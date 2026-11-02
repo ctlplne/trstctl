@@ -5987,6 +5987,7 @@ DynamicSecretConfiguredProvider = TypedDict(
         'label': str,
         'maximum_ttl_seconds': int,
         'ready': bool,
+        'revocation': str,
         'type': str,
     },
     total=False,

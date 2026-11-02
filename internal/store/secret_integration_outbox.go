@@ -83,15 +83,19 @@ func (s *Store) ApplyDynamicSecretRevocationIntentTx(
 		return err
 	}
 	return s.ApplyDynamicSecretRevocationIntentForEpochTx(
-		ctx, tx, tenantID, tenantEpoch, leaseID, payload, revokedAt)
+		ctx, tx, tenantID, tenantEpoch, leaseID, payload, revokedAt, false)
 }
 
+// ApplyDynamicSecretRevocationIntentForEpochTx is ApplyDynamicSecretRevocationIntentTx
+// for a resolved epoch; retainCredential keeps the lease's sealed credential for
+// a provider that revokes by presenting it (an OAuth access token, A239).
 func (s *Store) ApplyDynamicSecretRevocationIntentForEpochTx(
 	ctx context.Context,
 	tx pgx.Tx,
 	tenantID, tenantEpoch, leaseID string,
 	payload []byte,
 	revokedAt time.Time,
+	retainCredential bool,
 ) error {
 	if tenantID == "" || tenantEpoch == "" || leaseID == "" || revokedAt.IsZero() {
 		return errors.New("store: dynamic-secret revocation intent is incomplete")
@@ -124,7 +128,7 @@ func (s *Store) ApplyDynamicSecretRevocationIntentForEpochTx(
 		return err
 	}
 	return s.ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
-		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt)
+		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt, retainCredential)
 }
 
 // ApplyDynamicSecretRevocationRetryIntentForEpochTx projects an operator's

@@ -369,9 +369,12 @@ func (d *secretIntegrationOutboxDispatcher) dynamicSecretTerminalIssueFailure(te
 		return exhausted
 	}
 	for _, provider := range d.dynamicProvidersForTenant(tenantID) {
-		guarded, ok := provider.(interface{ DynamicSecretNeedsAtMostOnceEffect() bool })
+		guarded, ok := provider.(interface {
+			DynamicSecretNeedsAtMostOnceEffect() bool
+			DynamicSecretIndeterminateIssue() string
+		})
 		if provider.Name() == providerID && ok && guarded.DynamicSecretNeedsAtMostOnceEffect() {
-			return "AWS STS AssumeRole outcome is indeterminate; an external session may exist. Reconcile this lease in CloudTrail before issuing another credential"
+			return guarded.DynamicSecretIndeterminateIssue()
 		}
 	}
 	return exhausted
@@ -466,14 +469,19 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 	if provider == nil {
 		return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", command.Provider)
 	}
-	// Kubernetes TokenRequest and AWS STS sessions are immutable. Rotating
-	// renewal issues a replacement lease, so native validity matches the
-	// requested lease duration rather than the longer renewal ceiling.
-	if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok &&
-		(typed.DynamicSecretProviderType() == "kubernetes" || typed.DynamicSecretProviderType() == "aws-iam" || typed.DynamicSecretProviderType() == "aws-sts") {
+	// Kubernetes TokenRequest tokens, AWS STS sessions and OAuth access tokens
+	// are immutable. Rotating renewal issues a replacement lease (an access token
+	// is not extended at all), so native validity matches the requested lease
+	// duration rather than the longer renewal ceiling.
+	providerType := ""
+	if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok {
+		providerType = typed.DynamicSecretProviderType()
+	}
+	switch providerType {
+	case "kubernetes", "aws-iam", "aws-sts", "oauth-client-credentials":
 		nativeTTL = record.ExpiresAt.Sub(record.IssuedAt)
 	}
-	if typed, ok := provider.(interface{ DynamicSecretNeedsAtMostOnceEffect() bool }); ok && typed.DynamicSecretNeedsAtMostOnceEffect() && nativeTTL+time.Second <= 15*time.Minute {
+	if (providerType == "aws-iam" || providerType == "aws-sts") && nativeTTL+time.Second <= 15*time.Minute {
 		return d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issue-failed", command.ID), m.TenantID, projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseIssuanceFailure{
 			TenantEpoch: record.TenantEpoch, ID: record.ID,
 			Error: "AWS STS minimum 15-minute native validity window elapsed before issuance",
@@ -555,9 +563,14 @@ func (d *secretIntegrationOutboxDispatcher) generateDynamicSecretCredential(
 		}
 		if guarded, ok := provider.(interface{ DynamicSecretNeedsAtMostOnceEffect() bool }); ok && guarded.DynamicSecretNeedsAtMostOnceEffect() {
 			if d.idem == nil {
-				return dynsecret.Credential{}, errors.New("server: AWS STS issuance requires durable at-most-once effect protection")
+				return dynsecret.Credential{}, errors.New("server: at-most-once dynamic-secret issuance requires durable effect protection")
 			}
+			// The effect key names the lease; AWS keeps its original prefix so
+			// effects recorded before OAuth providers existed still match.
 			key := "dynsecret-sts:" + command.ID
+			if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok && typed.DynamicSecretProviderType() == "oauth-client-credentials" {
+				key = "dynsecret-oauth:" + command.ID
+			}
 			result, err := d.idem.DoAtMostOnceEffect(ctx, m.TenantID, key, func(callCtx context.Context) ([]byte, error) {
 				credential, generateErr := provider.Generate(callCtx, request)
 				if generateErr != nil {
@@ -567,7 +580,7 @@ func (d *secretIntegrationOutboxDispatcher) generateDynamicSecretCredential(
 				return json.Marshal(credential) // #nosec G117 -- the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200)
 			})
 			if err != nil {
-				return dynsecret.Credential{}, fmt.Errorf("server: at-most-once AWS STS lease %s: %w", command.ID, err)
+				return dynsecret.Credential{}, fmt.Errorf("server: at-most-once dynamic-secret lease %s: %w", command.ID, err)
 			}
 			defer secret.Wipe(result)
 			var credential dynsecret.Credential
@@ -805,12 +818,12 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	}
 	for _, provider := range d.dynamicProvidersForTenant(m.TenantID) {
 		if provider.Name() == item.Provider {
-			if err := provider.Revoke(ctx, item.BackendRef); err != nil {
-				if errors.Is(err, dynsecret.ErrAWSSTSSessionActive) {
+			if err := d.revokeDynamicSecretAtProvider(ctx, m.TenantID, provider, record, item.BackendRef); err != nil {
+				if errors.Is(err, dynsecret.ErrNativeExpiryPending) {
 					// The provider did no remote I/O. Keep revocation visibly
-					// pending until AWS's own credential expiry, without using
+					// pending until the credential's own expiry, without using
 					// the retry budget or claiming early invalidation.
-					if expiration, ok := dynsecret.AWSSTSExpiration(item.BackendRef); ok {
+					if expiration, ok := dynsecret.NativeExpiration(item.BackendRef); ok {
 						return orchestrator.DeferDeliveryUntil(err, expiration)
 					}
 					return orchestrator.DeferDelivery(err)
@@ -824,6 +837,25 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 		}
 	}
 	return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", item.Provider)
+}
+
+// revokeDynamicSecretAtProvider presents the lease's retained credential to a
+// provider that revokes that way (an OAuth access token, RFC 7009, A239) and
+// otherwise revokes by the provider reference alone.
+func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecretAtProvider(ctx context.Context, tenantID string, provider dynsecret.Provider, record store.DynamicSecretLease, backendRef string) error {
+	revoker, ok := provider.(interface {
+		RevokeCredential(context.Context, string, []byte) error
+	})
+	if !ok || len(record.RevocationSealedCredential) == 0 {
+		return provider.Revoke(ctx, backendRef)
+	}
+	credential, err := openTenantValue(ctx, d.tenantCrypto, d.kek, tenantID, record.RevocationSealedCredential,
+		dynamicSecretCredentialAAD(tenantID, record.ID, record.Provider))
+	if err != nil {
+		return fmt.Errorf("server: open the credential dynamic-secret lease %s is revoked with: %w", record.ID, err)
+	}
+	defer secret.Wipe(credential)
+	return revoker.RevokeCredential(ctx, backendRef, credential)
 }
 
 func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Context, m orchestrator.Message) error {

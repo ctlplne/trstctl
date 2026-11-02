@@ -237,11 +237,36 @@ func (p *configuredDynamicProvider) Name() string { return p.id }
 // operator review. It deliberately does not expose endpoint or credential refs.
 func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return p.cfg.Type }
 
-// AWS STS has no idempotency token or lookup by our lease ID. The outbox must
-// retain an at-most-once effect claim around AssumeRole so a lost response can
-// never mint a second live session for the same lease.
+// AWS STS has no idempotency token or lookup by our lease ID, and neither has an
+// OAuth token endpoint. The outbox must retain an at-most-once effect claim
+// around AssumeRole or the token request so a lost response can never mint a
+// second live credential for the same lease.
 func (p *configuredDynamicProvider) DynamicSecretNeedsAtMostOnceEffect() bool {
-	return p.cfg.Type == "aws-iam" || p.cfg.Type == "aws-sts"
+	return p.cfg.Type == "aws-iam" || p.cfg.Type == "aws-sts" || p.cfg.Type == "oauth-client-credentials"
+}
+
+// DynamicSecretIndeterminateIssue states what may exist upstream after an
+// at-most-once issuance whose outcome is unknown, and what the operator does
+// before issuing another credential.
+func (p *configuredDynamicProvider) DynamicSecretIndeterminateIssue() string {
+	if p.cfg.Type == "oauth-client-credentials" {
+		return fmt.Sprintf("OAuth token request outcome is indeterminate; an access token for client %q may exist for at most %s from the request. Revoke it at the authorization server or let it expire before issuing another credential", p.cfg.ClientID, p.maxTTL)
+	}
+	return "AWS STS AssumeRole outcome is indeterminate; an external session may exist. Reconcile this lease in CloudTrail before issuing another credential"
+}
+
+// DynamicSecretRevocation is "confirmed" when revoking a lease ends its
+// credential upstream before its native expiry, and "ttl_only" when the
+// credential lapses only then. An OAuth provider is confirmed only with a
+// revocation endpoint (A239).
+func (p *configuredDynamicProvider) DynamicSecretRevocation() string {
+	if p.cfg.Type == "oauth-client-credentials" {
+		if p.cfg.RevocationEndpoint != "" {
+			return "confirmed"
+		}
+		return "ttl_only"
+	}
+	return ""
 }
 
 // DynamicSecretAllowedRoles returns only operator-selectable role names.
@@ -358,7 +383,7 @@ func (p *configuredPreparedDynamicProvider) GeneratePrepared(ctx context.Context
 
 func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef string) error {
 	if p.DynamicSecretNeedsAtMostOnceEffect() {
-		return dynsecret.CheckAWSSTSExpiration(backendRef, time.Now())
+		return dynsecret.CheckNativeExpiration(backendRef, time.Now())
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
 	if err != nil {
@@ -366,6 +391,27 @@ func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef strin
 	}
 	defer closeBackend()
 	return backend.Revoke(ctx, backendRef)
+}
+
+// RevokeCredential revokes a lease by presenting its credential (an OAuth access
+// token at the RFC 7009 revocation endpoint). Without a revocation endpoint it
+// is Revoke: the token lapses at its native expiry.
+func (p *configuredDynamicProvider) RevokeCredential(ctx context.Context, backendRef string, credential []byte) error {
+	if p.cfg.Type != "oauth-client-credentials" || p.cfg.RevocationEndpoint == "" {
+		return p.Revoke(ctx, backendRef)
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeBackend()
+	revoker, ok := backend.(interface {
+		RevokeCredential(context.Context, string, []byte) error
+	})
+	if !ok {
+		return fmt.Errorf("server: dynamic-secret provider %q can't revoke by credential", p.id)
+	}
+	return revoker.RevokeCredential(ctx, backendRef, credential)
 }
 
 type requestDynamicBackend interface {
@@ -389,6 +435,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredCloudBackend(opener)
 	case "totp":
 		return openConfiguredTOTPBackend(opener)
+	case "oauth-client-credentials":
+		return openConfiguredOAuthBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -454,6 +502,30 @@ func openConfiguredTOTPBackend(o *configuredDynamicBackendOpener) (requestDynami
 		}
 	}
 	backend, err := dynsecret.NewTOTPBackend(dynsecret.TOTPConfig{SeedBase32: seed, Digits: cfg.Digits, Period: period, Algorithm: cfg.Algorithm})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredOAuthBackend reads the client secret into a token client that
+// keeps its own sealed copy and calls the token and revocation endpoints through
+// the SSRF-guarded HTTP client (A239).
+func openConfiguredOAuthBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	clientSecret, err := o.resolve(cfg.ClientSecretRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewOAuthClientCredentialsBackend(dynsecret.OAuthClientCredentialsConfig{
+		TokenURL: cfg.Endpoint, RevocationURL: cfg.RevocationEndpoint, ClientID: cfg.ClientID, ClientSecret: clientSecret,
+		RoleScopes: cfg.RoleBindings, MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback,
+		HTTPClient: client,
+	})
 	if err != nil {
 		return o.fail(err)
 	}

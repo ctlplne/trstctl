@@ -5,6 +5,7 @@ package store_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1232,5 +1233,74 @@ func TestSecretIntegrationTablesForceRLS(t *testing.T) {
 		if !enabled || !forced || !hasWithCheck {
 			t.Errorf("%s RLS enabled=%t forced=%t with_check=%t, want all true", table, enabled, forced, hasWithCheck)
 		}
+	}
+}
+
+// A239: a lease whose provider revokes by presenting the credential (an OAuth
+// access token, RFC 7009) keeps its sealed credential past the revoke
+// transition and loses it when the revocation completes; any other lease's
+// credential is gone at the transition. A replayed transition neither loses
+// nor invents it.
+func TestDynamicSecretRevocationRetainsTheCredentialOnlyWhenAskedA239(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	issuedAt := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	epoch, err := s.DynamicSecretTenantEpoch(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := store.DynamicSecretLease{TenantID: tenantA, Role: "reader", IssuedAt: issuedAt,
+		ExpiresAt: issuedAt.Add(time.Minute), HardExpiresAt: issuedAt.Add(5 * time.Minute), UpdatedAt: issuedAt}
+	oauth := base
+	oauth.ID, oauth.IdempotencyKey, oauth.Provider = "oauth-lease", "oauth-lease-key", "orders-api"
+	oauth.BackendRef = "oauth:00112233445566778899aabbccddeeff:1793620860"
+	oauth.SealedCredential, oauth.IssueOutboxID = []byte("sealed-oauth-token"), 801
+	plain := base
+	plain.ID, plain.IdempotencyKey, plain.Provider = "plain-lease", "plain-lease-key", "postgresql"
+	plain.BackendRef, plain.SealedCredential, plain.IssueOutboxID = "trstctl_plain", []byte("sealed-password"), 802
+	projectDynamicSecretLease(t, s, tenantA, oauth)
+	projectDynamicSecretLease(t, s, tenantA, plain)
+	revoke := func(lease store.DynamicSecretLease, retain bool) {
+		t.Helper()
+		payload, err := json.Marshal(map[string]string{"tenant_epoch": epoch, "LeaseID": lease.ID, "Provider": lease.Provider, "BackendRef": lease.BackendRef})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyDynamicSecretRevocationIntentForEpochTx(ctx, tx, tenantA, epoch, lease.ID, payload, issuedAt.Add(10*time.Second), retain)
+		}); err != nil {
+			t.Fatalf("revoke %s: %v", lease.ID, err)
+		}
+	}
+	get := func(id string) store.DynamicSecretLease {
+		t.Helper()
+		got, err := s.GetDynamicSecretLease(ctx, tenantA, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	revoke(oauth, true)
+	revoke(plain, false)
+	if got := get(oauth.ID); len(got.SealedCredential) != 0 || string(got.RevocationSealedCredential) != "sealed-oauth-token" {
+		t.Fatalf("OAuth lease after the revoke transition: sealed=%q revocation=%q", got.SealedCredential, got.RevocationSealedCredential)
+	}
+	if got := get(plain.ID); len(got.SealedCredential) != 0 || len(got.RevocationSealedCredential) != 0 {
+		t.Fatalf("plain lease after the revoke transition: sealed=%q revocation=%q", got.SealedCredential, got.RevocationSealedCredential)
+	}
+	revoke(oauth, true)
+	revoke(oauth, false)
+	if got := get(oauth.ID); string(got.RevocationSealedCredential) != "sealed-oauth-token" {
+		t.Fatalf("a replayed transition changed the retained credential to %q", got.RevocationSealedCredential)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyDynamicSecretLeaseRevocationCompletedTx(ctx, tx, tenantA, oauth.ID, issuedAt.Add(20*time.Second))
+	}); err != nil {
+		t.Fatalf("complete the revocation: %v", err)
+	}
+	if got := get(oauth.ID); len(got.RevocationSealedCredential) != 0 || got.RevocationStatus != store.DynamicSecretRevocationCompleted {
+		t.Fatalf("after completion: revocation credential %q, status %s", got.RevocationSealedCredential, got.RevocationStatus)
 	}
 }

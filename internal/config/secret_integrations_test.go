@@ -152,6 +152,55 @@ func TestValidateTOTPProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateOAuthClientCredentialsProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders-api", Type: "oauth-client-credentials",
+		Endpoint: "https://login.example/realms/lab/protocol/openid-connect/token", ClientID: "trstctl-leases",
+		ClientSecretRef: "file:/run/secrets/oauth-client", AllowedRoles: []string{"reader", "writer"}, MaxTTL: "5m",
+		RoleBindings: map[string]string{"reader": "orders.read", "writer": "orders.read orders.write"}}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	confirmed := base
+	confirmed.RevocationEndpoint = "https://login.example/realms/lab/protocol/openid-connect/revoke"
+	if err := check(confirmed); err != nil {
+		t.Fatalf("with a revocation endpoint: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no token endpoint":   {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the token endpoint) is required"},
+		"plain http":          {func(c *DynamicSecretProviderConfig) { c.Endpoint = "http://login.example/token" }, "endpoint:"},
+		"http revocation":     {func(c *DynamicSecretProviderConfig) { c.RevocationEndpoint = "http://login.example/revoke" }, "revocation_endpoint:"},
+		"no client":           {func(c *DynamicSecretProviderConfig) { c.ClientID = "" }, "client_id is required"},
+		"spaced client":       {func(c *DynamicSecretProviderConfig) { c.ClientID = " trstctl" }, "client_id is required"},
+		"no secret":           {func(c *DynamicSecretProviderConfig) { c.ClientSecretRef = "" }, "client_secret_ref"},
+		"no max_ttl":          {func(c *DynamicSecretProviderConfig) { c.MaxTTL = "" }, "max_ttl is required for oauth-client-credentials"},
+		"role without scopes": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"reader": "orders.read"} }, `role_bindings["writer"] must list the role's scopes`},
+		"malformed scope": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": `orders"read`, "writer": "w"}
+		}, "not an RFC 6749 scope-token"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["admin"] = "admin" }, `role_bindings["admin"] has no matching allowed role`},
+		"totp fields":          {func(c *DynamicSecretProviderConfig) { c.SeedRef = "file:/run/secrets/seed" }, "only valid for totp"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "orders.read", "writer": "orders.read orders.write"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
+		AllowedRoles: []string{"operator"}, MaxTTL: "30s", ClientID: "trstctl-leases"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "only valid for oauth-client-credentials") {
+		t.Fatalf("a client_id on another provider type = %v", err)
+	}
+}
+
 func TestValidateRedisACLRequiresExplicitScopedRoles(t *testing.T) {
 	base := DynamicSecretProviderConfig{
 		TenantID: "11111111-1111-1111-1111-111111111111", ID: "redis", Type: "redis",

@@ -60,6 +60,10 @@ type DynamicSecretLease struct {
 	// and the API idempotency commit can replay the identical credential without
 	// creating a second upstream principal.
 	SealedCredential []byte
+	// RevocationSealedCredential is SealedCredential kept past revocation for a
+	// lease whose provider revokes by presenting the credential (an OAuth access
+	// token, RFC 7009, A239). It is wiped when the revocation completes.
+	RevocationSealedCredential []byte
 	// SealedPreparation is worker-created, envelope-encrypted material that makes
 	// PreparedProvider retries converge on the same upstream identity. It is
 	// cleared when issuance reaches any terminal state.
@@ -485,7 +489,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationRequestedTx(ctx context.Context
 		return err
 	}
 	return s.ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
-		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt)
+		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt, false)
 }
 
 func (s *Store) ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
@@ -494,6 +498,10 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
 	tenantID, tenantEpoch, leaseID string,
 	outboxID int64,
 	revokedAt time.Time,
+	// retainCredential keeps the sealed credential for a provider that revokes
+	// by presenting it; the first transition from active decides, so a replay
+	// cannot lose or invent it.
+	retainCredential bool,
 ) error {
 	if tenantID == "" || leaseID == "" || outboxID <= 0 || revokedAt.IsZero() {
 		return errors.New("store: dynamic-secret revocation request is incomplete")
@@ -504,6 +512,10 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
 	tag, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_leases
 		    SET state = 'revoked',
+		        revocation_sealed_credential = CASE
+		            WHEN $6 AND state = 'active' THEN sealed_credential
+		            ELSE revocation_sealed_credential
+		        END,
 		        sealed_credential = ''::bytea,
 		        revocation_status = CASE
 		            WHEN revocation_status = 'completed' THEN 'completed'
@@ -518,7 +530,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationRequestedForEpochTx(
 		        updated_at = GREATEST(updated_at, $4)
 		  WHERE tenant_id = $1 AND tenant_epoch = $5 AND id = $2
 		    AND state IN ('active', 'revoked')`,
-		tenantID, leaseID, outboxID, revokedAt, tenantEpoch)
+		tenantID, leaseID, outboxID, revokedAt, tenantEpoch, retainCredential)
 	if err != nil {
 		return err
 	}
@@ -570,6 +582,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context
 	tag, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_leases
 		    SET revocation_status = 'completed', last_error = '',
+		        revocation_sealed_credential = ''::bytea,
 		        revocation_completed_at = COALESCE(revocation_completed_at, $3),
 		        updated_at = GREATEST(updated_at, $3)
 		  WHERE tenant_id = $1 AND tenant_epoch = $4 AND id = $2 AND state = 'revoked'`,
@@ -644,7 +657,7 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationFailedForEpochTx(ctx context.Co
 // #nosec G101 -- sealed_credential is a SQL column name, not a hardcoded credential (CWE-798).
 const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_epoch,
        idempotency_key, request_binding, provider, role, backend_ref,
-       sealed_credential, sealed_preparation, preparation_digest, prepared_at,
+       sealed_credential, revocation_sealed_credential, sealed_preparation, preparation_digest, prepared_at,
        credential_digest, state, issue_outbox_id, revocation_status,
        revoke_outbox_id, last_error, issued_at, expires_at, hard_expires_at,
        revoked_at, revocation_completed_at, updated_at
@@ -674,7 +687,7 @@ func scanDynamicSecretLeaseAuthority(row rowScanner, lease *DynamicSecretLease) 
 		&lease.ID, &lease.TenantID, &lease.TenantEpoch,
 		&lease.IdempotencyKey, &lease.RequestBinding, &lease.Provider,
 		&lease.Role, &lease.BackendRef,
-		&lease.SealedCredential, &lease.SealedPreparation,
+		&lease.SealedCredential, &lease.RevocationSealedCredential, &lease.SealedPreparation,
 		&lease.PreparationDigest, &lease.PreparedAt, &lease.CredentialDigest,
 		&lease.State, &lease.IssueOutboxID, &lease.RevocationStatus,
 		&lease.RevokeOutboxID, &lease.LastError,

@@ -351,6 +351,8 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 		return dynsecret.Lease{}, errors.New("dynsecret: immutable provider credential renewal must rotate the credential")
 	} else if ok && typed.DynamicSecretProviderType() == "totp" {
 		return dynsecret.Lease{}, dynsecret.ErrLeaseNotRenewable
+	} else if ok && typed.DynamicSecretProviderType() == "oauth-client-credentials" {
+		return dynsecret.Lease{}, dynsecret.ErrLeaseNotExtendable
 	}
 	if record.State != store.DynamicSecretLeaseActive {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)

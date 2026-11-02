@@ -5240,7 +5240,8 @@ when off, requiring a KEK when on):
   closes it; the leaseworker expires leases through an
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
-  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, and `totp` (A239). Issuance is
+  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`, and
+  `oauth-client-credentials` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5253,9 +5254,14 @@ when off, requiring a KEK when on):
   bind is refused (invalid credentials). TOTP (A239) is proven with stock
   oathtool: it computes the leased code for the lease's time step, accepts it
   there and rejects it one step later; a renewal is refused, and revocation only
-  closes the lease (the code lapses at `valid_until`). The provider catalog states
-  each adapter's authority and whether its revocation is confirmed or TTL-only.
-  The rest of A239's provider library is still being built.
+  closes the lease (the code lapses at `valid_until`). OAuth 2.0 access tokens
+  (A239) are proven against stock Keycloak 26.8.1: a lease's token carries only
+  its role's scope, stock curl reads the realm through Keycloak's admin API with
+  it, a renewal is refused, and after the lease is revoked (RFC 7009, through the
+  outbox) curl is refused with 401; a provider without a revocation endpoint
+  keeps the revocation pending until the token's expiry. The provider catalog
+  states each adapter's authority and whether its revocation is confirmed or
+  TTL-only. The rest of A239's provider library is still being built.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,
   CloudTrail reconciliation, or rejection after native expiry. The local query

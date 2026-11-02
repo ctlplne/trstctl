@@ -2311,6 +2311,31 @@ at `valid_until`.
 }
 ```
 
+For OAuth 2.0 access tokens (A239, `oauth-client-credentials`), set `endpoint` to
+the authorization server's HTTPS token endpoint, `client_id` and
+`client_secret_ref` to a confidential client that has only the scopes your roles
+need, and `role_bindings` to each allowed role's space-separated scopes. `max_ttl`
+is required: the longest lifetime the server gives this client's tokens. A lease
+gets a new token (client credentials grant) and refuses one with any other scope,
+or a lifetime past `max_ttl` or shorter than the lease. Set `revocation_endpoint`
+(RFC 7009) so revoking a lease revokes its token; without it the token stays valid
+until it expires and the revocation waits for that. Tokens can't be extended.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "orders-api",
+  "type": "oauth-client-credentials",
+  "endpoint": "https://login.example.com/realms/prod/protocol/openid-connect/token",
+  "revocation_endpoint": "https://login.example.com/realms/prod/protocol/openid-connect/revoke",
+  "client_id": "trstctl-leases",
+  "client_secret_ref": "file:/run/secrets/orders-api-client",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "orders.read"},
+  "max_ttl": "5m"
+}
+```
+
 AWS, GCP, and Azure sync targets can explicitly replace their static target
 credential with tenant-owned workload identity. Set exactly the provider switch
 (`aws_workload_identity`, `gcp_workload_identity`, or

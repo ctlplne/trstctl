@@ -46,6 +46,10 @@ type dynamicSecretConfiguredProvider struct {
 	MaximumTTLSeconds     int64    `json:"maximum_ttl_seconds"`
 	Ready                 bool     `json:"ready"`
 	ConfigurationRevision string   `json:"configuration_revision"`
+	// Revocation is the type's catalog value, or what this provider's
+	// configuration makes it (an OAuth provider without a revocation endpoint
+	// is ttl_only, A239).
+	Revocation string `json:"revocation,omitempty"`
 }
 
 type dynamicSecretProviderCatalogResponse struct {
@@ -218,6 +222,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("algorithm", "Algorithm", "SHA1 (the default), SHA256 or SHA512.", false),
 			roles("Every allowed role reads the same seed's codes; role_bindings are not used."),
 		)},
+		{Type: "oauth-client-credentials", Label: "OAuth access tokens", Purpose: "Requests a new access token from an OAuth 2.0 authorization server's token endpoint with the role's scopes (client credentials grant); a token can't be extended, and revoking the lease revokes the token at the revocation endpoint when one is configured, else the token lapses at its expiry.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Token endpoint", "HTTPS URL of the authorization server's token endpoint.", true),
+			value("client_id", "Client ID", "The confidential client the tokens are issued to; give it only the scopes the roles need.", true),
+			credential("client_secret_ref", "Client secret reference", "The client's secret, sent with HTTP Basic authentication.", true),
+			value("revocation_endpoint", "Revocation endpoint", "Optional HTTPS URL of the RFC 7009 revocation endpoint. Without it revocation waits for each token's expiry.", false),
+			value("max_ttl", "Maximum token lifetime", "The longest lifetime the authorization server gives this client's tokens; a longer-lived token is refused (and revoked when possible).", true),
+			roles("Each allowed role maps to its space-separated scopes; a token granted any other scope is refused."),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -250,6 +262,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "membership of the role's directory group", "confirmed"
 	case "totp":
 		return "the configured seed's current one-time code, accepted until the end of its time step (and through any skew window the verifier allows)", "ttl_only"
+	case "oauth-client-credentials":
+		return "an access token carrying only the role's scopes, accepted by resource servers until it is revoked at the authorization server or expires", "confirmed"
 	}
 	return "", ""
 }
@@ -281,6 +295,10 @@ func dynamicSecretConfiguredProviderFrom(provider dynsecret.Provider) dynamicSec
 	}
 	if bounded, ok := provider.(dynamicSecretMaximumTTL); ok {
 		configured.MaximumTTLSeconds = int64(bounded.MaximumTTL() / time.Second)
+	}
+	_, configured.Revocation = dynamicSecretProviderAuthority(configured.Type)
+	if stated, ok := provider.(interface{ DynamicSecretRevocation() string }); ok && stated.DynamicSecretRevocation() != "" {
+		configured.Revocation = stated.DynamicSecretRevocation()
 	}
 	return configured
 }

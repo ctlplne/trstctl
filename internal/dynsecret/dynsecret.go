@@ -101,6 +101,10 @@ var (
 	// ErrLeaseNotRenewable is a one-time code's lease (TOTP, A239): the code
 	// lapses at the end of its time step, so only a new lease gets a new code.
 	ErrLeaseNotRenewable = errors.New("dynsecret: a one-time code can't be renewed; issue a new lease for the next code")
+	// ErrLeaseNotExtendable is an access token's lease (OAuth client
+	// credentials, A239): the authorization server fixed the token's lifetime
+	// when it issued it, so only a new lease gets a new token.
+	ErrLeaseNotExtendable = errors.New("dynsecret: an access token can't be extended; issue a new lease for a new token")
 )
 
 // Lease is the durable record of a generated credential's lifecycle.

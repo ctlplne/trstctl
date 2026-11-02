@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -386,6 +387,14 @@ type DynamicSecretLeaseRevocationRequested struct {
 	BackendRef  string `json:"backend_ref"`
 }
 
+// dynamicSecretRevocationNeedsCredential reports whether a lease is revoked by
+// presenting its credential: an OAuth access token (RFC 7009), whose provider
+// reference dynsecret writes as "oauth:<digest>:<expiry>" (A239). The lease
+// then keeps its sealed credential until the revocation completes.
+func dynamicSecretRevocationNeedsCredential(backendRef string) bool {
+	return strings.HasPrefix(backendRef, "oauth:")
+}
+
 // DynamicSecretLeaseRevocationRetryRequested binds a new outbox command to an
 // exact failed predecessor. The old failure remains in immutable history.
 type DynamicSecretLeaseRevocationRetryRequested struct {
@@ -725,7 +734,8 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			return true, err
 		}
 		return true, p.store.ApplyDynamicSecretRevocationIntentForEpochTx(
-			ctx, tx, e.TenantID, tenantEpoch, payload.ID, outboxPayload, e.Time)
+			ctx, tx, e.TenantID, tenantEpoch, payload.ID, outboxPayload, e.Time,
+			dynamicSecretRevocationNeedsCredential(payload.BackendRef))
 	case EventDynamicSecretLeaseRevocationRetryRequested:
 		var payload DynamicSecretLeaseRevocationRetryRequested
 		if err := decode(e, &payload); err != nil {

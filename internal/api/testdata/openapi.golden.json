@@ -18502,6 +18502,14 @@
           "ready": {
             "type": "boolean"
           },
+          "revocation": {
+            "description": "Whether revoking a lease ends its credential before its native expiry (confirmed) or it lapses only then (ttl_only), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint.",
+            "enum": [
+              "confirmed",
+              "ttl_only"
+            ],
+            "type": "string"
+          },
           "type": {
             "type": "string"
           }
@@ -18651,7 +18659,8 @@
               "kubernetes",
               "redis",
               "ldap",
-              "totp"
+              "totp",
+              "oauth-client-credentials"
             ],
             "type": "string"
           }

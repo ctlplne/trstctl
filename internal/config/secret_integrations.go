@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
@@ -111,11 +112,18 @@ type DynamicSecretProviderConfig struct {
 	// SeedRef is a TOTP provider's shared secret (base32, as an authenticator
 	// enrolls it); Digits (6, 7 or 8), Period (30s or 60s) and Algorithm
 	// (SHA1, SHA256 or SHA512) default to 6, 30s and SHA1 (A239).
-	SeedRef      string   `json:"seed_ref,omitempty"`
-	Digits       int      `json:"digits,omitempty"`
-	Period       string   `json:"period,omitempty"`
-	Algorithm    string   `json:"algorithm,omitempty"`
-	AllowedRoles []string `json:"allowed_roles"`
+	SeedRef   string `json:"seed_ref,omitempty"`
+	Digits    int    `json:"digits,omitempty"`
+	Period    string `json:"period,omitempty"`
+	Algorithm string `json:"algorithm,omitempty"`
+	// ClientID and ClientSecretRef are an oauth-client-credentials provider's
+	// confidential client at the authorization server whose token endpoint is
+	// Endpoint; RevocationEndpoint (RFC 7009) is optional, and without it
+	// revocation waits for each token's expiry (A239).
+	ClientID           string   `json:"client_id,omitempty"`
+	ClientSecretRef    string   `json:"client_secret_ref,omitempty"`
+	RevocationEndpoint string   `json:"revocation_endpoint,omitempty"`
+	AllowedRoles       []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
@@ -219,7 +227,7 @@ type SecretSyncTargetConfig struct {
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
-	"totp": {},
+	"totp": {}, "oauth-client-credentials": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -459,6 +467,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		errs = append(errs, validateLDAPProvider(where, c)...)
 	case "totp":
 		errs = append(errs, validateTOTPProvider(where, c)...)
+	case "oauth-client-credentials":
+		errs = append(errs, validateOAuthClientCredentialsProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -795,7 +805,66 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "totp" && (c.SeedRef != "" || c.Digits != 0 || c.Period != "" || c.Algorithm != "") {
 		errs = append(errs, fmt.Errorf("%s seed_ref, digits, period and algorithm are only valid for totp", where))
 	}
+	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
+		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
+	}
 	return errs
+}
+
+// validateOAuthClientCredentialsProvider checks an OAuth 2.0 client-credentials
+// provider: endpoint is the token endpoint, revocation_endpoint is optional, the
+// client is confidential, max_ttl is the longest token lifetime the
+// authorization server issues this client, and each allowed role's
+// role_bindings value is its space-separated scopes (A239).
+func validateOAuthClientCredentialsProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the token endpoint) is required for oauth-client-credentials", where))
+	}
+	if c.RevocationEndpoint != "" {
+		if err := validateSecretIntegrationEndpoint(c.RevocationEndpoint, c.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s revocation_endpoint: %w", where, err))
+		}
+	}
+	if id := strings.TrimSpace(c.ClientID); id == "" || id != c.ClientID || strings.ContainsFunc(id, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s client_id is required for oauth-client-credentials, without surrounding spaces or control characters", where))
+	}
+	if err := validateCredentialRef(c.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref: %w", where, err))
+	}
+	if strings.TrimSpace(c.MaxTTL) == "" {
+		errs = append(errs, fmt.Errorf("%s max_ttl is required for oauth-client-credentials: the longest token lifetime the authorization server issues this client", where))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		if err := validOAuthScopes(c.RoleBindings[role]); err != nil {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must list the role's scopes: %w", where, role, err))
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
+// validOAuthScopes accepts one or more space-separated RFC 6749 scope-tokens
+// (%x21 / %x23-5B / %x5D-7E).
+func validOAuthScopes(raw string) error {
+	scopes := strings.Fields(raw)
+	if len(scopes) == 0 {
+		return errors.New("at least one scope is required")
+	}
+	for _, scope := range scopes {
+		for _, c := range []byte(scope) {
+			if c < 0x21 || c == 0x22 || c == 0x5c || c > 0x7e {
+				return fmt.Errorf("scope %q is not an RFC 6749 scope-token", scope)
+			}
+		}
+	}
+	return nil
 }
 
 // validateTOTPProvider checks a TOTP provider's seed reference and code

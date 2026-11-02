@@ -21,8 +21,9 @@ const awsSTSService = "sts"
 var (
 	awsSTSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 	// ErrAWSSTSSessionActive means the caller's access has been closed in trstctl,
-	// but AWS can still accept its previously issued STS session until native expiry.
-	ErrAWSSTSSessionActive = errors.New("dynsecret aws-sts: session remains valid until AWS expiry")
+	// but AWS can still accept its previously issued STS session until native
+	// expiry. It is an ErrNativeExpiryPending.
+	ErrAWSSTSSessionActive = fmt.Errorf("dynsecret aws-sts: session remains valid until AWS expiry: %w", ErrNativeExpiryPending)
 )
 
 // AWSSTSConfig maps each operator-approved role to an assumable AWS IAM role.

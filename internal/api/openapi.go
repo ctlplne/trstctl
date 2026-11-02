@@ -7006,7 +7006,7 @@ func componentSchemas() map[string]*Schema {
 		"required": {Type: "boolean"}, "description": str(),
 	}, "key", "label", "kind", "required", "description")
 	dynamicSecretSupportedProvider := object(map[string]*Schema{
-		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp"}},
+		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp", "oauth-client-credentials"}},
 		"label": str(), "purpose": str(), "authority": str(),
 		"revocation":   {Type: "string", Enum: []string{"confirmed", "ttl_only"}},
 		"requirements": {Type: "array", Items: ref("DynamicSecretProviderRequirement")},
@@ -7015,6 +7015,7 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "type": str(), "label": str(),
 		"allowed_roles": {Type: "array", Items: str()}, "maximum_ttl_seconds": {Type: "integer"},
 		"ready": {Type: "boolean"}, "configuration_revision": str(),
+		"revocation": {Type: "string", Enum: []string{"confirmed", "ttl_only"}, Description: "Whether revoking a lease ends its credential before its native expiry (confirmed) or it lapses only then (ttl_only), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint."},
 	}, "id", "type", "label", "allowed_roles", "maximum_ttl_seconds", "ready", "configuration_revision")
 	dynamicSecretProviderCatalog := object(map[string]*Schema{
 		"capability":                            {Type: "string", Enum: []string{"F65"}},

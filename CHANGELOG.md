@@ -2,6 +2,13 @@
 
 ### Added
 
+- OAuth 2.0 access-token dynamic secrets (`type: oauth-client-credentials`): each lease is a new token from an
+  authorization server's token endpoint (client credentials grant) carrying only the scopes its role is bound to;
+  a token with other scopes, another type or a lifetime outside the lease and `max_ttl` is refused (and revoked
+  when possible). A token can't be extended. With `revocation_endpoint` revoking the lease revokes the token there
+  (RFC 7009) and the catalog marks the provider confirmed; without it the revocation stays pending until the
+  token's expiry (TTL-only). An uncertain token request is never retried blindly.
+
 - TOTP dynamic secrets (`type: totp`): each lease carries the current RFC 6238 code of a seed the control plane
   holds and `valid_until`, the end of its time step; the code can't be renewed or withdrawn, so the catalog marks
   it TTL-only and `max_ttl` can't exceed the period.

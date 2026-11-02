@@ -14498,6 +14498,11 @@ export interface components {
             label: string;
             maximum_ttl_seconds: number;
             ready: boolean;
+            /**
+             * @description Whether revoking a lease ends its credential before its native expiry (confirmed) or it lapses only then (ttl_only), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint.
+             * @enum {string}
+             */
+            revocation?: "confirmed" | "ttl_only";
             type: string;
         };
         DynamicSecretProviderCatalog: {
@@ -14530,7 +14535,7 @@ export interface components {
             /** @enum {string} */
             revocation: "confirmed" | "ttl_only";
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp";
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;

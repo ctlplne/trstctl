@@ -355,10 +355,10 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Ten backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Eleven backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
-Redis ACL users, LDAP directory accounts, and TOTP codes (A239).
+Redis ACL users, LDAP directory accounts, TOTP codes, and OAuth 2.0 access tokens (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -388,17 +388,32 @@ withdrawn or renewed: revocation only closes the lease, and the code lapses at
 it `ttl_only`. `max_ttl` is required and no longer than the period, so a lease
 never outlasts its code by more than one period.
 
+The OAuth 2.0 backend (`oauth-client-credentials`) asks an authorization server's
+token endpoint for a new access token per lease (client credentials grant, with the
+scopes the lease's role is bound to). It refuses a token that carries any other
+scope, isn't a Bearer token, or lives longer than `max_ttl` or shorter than the
+lease, and revokes such a token first when it can. A token can't be extended, so a
+renewal is refused. With `revocation_endpoint`, revoking the lease presents the
+token at that endpoint (RFC 7009): the lease keeps its sealed token only until that
+revocation completes, and the catalog marks the provider `confirmed`. Without it
+the token is accepted until its own expiry, which the lease shows as
+`native_expires_at`, and the revocation stays pending until then (`ttl_only`). A
+token request has no idempotency key, so an uncertain one is never retried: the
+lease fails and states that a token may exist for at most `max_ttl`.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns eleven safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twelve safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
-  expiry, as an AWS STS session or a TOTP code does. The response also returns
+  expiry, as an AWS STS session or a TOTP code does. Each configured provider also
+  states its own `revocation` (an OAuth provider is confirmed only with a revocation
+  endpoint). The response also returns
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,
   credential references, or provider credential values. Configuration remains a

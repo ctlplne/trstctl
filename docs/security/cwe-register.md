@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2259 annotated sites across 29 rules. Each row is
+2264 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (491 sites)
+### G101 — CWE-798 Use of hardcoded credentials (494 sites)
 
 | Location | Reason |
 |---|---|
@@ -260,10 +260,10 @@ not this file.
 | `internal/config/scim_writeback_test.go:20` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:28` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/secret_integrations_test.go:52` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:352` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:356` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:360` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:364` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:401` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:405` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:409` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:413` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -301,6 +301,8 @@ not this file.
 | `internal/dns/ns1/ns1_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dynsecret/access_test.go:142` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
+| `internal/dynsecret/oauth_client_credentials_test.go:29` | fabricated lab client secret, form-encoded (CWE-798) |
+| `internal/dynsecret/oauth_client_credentials_test.go:190` | fabricated fixture secret; the case fails on its scope (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/totp_test.go:13` | the RFC 6238 test-vector seed, not a credential (CWE-798) |
@@ -342,8 +344,8 @@ not this file.
 | `internal/projections/discovery_secret_move.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/projections.go:319` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_deliveries.go:16` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/secret_integrations.go:227` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/projections/secret_integrations.go:229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_integrations.go:230` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:17` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -436,6 +438,7 @@ not this file.
 | `internal/server/discovery_served_test.go:2739` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2751` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2762` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/dynamic_secret_oauth_served_test.go:50` | fabricated lab client secret (CWE-798) |
 | `internal/server/dynamic_secret_totp_lab_test.go:38` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/endpoint_replacement_served_test.go:29` | fabricated test-only credential (CWE-798) |
 | `internal/server/external_observer_served_test.go:62` | fabricated fixture credential (CWE-798) |
@@ -495,7 +498,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1301` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -535,7 +538,7 @@ not this file.
 | `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
-| `internal/store/dynamic_secret_lease.go:644` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
+| `internal/store/dynamic_secret_lease.go:657` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/honey_token.go:47` | SQL column names only; this string contains no credential material. |
 | `internal/store/migration_0359_content_test.go:50` | a query naming the hash column; no credential value (CWE-798) |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
@@ -750,8 +753,8 @@ not this file.
 | `internal/projections/projections.go:6690` | checked against MaxInt64 above. |
 | `internal/projections/projections.go:6724` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
-| `internal/projections/secret_integrations.go:247` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations_test.go:659` | embedded JetStream fixture sequences are bounded far below MaxInt64 (CWE-190). |
 | `internal/projections/secret_integrations_test.go:812` | fixture sequence is tiny and asserted positive above. |
 | `internal/projections/secret_sync_lifecycle.go:318` | observe checked the explicit PostgreSQL bigint bound. |
@@ -786,8 +789,8 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:446` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:253` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:1055` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:1059` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1087` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1091` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
@@ -973,15 +976,16 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:426` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:456` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (6 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (7 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
-| `internal/dynsecret/aws_sts.go:163` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/aws_sts.go:164` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/ldap.go:214` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/providers_real.go:1386` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
-| `internal/server/secret_integrations_outbox.go:567` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
+| `internal/server/secret_integrations_outbox.go:580` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)
@@ -1079,7 +1083,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4187` | closed test table list above |
+| `internal/store/migration_content_test.go:4188` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 
@@ -2514,7 +2518,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (14 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (15 sites)
 
 | Location | Reason |
 |---|---|
@@ -2524,6 +2528,7 @@ not this file.
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
+| `internal/dynsecret/oauth_client_credentials.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:53` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:60` | the runner's own lab search engine (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
