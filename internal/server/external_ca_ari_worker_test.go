@@ -92,7 +92,9 @@ func TestExternalARIWorkerBindsExactLeafAndReplaysCanonicalOutcome(t *testing.T)
 	if err != nil || cert.Source != "issued" || cert.IssuingExternalCAID != "pebble" {
 		t.Fatalf("external issuer did not survive endpoint recording: %+v err=%v", cert, err)
 	}
-	start, end := time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(2*time.Hour)
+	// A CA's ARI window is RFC 3339 (whole seconds in practice), and the store
+	// keeps microseconds: a nanosecond time.Now() (Linux) never reads back equal.
+	start, end := time.Now().UTC().Add(time.Hour).Truncate(time.Second), time.Now().UTC().Add(2*time.Hour).Truncate(time.Second)
 	calls, fail := 0, false
 	h.handler.externalCAs = &externalCARegistry{byID: map[string]externalCAEntry{
 		"pebble": {

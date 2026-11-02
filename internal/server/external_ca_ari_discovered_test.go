@@ -78,7 +78,9 @@ func TestExternalARIDiscoveredLeafIsPolledByDeclaredIssuerKeyID(t *testing.T) {
 	matched, issuerKeyID := recordDiscovered("matched.discovered.test", "Declared Public Issuer")
 	stranger, _ := recordDiscovered("stranger.discovered.test", "Undeclared Issuer")
 
-	start, end := time.Now().UTC().Add(time.Hour), time.Now().UTC().Add(2*time.Hour)
+	// A CA's ARI window is RFC 3339 (whole seconds in practice), and the store
+	// keeps microseconds: a nanosecond time.Now() (Linux) never reads back equal.
+	start, end := time.Now().UTC().Add(time.Hour).Truncate(time.Second), time.Now().UTC().Add(2*time.Hour).Truncate(time.Second)
 	calls := 0
 	h.handler.externalCAs = &externalCARegistry{byID: map[string]externalCAEntry{
 		"public-acme": {
