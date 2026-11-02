@@ -25,8 +25,10 @@ printf '%s\n' \
 	>"$scratch/bin/npm"
 chmod +x "$scratch/bin/npm"
 
+# Each case states its own environment: a CI runner exports CI=true, which
+# forces a reinstall, so the reuse cases clear it and the CI case sets it.
 run_install() {
-	PATH="$scratch/bin:$PATH" "$repo_script" "$scratch/web"
+	env -u CI -u TRSTCTL_WEB_CLEAN_INSTALL PATH="$scratch/bin:$PATH" "$@" "$repo_script" "$scratch/web"
 }
 
 assert_call_count() {
@@ -50,10 +52,10 @@ printf '{"lockfileVersion":3,"changed":true}\n' >"$scratch/web/package-lock.json
 run_install
 assert_call_count 3
 
-TRSTCTL_WEB_CLEAN_INSTALL=1 run_install
+run_install TRSTCTL_WEB_CLEAN_INSTALL=1
 assert_call_count 4
 
-CI=true run_install
+run_install CI=true
 assert_call_count 5
 
 echo "install-web-deps self-test: PASS"
