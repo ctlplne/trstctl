@@ -208,6 +208,9 @@ SERVER_SLICES ?= 1
 # The package lanes: every package except internal/server (sliced by its census)
 # and the serial live perf set.
 TEST_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$'
+# A package measured above this many seconds runs as test slices spread over the
+# lanes (scripts/ci/go-test-shard.py), so no lane waits on one large package.
+TEST_MAX_UNIT_SECONDS ?= 360
 
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
@@ -222,16 +225,17 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 test-selftests: ## The test lanes' own self-tests (server slices, package shards, live baseline)
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf/live-baseline_selftest.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/go-test-units_selftest.py
 	@set -euo pipefail; $(TEST_PACKAGE_LIST) | \
-		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --selftest
+		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
 
 .PHONY: test-packages
 test-packages: ## go test (race + coverage) over package shard TEST_SHARD of TEST_SHARDS (all but internal/server and live perf)
 	@echo ">> go test (race + merged first-party coverage), package shard $(TEST_SHARD) of $(TEST_SHARDS)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
-	pkgs="$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json )"; \
-	[ -n "$$pkgs" ] || { echo "FAIL: package shard $(TEST_SHARD) of $(TEST_SHARDS) selected no packages"; exit 1; }; \
-	$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN).$(TEST_SHARD) $$pkgs
+	units="$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) )"; \
+	[ -n "$$units" ] || { echo "FAIL: package shard $(TEST_SHARD) of $(TEST_SHARDS) selected no packages"; exit 1; }; \
+	python3 scripts/ci/go-test-units.py --go '$(GO)' --parallelism $$parallelism --timeout $(PACKAGE_TEST_TIMEOUT) --coverpkg '$(GO_COVER_PACKAGES)' --coverprofile $(COVERPROFILE_MAIN).$(TEST_SHARD) $$units
 
 .PHONY: test-server
 test-server: ## internal/server census slice SERVER_SLICE of SERVER_SLICES (race + coverage, isolated parts)

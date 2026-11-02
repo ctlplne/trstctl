@@ -110,7 +110,8 @@ clean up only the runner's own processes. Its self-tests run at the start of
 `make test`.
 
 CI runs the same lanes as parallel jobs: `make test-packages` over package
-shards balanced by measured test time (`scripts/ci/go-test-weights.json`),
+shards balanced by measured test time (`scripts/ci/go-test-weights.json`; a
+package measured over six minutes runs as test slices spread across them),
 `make test-server` over slices of the server census, and `make test-extra`.
 The required `build / test / lint` check fails unless every lane succeeded,
 checks that the slices ran the census exactly once, merges every lane's

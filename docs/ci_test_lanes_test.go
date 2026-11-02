@@ -135,13 +135,14 @@ func TestMakeTestRunsEveryLaneInOrder(t *testing.T) {
 			t.Errorf("lane %s must be a documented .PHONY target", lane)
 		}
 	}
-	if !strings.Contains(mk, "[ -n \"$$pkgs\" ] || { echo \"FAIL: package shard $(TEST_SHARD) of $(TEST_SHARDS) selected no packages\"; exit 1; }") {
+	if !strings.Contains(mk, "[ -n \"$$units\" ] || { echo \"FAIL: package shard $(TEST_SHARD) of $(TEST_SHARDS) selected no packages\"; exit 1; }") {
 		t.Error("an empty package shard must fail rather than let go test fall back to the current directory")
 	}
 	for _, want := range []string{
 		"for i in $$(seq 0 $$(( $(TEST_SHARDS) - 1 ))); do profiles=\"$$profiles $(COVERPROFILE_MAIN).$$i\"; done",
 		"for f in $$profiles; do head -n 1 \"$$f\" | grep -qx 'mode: atomic' || { echo \"FAIL: coverage lane profile $$f is missing or not atomic\"; exit 1; }; done",
-		"python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --selftest",
+		"python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest",
+		"PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/go-test-units_selftest.py",
 	} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("coverage-gate must merge every package shard and refuse a missing one: missing %q", want)

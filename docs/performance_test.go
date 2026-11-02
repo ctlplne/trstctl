@@ -221,7 +221,7 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$",
 		"PACKAGE_TEST_TIMEOUT := 60m",
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
-		"$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN).$(TEST_SHARD) $$pkgs",
+		"python3 scripts/ci/go-test-units.py --go '$(GO)' --parallelism $$parallelism --timeout $(PACKAGE_TEST_TIMEOUT) --coverpkg '$(GO_COVER_PACKAGES)' --coverprofile $(COVERPROFILE_MAIN).$(TEST_SHARD) $$units",
 		"$(GO) test -race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
 		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
 		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race",
@@ -240,6 +240,17 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	}
 	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 2 {
 		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test and editions-gate", got)
+	}
+	// The package lane runner keeps race detection, fresh results, the timeout,
+	// atomic first-party coverage and the lane's package parallelism.
+	runner := read(t, "../scripts/ci/go-test-units.py")
+	for _, want := range []string{
+		`base = [args.go, "test", "-race", "-count=1", f"-timeout={args.timeout}", "-covermode=atomic", f"-coverpkg={args.coverpkg}"]`,
+		`base + [f"-p={args.parallelism}", f"-coverprofile={profile}"] + plain`,
+	} {
+		if !strings.Contains(runner, want) {
+			t.Errorf("package lane runner lost %q", want)
+		}
 	}
 }
 
@@ -311,7 +322,7 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	}
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
-		"pkgs=\"$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS)",
+		"units=\"$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS)",
 		"PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py",
 		"python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER).$(SERVER_SLICE) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server --slice $(SERVER_SLICE) --slices $(SERVER_SLICES)",
 		"-coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
