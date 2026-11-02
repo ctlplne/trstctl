@@ -2,6 +2,10 @@
 
 ### Added
 
+- Milvus dynamic secrets (`type: milvus`): each lease is a Milvus user with a generated password and only the Milvus
+  roles its role is bound to (`"orders_reader"`), created through the RESTful API; revocation drops the user (and its
+  role grants) and Milvus refuses its next request. Proven against stock Milvus 2.6.26 standalone.
+
 - Couchbase dynamic secrets (`type: couchbase`): each lease is a local Couchbase user with a generated password and
   only its role's roles on the named buckets (`"bucket_full_access on orders"`, the Community Edition's data role, or
   Enterprise roles such as `"data_reader,query_select on orders"`), created through the management REST API;

@@ -2349,6 +2349,27 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For Milvus (A239, `milvus`), set `endpoint` to the proxy's RESTful API
+(`https://<host>:19530`), `admin_user` and `password_ref` to a user allowed to create
+and drop users and grant roles (such as `root`), and `role_bindings` to existing Milvus
+roles per allowed role (comma separated), each holding the privileges the lease should
+carry, for example a role with `CollectionReadOnly` on one collection. Each lease is a
+user granted exactly those roles; revocation drops it.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "vectors",
+  "type": "milvus",
+  "endpoint": "https://milvus.internal:19530",
+  "admin_user": "root",
+  "password_ref": "file:/run/secrets/milvus-root",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "orders_reader"},
+  "max_ttl": "8h"
+}
+```
+
 For Couchbase (A239, `couchbase`), set `endpoint` to the cluster's management REST
 API (`https://<node>:18091`), `admin_user` and `password_ref` to a user allowed to
 create and delete local users, and `role_bindings` to `"<roles> on <buckets>"` per

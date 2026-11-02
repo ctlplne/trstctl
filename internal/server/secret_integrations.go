@@ -458,6 +458,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredKafkaBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
+	case "milvus":
+		return openConfiguredMilvusBackend(opener)
 	case "tailscale":
 		return openConfiguredTailscaleBackend(opener)
 	case "mongodb-atlas":
@@ -696,6 +698,29 @@ func openConfiguredCouchbaseBackend(o *configuredDynamicBackendOpener) (requestD
 		return o.fail(err)
 	}
 	backend, err := dynsecret.NewCouchbaseBackend(dynsecret.CouchbaseConfig{
+		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredMilvusBackend reads the administrator password into a backend
+// that keeps its own sealed copy and calls the RESTful API through the
+// SSRF-guarded client (A239).
+func openConfiguredMilvusBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewMilvusBackend(dynsecret.MilvusConfig{
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})

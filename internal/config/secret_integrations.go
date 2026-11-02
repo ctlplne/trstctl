@@ -123,8 +123,8 @@ type DynamicSecretProviderConfig struct {
 	ClientID           string `json:"client_id,omitempty"`
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
-	// AdminUser is the administrator a clickhouse, rabbitmq or couchbase provider
-	// creates and deletes leased users as, an elasticsearch provider creates and
+	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
+	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
 	// credentials and ACLs (its password is password_ref, A239).
 	AdminUser string `json:"admin_user,omitempty"`
@@ -236,11 +236,11 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
-	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {},
+	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -416,7 +416,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
-	"couchbase": validateCouchbaseProvider,
+	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -833,7 +833,7 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
 	}
 	if !adminUserProviderTypes[c.Type] && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka and couchbase", where))
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase and milvus", where))
 	}
 	return errs
 }
@@ -947,6 +947,38 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var milvusRoleName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,31}$`)
+
+// validateMilvusProvider checks a Milvus provider (A239): endpoint is the
+// proxy's RESTful API, admin_user and password_ref a user allowed to manage
+// users and grant roles, and each allowed role is bound to Milvus roles that
+// exist with the lease's privileges, for example "orders_reader".
+func validateMilvusProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the RESTful API) is required for milvus", where))
+	}
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsAny(c.AdminUser, ":") || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for milvus and must not contain a colon", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		for _, name := range strings.Split(binding, ",") {
+			if !milvusRoleName.MatchString(strings.TrimSpace(name)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a Milvus role name", where, role, strings.TrimSpace(name)))
+			}
+		}
+	}
+	return errs
 }
 
 var (

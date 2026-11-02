@@ -18667,7 +18667,8 @@
               "tailscale",
               "mongodb-atlas",
               "kafka",
-              "couchbase"
+              "couchbase",
+              "milvus"
             ],
             "type": "string"
           }

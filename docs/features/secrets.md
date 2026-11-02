@@ -355,12 +355,12 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Eighteen backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Nineteen backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
-database users, Kafka SCRAM users, and Couchbase users (A239).
+database users, Kafka SCRAM users, Couchbase users, and Milvus users (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -464,12 +464,20 @@ of adding one. Revocation deletes the user, and Couchbase refuses its next reque
 The Community Edition has one data role, full access to a bucket, so a Community lease
 is scoped by bucket; the Enterprise Edition's roles narrow it further.
 
+The Milvus backend creates one user per lease through the RESTful API and grants it
+the Milvus roles its role is bound to (`"orders_reader"`); the roles carry the
+privileges. Milvus refuses to create a user that exists and lets no one reset a
+password without the old one, so the lease's user is dropped before it is created: a
+retry after an uncertain attempt replaces the user instead of adding one. If a grant
+fails, the new user is dropped again. Revocation drops the user with its grants, and
+Milvus refuses its next request.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns nineteen safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twenty safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

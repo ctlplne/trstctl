@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka and couchbase") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase and milvus") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }
@@ -397,6 +397,38 @@ func TestValidateCouchbaseProviderA239(t *testing.T) {
 	} {
 		c := base
 		c.RoleBindings = map[string]string{"orders": "bucket_full_access on orders"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestValidateMilvusProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "vectors", Type: "milvus",
+		Endpoint: "https://milvus.internal:19530", AdminUser: "root", PasswordRef: "file:/run/secrets/milvus-root",
+		AllowedRoles: []string{"reader"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"reader": "orders_reader"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":    {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the RESTful API) is required for milvus"},
+		"no admin":       {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for milvus"},
+		"colon in admin": {func(c *DynamicSecretProviderConfig) { c.AdminUser = "root:x" }, "must not contain a colon"},
+		"no password":    {func(c *DynamicSecretProviderConfig) { c.PasswordRef = "" }, "password_ref"},
+		"no grant":       {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["reader"] is required for milvus`},
+		"bad role":       {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"reader": "orders reader"} }, "is not a Milvus role name"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "orders_reader"}
 		tc.mutate(&c)
 		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)

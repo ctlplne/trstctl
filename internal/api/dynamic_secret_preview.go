@@ -281,6 +281,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
 			roles(`Each allowed role maps to "<roles> on <buckets>", for example "bucket_full_access on orders" (the Community Edition's data role) or "data_reader,query_select on orders".`),
 		)},
+		{Type: "milvus", Label: "Milvus users", Purpose: "Creates a Milvus user with a generated password and only its role's Milvus roles through the RESTful API, and drops it at revocation; Milvus then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "RESTful API", "HTTPS URL of the Milvus proxy's RESTful API (port 19530).", true),
+			value("admin_user", "Administrator", "A Milvus user allowed to create and drop users and grant roles, such as root.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			roles(`Each allowed role maps to existing Milvus roles, comma separated, for example "orders_reader"; each role carries the privileges the lease should have.`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -329,6 +336,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's ACL operations on its topics, consumer groups and transactional IDs, until the ACLs and the SCRAM credential are deleted", "confirmed"
 	case "couchbase":
 		return "the role's Couchbase roles on the named buckets, until the user is deleted", "confirmed"
+	case "milvus":
+		return "the privileges of the Milvus roles the lease role is bound to, until the user is dropped", "confirmed"
 	}
 	return "", ""
 }

@@ -5242,7 +5242,7 @@ when off, requiring a KEK when on):
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
-  `mongodb-atlas`, `kafka`, and `couchbase` (A239). Issuance is
+  `mongodb-atlas`, `kafka`, `couchbase`, and `milvus` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5287,7 +5287,12 @@ when off, requiring a KEK when on):
   bound bucket as a leased user and is refused another bucket, a renewal stays
   within the maximum lifetime, and after revocation the login is refused (401)
   and no leased user is left. The Community Edition scopes a lease by bucket
-  only (its one data role is full access to a bucket).
+  only (its one data role is full access to a bucket). Milvus users (A239) are
+  proven against stock Milvus 2.6.26 standalone with authorization on: stock
+  curl queries the collection the bound role can read as a leased user and is
+  refused another collection and an insert (PermissionDenied), a renewal stays
+  within the maximum lifetime, and after revocation the user's request is
+  refused (code 1800) and no leased user is left.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.
