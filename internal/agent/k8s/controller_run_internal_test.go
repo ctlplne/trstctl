@@ -43,6 +43,23 @@ func startRunFixture(t *testing.T) *runFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The fixture's CA stands in for the control plane's signer, which builds
+	// its weak-key tables at startup (internal/server/run.go and
+	// internal/signing/serve.go). Sign one throwaway request on the curve these
+	// tests use before anything is timed, so the first CSR a test waits for is
+	// not the one that builds the table: under CI's race detector and
+	// module-wide coverage that one-time setup took most of a 5 s wait.
+	warm, err := mtls.GenerateAgentKey("warm.apps.svc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmCSR, err := warm.CSR()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ca.SignClientCSR(warmCSR, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	f := &runFixture{
 		api: newFakeAPI(resClusterIssuers, resIssuers, resCertificates, resTrustBundles, resCSRs, resConfigMaps, resSecrets),
 		ca:  ca,
