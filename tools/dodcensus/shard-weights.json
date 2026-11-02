@@ -1,19 +1,19 @@
 {
-  "source": "estimate (60 s + 30 s per entry) until a sharded CI run measures each group; replace with the runtime_seconds the shard receipts record",
+  "source": "measured: runtime_seconds of the three shard receipts of CI run 41439816582 (2026-11-02); a group that failed counts the time it ran",
   "seconds": {
-    "pkcs11_cgo ./internal/server TestDODManagedKeyProductionAssembly": 270,
-    "static ./cmd/trstctl TestDODConnectorRightSizeProductionAssembly": 90,
-    "static ./cmd/trstctl TestDODKMIPProductionAssembly": 90,
-    "static ./cmd/trstctl TestDODPQCProductionAssembly": 150,
-    "static ./internal/server TestDODBreakglassRotationProductionAssembly": 90,
-    "static ./internal/server TestDODCodeSigningProductionAssembly": 90,
-    "static ./internal/server TestDODEvalProtocolProfileProductionAssembly": 90,
-    "static ./internal/server TestDODExternalCAUniversalProductionAssembly": 510,
-    "static ./internal/server TestDODKubernetesPostureRoutesProductionAssembly": 120,
-    "static ./internal/server TestDODNativeConnectorsProductionAssembly": 810,
-    "static ./internal/server TestDODNativeIncidentNotificationProductionAssembly": 150,
-    "static ./internal/server TestDODSecretIntegrationsProductionAssembly": 330,
-    "static ./internal/server TestDODSecretSyncProductionAssembly": 390,
-    "static ./internal/server TestDODVaultCompatProductionAssembly": 90
+    "pkcs11_cgo ./internal/server TestDODManagedKeyProductionAssembly": 188,
+    "static ./cmd/trstctl TestDODConnectorRightSizeProductionAssembly": 109,
+    "static ./cmd/trstctl TestDODKMIPProductionAssembly": 104,
+    "static ./cmd/trstctl TestDODPQCProductionAssembly": 4,
+    "static ./internal/server TestDODBreakglassRotationProductionAssembly": 10,
+    "static ./internal/server TestDODCodeSigningProductionAssembly": 9,
+    "static ./internal/server TestDODEvalProtocolProfileProductionAssembly": 9,
+    "static ./internal/server TestDODExternalCAUniversalProductionAssembly": 260,
+    "static ./internal/server TestDODKubernetesPostureRoutesProductionAssembly": 97,
+    "static ./internal/server TestDODNativeConnectorsProductionAssembly": 224,
+    "static ./internal/server TestDODNativeIncidentNotificationProductionAssembly": 15,
+    "static ./internal/server TestDODSecretIntegrationsProductionAssembly": 283,
+    "static ./internal/server TestDODSecretSyncProductionAssembly": 32,
+    "static ./internal/server TestDODVaultCompatProductionAssembly": 10
   }
 }
