@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/store"
@@ -178,6 +179,15 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 			return
 		} else if found && !latest.Terminal() {
 			plan.Blockers = append(plan.Blockers, staticRotationInFlightDetail)
+		}
+		// A240: a single-phase provider warns before it runs.
+		if provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err == nil &&
+			staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
+			plan.ExecuteExternalEffects = append(plan.ExecuteExternalEffects, "single phase: issuing the new credential at provider "+
+				req.Provider+" invalidates the current one at once, so consumers fail until they read the new version")
+			if !req.AcknowledgeSinglePhase {
+				plan.Blockers = append(plan.Blockers, staticRotationSinglePhaseDetail)
+			}
 		}
 		// A240: the retirement gate the command will hold.
 		var gateErr *apiError

@@ -14535,7 +14535,7 @@ export interface components {
             /** @enum {string} */
             revocation: "confirmed" | "ttl_only";
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql";
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql" | "auth0";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;
@@ -20874,6 +20874,8 @@ export interface components {
             target?: string;
         };
         SecretRotationRequest: {
+            /** @description Static rotations (A240): accept a single-phase provider, which invalidates the current credential when it issues the next; such a rotation is refused without it. */
+            acknowledge_single_phase?: boolean;
             /** @description Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds. */
             consumers?: string[];
             key: string;
@@ -20915,6 +20917,7 @@ export interface components {
             retire_after_seconds?: number;
             /** Format: date-time */
             retired_at?: string;
+            single_phase_acknowledged?: boolean;
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -20938,6 +20941,8 @@ export interface components {
             next_cursor?: string;
         };
         SecretRotationScheduleRequest: {
+            /** @description Static rotations (A240): accept a single-phase provider, which invalidates the current credential when it issues the next; such a rotation is refused without it. */
+            acknowledge_single_phase?: boolean;
             /** @description Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds. */
             consumers?: string[];
             enabled?: boolean;
@@ -21145,8 +21150,11 @@ export interface components {
             retire_approved_by?: string;
             /** Format: date-time */
             retire_not_before?: string;
+            /** @enum {string} */
+            rotation_phase?: "two_phase" | "single_phase";
             /** Format: uuid */
             schedule_id?: string;
+            single_phase_acknowledged?: boolean;
             terminal: boolean;
             /** Format: date-time */
             terminal_at?: string;

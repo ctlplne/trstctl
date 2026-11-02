@@ -329,6 +329,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "Credential name prefix", "Optional prefix of leased credential names (default trstctl); revocation only ever deletes credentials with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to the consumer app "<org>/<catalog>/<consumer-org>/<app>"; the app's subscriptions are the credential's authority.`),
 		)},
+		{Type: "auth0", Label: "Auth0 application client secret", Purpose: "Rotates the client secret of the application the role is bound to through the Management API (static rotation only; it issues no leases). Single phase: Auth0 invalidates the current secret the moment it issues the next, so a rotation runs only when acknowledged and consumers fail until they read the new version. Built against a stand-in of the Management API; no Auth0 proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Tenant domain", "HTTPS URL of the Auth0 tenant, https://<tenant>.<region>.auth0.com.", true),
+			value("client_id", "Management client ID", "A machine-to-machine application granted the Management API's update:client_keys scope.", true),
+			credential("client_secret_ref", "Management client secret reference", "That application's client secret.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role (the secret name) maps to the client ID of the application whose secret it rotates."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -399,6 +406,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's literal key prefixes and explicit commands, through an RBAC user in one user group or ACL, until the user is deleted", "confirmed"
 	case "ibm-api-connect":
 		return "the subscriptions (plans and products) of the consumer app the role is bound to, until the credential is deleted", "confirmed"
+	case "auth0":
+		return "the bound application's own grants, through its rotated client secret; the previous secret stops working when the next is issued", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

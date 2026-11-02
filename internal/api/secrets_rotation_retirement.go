@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -35,6 +36,27 @@ const (
 )
 
 var errStaticRotationAwaitingConsumers = errors.New("api: static rotation retire: waiting for consumer evidence or the approved deadline")
+
+// staticRotationSinglePhaseDetail is the warning a single-phase rotation gives
+// before it runs (A240): the request (or its schedule) must accept it.
+const staticRotationSinglePhaseDetail = "this provider rotates in a single phase: issuing the new credential invalidates the current one at once, so consumers fail until they read the new version; set acknowledge_single_phase to run it"
+
+// staticRotationPhase is the provider's phase model for role; a provider that
+// does not say is two-phase.
+func staticRotationPhase(provider dynsecret.Provider, role string) string {
+	if phaser, ok := provider.(dynsecret.RotationPhaser); ok && phaser.RotationPhase(role) == dynsecret.RotationSinglePhase {
+		return dynsecret.RotationSinglePhase
+	}
+	return dynsecret.RotationTwoPhase
+}
+
+// checkStaticRotationPhase refuses an unacknowledged single-phase rotation.
+func checkStaticRotationPhase(provider dynsecret.Provider, role string, acknowledged bool) error {
+	if staticRotationPhase(provider, role) == dynsecret.RotationSinglePhase && !acknowledged {
+		return errStatus(http.StatusBadRequest, staticRotationSinglePhaseDetail)
+	}
+	return nil
+}
 
 // validateStaticRotationRetirement checks a request's retirement gate.
 func validateStaticRotationRetirement(consumers []string, retireAfterSeconds int) error {
@@ -131,6 +153,9 @@ func (a *API) holdStaticRotationRetirement(ctx context.Context, cmd store.Secret
 func (a *API) staticRotationView(ctx context.Context, cmd store.SecretStaticRotationCommand) (secretStaticRotationView, error) {
 	view := toSecretStaticRotationView(cmd)
 	view.ConsumerAdoption = consumerAdoptionNotRequested
+	if provider, _, err := a.staticRotationProvider(cmd.TenantID, cmd.Provider, cmd.Key); err == nil {
+		view.RotationPhase = staticRotationPhase(provider, cmd.Key)
+	}
 	if len(cmd.Consumers) == 0 {
 		return view, nil
 	}

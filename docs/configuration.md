@@ -2058,6 +2058,12 @@ allowed role to the two existing accounts its static rotation alternates between
 for example `{"reader": ["orders_app_a", "orders_app_b"]}`; the owner provisions both
 with the role's grants, and rotation only ever changes their passwords.
 
+An `auth0` provider (A240) only rotates: set `endpoint` to the tenant domain,
+`client_id` and `client_secret_ref` to a machine-to-machine application granted the
+Management API's `update:client_keys`, `allow_static_rotation: true`, and bind each
+allowed role (the secret's name) to the client ID of the application whose secret it
+rotates. Its rotations are single-phase and need `acknowledge_single_phase: true`.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
 `azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,

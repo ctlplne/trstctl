@@ -7006,7 +7006,7 @@ func componentSchemas() map[string]*Schema {
 		"required": {Type: "boolean"}, "description": str(),
 	}, "key", "label", "kind", "required", "description")
 	dynamicSecretSupportedProvider := object(map[string]*Schema{
-		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp", "oauth-client-credentials", "clickhouse", "elasticsearch", "rabbitmq", "tailscale", "mongodb-atlas", "kafka", "couchbase", "milvus", "github-app", "snowflake", "aws-elasticache", "aws-memorydb", "ibm-api-connect", "mssql", "azure-sql"}},
+		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp", "oauth-client-credentials", "clickhouse", "elasticsearch", "rabbitmq", "tailscale", "mongodb-atlas", "kafka", "couchbase", "milvus", "github-app", "snowflake", "aws-elasticache", "aws-memorydb", "ibm-api-connect", "mssql", "azure-sql", "auth0"}},
 		"label": str(), "purpose": str(), "authority": str(),
 		"revocation":   {Type: "string", Enum: []string{"confirmed", "ttl_only"}},
 		"requirements": {Type: "array", Items: ref("DynamicSecretProviderRequirement")},
@@ -7046,10 +7046,13 @@ func componentSchemas() map[string]*Schema {
 		Description: "Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds."}
 	rotationRetireAfter := &Schema{Type: "integer",
 		Description: "Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports."}
+	rotationAcknowledge := &Schema{Type: "boolean",
+		Description: "Static rotations (A240): accept a single-phase provider, which invalidates the current credential when it issues the next; such a rotation is refused without it."}
 	secretRotationReq := object(map[string]*Schema{
 		"provider": rotationProvider, "key": str(), "old_ref": str(),
 		"target": str(), "remote_key": str(), "ttl_seconds": rotationTTL,
 		"consumers": rotationConsumers, "retire_after_seconds": rotationRetireAfter,
+		"acknowledge_single_phase": rotationAcknowledge,
 	}, "provider", "key", "old_ref")
 	secretRotation := object(map[string]*Schema{
 		"key": str(), "old_ref": str(), "new_ref": str(),
@@ -7073,7 +7076,9 @@ func componentSchemas() map[string]*Schema {
 		"consumer_states": {Type: "array", Items: object(map[string]*Schema{
 			"consumer": str(), "verified_version": {Type: "integer"}, "adopted": {Type: "boolean"},
 		}, "consumer", "verified_version", "adopted")},
-		"created_at": timestamp(), "updated_at": timestamp(), "terminal_at": timestamp(),
+		"rotation_phase":            {Type: "string", Enum: []string{"two_phase", "single_phase"}},
+		"single_phase_acknowledged": {Type: "boolean"},
+		"created_at":                timestamp(), "updated_at": timestamp(), "terminal_at": timestamp(),
 	}, "id", "provider", "key", "old_ref", "new_ref", "phase", "terminal", "expected_version", "result_version", "restored_version", "credential_valid", "consumer_adoption", "created_at", "updated_at")
 	secretRotationPreview := object(map[string]*Schema{
 		"capability": {Type: "string", Enum: []string{"F37"}},
@@ -7129,6 +7134,7 @@ func componentSchemas() map[string]*Schema {
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"next_run_at": timestamp(),
 		"consumers":   rotationConsumers, "retire_after_seconds": rotationRetireAfter,
+		"acknowledge_single_phase": rotationAcknowledge,
 	}, "name", "provider", "key", "old_ref", "interval_seconds")
 	secretRotationRunStatuses := []string{
 		"completed", "queued", "failed", "rolled_back", "rollback_failed", "retire_pending", "delivery_failed", "unsupported",
@@ -7144,7 +7150,8 @@ func componentSchemas() map[string]*Schema {
 		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": secretRotationScheduleLastRunStatus,
 		"last_new_ref": str(), "last_error": str(),
 		"consumers": {Type: "array", Items: str()}, "retire_after_seconds": {Type: "integer"},
-		"created_at": timestamp(), "updated_at": timestamp(),
+		"single_phase_acknowledged": {Type: "boolean"},
+		"created_at":                timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "name", "provider", "key", "old_ref", "interval_seconds", "enabled", "next_run_at", "last_run_status", "created_at", "updated_at")
 	secretRotationScheduleRunStatus := str()
 	secretRotationScheduleRunStatus.Enum = secretRotationRunStatuses

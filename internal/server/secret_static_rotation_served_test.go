@@ -87,7 +87,10 @@ type staticRotationCommandView struct {
 	RetireNotBefore  *time.Time `json:"retire_not_before"`
 	RetireApprovedBy string     `json:"retire_approved_by"`
 	TerminalAt       *time.Time `json:"terminal_at"`
-	ConsumerStates   []struct {
+	// The single-phase warning (A240).
+	RotationPhase           string `json:"rotation_phase"`
+	SinglePhaseAcknowledged bool   `json:"single_phase_acknowledged"`
+	ConsumerStates          []struct {
 		Consumer        string `json:"consumer"`
 		VerifiedVersion int    `json:"verified_version"`
 		Adopted         bool   `json:"adopted"`

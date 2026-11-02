@@ -4341,7 +4341,7 @@ export interface DynamicSecretSupportedProvider {
   purpose: string;
   requirements: DynamicSecretProviderRequirement[];
   revocation: "confirmed" | "ttl_only";
-  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql";
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql" | "auth0";
 }
 
 export interface EdgeDelegation {
@@ -9970,6 +9970,7 @@ export interface SecretRotationPreview {
 }
 
 export interface SecretRotationRequest {
+  acknowledge_single_phase?: boolean;
   consumers?: string[];
   key: string;
   old_ref: string;
@@ -9998,6 +9999,7 @@ export interface SecretRotationSchedule {
   provider: string;
   retire_after_seconds?: number;
   retired_at?: string;
+  single_phase_acknowledged?: boolean;
   tenant_id: string;
   updated_at: string;
 }
@@ -10015,6 +10017,7 @@ export interface SecretRotationScheduleList {
 }
 
 export interface SecretRotationScheduleRequest {
+  acknowledge_single_phase?: boolean;
   consumers?: string[];
   enabled?: boolean;
   interval_seconds: number;
@@ -10173,7 +10176,9 @@ export interface SecretStaticRotation {
   retire_after_seconds?: number;
   retire_approved_by?: string;
   retire_not_before?: string;
+  rotation_phase?: "two_phase" | "single_phase";
   schedule_id?: string;
+  single_phase_acknowledged?: boolean;
   terminal: boolean;
   terminal_at?: string;
   ttl_seconds?: number;

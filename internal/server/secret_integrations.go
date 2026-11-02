@@ -468,6 +468,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredAWSCacheBackend(opener)
 	case "ibm-api-connect":
 		return openConfiguredAPIConnectBackend(opener)
+	case "auth0":
+		return openConfiguredAuth0Backend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -1646,6 +1648,16 @@ func (p *configuredDynamicProvider) RotationAccounts(role string) ([2]string, bo
 	return [2]string{accounts[0], accounts[1]}, true
 }
 
+// RotationPhase implements dynsecret.RotationPhaser: a provider type whose
+// rotation invalidates the current credential when it issues the next is
+// single-phase (A240).
+func (p *configuredDynamicProvider) RotationPhase(string) string {
+	if config.SinglePhaseRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] {
+		return dynsecret.RotationSinglePhase
+	}
+	return dynsecret.RotationTwoPhase
+}
+
 // rotationAccountPairs returns every role's two-user pair for the backend.
 func (p *configuredDynamicProvider) rotationAccountPairs() map[string][2]string {
 	pairs := map[string][2]string{}
@@ -1695,6 +1707,21 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
+	case "auth0":
+		// The rotated secret authenticates its application at the token
+		// endpoint (A240).
+		backend, closeBackend, err := p.open(ctx)
+		if err != nil {
+			return "", err
+		}
+		defer closeBackend()
+		verifier, ok := backend.(interface {
+			VerifyCredential(context.Context, []byte) error
+		})
+		if !ok {
+			return "", errors.New("server: the auth0 backend cannot verify a rotated secret")
+		}
+		return "authenticated", verifier.VerifyCredential(ctx, credential)
 	default:
 		return "not_available", nil
 	}

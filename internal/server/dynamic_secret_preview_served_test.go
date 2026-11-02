@@ -126,10 +126,10 @@ func TestServedDynamicSecretCatalogAndPreviewBindTheExactRuntimeConfiguration(t 
 		!catalog.ConfigurationChangesRestart || catalog.SecretDelivery != "file_or_secret_reference" {
 		t.Fatalf("catalog configuration contract = %+v", catalog)
 	}
-	if len(catalog.SupportedProviders) != 27 {
-		t.Fatalf("supported provider count = %d, want twenty-six backends plus the aws-iam compatibility alias", len(catalog.SupportedProviders))
+	if len(catalog.SupportedProviders) != 28 {
+		t.Fatalf("supported provider count = %d, want twenty-seven backends plus the aws-iam compatibility alias", len(catalog.SupportedProviders))
 	}
-	wantTypes := []string{"postgresql", "mysql", "mongodb", "aws-sts", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp", "oauth-client-credentials", "clickhouse", "elasticsearch", "rabbitmq", "tailscale", "mongodb-atlas", "kafka", "couchbase", "milvus", "github-app", "snowflake", "aws-elasticache", "aws-memorydb", "ibm-api-connect", "mssql", "azure-sql"}
+	wantTypes := []string{"postgresql", "mysql", "mongodb", "aws-sts", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap", "totp", "oauth-client-credentials", "clickhouse", "elasticsearch", "rabbitmq", "tailscale", "mongodb-atlas", "kafka", "couchbase", "milvus", "github-app", "snowflake", "aws-elasticache", "aws-memorydb", "ibm-api-connect", "auth0", "mssql", "azure-sql"}
 	for i, want := range wantTypes {
 		if catalog.SupportedProviders[i].Type != want || len(catalog.SupportedProviders[i].Requirements) == 0 {
 			t.Fatalf("supported provider %d = %+v, want %s with structured requirements", i, catalog.SupportedProviders[i], want)

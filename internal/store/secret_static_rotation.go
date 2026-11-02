@@ -73,9 +73,12 @@ type SecretStaticRotationCommand struct {
 	RetireAfterSeconds int
 	RetireApprovedBy   string
 	RetireNotBefore    *time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	TerminalAt         *time.Time
+	// SinglePhaseAcknowledged records that the request accepted a provider
+	// that invalidates the current credential when it issues the next (A240).
+	SinglePhaseAcknowledged bool
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	TerminalAt              *time.Time
 }
 
 // Terminal reports whether the worker has nothing left to do for the command.
@@ -140,12 +143,12 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
 		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at,
-		         consumers, retire_after_seconds, retire_approved_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16)
+		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
 		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC(),
-		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy); err != nil {
+		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -256,7 +259,7 @@ const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no creden
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
        ttl_seconds, new_expires_at, created_at, updated_at, terminal_at,
-       consumers, retire_after_seconds, retire_approved_by, retire_not_before`
+       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
@@ -264,7 +267,7 @@ func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, 
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
 		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt,
-		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore)
+		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}

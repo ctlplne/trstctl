@@ -752,6 +752,19 @@ proof runs the PostgreSQL two-user cycles with the application reporting each ve
 it writes with: no session ends at retirement, and a consumer that stays silent is
 retired past at the deadline with adoption still pending.
 
+A provider rotates in one of two phase models (A240), and the command view shows
+which as `rotation_phase`. Two-phase providers (the database providers, AWS IAM) keep
+the predecessor working until retirement. A single-phase provider invalidates the
+current credential the moment it issues the next, so consumers fail until they read
+the new version: the preview says so and stays blocked, and a rotation or schedule is
+refused (`400`), until the request sets `acknowledge_single_phase: true`; the command
+and schedule then record `single_phase_acknowledged`. The first single-phase provider
+is `auth0`, which rotates an application's client secret through the Management API's
+`rotate-secret` (each role is bound to the application's client ID; it rotates only
+and issues no leases) and verifies the new secret at the tenant's token endpoint
+(`verify_mode: authenticated`). It is built against a stand-in of the Auth0 API, with
+no Auth0 proof yet.
+
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and

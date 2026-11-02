@@ -18675,7 +18675,8 @@
               "aws-memorydb",
               "ibm-api-connect",
               "mssql",
-              "azure-sql"
+              "azure-sql",
+              "auth0"
             ],
             "type": "string"
           }
@@ -42264,6 +42265,10 @@
       },
       "SecretRotationRequest": {
         "properties": {
+          "acknowledge_single_phase": {
+            "description": "Static rotations (A240): accept a single-phase provider, which invalidates the current credential when it issues the next; such a rotation is refused without it.",
+            "type": "boolean"
+          },
           "consumers": {
             "description": "Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds.",
             "items": {
@@ -42377,6 +42382,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "single_phase_acknowledged": {
+            "type": "boolean"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
@@ -42453,6 +42461,10 @@
       },
       "SecretRotationScheduleRequest": {
         "properties": {
+          "acknowledge_single_phase": {
+            "description": "Static rotations (A240): accept a single-phase provider, which invalidates the current credential when it issues the next; such a rotation is refused without it.",
+            "type": "boolean"
+          },
           "consumers": {
             "description": "Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds.",
             "items": {
@@ -43214,9 +43226,19 @@
             "format": "date-time",
             "type": "string"
           },
+          "rotation_phase": {
+            "enum": [
+              "two_phase",
+              "single_phase"
+            ],
+            "type": "string"
+          },
           "schedule_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "single_phase_acknowledged": {
+            "type": "boolean"
           },
           "terminal": {
             "type": "boolean"

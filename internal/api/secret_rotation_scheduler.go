@@ -408,23 +408,23 @@ func secretRotationScheduleContext(ctx context.Context, tenantID string, sched s
 	return events.ContextWithActor(ctx, events.Actor{Subject: authority})
 }
 
-// secretRotationScheduleGate reads the retirement gate (A240) of the schedule
-// revision a tick froze. The gate is configuration the same upsert event wrote,
+// secretRotationScheduleGate reads the retirement gate and single-phase
+// acknowledgement (A240) of the schedule revision a tick froze. The gate is configuration the same upsert event wrote,
 // so the live row carries it while its config_event_sequence matches the
 // snapshot's; a newer revision cannot claim this due edge, and a mismatch here
 // fails closed instead of running without the gate.
-func (a *API) secretRotationScheduleGate(ctx context.Context, tenantID string, sched store.SecretRotationSchedule) ([]string, int, error) {
+func (a *API) secretRotationScheduleGate(ctx context.Context, tenantID string, sched store.SecretRotationSchedule) (store.SecretRotationSchedule, error) {
 	if !isStaticSecretRotation(sched.Provider) || isDynamicLeaseRotation(sched.Provider) {
-		return nil, 0, nil
+		return store.SecretRotationSchedule{}, nil
 	}
 	live, err := a.store.GetSecretRotationSchedule(ctx, tenantID, sched.ID)
 	if err != nil {
-		return nil, 0, err
+		return store.SecretRotationSchedule{}, err
 	}
 	if live.ConfigEventSequence != sched.ConfigEventSequence {
-		return nil, 0, fmt.Errorf("%w: schedule configuration changed after the tick froze its due edge", store.ErrSecretRotationScheduleCommandConflict)
+		return store.SecretRotationSchedule{}, fmt.Errorf("%w: schedule configuration changed after the tick froze its due edge", store.ErrSecretRotationScheduleCommandConflict)
 	}
-	return live.Consumers, live.RetireAfterSeconds, nil
+	return live, nil
 }
 
 func (a *API) runSecretRotationSchedule(
@@ -444,12 +444,12 @@ func (a *API) runSecretRotationSchedule(
 	commandKey := orchestrator.SecretRotationScheduleCommandKey(runID)
 	terminalEventID := orchestrator.SecretRotationScheduleRunEventID(runID)
 	principal := "secret-rotation-schedule:" + sched.ID
-	consumers, retireAfterSeconds, err := a.secretRotationScheduleGate(ctx, tenantID, sched)
+	gate, err := a.secretRotationScheduleGate(ctx, tenantID, sched)
 	if err != nil {
 		return secretRotationScheduleRunResponse{}, nil, err
 	}
 	request := secretRotationRequest{Provider: sched.Provider, Key: sched.Key, OldRef: sched.OldRef,
-		Consumers: consumers, RetireAfterSeconds: retireAfterSeconds}
+		Consumers: gate.Consumers, RetireAfterSeconds: gate.RetireAfterSeconds, AcknowledgeSinglePhase: gate.SinglePhaseAcknowledged}
 	requestBinding, err := a.secretRotationScheduleRequestBinding(
 		tenantID, principal, sched, commandKey, request)
 	if err != nil {

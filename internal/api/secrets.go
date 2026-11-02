@@ -394,6 +394,9 @@ type secretRotationRequest struct {
 	// verified, or at the approved deadline after verification.
 	Consumers          []string `json:"consumers,omitempty"`
 	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
+	// AcknowledgeSinglePhase accepts a provider that invalidates the current
+	// credential when it issues the next (A240).
+	AcknowledgeSinglePhase bool `json:"acknowledge_single_phase,omitempty"`
 }
 
 type secretRotationPreviewResponse struct {
@@ -437,15 +440,16 @@ type secretRotationResponse struct {
 }
 
 type secretRotationScheduleRequest struct {
-	Name               string     `json:"name"`
-	Provider           string     `json:"provider"`
-	Key                string     `json:"key"`
-	OldRef             string     `json:"old_ref"`
-	IntervalSeconds    int        `json:"interval_seconds"`
-	Enabled            *bool      `json:"enabled"`
-	NextRunAt          *time.Time `json:"next_run_at,omitempty"`
-	Consumers          []string   `json:"consumers,omitempty"`
-	RetireAfterSeconds int        `json:"retire_after_seconds,omitempty"`
+	Name                   string     `json:"name"`
+	Provider               string     `json:"provider"`
+	Key                    string     `json:"key"`
+	OldRef                 string     `json:"old_ref"`
+	IntervalSeconds        int        `json:"interval_seconds"`
+	Enabled                *bool      `json:"enabled"`
+	NextRunAt              *time.Time `json:"next_run_at,omitempty"`
+	Consumers              []string   `json:"consumers,omitempty"`
+	RetireAfterSeconds     int        `json:"retire_after_seconds,omitempty"`
+	AcknowledgeSinglePhase bool       `json:"acknowledge_single_phase,omitempty"`
 }
 
 type secretRotationScheduleResponse struct {
@@ -465,10 +469,11 @@ type secretRotationScheduleResponse struct {
 	LastNewRef      string     `json:"last_new_ref,omitempty"`
 	LastError       string     `json:"last_error,omitempty"`
 	// The retirement gate every static command this schedule queues carries.
-	Consumers          []string  `json:"consumers,omitempty"`
-	RetireAfterSeconds int       `json:"retire_after_seconds,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	Consumers               []string  `json:"consumers,omitempty"`
+	RetireAfterSeconds      int       `json:"retire_after_seconds,omitempty"`
+	SinglePhaseAcknowledged bool      `json:"single_phase_acknowledged,omitempty"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
 }
 
 type secretRotationScheduleRunResponse struct {
@@ -1217,6 +1222,11 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		if err := validateStaticRotationRetirement(req.Consumers, req.RetireAfterSeconds); err != nil {
 			return 0, nil, err
 		}
+		if staticProvider, _, err := a.staticRotationProvider(tenantID, provider, key); err == nil {
+			if err := checkStaticRotationPhase(staticProvider, key, req.AcknowledgeSinglePhase); err != nil {
+				return 0, nil, err
+			}
+		}
 		enabled := true
 		if req.Enabled != nil {
 			enabled = *req.Enabled
@@ -1229,6 +1239,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			Name: name, Provider: provider, Key: key, OldRef: oldRef,
 			IntervalSeconds: req.IntervalSeconds, Enabled: enabled, NextRunAt: nextRunAt,
 			Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds,
+			SinglePhaseAcknowledged: req.AcknowledgeSinglePhase,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -1585,7 +1596,7 @@ func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRota
 		RetiredAt:     s.RetiredAt,
 		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef,
 		LastError: store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError),
-		Consumers: s.Consumers, RetireAfterSeconds: s.RetireAfterSeconds,
+		Consumers: s.Consumers, RetireAfterSeconds: s.RetireAfterSeconds, SinglePhaseAcknowledged: s.SinglePhaseAcknowledged,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }

@@ -58,6 +58,20 @@ type TwoUserRotationProvider interface {
 	RotationAccounts(role string) ([2]string, bool)
 }
 
+// Rotation phases (A240). Two-phase: the predecessor keeps working until the
+// rotation retires it. Single-phase: issuing the successor invalidates the
+// predecessor at once, so consumers fail until they read the new version.
+const (
+	RotationTwoPhase    = "two_phase"
+	RotationSinglePhase = "single_phase"
+)
+
+// RotationPhaser is a StaticRotationProvider that says which phase model its
+// rotation of role follows; a provider that does not is two-phase.
+type RotationPhaser interface {
+	RotationPhase(role string) string
+}
+
 // LeaseCredentialVerifier proves a lease credential works at its provider:
 // dynamic-lease rotation (A201) verifies the new lease's credential before it
 // retires the predecessor. It returns the closed mode it used ("connected",

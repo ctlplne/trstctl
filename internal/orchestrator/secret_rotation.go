@@ -57,6 +57,7 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 		Key: strings.TrimSpace(in.Key), OldRef: strings.TrimSpace(in.OldRef),
 		IntervalSeconds: in.IntervalSeconds, Enabled: in.Enabled, NextRunAt: in.NextRunAt,
 		Consumers: in.Consumers, RetireAfterSeconds: in.RetireAfterSeconds,
+		SinglePhaseAcknowledged: in.SinglePhaseAcknowledged,
 	})
 	if err != nil {
 		return store.SecretRotationSchedule{}, err

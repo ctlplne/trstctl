@@ -374,3 +374,26 @@ func openConfiguredAPIConnectBackend(o *configuredDynamicBackendOpener) (request
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredAuth0Backend reads the management client secret into a backend
+// that keeps its own sealed copy and calls the tenant through the SSRF-guarded
+// client (A240).
+func openConfiguredAuth0Backend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	clientSecret, err := o.resolve(cfg.ClientSecretRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewAuth0Backend(dynsecret.Auth0Config{
+		Endpoint: cfg.Endpoint, ClientID: cfg.ClientID, ClientSecret: clientSecret, RoleBindings: cfg.RoleBindings,
+		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

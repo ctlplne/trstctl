@@ -3152,6 +3152,9 @@ type SecretStaticRotationQueued struct {
 	Consumers          []string `json:"consumers,omitempty"`
 	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
 	RetireApprovedBy   string   `json:"retire_approved_by,omitempty"`
+	// SinglePhaseAcknowledged records that the request accepted a provider
+	// that invalidates the current credential when it issues the next (A240).
+	SinglePhaseAcknowledged bool `json:"single_phase_acknowledged,omitempty"`
 }
 
 // SecretStaticRotationAdvanced records one phase transition of a static
@@ -3188,8 +3191,9 @@ type SecretRotationScheduleUpserted struct {
 	NextRunAt       time.Time `json:"next_run_at,omitempty"`
 	// Consumers and RetireAfterSeconds are the retirement gate every static
 	// command the schedule queues carries (A240).
-	Consumers          []string `json:"consumers,omitempty"`
-	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
+	Consumers               []string `json:"consumers,omitempty"`
+	RetireAfterSeconds      int      `json:"retire_after_seconds,omitempty"`
+	SinglePhaseAcknowledged bool     `json:"single_phase_acknowledged,omitempty"`
 }
 
 // SecretRotationScheduleControlled changes future eligibility without
@@ -7306,6 +7310,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
 			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, TTLSeconds: pl.TTLSeconds, CreatedAt: e.Time,
 			Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds, RetireApprovedBy: pl.RetireApprovedBy,
+			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged,
 		}, e.Data)
 	case EventSecretStaticRotationAdvanced:
 		var pl SecretStaticRotationAdvanced
@@ -7338,6 +7343,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
 			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
 			CreatedAt: e.Time, UpdatedAt: e.Time, Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds,
+			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged,
 		})
 	case EventSecretRotationSchedulePaused, EventSecretRotationScheduleResumed, EventSecretRotationScheduleRetired:
 		expectedAction := map[string]string{

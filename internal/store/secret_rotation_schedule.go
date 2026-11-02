@@ -65,6 +65,9 @@ type SecretRotationSchedule struct {
 	// static command the schedule queues carries.
 	Consumers          []string
 	RetireAfterSeconds int
+	// SinglePhaseAcknowledged carries a single-phase provider's
+	// acknowledgement to every command the schedule queues (A240).
+	SinglePhaseAcknowledged bool
 }
 
 // SecretRotationScheduleRun is the projected result of one scheduled rotation
@@ -188,8 +191,9 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 	_, err := tx.Exec(ctx,
 		`INSERT INTO secret_rotation_schedules
 		        (id, tenant_id, name, provider, secret_key, old_ref, interval_seconds,
-		         config_event_sequence, enabled, next_run_at, created_at, updated_at, consumers, retire_after_seconds)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		         config_event_sequence, enabled, next_run_at, created_at, updated_at, consumers, retire_after_seconds,
+		         single_phase_acknowledged)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET name = EXCLUDED.name,
 		          provider = EXCLUDED.provider,
@@ -198,6 +202,7 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		          interval_seconds = EXCLUDED.interval_seconds,
 		          consumers = EXCLUDED.consumers,
 		          retire_after_seconds = EXCLUDED.retire_after_seconds,
+		          single_phase_acknowledged = EXCLUDED.single_phase_acknowledged,
 		          config_event_sequence = EXCLUDED.config_event_sequence,
 		          enabled = CASE
 		              WHEN secret_rotation_schedules.retired_at IS NOT NULL OR
@@ -211,7 +216,8 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 		      AND secret_rotation_schedules.config_event_sequence < EXCLUDED.config_event_sequence`,
 		sched.ID, sched.TenantID, sched.Name, sched.Provider, sched.Key, sched.OldRef,
 		sched.IntervalSeconds, sched.ConfigEventSequence, sched.Enabled, sched.NextRunAt,
-		sched.CreatedAt, sched.UpdatedAt, nonNilStrings(sched.Consumers), sched.RetireAfterSeconds)
+		sched.CreatedAt, sched.UpdatedAt, nonNilStrings(sched.Consumers), sched.RetireAfterSeconds,
+		sched.SinglePhaseAcknowledged)
 	return err
 }
 
@@ -1321,7 +1327,7 @@ func (s *Store) ListSecretRotationSchedulesPage(ctx context.Context, tenantID, a
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id > $2
 			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
@@ -1363,7 +1369,7 @@ func (s *Store) ListDueSecretRotationSchedulesPage(
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
 			    AND (next_run_at > $3 OR (next_run_at = $3 AND id::text > $4))
@@ -1409,7 +1415,7 @@ func (s *Store) ListDueSecretRotationSchedulesRingPage(
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
 			    AND id > $3::uuid
@@ -1440,7 +1446,7 @@ func (s *Store) GetSecretRotationSchedule(ctx context.Context, tenantID, id stri
 			`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds
+			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -1458,7 +1464,7 @@ func (s *Store) GetSecretRotationScheduleForControlTx(
 		`SELECT id::text, tenant_id::text, name, provider, secret_key, old_ref, interval_seconds, config_event_sequence,
 		        enabled, next_run_at, control_event_sequence, retired_at,
 		        last_run_id::text, last_run_at, last_run_status,
-		        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds
+		        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 		   FROM secret_rotation_schedules
 		  WHERE tenant_id = $1 AND id = $2::uuid FOR UPDATE`, tenantID, id), &out)
 	return out, err
@@ -1469,7 +1475,8 @@ func scanSecretRotationSchedule(row rowScanner, sched *SecretRotationSchedule) e
 		&sched.OldRef, &sched.IntervalSeconds, &sched.ConfigEventSequence, &sched.Enabled, &sched.NextRunAt,
 		&sched.ControlEventSequence, &sched.RetiredAt,
 		&sched.LastRunID, &sched.LastRunAt, &sched.LastRunStatus, &sched.LastNewRef,
-		&sched.LastError, &sched.CreatedAt, &sched.UpdatedAt, &sched.Consumers, &sched.RetireAfterSeconds); err != nil {
+		&sched.LastError, &sched.CreatedAt, &sched.UpdatedAt, &sched.Consumers, &sched.RetireAfterSeconds,
+		&sched.SinglePhaseAcknowledged); err != nil {
 		return err
 	}
 	// Existing installations can have v1 rows written before scheduler errors

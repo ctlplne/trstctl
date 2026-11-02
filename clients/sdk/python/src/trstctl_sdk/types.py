@@ -13790,6 +13790,7 @@ SecretRotationPreview = TypedDict(
 SecretRotationRequest = TypedDict(
     'SecretRotationRequest',
     {
+        'acknowledge_single_phase': bool,
         'consumers': list[str],
         'key': str,
         'old_ref': str,
@@ -13822,6 +13823,7 @@ SecretRotationSchedule = TypedDict(
         'provider': str,
         'retire_after_seconds': int,
         'retired_at': str,
+        'single_phase_acknowledged': bool,
         'tenant_id': str,
         'updated_at': str,
     },
@@ -13851,6 +13853,7 @@ SecretRotationScheduleList = TypedDict(
 SecretRotationScheduleRequest = TypedDict(
     'SecretRotationScheduleRequest',
     {
+        'acknowledge_single_phase': bool,
         'consumers': list[str],
         'enabled': bool,
         'interval_seconds': int,
@@ -14061,7 +14064,9 @@ SecretStaticRotation = TypedDict(
         'retire_after_seconds': int,
         'retire_approved_by': str,
         'retire_not_before': str,
+        'rotation_phase': str,
         'schedule_id': str,
+        'single_phase_acknowledged': bool,
         'terminal': bool,
         'terminal_at': str,
         'ttl_seconds': int,

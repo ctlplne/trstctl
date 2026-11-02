@@ -180,7 +180,12 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true}
+
+// SinglePhaseRotationProviderTypes are the static-rotation types whose provider
+// invalidates the current credential when it issues the next one: a rotation
+// through them runs only when acknowledged (A240).
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -265,7 +270,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
-	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {},
+	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -318,7 +323,7 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 			errs = append(errs, fmt.Errorf("%s allowed_roles must contain at least one role", where))
 		}
 		if item.AllowStaticRotation && !StaticRotationProviderTypes[strings.TrimSpace(item.Type)] {
-			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for postgresql, mysql and aws-iam providers only", i))
+			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for postgresql, mysql, aws-iam and auth0 providers only", i))
 		}
 		if ttl, err := item.MaxTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("%s max_ttl must be a positive duration", where))
@@ -450,6 +455,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider,
+	"auth0":           validateAuth0Provider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -909,11 +915,11 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.RevocationEndpoint != "" {
 		errs = append(errs, fmt.Errorf("%s revocation_endpoint is only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "ibm-api-connect" && c.ClientSecretRef != "" {
-		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials, mongodb-atlas and ibm-api-connect", where))
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientSecretRef != "" {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials, mongodb-atlas, ibm-api-connect and auth0", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.ClientID != "" {
-		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app and ibm-api-connect", where))
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientID != "" {
+		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app, ibm-api-connect and auth0", where))
 	}
 	if c.Type != "ibm-api-connect" && c.APIKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect", where))
@@ -1048,6 +1054,36 @@ func validRabbitMQGrant(binding string) error {
 }
 
 var apiConnectSegment = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
+
+var auth0ClientID = regexp.MustCompile(`^[A-Za-z0-9]{8,64}$`)
+
+// validateAuth0Provider checks an Auth0 client-secret rotator (A240): endpoint
+// is the tenant domain, client_id and client_secret_ref a machine-to-machine
+// application with the Management API's update:client_keys scope, and each
+// allowed role is bound to the application client ID it rotates. It rotates
+// only (allow_static_rotation); it issues no leases.
+func validateAuth0Provider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the tenant domain) is required for auth0", where))
+	}
+	if !auth0ClientID.MatchString(c.ClientID) {
+		errs = append(errs, fmt.Errorf("%s client_id must be the management application's client ID for auth0", where))
+	}
+	if err := validateCredentialRef(c.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref: %w", where, err))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s auth0 rotates an application's client secret and issues no leases: set allow_static_rotation", where))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" && !auth0ClientID.MatchString(binding) {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be the Auth0 application client ID it rotates", where, role))
+		}
+	}
+	return errs
+}
 
 // validateAPIConnectProvider checks an IBM API Connect provider (A239):
 // endpoint is the platform API, client_id, client_secret_ref and api_key_ref

@@ -478,6 +478,41 @@ func TestValidateRotationAccountsA240(t *testing.T) {
 	}
 }
 
+func TestValidateAuth0ProviderA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "auth0", Type: "auth0",
+		Endpoint: "https://acme.us.auth0.com", ClientID: "mgmtClient001", ClientSecretRef: "file:/run/secrets/auth0-mgmt",
+		AllowedRoles: []string{"auth0/orders"}, RoleBindings: map[string]string{"auth0/orders": "appClient0001"}, MaxTTL: "1h",
+		AllowStaticRotation: true}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	if !StaticRotationProviderTypes["auth0"] || !SinglePhaseRotationProviderTypes["auth0"] {
+		t.Fatal("auth0 must rotate statically, in a single phase")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":     {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the tenant domain) is required for auth0"},
+		"bad client":      {func(c *DynamicSecretProviderConfig) { c.ClientID = "mgmt client" }, "client_id must be the management application's client ID"},
+		"no secret":       {func(c *DynamicSecretProviderConfig) { c.ClientSecretRef = "" }, "client_secret_ref"},
+		"leases":          {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "issues no leases: set allow_static_rotation"},
+		"unbound role":    {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["auth0/orders"]`},
+		"binding not app": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"auth0/orders": "orders app"} }, "must be the Auth0 application client ID"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"auth0/orders": "appClient0001"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateMSSQLProvidersA239(t *testing.T) {
 	for _, providerType := range []string{"mssql", "azure-sql"} {
 		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,

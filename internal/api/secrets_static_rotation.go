@@ -125,6 +125,9 @@ func (a *API) queueStaticSecretRotation(
 	if err := validateStaticRotationRetirement(req.Consumers, req.RetireAfterSeconds); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
+	if err := checkStaticRotationPhase(provider, req.Key, req.AcknowledgeSinglePhase); err != nil {
+		return store.SecretStaticRotationCommand{}, err
+	}
 	approvedBy := ""
 	if len(req.Consumers) > 0 || req.RetireAfterSeconds > 0 {
 		if approvedBy, err = requestPrincipalSubject(ctx); err != nil {
@@ -162,6 +165,7 @@ func (a *API) queueStaticSecretRotation(
 		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
 		ScheduleID: scheduleID, Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds, RetireApprovedBy: approvedBy,
+		SinglePhaseAcknowledged: req.AcknowledgeSinglePhase && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase,
 	}
 	if err := a.appendAndProjectStaticRotation(ctx, tenantID, id, projections.EventSecretStaticRotationQueued, payload); err != nil {
 		return store.SecretStaticRotationCommand{}, err
@@ -506,9 +510,13 @@ type secretStaticRotationView struct {
 	CredentialValid    bool                          `json:"credential_valid"`
 	ConsumerAdoption   string                        `json:"consumer_adoption"`
 	ConsumerStates     []staticRotationConsumerState `json:"consumer_states,omitempty"`
-	CreatedAt          time.Time                     `json:"created_at"`
-	UpdatedAt          time.Time                     `json:"updated_at"`
-	TerminalAt         *time.Time                    `json:"terminal_at,omitempty"`
+	// RotationPhase is the provider's phase model; a single-phase rotation
+	// ran only with SinglePhaseAcknowledged (A240).
+	RotationPhase           string     `json:"rotation_phase,omitempty"`
+	SinglePhaseAcknowledged bool       `json:"single_phase_acknowledged,omitempty"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
+	TerminalAt              *time.Time `json:"terminal_at,omitempty"`
 }
 
 func toSecretStaticRotationView(cmd store.SecretStaticRotationCommand) secretStaticRotationView {
@@ -519,8 +527,9 @@ func toSecretStaticRotationView(cmd store.SecretStaticRotationCommand) secretSta
 		TTLSeconds: cmd.TTLSeconds, NewExpiresAt: cmd.NewExpiresAt,
 		Consumers: cmd.Consumers, RetireAfterSeconds: cmd.RetireAfterSeconds, RetireApprovedBy: cmd.RetireApprovedBy,
 		RetireNotBefore: cmd.RetireNotBefore, CredentialValid: staticRotationCredentialValid(cmd),
-		ConsumerAdoption: consumerAdoptionNotRequested,
-		CreatedAt:        cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt, TerminalAt: cmd.TerminalAt,
+		SinglePhaseAcknowledged: cmd.SinglePhaseAcknowledged,
+		ConsumerAdoption:        consumerAdoptionNotRequested,
+		CreatedAt:               cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt, TerminalAt: cmd.TerminalAt,
 	}
 }
 
