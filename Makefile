@@ -241,6 +241,11 @@ test-selftests: ## The test lanes' own self-tests (server slices, package shards
 		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
 	@set -euo pipefail; $(EDITIONS_PACKAGE_LIST) | \
 		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(EDITIONS_CI_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
+	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/fuzz-shard_selftest.py
+	@set -euo pipefail; grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal ee | while read -r f; do \
+		pkg="./$$(dirname "$$f")"; \
+		grep -oE '^func (Fuzz[A-Za-z0-9_]+)\(' "$$f" | sed -E 's/^func //; s/\(//' | while read -r fn; do echo "$$pkg $$fn"; done; \
+	done | sort -u | python3 scripts/ci/fuzz-shard.py --shard 0 --shards $(FUZZ_CI_SHARDS) --selftest
 
 .PHONY: test-packages
 test-packages: ## go test (race + coverage) over package shard TEST_SHARD of TEST_SHARDS (all but internal/server and live perf)
@@ -412,10 +417,17 @@ FUZZ_SMOKE_TIME ?= 10s
 # and produced a red result on a different healthy target each run. Nightly or lab
 # jobs can raise this explicitly when the runner has a measured CPU budget.
 FUZZ_SMOKE_PARALLEL ?= 1
+# CI splits the targets over FUZZ_SHARDS lanes (scripts/ci/fuzz-shard.py: a package's
+# targets stay together, packages balanced by target count): 148 targets at 15 s each
+# outgrew one job's 30 minutes (owner decision 2026-11-02: split, never shorten).
+# FUZZ_CI_SHARDS is the ci.yml matrix; make test-selftests checks the partition.
+FUZZ_SHARD ?= 0
+FUZZ_SHARDS ?= 1
+FUZZ_CI_SHARDS ?= 8
 
 .PHONY: fuzz-smoke
 fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed seed corpus (FUZZ-003)
-	@echo ">> fuzz-smoke (each FuzzXxx for $(FUZZ_SMOKE_TIME); committed seeds replayed first)"
+	@echo ">> fuzz-smoke (each FuzzXxx for $(FUZZ_SMOKE_TIME); committed seeds replayed first; shard $(FUZZ_SHARD) of $(FUZZ_SHARDS))"
 	@set -euo pipefail; \
 	fail=0; \
 	while read -r pkg fn; do \
@@ -427,7 +439,7 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 			grep -oE '^func (Fuzz[A-Za-z0-9_]+)\(' "$$f" | sed -E 's/^func //; s/\(//' | while read -r fn; do \
 				echo "$$pkg $$fn"; \
 			done; \
-		done | sort -u \
+		done | sort -u | python3 scripts/ci/fuzz-shard.py --shard $(FUZZ_SHARD) --shards $(FUZZ_SHARDS) \
 	); \
 	if [ "$$fail" -ne 0 ]; then echo "FAIL: a fuzz target crashed (see above)"; exit 1; fi; \
 	echo ">> fuzz-smoke: all targets clean"

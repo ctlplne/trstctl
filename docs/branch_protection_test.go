@@ -86,6 +86,7 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"core-integration-wire":       ciUmbrellaCheck,
 	"dod-census":                  dodUmbrellaCheck,
 	"dod-selftests":               dodUmbrellaCheck,
+	"fuzz-shards":                 fuzzUmbrellaCheck,
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified

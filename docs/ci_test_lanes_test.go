@@ -23,8 +23,9 @@ var makeTestLanes = []string{"test-selftests", "test-packages", "test-server", "
 // split out of the old single job, block merge through; dodUmbrellaCheck is the
 // one the Definition-of-Done census shards and self-tests block merge through.
 const (
-	ciUmbrellaCheck  = "build / test / lint"
-	dodUmbrellaCheck = "definition of done / wiring census"
+	ciUmbrellaCheck   = "build / test / lint"
+	dodUmbrellaCheck  = "definition of done / wiring census"
+	fuzzUmbrellaCheck = "fuzz (smoke per-PR, deeper nightly)"
 )
 
 var makeTestRecipeRe = regexp.MustCompile(`(?m)^test: ## Run all tests[^\n]*\n((?:\t[^\n]*\n)+)`)
@@ -276,6 +277,41 @@ func TestEditionsGateTestsRunInLanesThatCoverEveryPackage(t *testing.T) {
 		if !strings.Contains(makefile, want) {
 			t.Errorf("Makefile must contain %q", want)
 		}
+	}
+}
+
+// TestFuzzSmokeRunsInLanesThatCoverEveryTarget keeps fuzz smoke whole after it
+// split into lanes: each lane runs its shard of the same targets at the same
+// per-target budget, the lanes match the Makefile's FUZZ_CI_SHARDS (which make
+// test-selftests checks holds every target exactly once), shard 0 keeps the
+// property and coverage guards, and the required check needs every lane.
+func TestFuzzSmokeRunsInLanesThatCoverEveryTarget(t *testing.T) {
+	wf := readCIWorkflow(t)
+	lanes, okLanes := wf.Jobs["fuzz-shards"]
+	umbrella, okUmbrella := wf.Jobs["fuzz"]
+	if !okLanes || !okUmbrella {
+		t.Fatal("ci.yml must have the fuzz-shards lanes and the fuzz umbrella")
+	}
+	shards := ciMatrixSize(t, lanes, "shard")
+	want := fmt.Sprintf("make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }} FUZZ_SHARD=${{ matrix.shard }} FUZZ_SHARDS=%d", shards)
+	if !strings.Contains(ciJobRuns(lanes), want) {
+		t.Errorf("the fuzz lanes must run %q", want)
+	}
+	if !strings.Contains(read(t, "../Makefile"), fmt.Sprintf("FUZZ_CI_SHARDS ?= %d\n", shards)) {
+		t.Errorf("Makefile FUZZ_CI_SHARDS must equal the %d fuzz lanes", shards)
+	}
+	if umbrella.Name != fuzzUmbrellaCheck || !slices.Contains(umbrella.Needs, "fuzz-shards") ||
+		strings.TrimSpace(umbrella.If) != "always()" || len(umbrella.Steps) == 0 || !ciUmbrellaGatesOnNeeds(umbrella.Steps[0]) {
+		t.Errorf("%q must need fuzz-shards, always run, and fail unless every lane succeeded", fuzzUmbrellaCheck)
+	}
+	guards := 0
+	for _, step := range lanes.Steps {
+		if strings.Contains(step.Run, "go test ./internal/crypto/ -run TestEvery") && strings.TrimSpace(step.If) == "matrix.shard == 0" {
+			guards++
+		}
+	}
+	if guards != 2 {
+		t.Errorf("fuzz lane 0 must run the property and coverage guards, found %d", guards)
 	}
 }
 

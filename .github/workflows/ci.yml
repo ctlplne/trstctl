@@ -1204,14 +1204,21 @@ jobs:
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
   # that touches untrusted input" (TEST-FUZZASSERT-001) is only a safety net if it RUNS:
-  # this job replays each target's committed seed corpus (under testdata/fuzz, so a
-  # known crasher like FUZZ-001's 0x30 0x84 fails fast) and then fuzzes each target
+  # these lanes replay each target's committed seed corpus (under testdata/fuzz, so a
+  # known crasher like FUZZ-001's 0x30 0x84 fails fast) and then fuzz each target
   # for a short budget. The schedule trigger raises the budget for a deeper nightly
-  # pass. A new crasher fails CI here instead of shipping.
-  fuzz:
-    name: fuzz (smoke per-PR, deeper nightly)
+  # pass. A new crasher fails CI here instead of shipping. The 148 targets outgrew one
+  # job's 30 minutes (cancelled on CI 41445346367 and 41451560632), so they run in
+  # eight lanes, each target once at the same budget; the required check below keeps
+  # its name and passes only if every lane did.
+  fuzz-shards:
+    name: fuzz / targets ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # TEST-004 (nightly raises the fuzz budget)
+    timeout-minutes: ${{ github.event_name == 'schedule' && 60 || 30 }} # TEST-004 (nightly raises the fuzz budget)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -1228,16 +1235,33 @@ jobs:
       # Property tests prove generated semantic invariants. This denominator is
       # deliberately separate from the hostile-byte fuzz-target denominator.
       - name: Property guard (every mandatory parser family has semantic invariants)
+        if: matrix.shard == 0
         run: go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1
 
       # The in-repo coverage guard (TestEveryUntrustedParserIsFuzzed) fails if any
       # untrusted-input parser lacks a fuzz target, keeping the denominator honest.
       - name: Coverage guard (every untrusted parser is fuzzed)
+        if: matrix.shard == 0
         run: go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1
 
       # Short budget per target on a PR; a longer budget on the nightly schedule.
-      - name: Fuzz smoke (all targets; committed seeds first)
-        run: make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}
+      - name: Fuzz smoke (this lane's targets; committed seeds first)
+        run: make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }} FUZZ_SHARD=${{ matrix.shard }} FUZZ_SHARDS=8
+
+  fuzz:
+    name: fuzz (smoke per-PR, deeper nightly)
+    needs: [fuzz-shards]
+    # Always run, so a failed or skipped lane fails this required check instead of
+    # leaving it skipped (a skipped required check would read as passing).
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # TEST-004
+    steps:
+      - name: Every fuzz lane passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); bad = {k: v["result"] for k, v in r.items() if v["result"] != "success"}; print(bad or "all fuzz lanes succeeded"); sys.exit(1 if bad else 0)'
 
   # Hosted ClusterFuzzLite / OSS-Fuzz-family run (PROTOCOL-002). The local fuzz
   # smoke job above stays fast and required; this job runs the upstream

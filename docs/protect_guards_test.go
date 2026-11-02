@@ -4174,7 +4174,9 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 	check("ci.yml fuzz gate", ci,
 		"schedule:",
 		"name: fuzz (smoke per-PR, deeper nightly)",
-		"timeout-minutes: 30 # TEST-004 (nightly raises the fuzz budget)",
+		// Each fuzz lane fails fast on a hang: 30 minutes on a push, 60 on the
+		// nightly schedule, whose 120 s per target needs about 40 per lane.
+		"timeout-minutes: ${{ github.event_name == 'schedule' && 60 || 30 }} # TEST-004 (nightly raises the fuzz budget)",
 		"go test ./internal/crypto/ -run TestEveryMandatoryParserFamilyHasPropertyInvariants -count=1",
 		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
 		"make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}",
