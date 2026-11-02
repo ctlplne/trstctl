@@ -232,6 +232,7 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 .PHONY: test-selftests
 test-selftests: ## The test lanes' own self-tests (server slices, package shards, live baseline)
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py
+	@bash scripts/ci/seed-bundled-pg-archive_selftest.sh
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf/live-baseline_selftest.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/go-test-units_selftest.py
 	@set -euo pipefail; $(TEST_PACKAGE_LIST) | \

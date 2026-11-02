@@ -363,6 +363,40 @@ func TestCIModuleDownloadsRetryTransientProxyFailures(t *testing.T) {
 	}
 }
 
+// TestEveryPostgresArchiveRestoreSeedsTheBundledSource keeps the restored
+// PostgreSQL archive in reach of the bundled server: the cache holds the
+// embedded-postgres library's own cache, which the bundled server never reads,
+// so jobs downloaded the archive anyway and parallel ones drew HTTP 429 (CI run
+// 41479056374). Every restore is followed by the seed script, and the test
+// lanes run its self-test.
+func TestEveryPostgresArchiveRestoreSeedsTheBundledSource(t *testing.T) {
+	wf := readCIWorkflow(t)
+	restores := 0
+	for id, job := range wf.Jobs {
+		for i, step := range job.Steps {
+			if step.Name != "Restore the pinned embedded PostgreSQL archive" {
+				continue
+			}
+			restores++
+			if i+1 == len(job.Steps) || strings.TrimSpace(job.Steps[i+1].Run) != "scripts/ci/seed-bundled-pg-archive.sh" {
+				t.Errorf("job %s restores the PostgreSQL archive without seeding the bundled server's source next", id)
+			}
+		}
+	}
+	if restores == 0 {
+		t.Error("no CI job restores the pinned PostgreSQL archive")
+	}
+	script := read(t, "../scripts/ci/seed-bundled-pg-archive.sh")
+	for _, want := range []string{`src="${HOME}/.embedded-postgres-go"`, `dst="${TMPDIR:-/tmp}/trstctl-pg-bin"`, `install -m 600 "$archive"`, `! -L "$archive"`} {
+		if !strings.Contains(script, want) {
+			t.Errorf("seed-bundled-pg-archive.sh lost %q", want)
+		}
+	}
+	if !strings.Contains(read(t, "../Makefile"), "@bash scripts/ci/seed-bundled-pg-archive_selftest.sh") {
+		t.Error("make test-selftests must run the seed script's self-test")
+	}
+}
+
 // TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch keeps the fix for a
 // cache restore that failed on every job: setup-go installs go.mod's `go`
 // version, and with GOTOOLCHAIN=auto its own `go env` fetched the newer

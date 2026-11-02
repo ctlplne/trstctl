@@ -78,6 +78,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Set up Node for SDK generators
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -197,6 +199,8 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
       # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
       # which the old single job's `make build` used to leave behind.
       - name: Prefetch dependencies for offline build tests
@@ -271,6 +275,8 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
       # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
       # which the old single job's `make build` used to leave behind.
       - name: Prefetch dependencies for offline build tests
@@ -484,6 +490,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Perf smoke SLO gate
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"
@@ -536,6 +544,8 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
       # Core succession tests retain the real PG/NATS/signer and WASM proofs.
       - name: Core succession integration and conformance
         run: |
@@ -579,6 +589,8 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
       # Agent delegation over PostgreSQL/RLS, embedded NATS, the outbox and the real
       # signer process, including the agent framework reference integrations
       # (test/interop/agentframeworks, built from their own pinned module).
@@ -636,6 +648,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Download lane coverage
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -693,6 +707,8 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
       # The wiring census deliberately switches GOPROXY off while it inspects the
       # shipped dependency closure. Warm the module cache first so that offline
       # proof checks product wiring rather than the state of a fresh runner cache.
@@ -737,6 +753,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Prefetch dependencies for the offline census
         run: scripts/ci/go-mod-download.sh
@@ -776,6 +794,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Prefetch dependencies for the offline census
         run: scripts/ci/go-mod-download.sh
@@ -840,6 +860,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Prefetch dependencies for the offline census
         run: scripts/ci/go-mod-download.sh
@@ -998,6 +1020,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Install pinned OpenBao CLI
         env:
@@ -1037,6 +1061,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Key the pinned OpenSSL build by runner image
         id: openssl-pqc-key
@@ -1094,6 +1120,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Full backup -> fresh restore -> boot -> issue (+ corrupted control)
         run: bash scripts/ci/restore-rehearsal.sh
@@ -1157,6 +1185,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Live load gate (realistic + peak phases)
         env:
@@ -1918,6 +1948,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Install pinned certbot client
         run: |
@@ -1969,6 +2001,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Install libest build prerequisites
         run: |
@@ -2023,6 +2057,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Verify OpenSSL CMP client is available
         run: |
@@ -2072,6 +2108,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Verify OpenSSL ts client is available
         run: |
@@ -2121,6 +2159,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Install sscep build prerequisites
         run: |
@@ -2175,6 +2215,8 @@ jobs:
             ~/.embedded-postgres-go
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
 
       - name: Install pinned spiffe-helper
         run: |
