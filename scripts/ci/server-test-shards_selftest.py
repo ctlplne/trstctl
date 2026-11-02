@@ -24,11 +24,15 @@ FAKE_GO = r'''
 import json, os, pathlib, subprocess, sys, time
 args = sys.argv[1:]
 scenario = os.environ.get('SHARDS_SELFTEST_SCENARIO', 'success')
+if args[:2] == ['env', 'GOROOT']:
+    print(os.environ['FAKE_GOROOT'])
+    raise SystemExit(0)
 if args[:2] == ['tool', 'test2json']:
     # A prebuilt test binary run through test2json: it must run from the package directory, and its baked-in
     # build flags stand in for go test's; translate its -test.* flags into the go test form handled below.
     assert args[2:6] == ['-t', '-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']] or (args[2:5] == ['-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']])
     pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.cwd').open('a').write(os.getcwd() + '\n')
+    pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.env').open('a').write(os.environ['GOROOT'] + ' ' + os.environ['PATH'].split(os.pathsep)[0] + '\n')
     flags = args[args.index(os.environ['FAKE_TEST_BINARY']) + 1:]
     assert '-test.v=test2json' in flags
     translated = ['-json', '-race', '-count=1', '-p=1', '-covermode=atomic', '-coverpkg=./internal/...']
@@ -199,16 +203,21 @@ class ProcessTests(unittest.TestCase):
             package = Path(directory) / 'internal' / 'server'
             package.mkdir(parents=True)
             os.environ['FAKE_TEST_BINARY'] = str(binary)
+            os.environ['FAKE_GOROOT'] = str(Path(directory) / 'go1.26.10')
             try:
                 result, record, merged, _, _ = self.run_gate('success', extra=(
                     '--test-binary', str(binary), '--import-path', 'example.test/internal/server', '--package', str(package)))
             finally:
                 del os.environ['FAKE_TEST_BINARY']
+                del os.environ['FAKE_GOROOT']
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(merged.startswith('mode: atomic\n'))
             self.assertEqual(record['test_binary_sha256'], hashlib.sha256(b'prebuilt race + coverage test binary').hexdigest())
             dirs = set(Path(str(binary) + '.cwd').read_text().split())
             self.assertEqual(dirs, {str(package.resolve())})
+            # Like go test, the binary's processes see the toolchain's GOROOT and its bin first on PATH.
+            goroot = str(Path(directory) / 'go1.26.10')
+            self.assertEqual(set(Path(str(binary) + '.env').read_text().splitlines()), {goroot + ' ' + os.path.join(goroot, 'bin')})
             with self.assertRaises(ValueError):
                 runner.test_commands(argparse.Namespace(go='go', test_binary=str(binary), import_path=None, package=str(package),
                                                         coverpkg='./...', skip='^TestFairness$', seconds=60))

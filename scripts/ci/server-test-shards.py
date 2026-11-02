@@ -211,24 +211,32 @@ def cancel_run(_signum, _frame):
 def test_commands(args):
     """How the census and each part run: `go test` over the package, or a prebuilt race + coverage test binary
     (--test-binary, built once for every CI slice) run in the package directory through test2json, as go test itself
-    runs it. Returns the census command, a part-command builder, the children's working directory and the binary's
-    digest (None for go test)."""
+    runs it. Returns the census command, a part-command builder, the children's working directory, environment
+    overrides for them, and the binary's digest (None for go test)."""
     if not args.test_binary:
         base = [args.go, "test", "-json", "-race", "-count=1", "-p=1", "-covermode=atomic", "-coverpkg=" + args.coverpkg]
 
         def part(profile, expression):
             return base + ["-coverprofile=" + str(profile), "-run", expression, "-skip", args.skip, f"-timeout={args.seconds}s", args.package]
-        return base + ["-list", "^(Test|Example|Fuzz)", args.package], part, None, None
+        return base + ["-list", "^(Test|Example|Fuzz)", args.package], part, None, {}, None
     if not args.import_path:
         raise ValueError("--test-binary needs --import-path")
     binary = Path(args.test_binary).resolve()
     digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    workdir = str(Path(args.package).resolve())
+    # go test puts its own toolchain's bin first on PATH (and sets GOROOT) for the
+    # test process, so a test that runs `go build` gets the matching compiler; do
+    # the same, resolving the module's toolchain from the package directory.
+    goroot = subprocess.run([args.go, "env", "GOROOT"], cwd=workdir, capture_output=True, text=True, check=True).stdout.strip()
+    if not goroot:
+        raise ValueError("go env GOROOT is empty")
+    overrides = {"GOROOT": goroot, "PATH": os.path.join(goroot, "bin") + os.pathsep + os.environ.get("PATH", "")}
     wrap = [args.go, "tool", "test2json", "-t", "-p", args.import_path, str(binary), "-test.v=test2json"]
 
     def part(profile, expression):
         return wrap + ["-test.count=1", "-test.paniconexit0", "-test.coverprofile=" + str(profile), "-test.run=" + expression,
                        "-test.skip=" + args.skip, f"-test.timeout={args.seconds}s"]
-    return wrap + ["-test.list", "^(Test|Example|Fuzz)"], part, str(Path(args.package).resolve()), digest
+    return wrap + ["-test.list", "^(Test|Example|Fuzz)"], part, workdir, overrides, digest
 
 
 def run(args):
@@ -243,7 +251,7 @@ def run(args):
     children = []
     record = {"wall_seconds": args.seconds, "workers": 2, "package": args.package, "parts": [], "temporary_root": str(scratch),
               "slice": args.slice, "slices": args.slices}
-    listing, part_command, workdir, binary_digest = test_commands(args)
+    listing, part_command, workdir, overrides, binary_digest = test_commands(args)
     record["test_binary_sha256"] = binary_digest
     success = False
     previous_signals = {sig: signal.signal(sig, cancel_run) for sig in (signal.SIGTERM, signal.SIGINT)}
@@ -251,7 +259,7 @@ def run(args):
         census = artifacts / "census.ndjson"
         began = time.monotonic()
         with census.open("w") as log:
-            census_child = subprocess.Popen(listing, cwd=workdir, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            census_child = subprocess.Popen(listing, cwd=workdir, env={**os.environ, **overrides}, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             children.append(census_child)
             census_exit = census_child.wait()
         if census_exit:
@@ -273,7 +281,7 @@ def run(args):
             logpath = artifacts / f"part-{index}.ndjson"
             profile = artifacts / f"part-{index}.cover"
             profile.unlink(missing_ok=True)
-            env = {**os.environ, "TMPDIR": str(scratch / str(index))}
+            env = {**os.environ, **overrides, "TMPDIR": str(scratch / str(index))}
             expression = "^(" + "|".join(names) + ")$"
             command = part_command(profile, expression)
             log = logpath.open("w")
