@@ -189,7 +189,7 @@ func (b *RabbitMQBackend) CreateCredential(ctx context.Context, req GenerateRequ
 // connection, and its open connections are closed. Only users this provider
 // names are ever deleted; a user already gone counts as deleted.
 func (b *RabbitMQBackend) Revoke(ctx context.Context, ref string) error {
-	if !rabbitmqUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !rabbitmqUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret rabbitmq: refusing to delete %q, which this provider did not create", ref)
 	}
 	status, err := b.call(ctx, http.MethodDelete, "/api/users/"+url.PathEscape(ref), nil)

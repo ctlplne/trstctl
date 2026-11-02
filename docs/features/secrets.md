@@ -355,13 +355,14 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-two backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-three backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
-tokens, SQL Server logins, and Azure SQL contained database users (A239).
+tokens, Snowflake service users, SQL Server logins, and Azure SQL contained database users
+(A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -410,7 +411,7 @@ maximum lifetime, and the ClickHouse role its lease role is bound to as its only
 (default) role, so the lease carries exactly that role's grants. Revocation drops
 the user and ClickHouse then refuses its login. The user's name derives from the
 lease, so a retry after an uncertain attempt replaces the same user, and revocation
-only ever drops users with the provider's prefix. Server errors are reported by
+only ever drops users with the provider's issued-name shape (its prefix, the role, and the lease digest suffix). Server errors are reported by
 their ClickHouse error code only, since their text can echo the statement.
 
 The Elasticsearch backend creates one API key per lease through the security API,
@@ -455,7 +456,7 @@ every request, so a client still connected is refused from its next request (Kaf
 not end an authenticated connection when its credential goes). Then it deletes the
 credential, so the next login fails. A retry after an uncertain attempt replaces the
 same user's password and leaves its ACLs as they are, and if the ACLs fail the new user
-is deleted again. Only users with the provider's prefix are ever revoked.
+is deleted again. Only users with the provider's issued-name shape (its prefix, the role, and the lease digest suffix) are ever revoked.
 
 The Couchbase backend creates one local user per lease through the cluster's
 management REST API, with a generated password and only its role's roles on the named
@@ -485,6 +486,17 @@ token until the revocation completes, and a lease can't be extended (a new lease
 a new token). It is built against a stand-in of GitHub's API made from its
 documentation; there is no proof against GitHub yet.
 
+The Snowflake backend creates one service user (`TYPE = SERVICE`) per lease that
+authenticates with a key pair the provider generates; the lease returns the private key,
+so no password exists to reach SQL text or query history. The user is granted only the
+role's roles and set to expire in Snowflake after the provider's maximum lifetime rounded
+up to whole days (`DAYS_TO_EXPIRY`), a backstop if trstctl is down when the lease ends.
+The administrator calls the SQL API with a key-pair JWT signed inside the crypto
+boundary. A retry after an uncertain attempt finds the lease's user and installs the new
+key on it. Revocation disables the user, which aborts its running queries and refuses
+its logins, then drops it. It is built against a stand-in of the SQL API made from its
+documentation; there is no Snowflake proof yet.
+
 The SQL Server backend (`mssql`) creates one login per lease with a generated password
 that meets SQL Server's password policy, a user for it in the configured database, and
 that user's membership of the role's database roles; the Azure SQL backend
@@ -506,7 +518,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns twenty-three safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twenty-four safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

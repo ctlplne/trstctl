@@ -128,6 +128,10 @@ type DynamicSecretProviderConfig struct {
 	// app's client ID (A239).
 	PrivateKeyRef  string `json:"private_key_ref,omitempty"`
 	InstallationID string `json:"installation_id,omitempty"`
+	// Account is a snowflake provider's account identifier (<orgname>-
+	// <accountname>); its administrator is admin_user with the key pair whose
+	// private key is private_key_ref (A239).
+	Account string `json:"account,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -242,11 +246,11 @@ var dynamicSecretTypes = map[string]struct{}{
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
-	"github-app": {},
+	"github-app": {}, "snowflake": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -424,6 +428,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
+	"snowflake": validateSnowflakeProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -839,14 +844,20 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.ClientID != "" {
 		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas and github-app", where))
 	}
-	if c.Type != "github-app" && (c.PrivateKeyRef != "" || c.InstallationID != "") {
-		errs = append(errs, fmt.Errorf("%s private_key_ref and installation_id are only valid for github-app", where))
+	if c.Type != "github-app" && c.InstallationID != "" {
+		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
+	}
+	if c.Type != "github-app" && c.Type != "snowflake" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app and snowflake", where))
+	}
+	if c.Type != "snowflake" && c.Account != "" {
+		errs = append(errs, fmt.Errorf("%s account is only valid for snowflake", where))
 	}
 	if c.Type != "tailscale" && c.Tailnet != "" {
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
 	}
 	if !adminUserProviderTypes[c.Type] && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase and milvus", where))
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase, milvus and snowflake", where))
 	}
 	return errs
 }
@@ -960,6 +971,44 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var (
+	snowflakeAccountID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$`)
+	snowflakeRoleName  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_$]{0,254}$`)
+)
+
+// validateSnowflakeProvider checks a Snowflake provider (A239): endpoint is the
+// account URL, account its identifier, admin_user and private_key_ref a user
+// allowed to create, alter and drop users and grant the bound roles, with its
+// registered key pair, and each allowed role is bound to Snowflake roles.
+func validateSnowflakeProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the account URL) is required for snowflake", where))
+	}
+	if !snowflakeAccountID.MatchString(c.Account) {
+		errs = append(errs, fmt.Errorf("%s account (the <orgname>-<accountname> identifier) is required for snowflake", where))
+	}
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for snowflake", where))
+	}
+	if err := validateCredentialRef(c.PrivateKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s private_key_ref: %w", where, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		for _, name := range strings.Split(binding, ",") {
+			if !snowflakeRoleName.MatchString(strings.TrimSpace(name)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a Snowflake role name", where, role, strings.TrimSpace(name)))
+			}
+		}
+	}
+	return errs
 }
 
 var (

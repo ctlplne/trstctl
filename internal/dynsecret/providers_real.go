@@ -1501,6 +1501,27 @@ func scopedNameWithSuffix(prefix, role, suffix string, max int, sep string) (str
 	return base + sep + suffix, nil
 }
 
+// issuedPrincipalName reports whether ref has the shape scopedNameForRequest
+// gives a principal issued with this prefix and "_": the sanitized prefix, a
+// separator, and a final separator before a ten-hex-digit suffix (the lease
+// digest, or a random one). Providers that delete principals by name refuse
+// anything else, so a foreign principal that merely shares the prefix - an
+// administrator named trstctl_admin, say - is never deleted. The comparison
+// ignores case for systems that upper-case unquoted names.
+func issuedPrincipalName(prefix, ref string) bool {
+	lower := strings.ToLower(ref)
+	start := sanitizeFragment(prefix, defaultDynsecretPrefix) + "_"
+	if !strings.HasPrefix(lower, start) || len(lower) < len(start)+10 || lower[len(lower)-11] != '_' {
+		return false
+	}
+	for _, c := range lower[len(lower)-10:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func sanitizeFragment(v, fallback string) string {
 	var b strings.Builder
 	lastSep := false

@@ -2349,6 +2349,30 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For Snowflake (A239, `snowflake`), set `endpoint` to the account URL,
+`account` to the account identifier (`<orgname>-<accountname>`), `admin_user` and
+`private_key_ref` to a user allowed to create, alter and drop users and grant the bound
+roles (`USERADMIN` or `SECURITYADMIN`) and the private key of its registered key pair,
+and `role_bindings` to Snowflake roles per allowed role (the first is the user's default
+role). Each lease is a `TYPE = SERVICE` user with a key pair the provider generates; the
+lease returns the private key, and Snowflake expires the user after `max_ttl` rounded up
+to whole days if trstctl has not revoked it by then.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "warehouse",
+  "type": "snowflake",
+  "endpoint": "https://acme-prod.snowflakecomputing.com",
+  "account": "acme-prod",
+  "admin_user": "TRSTCTL_ADMIN",
+  "private_key_ref": "file:/run/secrets/snowflake-admin.pem",
+  "allowed_roles": ["analyst"],
+  "role_bindings": {"analyst": "ANALYST"},
+  "max_ttl": "8h"
+}
+```
+
 For a GitHub App (A239, `github-app`), set `client_id` to the app's client ID,
 `private_key_ref` to its private key (PEM), `installation_id` to the installation the
 tokens are minted for, `max_ttl` to at most `1h` (GitHub ends installation tokens after

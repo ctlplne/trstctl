@@ -2,6 +2,16 @@
 
 ### Added
 
+- Snowflake dynamic secrets (`type: snowflake`): each lease is a Snowflake service user (`TYPE = SERVICE`) that
+  authenticates with a key pair the provider generates (the lease returns the private key; no password exists, so none
+  reaches SQL text or query history), granted only its role's roles and set to expire in Snowflake after the
+  provider's maximum lifetime in whole days (`DAYS_TO_EXPIRY`). The administrator calls the SQL API with a key-pair JWT
+  signed inside the crypto boundary. Revocation disables the user, aborting its running queries, then drops it. Built
+  against a stand-in of the SQL API.
+- Dynamic-secret providers that delete principals by name (ClickHouse, RabbitMQ, MongoDB Atlas, Kafka, Couchbase,
+  Milvus, SQL Server, Azure SQL, Snowflake) now refuse to delete one without the full issued-name shape (prefix, role and
+  the lease digest suffix), not just the prefix, so an administrator named, say, `trstctl_admin` is never deleted.
+
 - GitHub App dynamic secrets (`type: github-app`): each lease is an installation access token narrowed to the role's
   permissions and named repositories (`"contents:read,metadata:read on api,web"`), minted with an RS256 app JWT signed
   inside the crypto boundary. GitHub ends a token after an hour; revocation ends it at once by presenting it (the lease

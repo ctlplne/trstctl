@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -143,7 +142,7 @@ func (b *ClickHouseBackend) CreateCredential(ctx context.Context, req GenerateRe
 // Revoke implements Backend: the user is dropped, so ClickHouse refuses its
 // next login. Only users this provider names are ever dropped.
 func (b *ClickHouseBackend) Revoke(ctx context.Context, ref string) error {
-	if !clickHouseIdentifier.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !clickHouseIdentifier.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret clickhouse: refusing to drop %q, which this provider did not create", ref)
 	}
 	if err := b.exec(ctx, []byte("DROP USER IF EXISTS "+ref)); err != nil {

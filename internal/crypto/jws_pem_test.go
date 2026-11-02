@@ -51,6 +51,15 @@ func TestSignJWTWithPEMKeyRS256(t *testing.T) {
 			t.Fatalf("%s: claims %s", name, claims)
 		}
 	}
+	for name, keyPEM := range map[string][]byte{"PKCS #1": pkcs1, "PKCS #8": pkcs8PEM} {
+		der, err := PublicKeyDERFromPEMKey(keyPEM)
+		if err != nil || string(der) != string(signer.Public().DER) {
+			t.Fatalf("%s: public key DER differs from the key's (%v)", name, err)
+		}
+	}
+	if _, err := PublicKeyDERFromPEMKey([]byte("not a key")); err == nil {
+		t.Fatal("read a public key from non-PEM bytes")
+	}
 	two := append(append([]byte{}, pkcs1...), pkcs1...)
 	encrypted := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Headers: map[string]string{"Proc-Type": "4,ENCRYPTED"}, Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	for name, bad := range map[string][]byte{"empty": nil, "not PEM": []byte("ghs_not_a_key"), "two blocks": two, "encrypted": encrypted,

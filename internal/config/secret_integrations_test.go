@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase and milvus") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase, milvus and snowflake") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }
@@ -507,8 +507,46 @@ func TestValidateGitHubAppProviderA239(t *testing.T) {
 	other := base
 	other.Type, other.ClientID = "tailscale", ""
 	other.BearerTokenRef, other.RoleBindings = "file:/run/secrets/ts", map[string]string{"ci": "tag:ci"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "private_key_ref and installation_id are only valid for github-app") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "installation_id is only valid for github-app") {
 		t.Fatalf("github-app fields on another type: %v", err)
+	}
+}
+
+func TestValidateSnowflakeProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "warehouse", Type: "snowflake",
+		Endpoint: "https://acme-prod.snowflakecomputing.com", Account: "acme-prod", AdminUser: "TRSTCTL_ADMIN",
+		PrivateKeyRef: "file:/run/secrets/snowflake-admin.pem", AllowedRoles: []string{"analyst"}, MaxTTL: "8h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"analyst": "ANALYST, REPORTER"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint": {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the account URL) is required for snowflake"},
+		"no account":  {func(c *DynamicSecretProviderConfig) { c.Account = "" }, "account (the <orgname>-<accountname> identifier) is required"},
+		"no admin":    {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for snowflake"},
+		"no key":      {func(c *DynamicSecretProviderConfig) { c.PrivateKeyRef = "" }, "private_key_ref"},
+		"bad role":    {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"analyst": `"ANALYST"`} }, "is not a Snowflake role name"},
+		"no grant":    {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["analyst"] is required for snowflake`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"analyst": "ANALYST, REPORTER"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := base
+	other.Type, other.AdminUser, other.PrivateKeyRef = "tailscale", "", ""
+	other.BearerTokenRef, other.RoleBindings = "file:/run/secrets/ts", map[string]string{"analyst": "tag:ci"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "account is only valid for snowflake") {
+		t.Fatalf("account on another type: %v", err)
 	}
 }
 

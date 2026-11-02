@@ -374,7 +374,7 @@ func grantKafkaACLs(ctx context.Context, admin kafkaAdmin, user string, clauses 
 // fails). Only users this provider names are touched; a user already gone
 // counts as revoked.
 func (b *KafkaBackend) Revoke(ctx context.Context, ref string) error {
-	if !kafkaUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !kafkaUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret kafka: refusing to revoke %q, which this provider did not create", ref)
 	}
 	admin, err := b.connect(ctx)

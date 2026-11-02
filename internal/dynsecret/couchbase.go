@@ -156,7 +156,7 @@ func (b *CouchbaseBackend) CreateCredential(ctx context.Context, req GenerateReq
 // next request. Only users this provider names are deleted; a user already gone
 // counts as deleted.
 func (b *CouchbaseBackend) Revoke(ctx context.Context, ref string) error {
-	if !couchbaseUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !couchbaseUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret couchbase: refusing to delete %q, which this provider did not create", ref)
 	}
 	status, err := b.call(ctx, http.MethodDelete, "/settings/rbac/users/local/"+url.PathEscape(ref), nil)

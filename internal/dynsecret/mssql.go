@@ -213,7 +213,7 @@ func (b *MSSQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 // principals this provider names are touched; one already gone counts as
 // revoked.
 func (b *MSSQLBackend) Revoke(ctx context.Context, ref string) error {
-	if !mssqlUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !mssqlUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret mssql: refusing to revoke %q, which this provider did not create", ref)
 	}
 	login := sql.Named("login", ref)

@@ -4341,7 +4341,7 @@ export interface DynamicSecretSupportedProvider {
   purpose: string;
   requirements: DynamicSecretProviderRequirement[];
   revocation: "confirmed" | "ttl_only";
-  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "mssql" | "azure-sql";
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "mssql" | "azure-sql";
 }
 
 export interface EdgeDelegation {

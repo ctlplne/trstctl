@@ -5242,7 +5242,7 @@ when off, requiring a KEK when on):
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
-  `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `mssql`, and `azure-sql` (A239). Issuance is
+  `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `mssql`, and `azure-sql` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5303,7 +5303,9 @@ when off, requiring a KEK when on):
   against a stand-in of GitHub's API only (the app JWT is verified against the
   app's key; a narrowed token works, renewal is refused, revocation presents the
   retained token and GitHub then refuses it); a live GitHub proof needs an app
-  installation.
+  installation. Snowflake service users (A239) are built against a stand-in of the
+  SQL API only (the leased key pair logs in, revocation disables and drops the
+  user and its key is then refused); a live Snowflake proof needs an account.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.

@@ -149,7 +149,7 @@ func (b *MilvusBackend) CreateCredential(ctx context.Context, req GenerateReques
 // Milvus refuses its next request. Only users this provider names are dropped;
 // Milvus answers success for a user already gone.
 func (b *MilvusBackend) Revoke(ctx context.Context, ref string) error {
-	if !milvusUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !milvusUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret milvus: refusing to drop %q, which this provider did not create", ref)
 	}
 	if err := b.call(ctx, "/v2/vectordb/users/drop", map[string]string{"userName": ref}); err != nil {

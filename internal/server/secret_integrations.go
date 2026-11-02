@@ -462,6 +462,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredKafkaBackend(opener)
 	case "github-app":
 		return openConfiguredGitHubAppBackend(opener)
+	case "snowflake":
+		return openConfiguredSnowflakeBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -729,6 +731,31 @@ func openConfiguredMilvusBackend(o *configuredDynamicBackendOpener) (requestDyna
 	backend, err := dynsecret.NewMilvusBackend(dynsecret.MilvusConfig{
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredSnowflakeBackend reads the administrator's private key into a
+// backend that keeps its own sealed copy, signs each SQL API request's key-pair
+// JWT through the crypto boundary, and calls the API through the SSRF-guarded
+// client (A239).
+func openConfiguredSnowflakeBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	privateKey, err := o.resolve(cfg.PrivateKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewSnowflakeBackend(dynsecret.SnowflakeConfig{
+		Endpoint: cfg.Endpoint, Account: cfg.Account, AdminUser: cfg.AdminUser, AdminPrivateKey: privateKey,
+		RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix, MaxLifetime: o.provider.maxTTL,
+		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)

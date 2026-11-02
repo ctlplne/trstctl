@@ -234,7 +234,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("endpoint", "HTTP interface", "HTTPS URL of ClickHouse's HTTP interface.", true),
 			value("admin_user", "Administrator", "A ClickHouse user with access management, allowed to create and drop users and to grant the bound roles.", true),
 			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
 			roles("Each allowed role maps to an existing ClickHouse role that holds its grants, for example SELECT on one database."),
 		)},
 		{Type: "elasticsearch", Label: "Elasticsearch API keys", Purpose: "Creates an Elasticsearch API key that expires with the provider's maximum lifetime and holds only the index privileges its role is bound to, and invalidates it at revocation; Elasticsearch then refuses it.", Requirements: dynamicSecretProviderRequirements(
@@ -247,7 +247,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("endpoint", "Management API", "HTTPS URL of the RabbitMQ management API.", true),
 			value("admin_user", "Administrator", "A user tagged administrator in the management API, allowed to create and delete users and set permissions.", true),
 			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to "<permissions> on <queues or exchanges> in <vhost>", for example "read on orders in /"; names match exactly.`),
 		)},
 		{Type: "tailscale", Label: "Tailscale auth keys", Purpose: "Creates a single-use, ephemeral, preauthorized Tailscale auth key carrying the role's ACL tags and expiring with the provider's maximum lifetime, and deletes it at revocation; Tailscale then refuses it. Devices it already registered stay until removed (an ephemeral one when it goes offline). Built against a stand-in of Tailscale's API; no tailnet proof yet.", Requirements: dynamicSecretProviderRequirements(
@@ -271,21 +271,21 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("tls_ca_ref", "Broker TLS CA reference", "Optional private CA of the brokers' certificates; system roots when omitted.", false),
 			value("tls_server_name", "Broker TLS name", "Certificate name every broker must carry; required when addr is an IP address, else each broker's advertised host name.", false),
 			value("allow_plaintext", "Local plaintext exception", "Explicitly permit SASL_PLAINTEXT to a literal loopback or private IP only (and only to brokers advertised at such addresses); use only in a protected lab.", false),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to "<operations> on <resources>" clauses separated by ";", for example "read,describe on topic:orders; read on group:orders-app"; a name ending in * is a prefix.`),
 		)},
 		{Type: "couchbase", Label: "Couchbase users", Purpose: "Creates a local Couchbase user with a generated password and only its role's roles on the named buckets through the management REST API, and deletes it at revocation; Couchbase then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Management REST API", "HTTPS URL of the cluster's management REST API (port 18091).", true),
 			value("admin_user", "Administrator", "A user allowed to create and delete local users (Full Admin or Security Admin).", true),
 			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to "<roles> on <buckets>", for example "bucket_full_access on orders" (the Community Edition's data role) or "data_reader,query_select on orders".`),
 		)},
 		{Type: "milvus", Label: "Milvus users", Purpose: "Creates a Milvus user with a generated password and only its role's Milvus roles through the RESTful API, and drops it at revocation; Milvus then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "RESTful API", "HTTPS URL of the Milvus proxy's RESTful API (port 19530).", true),
 			value("admin_user", "Administrator", "A Milvus user allowed to create and drop users and grant roles, such as root.", true),
 			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to existing Milvus roles, comma separated, for example "orders_reader"; each role carries the privileges the lease should have.`),
 		)},
 		{Type: "github-app", Label: "GitHub App installation tokens", Purpose: "Mints an installation access token for a GitHub App, narrowed to the role's permissions and named repositories, which GitHub ends after an hour, and at revocation ends it at once by presenting it. A lease can't be extended; a new lease mints a new token. Built against a stand-in of GitHub's API; no GitHub proof yet.", Requirements: dynamicSecretProviderRequirements(
@@ -296,16 +296,24 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("max_ttl", "Maximum lifetime", "At most 1h: GitHub ends installation tokens an hour after minting.", true),
 			roles(`Each allowed role maps to "<permission>:<level> on <repositories>", for example "contents:read,metadata:read on api,web"; repositories are named explicitly.`),
 		)},
+		{Type: "snowflake", Label: "Snowflake service users", Purpose: "Creates a Snowflake service user (TYPE = SERVICE) that authenticates with a key pair the provider generates (the lease returns the private key; no password exists), granted only the role's roles and set to expire in Snowflake after the provider's maximum lifetime in whole days; at revocation disables it, which aborts its running queries, and drops it. Built against a stand-in of the SQL API; no Snowflake proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Account URL", "https://<orgname>-<accountname>.snowflakecomputing.com.", true),
+			value("account", "Account identifier", "The account identifier the key-pair JWT names, <orgname>-<accountname>.", true),
+			value("admin_user", "Administrator", "A user allowed to create, alter and drop users and grant the bound roles (USERADMIN or SECURITYADMIN), with a registered key pair.", true),
+			credential("private_key_ref", "Administrator private key reference", "The administrator's private key (PEM) matching its RSA_PUBLIC_KEY.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
+			roles(`Each allowed role maps to Snowflake roles, comma separated, for example "ANALYST"; the first is the user's default role.`),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
-			value("username_prefix", "Login name prefix", "Optional prefix of leased logins (default trstctl); revocation only ever drops principals with it.", false),
+			value("username_prefix", "Login name prefix", "Optional prefix of leased logins (default trstctl); revocation only ever drops principals with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to database roles, comma separated, for example "db_datareader".`),
 		)},
 		{Type: "azure-sql", Label: "Azure SQL contained users", Purpose: "Creates a contained database user with a generated password that joins the role's database roles, and at revocation ends its open sessions and drops it; the database then refuses its login. Proven against SQL Server's contained database users; no Azure proof yet.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a user in the database allowed to manage users, add role members and end sessions.", true),
 			value("database", "Database", "The (contained) database the leased users live in.", true),
-			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to database roles, comma separated, for example "db_datareader".`),
 		)},
 	}
@@ -360,6 +368,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the privileges of the Milvus roles the lease role is bound to, until the user is dropped", "confirmed"
 	case "github-app":
 		return "the role's repository permissions on the named repositories, through an installation token ended at revocation or by GitHub an hour after minting", "confirmed"
+	case "snowflake":
+		return "the role's Snowflake roles, through a key-pair service user disabled and dropped at revocation, or expired by Snowflake after the maximum lifetime in whole days", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

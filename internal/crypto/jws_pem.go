@@ -28,3 +28,20 @@ func SignJWTWithPEMKey(privateKeyPEM []byte, kid string, claims any) (string, er
 	defer signer.Destroy()
 	return SignJWT(signer, kid, claims)
 }
+
+// PublicKeyDERFromPEMKey returns the SubjectPublicKeyInfo DER of a private key
+// given as one unencrypted PEM block, for an API that names the signing key by
+// its public key's fingerprint (Snowflake's key-pair JWT issuer).
+func PublicKeyDERFromPEMKey(privateKeyPEM []byte) ([]byte, error) {
+	block, rest := pem.Decode(bytes.TrimSpace(privateKeyPEM))
+	if block == nil || len(bytes.TrimSpace(rest)) != 0 || len(block.Headers) != 0 {
+		return nil, errors.New("crypto: the private key must be one unencrypted PEM block")
+	}
+	defer secret.Wipe(block.Bytes)
+	signer, err := lockedRetainedHostSigner(block)
+	if err != nil {
+		return nil, err
+	}
+	defer signer.Destroy()
+	return append([]byte(nil), signer.Public().DER...), nil
+}

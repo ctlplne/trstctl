@@ -18670,6 +18670,7 @@
               "couchbase",
               "milvus",
               "github-app",
+              "snowflake",
               "mssql",
               "azure-sql"
             ],

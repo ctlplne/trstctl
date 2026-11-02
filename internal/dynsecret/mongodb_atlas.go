@@ -196,7 +196,7 @@ func (b *MongoDBAtlasBackend) CreateCredential(ctx context.Context, req Generate
 // login. Only users this provider names are deleted; one already gone (or
 // already removed by its deleteAfterDate) counts as deleted.
 func (b *MongoDBAtlasBackend) Revoke(ctx context.Context, ref string) error {
-	if !atlasUser.MatchString(ref) || !strings.HasPrefix(ref, sanitizeFragment(b.prefix, defaultDynsecretPrefix)+"_") {
+	if !atlasUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret mongodb-atlas: refusing to delete %q, which this provider did not create", ref)
 	}
 	token, err := b.accessToken(ctx)
