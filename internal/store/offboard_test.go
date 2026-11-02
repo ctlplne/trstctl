@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	googleuuid "github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
@@ -460,7 +461,11 @@ func TestOffboardTenantErasesMetadataWithoutRegistration(t *testing.T) {
 	ctx := t.Context()
 	// Isolated SQL residue fixture, not a customer lifecycle: an absent tenant
 	// row is not proof that all its other tables are empty. No early return is
-	// allowed, even when certificates itself is empty.
+	// allowed, even when certificates itself is empty. The tenants are fresh:
+	// the package's shared tenantA carries other tests' rows (24 MDM SCEP
+	// policies and 3 target revisions in a CI test slice), which the exact
+	// erasure count below must not include.
+	tenantA, tenantB := googleuuid.NewString(), googleuuid.NewString()
 	for _, tenant := range []string{tenantA, tenantB} {
 		if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_watermarks
