@@ -388,6 +388,26 @@ class IsolationTests(unittest.TestCase):
             self.assertEqual(copied.stat().st_mode & 0o777, 0o600)
             self.assertEqual(sorted(str(p.relative_to(destination)) for p in destination.rglob('*') if p.is_file()), [str(relative)])
 
+    def test_library_cache_archive_is_seeded_as_the_legacy_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, destination, library = root / 'source', root / 'dest', root / 'library'
+            source.mkdir()
+            library.mkdir()
+            archive = library / 'embedded-postgres-binaries-linux-amd64-16.15.0.txz'
+            archive.write_bytes(b'compressed archive; runtime verifies the pin')
+            (library / 'embedded-postgres-binaries-linux-amd64-17.0.0.txz').symlink_to(archive)
+            (library / 'postgres').write_bytes(b'executable must not be shared')
+            runner.seed_public_archives(source, destination, library)
+            copied = destination / 'trstctl-pg-bin' / archive.name
+            self.assertTrue(copied.is_file(), 'the library cache archive was not seeded as the legacy source')
+            self.assertEqual(copied.read_bytes(), archive.read_bytes())
+            self.assertEqual(copied.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(sorted(str(p.relative_to(destination)) for p in destination.rglob('*') if p.is_file()),
+                             ['trstctl-pg-bin/' + archive.name])
+            runner.seed_public_archives(source, root / 'dest-without', root / 'missing')
+            self.assertFalse((root / 'dest-without').exists(), 'a missing library cache seeded something')
+
     def test_cleanup_refuses_other_data_or_other_process(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

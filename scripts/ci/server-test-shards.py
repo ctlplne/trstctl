@@ -138,10 +138,23 @@ def failure_output(events, failed, limit=80, messages=40):
     return out
 
 
-def seed_public_archives(source, destination):
+def seed_public_archives(source, destination, library_cache=None):
     # Copy compressed archives only, preserving platform/version/digest paths.
     # The product still verifies the committed digest and freshly extracts each
     # executable tree. No database, extracted program or session state is shared.
+    # The embedded-postgres library's own cache (~/.embedded-postgres-go, which
+    # CI restores) holds the same pinned archive under the name the product
+    # reads as its legacy source (trstctl-pg-bin/), so it is seeded there too:
+    # without it every part downloaded the archive again, and parallel lanes
+    # drew HTTP 429 from the archive host (CI run 41479056374).
+    if library_cache is not None and library_cache.is_dir() and not library_cache.is_symlink():
+        for archive in library_cache.glob("embedded-postgres-binaries-*.txz"):
+            if archive.is_symlink() or not archive.is_file():
+                continue
+            target = destination / "trstctl-pg-bin" / archive.name
+            target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            shutil.copyfile(archive, target)
+            target.chmod(0o600)
     for name in ("trstctl-pg-archives", "trstctl-pg-bin"):
         cache = source / name
         if not cache.is_dir() or cache.is_symlink():
@@ -274,7 +287,9 @@ def run(args):
         for index in range(len(groups)):
             root = scratch / str(index)
             root.mkdir(mode=0o700)
-            seed_public_archives(Path(tempfile.gettempdir()), root)
+            seed_public_archives(Path(tempfile.gettempdir()), root, Path.home() / ".embedded-postgres-go")
+        seeded = sorted(str(p.relative_to(scratch / "0")) for p in (scratch / "0").rglob("*.txz")) if groups else []
+        print(f">> seeded public PostgreSQL archives into each part: {', '.join(seeded) or 'none (each part downloads its own)'}", flush=True)
         began = time.monotonic()
         deadline = began + args.seconds
         for index, names in enumerate(groups):
