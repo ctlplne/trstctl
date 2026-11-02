@@ -390,7 +390,10 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	if err := os.WriteFile(agentCAPath, h.srv.AgentCACertPEM(), 0o644); err != nil { // #nosec G306 -- public CA certificate fixture (CWE-276)
 		t.Fatalf("persist agent CA: %v", err)
 	}
-	processCtx, cancelProcess := context.WithTimeout(ctx, 30*time.Second)
+	// The pass takes about ten seconds locally without the race detector; a
+	// race-instrumented CI runner killed it at a 30-second deadline with the job
+	// still pending (CI 41445346367), so the process gets AUD32's 90 seconds.
+	processCtx, cancelProcess := context.WithTimeout(ctx, 90*time.Second)
 	defer cancelProcess()
 	cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD30HostAgentProcessHelper$", "-test.v") // #nosec G204,G702 -- fixed current test binary and fixed argv (CWE-78).
 	cmd.Env = append(os.Environ(),
