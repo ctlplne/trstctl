@@ -70,6 +70,15 @@ func TestServedValidityReadinessA178(t *testing.T) {
 		return identity, certs[0]
 	}
 	verifiedIdentity, verifiedCert := deployed("checkout.example.test")
+	// The harness's deploy transition queued a connector delivery that fails
+	// and retries with backoff. Retire it, as an exhausted budget would, before
+	// recording the verified receipt: a retry that lands after the receipt is
+	// (correctly) the latest outcome, and on a slow runner billing's drain
+	// below claimed one.
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET status = 'failed'
+		WHERE tenant_id = $1 AND destination = 'connector.deploy' AND status = 'pending'`, h.tenant); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := h.srv.orch.RecordConnectorDelivery(ctx, h.tenant, store.ConnectorDeliveryReceipt{
 		IdentityID: &verifiedIdentity.ID, Destination: "connector.deploy", Connector: "apache", Target: "checkout-edge",
 		Fingerprint: verifiedCert.Fingerprint, Status: "verified", IdempotencyKey: "validity-readiness-verified",
