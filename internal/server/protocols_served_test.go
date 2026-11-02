@@ -154,6 +154,12 @@ func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, 
 	if err != nil {
 		t.Fatalf("readiness report signer: %v", err)
 	}
+	// The signer builds its EC weak-key tables in the background at serve start,
+	// and the first key it checks waits for them: on a loaded CI runner the
+	// harness's first RPC, provisioning the issuing CA, ran out its deadline
+	// waiting (CI run 41485378892; the same cause 307 fixed in two other
+	// helpers). Build them first; later harnesses in the process reuse them.
+	crypto.WarmWeakKeyChecks()
 	signerSrv, err := signing.NewPersistentServer(ks, signing.WithAuthorizer(authz), signing.WithKeyFactory(pqc.NewSignerKeyFactory()),
 		signing.WithArtifactSigner(reportSigner))
 	if err != nil {

@@ -234,15 +234,24 @@ jobs:
           TRSTCTL_REQUIRE_OPENSSH: "1"
         run: |
           chmod +x server.test
-          make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=6 SERVER_TEST_BINARY="${GITHUB_WORKSPACE}/server.test"
+          # A slice's test wall stays inside this job's 30 minutes (setup takes
+          # up to five, a slice's tests five to twelve, CI runs 41460552585 to
+          # 41485378892), so a hung test ends in Go's timeout panic with every
+          # goroutine's stack in the part log, not in a cancelled job that keeps
+          # nothing (slice 3 of run 41485378892).
+          make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=6 SERVER_TEST_BINARY="${GITHUB_WORKSPACE}/server.test" SERVER_COMPLEMENTARY_TIMEOUT=22m
 
+      # Uploaded whether the slice passed or not: a failed slice's part logs are
+      # the only record of which test failed or hung and why.
       - name: Upload server slice coverage and census result
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-server-${{ matrix.slice }}
           path: |
             cover.out.server.${{ matrix.slice }}
             cover.out.server.${{ matrix.slice }}.shards/result.json
+            cover.out.server.${{ matrix.slice }}.shards/part-*.ndjson
           if-no-files-found: error
 
   go-test-extra:

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -360,6 +361,58 @@ func TestCIModuleDownloadsRetryTransientProxyFailures(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("go-mod-download.sh lost %q", want)
 		}
+	}
+}
+
+// TestServerSliceWallEndsInsideItsJob keeps a hung server test diagnosable on
+// CI: a slice's test wall is shorter than its job's timeout (with room for
+// setup), so Go's timeout panic writes every goroutine's stack into the part
+// log before GitHub cancels the job, and the part logs are uploaded whether the
+// slice passed or not (slice 3 of CI run 41485378892 hung and left nothing).
+func TestServerSliceWallEndsInsideItsJob(t *testing.T) {
+	var wf struct {
+		Jobs map[string]struct {
+			TimeoutMinutes any `yaml:"timeout-minutes"`
+			Steps          []struct {
+				Name string         `yaml:"name"`
+				If   string         `yaml:"if"`
+				With map[string]any `yaml:"with"`
+				Run  string         `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(read(t, "../.github/workflows/ci.yml")), &wf); err != nil {
+		t.Fatalf("parse .github/workflows/ci.yml: %v", err)
+	}
+	job, ok := wf.Jobs["go-test-server"]
+	if !ok {
+		t.Fatal("ci.yml has no go-test-server job")
+	}
+	timeout, ok := job.TimeoutMinutes.(int)
+	if !ok {
+		t.Fatalf("go-test-server's timeout-minutes is %v, want a fixed number of minutes", job.TimeoutMinutes)
+	}
+	wall := regexp.MustCompile(`make test-server [^\n]*SERVER_COMPLEMENTARY_TIMEOUT=(\d+)m`)
+	uploaded := false
+	for _, step := range job.Steps {
+		if m := wall.FindStringSubmatch(step.Run); m != nil {
+			minutes, err := strconv.Atoi(m[1])
+			if err != nil {
+				t.Fatalf("server slice wall %q: %v", m[1], err)
+			}
+			if minutes+5 > timeout {
+				t.Errorf("the server slice wall (%d min) plus five minutes of setup exceeds the job's %d minutes", minutes, timeout)
+			}
+			uploaded = true
+		}
+		if step.Name == "Upload server slice coverage and census result" {
+			if strings.TrimSpace(step.If) != "always()" || !strings.Contains(fmt.Sprint(step.With["path"]), ".shards/part-*.ndjson") {
+				t.Error("the server slice upload must run always() and keep the part logs")
+			}
+		}
+	}
+	if !uploaded {
+		t.Error("the server slice step must set SERVER_COMPLEMENTARY_TIMEOUT to a wall inside the job")
 	}
 }
 
