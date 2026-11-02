@@ -20,8 +20,12 @@ import (
 var makeTestLanes = []string{"test-selftests", "test-packages", "test-server", "test-extra", "coverage-gate", "test-live-slo"}
 
 // ciUmbrellaCheck is the required check that the Go test lanes, and the gates
-// split out of the old single job, block merge through.
-const ciUmbrellaCheck = "build / test / lint"
+// split out of the old single job, block merge through; dodUmbrellaCheck is the
+// one the Definition-of-Done census shards and self-tests block merge through.
+const (
+	ciUmbrellaCheck  = "build / test / lint"
+	dodUmbrellaCheck = "definition of done / wiring census"
+)
 
 var makeTestRecipeRe = regexp.MustCompile(`(?m)^test: ## Run all tests[^\n]*\n((?:\t[^\n]*\n)+)`)
 
@@ -58,6 +62,18 @@ func ciUmbrellaGatesOnNeeds(step ciStep) bool {
 	return strings.TrimSpace(step.Env["RESULTS"]) == "${{ toJSON(needs) }}" &&
 		strings.Contains(step.Run, `v["result"] != "success"`) &&
 		strings.Contains(step.Run, "sys.exit(1 if bad else 0)")
+}
+
+// ciUmbrellaGate reports whether the umbrella has a needs gate that always runs:
+// its first step, or a later step marked if: always() (so a failure earlier in
+// the umbrella cannot skip it).
+func ciUmbrellaGate(job ciJob) bool {
+	for i, step := range job.Steps {
+		if ciUmbrellaGatesOnNeeds(step) && (i == 0 || strings.TrimSpace(step.If) == "always()") {
+			return true
+		}
+	}
+	return false
 }
 
 // ciMatrixSize returns N when the job's matrix key is exactly [0, 1, ..., N-1].
@@ -174,6 +190,9 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	}
 	if len(umbrella.Steps) == 0 || !ciUmbrellaGatesOnNeeds(umbrella.Steps[0]) {
 		t.Fatalf("the first step of %s must fail unless every needed job succeeded", ciUmbrellaCheck)
+	}
+	if !ciUmbrellaGate(umbrella) {
+		t.Fatalf("%s has no needs gate that always runs", ciUmbrellaCheck)
 	}
 	downloads := false
 	for _, step := range umbrella.Steps {

@@ -315,12 +315,39 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@if [ -n "$(strip $(DOD_CARD))" ] && [ -n "$(strip $(DOD_CAPABILITY))" ]; then \
 		echo "dod-gate: choose only one of DOD_CARD or DOD_CAPABILITY" >&2; exit 2; \
 	fi
-	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"; \
-		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
-	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./tools/dodcensus/... -count=1
-	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
+	@$(MAKE) --no-print-directory dod-selftests
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
+
+# CI runs the census as parallel shards (owner decision 2026-11-02: split the Go
+# test jobs, dod-gate included): each shard runs the runtime groups the measured
+# partition gives it (tools/dodcensus/shard-weights.json), and the required
+# check merges the shard receipts into wiring-census.json and checks the product
+# claims against it. `make dod-gate` runs the same census whole.
+DOD_SHARD ?= 0
+DOD_SHARDS ?= 1
+
+.PHONY: dod-cache
+dod-cache:
+	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"; \
+		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
+
+.PHONY: dod-selftests
+dod-selftests: dod-cache ## The census tool's own tests and the production-assembly canary
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./tools/dodcensus/... -count=1
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./internal/server -run '^TestDODGateProductionAssemblyCanary$$' -count=1
+
+.PHONY: dod-census-shard
+dod-census-shard: dod-cache ## Run census shard DOD_SHARD of DOD_SHARDS into wiring-census.part-DOD_SHARD.json
+	@echo ">> definition-of-done wiring census, shard $(DOD_SHARD) of $(DOD_SHARDS)"
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
+		--repo . --manifest tools/dodcensus/manifest.json --shard $(DOD_SHARD) --shards $(DOD_SHARDS) --out wiring-census.part-$(DOD_SHARD).json
+
+.PHONY: dod-census-merge
+dod-census-merge: dod-cache ## Merge shards 0..DOD_SHARDS-1 into wiring-census.json and check the product claims against it
+	@set -eu; parts=""; for i in $$(seq 0 $$(( $(DOD_SHARDS) - 1 ))); do parts="$$parts wiring-census.part-$$i.json"; done; \
+	TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
+		--repo . --manifest tools/dodcensus/manifest.json --merge --out "$(DOD_CENSUS_OUT)" $$parts
 
 DOD_ARM64_CENSUS_OUT ?= wiring-census-arm64.json
 

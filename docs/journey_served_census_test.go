@@ -155,8 +155,8 @@ func TestJourneyServedBadgesAreBoundToTheWiringCensus(t *testing.T) {
 func TestJourneyServedBadgeGenerationRunsAfterFreshCensusInCI(t *testing.T) {
 	workflow := read(t, "../.github/workflows/ci.yml")
 	requireOrderedTokens(t, "dod-gate CI job", workflow,
-		"- name: Run the shipped-binary Definition-of-Done census",
-		"run: make dod-gate",
+		"- name: Merge the shards into the shipped-binary Definition-of-Done census",
+		"run: make dod-census-merge DOD_SHARDS=",
 		"- name: Verify journey served badges against the fresh census",
 		"run: make journey-census-check",
 	)

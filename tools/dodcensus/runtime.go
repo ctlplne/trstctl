@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -1119,6 +1120,7 @@ type runtimeTestExecution struct {
 	expectations map[string]runtimeExpectation
 	receiptDir   string
 	broker       *substrateBroker
+	elapsed      time.Duration // the group's wall time; a shard receipt records it
 }
 
 type launchedBinarySpec struct {
@@ -1205,10 +1207,12 @@ func runRuntimeProof(ctx context.Context, repo string, entry Entry, profileName 
 	execution := cache[key]
 	if execution == nil {
 		var err error
+		began := time.Now()
 		execution, err = executeRuntimeTest(ctx, repo, profileName, profile, launched, substrate, group, runner)
 		if err != nil {
 			return checkEvidence{Detail: err.Error()}
 		}
+		execution.elapsed = time.Since(began)
 		cache[key] = execution
 	}
 	if execution.skipped {

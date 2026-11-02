@@ -53,6 +53,7 @@ __pycache__/
 # Volatile DoD receipts: make dod-gate and make dod-gate-arm64 always emit a
 # fresh timestamped census.
 /wiring-census.json
+/wiring-census.part-*.json
 /wiring-census-arm64.json
 
 # Go workspace files (not committed; per-developer)

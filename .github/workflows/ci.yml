@@ -437,10 +437,22 @@ jobs:
           make coverage-gate TEST_SHARDS=6 SERVER_SLICES=6
           make test-live-slo
 
-  dod-gate:
-    name: definition of done / wiring census
+  # The Definition-of-Done census runs as parallel shards (owner decision
+  # 2026-11-02: split the Go test jobs, dod-gate included). Each shard runs the
+  # runtime groups the measured partition gives it (tools/dodcensus/
+  # shard-weights.json) and prints each group's seconds; the self-tests and the
+  # production-assembly canary run beside them. definition of done / wiring
+  # census stays the required check: it merges the shard receipts into
+  # wiring-census.json, checks the product claims and the journey badges against
+  # it, and fails unless every shard and the self-tests succeeded.
+  dod-census:
+    name: definition of done / census ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -458,8 +470,68 @@ jobs:
       - name: Prefetch dependencies for the offline census
         run: go mod download
 
-      - name: Run the shipped-binary Definition-of-Done census
-        run: make dod-gate
+      - name: Run this shard of the shipped-binary Definition-of-Done census
+        run: make dod-census-shard DOD_SHARD=${{ matrix.shard }} DOD_SHARDS=3
+
+      - name: Upload the shard receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wiring-census-part-${{ matrix.shard }}
+          path: wiring-census.part-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  dod-selftests:
+    name: definition of done / census self-tests + canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Prefetch dependencies for the offline census
+        run: go mod download
+
+      - name: Census self-tests and the production-assembly canary
+        run: make dod-selftests
+
+  dod-gate:
+    name: definition of done / wiring census
+    needs: [dod-census, dod-selftests]
+    # Always run, so a failed or skipped shard fails this required check instead
+    # of leaving it skipped (a skipped required check would read as passing).
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Prefetch dependencies for the offline census
+        run: go mod download
+
+      - name: Download the shard receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: wiring-census-part-*
+          merge-multiple: true
+
+      - name: Merge the shards into the shipped-binary Definition-of-Done census
+        run: make dod-census-merge DOD_SHARDS=3
 
       - name: Verify journey served badges against the fresh census
         run: make journey-census-check
@@ -470,6 +542,15 @@ jobs:
         with:
           name: wiring-census
           path: wiring-census.json
+
+      # Last and always: even when the merge already failed, a failed, cancelled
+      # or skipped shard or self-test job fails this required check.
+      - name: Every census shard and the self-tests passed
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); bad = {k: v["result"] for k, v in r.items() if v["result"] != "success"}; print(bad or "all lanes and gates succeeded"); sys.exit(1 if bad else 0)'
 
   # The arm64 proof profile (tools/dodcensus/manifest-arm64.json) proves the
   # managed-key production assembly against the release's linux/arm64 control

@@ -48,6 +48,7 @@ var baselineSuffixRE = regexp.MustCompile(`-([a-z0-9]+)-([a-z0-9]+)\.png$`)
 
 type ciStep struct {
 	Name string            `yaml:"name"`
+	If   string            `yaml:"if"`
 	Uses string            `yaml:"uses"`
 	With map[string]any    `yaml:"with"`
 	Env  map[string]string `yaml:"env"`

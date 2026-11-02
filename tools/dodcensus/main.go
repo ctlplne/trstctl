@@ -242,6 +242,7 @@ type Report struct {
 	Summary             reportSummary               `json:"summary"`
 	Entries             map[string]entryResult      `json:"entries"`
 	Capabilities        map[string]capabilityResult `json:"capabilities"`
+	Shard               *reportShard                `json:"shard,omitempty"`
 }
 
 func (r Report) hasRequiredFailures() bool { return r.Summary.RequiredFailed > 0 }
@@ -249,6 +250,10 @@ func (r Report) hasRequiredFailures() bool { return r.Summary.RequiredFailed > 0
 type selection struct {
 	Capability string
 	CardID     string
+	// Shard of Shards (Shards > 0) evaluates only the rows Owners gives it.
+	Shard  int
+	Shards int
+	Owners map[string]int
 }
 
 type commandCall struct {
@@ -426,6 +431,9 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	outFlag := flags.String("out", "wiring-census.json", "JSON receipt path")
 	capabilityFlag := flags.String("capability", "", "require one exact manifest entry ID to be REQUIRED and SERVED")
 	cardFlag := flags.String("card", "", "require the entry for one DoD card ID to be served")
+	shardFlag := flags.Int("shard", 0, "with --shards: evaluate only the runtime groups this shard owns")
+	shardsFlag := flags.Int("shards", 0, "cut the census into this many shards (CI lanes); 0 runs it whole")
+	mergeFlag := flags.Bool("merge", false, "merge the shard receipts given as arguments into the full receipt")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -448,6 +456,19 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "dodcensus: choose only one of --capability or --card")
 		return 2
 	}
+	if *mergeFlag || *shardsFlag != 0 || *shardFlag != 0 || flags.NArg() > 0 {
+		if sel.Capability != "" || sel.CardID != "" {
+			_, _ = fmt.Fprintln(stderr, "dodcensus: shards and merges cover the whole manifest; drop --capability/--card")
+			return 2
+		}
+		if *mergeFlag {
+			return runMerge(repo, manifest, resolveOut(repo, *outFlag), flags.Args(), stdout, stderr)
+		}
+		if sel, err = shardSelection(repo, manifest, *shardFlag, *shardsFlag, flags.NArg()); err != nil {
+			_, _ = fmt.Fprintf(stderr, "dodcensus: %v\n", err)
+			return 2
+		}
+	}
 	cacheDir := strings.TrimSpace(os.Getenv("TRSTCTL_DOD_GOCACHE"))
 	if cacheDir == "" {
 		cacheDir = filepath.Join(os.TempDir(), "trstctl-dodcensus-gocache")
@@ -467,17 +488,27 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// certifying product claims). Exact focused runs deliberately have no full
 	// denominator, so they do not evaluate breadth-wide claims.
 	claimsErr := validateClaimsForSelection(repo, manifest, report, sel)
-	outPath := *outFlag
-	if !filepath.IsAbs(outPath) {
-		outPath = filepath.Join(repo, outPath)
+	return finishCLIReport(resolveOut(repo, *outFlag), report, sel, claimsErr, stdout, stderr)
+}
+
+func resolveOut(repo, out string) string {
+	if filepath.IsAbs(out) {
+		return out
 	}
-	return finishCLIReport(outPath, report, sel, claimsErr, stdout, stderr)
+	return filepath.Join(repo, out)
 }
 
 func finishCLIReport(outPath string, report Report, sel selection, claimsErr error, stdout, stderr io.Writer) int {
 	if err := writeReport(outPath, report); err != nil {
 		_, _ = fmt.Fprintf(stderr, "dodcensus: write receipt: %v\n", err)
 		return 2
+	}
+	if report.Shard != nil {
+		printShardReport(stdout, report, outPath)
+		if shardFailed(report) {
+			return 1
+		}
+		return 0
 	}
 	printReport(stdout, report, outPath)
 	if claimsErr != nil {
@@ -763,7 +794,7 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	}
 	states := map[string]profileState{}
 	for _, entry := range manifest.Entries {
-		if selectionActive && entry.ID != selectedID {
+		if (selectionActive && entry.ID != selectedID) || !sel.owns(entry.ID) {
 			continue
 		}
 		name, profile := resolvedProfile(manifest, entry)
@@ -802,6 +833,11 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 	// below, but a focused proof may not hide a test-only full-group branch.
 	fullRuntimeGroups := groupRuntimeEntries(manifest, "", false)
 	runtimeGroups := groupRuntimeEntries(manifest, selectedID, selectionActive)
+	for key, group := range runtimeGroups {
+		if !sel.owns(group[0].ID) {
+			delete(runtimeGroups, key) // another shard runs this group, whole
+		}
+	}
 	launched, err := launchedBinarySpecForManifest(absRepo, manifest)
 	if err != nil {
 		return Report{}, err
@@ -811,6 +847,12 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 		profileName, profile := resolvedProfile(manifest, entry)
 		if selectionActive && entry.ID != selectedID {
 			result := notEvaluatedEntryResult(entry, profileName, selectedID)
+			report.Entries[entry.ID] = result
+			updateSummary(&report.Summary, result)
+			continue
+		}
+		if !sel.owns(entry.ID) {
+			result := notEvaluatedShardResult(entry, profileName, sel)
 			report.Entries[entry.ID] = result
 			updateSummary(&report.Summary, result)
 			continue
@@ -855,6 +897,9 @@ func evaluate(ctx context.Context, repo string, manifest Manifest, runner comman
 		}
 	}
 	report.Total = len(report.Capabilities)
+	if sel.sharded() {
+		report.Shard = shardReceipt(manifest, sel, runtimeExecutions)
+	}
 	return report, nil
 }
 

@@ -82,6 +82,8 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"perf-gates":                  ciUmbrellaCheck,
 	"core-integration-succession": ciUmbrellaCheck,
 	"core-integration-wire":       ciUmbrellaCheck,
+	"dod-census":                  dodUmbrellaCheck,
+	"dod-selftests":               dodUmbrellaCheck,
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified
@@ -195,8 +197,8 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 			t.Errorf("umbrella %q must run with if: always(), or a failed lane would skip it and read as passing", umbrellaName)
 		case !slices.Contains(umbrella.Needs, id):
 			t.Errorf("umbrella %q must need lane %q", umbrellaName, id)
-		case len(umbrella.Steps) == 0 || !ciUmbrellaGatesOnNeeds(umbrella.Steps[0]):
-			t.Errorf("umbrella %q must fail first unless every needed lane succeeded", umbrellaName)
+		case !ciUmbrellaGate(umbrella):
+			t.Errorf("umbrella %q must have a step that always runs and fails unless every needed lane succeeded", umbrellaName)
 		default:
 			umbrellaGated[lane.Name] = true
 		}

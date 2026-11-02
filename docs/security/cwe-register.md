@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2248 annotated sites across 29 rules. Each row is
+2250 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -547,8 +547,8 @@ not this file.
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:150` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
-| `tools/dodcensus/claims.go:164` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
-| `tools/dodcensus/runtime.go:39` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
+| `tools/dodcensus/claims.go:165` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
+| `tools/dodcensus/runtime.go:40` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 
@@ -1358,7 +1358,7 @@ not this file.
 | `tools/dodcensus/connector_substrate_test.go:114` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/external_ca_substrate_test.go:168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/kmip_substrate_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/main.go:317` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/main.go:322` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/managed_key_manifest_test.go:599` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/managed_key_manifest_test.go:635` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/launched.go:285` | developer tool running fixed toolchain commands over the repo (CWE-78) |
@@ -1431,7 +1431,7 @@ not this file.
 | `scripts/perf/cmd/soakcapture/main.go:82` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakgate/main.go:120` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:170` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `tools/dodcensus/main.go:1297` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `tools/dodcensus/main.go:1342` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/pqclab/main.go:455` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1489,7 +1489,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (621 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (623 sites)
 
 | Location | Reason |
 |---|---|
@@ -2048,11 +2048,11 @@ not this file.
 | `tools/connectorsupportdoc/main_test.go:105` | fixed in-tree documentation contract |
 | `tools/dodcensus/artifact.go:85` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/artifact.go:167` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/claims.go:63` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/claims.go:74` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/claims.go:78` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/claims.go:64` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/claims.go:75` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/claims.go:79` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/kubernetes_posture_manifest_test.go:18` | test reads the exact committed runtime-proof source (CWE-22) |
-| `tools/dodcensus/main.go:505` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/main.go:536` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/main_test.go:519` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/main_test.go:538` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/main_test.go:557` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2086,12 +2086,12 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:317` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:1045` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:1183` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime.go:132` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:153` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:224` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:438` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:1139` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:1472` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:133` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:154` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:225` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:439` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:1141` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:1476` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:98` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:692` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:809` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -2102,6 +2102,8 @@ not this file.
 | `tools/dodcensus/runtime_runner_test.go:547` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:124` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
+| `tools/dodcensus/shard.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/shard.go:198` | developer tool reading the shard receipts it is pointed at (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
 | `tools/pqclab/main.go:204` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main.go:269` | developer tool reading the repo paths it is pointed at (CWE-22) |
