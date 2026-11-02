@@ -65,6 +65,17 @@ jobs:
           check-latest: true
           cache: true
 
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
       - name: Set up Node for SDK generators
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -161,6 +172,17 @@ jobs:
           check-latest: true
           cache: true
 
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
       # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
       # which the old single job's `make build` used to leave behind.
       - name: Prefetch dependencies for offline build tests
@@ -212,6 +234,17 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
       # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
       # which the old single job's `make build` used to leave behind.
@@ -411,6 +444,17 @@ jobs:
           check-latest: true
           cache: true
 
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
       - name: Perf smoke SLO gate
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"
 
@@ -451,6 +495,17 @@ jobs:
           check-latest: true
           cache: true
 
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
       # Core succession tests retain the real PG/NATS/signer and WASM proofs.
       - name: Core succession integration and conformance
         run: |
@@ -482,6 +537,17 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
       # Agent delegation over PostgreSQL/RLS, embedded NATS, the outbox and the real
       # signer process, including the agent framework reference integrations
@@ -606,6 +672,17 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
       - name: Prefetch dependencies for the offline census
         run: go mod download
@@ -833,6 +910,17 @@ jobs:
           check-latest: true
           cache: true
 
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
       - name: Install pinned OpenBao CLI
         env:
           TRSTCTL_OPENBAO_INSTALL_DIR: ${{ runner.temp }}/openbao-bin
@@ -860,6 +948,17 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
       - name: Install checksum-pinned ML-DSA-capable OpenSSL
         env:
@@ -895,6 +994,17 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
       - name: Full backup -> fresh restore -> boot -> issue (+ corrupted control)
         run: bash scripts/ci/restore-rehearsal.sh
