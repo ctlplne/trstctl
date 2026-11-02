@@ -124,8 +124,9 @@ type DynamicSecretProviderConfig struct {
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
 	// AdminUser is the administrator a clickhouse or rabbitmq provider creates
-	// and deletes leased users as, or an elasticsearch provider creates and
-	// invalidates API keys as (its password is password_ref, A239).
+	// and deletes leased users as, an elasticsearch provider creates and
+	// invalidates API keys as, or a kafka provider's SCRAM user that sets
+	// credentials and ACLs (its password is password_ref, A239).
 	AdminUser string `json:"admin_user,omitempty"`
 	// Tailnet is a tailscale provider's tailnet, "-" (the API token's own) by
 	// default; its API token is bearer_token_ref (A239).
@@ -235,12 +236,12 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
-	"tailscale": {}, "mongodb-atlas": {},
+	"tailscale": {}, "mongodb-atlas": {}, "kafka": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
-var tlsProviderTypes = map[string]bool{"ldap": true}
+var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -411,7 +412,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"ldap": validateLDAPProvider, "totp": validateTOTPProvider,
 	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
-	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider,
+	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -827,8 +828,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "tailscale" && c.Tailnet != "" {
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
 	}
-	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.Type != "rabbitmq" && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch and rabbitmq", where))
+	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.Type != "rabbitmq" && c.Type != "kafka" && c.AdminUser != "" {
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq and kafka", where))
 	}
 	return errs
 }
@@ -939,6 +940,64 @@ func validRabbitMQGrant(binding string) error {
 	for _, n := range strings.Split(names, ",") {
 		if !rabbitmqResource.MatchString(strings.TrimSpace(n)) {
 			return fmt.Errorf("resource %q is not a literal queue or exchange name", strings.TrimSpace(n))
+		}
+	}
+	return nil
+}
+
+var (
+	kafkaOperation    = regexp.MustCompile(`^(read|write|describe|describe_configs|create|delete|alter|alter_configs)$`)
+	kafkaResourceName = regexp.MustCompile(`^[A-Za-z0-9._-]{1,249}$`)
+)
+
+// validateKafkaProvider checks a Kafka provider (A239): addr is a bootstrap
+// broker (SASL_SSL, or SASL_PLAINTEXT at a literal loopback or private IP with
+// allow_plaintext), admin_user and password_ref a SCRAM-SHA-512 user that sets
+// credentials and ACLs, and each allowed role is bound to its ACLs.
+func validateKafkaProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for kafka", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	if strings.TrimSpace(c.TLSCARef) != "" {
+		if err := validateCredentialRef(c.TLSCARef); err != nil {
+			errs = append(errs, fmt.Errorf("%s tls_ca_ref: %w", where, err))
+		}
+	}
+	errs = append(errs, validateProviderTransport(where, c)...)
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" {
+			if err := validKafkaGrant(binding); err != nil {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+			}
+		}
+	}
+	return errs
+}
+
+// validKafkaGrant checks "<operations> on <resources>" clauses separated by
+// ";", for example "read,describe on topic:orders; read on group:orders-app";
+// a name ending in * is a prefix and a bare * is refused.
+func validKafkaGrant(binding string) error {
+	for _, clause := range strings.Split(binding, ";") {
+		ops, resources, ok := strings.Cut(strings.TrimSpace(clause), " on ")
+		if !ok {
+			return errors.New(`must be "<operations> on <resources>", for example "read,describe on topic:orders; read on group:orders-app"`)
+		}
+		for _, op := range strings.Split(ops, ",") {
+			if !kafkaOperation.MatchString(strings.TrimSpace(op)) {
+				return fmt.Errorf("operation %q is not read, write, describe, describe_configs, create, delete, alter or alter_configs", strings.TrimSpace(op))
+			}
+		}
+		for _, item := range strings.Split(resources, ",") {
+			kind, name, _ := strings.Cut(strings.TrimSpace(item), ":")
+			if (kind != "topic" && kind != "group" && kind != "transactional_id") || !kafkaResourceName.MatchString(strings.TrimSuffix(name, "*")) {
+				return fmt.Errorf("resource %q is not topic:, group: or transactional_id: and a name or name prefix", strings.TrimSpace(item))
+			}
 		}
 	}
 	return nil

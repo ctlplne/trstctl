@@ -454,6 +454,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredElasticsearchBackend(opener)
 	case "rabbitmq":
 		return openConfiguredRabbitMQBackend(opener)
+	case "kafka":
+		return openConfiguredKafkaBackend(opener)
 	case "tailscale":
 		return openConfiguredTailscaleBackend(opener)
 	case "mongodb-atlas":
@@ -671,6 +673,31 @@ func openConfiguredMongoDBAtlasBackend(o *configuredDynamicBackendOpener) (reque
 		Endpoint: endpoint, GroupID: cfg.Project, ClientID: cfg.ClientID, ClientSecret: clientSecret,
 		RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix, MaxLifetime: o.provider.maxTTL,
 		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredKafkaBackend reads the administrator's SCRAM password (and a
+// private CA) into a backend that keeps its own sealed copy and reaches the
+// brokers over verified TLS, or the allowed plaintext (A239).
+func openConfiguredKafkaBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	var caPEM []byte
+	if cfg.TLSCARef != "" {
+		if caPEM, err = o.resolve(cfg.TLSCARef); err != nil {
+			return o.fail(err)
+		}
+	}
+	backend, err := dynsecret.NewKafkaBackend(dynsecret.KafkaConfig{
+		Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
+		AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
 	})
 	if err != nil {
 		return o.fail(err)

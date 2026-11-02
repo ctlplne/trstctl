@@ -355,12 +355,12 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Sixteen backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Seventeen backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
-users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, and MongoDB Atlas
-database users (A239).
+users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
+database users, and Kafka SCRAM users (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -446,12 +446,22 @@ days). Revocation deletes the user. A retry after an uncertain attempt finds the
 lease's user and updates it instead of adding one. It is built against a stand-in
 of the Atlas Admin API made from its documentation; there is no Atlas proof yet.
 
+The Kafka backend creates one SCRAM-SHA-512 user per lease with a generated password
+and only its role's ACLs (`"read,describe on topic:orders; read on group:orders-app"`),
+as a SCRAM administrator over verified TLS (SASL_SSL), or SASL_PLAINTEXT to a literal
+loopback or private IP. Revocation deletes the user's ACLs first: the broker authorizes
+every request, so a client still connected is refused from its next request (Kafka does
+not end an authenticated connection when its credential goes). Then it deletes the
+credential, so the next login fails. A retry after an uncertain attempt replaces the
+same user's password and leaves its ACLs as they are, and if the ACLs fail the new user
+is deleted again. Only users with the provider's prefix are ever revoked.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns seventeen safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns eighteen safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

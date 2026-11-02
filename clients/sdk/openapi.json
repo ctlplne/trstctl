@@ -18665,7 +18665,8 @@
               "elasticsearch",
               "rabbitmq",
               "tailscale",
-              "mongodb-atlas"
+              "mongodb-atlas",
+              "kafka"
             ],
             "type": "string"
           }

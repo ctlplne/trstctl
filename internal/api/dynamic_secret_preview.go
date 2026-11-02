@@ -264,6 +264,16 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("max_ttl", "Maximum lifetime", "At most 7 days: Atlas deletes each leased user at that age (deleteAfterDate).", true),
 			roles(`Each allowed role maps to "<built-in role> on <databases>", for example "read on orders".`),
 		)},
+		{Type: "kafka", Label: "Kafka SCRAM users", Purpose: "Creates a SCRAM-SHA-512 user with a generated password and only its role's ACLs on topics, consumer groups and transactional IDs, and at revocation deletes the ACLs (refused from the user's next request, even on an open connection) and the credential; the brokers then refuse its login.", Requirements: dynamicSecretProviderRequirements(
+			value("addr", "Bootstrap broker", "host:port of a broker's SASL_SSL listener, verified against tls_server_name; SASL_PLAINTEXT only at a literal loopback or private IP with allow_plaintext.", true),
+			value("admin_user", "Administrator", "A SCRAM-SHA-512 user allowed to alter user SCRAM credentials and create and delete ACLs (ALTER on the cluster).", true),
+			credential("password_ref", "Administrator password reference", "The administrator's SCRAM password.", true),
+			credential("tls_ca_ref", "Broker TLS CA reference", "Optional private CA of the brokers' certificates; system roots when omitted.", false),
+			value("tls_server_name", "Broker TLS name", "Certificate name every broker must carry; required when addr is an IP address, else each broker's advertised host name.", false),
+			value("allow_plaintext", "Local plaintext exception", "Explicitly permit SASL_PLAINTEXT to a literal loopback or private IP only (and only to brokers advertised at such addresses); use only in a protected lab.", false),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			roles(`Each allowed role maps to "<operations> on <resources>" clauses separated by ";", for example "read,describe on topic:orders; read on group:orders-app"; a name ending in * is a prefix.`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -308,6 +318,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "one registration of a device with the role's ACL tags, until the auth key is deleted or expires; devices already registered keep their tags until removed", "confirmed"
 	case "mongodb-atlas":
 		return "the role's built-in roles on the named databases of one Atlas project, until the user is deleted or Atlas removes it at its deleteAfterDate", "confirmed"
+	case "kafka":
+		return "the role's ACL operations on its topics, consumer groups and transactional IDs, until the ACLs and the SCRAM credential are deleted", "confirmed"
 	}
 	return "", ""
 }

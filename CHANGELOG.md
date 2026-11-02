@@ -2,6 +2,12 @@
 
 ### Added
 
+- Kafka dynamic secrets (`type: kafka`): each lease is a SCRAM-SHA-512 user with a generated password and only its
+  role's ACLs on topics, consumer groups and transactional IDs (`"read,describe on topic:orders; read on
+  group:orders-app"`; a trailing `*` makes a prefix). Revocation deletes the ACLs, which refuse a client still
+  connected on its next request, then the credential, so the next login fails. Brokers are reached over verified TLS
+  (SASL_SSL), or SASL_PLAINTEXT to a literal loopback or private IP only. Proven against stock Apache Kafka 3.9.0.
+
 - MongoDB Atlas dynamic secrets (`type: mongodb-atlas`): each lease is a database user in one Atlas project with a
   generated password and its role's built-in roles (`"<role> on <databases>"`), which Atlas deletes after the
   provider's maximum lifetime (`deleteAfterDate`, at most 7 days); revocation deletes it. The Admin API is called with

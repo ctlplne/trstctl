@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch and rabbitmq") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq and kafka") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }
@@ -306,6 +306,63 @@ func TestValidateRabbitMQProviderA239(t *testing.T) {
 		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
+	}
+}
+
+func TestValidateKafkaProviderA239(t *testing.T) {
+	grant := "read,describe on topic:orders; read on group:orders-app"
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "events", Type: "kafka",
+		Addr: "kafka.internal:9093", AdminUser: "trstctl_admin", PasswordRef: "file:/run/secrets/kafka-admin",
+		TLSCARef: "file:/run/secrets/kafka-ca.pem", AllowedRoles: []string{"consumer"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"consumer": grant}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	lab := base
+	lab.Addr, lab.TLSCARef, lab.AllowPlaintext = "127.0.0.1:9092", "", true
+	if err := check(lab); err != nil {
+		t.Fatalf("plaintext SASL at loopback: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no addr":         {func(c *DynamicSecretProviderConfig) { c.Addr = "" }, "addr must be host:port"},
+		"no admin":        {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for kafka"},
+		"no password":     {func(c *DynamicSecretProviderConfig) { c.PasswordRef = "" }, "password_ref"},
+		"IP without name": {func(c *DynamicSecretProviderConfig) { c.Addr = "10.0.0.5:9093" }, "tls_server_name is required"},
+		"plaintext public": {func(c *DynamicSecretProviderConfig) {
+			c.Addr, c.TLSCARef, c.AllowPlaintext = "203.0.113.7:9092", "", true
+		}, "literal loopback or private IP"},
+		"plaintext with TLS": {func(c *DynamicSecretProviderConfig) { c.Addr, c.AllowPlaintext = "127.0.0.1:9092", true }, "allow_plaintext forbids TLS settings"},
+		"no grant":           {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["consumer"] is required for kafka`},
+		"every topic": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"consumer": "read on topic:*"}
+		}, "is not topic:, group: or transactional_id:"},
+		"cluster": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"consumer": "alter on cluster:kafka-cluster"}
+		}, "is not topic:, group: or transactional_id:"},
+		"bad operation": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"consumer": "all on topic:orders"}
+		}, "is not read, write, describe"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["admin"] = "write on topic:x" }, `role_bindings["admin"] has no matching allowed role`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"consumer": grant}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := base
+	other.Type, other.Addr, other.AdminUser, other.TLSCARef = "redis", "redis.internal:6380", "", ""
+	other.AllowPlaintext = true
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "allow_plaintext are not valid for redis") {
+		t.Fatalf("shared TLS settings on another type: %v", err)
 	}
 }
 

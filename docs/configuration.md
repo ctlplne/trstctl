@@ -2349,6 +2349,34 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For Kafka (A239, `kafka`), set `addr` to a bootstrap broker's SASL_SSL listener,
+`admin_user` and `password_ref` to a SCRAM-SHA-512 user allowed to alter user SCRAM
+credentials and create and delete ACLs (ALTER on the cluster), optionally `tls_ca_ref`
+and `tls_server_name` (required when `addr` is an IP address; every broker's certificate
+must then carry it), and `role_bindings` to ACL clauses per allowed role:
+`"<operations> on <resources>"` separated by `;`, where operations are `read`, `write`,
+`describe`, `describe_configs`, `create`, `delete`, `alter` and `alter_configs`, and a
+resource is `topic:`, `group:` or `transactional_id:` and a name (a name ending in `*` is
+a prefix; a bare `*` is refused). Each lease is a SCRAM-SHA-512 user with exactly those
+ACLs; revocation deletes the ACLs, then the credential. `allow_plaintext` permits
+SASL_PLAINTEXT to a literal loopback or private IP only, and only to brokers advertised
+at such addresses.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "events",
+  "type": "kafka",
+  "addr": "kafka-0.internal:9093",
+  "admin_user": "trstctl_admin",
+  "password_ref": "file:/run/secrets/kafka-admin",
+  "tls_ca_ref": "file:/run/secrets/kafka-ca.pem",
+  "allowed_roles": ["orders-consumer"],
+  "role_bindings": {"orders-consumer": "read,describe on topic:orders; read on group:orders-app"},
+  "max_ttl": "8h"
+}
+```
+
 For MongoDB Atlas (A239, `mongodb-atlas`), set `project` to the Atlas project ID,
 `client_id` and `client_secret_ref` to a service account allowed to manage the
 project's database users, optionally `endpoint` (default `https://cloud.mongodb.com`),

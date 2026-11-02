@@ -5241,8 +5241,8 @@ when off, requiring a KEK when on):
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
-  `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`, and
-  `mongodb-atlas` (A239). Issuance is
+  `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
+  `mongodb-atlas`, and `kafka` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5276,7 +5276,13 @@ when off, requiring a KEK when on):
   refused, and a revoked key is refused; a live tailnet proof needs an account.
   MongoDB Atlas database users (A239) are built against a stand-in of the Atlas
   Admin API only (a leased user logs in with its role's roles, and is refused
-  once revoked); a live Atlas proof needs an account.
+  once revoked); a live Atlas proof needs an account. Kafka SCRAM users (A239)
+  are proven against stock Apache Kafka 3.9.0 (KRaft, StandardAuthorizer): the
+  stock console consumer reads the bound topic in the bound group as a leased
+  user and the stock producer is refused (TopicAuthorizationException), a
+  renewal stays within the maximum lifetime, and after revocation a consumer
+  still connected is refused on its open connection, a new login is refused,
+  and no leased user or ACL is left.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.
