@@ -1956,7 +1956,7 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:210` | parent-created public fixture (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:416` | test reads its own remote-host fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:802` | test-owned target fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:807` | test-owned target fixture (CWE-22) |
 | `internal/server/host_keystore_credentials_served_test.go:117` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |

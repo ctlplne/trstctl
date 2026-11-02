@@ -615,7 +615,12 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	}
 	runColdAgent := func(wantOutcome string) {
 		t.Helper()
-		processCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		// A pass that fails verification also rolls back automatically: restore,
+		// reload and verify the predecessor (each verification up to ten
+		// seconds). That pass took 29.6 s on a CI runner (CI 41439816582), so the
+		// process gets a 90-second deadline; the outcome it must report is
+		// checked by the helper either way.
+		processCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(processCtx, os.Args[0], "-test.run=^TestAUD32HostAgentProcessHelper$", "-test.v") // #nosec G204,G702 -- fixed current test binary and fixed argv (CWE-78).
 		cmd.Env = append(os.Environ(),
