@@ -44,7 +44,7 @@ func (p *snapshotProtectionFixture) RestorePlainSnapshot(context.Context, eventp
 
 // Component AEAD/framing only. This fixture does not prove source selection,
 // persistent key destruction, PostgreSQL restoration or an operator workflow.
-func newSnapshotProtectionFixture(t testing.TB, name string) (snapshotSetMetadata, []byte, *snapshotProtectionFixture) {
+func newSnapshotProtectionFixture(t fuzzFixtureTB, name string) (snapshotSetMetadata, []byte, *snapshotProtectionFixture) {
 	t.Helper()
 	material, err := seal.GenerateKEK()
 	if err != nil {
@@ -214,4 +214,15 @@ func TestProtectedSnapshotChunksBindOrderCountLengthAndRewrittenHeaders(t *testi
 			}
 		})
 	}
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Cleanup(func())
 }

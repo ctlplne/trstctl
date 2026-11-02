@@ -18,7 +18,7 @@ import (
 //go:embed testdata/der-whitespace/*.pem
 var whitespaceSignatureSeeds embed.FS
 
-func whitespaceSignatureFixtures(t testing.TB) [][]byte {
+func whitespaceSignatureFixtures(t fuzzFixtureTB) [][]byte {
 	t.Helper()
 	paths, err := whitespaceSignatureSeeds.ReadDir("testdata/der-whitespace")
 	if err != nil || len(paths) != 6 {
@@ -119,4 +119,14 @@ func FuzzInspectAllPreservesValidDER(f *testing.F) {
 			t.Fatalf("valid DER lost or changed: count=%d err=%v", len(infos), err)
 		}
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

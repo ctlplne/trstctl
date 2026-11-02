@@ -14,7 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 )
 
-func holdClearanceFixture(t testing.TB) eventspec.Event {
+func holdClearanceFixture(t fuzzFixtureTB) eventspec.Event {
 	t.Helper()
 	at := time.Now().UTC()
 	request := eventprotect.DestructionRequest{Ref: eventprotect.KeyRef{TenantID: controlTestTenant, ID: "02f0b795-3f17-46a9-a9cc-a7bdd7ee21eb"}, OperationID: "eb08db3a-2d9e-4192-b2b9-b156308860e4", RegistrationIdentity: "opaque-registration", ActivationEventID: "02f0b795-3f17-46a9-a9cc-a7bdd7ee21eb", ActivationSequence: 7, CreationDigest: strings.Repeat("a", 64), OffboardEventID: "opaque-offboard", OffboardSequence: 9, OffboardedAt: at, NotBefore: at.Add(time.Hour)}
@@ -68,4 +68,14 @@ func TestHoldClearanceWireIsClosedNonPersonalAndExact(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

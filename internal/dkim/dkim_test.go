@@ -19,7 +19,7 @@ import (
 // (Debian's python3-dkim 1.1.4, dkimpy) with fresh keys, generated in a lab
 // container: rsa-sha256 and ed25519-sha256, relaxed and simple, and one
 // signature over part of the body (l=).
-func dkimpyVectors(t testing.TB) (map[string]string, map[string][]byte) {
+func dkimpyVectors(t fuzzFixtureTB) (map[string]string, map[string][]byte) {
 	t.Helper()
 	raw, err := os.ReadFile("testdata/dkimpy-vectors.json")
 	if err != nil {
@@ -131,4 +131,14 @@ func FuzzVerifyDomain(f *testing.F) {
 	f.Fuzz(func(t *testing.T, msg []byte) {
 		_ = verifier.VerifyDomain(context.Background(), msg, "p15.test")
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

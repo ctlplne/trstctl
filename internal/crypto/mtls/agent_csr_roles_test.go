@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func csrAskingFor(t testing.TB, cn string, uris ...string) []byte {
+func csrAskingFor(t fuzzFixtureTB, cn string, uris ...string) []byte {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -83,4 +83,14 @@ func FuzzAgentRolesFromCSR(f *testing.F) {
 			}
 		}
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

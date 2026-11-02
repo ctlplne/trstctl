@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func reviewedCommand(t testing.TB) Command {
+func reviewedCommand(t fuzzFixtureTB) Command {
 	t.Helper()
 	key := []byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPexCbv5HmN6JhIN7b1GaDxkyWFY3uSrHBvKdlQYHONt fleet-public-fixture")
 	canonical, fingerprint, err := CanonicalPublicCAKey(key)
@@ -59,4 +59,14 @@ func TestHostOptInConfirmationBindingAndDeadlineRemainLocal(t *testing.T) {
 	if err := command.PermitLocal(local, command.ExpiresAt); err == nil {
 		t.Fatal("accepted expired execution")
 	}
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

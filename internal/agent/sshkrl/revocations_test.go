@@ -14,7 +14,7 @@ import (
 	sshprotocol "trstctl.com/trstctl/internal/protocols/ssh"
 )
 
-func readFixture(t testing.TB, name string) []byte {
+func readFixture(t fuzzFixtureTB, name string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("testdata", name)) // #nosec G304 -- committed test fixture
 	if err != nil {
@@ -238,4 +238,14 @@ func FuzzParseRevocations(f *testing.F) {
 			t.Fatal("parsed list without the KRL magic")
 		}
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

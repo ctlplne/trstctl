@@ -59,7 +59,7 @@ func (f *protectedBackupKeys) WithKey(_ context.Context, ref eventprotect.KeyRef
 
 // Real NATS and AEAD; admission and memory-only custody are explicit codec
 // fixtures. This does not qualify production offboarding or persistent removal.
-func protectedHistoryFixture(t testing.TB) (*events.Log, *protectedBackupKeys, []events.BackupHistoryRecord) {
+func protectedHistoryFixture(t fuzzFixtureTB) (*events.Log, *protectedBackupKeys, []events.BackupHistoryRecord) {
 	t.Helper()
 	raw, err := seal.GenerateKEK()
 	if err != nil {
@@ -211,4 +211,17 @@ func TestProtectedEventBackupRejectsAuthenticatedMirrorMismatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Cleanup(func())
+	Context() context.Context
+	TempDir() string
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func inventorySPKI(t testing.TB, oid asn1.ObjectIdentifier, size int, params asn1.RawValue, padding int) []byte {
+func inventorySPKI(t fuzzFixtureTB, oid asn1.ObjectIdentifier, size int, params asn1.RawValue, padding int) []byte {
 	t.Helper()
 	raw, err := asn1.Marshal(struct {
 		Algorithm pkix.AlgorithmIdentifier

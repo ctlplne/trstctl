@@ -17,7 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
-func generatedAliasFixture(t testing.TB, password []byte) []byte {
+func generatedAliasFixture(t fuzzFixtureTB, password []byte) []byte {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -153,4 +153,14 @@ func FuzzGeneratedPKCS12Alias(f *testing.F) {
 			t.Fatal("accepted alias is not an authenticated usable PFX")
 		}
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }

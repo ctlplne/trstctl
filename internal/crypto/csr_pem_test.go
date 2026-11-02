@@ -9,7 +9,7 @@ import (
 	"testing/quick"
 )
 
-func publicCSRPEMFixture(t testing.TB) ([]byte, []byte) {
+func publicCSRPEMFixture(t fuzzFixtureTB) ([]byte, []byte) {
 	t.Helper()
 	key, err := GenerateHostSubjectKey("exact.example.test", []string{"exact.example.test"})
 	if err != nil {
@@ -91,4 +91,14 @@ func FuzzParsePublicCSRPEM(f *testing.F) {
 			t.Fatal("accepted CSR signature is invalid")
 		}
 	})
+}
+
+// fuzzFixtureTB is the part of testing.TB the fixture helpers use. Fuzz
+// targets hand them their *testing.F, and ClusterFuzzLite's testing shim
+// implements these methods but not all of Go 1.26's testing.TB (it has no
+// ArtifactDir), so a testing.TB parameter does not compile there.
+type fuzzFixtureTB interface {
+	Helper()
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 }
