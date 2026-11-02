@@ -1240,6 +1240,14 @@ func (s *Store) ApplyApplicationSecretMutationTx(ctx context.Context, tx pgx.Tx,
 			mutation.TenantID, mutation.Name); err != nil {
 			return err
 		}
+		// A secret recreated under this name starts again at version 1, so its
+		// consumers' delivery evidence goes with this one: a report of version 8
+		// must never count as adopting the new secret's version 2 (A240).
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM secret_deliveries WHERE tenant_id = $1 AND name = $2`,
+			mutation.TenantID, mutation.Name); err != nil {
+			return err
+		}
 		if err := insertApplicationSecretMutationReceiptTx(ctx, tx, mutation, current.CreatedAt); err != nil {
 			return err
 		}
