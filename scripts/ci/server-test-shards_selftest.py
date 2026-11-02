@@ -89,10 +89,14 @@ if scenario == 'duplicate':
     names += names[:1]
 for name in names:
     emit(Action='run', Test=name)
+    if scenario == 'test_failure' and name == 'TestAlpha':
+        emit(Action='output', Test=name, Output='alpha_test.go:7: want ready, got pending\n')
+        emit(Action='fail', Test=name)
+        continue
     emit(Action='skip' if scenario == 'skip' and name == 'TestAlpha' else 'pass', Test=name)
 if scenario != 'no_profile':
     profile.write_text(('mode: set\n' if scenario == 'bad_profile' else 'mode: atomic\n') + 'trstctl.com/trstctl/internal/test.go:1.1,1.9 1 1\n')
-raise SystemExit(1 if scenario == 'child_failure' else 0)
+raise SystemExit(1 if scenario in ('child_failure', 'test_failure') else 0)
 '''
 
 class CensusTests(unittest.TestCase):
@@ -208,6 +212,15 @@ class ProcessTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.test_commands(argparse.Namespace(go='go', test_binary=str(binary), import_path=None, package=str(package),
                                                         coverpkg='./...', skip='^TestFairness$', seconds=60))
+
+    def test_a_failed_test_prints_its_output_and_still_records_the_result(self):
+        result, record, merged, _, _ = self.run_gate('test_failure')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('--- FAIL: TestAlpha', result.stdout)
+        self.assertIn('alpha_test.go:7: want ready, got pending', result.stdout)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertFalse(record['success'])
+        self.assertIsNone(merged)
 
     def run_gate(self, scenario, timeout='3s', extra=()):
         with tempfile.TemporaryDirectory(prefix='shards-selftest-') as directory:

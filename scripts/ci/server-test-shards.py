@@ -301,9 +301,9 @@ def run(args):
             record["parts"].append(part)
             print(f">> server part: exit={child.returncode}, completed={part['terminal']}/{part['expected']}, failures={part['failed']}, log={logpath}", flush=True)
             # A CI log is often all there is of a failure: print each failed test's own output.
-            for name, output in failure_output(read_events(logpath), part["failed"]).items():
-                print(f"--- FAIL: {name} (last {len(output)} output lines)", flush=True)
-                for line in output:
+            for name, lines in failure_output(read_events(logpath), part["failed"]).items():
+                print(f"--- FAIL: {name} (last {len(lines)} output lines)", flush=True)
+                for line in lines:
                     print("    " + line, flush=True)
         record["execution_seconds"] = time.monotonic() - began
         success = not expired and all(p["exit"] == 0 and p["complete"] and not p["failed"] and p["coverage_valid"] for p in record["parts"])
