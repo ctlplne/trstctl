@@ -735,6 +735,23 @@ against a real PostgreSQL target while an application keeps writing with the
 credential it last read, through a target that blocks retirement past the delivery
 deadline, a server restart mid-cycle and a successor the target refuses.
 
+A static rotation (or its schedule) can hold the predecessor until its consumers have
+moved (A240): `consumers` names the labels whose delivery reports
+(`POST /api/v1/secrets/deliveries` with `state: verified`, the version the consumer's
+application proved it uses) must reach the new version, and `retire_after_seconds`
+is the approved deadline after verification (up to 30 days; required with
+`consumers`) at which the predecessor retires even if a consumer never reports.
+Retirement waits without spending the worker's retry budget, looks again as soon as a
+named consumer reports, and is recorded with `retire_not_before` and
+`retire_approved_by` (the requester, or `secret-rotation-schedule:<id>`). The command
+view keeps `credential_valid` (the successor passed its own verification) apart from
+`consumer_adoption` (`not_requested`, `pending` or `adopted`, with each consumer's
+verified version), so a rotation that retired at its deadline still shows which
+consumers never adopted. The preview names the consumers and the deadline. The served
+proof runs the PostgreSQL two-user cycles with the application reporting each version
+it writes with: no session ends at retirement, and a consumer that stays silent is
+retired past at the deadline with adoption still pending.
+
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and

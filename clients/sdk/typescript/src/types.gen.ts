@@ -20874,16 +20874,21 @@ export interface components {
             target?: string;
         };
         SecretRotationRequest: {
+            /** @description Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds. */
+            consumers?: string[];
             key: string;
             old_ref: string;
             /** @description connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. */
             provider: string;
             remote_key?: string;
+            /** @description Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports. */
+            retire_after_seconds?: number;
             target?: string;
             /** @description The new lease's lifetime in seconds: required and positive for dynamic-lease:<provider>, bounded by the provider's maximum. Connector and static requests reject any supplied ttl_seconds with 400. */
             ttl_seconds?: number;
         };
         SecretRotationSchedule: {
+            consumers?: string[];
             /** Format: date-time */
             created_at: string;
             enabled: boolean;
@@ -20907,6 +20912,7 @@ export interface components {
             next_run_at: string;
             old_ref: string;
             provider: string;
+            retire_after_seconds?: number;
             /** Format: date-time */
             retired_at?: string;
             /** Format: uuid */
@@ -20932,6 +20938,8 @@ export interface components {
             next_cursor?: string;
         };
         SecretRotationScheduleRequest: {
+            /** @description Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds. */
+            consumers?: string[];
             enabled?: boolean;
             interval_seconds: number;
             key: string;
@@ -20941,6 +20949,8 @@ export interface components {
             old_ref: string;
             /** @description connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence. */
             provider: string;
+            /** @description Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports. */
+            retire_after_seconds?: number;
         };
         SecretRotationScheduleRun: {
             /** Format: date-time */
@@ -21101,8 +21111,21 @@ export interface components {
             target: string;
         };
         SecretStaticRotation: {
+            /**
+             * @description Whether every named consumer reported the result version verified; kept apart from credential_valid.
+             * @enum {string}
+             */
+            consumer_adoption: "not_requested" | "pending" | "adopted";
+            consumer_states?: {
+                adopted: boolean;
+                consumer: string;
+                verified_version: number;
+            }[];
+            consumers?: string[];
             /** Format: date-time */
             created_at: string;
+            /** @description The successor passed its own verification. */
+            credential_valid: boolean;
             error?: string;
             expected_version: number;
             /** Format: uuid */
@@ -21118,6 +21141,10 @@ export interface components {
             provider_type?: string;
             restored_version: number;
             result_version: number;
+            retire_after_seconds?: number;
+            retire_approved_by?: string;
+            /** Format: date-time */
+            retire_not_before?: string;
             /** Format: uuid */
             schedule_id?: string;
             terminal: boolean;

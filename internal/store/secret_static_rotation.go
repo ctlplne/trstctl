@@ -65,9 +65,17 @@ type SecretStaticRotationCommand struct {
 	TTLSeconds int
 	// NewExpiresAt is when a dynamic-lease rotation's new lease expires.
 	NewExpiresAt *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	TerminalAt   *time.Time
+	// Consumers, RetireAfterSeconds and RetireApprovedBy are the retirement
+	// gate (A240): the predecessor retires once every named consumer reports
+	// the result version verified (A238 delivery reports), or at the approved
+	// deadline, RetireNotBefore (verification + RetireAfterSeconds).
+	Consumers          []string
+	RetireAfterSeconds int
+	RetireApprovedBy   string
+	RetireNotBefore    *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	TerminalAt         *time.Time
 }
 
 // Terminal reports whether the worker has nothing left to do for the command.
@@ -102,6 +110,7 @@ type SecretStaticRotationAdvance struct {
 	VerifyMode      string
 	Error           string
 	NewExpiresAt    *time.Time
+	RetireNotBefore *time.Time
 	At              time.Time
 }
 
@@ -117,7 +126,7 @@ func SecretStaticRotationOutboxIdempotencyKey(tenantEpoch, id string) string {
 func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx, cmd SecretStaticRotationCommand, outboxPayload []byte) error {
 	if cmd.TenantID == "" || cmd.ID == "" || cmd.TenantEpoch == "" || cmd.Provider == "" || cmd.Key == "" ||
 		cmd.OldRef == "" || len(cmd.IdempotencyKeyDigest) != 64 || len(cmd.RequestBinding) != 64 || cmd.CreatedAt.IsZero() ||
-		cmd.TTLSeconds < 0 {
+		cmd.TTLSeconds < 0 || cmd.RetireAfterSeconds < 0 {
 		return errors.New("store: static rotation command is incomplete")
 	}
 	if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, cmd.TenantID, cmd.TenantEpoch); err != nil {
@@ -130,11 +139,13 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
-		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at,
+		         consumers, retire_after_seconds, retire_approved_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
-		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC()); err != nil {
+		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC(),
+		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -173,11 +184,12 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 		        error = $12,
 		        updated_at = $13,
 		        terminal_at = $14,
-		        new_expires_at = COALESCE($15, new_expires_at)
+		        new_expires_at = COALESCE($15, new_expires_at),
+		        retire_not_before = COALESCE($16, retire_not_before)
 		  WHERE tenant_id = $1 AND id = $2 AND phase = $3`,
 		adv.TenantID, adv.ID, adv.FromPhase, adv.Phase, adv.ProviderType, adv.NewRef,
 		adv.SealedNew, adv.SealedOld, adv.ResultVersion, adv.RestoredVersion, adv.VerifyMode,
-		adv.Error, adv.At.UTC(), terminalAt, utcTimePtr(adv.NewExpiresAt))
+		adv.Error, adv.At.UTC(), terminalAt, utcTimePtr(adv.NewExpiresAt), utcTimePtr(adv.RetireNotBefore))
 	if err != nil {
 		return err
 	}
@@ -198,6 +210,23 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 	}
 	return fmt.Errorf("%w: static rotation command %s is in phase %q, transition expected %q",
 		ErrIdempotencyConflict, adv.ID, current, adv.FromPhase)
+}
+
+// WakeSecretStaticRotationRetirement moves the pending outbox rows of the
+// secret's verified static rotations to now, so a retirement waiting on
+// consumer evidence looks again as soon as a consumer reports (A240). It only
+// reschedules: the worker still decides, and nothing else about a row changes.
+func (s *Store) WakeSecretStaticRotationRetirement(ctx context.Context, tenantID, key string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE outbox AS o SET next_attempt_at = now()
+			   FROM secret_static_rotation_commands AS c
+			  WHERE c.tenant_id = $1 AND c.secret_key = $2 AND c.phase = $3
+			    AND o.tenant_id = c.tenant_id AND o.id = c.outbox_id
+			    AND o.status = 'pending' AND o.next_attempt_at > now()`,
+			tenantID, key, SecretStaticRotationVerified)
+		return err
+	})
 }
 
 // utcTimePtr is a nullable timestamp parameter in UTC; nil stays SQL NULL.
@@ -226,14 +255,16 @@ func secretStaticRotationPhaseRank(phase string) int {
 const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref,
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
-       ttl_seconds, new_expires_at, created_at, updated_at, terminal_at`
+       ttl_seconds, new_expires_at, created_at, updated_at, terminal_at,
+       consumers, retire_after_seconds, retire_approved_by, retire_not_before`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
 	err := row.Scan(&c.TenantID, &c.ID, &c.TenantEpoch, &c.Provider, &c.ProviderType, &c.Key, &c.OldRef, &c.NewRef,
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
-		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt)
+		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt,
+		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}

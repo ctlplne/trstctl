@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -142,9 +143,13 @@ type twoUserOrdersApp struct {
 	base   atomic.Pointer[string]
 	token  string
 	client *http.Client
+	// quiet stops the delivery reports (A238) the application otherwise sends
+	// after a version works: the retirement gate's evidence (A240).
+	quiet atomic.Bool
 
 	mu        sync.Mutex
 	version   int
+	reported  int
 	conn      *pgx.Conn
 	writes    map[string]int
 	failures  []string
@@ -195,13 +200,41 @@ func (app *twoUserOrdersApp) tick(ctx context.Context) {
 		return
 	}
 	app.mu.Lock()
-	defer app.mu.Unlock()
 	now := time.Now()
 	if !app.lastWrite.IsZero() && now.Sub(app.lastWrite) > app.maxGap {
 		app.maxGap = now.Sub(app.lastWrite)
 	}
 	app.lastWrite = now
 	app.writes[user]++
+	app.mu.Unlock()
+	// The version just wrote an order: report it verified, once.
+	if app.version != app.reported && !app.quiet.Load() && app.report(ctx, app.version) == nil {
+		app.reported = app.version
+	}
+}
+
+func (app *twoUserOrdersApp) report(ctx context.Context, version int) error {
+	body, err := json.Marshal(map[string]any{"consumer": "orders-app", "state": "verified",
+		"secrets": []map[string]any{{"name": twoUserRole, "version": version}}})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, *app.base.Load()+"/api/v1/secrets/deliveries", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+app.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", fmt.Sprintf("orders-app-verified-%d", version))
+	resp, err := app.client.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("report version %d: HTTP %d", version, resp.StatusCode)
+	}
+	return nil
 }
 
 func (app *twoUserOrdersApp) read(ctx context.Context) (string, int, error) {
@@ -309,9 +342,22 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 		}
 	}
 
+	// Naming consumers needs an approved deadline; the gate is static-only.
+	for name, body := range map[string]map[string]any{
+		"no deadline": {"provider": twoUserProvider, "key": twoUserRole, "old_ref": twoUserAccountA, "consumers": []string{"orders-app"}},
+		"connector":   {"provider": "connector:nowhere", "key": twoUserRole, "old_ref": "version:1", "consumers": []string{"orders-app"}, "retire_after_seconds": 60},
+	} {
+		status, out := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok, body)
+		if status != http.StatusBadRequest {
+			t.Fatalf("retirement gate %s: %d %s", name, status, out)
+		}
+	}
+	// The schedule's commands retire their predecessor once the application
+	// reports the new version verified, or 10 minutes after verification.
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", tok, "orders-schedule",
 		map[string]any{"name": "orders-every-second", "provider": twoUserProvider, "key": twoUserRole, "old_ref": twoUserAccountA,
-			"interval_seconds": 1, "enabled": true, "next_run_at": time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)})
+			"interval_seconds": 1, "enabled": true, "next_run_at": time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano),
+			"consumers": []string{"orders-app"}, "retire_after_seconds": 600})
 	if status != http.StatusCreated && status != http.StatusOK {
 		t.Fatalf("create schedule: %d %s", status, body)
 	}
@@ -459,6 +505,7 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 	if _, err := blockerTx.Exec(ctx, `ALTER ROLE `+twoUserAccountA+` CONNECTION LIMIT 50`); err != nil {
 		t.Fatal(err)
 	}
+	app.quiet.Store(true) // the application switches but has not reported yet
 	cmd := tick(1)
 	if cmd.OldRef != twoUserAccountA {
 		t.Fatalf("cycle 1 predecessor: %+v", cmd)
@@ -467,6 +514,21 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 	if verified.NewRef != twoUserAccountB || verified.VerifyMode != "connected" {
 		t.Fatalf("cycle 1 successor: %+v", verified)
 	}
+	// Credential-valid is not consumer-adopted: the command holds the
+	// predecessor, without spending its retry budget, until the application
+	// reports.
+	awaitWrites(twoUserAccountB)
+	for range 3 {
+		h.srv.dispatchOnce(ctx)
+	}
+	held := command(cmd.ID)
+	if held.Phase != store.SecretStaticRotationVerified || !held.CredentialValid || held.ConsumerAdoption != "pending" ||
+		held.RetireNotBefore == nil || time.Until(*held.RetireNotBefore) < 9*time.Minute ||
+		held.RetireApprovedBy != "secret-rotation-schedule:"+schedule.ID || len(held.ConsumerStates) != 1 || held.ConsumerStates[0].Adopted {
+		t.Fatalf("cycle 1 before the application reports: %+v", held)
+	}
+	works(dsnA, twoUserAccountA)
+	app.quiet.Store(false)
 	// Retirement meets the blocked target and fails at the delivery deadline;
 	// the command stays verified with the failure recorded for a retry.
 	for deadline := time.Now().Add(60 * time.Second); !strings.Contains(outbox(), `last_error="external_delivery_failed"`); {
@@ -574,6 +636,32 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 	awaitWrites(twoUserAccountA)
 	bothKeepGrants()
 
+	// A consumer that never reports cannot hold the predecessor past the
+	// approved deadline: this rotation also names a batch job that stays
+	// silent, and it retires two seconds after verification, credential-valid
+	// with adoption still pending.
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok, "orders-deadline",
+		map[string]any{"provider": twoUserProvider, "key": twoUserRole, "old_ref": twoUserAccountA,
+			"consumers": []string{"orders-app", "orders-batch"}, "retire_after_seconds": 2})
+	var queued struct {
+		CommandID string `json:"command_id"`
+	}
+	if status != http.StatusOK || json.Unmarshal(body, &queued) != nil || queued.CommandID == "" {
+		t.Fatalf("deadline rotation: %d %s", status, body)
+	}
+	deadline := await(queued.CommandID, "")
+	if deadline.Phase != store.SecretStaticRotationCompleted || !deadline.CredentialValid || deadline.ConsumerAdoption != "pending" ||
+		deadline.RetireNotBefore == nil || deadline.TerminalAt == nil || deadline.TerminalAt.Before(*deadline.RetireNotBefore) ||
+		deadline.RetireApprovedBy == "" || len(deadline.ConsumerStates) != 2 ||
+		!deadline.ConsumerStates[0].Adopted || deadline.ConsumerStates[0].VerifiedVersion != deadline.ResultVersion ||
+		deadline.ConsumerStates[1].Adopted || deadline.ConsumerStates[1].VerifiedVersion != 0 {
+		t.Fatalf("a silent consumer at the deadline: %+v", deadline)
+	}
+	latest, _ := readSecret()
+	works(latest, twoUserAccountB)
+	refused(next, twoUserAccountA)
+	bothKeepGrants()
+
 	// Nothing outside the pair was ever created, and the application wrote
 	// through every cycle with both accounts.
 	if roles := strings.Join(target.roles(), ","); roles != "orders_app_a,orders_app_b,postgres" {
@@ -600,8 +688,8 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 			t.Fatalf("unexpected application failure: %s", failure)
 		}
 	}
-	if sessionsLost > 4 {
-		t.Fatalf("the application lost %d sessions in four retirements: %v", sessionsLost, failures)
+	if sessionsLost != 0 {
+		t.Fatalf("a retirement that waits for the application's report ended %d of its sessions: %v", sessionsLost, failures)
 	}
 	t.Logf("application writes %v, longest gap %s, %d refused adoptions of the rejected successor, %d sessions ended at retirement",
 		writes, maxGap, len(failures)-sessionsLost, sessionsLost)

@@ -117,6 +117,13 @@ func (a *API) reportSecretDelivery(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return 0, nil, err
 		}
+		if req.State == store.SecretDeliveryVerified {
+			// A240: a static rotation waiting on this consumer looks again now
+			// instead of at its next poll. Best effort: the poll still runs.
+			for _, item := range req.Secrets {
+				_ = a.store.WakeSecretStaticRotationRetirement(ctx, tenantID, item.Name)
+			}
+		}
 		return http.StatusOK, req, nil
 	})
 }

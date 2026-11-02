@@ -563,7 +563,7 @@ not this file.
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:304` | SQL column list, no credential (CWE-798) |
-| `internal/store/secret_static_rotation.go:226` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
+| `internal/store/secret_static_rotation.go:255` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
@@ -753,7 +753,7 @@ not this file.
 | `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
-| `internal/orchestrator/secret_rotation.go:563` | the positive int64 value always fits exactly in uint64 (CWE-190). |
+| `internal/orchestrator/secret_rotation.go:564` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -765,10 +765,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6660` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6677` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6690` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6724` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6674` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6691` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6704` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6738` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -934,12 +934,12 @@ not this file.
 | `internal/store/projection_checkpoint.go:399` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/scanned_certificate_chain.go:23` | event sequences fit int64 (CWE-190) |
 | `internal/store/secret_projects.go:74` | bounded to int64 above (CWE-190) |
-| `internal/store/secret_rotation_schedule.go:235` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:275` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:241` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:254` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:281` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:294` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:390` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:414` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/snapshot.go:650` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
 | `internal/store/snapshot.go:670` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
@@ -1118,7 +1118,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4188` | closed test table list above |
+| `internal/store/migration_content_test.go:4189` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 

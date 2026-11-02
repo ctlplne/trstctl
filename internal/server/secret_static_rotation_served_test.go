@@ -81,6 +81,17 @@ type staticRotationCommandView struct {
 	VerifyMode      string `json:"verify_mode"`
 	Error           string `json:"error"`
 	ScheduleID      string `json:"schedule_id"`
+	// The retirement gate (A240).
+	CredentialValid  bool       `json:"credential_valid"`
+	ConsumerAdoption string     `json:"consumer_adoption"`
+	RetireNotBefore  *time.Time `json:"retire_not_before"`
+	RetireApprovedBy string     `json:"retire_approved_by"`
+	TerminalAt       *time.Time `json:"terminal_at"`
+	ConsumerStates   []struct {
+		Consumer        string `json:"consumer"`
+		VerifiedVersion int    `json:"verified_version"`
+		Adopted         bool   `json:"adopted"`
+	} `json:"consumer_states"`
 }
 
 // A static-provider rotation is one durable command: the request commits it

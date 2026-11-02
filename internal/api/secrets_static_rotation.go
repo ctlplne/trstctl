@@ -122,6 +122,15 @@ func (a *API) queueStaticSecretRotation(
 	if err := checkStaticRotationPredecessor(provider, req.Key, req.OldRef); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
+	if err := validateStaticRotationRetirement(req.Consumers, req.RetireAfterSeconds); err != nil {
+		return store.SecretStaticRotationCommand{}, err
+	}
+	approvedBy := ""
+	if len(req.Consumers) > 0 || req.RetireAfterSeconds > 0 {
+		if approvedBy, err = requestPrincipalSubject(ctx); err != nil {
+			return store.SecretStaticRotationCommand{}, err
+		}
+	}
 	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
 	if err != nil {
 		return store.SecretStaticRotationCommand{}, err
@@ -152,7 +161,7 @@ func (a *API) queueStaticSecretRotation(
 	payload := projections.SecretStaticRotationQueued{
 		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
-		ScheduleID: scheduleID,
+		ScheduleID: scheduleID, Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds, RetireApprovedBy: approvedBy,
 	}
 	if err := a.appendAndProjectStaticRotation(ctx, tenantID, id, projections.EventSecretStaticRotationQueued, payload); err != nil {
 		return store.SecretStaticRotationCommand{}, err
@@ -345,7 +354,11 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 		if mode == "" {
 			mode = "not_available"
 		}
-		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationVerified, VerifyMode: mode})
+		// A240: the approved deadline runs from verification.
+		notBefore := time.Now().UTC().Add(time.Duration(cmd.RetireAfterSeconds) * time.Second)
+		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{
+			Phase: store.SecretStaticRotationVerified, VerifyMode: mode, RetireNotBefore: &notBefore,
+		})
 	}
 	if attempt < staticRotationVerifyAttempts {
 		return fmt.Errorf("api: static rotation verify (attempt %d): %w", attempt, verifyErr)
@@ -380,6 +393,9 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 }
 
 func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
+	if err := a.holdStaticRotationRetirement(ctx, cmd); err != nil {
+		return err
+	}
 	if cmd.OldRef != staticRotationNoPredecessor {
 		if err := provider.Revoke(ctx, cmd.OldRef); err != nil {
 			return fmt.Errorf("api: static rotation retire: %w", err)
@@ -481,9 +497,18 @@ type secretStaticRotationView struct {
 	ScheduleID      string     `json:"schedule_id,omitempty"`
 	TTLSeconds      int        `json:"ttl_seconds,omitempty"`
 	NewExpiresAt    *time.Time `json:"new_expires_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	TerminalAt      *time.Time `json:"terminal_at,omitempty"`
+	// The retirement gate (A240): credential_valid is the successor's own
+	// verification; consumer_adoption is the named consumers' evidence.
+	Consumers          []string                      `json:"consumers,omitempty"`
+	RetireAfterSeconds int                           `json:"retire_after_seconds,omitempty"`
+	RetireApprovedBy   string                        `json:"retire_approved_by,omitempty"`
+	RetireNotBefore    *time.Time                    `json:"retire_not_before,omitempty"`
+	CredentialValid    bool                          `json:"credential_valid"`
+	ConsumerAdoption   string                        `json:"consumer_adoption"`
+	ConsumerStates     []staticRotationConsumerState `json:"consumer_states,omitempty"`
+	CreatedAt          time.Time                     `json:"created_at"`
+	UpdatedAt          time.Time                     `json:"updated_at"`
+	TerminalAt         *time.Time                    `json:"terminal_at,omitempty"`
 }
 
 func toSecretStaticRotationView(cmd store.SecretStaticRotationCommand) secretStaticRotationView {
@@ -492,7 +517,10 @@ func toSecretStaticRotationView(cmd store.SecretStaticRotationCommand) secretSta
 		Phase: cmd.Phase, Terminal: cmd.Terminal(), ExpectedVersion: cmd.ExpectedVersion, ResultVersion: cmd.ResultVersion,
 		RestoredVersion: cmd.RestoredVersion, VerifyMode: cmd.VerifyMode, Error: cmd.Error, ScheduleID: cmd.ScheduleID,
 		TTLSeconds: cmd.TTLSeconds, NewExpiresAt: cmd.NewExpiresAt,
-		CreatedAt: cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt, TerminalAt: cmd.TerminalAt,
+		Consumers: cmd.Consumers, RetireAfterSeconds: cmd.RetireAfterSeconds, RetireApprovedBy: cmd.RetireApprovedBy,
+		RetireNotBefore: cmd.RetireNotBefore, CredentialValid: staticRotationCredentialValid(cmd),
+		ConsumerAdoption: consumerAdoptionNotRequested,
+		CreatedAt:        cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt, TerminalAt: cmd.TerminalAt,
 	}
 }
 
@@ -541,7 +569,12 @@ func (a *API) getStaticSecretRotation(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toSecretStaticRotationView(cmd))
+	view, err := a.staticRotationView(r.Context(), cmd)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, view)
 }
 
 // listStaticSecretRotations pages commands newest first, optionally for one
@@ -571,7 +604,12 @@ func (a *API) listStaticSecretRotations(w http.ResponseWriter, r *http.Request) 
 	}
 	items := make([]secretStaticRotationView, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toSecretStaticRotationView(row))
+		view, err := a.staticRotationView(r.Context(), row)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		items = append(items, view)
 	}
 	next := ""
 	if len(rows) == limit {

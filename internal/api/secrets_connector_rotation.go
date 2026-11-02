@@ -118,6 +118,9 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		},
 		DataHandling: "Preview reads tenant-scoped secret metadata only; it never decrypts, generates, returns, logs, or sends secret material.",
 	}
+	if refuseRetirementGateOutsideStatic(req.Provider, req.Consumers, req.RetireAfterSeconds) != nil {
+		plan.Blockers = append(plan.Blockers, staticRotationGateOnlyStaticDetail)
+	}
 	if isDynamicLeaseRotation(req.Provider) {
 		a.previewDynamicLeaseRotation(w, r, tenantID, req, plan)
 		return
@@ -175,6 +178,18 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 			return
 		} else if found && !latest.Terminal() {
 			plan.Blockers = append(plan.Blockers, staticRotationInFlightDetail)
+		}
+		// A240: the retirement gate the command will hold.
+		var gateErr *apiError
+		if err := validateStaticRotationRetirement(req.Consumers, req.RetireAfterSeconds); errors.As(err, &gateErr) {
+			plan.Blockers = append(plan.Blockers, gateErr.detail)
+		} else if len(req.Consumers) > 0 {
+			plan.ExecuteExternalEffects = append(plan.ExecuteExternalEffects, fmt.Sprintf(
+				"hold the predecessor until consumers %s report version %d verified, or until the approved deadline %d seconds after verification",
+				strings.Join(req.Consumers, ", "), plan.NextVersion, req.RetireAfterSeconds))
+		} else if req.RetireAfterSeconds > 0 {
+			plan.ExecuteExternalEffects = append(plan.ExecuteExternalEffects, fmt.Sprintf(
+				"hold the predecessor until the approved deadline %d seconds after verification", req.RetireAfterSeconds))
 		}
 		plan.Ready = len(plan.Blockers) == 0
 		a.writeJSON(w, http.StatusOK, plan)

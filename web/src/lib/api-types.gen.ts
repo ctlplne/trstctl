@@ -9970,15 +9970,18 @@ export interface SecretRotationPreview {
 }
 
 export interface SecretRotationRequest {
+  consumers?: string[];
   key: string;
   old_ref: string;
   provider: string;
   remote_key?: string;
+  retire_after_seconds?: number;
   target?: string;
   ttl_seconds?: number;
 }
 
 export interface SecretRotationSchedule {
+  consumers?: string[];
   created_at: string;
   enabled: boolean;
   id: string;
@@ -9993,6 +9996,7 @@ export interface SecretRotationSchedule {
   next_run_at: string;
   old_ref: string;
   provider: string;
+  retire_after_seconds?: number;
   retired_at?: string;
   tenant_id: string;
   updated_at: string;
@@ -10011,6 +10015,7 @@ export interface SecretRotationScheduleList {
 }
 
 export interface SecretRotationScheduleRequest {
+  consumers?: string[];
   enabled?: boolean;
   interval_seconds: number;
   key: string;
@@ -10018,6 +10023,7 @@ export interface SecretRotationScheduleRequest {
   next_run_at?: string;
   old_ref: string;
   provider: string;
+  retire_after_seconds?: number;
 }
 
 export interface SecretRotationScheduleRun {
@@ -10147,7 +10153,11 @@ export interface SecretScopedSyncRequest {
 }
 
 export interface SecretStaticRotation {
+  consumer_adoption: "not_requested" | "pending" | "adopted";
+  consumer_states?: { adopted: boolean; consumer: string; verified_version: number }[];
+  consumers?: string[];
   created_at: string;
+  credential_valid: boolean;
   error?: string;
   expected_version: number;
   id: string;
@@ -10160,6 +10170,9 @@ export interface SecretStaticRotation {
   provider_type?: string;
   restored_version: number;
   result_version: number;
+  retire_after_seconds?: number;
+  retire_approved_by?: string;
+  retire_not_before?: string;
   schedule_id?: string;
   terminal: boolean;
   terminal_at?: string;

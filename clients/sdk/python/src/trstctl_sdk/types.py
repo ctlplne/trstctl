@@ -13790,10 +13790,12 @@ SecretRotationPreview = TypedDict(
 SecretRotationRequest = TypedDict(
     'SecretRotationRequest',
     {
+        'consumers': list[str],
         'key': str,
         'old_ref': str,
         'provider': str,
         'remote_key': str,
+        'retire_after_seconds': int,
         'target': str,
         'ttl_seconds': int,
     },
@@ -13803,6 +13805,7 @@ SecretRotationRequest = TypedDict(
 SecretRotationSchedule = TypedDict(
     'SecretRotationSchedule',
     {
+        'consumers': list[str],
         'created_at': str,
         'enabled': bool,
         'id': str,
@@ -13817,6 +13820,7 @@ SecretRotationSchedule = TypedDict(
         'next_run_at': str,
         'old_ref': str,
         'provider': str,
+        'retire_after_seconds': int,
         'retired_at': str,
         'tenant_id': str,
         'updated_at': str,
@@ -13847,6 +13851,7 @@ SecretRotationScheduleList = TypedDict(
 SecretRotationScheduleRequest = TypedDict(
     'SecretRotationScheduleRequest',
     {
+        'consumers': list[str],
         'enabled': bool,
         'interval_seconds': int,
         'key': str,
@@ -13854,6 +13859,7 @@ SecretRotationScheduleRequest = TypedDict(
         'next_run_at': str,
         'old_ref': str,
         'provider': str,
+        'retire_after_seconds': int,
     },
     total=False,
 )
@@ -14035,7 +14041,11 @@ SecretScopedSyncRequest = TypedDict(
 SecretStaticRotation = TypedDict(
     'SecretStaticRotation',
     {
+        'consumer_adoption': str,
+        'consumer_states': list[dict[str, Any]],
+        'consumers': list[str],
         'created_at': str,
+        'credential_valid': bool,
         'error': str,
         'expected_version': int,
         'id': str,
@@ -14048,6 +14058,9 @@ SecretStaticRotation = TypedDict(
         'provider_type': str,
         'restored_version': int,
         'result_version': int,
+        'retire_after_seconds': int,
+        'retire_approved_by': str,
+        'retire_not_before': str,
         'schedule_id': str,
         'terminal': bool,
         'terminal_at': str,

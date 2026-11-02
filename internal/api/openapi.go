@@ -7042,9 +7042,14 @@ func componentSchemas() map[string]*Schema {
 	rotationProvider.Description = "connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command."
 	rotationTTL := &Schema{Type: "integer"}
 	rotationTTL.Description = "The new lease's lifetime in seconds: required and positive for dynamic-lease:<provider>, bounded by the provider's maximum. Connector and static requests reject any supplied ttl_seconds with 400."
+	rotationConsumers := &Schema{Type: "array", Items: str(),
+		Description: "Static rotations (A240): consumer labels whose delivery reports (POST /api/v1/secrets/deliveries, state verified) must reach the new version before the predecessor retires. Requires retire_after_seconds."}
+	rotationRetireAfter := &Schema{Type: "integer",
+		Description: "Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports."}
 	secretRotationReq := object(map[string]*Schema{
 		"provider": rotationProvider, "key": str(), "old_ref": str(),
 		"target": str(), "remote_key": str(), "ttl_seconds": rotationTTL,
+		"consumers": rotationConsumers, "retire_after_seconds": rotationRetireAfter,
 	}, "provider", "key", "old_ref")
 	secretRotation := object(map[string]*Schema{
 		"key": str(), "old_ref": str(), "new_ref": str(),
@@ -7060,8 +7065,16 @@ func componentSchemas() map[string]*Schema {
 		"expected_version": {Type: "integer"}, "result_version": {Type: "integer"}, "restored_version": {Type: "integer"},
 		"verify_mode": str(), "error": str(), "schedule_id": uuid(),
 		"ttl_seconds": {Type: "integer"}, "new_expires_at": timestamp(),
+		"consumers": {Type: "array", Items: str()}, "retire_after_seconds": {Type: "integer"},
+		"retire_approved_by": str(), "retire_not_before": timestamp(),
+		"credential_valid": {Type: "boolean", Description: "The successor passed its own verification."},
+		"consumer_adoption": {Type: "string", Enum: []string{"not_requested", "pending", "adopted"},
+			Description: "Whether every named consumer reported the result version verified; kept apart from credential_valid."},
+		"consumer_states": {Type: "array", Items: object(map[string]*Schema{
+			"consumer": str(), "verified_version": {Type: "integer"}, "adopted": {Type: "boolean"},
+		}, "consumer", "verified_version", "adopted")},
 		"created_at": timestamp(), "updated_at": timestamp(), "terminal_at": timestamp(),
-	}, "id", "provider", "key", "old_ref", "new_ref", "phase", "terminal", "expected_version", "result_version", "restored_version", "created_at", "updated_at")
+	}, "id", "provider", "key", "old_ref", "new_ref", "phase", "terminal", "expected_version", "result_version", "restored_version", "credential_valid", "consumer_adoption", "created_at", "updated_at")
 	secretRotationPreview := object(map[string]*Schema{
 		"capability": {Type: "string", Enum: []string{"F37"}},
 		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
@@ -7115,6 +7128,7 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "provider": secretRotationScheduleProvider, "key": str(), "old_ref": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"next_run_at": timestamp(),
+		"consumers":   rotationConsumers, "retire_after_seconds": rotationRetireAfter,
 	}, "name", "provider", "key", "old_ref", "interval_seconds")
 	secretRotationRunStatuses := []string{
 		"completed", "queued", "failed", "rolled_back", "rollback_failed", "retire_pending", "delivery_failed", "unsupported",
@@ -7129,6 +7143,7 @@ func componentSchemas() map[string]*Schema {
 		"retired_at":  timestamp(),
 		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": secretRotationScheduleLastRunStatus,
 		"last_new_ref": str(), "last_error": str(),
+		"consumers": {Type: "array", Items: str()}, "retire_after_seconds": {Type: "integer"},
 		"created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "name", "provider", "key", "old_ref", "interval_seconds", "enabled", "next_run_at", "last_run_status", "created_at", "updated_at")
 	secretRotationScheduleRunStatus := str()

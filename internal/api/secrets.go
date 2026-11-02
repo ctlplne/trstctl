@@ -389,6 +389,11 @@ type secretRotationRequest struct {
 	Target     string `json:"target,omitempty"`
 	RemoteKey  string `json:"remote_key,omitempty"`
 	TTLSeconds *int   `json:"ttl_seconds,omitempty"`
+	// Consumers and RetireAfterSeconds are a static rotation's retirement gate
+	// (A240): retire once every named consumer reports the new version
+	// verified, or at the approved deadline after verification.
+	Consumers          []string `json:"consumers,omitempty"`
+	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
 }
 
 type secretRotationPreviewResponse struct {
@@ -432,13 +437,15 @@ type secretRotationResponse struct {
 }
 
 type secretRotationScheduleRequest struct {
-	Name            string     `json:"name"`
-	Provider        string     `json:"provider"`
-	Key             string     `json:"key"`
-	OldRef          string     `json:"old_ref"`
-	IntervalSeconds int        `json:"interval_seconds"`
-	Enabled         *bool      `json:"enabled"`
-	NextRunAt       *time.Time `json:"next_run_at,omitempty"`
+	Name               string     `json:"name"`
+	Provider           string     `json:"provider"`
+	Key                string     `json:"key"`
+	OldRef             string     `json:"old_ref"`
+	IntervalSeconds    int        `json:"interval_seconds"`
+	Enabled            *bool      `json:"enabled"`
+	NextRunAt          *time.Time `json:"next_run_at,omitempty"`
+	Consumers          []string   `json:"consumers,omitempty"`
+	RetireAfterSeconds int        `json:"retire_after_seconds,omitempty"`
 }
 
 type secretRotationScheduleResponse struct {
@@ -457,8 +464,11 @@ type secretRotationScheduleResponse struct {
 	LastRunStatus   string     `json:"last_run_status"`
 	LastNewRef      string     `json:"last_new_ref,omitempty"`
 	LastError       string     `json:"last_error,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	// The retirement gate every static command this schedule queues carries.
+	Consumers          []string  `json:"consumers,omitempty"`
+	RetireAfterSeconds int       `json:"retire_after_seconds,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type secretRotationScheduleRunResponse struct {
@@ -1042,6 +1052,10 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	if err := refuseRetirementGateOutsideStatic(req.Provider, req.Consumers, req.RetireAfterSeconds); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	if tenantID, ok := a.tenant(r); ok {
 		// A235: a rotation writes the secret's next version.
 		if err := a.requireSecretWrite(r.Context(), tenantID, req.Key); err != nil {
@@ -1197,6 +1211,12 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		} else if err := checkStaticRotationPredecessor(staticProvider, key, oldRef); err != nil {
 			return 0, nil, err
 		}
+		if err := refuseRetirementGateOutsideStatic(provider, req.Consumers, req.RetireAfterSeconds); err != nil {
+			return 0, nil, err
+		}
+		if err := validateStaticRotationRetirement(req.Consumers, req.RetireAfterSeconds); err != nil {
+			return 0, nil, err
+		}
 		enabled := true
 		if req.Enabled != nil {
 			enabled = *req.Enabled
@@ -1208,6 +1228,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		sched, err := a.orch.UpsertSecretRotationSchedule(ctx, tenantID, store.SecretRotationSchedule{
 			Name: name, Provider: provider, Key: key, OldRef: oldRef,
 			IntervalSeconds: req.IntervalSeconds, Enabled: enabled, NextRunAt: nextRunAt,
+			Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -1564,6 +1585,7 @@ func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRota
 		RetiredAt:     s.RetiredAt,
 		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef,
 		LastError: store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError),
+		Consumers: s.Consumers, RetireAfterSeconds: s.RetireAfterSeconds,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }

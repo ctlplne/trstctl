@@ -3145,6 +3145,13 @@ type SecretStaticRotationQueued struct {
 	// TTLSeconds is a dynamic-lease rotation's requested new-lease lifetime
 	// (A201); absent for a static rotation.
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
+	// Consumers, RetireAfterSeconds and RetireApprovedBy are the retirement
+	// gate (A240): retire once every named consumer reports the result version
+	// verified, or RetireAfterSeconds after verification, a deadline approved
+	// by RetireApprovedBy.
+	Consumers          []string `json:"consumers,omitempty"`
+	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
+	RetireApprovedBy   string   `json:"retire_approved_by,omitempty"`
 }
 
 // SecretStaticRotationAdvanced records one phase transition of a static
@@ -3165,6 +3172,9 @@ type SecretStaticRotationAdvanced struct {
 	Error           string `json:"error,omitempty"`
 	// NewExpiresAt is when a dynamic-lease rotation's new lease expires.
 	NewExpiresAt *time.Time `json:"new_expires_at,omitempty"`
+	// RetireNotBefore is the approved retirement deadline, fixed when the
+	// successor verifies (A240).
+	RetireNotBefore *time.Time `json:"retire_not_before,omitempty"`
 }
 
 type SecretRotationScheduleUpserted struct {
@@ -3176,6 +3186,10 @@ type SecretRotationScheduleUpserted struct {
 	IntervalSeconds int       `json:"interval_seconds"`
 	Enabled         bool      `json:"enabled"`
 	NextRunAt       time.Time `json:"next_run_at,omitempty"`
+	// Consumers and RetireAfterSeconds are the retirement gate every static
+	// command the schedule queues carries (A240).
+	Consumers          []string `json:"consumers,omitempty"`
+	RetireAfterSeconds int      `json:"retire_after_seconds,omitempty"`
 }
 
 // SecretRotationScheduleControlled changes future eligibility without
@@ -7291,6 +7305,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
 			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
 			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, TTLSeconds: pl.TTLSeconds, CreatedAt: e.Time,
+			Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds, RetireApprovedBy: pl.RetireApprovedBy,
 		}, e.Data)
 	case EventSecretStaticRotationAdvanced:
 		var pl SecretStaticRotationAdvanced
@@ -7304,7 +7319,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, FromPhase: pl.FromPhase, Phase: pl.Phase,
 			ProviderType: pl.ProviderType, NewRef: pl.NewRef, SealedNew: pl.SealedNew, SealedOld: pl.SealedOld,
 			ResultVersion: pl.ResultVersion, RestoredVersion: pl.RestoredVersion, VerifyMode: pl.VerifyMode,
-			Error: pl.Error, NewExpiresAt: pl.NewExpiresAt, At: e.Time,
+			Error: pl.Error, NewExpiresAt: pl.NewExpiresAt, RetireNotBefore: pl.RetireNotBefore, At: e.Time,
 		})
 	case EventSecretRotationScheduleUpserted:
 		var pl SecretRotationScheduleUpserted
@@ -7322,7 +7337,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
 			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
 			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
-			CreatedAt: e.Time, UpdatedAt: e.Time,
+			CreatedAt: e.Time, UpdatedAt: e.Time, Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds,
 		})
 	case EventSecretRotationSchedulePaused, EventSecretRotationScheduleResumed, EventSecretRotationScheduleRetired:
 		expectedAction := map[string]string{
