@@ -104,9 +104,18 @@ This runner also requires Python 3 on a POSIX host. It copies only compressed
 public PostgreSQL archives into separate temporary directories; the product
 authenticates and extracts them again. Database and signer state are independent.
 Compilation/listing is timed separately from execution. Logs, the census, skips
-and completion counts remain in `cover.out.server.shards/`. Timeout, cancellation,
-missing tests or failed processes reject the merged profile and clean up only
-the runner's own processes. Its self-tests run at the start of `make test`.
+and completion counts remain in `cover.out.server.<slice>.shards/`. Timeout,
+cancellation, missing tests or failed processes reject the merged profile and
+clean up only the runner's own processes. Its self-tests run at the start of
+`make test`.
+
+CI runs the same lanes as parallel jobs: `make test-packages` over package
+shards balanced by measured test time (`scripts/ci/go-test-weights.json`),
+`make test-server` over slices of the server census, and `make test-extra`.
+The required `build / test / lint` check fails unless every lane succeeded,
+checks that the slices ran the census exactly once, merges every lane's
+coverage and enforces the floors (`make coverage-gate`), then reports the live
+SLO. Locally, `make test` runs all of it in one process tree, in that order.
 
 ## Security
 

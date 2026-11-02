@@ -91,8 +91,62 @@ class CensusTests(unittest.TestCase):
             with self.subTest(value=bad), self.assertRaises(argparse.ArgumentTypeError):
                 runner.timeout_seconds(bad)
 
+class SliceTests(unittest.TestCase):
+    def test_slices_partition_the_census_exactly(self):
+        names = sorted(f'Test{i:03d}' for i in range(17))
+        for count in (1, 2, 3, 6):
+            union = [name for index in range(count) for name in runner.slice_census(names, index, count)]
+            self.assertEqual(sorted(union), names)
+            self.assertEqual(len(union), len(set(union)))
+        for index, count in [(2, 2), (-1, 3), (0, 0)]:
+            with self.subTest(index=index, count=count), self.assertRaises(ValueError):
+                runner.slice_census(names, index, count)
+
+    def test_runners_agree_on_a_census_listed_at_different_times(self):
+        def listing(stamp):
+            return [{'Time': stamp, 'Action': 'output', 'Output': name + '\n'} for name in ('TestB', 'TestA', 'TestFairness')]
+
+        first = runner.selected_tests(listing('2026-11-02T04:54:41Z'), '^TestFairness$')
+        second = runner.selected_tests(listing('2026-11-02T09:12:03Z'), '^TestFairness$')
+        self.assertEqual(first, ['TestA', 'TestB'])
+        self.assertEqual(runner.census_digest(first), runner.census_digest(second))
+        self.assertNotEqual(runner.census_digest(first), runner.census_digest(['TestA']))
+
+    def test_verify_slices_requires_one_complete_census_each_test_once(self):
+        names = ['TestA', 'TestB', 'TestC']
+
+        def record(index, selected, success=True, census=None, digest=None, count=2):
+            census = census or names
+            return {'slice': index, 'slices': count, 'selected': selected, 'census': census,
+                    'census_sha256': digest or runner.census_digest(census), 'success': success}
+
+        with tempfile.TemporaryDirectory(prefix='slices-selftest-') as directory:
+            written = [0]
+
+            def write(*records):
+                paths = []
+                for row in records:
+                    written[0] += 1
+                    path = Path(directory) / f'result-{written[0]}.json'
+                    path.write_text(json.dumps(row))
+                    paths.append(str(path))
+                return paths
+
+            self.assertEqual(runner.verify_slices(write(record(0, ['TestA', 'TestC']), record(1, ['TestB']))), (3, 2))
+            for name, records in {
+                'a slice missing': [record(0, ['TestA', 'TestC'])],
+                'a slice failed': [record(0, ['TestA', 'TestC']), record(1, ['TestB'], success=False)],
+                'a test lost': [record(0, ['TestA']), record(1, ['TestB'])],
+                'a test doubled': [record(0, ['TestA', 'TestC']), record(1, ['TestB', 'TestC'])],
+                'censuses differ': [record(0, ['TestA', 'TestC']), record(1, ['TestB'], census=['TestA', 'TestB', 'TestD'])],
+                'a digest that is not its census': [record(0, ['TestA', 'TestC'], digest='forged'), record(1, ['TestB'], digest='forged')],
+            }.items():
+                with self.subTest(case=name), self.assertRaises(ValueError):
+                    runner.verify_slices(write(*records))
+
+
 class ProcessTests(unittest.TestCase):
-    def run_gate(self, scenario, timeout='3s'):
+    def run_gate(self, scenario, timeout='3s', extra=()):
         with tempfile.TemporaryDirectory(prefix='shards-selftest-') as directory:
             root = Path(directory)
             fake = root / 'fake-go'
@@ -107,7 +161,7 @@ class ProcessTests(unittest.TestCase):
             began = time.monotonic()
             command = [sys.executable, str(SCRIPT), '--go', str(fake),
                                      '--coverpkg', './internal/...', '--coverprofile', str(output),
-                                     '--skip', '^TestFairness$', '--timeout', timeout]
+                                     '--skip', '^TestFairness$', '--timeout', timeout, *extra]
             child = subprocess.Popen(command,
                                      env={**os.environ, 'SHARDS_SELFTEST_SCENARIO': scenario, 'TMPDIR': str(root)},
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -129,6 +183,15 @@ class ProcessTests(unittest.TestCase):
                 with self.assertRaises(ProcessLookupError):
                     os.kill(json.loads(path.read_text())['pid'], 0)
             return result, record, output.read_text() if output.exists() else None, metadata, elapsed
+
+    def test_a_slice_runs_exactly_its_share_of_the_census(self):
+        result, record, profile, _, _ = self.run_gate('success', extra=('--slice', '1', '--slices', '2'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(record['success'])
+        self.assertEqual(record['selected'], record['census'][1::2])
+        self.assertEqual((record['slice'], record['slices']), (1, 2))
+        self.assertEqual(sorted(name for part in record['partitions'] for name in part), sorted(record['selected']))
+        self.assertEqual(profile.count('mode: atomic'), 1)
 
     def test_success_preserves_flags_census_isolation_and_both_profiles(self):
         result, record, profile, metadata, _ = self.run_gate('success')

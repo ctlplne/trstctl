@@ -6,6 +6,11 @@ Compilation/listing is outside the test wall, as it is for go test -timeout.
 Database startup, execution, and final linking of both parts are inside it.
 No result or merged coverage is accepted unless every selected top-level test,
 example and fuzz seed target has exactly one start and one terminal event.
+
+With --slice i --slices N a CI job runs only its share of the census (every
+N-th name of the sorted census, from i), still in isolated parts under the
+same accounting; --verify-slices then checks that the jobs' results ran one
+census completely, each name in exactly one slice.
 """
 import argparse
 import collections
@@ -46,6 +51,42 @@ def selected_tests(events, skip):
     if len(names) < 3 or len(names) != len(set(names)) or excluded not in names:
         raise ValueError("compiled test census is empty, duplicated, or lacks the separate fairness test")
     return sorted(name for name in names if name != excluded)
+
+
+def census_digest(names):
+    """The census identity every slice must agree on: its sorted test names (the raw listing carries timestamps)."""
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()
+
+
+def slice_census(names, index, count):
+    """This job's share of the census: every count-th name of the sorted census, from index."""
+    if count < 1 or not 0 <= index < count:
+        raise ValueError("--slice must be in [0, --slices)")
+    return names[index::count]
+
+
+def verify_slices(paths):
+    """Check that slice results ran one census completely, each name in exactly one slice."""
+    records = [json.loads(Path(p).read_text()) for p in paths]
+    if not records:
+        raise ValueError("no slice results")
+    counts = {r.get("slices", 1) for r in records}
+    digests = {r.get("census_sha256") for r in records}
+    if len(counts) != 1 or len(digests) != 1 or None in digests:
+        raise ValueError("slice results disagree on the census or the slice count")
+    if any(census_digest(r.get("census", [])) != r["census_sha256"] for r in records):
+        raise ValueError("a slice result's census does not match its digest")
+    count = counts.pop()
+    indices = sorted(r.get("slice", 0) for r in records)
+    if indices != list(range(count)):
+        raise ValueError(f"slice results {indices} are not exactly slices 0..{count - 1}")
+    if not all(r.get("success") for r in records):
+        raise ValueError("a slice did not complete successfully")
+    census = records[0]["census"]
+    union = collections.Counter(name for r in records for name in r.get("selected", []))
+    if union != collections.Counter(census):
+        raise ValueError("the slices' tests are not exactly the census, each once")
+    return len(census), count
 
 
 def complete_run(events, expected):
@@ -154,7 +195,8 @@ def run(args):
     scratch = Path(tempfile.mkdtemp(prefix="trstctl-tests-", dir="/tmp")).resolve()
     commands = []
     children = []
-    record = {"wall_seconds": args.seconds, "workers": 2, "package": args.package, "parts": [], "temporary_root": str(scratch)}
+    record = {"wall_seconds": args.seconds, "workers": 2, "package": args.package, "parts": [], "temporary_root": str(scratch),
+              "slice": args.slice, "slices": args.slices}
     base = [args.go, "test", "-json", "-race", "-count=1", "-p=1", "-covermode=atomic", "-coverpkg=" + args.coverpkg]
     success = False
     previous_signals = {sig: signal.signal(sig, cancel_run) for sig in (signal.SIGTERM, signal.SIGINT)}
@@ -168,11 +210,13 @@ def run(args):
         if census_exit:
             raise RuntimeError("test census compilation failed: " + str(census))
         names = selected_tests(read_events(census), args.skip)
-        groups = [names[::2], names[1::2]]
-        record.update(census_seconds=time.monotonic() - began, census=names, partitions=groups,
-                      census_sha256=hashlib.sha256(census.read_bytes()).hexdigest())
-        print(f">> server census: {len(names)} selected tests, two isolated parts, one {args.seconds:g}s wall", flush=True)
-        for index in range(2):
+        selected = slice_census(names, args.slice, args.slices)
+        groups = [group for group in (selected[::2], selected[1::2]) if group]
+        record.update(census_seconds=time.monotonic() - began, census=names, selected=selected, partitions=groups,
+                      workers=len(groups), census_sha256=census_digest(names))
+        print(f">> server census: {len(names)} selected tests; slice index {args.slice} of {args.slices}: {len(selected)} tests "
+              f"in {len(groups)} isolated parts, one {args.seconds:g}s wall", flush=True)
+        for index in range(len(groups)):
             root = scratch / str(index)
             root.mkdir(mode=0o700)
             seed_public_archives(Path(tempfile.gettempdir()), root)
@@ -257,9 +301,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--go", default="go")
     parser.add_argument("--package", default="./internal/server")
-    parser.add_argument("--coverpkg", required=True)
-    parser.add_argument("--coverprofile", required=True)
-    parser.add_argument("--skip", required=True)
+    parser.add_argument("--coverpkg")
+    parser.add_argument("--coverprofile")
+    parser.add_argument("--skip")
     parser.add_argument("--timeout", dest="seconds", type=timeout_seconds, default="15m")
+    parser.add_argument("--slice", type=int, default=0)
+    parser.add_argument("--slices", type=int, default=1)
+    parser.add_argument("--verify-slices", nargs="+", metavar="RESULT_JSON")
     options = parser.parse_args()
+    if options.verify_slices:
+        try:
+            tests, slices = verify_slices(options.verify_slices)
+        except (OSError, ValueError, KeyError) as error:
+            raise SystemExit("FAIL: server test slices: " + str(error))
+        print(f">> server census complete across {slices} slices: {tests} tests, each run exactly once")
+        raise SystemExit(0)
+    for name in ("coverpkg", "coverprofile", "skip"):
+        if not getattr(options, name):
+            parser.error(f"--{name} is required")
     raise SystemExit(run(options))

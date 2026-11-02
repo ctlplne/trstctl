@@ -25,12 +25,134 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test-lint:
-    name: build / test / lint
+  # The Go tests run as parallel lanes (owner decision 2026-11-02: split the Go
+  # test jobs so each finishes well inside its limit and a CI run takes about
+  # 20 minutes). `make test` runs the same lanes in order locally. Package shards
+  # are balanced by measured weights (scripts/ci/go-test-weights.json); the
+  # server census is sliced with one-start/one-terminal accounting per test and
+  # the slices are proven to cover the census exactly once before coverage is
+  # accepted. build / test / lint is the umbrella required check: it fails unless
+  # every lane and gate job succeeded, then merges coverage and enforces every
+  # floor.
+  go-test-packages:
+    name: go test / packages ${{ matrix.shard }}
     runs-on: ubuntu-latest
     # Per-job timeout so a hung embedded-PG/NATS/signer integration job fails fast
     # instead of burning the 6-hour GitHub default (TEST-004).
-    timeout-minutes: 40
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Set up Node for SDK generators
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verify Java SDK toolchain
+        run: |
+          javac -version
+          java -version
+
+      - name: Test (package shard)
+        # TRSTCTL_REQUIRE_OPENSSH=1 forces the stock-OpenSSH SSH-certificate
+        # cross-checks (ssh-keygen -L / -Q) to RUN and assert on the runner, which
+        # always ships ssh-keygen — so the INTEROP-S3 strength (trstctl SSH certs
+        # verify with the reference toolchain) cannot silently regress via a skip.
+        env:
+          TRSTCTL_REQUIRE_OPENSSH: "1"
+        run: make test-packages TEST_SHARD=${{ matrix.shard }} TEST_SHARDS=6
+
+      - name: Upload package shard coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-packages-${{ matrix.shard }}
+          path: cover.out.main.${{ matrix.shard }}
+          if-no-files-found: error
+
+  go-test-server:
+    name: go test / server ${{ matrix.slice }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [0, 1, 2, 3, 4, 5]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Test (server census slice)
+        env:
+          TRSTCTL_REQUIRE_OPENSSH: "1"
+        run: make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=6
+
+      - name: Upload server slice coverage and census result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-server-${{ matrix.slice }}
+          path: |
+            cover.out.server.${{ matrix.slice }}
+            cover.out.server.${{ matrix.slice }}.shards/result.json
+          if-no-files-found: error
+
+  go-test-extra:
+    name: go test / fairness + live perf
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Test (row-501 fairness shard and live perf lanes)
+        env:
+          TRSTCTL_REQUIRE_OPENSSH: "1"
+        run: make test-extra
+
+      - name: Upload fairness and live perf coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-extra
+          path: |
+            cover.out.server-rotation-cursor
+            cover.out.liveperf
+          if-no-files-found: error
+
+  build-lint:
+    name: build + lint gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -60,14 +182,89 @@ jobs:
       - name: Smoke test (--version boots and exits cleanly)
         run: ./bin/trstctl --version
 
-      - name: Test
-        # TRSTCTL_REQUIRE_OPENSSH=1 forces the stock-OpenSSH SSH-certificate
-        # cross-checks (ssh-keygen -L / -Q) to RUN and assert on the runner, which
-        # always ships ssh-keygen — so the INTEROP-S3 strength (trstctl SSH certs
-        # verify with the reference toolchain) cannot silently regress via a skip.
-        env:
-          TRSTCTL_REQUIRE_OPENSSH: "1"
-        run: make test
+      # Install the pinned golangci-lint v2 (required for Go 1.26) so the lint
+      # step uses a deterministic version rather than the runner's.
+      - name: Install lint tooling
+        run: make tools
+
+      # `make lint` fails closed if golangci-lint/actionlint are absent rather
+      # than silently skipping them (CODE-005). Since `make tools` just installed
+      # the pinned tools, this proves the full lint actually ran in CI.
+      - name: Lint
+        run: make lint
+
+      - name: Editions gate
+        run: make editions-gate
+
+      # Patent claim traceability: ee/docs/claim-traceability.md is generated
+      # from the claim citations in ee/ Go source. A citation added, moved, or
+      # removed without regenerating the committed table fails the build here,
+      # and --strict additionally fails on any integrity finding — including a
+      # claim whose whole implementation set is a package doc comment.
+      - name: Claim traceability check
+        run: make claim-traceability-check
+
+      # CWE register/coverage: both documents are generated from the tree's
+      # in-source `#nosec G### -- reason` waivers plus the fixed-findings list.
+      # A new waiver without a reason, or one added without regenerating the
+      # committed pages, fails the build here.
+      - name: CWE register and coverage check
+        run: make cwe-docs-check
+
+      # CBOM coverage design doc: docs/design/cbom-coverage.md is generated from
+      # the observability-envelope registry and the real classifier run over a
+      # fixed fixture estate. A source kind, asset class, or unobservable class
+      # added without regenerating the committed page fails the build here.
+      - name: CBOM coverage design doc check
+        run: make cbom-docs-check
+
+      # Verify the CI gates' own logic (the critical-package coverage evaluator
+      # and the base-image digest-pinning guard) so a regression in a gate is
+      # caught here rather than silently weakening the build (SF.1).
+      - name: Gate self-tests
+        run: |
+          bash scripts/ci/coverage-normalize_selftest.sh
+          bash scripts/ci/coverage-critical_selftest.sh
+          bash scripts/ci/coverage-server-lifecycle_selftest.sh
+          bash scripts/ci/check-base-pinned_selftest.sh
+          bash scripts/ci/verify-branch-protection_selftest.sh
+          bash scripts/ci/verify-required-checks_selftest.sh
+          bash scripts/ci/verify-scheduled-gates_selftest.sh
+          bash scripts/ci/profile-zlint_selftest.sh
+          bash scripts/ci/check-compose-images-pinned_selftest.sh
+          bash scripts/ci/install-web-deps_selftest.sh
+          bash scripts/ci/install-openbao_selftest.sh
+          bash scripts/ci/install-openssl-pqc_selftest.sh
+          bash scripts/ci/check-base-pinned.sh .
+          bash scripts/ci/check-compose-images-pinned.sh .
+
+
+  sdk-terraform:
+    name: SDK contracts + Terraform acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Set up Node for SDK generators
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verify Java SDK toolchain
+        run: |
+          javac -version
+          java -version
 
       - name: SDK contract and client tests
         env:
@@ -95,6 +292,24 @@ jobs:
           TRSTCTL_RUN_TERRAFORM_ACC=1 TRSTCTL_TERRAFORM_PATH="${RUNNER_TEMP}/tfbin/terraform" CHECKPOINT_DISABLE=1 \
             go test -C clients/terraform -count=1 -run TestTerraformApplyCreatesProfileCertificateAndSecret ./internal/terraformprovider/
 
+
+  perf-gates:
+    name: perf smoke + capacity calibration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
       - name: Perf smoke SLO gate
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"
 
@@ -115,16 +330,23 @@ jobs:
           path: ${{ runner.temp }}/capacity-measurement-baseline.json
           if-no-files-found: error
 
-      # Install the pinned golangci-lint v2 (required for Go 1.26) so the lint
-      # step uses a deterministic version rather than the runner's.
-      - name: Install lint tooling
-        run: make tools
 
-      # `make lint` fails closed if golangci-lint/actionlint are absent rather
-      # than silently skipping them (CODE-005). Since `make tools` just installed
-      # the pinned tools, this proves the full lint actually ran in CI.
-      - name: Lint
-        run: make lint
+  core-integration-succession:
+    name: core integration / succession + decommission
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
 
       # Core succession tests retain the real PG/NATS/signer and WASM proofs.
       - name: Core succession integration and conformance
@@ -138,36 +360,29 @@ jobs:
           go test ./internal/decommission/conformance/... -count=1
           go test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m
 
+
+  core-integration-wire:
+    name: core integration / delegation + reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
       # Agent delegation over PostgreSQL/RLS, embedded NATS, the outbox and the real
       # signer process, including the agent framework reference integrations
       # (test/interop/agentframeworks, built from their own pinned module).
       - name: Core agent delegation wire integration
         run: go test -tags integration ./internal/agentid/intwire/... -count=1 -timeout=15m
-
-      - name: Editions gate
-        run: make editions-gate
-
-      # Patent claim traceability: ee/docs/claim-traceability.md is generated
-      # from the claim citations in ee/ Go source. A citation added, moved, or
-      # removed without regenerating the committed table fails the build here,
-      # and --strict additionally fails on any integrity finding — including a
-      # claim whose whole implementation set is a package doc comment.
-      - name: Claim traceability check
-        run: make claim-traceability-check
-
-      # CWE register/coverage: both documents are generated from the tree's
-      # in-source `#nosec G### -- reason` waivers plus the fixed-findings list.
-      # A new waiver without a reason, or one added without regenerating the
-      # committed pages, fails the build here.
-      - name: CWE register and coverage check
-        run: make cwe-docs-check
-
-      # CBOM coverage design doc: docs/design/cbom-coverage.md is generated from
-      # the observability-envelope registry and the real classifier run over a
-      # fixed fixture estate. A source kind, asset class, or unobservable class
-      # added without regenerating the committed page fails the build here.
-      - name: CBOM coverage design doc check
-        run: make cbom-docs-check
 
       # XREC-INT-WIRE: run the real-substrate integration suite over PostgreSQL/RLS,
       # embedded file-backed NATS/JetStream, the outbox, and the real signer process.
@@ -179,25 +394,48 @@ jobs:
       - name: Core reconciliation conformance
         run: go test -tags integration ./internal/reconcile/conformance/... -count=1 -timeout=10m
 
-      # Verify the CI gates' own logic (the critical-package coverage evaluator
-      # and the base-image digest-pinning guard) so a regression in a gate is
-      # caught here rather than silently weakening the build (SF.1).
-      - name: Gate self-tests
+
+  build-test-lint:
+    name: build / test / lint
+    needs: [go-test-packages, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire]
+    # Always run, so a failed or skipped lane fails this required check instead of
+    # leaving it skipped (a skipped required check would read as passing).
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # TEST-004
+    steps:
+      - name: Every test lane and gate passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
         run: |
-          bash scripts/ci/coverage-normalize_selftest.sh
-          bash scripts/ci/coverage-critical_selftest.sh
-          bash scripts/ci/coverage-server-lifecycle_selftest.sh
-          bash scripts/ci/check-base-pinned_selftest.sh
-          bash scripts/ci/verify-branch-protection_selftest.sh
-          bash scripts/ci/verify-required-checks_selftest.sh
-          bash scripts/ci/verify-scheduled-gates_selftest.sh
-          bash scripts/ci/profile-zlint_selftest.sh
-          bash scripts/ci/check-compose-images-pinned_selftest.sh
-          bash scripts/ci/install-web-deps_selftest.sh
-          bash scripts/ci/install-openbao_selftest.sh
-          bash scripts/ci/install-openssl-pqc_selftest.sh
-          bash scripts/ci/check-base-pinned.sh .
-          bash scripts/ci/check-compose-images-pinned.sh .
+          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); bad = {k: v["result"] for k, v in r.items() if v["result"] != "success"}; print(bad or "all lanes and gates succeeded"); sys.exit(1 if bad else 0)'
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Download lane coverage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      # The same order as `make test`: the lanes' self-tests, the floors over
+      # exactly the lanes' shards and slices, then the live SLO report, after the
+      # floors so a noisy runner cannot keep them from running.
+      - name: Test (self-tests, merged coverage floors, live SLO report)
+        run: |
+          make test-selftests TEST_SHARDS=6
+          make coverage-gate TEST_SHARDS=6 SERVER_SLICES=6
+          make test-live-slo
 
   dod-gate:
     name: definition of done / wiring census

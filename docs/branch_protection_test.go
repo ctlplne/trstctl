@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,23 @@ var branchProtectionExemptCIJobs = map[string]string{
 	"perf live / served hot-path load gate":    "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
 	"web storybook (workbench build)":          "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
 	"definition of done / arm64 proof profile": "runs the managed-key proof on a native arm64 runner; it joins the required set once it has run green there, which is the repository owner's branch-protection decision",
+}
+
+// branchProtectionUmbrellaLanes names CI jobs, by job id, that block merge through
+// a required umbrella check instead of being required one by one: the old single
+// build / test / lint job split into parallel lanes (owner decision 2026-11-02).
+// TestBranchProtectionMatchesCIJobs checks that each umbrella is required, needs
+// the lane, always runs (a skipped required check would read as passing) and
+// fails unless every lane succeeded, so a lane cannot drop out of the gate.
+var branchProtectionUmbrellaLanes = map[string]string{
+	"go-test-packages":            ciUmbrellaCheck,
+	"go-test-server":              ciUmbrellaCheck,
+	"go-test-extra":               ciUmbrellaCheck,
+	"build-lint":                  ciUmbrellaCheck,
+	"sdk-terraform":               ciUmbrellaCheck,
+	"perf-gates":                  ciUmbrellaCheck,
+	"core-integration-succession": ciUmbrellaCheck,
+	"core-integration-wire":       ciUmbrellaCheck,
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified
@@ -158,8 +176,33 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 			t.Errorf("required check %q in branch-protection.json matches no CI/security job name — a renamed/removed job, or a typo, would make the gate ineffective (TEST-006)", ctx)
 		}
 	}
+	// Lanes that block merge through a required umbrella check, verified here.
+	ci := readCIWorkflow(t)
+	umbrellaGated := map[string]bool{}
+	for id, umbrellaName := range branchProtectionUmbrellaLanes {
+		lane, ok := ci.Jobs[id]
+		if !ok {
+			t.Errorf("umbrella lane %q is not a ci.yml job", id)
+			continue
+		}
+		_, umbrella, ok := ciJobByName(ci, umbrellaName)
+		switch {
+		case !ok:
+			t.Errorf("lane %q names umbrella %q, which is not a ci.yml job", id, umbrellaName)
+		case !seenRequired[umbrellaName]:
+			t.Errorf("umbrella %q of lane %q must be required in branch-protection.json", umbrellaName, id)
+		case strings.TrimSpace(umbrella.If) != "always()":
+			t.Errorf("umbrella %q must run with if: always(), or a failed lane would skip it and read as passing", umbrellaName)
+		case !slices.Contains(umbrella.Needs, id):
+			t.Errorf("umbrella %q must need lane %q", umbrellaName, id)
+		case len(umbrella.Steps) == 0 || !ciUmbrellaGatesOnNeeds(umbrella.Steps[0]):
+			t.Errorf("umbrella %q must fail first unless every needed lane succeeded", umbrellaName)
+		default:
+			umbrellaGated[lane.Name] = true
+		}
+	}
 	for name, wf := range known {
-		if seenRequired[name] {
+		if seenRequired[name] || umbrellaGated[name] {
 			continue
 		}
 		if reason := strings.TrimSpace(branchProtectionExemptCIJobs[name]); reason != "" {

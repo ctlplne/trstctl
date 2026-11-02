@@ -50,11 +50,13 @@ Merging to `main` requires:
 These are the exact GitHub check names (the `name:` of each CI job), kept in sync
 with the workflows by `docs/branch_protection_test.go`: a required context must
 match a real job, a fixed-name CI/security job must block merge or carry an
-exemption, and this page must document every required context.
+exemption, and this page must document every required context. A job may also
+block merge through a required umbrella: the test then checks that the umbrella
+needs it, always runs and fails unless it succeeded.
 
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
-| `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage), full `make lint` (gofmt/vet/**trstctllint**, golangci-lint, actionlint), gate self-tests |
+| `build / test / lint` | `ci.yml` | The umbrella over the parallel `make test` lanes (package shards, server-census slices, the fairness and live-perf lane) and the jobs split out of it: build all binaries, full `make lint` (gofmt/vet/**trstctllint**, golangci-lint, actionlint) and gate self-tests, SDK contracts and Terraform acceptance, perf smoke and capacity calibration, core integration. It always runs, fails unless every one of those jobs succeeded, then merges their coverage, enforces every floor and reports the live SLO |
 | `definition of done / wiring census` | `ci.yml` | `make dod-gate`: `go list -deps` reachability, production `buildRunDeps` assembly, and non-sentinel served-handler receipts for every required manifest row |
 | `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, retry-backoff assertions |
 | `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Independent semantic-property and fuzz-target census guards run before PR fuzz smoke; deeper scheduled fuzzing keeps generated invariants, fuzz targets, and seed corpora wired into the merge gate |

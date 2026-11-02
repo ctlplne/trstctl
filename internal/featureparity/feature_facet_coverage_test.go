@@ -115,8 +115,20 @@ func TestFeatureServedFacetCitesExecutedAcceptanceTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
 	}
-	if !strings.Contains(string(workflow), "run: make test") || !strings.Contains(string(makefile), "test: ## Run all tests") {
-		t.Fatal("served acceptance command make test is not executed by CI")
+	// CI runs `make test` as its lanes, in parallel jobs (owner decision
+	// 2026-11-02): every lane of the Makefile's test recipe must be a CI step.
+	recipe := regexp.MustCompile(`(?m)^test: ## Run all tests[^\n]*\n((?:\t[^\n]*\n)+)`).FindSubmatch(makefile)
+	if recipe == nil {
+		t.Fatal("served acceptance command make test is not a Makefile recipe")
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(recipe[1])), "\n") {
+		lane, ok := strings.CutPrefix(strings.TrimSpace(line), "@$(MAKE) --no-print-directory ")
+		if !ok || lane == "" {
+			t.Fatalf("make test recipe line %q is not one lane", line)
+		}
+		if !regexp.MustCompile(`(?m)(^|\s)make ` + regexp.QuoteMeta(lane) + `(\s|$)`).Match(workflow) {
+			t.Fatalf("served acceptance command make test is not executed by CI: lane %s never runs", lane)
+		}
 	}
 
 	testName := regexp.MustCompile(`\b(Test[A-Za-z0-9_]+)\b`)

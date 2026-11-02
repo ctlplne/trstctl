@@ -196,23 +196,67 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 		|| { echo "FAIL: fips-build produced a binary whose FIPS module is NOT active" >&2; exit 1; }
 	@echo ">> FIPS build verified: crypto.fips.module_active: true"
 
+# CI runs the test lanes as parallel jobs (owner decision 2026-11-02: split the Go
+# test jobs): TEST_SHARDS package shards balanced by measured weights, SERVER_SLICES
+# server-census slices, and the extra lane. coverage-gate then merges exactly those
+# profiles and enforces every floor, and the live SLO is reported after the floors.
+# Locally `make test` runs the same lanes in that order.
+TEST_SHARD ?= 0
+TEST_SHARDS ?= 1
+SERVER_SLICE ?= 0
+SERVER_SLICES ?= 1
+# The package lanes: every package except internal/server (sliced by its census)
+# and the serial live perf set.
+TEST_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$'
+
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
+	@$(MAKE) --no-print-directory test-selftests
+	@$(MAKE) --no-print-directory test-packages
+	@$(MAKE) --no-print-directory test-server
+	@$(MAKE) --no-print-directory test-extra
+	@$(MAKE) --no-print-directory coverage-gate
+	@$(MAKE) --no-print-directory test-live-slo
+
+.PHONY: test-selftests
+test-selftests: ## The test lanes' own self-tests (server slices, package shards, live baseline)
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf/live-baseline_selftest.py
-	@echo ">> go test (race + merged first-party coverage)"
+	@set -euo pipefail; $(TEST_PACKAGE_LIST) | \
+		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --selftest
+
+.PHONY: test-packages
+test-packages: ## go test (race + coverage) over package shard TEST_SHARD of TEST_SHARDS (all but internal/server and live perf)
+	@echo ">> go test (race + merged first-party coverage), package shard $(TEST_SHARD) of $(TEST_SHARDS)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
-	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$' )"; \
-	$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
-	@echo ">> go test internal/server complementary shard (race + merged first-party coverage)"
-	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server
+	pkgs="$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json )"; \
+	[ -n "$$pkgs" ] || { echo "FAIL: package shard $(TEST_SHARD) of $(TEST_SHARDS) selected no packages"; exit 1; }; \
+	$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN).$(TEST_SHARD) $$pkgs
+
+.PHONY: test-server
+test-server: ## internal/server census slice SERVER_SLICE of SERVER_SLICES (race + coverage, isolated parts)
+	@echo ">> go test internal/server complementary shard, slice index $(SERVER_SLICE) of $(SERVER_SLICES) (race + merged first-party coverage)"
+	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER).$(SERVER_SLICE) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server --slice $(SERVER_SLICE) --slices $(SERVER_SLICES)
+
+.PHONY: test-extra
+test-extra: ## The internal/server row-501 fairness shard and the live perf correctness lane (race + coverage)
 	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
 	@echo ">> go test live perf packages (serial race + coverage correctness lane)"
 	@mkdir -p $(BIN_DIR)
 	@$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer
 	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
+
+.PHONY: coverage-gate
+coverage-gate: ## Merge every lane's profile (shards 0..TEST_SHARDS-1, slices 0..SERVER_SLICES-1) and enforce the coverage floors
+	@set -euo pipefail; slices=""; for i in $$(seq 0 $$(( $(SERVER_SLICES) - 1 ))); do slices="$$slices $(COVERPROFILE_SERVER).$$i.shards/result.json"; done; \
+	python3 scripts/ci/server-test-shards.py --verify-slices $$slices
+	@set -euo pipefail; profiles=""; \
+	for i in $$(seq 0 $$(( $(TEST_SHARDS) - 1 ))); do profiles="$$profiles $(COVERPROFILE_MAIN).$$i"; done; \
+	for i in $$(seq 0 $$(( $(SERVER_SLICES) - 1 ))); do profiles="$$profiles $(COVERPROFILE_SERVER).$$i"; done; \
+	profiles="$$profiles $(COVERPROFILE_SERVER_ROTATION_CURSOR) $(COVERPROFILE_LIVE_PERF)"; \
+	for f in $$profiles; do head -n 1 "$$f" | grep -qx 'mode: atomic' || { echo "FAIL: coverage lane profile $$f is missing or not atomic"; exit 1; }; done; \
+	{ echo 'mode: atomic'; for f in $$profiles; do tail -n +2 "$$f"; done; } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
@@ -225,7 +269,12 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 		SERVER_LIFECYCLE_FUNCS='$(SERVER_LIFECYCLE_FUNCS)' SERVER_FUNC_COVERAGE_MIN=$(SERVER_FUNC_COVERAGE_MIN) \
 		bash scripts/ci/coverage-server-lifecycle.sh
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) CRITICAL_COVERAGE_MIN_TIER2=$(CRITICAL_COVERAGE_MIN_TIER2) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
+
+.PHONY: test-live-slo
+test-live-slo: ## Report the live mutation SLO, uninstrumented, after the coverage floors (speed is enforced by perf-live-wall)
 	@echo ">> report live mutation SLO (uninstrumented; speed is enforced by perf-live-wall)"
+	@mkdir -p $(BIN_DIR)
+	@$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer
 	@TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
 
 .PHONY: perf-live-wall

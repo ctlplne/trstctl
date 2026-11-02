@@ -221,21 +221,22 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$",
 		"PACKAGE_TEST_TIMEOUT := 60m",
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
-		"$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
+		"$(GO) test -race -count=1 -p=$$parallelism -timeout=$(PACKAGE_TEST_TIMEOUT) -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN).$(TEST_SHARD) $$pkgs",
 		"$(GO) test -race -count=1 -p=1 -timeout=$(PACKAGE_TEST_TIMEOUT) -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
 		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
 		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race",
 		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
-		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
+		"profiles=\"$$profiles $(COVERPROFILE_SERVER_ROTATION_CURSOR) $(COVERPROFILE_LIVE_PERF)\"",
+		"for f in $$profiles; do tail -n +2 \"$$f\"; done",
 	} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile performance test topology missing %q", want)
 		}
 	}
 	if got := strings.Count(mk, "grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$'"); got != 2 {
-		t.Errorf("Makefile excludes the serial performance package set from %d parallel lanes, want test and editions-gate", got)
+		t.Errorf("Makefile excludes the serial performance package set from %d parallel package lists, want the test lanes' list and editions-gate", got)
 	}
 	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 2 {
 		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test and editions-gate", got)
@@ -269,11 +270,23 @@ func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 		t.Fatalf("live SLO exact measurement lanes = %d, want one uninstrumented run", got)
 	}
 	// A noisy host must not prevent the functional coverage floors from running.
-	// The unchanged throughput budget is still measured, after those floors.
-	slo := strings.Index(testBlock, "TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf")
+	// The unchanged throughput budget is still measured, after those floors: the
+	// floors are coverage-gate, the SLO report is test-live-slo, and both make test
+	// and CI's required umbrella check run them in that order.
+	slo := strings.Index(testBlock, "test-live-slo: ## ")
 	functionalFloor := strings.Index(testBlock, "bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen")
-	if slo < 0 || functionalFloor < 0 || slo < functionalFloor {
-		t.Fatal("live throughput SLO must run after the functional coverage floors")
+	if slo < 0 || functionalFloor < 0 || slo < functionalFloor ||
+		!strings.Contains(testBlock[slo:], "TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf") {
+		t.Fatal("the live throughput SLO report must be its own lane, after the functional coverage floors")
+	}
+	floorsRun := strings.Index(testBlock, "@$(MAKE) --no-print-directory coverage-gate\n")
+	sloRun := strings.Index(testBlock, "@$(MAKE) --no-print-directory test-live-slo\n")
+	if floorsRun < 0 || sloRun < floorsRun {
+		t.Fatal("make test must run the live throughput SLO report after the functional coverage floors")
+	}
+	umbrella := read(t, "../.github/workflows/ci.yml")
+	if floors, report := strings.Index(umbrella, "make coverage-gate TEST_SHARDS="), strings.Index(umbrella, "make test-live-slo"); floors < 0 || report < floors {
+		t.Fatal("CI must report the live throughput SLO after the functional coverage floors")
 	}
 }
 
@@ -298,12 +311,14 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	}
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
-		"grep -v -E '^$(SERVER_IMPORT)$$'",
+		"pkgs=\"$$( $(TEST_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(TEST_SHARD) --shards $(TEST_SHARDS)",
 		"PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py",
-		"python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server",
+		"python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER).$(SERVER_SLICE) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server --slice $(SERVER_SLICE) --slices $(SERVER_SLICES)",
 		"-coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server",
-		"tail -n +2 $(COVERPROFILE_SERVER)",
-		"tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR)",
+		"python3 scripts/ci/server-test-shards.py --verify-slices $$slices",
+		"for i in $$(seq 0 $$(( $(SERVER_SLICES) - 1 ))); do profiles=\"$$profiles $(COVERPROFILE_SERVER).$$i\"; done",
+		"profiles=\"$$profiles $(COVERPROFILE_SERVER_ROTATION_CURSOR) $(COVERPROFILE_LIVE_PERF)\"",
+		"for f in $$profiles; do tail -n +2 \"$$f\"; done",
 	} {
 		if !strings.Contains(testBlock, want) {
 			t.Errorf("Makefile test target can lose the row-501 server proof or its coverage: missing %q", want)
@@ -317,6 +332,9 @@ func TestMakeTestShardsRow501ServerProofWithoutDroppingCoverage(t *testing.T) {
 	}
 	if got := strings.Count(testBlock, "-timeout=10m ./internal/server"); got != 1 {
 		t.Errorf("row-501 shard retaining its ten-minute ceiling = %d, want 1", got)
+	}
+	if !strings.Contains(mk, "TEST_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$'") {
+		t.Error("the package lanes must exclude internal/server, which runs as census slices")
 	}
 	if !anyTestDeclaresUnder(t, "../internal/server", proof) {
 		t.Fatalf("dedicated server proof %s is no longer declared", proof)

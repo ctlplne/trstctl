@@ -47,13 +47,38 @@ var playwrightPlatformForRunner = map[string]string{
 var baselineSuffixRE = regexp.MustCompile(`-([a-z0-9]+)-([a-z0-9]+)\.png$`)
 
 type ciStep struct {
-	Run string `yaml:"run"`
+	Name string            `yaml:"name"`
+	Uses string            `yaml:"uses"`
+	With map[string]any    `yaml:"with"`
+	Env  map[string]string `yaml:"env"`
+	Run  string            `yaml:"run"`
 }
 
 type ciJob struct {
-	Name   string   `yaml:"name"`
-	RunsOn any      `yaml:"runs-on"`
-	Steps  []ciStep `yaml:"steps"`
+	Name     string  `yaml:"name"`
+	RunsOn   any     `yaml:"runs-on"`
+	If       string  `yaml:"if"`
+	Needs    ciNeeds `yaml:"needs"`
+	Strategy struct {
+		Matrix map[string]any `yaml:"matrix"`
+	} `yaml:"strategy"`
+	Steps []ciStep `yaml:"steps"`
+}
+
+// ciNeeds is a job's `needs:`, written either as one job id or as a list.
+type ciNeeds []string
+
+func (n *ciNeeds) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		*n = ciNeeds{node.Value}
+		return nil
+	}
+	var ids []string
+	if err := node.Decode(&ids); err != nil {
+		return err
+	}
+	*n = ids
+	return nil
 }
 
 type ciWorkflow struct {
