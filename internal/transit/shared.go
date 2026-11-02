@@ -295,17 +295,21 @@ func (k *Keyring) catchUp(keys map[string]persistedKey) error {
 			wipePersistedKey(p)
 			continue
 		}
-		from, to := nk.latest+1, p.Latest+1
+		// validPersistedKey checked that each kind stores exactly Latest+1
+		// versions and that Latest is not behind this replica's, so the new
+		// versions are the stored slice from this replica's next one.
+		from := nk.latest + 1
 		switch nk.kind {
 		case KindAEAD:
-			nk.aead = append(nk.aead, p.AEAD[from:to]...)
+			nk.aead = append(nk.aead, p.AEAD[from:]...)
 			wipeKeyBytes(p.AEAD[:from])
 		case KindHMAC:
-			nk.hmac = append(nk.hmac, p.HMAC[from:to]...)
+			nk.hmac = append(nk.hmac, p.HMAC[from:]...)
 			wipeKeyBytes(p.HMAC[:from])
 		case KindSign:
-			added := make([]*crypto.LockedSigner, 0, to-from)
-			for _, der := range p.SignPKCS8[from:to] {
+			pending := p.SignPKCS8[from:]
+			added := make([]*crypto.LockedSigner, 0, len(pending))
+			for _, der := range pending {
 				ls, err := crypto.LockedKeyFromPKCS8(der)
 				if err != nil {
 					for _, s := range added {

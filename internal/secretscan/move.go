@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -175,15 +176,16 @@ type wipingBuffer struct {
 }
 
 func (b *wipingBuffer) Write(p []byte) (int, error) {
-	if b.overflow || len(b.data)+len(p) > maxLocateReport {
+	if b.overflow || len(p) > maxLocateReport-len(b.data) {
 		b.overflow = true
 		return len(p), nil
 	}
-	if len(b.data)+len(p) > cap(b.data) {
-		grown := make([]byte, len(b.data), max(2*cap(b.data), len(b.data)+len(p), 4096))
-		copy(grown, b.data)
-		secret.Wipe(b.data)
-		b.data = grown
+	if len(p) > cap(b.data)-len(b.data) {
+		// Grow into a new array (append's growth, at least 4 KiB) and wipe the
+		// one it outgrew.
+		outgrown := b.data
+		b.data = slices.Grow(b.data[:len(b.data):len(b.data)], max(len(p), 4096))
+		secret.Wipe(outgrown[:cap(outgrown)])
 	}
 	b.data = append(b.data, p...)
 	return len(p), nil

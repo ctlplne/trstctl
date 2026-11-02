@@ -8,6 +8,7 @@ package translog
 
 import (
 	"bytes"
+	"slices"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -18,10 +19,7 @@ func leafHash(leaf []byte) []byte {
 }
 
 func nodeHash(l, r []byte) []byte {
-	b := make([]byte, 0, 1+len(l)+len(r))
-	b = append(b, 0x01)
-	b = append(b, l...)
-	b = append(b, r...)
+	b := slices.Concat([]byte{0x01}, l, r)
 	return crypto.SHA256Sum(b)
 }
 

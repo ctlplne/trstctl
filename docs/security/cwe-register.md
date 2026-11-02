@@ -668,11 +668,11 @@ not this file.
 | `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
 | `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
 | `internal/crypto/seal/generation.go:168` | bounded to maxUint16Value by the guard above (CWE-190) |
-| `internal/crypto/seal/seal.go:117` | slice lengths cannot exceed uint64. |
-| `internal/crypto/seal/seal.go:120` | slice lengths cannot exceed uint64. |
-| `internal/crypto/seal/seal.go:224` | bounded to maxUint16Value by the check above (CWE-190) |
-| `internal/crypto/seal/seal.go:576` | validateDomain above caps the length at maxUint16Value (CWE-190) |
-| `internal/crypto/seal/seal.go:579` | bounded to maxUint16Value by the guard above (CWE-190) |
+| `internal/crypto/seal/seal.go:118` | slice lengths cannot exceed uint64. |
+| `internal/crypto/seal/seal.go:121` | slice lengths cannot exceed uint64. |
+| `internal/crypto/seal/seal.go:225` | bounded to maxUint16Value by the check above (CWE-190) |
+| `internal/crypto/seal/seal.go:575` | validateDomain above caps the length at maxUint16Value (CWE-190) |
+| `internal/crypto/seal/seal.go:576` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/signauth.go:66` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/signauth.go:76` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/ssh.go:69` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
@@ -1248,7 +1248,7 @@ not this file.
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/gitleaks.go:228` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
-| `internal/secretscan/move.go:146` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
+| `internal/secretscan/move.go:147` | the pinned gitleaks binary over the operator's own checkout (CWE-78) |
 | `internal/secretscan/move_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/repository.go:96` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscli/secretscli.go:87` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
@@ -2263,7 +2263,7 @@ not this file.
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
-| `internal/crypto/uuidv5.go:21` | RFC 4122 UUIDv5 public identifier, not a security digest. |
+| `internal/crypto/uuidv5.go:20` | RFC 4122 UUIDv5 public identifier, not a security digest. |
 | `internal/crypto/weakkey/weakkey.go:139` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 | `internal/crypto/weakkey/weakkeytest/rsa.go:51` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -144,8 +145,7 @@ func storeMovedSecret(ctx context.Context, client *http.Client, server, token, t
 	}
 	quotedValue := secretjson.QuoteBytes(value)
 	defer secret.Wipe(quotedValue)
-	body := make([]byte, 0, len(quotedName)+len(quotedValue)+20)
-	body = append(append(append(append(append(body, `{"name":`...), quotedName...), `,"value":`...), quotedValue...), '}')
+	body := slices.Concat([]byte(`{"name":`), quotedName, []byte(`,"value":`), quotedValue, []byte{'}'})
 	defer secret.Wipe(body)
 	status, resp, err := do(ctx, client, server, http.MethodPost, "/api/v1/secrets/store", nil, body, token, tenant,
 		"secret-move:"+findingID+":"+crypto.SHA256Hex([]byte(name)), "")

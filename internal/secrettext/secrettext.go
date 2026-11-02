@@ -4,7 +4,11 @@
 // must cross APIs requiring string values, such as net/http headers.
 package secrettext
 
-import "trstctl.com/trstctl/internal/crypto/secret"
+import (
+	"slices"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
+)
 
 // Clone returns an owned copy of material for long-lived provider structs.
 func Clone(material []byte) []byte {
@@ -18,9 +22,7 @@ func Clone(material []byte) []byte {
 // values. The temporary byte assembly buffer is wiped immediately after the
 // edge string is created.
 func Prefixed(prefix string, material []byte) string {
-	buf := make([]byte, 0, len(prefix)+len(material))
-	buf = append(buf, prefix...)
-	buf = append(buf, material...)
+	buf := slices.Concat([]byte(prefix), material)
 	out := string(buf)
 	secret.Wipe(buf)
 	return out

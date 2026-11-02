@@ -11,6 +11,7 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"slices"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -570,17 +571,10 @@ func buildV2(domain, tag, wrapped, nonce, ciphertext []byte) ([]byte, error) {
 		len(nonce) != nonceSize || len(ciphertext) == 0 {
 		return nil, ErrFormat
 	}
-	out := make([]byte, 0, len(magic)+1+2+len(domain)+len(tag)+2+len(wrapped)+len(nonce)+len(ciphertext))
-	out = append(out, magic...)
-	out = append(out, version2)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(domain))) // #nosec G115 -- validateDomain above caps the length at maxUint16Value (CWE-190)
-	out = append(out, domain...)
-	out = append(out, tag...)
-	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped))) // #nosec G115 -- bounded to maxUint16Value by the guard above (CWE-190)
-	out = append(out, wrapped...)
-	out = append(out, nonce...)
-	out = append(out, ciphertext...)
-	return out, nil
+	var domainLen, wrappedLen [2]byte
+	binary.BigEndian.PutUint16(domainLen[:], uint16(len(domain)))   // #nosec G115 -- validateDomain above caps the length at maxUint16Value (CWE-190)
+	binary.BigEndian.PutUint16(wrappedLen[:], uint16(len(wrapped))) // #nosec G115 -- bounded to maxUint16Value by the guard above (CWE-190)
+	return slices.Concat(magic, []byte{version2}, domainLen[:], domain, tag, wrappedLen[:], wrapped, nonce, ciphertext), nil
 }
 
 func validateDomain(domain []byte) error {

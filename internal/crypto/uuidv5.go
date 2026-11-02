@@ -5,6 +5,7 @@ package crypto
 import (
 	"crypto/sha1" // #nosec G505 -- RFC 4122 UUIDv5 uses SHA-1 only for a public identity label, never integrity (CWE-328).
 	"fmt"
+	"slices"
 )
 
 // UUIDv5OID derives a public, deterministic identifier in the RFC 4122 OID
@@ -15,9 +16,7 @@ import (
 func UUIDv5OID(name []byte) string {
 	namespace := [...]byte{0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1,
 		0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
-	seed := make([]byte, 0, len(namespace)+len(name))
-	seed = append(seed, namespace[:]...)
-	seed = append(seed, name...)
+	seed := slices.Concat(namespace[:], name)
 	digest := sha1.Sum(seed) // #nosec G401 -- RFC 4122 UUIDv5 public identifier, not a security digest.
 	digest[6] = (digest[6] & 0x0f) | 0x50
 	digest[8] = (digest[8] & 0x3f) | 0x80

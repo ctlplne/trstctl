@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -119,9 +120,7 @@ func RecoverySuccessorEventID(tenantID, identityID string, epoch uint64) string 
 // this derivation here avoids pulling a general UUID package (and its SQL
 // driver dependency) into the isolated signing process through succession.
 func recoveryEventID(domain string, bound []byte) string {
-	message := make([]byte, 0, len(domain)+len(bound))
-	message = append(message, domain...)
-	message = append(message, bound...)
+	message := slices.Concat([]byte(domain), bound)
 	digest := crypto.SHA256Sum(message)
 	digest[6] = (digest[6] & 0x0f) | 0x80 // UUID version 8
 	digest[8] = (digest[8] & 0x3f) | 0x80 // RFC 4122 variant

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -171,12 +172,11 @@ func encodePayload(payload Payload) ([]byte, error) {
 			return nil, ErrPayload
 		}
 	}
-	frame := make([]byte, 0, frameHeaderBytes+len(payload.Data)+len(actor))
-	frame = append(frame, 'E', 'P', 'F', '1')
-	frame = binary.BigEndian.AppendUint64(frame, uint64(len(payload.Data)))
-	frame = binary.BigEndian.AppendUint64(frame, uint64(len(actor)))
-	frame = append(frame, payload.Data...)
-	return append(frame, actor...), nil
+	var header [frameHeaderBytes]byte
+	copy(header[:4], "EPF1")
+	binary.BigEndian.PutUint64(header[4:12], uint64(len(payload.Data)))
+	binary.BigEndian.PutUint64(header[12:20], uint64(len(actor)))
+	return slices.Concat(header[:], payload.Data, actor), nil
 }
 
 func decodePayload(frame []byte) (Payload, error) {
