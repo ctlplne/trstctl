@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/netsec"
@@ -125,13 +126,15 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	if !hasAWSSignature(signed.Headers, u.Query()) {
 		return AWSIdentity{}, fmt.Errorf("signed STS request is missing SigV4 authorization")
 	}
-	// The network authority comes only from operator configuration. The submitted
-	// signed request still supplies the path/query covered by SigV4, but it cannot
-	// select a different host through URL parsing tricks or redirects (CWE-918).
-	target := *u
-	target.Scheme = allowed.Scheme
-	target.Host = allowed.Host
-	target.User = nil
+	// The request sent upstream is rebuilt from operator configuration alone: the
+	// configured scheme and host, the root path STS serves, and only the signed
+	// STS parameters, each in the shape AWS signs. A submitted URL can't add a
+	// parameter, a path or a host (CWE-918).
+	query, err := signedSTSQuery(u)
+	if err != nil {
+		return AWSIdentity{}, err
+	}
+	target := url.URL{Scheme: allowed.Scheme, Host: allowed.Host, Path: "/", RawQuery: query.Encode()}
 	req, err := http.NewRequestWithContext(ctx, method, target.String(), bytes.NewReader([]byte(signed.Body)))
 	if err != nil {
 		return AWSIdentity{}, err
@@ -152,10 +155,8 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	closedClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	// The network authority is rebuilt above from the operator-configured
-	// endpoint, scheme changes and userinfo are rejected, and redirects are
-	// disabled. Attacker-controlled request fields cannot select the peer.
-	// codeql[go/request-forgery]
+	// The URL is rebuilt above from the configured endpoint and the signed STS
+	// parameters, and redirects are disabled: request fields can't select the peer.
 	resp, err := closedClient.Do(req)
 	if err != nil {
 		return AWSIdentity{}, err
@@ -173,6 +174,48 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 		return AWSIdentity{}, err
 	}
 	return id, nil
+}
+
+// stsQueryParameters are the only query parameters a signed GetCallerIdentity
+// request may carry, each with the shape AWS signs.
+var stsQueryParameters = map[string]*regexp.Regexp{
+	"Action":               regexp.MustCompile(`^GetCallerIdentity$`),
+	"Version":              regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`),
+	"X-Amz-Algorithm":      regexp.MustCompile(`^AWS4-HMAC-SHA256$`),
+	"X-Amz-Credential":     regexp.MustCompile(`^[A-Z0-9]{16,128}/[0-9]{8}/[a-z0-9-]{1,32}/sts/aws4_request$`),
+	"X-Amz-Date":           regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z$`),
+	"X-Amz-Expires":        regexp.MustCompile(`^[0-9]{1,6}$`),
+	"X-Amz-SignedHeaders":  regexp.MustCompile(`^[a-z0-9-]+(;[a-z0-9-]+)*$`),
+	"X-Amz-Signature":      regexp.MustCompile(`^[0-9a-f]{64}$`),
+	"X-Amz-Security-Token": regexp.MustCompile(`^[A-Za-z0-9+/=]+$`),
+}
+
+// signedSTSQuery copies the submitted query's signed STS parameters into a new
+// query, refusing any other parameter, a repeated one, a malformed value, or a
+// path other than the root.
+func signedSTSQuery(u *url.URL) (url.Values, error) {
+	if u.Path != "" && u.Path != "/" {
+		return nil, fmt.Errorf("STS URL path must be /")
+	}
+	submitted := u.Query()
+	query := url.Values{}
+	for name, pattern := range stsQueryParameters {
+		values := submitted[name]
+		if len(values) == 0 {
+			continue
+		}
+		value := values[0]
+		if len(values) != 1 || len(value) > 8192 || !pattern.MatchString(value) {
+			return nil, fmt.Errorf("STS URL parameter %s is repeated or malformed", name)
+		}
+		query.Set(name, value)
+	}
+	for name := range submitted {
+		if _, ok := stsQueryParameters[name]; !ok {
+			return nil, fmt.Errorf("STS URL carries a parameter STS doesn't sign for GetCallerIdentity")
+		}
+	}
+	return query, nil
 }
 
 func sameHost(a, b *url.URL) bool {

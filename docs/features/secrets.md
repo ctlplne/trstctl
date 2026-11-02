@@ -1238,6 +1238,10 @@ or OIDC/generic JWT may name one signed `scopes_claim`; setting both or neither
 fails startup. A token's ordinary `scope`/`scopes` claim never overrides static
 operator policy. AWS IAM uses the Vault-style signed `sts:GetCallerIdentity`
 request, verifying the caller via STS without ever receiving the AWS secret access key.
+The request trstctl sends to STS is rebuilt from the configured endpoint, the root path
+and the signed STS parameters alone (`Action`, `Version` and the SigV4 `X-Amz-*` query
+parameters, each in the shape AWS signs); a submitted request with any other parameter,
+a repeated or malformed one, or another path is refused before anything is sent.
 
 ```yaml
 secrets:

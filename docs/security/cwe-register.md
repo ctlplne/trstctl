@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2234 annotated sites across 29 rules. Each row is
+2235 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (488 sites)
+### G101 — CWE-798 Use of hardcoded credentials (489 sites)
 
 | Location | Reason |
 |---|---|
@@ -187,8 +187,9 @@ not this file.
 | `internal/audit/audit_test.go:179` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/audit/audit_test.go:211` | deliberately toxic fixture proves retained-prefix redaction (CWE-798). |
 | `internal/auth/oidc_client_secret.go:15` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/authmethod/aws_iam_http_test.go:16` | fabricated signed-request fixture (CWE-798) |
-| `internal/authmethod/aws_iam_http_test.go:37` | fabricated signed-request fixture (CWE-798) |
+| `internal/authmethod/aws_iam_http_test.go:17` | fabricated signed-request fixture (CWE-798) |
+| `internal/authmethod/aws_iam_http_test.go:38` | fabricated signed-request fixture (CWE-798) |
+| `internal/authmethod/aws_iam_http_test.go:64` | fabricated signed-request fixture (CWE-798) |
 | `internal/broker/issuanceprecondition_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/ca/ejbca/ejbcafake/ejbcafake.go:28` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:30` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
