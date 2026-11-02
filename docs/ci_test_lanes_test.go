@@ -315,6 +315,36 @@ func TestFuzzSmokeRunsInLanesThatCoverEveryTarget(t *testing.T) {
 	}
 }
 
+// TestCIModuleDownloadsRetryTransientProxyFailures keeps every job's module
+// download behind scripts/ci/go-mod-download.sh: a bare `go mod download` let one
+// HTTP/2 stream reset from the module proxy fail a whole server lane before any
+// test ran (CI 41451560632). The script retries twice and still fails a real error.
+func TestCIModuleDownloadsRetryTransientProxyFailures(t *testing.T) {
+	wf := readCIWorkflow(t)
+	uses := 0
+	for id, job := range wf.Jobs {
+		for _, step := range job.Steps {
+			for _, line := range strings.Split(step.Run, "\n") {
+				switch strings.TrimSpace(line) {
+				case "go mod download":
+					t.Errorf("job %s runs a bare `go mod download`; use scripts/ci/go-mod-download.sh", id)
+				case "scripts/ci/go-mod-download.sh":
+					uses++
+				}
+			}
+		}
+	}
+	if uses == 0 {
+		t.Error("no CI job downloads modules through scripts/ci/go-mod-download.sh")
+	}
+	script := read(t, "../scripts/ci/go-mod-download.sh")
+	for _, want := range []string{"for delay in 10 30; do", "go mod download && exit 0", "exit 1"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("go-mod-download.sh lost %q", want)
+		}
+	}
+}
+
 // TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch keeps the fix for a
 // cache restore that failed on every job: setup-go installs go.mod's `go`
 // version, and with GOTOOLCHAIN=auto its own `go env` fetched the newer
