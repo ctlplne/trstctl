@@ -108,13 +108,13 @@ class LoopbackDatabaseBridge(socketserver.ThreadingTCPServer):
     allow_reuse_address = False
     daemon_threads = True
 
-    def __init__(self, upstream_port: int, state) -> None:
+    def __init__(self, upstream_port: int, state, bind=("127.0.0.1", 0)) -> None:
         self.upstream_addresses = (
             ("loopback", ("127.0.0.1", upstream_port)),
             ("docker-host", ("host.docker.internal", upstream_port)),
         )
         self.state = state
-        super().__init__(("127.0.0.1", 0), DatabaseBridgeHandler)
+        super().__init__(bind, DatabaseBridgeHandler)
 
 
 # This receiver is compiled into a temporary, independent process by the
@@ -199,6 +199,8 @@ class State:
         self.host_port = 0
         self.database_bridge = None
         self.database_bridge_thread = None
+        self.private_bridge = None
+        self.private_bridge_thread = None
         self.bridge_accepts = 0
         self.bridge_upstream_connects = 0
         self.bridge_last_errno = 0
@@ -326,6 +328,18 @@ class State:
         self.database_bridge = bridge
         self.database_bridge_thread = thread
         self.host_port = int(bridge.server_address[1])
+        # Plaintext Redis is served only to a literal private address. On a
+        # Linux parent the runtime container shares the host network and its
+        # host.docker.internal resolves to loopback first, so the parent names
+        # the Docker bridge gateway it also maps there: the Redis bridge alone
+        # listens on that private address too, on the same port.
+        private_ipv4 = os.environ.get("TRSTCTL_DOD_PRIVATE_BRIDGE_IPV4", "")
+        if self.kind == "redis" and private_ipv4:
+            private = LoopbackDatabaseBridge(upstream_port, self, (private_ipv4, self.host_port))
+            private_thread = threading.Thread(target=private.serve_forever, daemon=True)
+            private_thread.start()
+            self.private_bridge = private
+            self.private_bridge_thread = private_thread
 
     def _database_healthy(self) -> bool:
         if self.kind == "postgresql":
@@ -484,6 +498,11 @@ class State:
             self.database_bridge.server_close()
         if self.database_bridge_thread is not None:
             self.database_bridge_thread.join(timeout=2)
+        if self.private_bridge is not None:
+            self.private_bridge.shutdown()
+            self.private_bridge.server_close()
+        if self.private_bridge_thread is not None:
+            self.private_bridge_thread.join(timeout=2)
         if self.github_box_process is not None:
             if self.github_box_process.stdin is not None:
                 self.github_box_process.stdin.close()

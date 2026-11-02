@@ -92,7 +92,7 @@ func TestBrokerTranslatesExactRuntimeTempFilesToReceiptDirectory(t *testing.T) {
 	if dynamic["TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE"] != runtimeFile {
 		t.Fatal("broker mutated the child-owned request map")
 	}
-	environment := strings.Join(brokerEnvironment(runtimeExpectation{ID: "code_signing.default"}, receiptDir, validated), "\n")
+	environment := strings.Join(brokerEnvironment(runtimeExpectation{ID: "code_signing.default"}, receiptDir, validated, ""), "\n")
 	if !strings.Contains(environment, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE="+hostFile) || strings.Contains(environment, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE="+dodproof.RuntimeTempDir) {
 		t.Fatalf("parent substrate environment did not receive only the translated host path:\n%s", environment)
 	}
@@ -222,7 +222,7 @@ func TestBrokerEnvironmentForwardsOnlyReviewedNames(t *testing.T) {
 	environment := strings.Join(brokerEnvironment(expected, t.TempDir(), map[string]string{
 		"TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE": "/approved/key",
 		"TRSTCTL_ARBITRARY_FILE":                  "/etc/passwd",
-	}), "\n")
+	}, ""), "\n")
 	if !strings.Contains(environment, "TRSTCTL_REKOR_EMULATOR_PRIVATE_KEY_FILE=/approved/key") {
 		t.Fatal("reviewed dynamic input was not forwarded")
 	}

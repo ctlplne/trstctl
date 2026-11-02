@@ -43,13 +43,17 @@ type substrateBroker struct {
 	receiptDir string
 	token      string
 	crossHost  bool
-	listener   net.Listener
-	server     *http.Server
-	mu         sync.Mutex
-	expect     map[string]runtimeExpectation
-	sessions   map[string]*brokerSubstrate
-	receipts   map[string][]byte
-	endpoint   string
+	// privateBridgeIPv4 is the Linux Docker bridge gateway the runtime
+	// container also resolves host.docker.internal to; substrates that must
+	// serve a literal private address listen there too.
+	privateBridgeIPv4 string
+	listener          net.Listener
+	server            *http.Server
+	mu                sync.Mutex
+	expect            map[string]runtimeExpectation
+	sessions          map[string]*brokerSubstrate
+	receipts          map[string][]byte
+	endpoint          string
 }
 
 type brokerSubstrate struct {
@@ -116,6 +120,9 @@ func startSubstrateBroker(repo, receiptDir string, crossHost bool) (*substrateBr
 	broker := &substrateBroker{
 		repo: repo, receiptDir: receiptDir, token: fmt.Sprintf("%x", tokenBytes), crossHost: crossHost,
 		listener: listener, expect: map[string]runtimeExpectation{}, sessions: map[string]*brokerSubstrate{}, receipts: map[string][]byte{},
+	}
+	if crossHost {
+		broker.privateBridgeIPv4 = linuxDockerBridgeIPv4()
 	}
 	broker.endpoint = fmt.Sprintf("http://127.0.0.1:%d", listener.Addr().(*net.TCPAddr).Port)
 	mux := http.NewServeMux()
@@ -221,7 +228,7 @@ func (b *substrateBroker) launch(ctx context.Context, expected runtimeExpectatio
 	}
 	cmd := exec.Command(commandPath, expected.Command[1:]...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 	cmd.Dir = b.repo
-	cmd.Env = brokerEnvironment(expected, b.receiptDir, validatedDynamic)
+	cmd.Env = brokerEnvironment(expected, b.receiptDir, validatedDynamic, b.privateBridgeIPv4)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, brokerReady{}, err
@@ -483,7 +490,7 @@ func validateBrokerCommand(commandPath string, argv []string) error {
 	return nil
 }
 
-func brokerEnvironment(expected runtimeExpectation, receiptDir string, dynamic map[string]string) []string {
+func brokerEnvironment(expected runtimeExpectation, receiptDir string, dynamic map[string]string, privateBridgeIPv4 string) []string {
 	out := make([]string, 0, len(os.Environ())+8)
 	for _, item := range os.Environ() {
 		name, _, _ := strings.Cut(item, "=")
@@ -504,6 +511,9 @@ func brokerEnvironment(expected runtimeExpectation, receiptDir string, dynamic m
 		if value := dynamic[name]; value != "" {
 			out = append(out, name+"="+value)
 		}
+	}
+	if privateBridgeIPv4 != "" {
+		out = append(out, "TRSTCTL_DOD_PRIVATE_BRIDGE_IPV4="+privateBridgeIPv4)
 	}
 	return out
 }

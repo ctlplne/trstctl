@@ -26,21 +26,31 @@ func TestCommittedRuntimeRunnerIdentityMatchesExactClosure(t *testing.T) {
 }
 
 func TestRuntimeRunnerDockerHostArgsPreserveDesktopDNS(t *testing.T) {
-	got, err := runtimeRunnerDockerHostArgs("darwin")
+	got, err := runtimeRunnerDockerHostArgs("darwin", "172.17.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(got, " ") != "--network bridge" {
 		t.Fatalf("Darwin Docker host args = %v, want Docker Desktop bridge/DNS", got)
 	}
-	got, err = runtimeRunnerDockerHostArgs("linux")
+	got, err = runtimeRunnerDockerHostArgs("linux", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(got, " ") != "--network host --add-host host.docker.internal:127.0.0.1" {
 		t.Fatalf("Linux Docker host args = %v", got)
 	}
-	if _, err := runtimeRunnerDockerHostArgs("windows"); err == nil {
+	// With a Docker bridge, loopback stays the first answer and the bridge's
+	// private gateway is the second (plaintext Redis needs a literal private
+	// address).
+	got, err = runtimeRunnerDockerHostArgs("linux", "172.17.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, " ") != "--network host --add-host host.docker.internal:127.0.0.1 --add-host host.docker.internal:172.17.0.1" {
+		t.Fatalf("Linux Docker host args with a bridge = %v", got)
+	}
+	if _, err := runtimeRunnerDockerHostArgs("windows", ""); err == nil {
 		t.Fatal("unsupported Docker host routing passed")
 	}
 }

@@ -981,17 +981,17 @@ not this file.
 | `tools/dodcensus/proof/launched.go:2087` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:2091` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/proof/launched.go:2741` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:147` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:153` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:159` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:166` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:181` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:193` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/runtime_runner_test.go:202` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:157` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:163` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:169` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:176` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:191` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:203` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `tools/dodcensus/runtime_runner_test.go:212` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `tools/dodcensus/substrate_broker.go:402` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/substrate_broker.go:426` | bounded value packing in a developer tool, not a served binary (CWE-190) |
-| `tools/dodcensus/substrate_broker.go:456` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/runtime_runner_test.go:222` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `tools/dodcensus/substrate_broker.go:409` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
+| `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
 ### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (27 sites)
 
@@ -1417,8 +1417,8 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1210` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1294` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/runtime_runner.go:920` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/substrate_broker.go:229` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:361` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1528,10 +1528,10 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:884` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:894` | deliberately unsafe fixture mode (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:927` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/runtime_runner_test.go:150` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/runtime_runner_test.go:156` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `tools/dodcensus/runtime_runner_test.go:173` | private fixture-directory mode is the behavior under test (CWE-276) |
-| `tools/dodcensus/runtime_runner_test.go:199` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/runtime_runner_test.go:160` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/runtime_runner_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/dodcensus/runtime_runner_test.go:183` | private fixture-directory mode is the behavior under test (CWE-276) |
+| `tools/dodcensus/runtime_runner_test.go:209` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:157` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:163` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2141,14 +2141,14 @@ not this file.
 | `tools/dodcensus/runtime.go:439` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:1141` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:1476` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:98` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:692` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:809` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:853` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:341` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:489` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:543` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:547` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:99` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:693` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:817` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:861` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:351` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:499` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:553` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:557` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:124` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/dodcensus/shard.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -2420,7 +2420,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1168` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1210` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1294` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/dodcensus/runtime_runner.go:920` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
 ### G703 — CWE-22 Path traversal (taint) (128 sites)
 
@@ -2549,9 +2549,9 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:213` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:322` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/proof/proof_test.go:1324` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/runtime_runner.go:897` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:346` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/runtime_runner_test.go:497` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/runtime_runner.go:905` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:356` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/runtime_runner_test.go:507` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 

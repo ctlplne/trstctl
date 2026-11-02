@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -486,7 +487,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 			return commandResult{Err: fmt.Errorf("runtime runner mount path %q is unsafe", path), ExitCode: -1}
 		}
 	}
-	hostArgs, err := runtimeRunnerDockerHostArgs(runtime.GOOS)
+	hostArgs, err := runtimeRunnerDockerHostArgs(runtime.GOOS, linuxDockerBridgeIPv4())
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
@@ -717,7 +718,7 @@ func runtimeRunnerNSSFiles(receiptDir string, uid, gid uint32) (string, string, 
 	return passwdFile, groupFile, nil
 }
 
-func runtimeRunnerDockerHostArgs(hostOS string) ([]string, error) {
+func runtimeRunnerDockerHostArgs(hostOS, bridgeIPv4 string) ([]string, error) {
 	switch hostOS {
 	case "darwin":
 		// Docker Desktop owns the host.docker.internal DNS record. Overriding it
@@ -729,7 +730,14 @@ func runtimeRunnerDockerHostArgs(hostOS string) ([]string, error) {
 		// loopback. Host networking plus an exact hosts entry preserves the
 		// broker/emulator loopback boundary while making the container use the
 		// same endpoints as the parent-owned proof processes.
-		return []string{"--network", "host", "--add-host", "host.docker.internal:127.0.0.1"}, nil
+		args := []string{"--network", "host", "--add-host", "host.docker.internal:127.0.0.1"}
+		// Loopback stays the first answer. The Docker bridge gateway is the
+		// second, for the proofs that need a literal private address
+		// (plaintext Redis); only a substrate told to listen there does.
+		if bridgeIPv4 != "" {
+			args = append(args, "--add-host", "host.docker.internal:"+bridgeIPv4)
+		}
+		return args, nil
 	default:
 		return nil, fmt.Errorf("pinned runtime runner does not support Docker host routing on %s", hostOS)
 	}
@@ -939,4 +947,28 @@ func validateHostCommand(name string, args []string) error {
 		}
 	}
 	return nil
+}
+
+// linuxDockerBridgeIPv4 is the Docker bridge gateway's private IPv4 on a Linux
+// parent, or "" when there is none (another OS, or no docker0 bridge).
+func linuxDockerBridgeIPv4() string {
+	if runtime.GOOS != "linux" {
+		return ""
+	}
+	iface, err := net.InterfaceByName("docker0")
+	if err != nil {
+		return ""
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if network, ok := addr.(*net.IPNet); ok {
+			if v4 := network.IP.To4(); v4 != nil && v4.IsPrivate() {
+				return v4.String()
+			}
+		}
+	}
+	return ""
 }
