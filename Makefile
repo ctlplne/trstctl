@@ -211,6 +211,12 @@ TEST_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_
 # A package measured above this many seconds runs as test slices spread over the
 # lanes (scripts/ci/go-test-shard.py), so no lane waits on one large package.
 TEST_MAX_UNIT_SECONDS ?= 360
+# The editions gate's trstctl_core test pass: every non-ee package but the live perf ones (they run serially), and
+# the number of CI lanes it is split into (the ci.yml matrix; docs/ci_test_lanes_test.go checks they agree).
+EDITIONS_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$'
+EDITIONS_SHARD ?= 0
+EDITIONS_SHARDS ?=
+EDITIONS_CI_SHARDS ?= 6
 # CI builds the internal/server race + coverage test binary once (make
 # server-test-binary) and every server slice runs it (SERVER_TEST_BINARY);
 # locally each slice builds its own.
@@ -233,6 +239,8 @@ test-selftests: ## The test lanes' own self-tests (server slices, package shards
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/go-test-units_selftest.py
 	@set -euo pipefail; $(TEST_PACKAGE_LIST) | \
 		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
+	@set -euo pipefail; $(EDITIONS_PACKAGE_LIST) | \
+		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(EDITIONS_CI_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
 
 .PHONY: test-packages
 test-packages: ## go test (race + coverage) over package shard TEST_SHARD of TEST_SHARDS (all but internal/server and live perf)
@@ -589,7 +597,7 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) ee-lint-ratchet; \
 	fi
 
-.PHONY: editions-gate
+.PHONY: editions-gate editions-gate-build editions-gate-tests
 .PHONY: vault-compat-gate
 vault-compat-gate: ## Run the Vault/OpenBao shim acceptance against a real CLI (TEST-VAULT-001)
 	@echo ">> vault-compat-gate (real vault/openbao CLI, non-skipped)"
@@ -606,7 +614,9 @@ ee-test: ## Run the ee/ unit tests with a coverage floor (TEST-EE-CI-001)
 	awk -v t="$$total" -v m=$(EE_COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
 		{ echo "FAIL: ee/ coverage $$total% is below the required $(EE_COVERAGE_MIN)%"; exit 1; }
 
-editions-gate: ## Prove the editions one-way valve and core-only build
+editions-gate: editions-gate-build editions-gate-tests ## Prove the editions one-way valve and core-only build
+
+editions-gate-build: ## The editions import guard, the trstctl_core build and its dependency graph (zero ee/, every core family)
 	@echo ">> editions import guard self-test"
 	@SELFTEST=1 ./scripts/check_editions_imports.sh
 	@echo ">> trstctl_core build"
@@ -623,12 +633,30 @@ editions-gate: ## Prove the editions one-way valve and core-only build
 			echo "FAIL: trstctl_core build does not link internal/$$pkg; the core families attach in every build" >&2; exit 1; \
 		fi; \
 	done
+
+# editions-gate-tests runs every non-ee package's tests in the trstctl_core build. Without EDITIONS_SHARDS it is one
+# pass; CI runs EDITIONS_SHARD of EDITIONS_SHARDS in parallel lanes (owner decision 2026-11-02: split the long jobs),
+# packages picked like the package lanes' (measured weights; packages over the unit budget, internal/server among
+# them, as test-name slices), with the live perf packages serially in shard 0. Every test still runs once.
+editions-gate-tests: ## trstctl_core tests over non-ee packages (CI: shard EDITIONS_SHARD of EDITIONS_SHARDS)
+ifeq ($(strip $(EDITIONS_SHARDS)),)
 	@echo ">> trstctl_core tests over non-ee packages"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
-	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
+	pkgs="$$( $(EDITIONS_PACKAGE_LIST) )"; \
 	GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs
 	@echo ">> trstctl_core live perf packages (serial)"
 	@GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)
+else
+	@echo ">> trstctl_core tests over non-ee packages, shard $(EDITIONS_SHARD) of $(EDITIONS_SHARDS)"
+	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
+	units="$$( $(EDITIONS_PACKAGE_LIST) | python3 scripts/ci/go-test-shard.py --shard $(EDITIONS_SHARD) --shards $(EDITIONS_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) )"; \
+	[ -n "$$units" ] || { echo "FAIL: editions shard $(EDITIONS_SHARD) of $(EDITIONS_SHARDS) selected no packages"; exit 1; }; \
+	python3 scripts/ci/go-test-units.py --go '$(GO)' --tags trstctl_core --no-race --parallelism $$parallelism --timeout $(SERVER_COMPLEMENTARY_TIMEOUT) $$units
+	@if [ "$(EDITIONS_SHARD)" = 0 ]; then \
+		echo ">> trstctl_core live perf packages (serial)"; \
+		GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core -count=1 -p=1 $(LIVE_PERF_PACKAGES); \
+	fi
+endif
 
 .PHONY: claim-traceability-check
 claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates byte-identical from core and ee/ claim citations, with zero integrity findings

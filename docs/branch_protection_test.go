@@ -79,6 +79,7 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"go-test-server":              ciUmbrellaCheck,
 	"go-test-extra":               ciUmbrellaCheck,
 	"build-lint":                  ciUmbrellaCheck,
+	"editions-gate-tests":         ciUmbrellaCheck,
 	"sdk-terraform":               ciUmbrellaCheck,
 	"perf-gates":                  ciUmbrellaCheck,
 	"core-integration-succession": ciUmbrellaCheck,

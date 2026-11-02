@@ -37,14 +37,16 @@ if "-list" in args:
     print("ok  \t" + pkg + "\t0.01s")
     sys.exit(0)
 pattern = args[args.index("-run") + 1] if "-run" in args else None
-profile = next(a.split("=", 1)[1] for a in args if a.startswith("-coverprofile="))
+profile = next((a.split("=", 1)[1] for a in args if a.startswith("-coverprofile=")), None)
 pkgs = [a for a in args if a.startswith("example/")]
 ran = []
 for pkg in pkgs:
     ran += [pkg + "." + t for t in tests[pkg] if pattern is None or re.fullmatch(pattern, t)]
 with open(log, "a") as f:
     f.write(" ".join(ran) + "\n")
-if os.environ.get("FAKE_NO_PROFILE") != "1":
+with open(log + ".flags", "a") as f:
+    f.write(" ".join(a for a in args if a == "-race" or a.startswith(("-tags=", "-cover"))) + "\n")
+if profile and os.environ.get("FAKE_NO_PROFILE") != "1":
     with open(profile, "w") as f:
         f.write("mode: atomic\n" + "".join(r + ".go:1.1,2.2 1 1\n" for r in ran))
 failing = os.environ.get("FAKE_FAIL", "")
@@ -53,18 +55,38 @@ sys.exit(1 if failing and any(r.endswith("." + failing) for r in ran) else 0)
 
 
 class UnitsTests(unittest.TestCase):
-    def run_lane(self, unit_args, env=None):
+    def run_lane(self, unit_args, env=None, options=None):
         with tempfile.TemporaryDirectory(prefix="units-selftest-") as directory:
             root = Path(directory)
             fake = root / "fake-go"
             fake.write_text("#!" + sys.executable + "\n" + FAKE_GO)
             fake.chmod(0o700)
             log, out = root / "ran.log", root / "cover.out.main.0"
+            if options is None:
+                options = ["--coverpkg", "./...", "--coverprofile", str(out)]
             result = subprocess.run([sys.executable, str(HERE / "go-test-units.py"), "--go", str(fake), "--parallelism", "2",
-                                     "--timeout", "1m", "--coverpkg", "./...", "--coverprofile", str(out), *unit_args],
+                                     "--timeout", "1m", *options, *unit_args],
                                     env={**os.environ, "FAKE_LOG": str(log), **(env or {})}, capture_output=True, text=True)
             ran = log.read_text().split() if log.exists() else []
+            self.flags = Path(str(log) + ".flags").read_text().splitlines() if Path(str(log) + ".flags").exists() else []
             return result, ran, out.read_text() if out.exists() else None
+
+    def test_editions_lanes_run_tagged_without_race_or_coverage(self):
+        # The editions gate's trstctl_core lanes: --tags, --no-race, no coverage flags or profile.
+        result, ran, profile = self.run_lane(["example/small", "example/big#0/2", "example/big#1/2"],
+                                             options=["--tags", "trstctl_core", "--no-race"])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("example/small.TestS", ran)
+        self.assertEqual(len([r for r in ran if r.startswith("example/big.")]), 6)
+        runs = [f for f in self.flags if f]
+        self.assertTrue(runs and all(f == "-tags=trstctl_core" for f in runs), self.flags)
+        self.assertIsNone(profile)
+        self.assertIn("go test 1 packages (tags trstctl_core)", result.stdout)
+
+    def test_coverage_flags_go_together(self):
+        result, _, _ = self.run_lane(["example/small"], options=["--coverpkg", "./..."])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--coverpkg and --coverprofile go together", result.stderr)
 
     def test_slices_run_every_test_once_beside_the_plain_packages(self):
         result, ran, profile = self.run_lane(["example/small", "example/other", "example/big#0/2", "example/big#1/2"])

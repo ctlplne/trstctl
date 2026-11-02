@@ -125,6 +125,83 @@ jobs:
           path: cover.out.main.${{ matrix.shard }}
           if-no-files-found: error
 
+  # The editions gate's trstctl_core test pass (every non-ee package's tests in the core-only
+  # build), split into lanes like the package lanes; the build and dependency-graph half stays
+  # in build-lint. One job running it all took more than the build-lint job's 30 minutes.
+  editions-gate-tests:
+    name: editions gate / trstctl_core tests ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    # Per-job timeout so a hung embedded-PG/NATS/signer integration job fails fast
+    # instead of burning the 6-hour GitHub default (TEST-004).
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # The pinned embedded PostgreSQL archive (checksum-verified on use) is
+      # restored instead of fetched: each Go test job downloading it from the
+      # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+
+      - name: Set up Node for SDK generators
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verify Java SDK toolchain
+        run: |
+          javac -version
+          java -version
+
+      # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
+      # which the old single job's `make build` used to leave behind.
+      - name: Prefetch dependencies for offline build tests
+        run: go mod download
+
+      # The ML-DSA interoperability tests require a stock OpenSSL with ML-DSA; the
+      # runner's OpenSSL 3.0 has none (the ee and pqc jobs install the same one).
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
+        run: scripts/ci/install-openssl-pqc.sh
+
+      - name: trstctl_core tests (editions shard)
+        env:
+          TRSTCTL_REQUIRE_OPENSSH: "1"
+        run: make editions-gate-tests EDITIONS_SHARD=${{ matrix.shard }} EDITIONS_SHARDS=6
+
   # The internal/server race + coverage test binary is built once and shared by
   # every server slice, instead of each slice compiling it (about 4.4 minutes).
   go-test-server-build:
@@ -345,8 +422,9 @@ jobs:
       - name: Lint
         run: make lint
 
-      - name: Editions gate
-        run: make editions-gate
+      # The trstctl_core test pass runs in the editions-gate-tests lanes.
+      - name: Editions gate (core-only build and dependency graph)
+        run: make editions-gate-build
 
       # Patent claim traceability: ee/docs/claim-traceability.md is generated
       # from the claim citations in ee/ Go source. A citation added, moved, or
@@ -590,7 +668,7 @@ jobs:
 
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, editions-gate-tests, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

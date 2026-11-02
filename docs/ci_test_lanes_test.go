@@ -206,7 +206,7 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	if strings.TrimSpace(umbrella.If) != "always()" {
 		t.Errorf("%s must run with if: always(), so a failed or skipped lane fails it instead of skipping it", ciUmbrellaCheck)
 	}
-	for _, lane := range []string{"go-test-packages", "go-test-server-build", "go-test-server", "go-test-extra"} {
+	for _, lane := range []string{"go-test-packages", "go-test-server-build", "go-test-server", "go-test-extra", "editions-gate-tests"} {
 		if !slices.Contains(umbrella.Needs, lane) {
 			t.Errorf("%s must need lane %s", ciUmbrellaCheck, lane)
 		}
@@ -237,6 +237,45 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 			t.Fatalf("%s must run, in order, the self-tests, the floors over exactly the lanes' shards and slices, then the live SLO report: %q is missing or out of order", ciUmbrellaCheck, want)
 		}
 		last = i
+	}
+}
+
+// TestEditionsGateTestsRunInLanesThatCoverEveryPackage keeps the editions gate's
+// trstctl_core test pass whole after it moved out of build-lint into parallel
+// lanes: build-lint still proves the core-only build and its dependency graph,
+// every lane runs one shard of the same pass with the ML-DSA OpenSSL the
+// interoperability tests need, the lanes match the Makefile's shard count (which
+// make test-selftests checks covers every non-ee package exactly once), and the
+// umbrella check needs them.
+func TestEditionsGateTestsRunInLanesThatCoverEveryPackage(t *testing.T) {
+	wf := readCIWorkflow(t)
+	lint, okLint := wf.Jobs["build-lint"]
+	lanes, okLanes := wf.Jobs["editions-gate-tests"]
+	if !okLint || !okLanes {
+		t.Fatal("ci.yml must have the build-lint job and the editions-gate-tests lanes")
+	}
+	if runs := ciJobRuns(lint); !strings.Contains(runs, "make editions-gate-build") || strings.Contains(runs, "make editions-gate\n") {
+		t.Error("build-lint must run make editions-gate-build (the core-only build and graph), leaving the test pass to the lanes")
+	}
+	shards := ciMatrixSize(t, lanes, "shard")
+	if want := fmt.Sprintf("make editions-gate-tests EDITIONS_SHARD=${{ matrix.shard }} EDITIONS_SHARDS=%d", shards); !strings.Contains(ciJobRuns(lanes), want) {
+		t.Errorf("the editions lanes must run %q", want)
+	}
+	if !strings.Contains(ciJobRuns(lanes), "scripts/ci/install-openssl-pqc.sh") {
+		t.Error("the editions lanes must install the pinned ML-DSA OpenSSL: the core-only pass runs its interoperability tests")
+	}
+	makefile := read(t, "../Makefile")
+	if !strings.Contains(makefile, fmt.Sprintf("EDITIONS_CI_SHARDS ?= %d\n", shards)) {
+		t.Errorf("Makefile EDITIONS_CI_SHARDS must equal the %d editions lanes, so test-selftests checks the partition CI runs", shards)
+	}
+	for _, want := range []string{
+		"editions-gate: editions-gate-build editions-gate-tests",
+		"--shards $(EDITIONS_CI_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest",
+		"--tags trstctl_core --no-race",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("Makefile must contain %q", want)
+		}
 	}
 }
 

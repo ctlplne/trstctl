@@ -228,6 +228,9 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"TRSTCTL_PERF_REPORT_ONLY=1 TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -v -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
+		// CI's editions lanes: the same pass, one shard each, live perf serially in shard 0.
+		"python3 scripts/ci/go-test-units.py --go '$(GO)' --tags trstctl_core --no-race --parallelism $$parallelism --timeout $(SERVER_COMPLEMENTARY_TIMEOUT) $$units",
+		"$(GO) test -tags trstctl_core -count=1 -p=1 $(LIVE_PERF_PACKAGES)",
 		"profiles=\"$$profiles $(COVERPROFILE_SERVER_ROTATION_CURSOR) $(COVERPROFILE_LIVE_PERF)\"",
 		"for f in $$profiles; do tail -n +2 \"$$f\"; done",
 	} {
@@ -238,15 +241,22 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	if got := strings.Count(mk, "grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$'"); got != 2 {
 		t.Errorf("Makefile excludes the serial performance package set from %d parallel package lists, want the test lanes' list and editions-gate", got)
 	}
-	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 2 {
-		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test and editions-gate", got)
+	if got := strings.Count(mk, "parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\""); got != 3 {
+		t.Errorf("Makefile derives descriptor-bounded package parallelism in %d main lanes, want test, editions-gate and its CI shards", got)
 	}
-	// The package lane runner keeps race detection, fresh results, the timeout,
-	// atomic first-party coverage and the lane's package parallelism.
+	if got := strings.Count(mk, "--no-race"); got != 1 {
+		t.Errorf("Makefile passes --no-race %d times; only the editions gate's trstctl_core lanes may run without the race detector", got)
+	}
+	// The package lane runner keeps race detection (unless a lane asks for
+	// --no-race, which only the editions gate's trstctl_core lanes do), fresh
+	// results, the timeout, atomic first-party coverage when a lane collects it
+	// (the package lanes always do) and the lane's package parallelism.
 	runner := read(t, "../scripts/ci/go-test-units.py")
 	for _, want := range []string{
-		`base = [args.go, "test", "-race", "-count=1", f"-timeout={args.timeout}", "-covermode=atomic", f"-coverpkg={args.coverpkg}"]`,
-		`base + [f"-p={args.parallelism}", f"-coverprofile={profile}"] + plain`,
+		`base = [args.go, "test"] + ([] if args.no_race else ["-race"]) + ["-count=1", f"-timeout={args.timeout}"]`,
+		`base += ["-covermode=atomic", f"-coverpkg={args.coverpkg}"]`,
+		`base + [f"-p={args.parallelism}"] + ([f"-coverprofile={profile}"] if covered else []) + plain`,
+		`parser.error("--coverpkg and --coverprofile go together")`,
 	} {
 		if !strings.Contains(runner, want) {
 			t.Errorf("package lane runner lost %q", want)
