@@ -2349,6 +2349,27 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For MongoDB Atlas (A239, `mongodb-atlas`), set `project` to the Atlas project ID,
+`client_id` and `client_secret_ref` to a service account allowed to manage the
+project's database users, optionally `endpoint` (default `https://cloud.mongodb.com`),
+`max_ttl` (at most `168h`), and `role_bindings` to `"<built-in role> on <databases>"`
+per allowed role. Each lease is a database user with those roles that Atlas deletes
+at `max_ttl` from its creation; revocation deletes it at once.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "atlas",
+  "type": "mongodb-atlas",
+  "project": "5f1e2d3c4b5a69788796a5b4",
+  "client_id": "mdb_sa_id_trstctl",
+  "client_secret_ref": "file:/run/secrets/atlas-service-account",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "read on orders"},
+  "max_ttl": "8h"
+}
+```
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",

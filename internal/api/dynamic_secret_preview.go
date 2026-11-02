@@ -256,6 +256,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("bearer_token_ref", "API token reference", "A Tailscale API access token allowed to create and delete auth keys.", true),
 			roles("Each allowed role maps to the comma-separated ACL tags its keys give the devices they register, for example tag:ci."),
 		)},
+		{Type: "mongodb-atlas", Label: "MongoDB Atlas database users", Purpose: "Creates a database user in one Atlas project with a generated password and its role's built-in roles, which Atlas deletes after the provider's maximum lifetime, and deletes it at revocation; Atlas then refuses its login. Built against a stand-in of the Atlas Admin API; no Atlas proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Atlas", "Atlas base URL; https://cloud.mongodb.com when empty.", false),
+			value("project", "Project ID", "The Atlas project (group) ID, 24 hexadecimal characters.", true),
+			value("client_id", "Service account client ID", "An Atlas service account allowed to manage the project's database users.", true),
+			credential("client_secret_ref", "Service account secret reference", "The service account's client secret.", true),
+			value("max_ttl", "Maximum lifetime", "At most 7 days: Atlas deletes each leased user at that age (deleteAfterDate).", true),
+			roles(`Each allowed role maps to "<built-in role> on <databases>", for example "read on orders".`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -298,6 +306,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's configure, write and read permissions on the named queues and exchanges in one virtual host, until the user is deleted and its connections closed", "confirmed"
 	case "tailscale":
 		return "one registration of a device with the role's ACL tags, until the auth key is deleted or expires; devices already registered keep their tags until removed", "confirmed"
+	case "mongodb-atlas":
+		return "the role's built-in roles on the named databases of one Atlas project, until the user is deleted or Atlas removes it at its deleteAfterDate", "confirmed"
 	}
 	return "", ""
 }

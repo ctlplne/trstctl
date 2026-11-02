@@ -5241,7 +5241,8 @@ when off, requiring a KEK when on):
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
-  `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, and `tailscale` (A239). Issuance is
+  `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`, and
+  `mongodb-atlas` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5273,6 +5274,9 @@ when off, requiring a KEK when on):
   is left. Tailscale auth keys (A239) are built against a stand-in of Tailscale's
   API only: a leased key registers one device, a second registration is
   refused, and a revoked key is refused; a live tailnet proof needs an account.
+  MongoDB Atlas database users (A239) are built against a stand-in of the Atlas
+  Admin API only (a leased user logs in with its role's roles, and is refused
+  once revoked); a live Atlas proof needs an account.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.

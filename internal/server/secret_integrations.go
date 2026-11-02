@@ -456,6 +456,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredRabbitMQBackend(opener)
 	case "tailscale":
 		return openConfiguredTailscaleBackend(opener)
+	case "mongodb-atlas":
+		return openConfiguredMongoDBAtlasBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -641,6 +643,34 @@ func openConfiguredTailscaleBackend(o *configuredDynamicBackendOpener) (requestD
 	backend, err := dynsecret.NewTailscaleBackend(dynsecret.TailscaleConfig{
 		Endpoint: endpoint, Tailnet: cfg.Tailnet, APIToken: token, RoleBindings: cfg.RoleBindings,
 		MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredMongoDBAtlasBackend reads the service account's secret into a
+// backend that keeps its own sealed copy and calls the Atlas Admin API through
+// the SSRF-guarded client (A239).
+func openConfiguredMongoDBAtlasBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	clientSecret, err := o.resolve(cfg.ClientSecretRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://cloud.mongodb.com"
+	}
+	client, err := secretIntegrationHTTPClient(endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewMongoDBAtlasBackend(dynsecret.MongoDBAtlasConfig{
+		Endpoint: endpoint, GroupID: cfg.Project, ClientID: cfg.ClientID, ClientSecret: clientSecret,
+		RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix, MaxLifetime: o.provider.maxTTL,
+		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)

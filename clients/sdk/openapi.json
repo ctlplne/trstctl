@@ -18664,7 +18664,8 @@
               "clickhouse",
               "elasticsearch",
               "rabbitmq",
-              "tailscale"
+              "tailscale",
+              "mongodb-atlas"
             ],
             "type": "string"
           }

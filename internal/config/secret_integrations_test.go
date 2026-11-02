@@ -348,6 +348,38 @@ func TestValidateTailscaleProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateMongoDBAtlasProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "atlas", Type: "mongodb-atlas",
+		Project: "5f1e2d3c4b5a69788796a5b4", ClientID: "mdb_sa_id_trstctl", ClientSecretRef: "file:/run/secrets/atlas-sa",
+		AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "read on orders,inventory"}, MaxTTL: "8h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no project":           {func(c *DynamicSecretProviderConfig) { c.Project = "" }, "project (the Atlas project ID"},
+		"no client":            {func(c *DynamicSecretProviderConfig) { c.ClientID = "" }, "client_id (the Atlas service account)"},
+		"no secret":            {func(c *DynamicSecretProviderConfig) { c.ClientSecretRef = "" }, "client_secret_ref"},
+		"over a week":          {func(c *DynamicSecretProviderConfig) { c.MaxTTL = "200h" }, "exceeds the seven days"},
+		"bad role":             {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"reader": "read"} }, `must be "<role> on <databases>"`},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["admin"] = "dbAdmin on x" }, `role_bindings["admin"] has no matching allowed role`},
+		"revocation endpoint":  {func(c *DynamicSecretProviderConfig) { c.RevocationEndpoint = "https://x/revoke" }, "revocation_endpoint is only valid for oauth-client-credentials"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "read on orders,inventory"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateRedisACLRequiresExplicitScopedRoles(t *testing.T) {
 	base := DynamicSecretProviderConfig{
 		TenantID: "11111111-1111-1111-1111-111111111111", ID: "redis", Type: "redis",

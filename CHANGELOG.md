@@ -2,6 +2,11 @@
 
 ### Added
 
+- MongoDB Atlas dynamic secrets (`type: mongodb-atlas`): each lease is a database user in one Atlas project with a
+  generated password and its role's built-in roles (`"<role> on <databases>"`), which Atlas deletes after the
+  provider's maximum lifetime (`deleteAfterDate`, at most 7 days); revocation deletes it. The Admin API is called with
+  a service account's token. Built against a stand-in of the Atlas Admin API.
+
 - Tailscale dynamic secrets (`type: tailscale`): each lease is a single-use, ephemeral, preauthorized auth key carrying
   its role's ACL tags and expiring with the provider's maximum lifetime; revocation deletes it. The key request is
   never retried blindly. Built against a stand-in of Tailscale's API.

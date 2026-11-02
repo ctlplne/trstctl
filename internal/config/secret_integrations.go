@@ -235,7 +235,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
-	"tailscale": {},
+	"tailscale": {}, "mongodb-atlas": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -411,7 +411,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"ldap": validateLDAPProvider, "totp": validateTOTPProvider,
 	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
-	"tailscale": validateTailscaleProvider,
+	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -818,8 +818,11 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "totp" && (c.SeedRef != "" || c.Digits != 0 || c.Period != "" || c.Algorithm != "") {
 		errs = append(errs, fmt.Errorf("%s seed_ref, digits, period and algorithm are only valid for totp", where))
 	}
-	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
-		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
+	if c.Type != "oauth-client-credentials" && c.RevocationEndpoint != "" {
+		errs = append(errs, fmt.Errorf("%s revocation_endpoint is only valid for oauth-client-credentials", where))
+	}
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && (c.ClientID != "" || c.ClientSecretRef != "") {
+		errs = append(errs, fmt.Errorf("%s client_id and client_secret_ref are only valid for oauth-client-credentials and mongodb-atlas", where))
 	}
 	if c.Type != "tailscale" && c.Tailnet != "" {
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
@@ -967,6 +970,51 @@ func validateTailscaleProvider(where string, c DynamicSecretProviderConfig) []er
 				errs = append(errs, fmt.Errorf("%s role_bindings[%q] must list ACL tags (tag:name), not %q", where, role, strings.TrimSpace(tag)))
 				break
 			}
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
+var (
+	atlasGroupID  = regexp.MustCompile(`^[0-9a-f]{24}$`)
+	atlasRoleName = regexp.MustCompile(`^[A-Za-z]{1,64}$`)
+	atlasDatabase = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+)
+
+// validateMongoDBAtlasProvider checks a MongoDB Atlas provider (A239): project
+// is the Atlas project (group) ID, client_id and client_secret_ref a service
+// account allowed to manage database users, max_ttl at most the seven days
+// Atlas's deleteAfterDate allows, and each allowed role is bound to
+// "<role> on <databases>", for example "read on orders".
+func validateMongoDBAtlasProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if !atlasGroupID.MatchString(c.Project) {
+		errs = append(errs, fmt.Errorf("%s project (the Atlas project ID, 24 hexadecimal characters) is required for mongodb-atlas", where))
+	}
+	if strings.TrimSpace(c.ClientID) == "" {
+		errs = append(errs, fmt.Errorf("%s client_id (the Atlas service account) is required for mongodb-atlas", where))
+	}
+	if err := validateCredentialRef(c.ClientSecretRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref: %w", where, err))
+	}
+	if ttl, err := c.MaxTTLDuration(); err == nil && ttl > 7*24*time.Hour {
+		errs = append(errs, fmt.Errorf("%s max_ttl %s exceeds the seven days Atlas deletes a user within", where, ttl))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		roleName, databases, ok := strings.Cut(strings.TrimSpace(c.RoleBindings[role]), " on ")
+		valid := ok && atlasRoleName.MatchString(strings.TrimSpace(roleName))
+		for _, db := range strings.Split(databases, ",") {
+			valid = valid && atlasDatabase.MatchString(strings.TrimSpace(db))
+		}
+		if !valid {
+			errs = append(errs, fmt.Errorf(`%s role_bindings[%q] must be "<role> on <databases>", for example "read on orders"`, where, role))
 		}
 	}
 	for role := range c.RoleBindings {
