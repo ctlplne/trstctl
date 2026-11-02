@@ -498,6 +498,13 @@ func (a *API) vaultKVWrite(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusBadRequest, "secret path is required")
 		return
 	}
+	if tenantID, ok := a.tenant(r); ok {
+		// A235: the KV routes write the same rows as the native store.
+		if err := a.requireSecretWrite(r.Context(), tenantID, name); err != nil {
+			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+	}
 	var idempotencyKey string
 	if mount := r.PathValue("mount"); mount != "" {
 		idempotencyKey, ok = a.vaultLifecycleKey(w, r, body, mount, false)
@@ -710,6 +717,10 @@ func (a *API) vaultKVRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rec, err := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name)
+	if err == nil {
+		// A235: a restricted environment the caller is not granted reads as missing.
+		err = a.requireSecretRead(r.Context(), tenantID, name)
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrSecretNotFound) {
 			writeVaultError(w, http.StatusNotFound, "no such secret")

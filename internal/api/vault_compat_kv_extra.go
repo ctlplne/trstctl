@@ -124,6 +124,9 @@ func (a *API) vaultKVMetadataReadOrList(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	rec, err := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name)
+	if err == nil {
+		err = a.requireSecretRead(r.Context(), tenantID, name) // A235: restricted reads as missing
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrSecretNotFound) {
 			writeVaultError(w, http.StatusNotFound, "no such secret")
@@ -174,7 +177,12 @@ func (a *API) vaultKVList(w http.ResponseWriter, r *http.Request) {
 	if prefix != "" {
 		prefix += "/"
 	}
-	recs, err := a.secrets.be.Store.ListSecretNames(r.Context(), tenantID, vaultCompatListLimit)
+	hidden, err := a.hiddenSecretPrefixes(r.Context(), tenantID)
+	if err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	recs, err := a.secrets.be.Store.ListSecretNamesUnder(r.Context(), tenantID, nil, hidden, vaultCompatListLimit)
 	if err != nil {
 		writeVaultError(w, http.StatusInternalServerError, "internal error")
 		return

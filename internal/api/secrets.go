@@ -540,6 +540,10 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := a.requireSecretWrite(r.Context(), bindingTenantID, req.Name); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	if req.OwnerID != "" {
 		if _, ownerErr := a.store.GetOwner(r.Context(), bindingTenantID, req.OwnerID); ownerErr != nil {
 			if store.IsNotFound(ownerErr) {
@@ -675,6 +679,9 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
+	if a.writeSecretScopeError(w, a.requireSecretRead(r.Context(), tenantID, name)) {
+		return
+	}
 	if r.URL.Query().Get("resolve") == "true" {
 		resolveCtx, opened := withDecoyReadCollector(r.Context())
 		value, version, err := a.resolveSecretValue(resolveCtx, tenantID, name, nil)
@@ -736,6 +743,9 @@ func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
+	if a.writeSecretScopeError(w, a.requireSecretRead(r.Context(), tenantID, name)) {
+		return
+	}
 	version, err := strconv.Atoi(r.URL.Query().Get("version"))
 	if err != nil || version <= 0 {
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "version query parameter must be a positive integer"))
@@ -799,6 +809,10 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 	bindingTenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if err := a.requireSecretWrite(r.Context(), bindingTenantID, name); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	keyDigest, requestBinding, err := a.applicationSecretRequestBinding(
@@ -917,6 +931,10 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := a.requireSecretWrite(r.Context(), bindingTenantID, name); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	keyDigest, requestBinding, err := a.applicationSecretRequestBinding(
 		bindingTenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(), "recover", "native", name, req)
 	if err != nil {
@@ -1023,6 +1041,13 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 	if err := normalizeSecretRotationRequest(&req); err != nil {
 		a.writeError(w, err)
 		return
+	}
+	if tenantID, ok := a.tenant(r); ok {
+		// A235: a rotation writes the secret's next version.
+		if err := a.requireSecretWrite(r.Context(), tenantID, req.Key); err != nil {
+			a.writeError(w, err)
+			return
+		}
 	}
 	if isConnectorSecretRotation(req.Provider) {
 		if req.TTLSeconds != nil {
@@ -1150,6 +1175,9 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		}
 		if req.IntervalSeconds <= 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
+		}
+		if err := a.requireSecretWrite(ctx, tenantID, key); err != nil {
+			return 0, nil, err // A235: a scheduled rotation writes the secret
 		}
 		rotationRequest := secretRotationRequest{Provider: provider, Key: key, OldRef: oldRef}
 		if isConnectorSecretRotation(provider) {
@@ -1407,6 +1435,10 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := a.requireSecretWrite(r.Context(), bindingTenantID, name); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	keyDigest, requestBinding, err := a.applicationSecretRequestBinding(
 		bindingTenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(), "delete", "native", name, nil)
 	if err != nil {
@@ -1495,7 +1527,12 @@ func (a *API) listSecrets(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
-	recs, err := a.secrets.be.Store.ListSecretNames(r.Context(), tenantID, limit)
+	hidden, err := a.hiddenSecretPrefixes(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	recs, err := a.secrets.be.Store.ListSecretNamesUnder(r.Context(), tenantID, nil, hidden, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1554,6 +1591,11 @@ func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, sta
 			cycle := append(append([]string(nil), stack...), name)
 			return nil, 0, secretReferenceCycleError{Cycle: cycle}
 		}
+	}
+	// A235: every hop of a reference is read as the caller; a restricted
+	// environment the caller is not granted reads as a missing reference.
+	if err := a.requireSecretRead(ctx, tenantID, name); err != nil {
+		return nil, 0, err
 	}
 	rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
 	if err != nil {

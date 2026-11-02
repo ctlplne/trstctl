@@ -433,6 +433,13 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	if tenantID, ok := a.tenant(r); ok {
+		// A235: pushing a secret out reads it; a restricted environment the
+		// caller is not granted cannot be synced (it reads as missing).
+		if a.writeSecretScopeError(w, a.requireSecretRead(r.Context(), tenantID, req.Name)) {
+			return
+		}
+	}
 	binding, err := secretSyncRequestBinding(principal, req)
 	if err != nil {
 		a.writeError(w, err)

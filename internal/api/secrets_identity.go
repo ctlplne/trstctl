@@ -211,6 +211,13 @@ func (a *API) approveSecretChange(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "an authenticated approver is required"))
 		return
 	}
+	if tenantID, ok := a.tenant(r); ok {
+		// A235: approving a change to a restricted secret needs write access there.
+		if err := a.requireSecretWrite(r.Context(), tenantID, name); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	resource := secretApprovalResource(name)
 	command := ApprovalDecisionCommand{
 		RequestID: strings.TrimSpace(req.RequestID), IntentDigest: strings.TrimSpace(req.IntentDigest),

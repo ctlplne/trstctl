@@ -137,6 +137,12 @@ func (a *API) importSecretsEventSourced(w http.ResponseWriter, r *http.Request, 
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	for _, name := range names {
+		if err := a.requireSecretWrite(r.Context(), tenantID, name); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	keyDigest, binding, err := a.applicationSecretRequestBinding(
 		tenantID, idempotencyKey, principal, r.Method, r.URL.EscapedPath(),
 		"import", "native", "", req)

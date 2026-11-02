@@ -1317,6 +1317,12 @@ never live in the API process. What you can do end to end against the running bi
   `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
   remain. GitLab/Bitbucket native signatures and private-repository clone credentials
   are not served.
+- Secrets workspace (A235): projects with environments over the native store (by name
+  prefix `<project>/<environment>/`), restricted environments open only to granted
+  members on every read/write surface (native API, references, previews, imports, syncs,
+  rotations, Vault-compatible KV), membership under `access:write`, and a project view
+  naming unknown ownership. The console view, promotion between environments, folder
+  snapshots and scoped overrides are later steps (A235's console part, A236).
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
   redacted repository finding's value in the operator's checkout with the pinned
   gitleaks, stores it as a native secret and links the finding

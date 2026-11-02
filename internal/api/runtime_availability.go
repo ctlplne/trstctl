@@ -105,7 +105,8 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		"previewSecretSync", "syncSecret", "receiveSecretRepositoryWebhook", "ingestThirdPartySecretScan", "scanSecrets", "approveSecretChange",
 		"listDynamicSecretProviders", "previewDynamicSecretLease", "issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",
 		"previewShare", "createShare", "redeemShare", "issuePKISecret", "previewMachineLogin", "machineLogin", "listMachineAuthMethods", "listMachineSessions",
-		"revokeMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod":
+		"revokeMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod",
+		"createSecretProject", "listSecretProjects", "getSecretProject", "addSecretProjectEnvironment", "putSecretProjectMember", "deleteSecretProjectMember":
 		return runtimeDependency(a.secrets != nil,
 			"The native secret store is turned off in this deployment. Enable it before storing, revealing, rotating, sharing, or leasing application secrets.")
 

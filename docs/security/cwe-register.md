@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2179 annotated sites across 29 rules. Each row is
+2184 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (468 sites)
+### G101 — CWE-798 Use of hardcoded credentials (472 sites)
 
 | Location | Reason |
 |---|---|
@@ -173,8 +173,8 @@ not this file.
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:194` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1079` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1227` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1086` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1234` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
 | `internal/api/secrets_scanning.go:640` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:664` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -338,6 +338,10 @@ not this file.
 | `internal/projections/projections.go:319` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:227` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:17` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_projects.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
 | `internal/protocols/acme/email_reply_test.go:23` | RFC 8823 test token and digest, not a credential (CWE-798) |
@@ -588,7 +592,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (353 sites)
+### G115 — CWE-190 Integer overflow or wraparound (354 sites)
 
 | Location | Reason |
 |---|---|
@@ -719,10 +723,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6654` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6671` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6684` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6718` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6657` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6674` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6687` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6721` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:247` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -875,8 +879,8 @@ not this file.
 | `internal/store/pam.go:93` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:734` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:796` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:970` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:984` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:972` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:986` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -887,14 +891,15 @@ not this file.
 | `internal/store/projection_checkpoint.go:392` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:399` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/scanned_certificate_chain.go:23` | event sequences fit int64 (CWE-190) |
+| `internal/store/secret_projects.go:74` | bounded to int64 above (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:235` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:275` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:628` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:648` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:636` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:656` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |

@@ -104,6 +104,10 @@ func (a *API) previewSecretCreate(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := a.requireSecretWrite(r.Context(), tenantID, req.Name); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	blockers := make([]string, 0, 2)
 	if req.OwnerID != "" {
 		if _, ownerErr := a.store.GetOwner(r.Context(), tenantID, req.OwnerID); ownerErr != nil {

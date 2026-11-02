@@ -126,6 +126,35 @@ store core, kept for legacy event replay and compatibility, holds its KEK the sa
 and still replays both the binary container and earlier JSON-envelope history; new
 writes go through the path above.
 
+### Projects, environments and restricted access (A235)
+
+A **project** groups an application's secrets by environment over the same native
+store: a secret belongs to project `payments`, environment `stage` when its name starts
+with `payments/stage/` (the rest is its folder path and key), so references, history,
+recovery, sync and `trstctl run` work unchanged and nothing is copied to a second store.
+Set one up with slugs only:
+
+```
+trstctl secrets projects create -f payments.json   # {"slug":"payments","environments":[{"slug":"dev"},{"slug":"stage","restricted":true}]}
+trstctl secrets projects members grant payments team-a-ci -f grant.json   # {"role":"developer","environments":["stage"]}
+trstctl secrets projects show payments
+```
+
+An unrestricted environment behaves like any tenant secret. A **restricted** environment
+is open only to the project's members granted it: `viewer` reads, and `developer` and
+`admin` read and write; a member with no `environments` list is granted every environment.
+The rule holds on every surface that reads or writes by name. That covers the native
+read, list, history, preview, create, rotate, delete, recover, import, sync and rotation
+routes, every hop of a `${secret.…}` reference, and the Vault-compatible KV routes. A
+read the rule denies answers exactly as a missing secret, so names don't reveal what
+exists, and a denied write is 403. Projects, environments and membership change under
+`access:write`, so a `secrets:write` token can't grant itself an environment. A tenant
+administrator who needs a restricted value grants themselves membership, which is
+recorded. `projects show` lists each environment's secrets with their owner, or
+`unknown` when none is set, and shows a restricted environment the caller isn't granted
+as `restricted` without its names. Tenant RLS stays the boundary: an environment is not
+a tenant.
+
 ### Vault/OpenBao-compatible common API
 
 Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a

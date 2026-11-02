@@ -356,8 +356,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// P9 adds reading a code-signing key's certificate chain and getting a CSR it signed.
 	// P6's native GitHub scan webhook raised it to 620, and moving a leaked
 	// secret into the store to 621.
-	if len(out) != 621 {
-		t.Fatalf("OpenAPI operationIds = %d, want 621", len(out))
+	// A235 adds the secrets workspace: creating, listing and showing projects,
+	// adding environments, and granting and revoking members (627).
+	if len(out) != 627 {
+		t.Fatalf("OpenAPI operationIds = %d, want 627", len(out))
 	}
 	return out
 }

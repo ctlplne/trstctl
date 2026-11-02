@@ -7064,6 +7064,30 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "ready", "effect_free", "provider", "key", "old_ref", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
 	secretRotationScheduleProvider := str()
 	secretRotationScheduleProvider.Description = "connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence."
+	// A235: the secrets workspace.
+	secretProjectSecret := object(map[string]*Schema{
+		"name": str(), "key": str(), "version": {Type: "integer"}, "owner_id": str(), "owner": str(),
+	}, "name", "key", "version", "owner")
+	secretProjectEnvironment := object(map[string]*Schema{
+		"slug": str(), "name": str(), "restricted": {Type: "boolean"},
+		"access":  {Type: "string", Enum: []string{"open", "member", "restricted"}},
+		"secrets": {Type: "array", Items: secretProjectSecret},
+	}, "slug", "restricted", "access", "secrets")
+	secretProjectMember := object(map[string]*Schema{
+		"subject": str(), "role": {Type: "string", Enum: []string{"viewer", "developer", "admin"}},
+		"environments": {Type: "array", Items: str()}, "granted_by": str(), "granted_at": timestamp(),
+	}, "subject", "role", "environments", "granted_at")
+	secretProject := object(map[string]*Schema{
+		"slug": str(), "name": str(), "owner_id": str(), "owner": str(), "created_by": str(), "created_at": timestamp(),
+		"environments": {Type: "array", Items: secretProjectEnvironment}, "members": {Type: "array", Items: secretProjectMember},
+	}, "slug", "owner", "created_at")
+	secretProjectEnvironmentReq := object(map[string]*Schema{"slug": str(), "name": str(), "restricted": {Type: "boolean"}}, "slug")
+	secretProjectCreateReq := object(map[string]*Schema{
+		"slug": str(), "name": str(), "owner_id": str(), "environments": {Type: "array", Items: secretProjectEnvironmentReq},
+	}, "slug", "environments")
+	secretProjectMemberReq := object(map[string]*Schema{
+		"role": {Type: "string", Enum: []string{"viewer", "developer", "admin"}}, "environments": {Type: "array", Items: str()},
+	}, "role")
 	secretRotationScheduleReq := object(map[string]*Schema{
 		"name": str(), "provider": secretRotationScheduleProvider, "key": str(), "old_ref": str(),
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
@@ -8870,6 +8894,11 @@ func componentSchemas() map[string]*Schema {
 		"SecretImportResponse":            secretImportResp,
 		"SecretRecoverRequest":            secretRecoverReq,
 		"SecretMeta":                      secretMeta,
+		"SecretProject":                   secretProject,
+		"SecretProjectList":               list("SecretProject"),
+		"SecretProjectCreateRequest":      secretProjectCreateReq,
+		"SecretProjectEnvironmentRequest": secretProjectEnvironmentReq,
+		"SecretProjectMemberRequest":      secretProjectMemberReq,
 		"MachineAuthMethod": object(map[string]*Schema{
 			"name": str(), "type": str(), "source": str(),
 			"issuer": str(), "audience": str(), "tenant_claim": str(), "subject_claim": str(),

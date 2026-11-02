@@ -9744,6 +9744,40 @@ export interface SecretMetaList {
   next_cursor?: string;
 }
 
+export interface SecretProject {
+  created_at: string;
+  created_by?: string;
+  environments?: ({ access: "open" | "member" | "restricted"; name?: string; restricted: boolean; secrets: { key: string; name: string; owner: string; owner_id?: string; version: number }[]; slug: string })[];
+  members?: ({ environments: string[]; granted_at: string; granted_by?: string; role: "viewer" | "developer" | "admin"; subject: string })[];
+  name?: string;
+  owner: string;
+  owner_id?: string;
+  slug: string;
+}
+
+export interface SecretProjectCreateRequest {
+  environments: { name?: string; restricted?: boolean; slug: string }[];
+  name?: string;
+  owner_id?: string;
+  slug: string;
+}
+
+export interface SecretProjectEnvironmentRequest {
+  name?: string;
+  restricted?: boolean;
+  slug: string;
+}
+
+export interface SecretProjectList {
+  items: SecretProject[];
+  next_cursor?: string;
+}
+
+export interface SecretProjectMemberRequest {
+  environments?: string[];
+  role: "viewer" | "developer" | "admin";
+}
+
 export interface SecretRecoverRequest {
   at: string;
 }

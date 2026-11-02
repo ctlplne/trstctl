@@ -258,6 +258,8 @@ var TenantScopedTables = []string{
 	"credential_usage_windows", "misuse_findings",
 	// P6: leaked-secret findings moved into the native store; no foreign keys.
 	"discovery_finding_secret_moves",
+	// A235: the secrets workspace; no foreign keys.
+	"secret_projects", "secret_project_environments", "secret_project_members",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.

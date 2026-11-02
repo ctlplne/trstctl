@@ -7961,6 +7961,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List secrets projects with their owners (unknown when none) */
+        get: operations["listSecretProjects"];
+        put?: never;
+        /** Create a secrets project (an application) with its environments; restricted environments open to granted members only */
+        post: operations["createSecretProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show a secrets project: environments, the secrets you may see with their owners, and members */
+        get: operations["getSecretProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an environment to a secrets project */
+        post: operations["addSecretProjectEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}/members/{subject}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Grant a subject a role in a secrets project, optionally for listed environments only */
+        put: operations["putSecretProjectMember"];
+        post?: never;
+        /** Revoke a subject's access to a secrets project */
+        delete: operations["deleteSecretProjectMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/rotation-schedules": {
         parameters: {
             query?: never;
@@ -20337,6 +20407,62 @@ export interface components {
         SecretMetaList: {
             items: components["schemas"]["SecretMeta"][];
             next_cursor?: string;
+        };
+        SecretProject: {
+            /** Format: date-time */
+            created_at: string;
+            created_by?: string;
+            environments?: {
+                /** @enum {string} */
+                access: "open" | "member" | "restricted";
+                name?: string;
+                restricted: boolean;
+                secrets: {
+                    key: string;
+                    name: string;
+                    owner: string;
+                    owner_id?: string;
+                    version: number;
+                }[];
+                slug: string;
+            }[];
+            members?: {
+                environments: string[];
+                /** Format: date-time */
+                granted_at: string;
+                granted_by?: string;
+                /** @enum {string} */
+                role: "viewer" | "developer" | "admin";
+                subject: string;
+            }[];
+            name?: string;
+            owner: string;
+            owner_id?: string;
+            slug: string;
+        };
+        SecretProjectCreateRequest: {
+            environments: {
+                name?: string;
+                restricted?: boolean;
+                slug: string;
+            }[];
+            name?: string;
+            owner_id?: string;
+            slug: string;
+        };
+        SecretProjectEnvironmentRequest: {
+            name?: string;
+            restricted?: boolean;
+            slug: string;
+        };
+        SecretProjectList: {
+            items: components["schemas"]["SecretProject"][];
+            next_cursor?: string;
+        };
+        SecretProjectMemberRequest: {
+            environments?: string[];
+            /** @enum {string} */
+            role: "viewer" | "developer" | "admin";
         };
         SecretRecoverRequest: {
             /** Format: date-time */
@@ -44503,6 +44629,274 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PKISecretPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProjectList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSecretProject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretProjectCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addSecretProjectEnvironment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretProjectEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putSecretProjectMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+                /** @description member subject */
+                subject: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretProjectMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteSecretProjectMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+                /** @description member subject */
+                subject: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretProject"];
                 };
             };
             /** @description client error */

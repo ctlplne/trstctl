@@ -74,6 +74,10 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	if err := a.requireSecretWrite(r.Context(), tenantID, req.Key); err != nil {
+		a.writeError(w, err)
+		return
+	}
 
 	canonical := struct {
 		Domain     string `json:"domain"`

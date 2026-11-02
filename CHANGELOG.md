@@ -2,6 +2,12 @@
 
 ### Added
 
+- Secrets projects and environments: `trstctl secrets projects create|show` and `members grant|revoke` group an
+  application's secrets by environment (by name, `<project>/<environment>/…`) in the same native store. A restricted
+  environment is readable and writable only by members granted it, on every surface including references and the
+  Vault-compatible KV routes; a denied read answers as a missing secret. Membership changes need `access:write`, and
+  the project view names unknown ownership.
+
 - An SMTP reply intake for ACME email challenges: `protocols.acme_email.smtp_listen` receives RFC 8823 replies for
   the challenge address only, verifies each one's DKIM signature for its From domain (rsa-sha256 and
   ed25519-sha256, keys from DNS or pinned in `dkim_keys`) and hands it to the ACME server; a reply that fails is

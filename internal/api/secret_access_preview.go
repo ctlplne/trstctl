@@ -189,7 +189,16 @@ func (a *API) previewSecretAccess(w http.ResponseWriter, r *http.Request) {
 	version := 0
 	directSecretFound := false
 	blockers := make([]string, 0, 1)
+	scopeErr := a.requireSecretRead(r.Context(), tenantID, req.Name)
+	if scopeErr != nil && !errors.Is(scopeErr, errSecretScopeRead) {
+		a.writeError(w, scopeErr)
+		return
+	}
 	rec, readErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Name)
+	if scopeErr != nil {
+		// A235: a restricted environment the caller is not granted previews as missing.
+		readErr = scopeErr
+	}
 	if readErr == nil {
 		directSecretFound = true
 		version = rec.Version

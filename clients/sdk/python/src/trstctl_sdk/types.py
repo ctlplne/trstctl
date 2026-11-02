@@ -13470,6 +13470,60 @@ SecretMetaList = TypedDict(
     total=False,
 )
 
+SecretProject = TypedDict(
+    'SecretProject',
+    {
+        'created_at': str,
+        'created_by': str,
+        'environments': list[dict[str, Any]],
+        'members': list[dict[str, Any]],
+        'name': str,
+        'owner': str,
+        'owner_id': str,
+        'slug': str,
+    },
+    total=False,
+)
+
+SecretProjectCreateRequest = TypedDict(
+    'SecretProjectCreateRequest',
+    {
+        'environments': list[dict[str, Any]],
+        'name': str,
+        'owner_id': str,
+        'slug': str,
+    },
+    total=False,
+)
+
+SecretProjectEnvironmentRequest = TypedDict(
+    'SecretProjectEnvironmentRequest',
+    {
+        'name': str,
+        'restricted': bool,
+        'slug': str,
+    },
+    total=False,
+)
+
+SecretProjectList = TypedDict(
+    'SecretProjectList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+SecretProjectMemberRequest = TypedDict(
+    'SecretProjectMemberRequest',
+    {
+        'environments': list[str],
+        'role': str,
+    },
+    total=False,
+)
+
 SecretRecoverRequest = TypedDict(
     'SecretRecoverRequest',
     {
