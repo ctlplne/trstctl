@@ -93,9 +93,20 @@ jobs:
 
       # The ML-DSA interoperability tests require a stock OpenSSL with ML-DSA; the
       # runner's OpenSSL 3.0 has none (the ee and pqc jobs install the same one).
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
       - name: Install checksum-pinned ML-DSA-capable OpenSSL
         env:
           TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
         run: scripts/ci/install-openssl-pqc.sh
 
       - name: Test (package shard)
@@ -190,9 +201,20 @@ jobs:
 
       # The ML-DSA interoperability tests require a stock OpenSSL with ML-DSA; the
       # runner's OpenSSL 3.0 has none (the ee and pqc jobs install the same one).
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
       - name: Install checksum-pinned ML-DSA-capable OpenSSL
         env:
           TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
         run: scripts/ci/install-openssl-pqc.sh
 
       - name: Download the server test binary
@@ -960,9 +982,20 @@ jobs:
             /tmp/trstctl-pg-archives
           key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
 
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
       - name: Install checksum-pinned ML-DSA-capable OpenSSL
         env:
           TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
         run: scripts/ci/install-openssl-pqc.sh
 
       - name: ee/ unit tests (coverage floor)
@@ -2408,9 +2441,20 @@ jobs:
       # Ubuntu's stock OpenSSL predates standardized ML-DSA. The shared installer
       # pins and verifies the same capable client used by the EE interoperability
       # tests, so both gates exercise one reviewed external oracle.
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
       - name: Install checksum-pinned ML-DSA-capable OpenSSL
         env:
           TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
         run: scripts/ci/install-openssl-pqc.sh
 
       - name: Require ML-DSA-capable stock OpenSSL
