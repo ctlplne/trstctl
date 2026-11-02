@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomBytes, scryptSync } from "node:crypto";
 
@@ -16,10 +16,17 @@ mkdirSync(dirname(usersPath), { recursive: true, mode: 0o700 });
 mkdirSync(dirname(credentialsPath), { recursive: true, mode: 0o700 });
 process.umask(0o077);
 
+// Checks and reads the same open file: a path swapped after the check can't
+// substitute another file, and a symlink is refused.
 function privateFile(path) {
-  const info = statSync(path);
-  if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error(`${path} must be a private regular file (0600)`);
-  return JSON.parse(readFileSync(path, "utf8"));
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error(`${path} must be a private regular file (0600)`);
+    return JSON.parse(readFileSync(fd, "utf8"));
+  } finally {
+    closeSync(fd);
+  }
 }
 
 const existingUsers = existsSync(usersPath);

@@ -1,5 +1,5 @@
 import http from "node:http";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 import { createHash, createPrivateKey, randomBytes, scryptSync, sign, timingSafeEqual } from "node:crypto";
 
 const host = process.env.OIDC_HOST || "127.0.0.1";
@@ -32,9 +32,16 @@ const idpSessionTTL = 60 * 60 * 1000;
 const maxIdpSessions = 256;
 let tenantUsers = [];
 if (usersPath) {
-  const info = statSync(usersPath);
-  if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error("OIDC_USERS_FILE must be a private regular file (0600)");
-  const document = JSON.parse(readFileSync(usersPath, "utf8"));
+  // Checks and reads the same open file (no swap between check and read; no symlink).
+  const fd = openSync(usersPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let document;
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || (info.mode & 0o077) !== 0) throw new Error("OIDC_USERS_FILE must be a private regular file (0600)");
+    document = JSON.parse(readFileSync(fd, "utf8"));
+  } finally {
+    closeSync(fd);
+  }
   if (document.version !== 1 || document.tenant !== tenant || !Array.isArray(document.users) || document.users.length < 1) {
     throw new Error("OIDC_USERS_FILE has an invalid tenant or identity roster");
   }

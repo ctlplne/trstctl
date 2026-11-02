@@ -358,9 +358,17 @@ function mintBootstrapToken(subject = "demo-seeder") {
   }
   const tokenFile = subject === "demo-seeder" ? bootstrapTokenFile : `${bootstrapTokenFile}.${subject}`;
   // The demo seed is a single Compose init job and creation below uses flag=wx;
-  // a second writer cannot replace its token.
-  if (existsSync(tokenFile)) {
-    const persisted = readFileSync(tokenFile, "utf8").trim();
+  // a second writer cannot replace its token. Read first and treat only "no
+  // such file" as absent, so nothing is checked separately from the read.
+  let persisted;
+  try {
+    persisted = readFileSync(tokenFile, "utf8").trim();
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  if (persisted !== undefined) {
     if (!persisted) {
       throw new Error(`persisted demo bootstrap token is empty at ${tokenFile}`);
     }
@@ -379,7 +387,6 @@ function mintBootstrapToken(subject = "demo-seeder") {
     "--scopes",
     "*",
   ], { env });
-  // codeql[js/file-system-race]
   writeFileSync(tokenFile, `${token}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   return token;
 }
