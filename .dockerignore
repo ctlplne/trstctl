@@ -24,6 +24,11 @@ docs/**
 !docs/features/code-signing-and-timestamping.md
 !docs/features/secrets.md
 
+# The client SDKs (separate Go, TypeScript, Python and Java modules) and the
+# embedded EST client are their own deliverables: no image build, web
+# feature-contract check or fuzz build reads them.
+clients/
+
 # Repository-local audit, dependency, compiler, and release caches.
 .sandbox-build/
 .supply-chain/
