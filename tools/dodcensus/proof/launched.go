@@ -2902,7 +2902,8 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		}
 		expectedPath := filepath.Join(built.binDir, name)
 		expectedPaths = append(expectedPaths, expectedPath)
-		pathMatches := samePrivateReceiptObject(filepath.Dir(expected.EvidenceFile), expectedPath, args[0]) == nil
+		pathMatches := samePrivateReceiptObject(filepath.Dir(expected.EvidenceFile), expectedPath, args[0]) == nil ||
+			sameExecRootObject(RuntimeExecDir, expectedPath, args[0]) == nil
 		// PR_SET_DUMPABLE=0 deliberately hides a Rosetta guest's argv/path from
 		// non-root ancestors and exposes only the reviewed interpreter. In that
 		// exact case the direct parent/name/start-time and causal FD-isolation
@@ -2936,6 +2937,36 @@ func validateUnreadableShippedCompanion(parentPID, candidatePID int, built shipp
 		}
 	} else if !os.IsPermission(liveErr) {
 		return fmt.Errorf("inspect companion process executable: %w", liveErr)
+	}
+	return nil
+}
+
+// sameExecRootObject binds a natively launched companion to the gate's copy:
+// BuildShippedProcess publishes companions only under the private executable
+// root, so a native (non-emulated) companion's argv0 is that exact path. The
+// receipt-alias check above covers only the receipt and runtime-temp mounts,
+// so on a native amd64 runner a hardened, non-dumpable signer matched none of
+// the cases and the census reported it as a foreign process holding the
+// launched parent's socket (CI run 41479056374). The path must be clean, under
+// execRoot, a regular file (not a link) and the very inode the gate published;
+// the caller still binds the gate-build identity and, when readable, the
+// process executable.
+func sameExecRootObject(execRoot, expectedPath, actualPath string) error {
+	if actualPath != expectedPath || !filepath.IsAbs(expectedPath) || filepath.Clean(expectedPath) != expectedPath ||
+		strings.ContainsAny(expectedPath, "\r\n\x00") {
+		return fmt.Errorf("companion argv0 is not the exact published executable path")
+	}
+	relative, err := filepath.Rel(execRoot, expectedPath)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("companion executable is outside the gate-owned executable root")
+	}
+	expectedInfo, err := os.Lstat(expectedPath)
+	if err != nil || !expectedInfo.Mode().IsRegular() {
+		return fmt.Errorf("inspect published companion executable: %w", err)
+	}
+	actualInfo, err := os.Lstat(actualPath)
+	if err != nil || !actualInfo.Mode().IsRegular() || !os.SameFile(expectedInfo, actualInfo) {
+		return fmt.Errorf("companion executable is not the published inode: %w", err)
 	}
 	return nil
 }

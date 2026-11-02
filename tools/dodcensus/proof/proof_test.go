@@ -516,6 +516,42 @@ func TestReviewedCompanionStatusRequiresDirectHardenedSignerShape(t *testing.T) 
 	}
 }
 
+func TestNativeUnreadableCompanionIsTheExactPublishedExecutable(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "shipped-process-0123456789abcdef-1")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	signer := filepath.Join(bin, "trstctl-signer")
+	if err := os.WriteFile(signer, []byte("published signer bytes"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := sameExecRootObject(root, signer, signer); err != nil {
+		t.Fatalf("the exact published companion was refused: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "trstctl-signer")
+	if err := os.WriteFile(outside, []byte("published signer bytes"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(bin, "link-signer")
+	if err := os.Symlink(signer, link); err != nil {
+		t.Fatal(err)
+	}
+	for name, test := range map[string][2]string{
+		"another argv0":      {signer, filepath.Join(bin, "trstctl")},
+		"outside the root":   {outside, outside},
+		"unclean path":       {bin + "/../" + filepath.Base(bin) + "/trstctl-signer", bin + "/../" + filepath.Base(bin) + "/trstctl-signer"},
+		"relative path":      {"trstctl-signer", "trstctl-signer"},
+		"symlinked argv0":    {link, link},
+		"missing executable": {filepath.Join(bin, "gone"), filepath.Join(bin, "gone")},
+		"the root itself":    {root, root},
+	} {
+		if err := sameExecRootObject(root, test[0], test[1]); err == nil {
+			t.Errorf("%s: accepted %q as the published companion", name, test[1])
+		}
+	}
+}
+
 func TestQEMUUnreadableCompanionHasExactDuplicatedGuestPath(t *testing.T) {
 	const signer = "/dod-exec/shipped-process/trstctl-signer"
 	for name, test := range map[string]struct {
