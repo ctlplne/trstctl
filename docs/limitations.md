@@ -5316,8 +5316,10 @@ when off, requiring a KEK when on):
   library, each waiting on a named input: Cassandra, Oracle Database and Vertica
   (a Go client library for each), SAP HANA and SAP ASE (an image and a driver).
   The provider catalog states each adapter's authority and whether its
-  revocation is confirmed or TTL-only. The rest of A239's provider library is
-  still being built.
+  revocation is confirmed or TTL-only. A239 is served for every provider in the
+  integration catalog that needs no outside input; the five named above wait on
+  theirs, and SSH user certificates are served by the SSH CA rather than as
+  leases.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,
   CloudTrail reconciliation, or rejection after native expiry. The local query
