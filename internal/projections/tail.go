@@ -115,18 +115,26 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		cancelRun()
 		sampler.Wait()
 	}()
+	advance := func(e events.Event) error {
+		return retryWhileBusy(runCtx, func() error { return w.proj.AdvanceCheckpoint(runCtx, e.Sequence) })
+	}
 	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
-		erased, err := w.proj.retainedSourceErased(runCtx, w.log, e)
-		if err != nil {
+		var erased bool
+		if err := retryWhileBusy(runCtx, func() (err error) {
+			erased, err = w.proj.retainedSourceErased(runCtx, w.log, e)
+			return err
+		}); err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		if erased {
-			if err := w.proj.AdvanceCheckpoint(runCtx, e.Sequence); err != nil {
+			if err := advance(e); err != nil {
 				return w.persistFailure(runCtx, e.Sequence, err)
 			}
 			w.applied.Store(e.Sequence)
 			return nil
 		}
+		// The lifecycle authorities observe each event once; only the store
+		// steps below are retried.
 		skip, err := secretAuthority.skip(e)
 		if err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)
@@ -136,17 +144,20 @@ func (w *TailWorker) Run(ctx context.Context) error {
 			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		skip = skip || skipDynamicSecret
-		if skip {
-			err = w.proj.applyEventProjections(runCtx, e)
-		} else if isTenantLifecycleEventType(e.Type) {
-			err = w.proj.ApplyRetainedTenantLifecycle(runCtx, e)
-		} else {
-			// The command side can project before this durable consumer ACKs the
-			// same event. Use retained-history replay semantics for the tail only;
-			// direct command projection still refuses a duplicate decision.
-			err = w.proj.Apply(governanceDecisionHistoryReplay(runCtx), e)
-		}
-		if err != nil {
+		if err := retryWhileBusy(runCtx, func() error {
+			switch {
+			case skip:
+				return w.proj.applyEventProjections(runCtx, e)
+			case isTenantLifecycleEventType(e.Type):
+				return w.proj.ApplyRetainedTenantLifecycle(runCtx, e)
+			default:
+				// The command side can project before this durable consumer ACKs
+				// the same event. Use retained-history replay semantics for the
+				// tail only; direct command projection still refuses a duplicate
+				// decision.
+				return w.proj.Apply(governanceDecisionHistoryReplay(runCtx), e)
+			}
+		}); err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		// Advance the projection checkpoint as the tail applies out-of-band events
@@ -155,7 +166,7 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		// fails, this invocation stops and records the sequence: acknowledging a
 		// message whose durable PostgreSQL cursor did not move would let the stream
 		// cursor get ahead of the read model.
-		if err := w.proj.AdvanceCheckpoint(runCtx, e.Sequence); err != nil {
+		if err := advance(e); err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)
 		}
 		w.applied.Store(e.Sequence)
@@ -179,6 +190,33 @@ func (w *TailWorker) persistEnvelopeDecodeFailure(ctx context.Context, err error
 // persistFailure records a poison before this Run invocation returns. It uses a
 // short fresh deadline because the projection operation may have consumed its own
 // request deadline; a canceled worker shutdown is not a poison and is left clean.
+// tailBusyBudget bounds how long the tail retries one store step while the
+// store reports itself busy: a pool at capacity, or another session holding
+// the tenant's event-protection lock (an append, a custody check). The read
+// model did not reject the event, so a momentary busy store is waited out
+// rather than recorded as a tail failure; one busy past the budget is recorded
+// and stops the worker, as before.
+const tailBusyBudget = 5 * time.Second
+
+func retryWhileBusy(ctx context.Context, step func() error) error {
+	wait := 20 * time.Millisecond
+	deadline := time.Now().Add(tailBusyBudget)
+	for {
+		err := step()
+		if err == nil || !errors.Is(err, store.ErrDatastoreBusy) || !time.Now().Before(deadline) {
+			return err
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return err
+		case <-timer.C:
+		}
+		wait = min(2*wait, 500*time.Millisecond)
+	}
+}
+
 func (w *TailWorker) persistFailure(ctx context.Context, seq uint64, projectionErr error) error {
 	if ctx.Err() != nil {
 		return projectionErr
