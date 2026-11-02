@@ -57,7 +57,9 @@ func TestSoftHSMContainerSealsTheSignerCAKeyThroughTheAdapter(t *testing.T) {
 		"pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-a200 --login --pin 987654 --keygen --key-type AES:32 --label trstctl-signer-keystore --sensitive >/dev/null 2>&1",
 		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-a200 TRSTCTL_SOFTHSM_USER_PIN=987654",
 		"export CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off",
-		"go build -tags=pkcs11cgo -o /tmp/trstctl-kms-wrap ./cmd/trstctl-kms-wrap",
+		// The repository is mounted read-only and owned by another user, so git
+		// refuses to report its status: build without VCS stamping.
+		"go build -buildvcs=false -tags=pkcs11cgo -o /tmp/trstctl-kms-wrap ./cmd/trstctl-kms-wrap",
 		"export TRSTCTL_KMS_WRAP_ADAPTER=/tmp/trstctl-kms-wrap",
 		"go test -tags=pkcs11cgo ./internal/kms/wrapadapter -run 'TestSoftHSMSealsTheSignerCAKeyThroughTheAdapter' -count=1 -v",
 		"pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-a200 --login --pin 987654 --list-objects --type secrkey 2>/dev/null | grep -c 'trstctl-signer-keystore' || true",

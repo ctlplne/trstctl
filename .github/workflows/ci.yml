@@ -75,6 +75,18 @@ jobs:
           javac -version
           java -version
 
+      # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
+      # which the old single job's `make build` used to leave behind.
+      - name: Prefetch dependencies for offline build tests
+        run: go mod download
+
+      # The ML-DSA interoperability tests require a stock OpenSSL with ML-DSA; the
+      # runner's OpenSSL 3.0 has none (the ee and pqc jobs install the same one).
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+        run: scripts/ci/install-openssl-pqc.sh
+
       - name: Test (package shard)
         # TRSTCTL_REQUIRE_OPENSSH=1 forces the stock-OpenSSH SSH-certificate
         # cross-checks (ssh-keygen -L / -Q) to RUN and assert on the runner, which
@@ -114,6 +126,18 @@ jobs:
           check-latest: true
           cache: true
 
+      # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
+      # which the old single job's `make build` used to leave behind.
+      - name: Prefetch dependencies for offline build tests
+        run: go mod download
+
+      # The ML-DSA interoperability tests require a stock OpenSSL with ML-DSA; the
+      # runner's OpenSSL 3.0 has none (the ee and pqc jobs install the same one).
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+        run: scripts/ci/install-openssl-pqc.sh
+
       - name: Test (server census slice)
         env:
           TRSTCTL_REQUIRE_OPENSSH: "1"
@@ -146,6 +170,11 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      # Offline (GOPROXY=off) build tests need the whole module graph in the cache,
+      # which the old single job's `make build` used to leave behind.
+      - name: Prefetch dependencies for offline build tests
+        run: go mod download
 
       - name: Test (row-501 fairness shard and live perf lanes)
         env:
