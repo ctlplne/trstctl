@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SecretProjectTransfers } from "@/pages/secrets/SecretProjectTransfers";
+import type { SecretProject } from "@/lib/api-types.gen";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -17,7 +18,7 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-const project = {
+const project: SecretProject = {
   slug: "orders",
   name: "Orders",
   owner: "unknown",
