@@ -89,7 +89,9 @@ func TestComplianceReportWorkerSignsArchivesAndRecoversExactDueEdge(t *testing.T
 		t.Fatalf("configured operator schedule create = %d %s", status, body)
 	}
 	const scheduleID = "27d819ea-0057-4ddb-9551-836d0e32128a"
-	due := time.Now().UTC().Add(-time.Hour)
+	// The store keeps microseconds: a nanosecond time.Now() (Linux) would never
+	// read back Equal, nor name the run the worker derives from the stored edge.
+	due := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	seedEvent, err := h.log.Append(ctx, events.Event{
 		TenantID: h.tenant, Type: projections.EventComplianceReportScheduleUpserted,
 		Time: due.Add(-time.Hour), SchemaVersion: 1,
@@ -228,7 +230,9 @@ func TestComplianceReportWorkerDeadLetterRequeueAndRecover(t *testing.T) {
 	})
 	ctx := t.Context()
 	const scheduleID = "8a82db2c-1eef-47ce-a146-58f727576a88"
-	due := time.Now().UTC().Add(-time.Hour)
+	// The store keeps microseconds: a nanosecond time.Now() (Linux) would never
+	// read back Equal, nor name the run the worker derives from the stored edge.
+	due := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	ev, err := h.log.Append(ctx, events.Event{
 		TenantID: h.tenant, Type: projections.EventComplianceReportScheduleUpserted,
 		Time: due.Add(-time.Hour), SchemaVersion: 1,
