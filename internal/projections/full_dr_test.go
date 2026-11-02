@@ -715,14 +715,30 @@ func insertOutboxRowTx(ctx context.Context, tx pgx.Tx, key string) error {
 	return err
 }
 
+// resetFullDRState empties the tables a full-DR test seeds and restores, and
+// empties them again when the test ends. The package shares one database and
+// newStore's per-test reset does not cover these tables, so a full-DR fixture
+// (a secret rotation schedule bound to the fixture's own tenant registration,
+// application-secret epochs) would otherwise reach the next server-assembly test
+// as foreign scheduler authority for the shared tenant (CI test slice: every
+// Build after TestFullBackupRestoreIncludesPostgresState failed).
 func resetFullDRState(t *testing.T, st *store.Store) {
 	t.Helper()
-	ctx := context.Background()
-	tables := append([]string(nil), backup.RecoveredFromPostgresBackup...)
-	sort.Strings(tables)
-	if _, err := st.SystemPool().Exec(ctx, "TRUNCATE "+quoteDRTables(tables)+" RESTART IDENTITY CASCADE"); err != nil {
+	if err := truncateFullDRTables(st); err != nil {
 		t.Fatalf("truncate independent DR tables: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := truncateFullDRTables(st); err != nil {
+			t.Errorf("truncate independent DR tables after the test: %v", err)
+		}
+	})
+}
+
+func truncateFullDRTables(st *store.Store) error {
+	tables := append([]string(nil), backup.RecoveredFromPostgresBackup...)
+	sort.Strings(tables)
+	_, err := st.SystemPool().Exec(context.Background(), "TRUNCATE "+quoteDRTables(tables)+" RESTART IDENTITY CASCADE")
+	return err
 }
 
 func seedRecoveredFromPostgresTables(
