@@ -263,7 +263,7 @@ func TestAUD32HostAgentProcessHelper(t *testing.T) {
 // handshakes that machine, and returns a signed verified receipt.
 func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	ctx := context.Background()
-	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy")
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{"connector.deploy"}, withIsolatedTenant)
 
 	root := t.TempDir()
 	certPath := filepath.Join(root, "listener.crt")
@@ -496,7 +496,7 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 // Every execution is a fresh OS process using only its encrypted local ledger.
 func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testing.T) {
 	ctx := context.Background()
-	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.deploy", "connector.rollback")
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{"connector.deploy", "connector.rollback"}, withIsolatedTenant)
 	root := t.TempDir()
 	certPath, keyPath := filepath.Join(root, "listener.crt"), filepath.Join(root, "listener.key")
 	reloadMarker := filepath.Join(root, "reload-ran")

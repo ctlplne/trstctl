@@ -1898,8 +1898,8 @@ not this file.
 | `internal/secretscan/thirdparty.go:103` | operator-owned artifact path from the reviewed source config, bounded by size above (CWE-22) |
 | `internal/secretscan/thirdparty.go:107` | operator-owned signature path from the reviewed source config (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
-| `internal/server/agent_roles_served_test.go:509` | path is a t.TempDir fixture (CWE-22). |
-| `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_roles_served_test.go:527` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_roles_served_test.go:531` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:134` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:167` | the test's own archive (CWE-22) |

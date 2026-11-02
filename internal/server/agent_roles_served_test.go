@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"strings"
@@ -75,6 +76,13 @@ func newRoleHarnessWithDeps(t *testing.T, roles, claimable []string, options ...
 // fault injection). Every other harness refuses an unregistered payload.
 var withSyntheticEventTypes events.OpenOption = func(*events.Log) {}
 
+// withIsolatedTenant enrolls one role harness's agent in a tenant of its own.
+// The package's served tests share one database and the fixed servedTestTenant,
+// so an agent process that claims every claimable job of its kinds (AUD30,
+// AUD32) also claims jobs earlier tests left pending there — and which ones
+// depends on which tests ran before it in the same process (a CI census slice).
+var withIsolatedTenant = func(*Deps) {}
+
 func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
 	return newRoleHarnessNamedWithEventOptions(t, "role-agent", roles, claimable, eventOptions, options...)
 }
@@ -84,7 +92,14 @@ func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, 
 	deps := []func(*Deps){withAgentChannel, func(d *Deps) {
 		d.AgentClaimableJobKinds = claimable
 	}}
-	deps = append(deps, options...)
+	isolated := false
+	for _, option := range options {
+		if reflect.ValueOf(option).Pointer() == reflect.ValueOf(withIsolatedTenant).Pointer() {
+			isolated = true
+			continue
+		}
+		deps = append(deps, option)
+	}
 	// Same gate as the binary: a report whose receipt payload has no registered
 	// privacy shape must fail here, not on the first host deploy. Only a test
 	// that names withSyntheticEventTypes runs without it.
@@ -102,6 +117,9 @@ func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, 
 	}
 	eventOptions = kept
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, deps...)
+	if isolated {
+		h.tenant = uuid.NewString() // enrollment below registers it
+	}
 	if !h.srv.AgentChannelServed() {
 		t.Fatal("agent channel is not served")
 	}
