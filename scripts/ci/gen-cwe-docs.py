@@ -128,7 +128,7 @@ FIXED = [
      "The secret-store access API returned secret bytes with no declared content type, inviting browsers to sniff them into a renderable type; every response now declares Content-Type and X-Content-Type-Options: nosniff.",
      "TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go)"),
     ("CWE-295", "tools/trstctllint/tlsverify",
-     "Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober, the mtls loopback liveness probe, and _test.go files, so the class cannot reappear anywhere in shipped code.",
+     "Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober and _test.go files (the loopback liveness probe pins the served certificate), so the class cannot reappear anywhere in shipped code.",
      "TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest"),
 ]
 

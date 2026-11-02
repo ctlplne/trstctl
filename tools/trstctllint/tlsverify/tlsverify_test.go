@@ -17,7 +17,7 @@ import (
 func TestTLSVerify(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), tlsverify.Analyzer,
 		"trstctl.com/trstctl/internal/crypto/tlsprobe", // the sanctioned prober: allowed
-		"trstctl.com/trstctl/internal/crypto/mtls",     // LoopbackProbeClient allowed, everything else flagged
+		"trstctl.com/trstctl/internal/crypto/mtls",     // no exception: the loopback probe pins the served certificate
 		"badpkg",   // production violations: flagged
 		"cleanpkg", // verification left on: never flagged
 	)

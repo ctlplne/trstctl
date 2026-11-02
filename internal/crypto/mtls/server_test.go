@@ -276,11 +276,12 @@ func TestServerCertFromFilesRejectsMissing(t *testing.T) {
 	}
 }
 
-// TestLoopbackProbeClientTrustsNothingButConnects: the loopback liveness client
-// reaches an internal-cert server (it does not verify the chain — it is a
-// localhost liveness probe only).
-func TestLoopbackProbeClientReachesInternalServer(t *testing.T) {
-	sc, err := mtls.SelfSignedServerCert([]string{"127.0.0.1"}, time.Hour)
+// TestLoopbackProbeClientVerifiesTheServedCertificate: the loopback liveness
+// client trusts exactly the certificate the listener serves (pinned from its
+// published trust PEM) and verifies it; any other certificate is refused, and a
+// PEM with no usable certificate builds no client.
+func TestLoopbackProbeClientVerifiesTheServedCertificate(t *testing.T) {
+	sc, err := mtls.SelfSignedServerCert([]string{"localhost", "127.0.0.1"}, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,19 +290,45 @@ func TestLoopbackProbeClientReachesInternalServer(t *testing.T) {
 	go func() { _ = sc.ServeHTTPS(srv, ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
 
-	client := mtls.LoopbackProbeClient(3 * time.Second)
-	var err2 error
+	client, err := mtls.LoopbackProbeClient(3*time.Second, sc.TrustPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reached error
 	for i := 0; i < 50; i++ {
 		resp, e := client.Get("https://" + ln.Addr().String() + "/healthz")
 		if e == nil {
 			_ = resp.Body.Close()
-			err2 = nil
+			reached = nil
 			break
 		}
-		err2 = e
+		reached = e
 		time.Sleep(20 * time.Millisecond)
 	}
-	if err2 != nil && !errors.Is(err2, http.ErrServerClosed) {
-		t.Fatalf("loopback probe client could not reach the internal-cert server: %v", err2)
+	if reached != nil {
+		t.Fatalf("the pinned probe could not reach the server it pins: %v", reached)
+	}
+
+	other, err := mtls.SelfSignedServerCert([]string{"localhost", "127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong, err := mtls.LoopbackProbeClient(3*time.Second, other.TrustPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unknown x509.UnknownAuthorityError
+	if resp, err := wrong.Get("https://" + ln.Addr().String() + "/healthz"); err == nil {
+		_ = resp.Body.Close()
+		t.Fatal("a probe pinned to another certificate reached the server")
+	} else if !errors.As(err, &unknown) {
+		t.Fatalf("a probe pinned to another certificate failed for another reason: %v", err)
+	}
+
+	if _, err := mtls.LoopbackProbeClient(time.Second, []byte("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n")); err == nil {
+		t.Fatal("a PEM with no certificate built a probe client")
+	}
+	if _, err := mtls.LoopbackProbeClient(time.Second, nil); err == nil {
+		t.Fatal("an empty PEM built a probe client")
 	}
 }

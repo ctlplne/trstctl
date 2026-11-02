@@ -464,22 +464,58 @@ func (s *ServerCert) ServeHTTPS(srv *http.Server, ln net.Listener) error {
 	return srv.ServeTLS(ln, "", "")
 }
 
-// LoopbackProbeClient returns an HTTP client for a LOCALHOST LIVENESS PROBE only
-// (the container health check execs the binary, which has no shell or curl). It
-// does NOT verify the server certificate, because the control plane's internal
-// certificate is ephemeral and self-signed and the probe only confirms the
-// process is alive and ready on loopback — it carries no credential and reads no
-// data. It must never be used for data-bearing requests.
-func LoopbackProbeClient(timeout time.Duration) *http.Client {
+// LoopbackProbeClient returns an HTTP client for the local liveness and
+// readiness probes (the container check execs the binary, which has no shell or
+// curl). It trusts exactly the certificate the listener serves — the first
+// certificate in servedPEM, read from internal mode's published trust file or
+// file mode's certificate file — and verifies it under a name the certificate
+// carries (localhost, else its first DNS name, else its first IP address), so
+// the probe needs no skipped verification. It carries no credential and reads no
+// data.
+func LoopbackProbeClient(timeout time.Duration, servedPEM []byte) (*http.Client, error) {
+	var leaf *x509.Certificate
+	for rest := servedPEM; leaf == nil; {
+		var block *pem.Block
+		if block, rest = pem.Decode(rest); block == nil {
+			return nil, errors.New("mtls: the served certificate file holds no CERTIFICATE block")
+		}
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("mtls: parse the served certificate: %w", err)
+		}
+		leaf = cert
+	}
+	name := probeServerName(leaf)
+	if name == "" {
+		return nil, errors.New("mtls: the served certificate names no host to verify")
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(leaf)
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			// Loopback liveness only — see the doc comment above. This client can
-			// only be handed the fixed loopback health URL by the internal probe.
-			// codeql[go/disabled-certificate-check]
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, // #nosec G402 -- localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295)
+			TLSClientConfig: &tls.Config{RootCAs: roots, ServerName: name, MinVersion: tls.VersionTLS12},
 		},
+	}, nil
+}
+
+// probeServerName is the name the probe verifies the pinned certificate under.
+func probeServerName(cert *x509.Certificate) string {
+	for _, name := range cert.DNSNames {
+		if name == "localhost" {
+			return name
+		}
 	}
+	if len(cert.DNSNames) > 0 {
+		return cert.DNSNames[0]
+	}
+	if len(cert.IPAddresses) > 0 {
+		return cert.IPAddresses[0].String()
+	}
+	return ""
 }
 
 // ServeMutualHTTPS is ServeHTTPS for a listener that admits only clients

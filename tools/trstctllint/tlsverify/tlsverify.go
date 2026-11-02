@@ -26,11 +26,6 @@ const (
 	// function is to capture the served certificate, valid or not, on a
 	// connection that never carries data.
 	allowedPkg = modulePath + "/internal/crypto/tlsprobe"
-	// The one sanctioned production function outside it: the mtls loopback
-	// liveness probe, which checks its own process's ephemeral self-signed
-	// listener on localhost and carries no credential and reads no data.
-	allowedFuncPkg  = modulePath + "/internal/crypto/mtls"
-	allowedFuncName = "LoopbackProbeClient"
 )
 
 // Analyzer enforces SEC-CWE-295.
@@ -49,10 +44,6 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			continue
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
-			if fd, ok := n.(*ast.FuncDecl); ok &&
-				pass.Pkg.Path() == allowedFuncPkg && fd.Name.Name == allowedFuncName {
-				return false // the sanctioned loopback liveness probe
-			}
 			switch node := n.(type) {
 			case *ast.CompositeLit:
 				if !isTLSConfig(pass.TypesInfo.TypeOf(node)) {

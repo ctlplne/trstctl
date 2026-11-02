@@ -427,21 +427,31 @@ func readyProbe(cfg *config.Config) error {
 	return controlPlaneProbe(cfg, readyProbePath, "readiness check")
 }
 
-// controlPlaneProbe matches the server's transport: HTTPS for the TLS modes (over a
-// loopback probe client that does not verify the ephemeral internal certificate),
-// plaintext only when TLS is explicitly disabled.
+// controlPlaneProbe matches the server's transport: HTTPS for the TLS modes, over
+// a loopback probe client pinned to the certificate the listener serves (internal
+// mode's published trust file, or file mode's certificate file), and plaintext
+// only when TLS is explicitly disabled.
 func controlPlaneProbe(cfg *config.Config, path, label string) error {
 	host := cfg.Server.Addr
 	if strings.HasPrefix(host, ":") {
 		host = "127.0.0.1" + host
 	}
-	scheme := "https"
-	client := mtls.LoopbackProbeClient(3 * time.Second)
 	if cfg.Server.TLS.Mode == config.TLSDisabled {
-		scheme = "http"
-		client = netsec.InsecureLoopbackClient(3 * time.Second)
+		return probeURL(netsec.InsecureLoopbackClient(3*time.Second), "http://"+host+path, label)
 	}
-	return probeURL(client, scheme+"://"+host+path, label)
+	servedFile := cfg.Server.TLS.CertFile
+	if cfg.Server.TLS.Mode == config.TLSInternal {
+		servedFile = cfg.Server.TLS.InternalTrustFile
+	}
+	served, err := os.ReadFile(servedFile) // #nosec G304 -- the configured public certificate of this process's own listener (CWE-22)
+	if err != nil {
+		return fmt.Errorf("%s: read the served certificate: %w", label, err)
+	}
+	client, err := mtls.LoopbackProbeClient(3*time.Second, served)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return probeURL(client, "https://"+host+path, label)
 }
 
 func probeURL(client *http.Client, url, label string) error {

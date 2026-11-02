@@ -50,11 +50,11 @@ golangci-lint results do not replace that evidence.
 | CWE-190 | `internal/crypto/seal/seal.go` | Seal accepted a wrapped DEK larger than the v1 container's 2-byte length prefix and silently mis-framed it; now refused with ErrFormat. | TestSealRefusesOversizedWrappedDEK (internal/crypto/seal/bounds_guard_test.go) |
 | CWE-295 | `internal/crypto/mtls/mtls.go` | Pinned TLS configs enforced the key pin only in VerifyPeerCertificate, which resumed sessions skip, so a session ticket could outlive a pin rotation; pinned listeners now disable tickets and re-verify the pin in VerifyConnection. | TestPinnedConfigsEnforcePinOnResumedSessions (internal/crypto/mtls/resumption_pin_test.go) |
 | CWE-79 | `internal/secretstore/access.go` | The secret-store access API returned secret bytes with no declared content type, inviting browsers to sniff them into a renderable type; every response now declares Content-Type and X-Content-Type-Options: nosniff. | TestAPIResponsesDeclareContentTypeAndNosniff (internal/secretstore/access_headers_test.go) |
-| CWE-295 | `tools/trstctllint/tlsverify` | Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober, the mtls loopback liveness probe, and _test.go files, so the class cannot reappear anywhere in shipped code. | TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest |
+| CWE-295 | `tools/trstctllint/tlsverify` | Class guard, not an instance fix: the ninth trstctllint analyzer forbids InsecureSkipVerify outside the tlsprobe discovery prober and _test.go files (the loopback liveness probe pins the served certificate), so the class cannot reappear anywhere in shipped code. | TestTLSVerify fixtures (tools/trstctllint/tlsverify) + the repo-wide linter selftest |
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2258 annotated sites across 29 rules. Each row is
+2259 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -587,18 +587,19 @@ not this file.
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 | `internal/server/mcp_authorization_keycloak_test.go:272` | the lab container's own loopback URL (CWE-88) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (19 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (20 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:459` | local test listener owned and torn down by the test (CWE-400) |
 | `cmd/trstctl-agent/role_grant_renewal_test.go:66` | local test listener owned and torn down by the test (CWE-400) |
+| `cmd/trstctl/healthprobe_test.go:31` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/agent/http_enroll_test.go:150` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/hybrid_group_test.go:31` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/reload_test.go:95` | loopback test listener torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:152` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:215` | local test listener owned and torn down by the test (CWE-400) |
-| `internal/crypto/mtls/server_test.go:288` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/crypto/mtls/server_test.go:289` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/ca_switch_served_test.go:77` | loopback fixture closed by its stop func (CWE-400) |
 | `internal/server/closed_loop_served_test.go:73` | loopback fixture closed below (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
@@ -1495,7 +1496,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (623 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (624 sites)
 
 | Location | Reason |
 |---|---|
@@ -1573,6 +1574,7 @@ not this file.
 | `cmd/trstctl/ee_attach.go:376` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:386` | operator-configured client secret file (CWE-22) |
 | `cmd/trstctl/ee_attach.go:452` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/main.go:446` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2265,14 +2267,13 @@ not this file.
 | `internal/crypto/weakkey/weakkey.go:139` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 | `internal/crypto/weakkey/weakkeytest/rsa.go:51` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 
-### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (10 sites)
+### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (9 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/mtls/mtls.go:373` | operator-selected lab escape hatch, off by default, and |
 | `internal/crypto/mtls/rawclient_test.go:101` | the test server models a KMIP server whose TLS stops at 1.2 (CWE-327) |
 | `internal/crypto/mtls/reload_test.go:64` | reload probe of the test's own loopback listener; reads only the served serial, carries no data (CWE-295) |
-| `internal/crypto/mtls/server.go:480` | localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295) |
 | `internal/crypto/mtls/server_test.go:251` | test TLS client speaking to the test's own server (CWE-295) |
 | `internal/crypto/mtls/tls_floor_test.go:34` | loopback test dial against the test's own self-signed server (CWE-295) |
 | `internal/crypto/tlsprobe/native_fallback_test.go:23` | interoperability fixture pins TLS 1.2 to prove the native fallback preserves an existing supported listener. |

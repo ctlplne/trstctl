@@ -2,15 +2,15 @@
 
 package mtls
 
-// The loopback liveness probe is the one sanctioned function outside the
-// prober package; any other function in this package is still flagged.
+// No function in this package may skip verification, the loopback liveness
+// probe included: it pins the certificate the listener serves.
 import (
 	"crypto/tls"
 	"net/http"
 )
 
 func LoopbackProbeClient() *http.Client {
-	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} // want "InsecureSkipVerify: true disables TLS certificate verification"
 }
 
 func somewhereElse() *tls.Config {
