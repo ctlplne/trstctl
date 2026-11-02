@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"runtime"
 	"time"
@@ -31,8 +32,11 @@ func Capture(ctx context.Context, iface string, ports []uint16, snaplen int, a *
 	}
 	defer func() { _ = unix.Close(fd) }()
 	program := portFilter(ports, uint32(snaplen)) // #nosec G115 -- snaplen is a small configured frame size
+	if len(program) == 0 || len(program) > math.MaxUint16 {
+		return fmt.Errorf("observe: port filter has %d instructions", len(program))
+	}
 	if err := unix.SetsockoptSockFprog(fd, unix.SOL_SOCKET, unix.SO_ATTACH_FILTER,
-		&unix.SockFprog{Len: uint16(len(program)), Filter: &program[0]}); err != nil {
+		&unix.SockFprog{Len: uint16(len(program)), Filter: &program[0]}); err != nil { // #nosec G115 -- bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190)
 		return fmt.Errorf("observe: attach port filter: %w", err)
 	}
 	if err := unix.Bind(fd, &unix.SockaddrLinklayer{Protocol: htons(unix.ETH_P_ALL), Ifindex: ifi.Index}); err != nil {

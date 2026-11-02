@@ -91,6 +91,22 @@ class CensusTests(unittest.TestCase):
             with self.subTest(value=bad), self.assertRaises(argparse.ArgumentTypeError):
                 runner.timeout_seconds(bad)
 
+class FailureOutputTests(unittest.TestCase):
+    def test_a_failed_test_and_its_subtests_print_their_own_last_lines(self):
+        events = [
+            {'Action': 'output', 'Test': 'TestOK', 'Output': 'fine\n'},
+            {'Action': 'output', 'Test': 'TestBad', 'Output': '=== RUN   TestBad\n'},
+            {'Action': 'output', 'Test': 'TestBad/case', 'Output': 'bad_test.go:12: want 1, got 2\n'},
+            {'Action': 'output', 'Output': 'package-level line\n'},
+        ] + [{'Action': 'output', 'Test': 'TestBad', 'Output': f'line {i}\n'} for i in range(100)]
+        got = runner.failure_output(events, ['TestBad'], limit=5)
+        self.assertEqual(list(got), ['TestBad'])
+        # The subtest's report is kept although it is far from the tail; order is preserved.
+        self.assertEqual(got['TestBad'], ['bad_test.go:12: want 1, got 2', 'line 95', 'line 96', 'line 97', 'line 98', 'line 99'])
+        self.assertNotIn('fine', runner.failure_output(events, ['TestBad'])['TestBad'])
+        self.assertEqual(runner.failure_output(events, []), {})
+
+
 class SliceTests(unittest.TestCase):
     def test_slices_partition_the_census_exactly(self):
         names = sorted(f'Test{i:03d}' for i in range(17))

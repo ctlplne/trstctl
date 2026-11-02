@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2250 annotated sites across 29 rules. Each row is
+2252 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -609,7 +609,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (354 sites)
+### G115 — CWE-190 Integer overflow or wraparound (355 sites)
 
 | Location | Reason |
 |---|---|
@@ -619,7 +619,8 @@ not this file.
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/misuse.go:130` | event sequences fit int64 (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
-| `internal/agent/observe/capture_linux.go:33` | snaplen is a small configured frame size |
+| `internal/agent/observe/capture_linux.go:34` | snaplen is a small configured frame size |
+| `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
 | `internal/agent/observe/flows.go:202` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
 | `internal/agent/observe/flows.go:213` | one segment's payload is under 64 KiB, and sequence numbers wrap mod 2^32 by design (CWE-190) |
 | `internal/agent/observe/flows_test.go:23` | bounded test packet length (CWE-190) |
@@ -2373,7 +2374,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (127 sites)
+### G703 — CWE-22 Path traversal (taint) (128 sites)
 
 | Location | Reason |
 |---|---|
@@ -2389,6 +2390,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/agent/observe/capture_linux_test.go:65` | the lab runner names the report path in the test environment, never a request (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:163` | both paths are agent-owned fixed state paths |
 | `internal/agent/relay/host_renew_pending.go:223` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:254` | derived agent-owned state path |

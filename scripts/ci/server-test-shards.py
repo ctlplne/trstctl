@@ -115,6 +115,27 @@ def complete_run(events, expected):
     }
 
 
+FAILURE_LINE = re.compile(r"\w\.go:\d+:|panic:|--- FAIL")
+
+
+def failure_output(events, failed, limit=80, messages=40):
+    """Each failed test's output (subtests included), in order: its first `messages` failure
+    lines (file:line reports, panics, --- FAIL) wherever they are, and its last `limit` lines."""
+    wanted = set(failed)
+    lines = collections.defaultdict(list)
+    for event in events:
+        name = event.get("Test", "")
+        if event.get("Action") == "output" and name.split("/", 1)[0] in wanted:
+            lines[name.split("/", 1)[0]].append(event.get("Output", "").rstrip("\n"))
+    out = {}
+    for name in failed:
+        text = lines[name]
+        keep = {i for i, line in enumerate(text) if FAILURE_LINE.search(line)}
+        keep = set(sorted(keep)[:messages]) | set(range(max(0, len(text) - limit), len(text)))
+        out[name] = [text[i] for i in sorted(keep)]
+    return out
+
+
 def seed_public_archives(source, destination):
     # Copy compressed archives only, preserving platform/version/digest paths.
     # The product still verifies the committed digest and freshly extracts each
@@ -253,6 +274,11 @@ def run(args):
             part["coverage_valid"] = body.startswith("mode: atomic\n") and len(body.splitlines()) > 1
             record["parts"].append(part)
             print(f">> server part: exit={child.returncode}, completed={part['terminal']}/{part['expected']}, failures={part['failed']}, log={logpath}", flush=True)
+            # A CI log is often all there is of a failure: print each failed test's own output.
+            for name, output in failure_output(read_events(logpath), part["failed"]).items():
+                print(f"--- FAIL: {name} (last {len(output)} output lines)", flush=True)
+                for line in output:
+                    print("    " + line, flush=True)
         record["execution_seconds"] = time.monotonic() - began
         success = not expired and all(p["exit"] == 0 and p["complete"] and not p["failed"] and p["coverage_valid"] for p in record["parts"])
         if success:

@@ -62,7 +62,7 @@ func TestCaptureStockTrafficOnLoopbackX1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(out, report, 0o600); err != nil {
+	if err := os.WriteFile(out, report, 0o600); err != nil { // #nosec G703 -- the lab runner names the report path in the test environment, never a request (CWE-22)
 		t.Fatal(err)
 	}
 	for _, marker := range []string{"x1-app-data", "x1-secret-path", "x1-bind-secret", "x1-admin"} {
