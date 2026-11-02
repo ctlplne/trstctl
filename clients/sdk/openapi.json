@@ -18673,6 +18673,7 @@
               "snowflake",
               "aws-elasticache",
               "aws-memorydb",
+              "ibm-api-connect",
               "mssql",
               "azure-sql"
             ],

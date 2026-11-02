@@ -5243,7 +5243,7 @@ when off, requiring a KEK when on):
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
-  `mssql`, and `azure-sql` (A239). Issuance is
+  `ibm-api-connect`, `mssql`, and `azure-sql` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5310,6 +5310,11 @@ when off, requiring a KEK when on):
   ElastiCache and MemoryDB RBAC users (A239) are built against stand-ins of their
   APIs only (the user joins its group once settled, a retry replaces its password,
   revocation deletes it and AUTH then fails); a live proof needs an AWS account.
+  IBM API Connect app credentials (A239) are built against a stand-in of the
+  platform API only (the gateway accepts a leased credential and refuses it once
+  revoked); a live proof needs an API Connect instance. Not yet built in A239's
+  library, each waiting on a named input: Cassandra, Oracle Database and Vertica
+  (a Go client library for each), SAP HANA and SAP ASE (an image and a driver).
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.

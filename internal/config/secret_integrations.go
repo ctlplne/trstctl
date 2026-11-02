@@ -137,6 +137,9 @@ type DynamicSecretProviderConfig struct {
 	// ElastiCache's user engine, redis (default) or valkey (A239).
 	UserGroup string `json:"user_group,omitempty"`
 	Engine    string `json:"engine,omitempty"`
+	// APIKeyRef is an ibm-api-connect provider's platform API key, exchanged
+	// with client_id and client_secret_ref for a platform token (A239).
+	APIKeyRef string `json:"api_key_ref,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -251,7 +254,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
-	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {},
+	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -434,6 +437,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
+	"ibm-api-connect": validateAPIConnectProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -849,11 +853,14 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.RevocationEndpoint != "" {
 		errs = append(errs, fmt.Errorf("%s revocation_endpoint is only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.ClientSecretRef != "" {
-		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials and mongodb-atlas", where))
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "ibm-api-connect" && c.ClientSecretRef != "" {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials, mongodb-atlas and ibm-api-connect", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.ClientID != "" {
-		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas and github-app", where))
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.ClientID != "" {
+		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app and ibm-api-connect", where))
+	}
+	if c.Type != "ibm-api-connect" && c.APIKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect", where))
 	}
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
@@ -982,6 +989,44 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var apiConnectSegment = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
+
+// validateAPIConnectProvider checks an IBM API Connect provider (A239):
+// endpoint is the platform API, client_id, client_secret_ref and api_key_ref
+// the administrator's api_key grant, and each allowed role is bound to the
+// consumer app "<org>/<catalog>/<consumer-org>/<app>" whose credentials leases
+// are.
+func validateAPIConnectProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the platform API) is required for ibm-api-connect", where))
+	}
+	if strings.TrimSpace(c.ClientID) == "" {
+		errs = append(errs, fmt.Errorf("%s client_id is required for ibm-api-connect", where))
+	}
+	for name, ref := range map[string]string{"client_secret_ref": c.ClientSecretRef, "api_key_ref": c.APIKeyRef} {
+		if err := validateCredentialRef(ref); err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", where, name, err))
+		}
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		parts := strings.Split(binding, "/")
+		valid := len(parts) == 4
+		for _, part := range parts {
+			valid = valid && apiConnectSegment.MatchString(part)
+		}
+		if !valid {
+			errs = append(errs, fmt.Errorf(`%s role_bindings[%q] must be "<org>/<catalog>/<consumer-org>/<app>"`, where, role))
+		}
+	}
+	return errs
 }
 
 var awsCacheGroupName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]{0,39}$`)

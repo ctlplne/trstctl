@@ -355,14 +355,16 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-five backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-six backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
-tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, SQL Server logins,
-and Azure SQL contained database users (A239).
+tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Connect app
+credentials, SQL Server logins, and Azure SQL contained database users (A239). SSH user
+certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
+through the served KRL), not as dynamic-secret leases.
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -509,6 +511,14 @@ cluster. Requests are SigV4-signed with the configured access key. They are buil
 against stand-ins of the ElastiCache Query API and the MemoryDB JSON API made from their
 documentation; there is no AWS proof yet.
 
+The IBM API Connect backend creates one credential per lease on the consumer app the
+role is bound to, through the platform API with the api_key grant; the app's
+subscriptions are its authority. API Connect generates the secret and never shows it
+again, so a retry that finds the lease's credential name taken deletes it and creates it
+anew. Revocation deletes the credential, and the gateway refuses its client ID. It is
+built against a stand-in of the platform API made from its documentation; there is no
+API Connect proof yet.
+
 The SQL Server backend (`mssql`) creates one login per lease with a generated password
 that meets SQL Server's password policy, a user for it in the configured database, and
 that user's membership of the role's database roles; the Azure SQL backend
@@ -530,7 +540,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns twenty-six safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twenty-seven safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

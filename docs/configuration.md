@@ -2349,6 +2349,28 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For IBM API Connect (A239, `ibm-api-connect`), set `endpoint` to the platform API,
+`client_id`, `client_secret_ref` and `api_key_ref` to the client and API key the
+platform's api_key grant authenticates with (the key's user must manage the bound
+apps' credentials), and `role_bindings` to the consumer app per allowed role,
+`"<org>/<catalog>/<consumer-org>/<app>"`. Each lease is a credential on that app; its
+authority is the app's subscriptions.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "apic",
+  "type": "ibm-api-connect",
+  "endpoint": "https://apic-platform.internal",
+  "client_id": "toolkit",
+  "client_secret_ref": "file:/run/secrets/apic-client",
+  "api_key_ref": "file:/run/secrets/apic-api-key",
+  "allowed_roles": ["partner"],
+  "role_bindings": {"partner": "acme/sandbox/partners/orders-app"},
+  "max_ttl": "8h"
+}
+```
+
 For ElastiCache (A239, `aws-elasticache`) or MemoryDB (`aws-memorydb`), set `region`,
 `access_key_id`, `secret_access_key_ref` (and `session_token_ref` for temporary
 credentials) to an AWS principal allowed to create, modify and delete users and to

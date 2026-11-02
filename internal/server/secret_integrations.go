@@ -466,6 +466,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredSnowflakeBackend(opener)
 	case "aws-elasticache", "aws-memorydb":
 		return openConfiguredAWSCacheBackend(opener)
+	case "ibm-api-connect":
+		return openConfiguredAPIConnectBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":

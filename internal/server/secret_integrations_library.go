@@ -347,3 +347,30 @@ func openConfiguredAWSCacheBackend(o *configuredDynamicBackendOpener) (requestDy
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredAPIConnectBackend reads the platform client secret and API key
+// into a backend that keeps its own sealed copies and calls the platform API
+// through the SSRF-guarded client (A239).
+func openConfiguredAPIConnectBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	clientSecret, err := o.resolve(cfg.ClientSecretRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	apiKey, err := o.resolve(cfg.APIKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewAPIConnectBackend(dynsecret.APIConnectConfig{
+		Endpoint: cfg.Endpoint, ClientID: cfg.ClientID, ClientSecret: clientSecret, APIKey: apiKey, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

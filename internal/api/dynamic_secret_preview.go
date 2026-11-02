@@ -321,6 +321,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("user_group", "ACL", "The MemoryDB ACL, attached to the cluster, that leased users join.", true),
 			value("redis_acl_roles", "Role policies", "For every allowed role, literal key_prefixes and explicit safe commands, as for the Redis provider; raw ACL rules and categories are refused.", true),
 		)},
+		{Type: "ibm-api-connect", Label: "IBM API Connect app credentials", Purpose: "Creates a credential (client ID and generated secret) on the consumer app the role is bound to through the API Connect platform API, carrying that app's subscriptions, and deletes it at revocation; the gateway then refuses its client ID. Built against a stand-in of the platform API; no API Connect proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Platform API", "HTTPS URL of the API Connect platform API.", true),
+			value("client_id", "Platform client ID", "The client ID the API key grant authenticates with (a toolkit or registered client).", true),
+			credential("client_secret_ref", "Platform client secret reference", "That client's secret.", true),
+			credential("api_key_ref", "API key reference", "An API key of a user allowed to manage the bound apps' credentials.", true),
+			value("username_prefix", "Credential name prefix", "Optional prefix of leased credential names (default trstctl); revocation only ever deletes credentials with it and the lease digest suffix the provider gives them.", false),
+			roles(`Each allowed role maps to the consumer app "<org>/<catalog>/<consumer-org>/<app>"; the app's subscriptions are the credential's authority.`),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -389,6 +397,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's Snowflake roles, through a key-pair service user disabled and dropped at revocation, or expired by Snowflake after the maximum lifetime in whole days", "confirmed"
 	case "aws-elasticache", "aws-memorydb":
 		return "the role's literal key prefixes and explicit commands, through an RBAC user in one user group or ACL, until the user is deleted", "confirmed"
+	case "ibm-api-connect":
+		return "the subscriptions (plans and products) of the consumer app the role is bound to, until the credential is deleted", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

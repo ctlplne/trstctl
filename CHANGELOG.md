@@ -2,6 +2,11 @@
 
 ### Added
 
+- IBM API Connect dynamic secrets (`type: ibm-api-connect`): each lease is a credential (client ID and generated secret)
+  on the consumer app its role is bound to (`"<org>/<catalog>/<consumer-org>/<app>"`), carrying that app's
+  subscriptions, created through the platform API with the api_key grant; revocation deletes the credential and the
+  gateway then refuses its client ID. Built against a stand-in of the platform API.
+
 - ElastiCache and MemoryDB dynamic secrets (`type: aws-elasticache`, `type: aws-memorydb`): each lease is an RBAC user
   with a generated password and the role's access string, compiled from literal key prefixes and explicit safe commands
   exactly as for the Redis provider (`redis_acl_roles`; raw ACL rules and categories are refused), added to one

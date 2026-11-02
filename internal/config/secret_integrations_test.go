@@ -591,6 +591,36 @@ func TestValidateAWSCacheProvidersA239(t *testing.T) {
 	}
 }
 
+func TestValidateAPIConnectProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "apic", Type: "ibm-api-connect",
+		Endpoint: "https://apic.internal", ClientID: "toolkit", ClientSecretRef: "file:/run/secrets/apic-client", APIKeyRef: "file:/run/secrets/apic-key",
+		AllowedRoles: []string{"partner"}, MaxTTL: "8h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"partner": "acme/sandbox/partners/orders-app"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint": {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the platform API) is required"},
+		"no client":   {func(c *DynamicSecretProviderConfig) { c.ClientID = "" }, "client_id is required for ibm-api-connect"},
+		"no api key":  {func(c *DynamicSecretProviderConfig) { c.APIKeyRef = "" }, "api_key_ref"},
+		"bad app":     {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"partner": "orders-app"} }, `must be "<org>/<catalog>/<consumer-org>/<app>"`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"partner": "acme/sandbox/partners/orders-app"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateTailscaleProviderA239(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
 		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},
