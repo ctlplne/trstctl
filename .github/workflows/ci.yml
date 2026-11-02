@@ -1657,8 +1657,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          # Full history so `buf breaking --against '.git#branch=main'` can resolve
-          # the baseline contract to diff against.
+          # Full history so `buf breaking` can resolve the baseline contract to
+          # diff against (main, or main's previous tip on a push).
           fetch-depth: 0
 
       - name: Install buf (pinned)
@@ -1667,14 +1667,24 @@ jobs:
           version: 1.47.2
           setup_only: true
 
-      # actions/checkout leaves pull-request jobs on a detached merge commit and
-      # does not create a local `main` branch. Buf's .git module resolver requires
-      # that exact local ref, so materialize it from the freshly fetched remote.
-      - name: Materialize the protected main baseline
+      # The baseline is the contract a change replaces: main for a pull request,
+      # and main's previous tip (github.event.before) for a push to main, whose
+      # commits already are main (comparing main with itself passes vacuously).
+      # actions/checkout leaves a pull-request job on a detached merge commit and a
+      # push job on main itself, which cannot be force-moved, so the baseline gets
+      # its own local ref for buf's .git module resolver; nothing is pushed.
+      - name: Materialize the contract baseline
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
           git fetch --no-tags --force origin +refs/heads/main:refs/remotes/origin/main
-          git branch --force main refs/remotes/origin/main
-          git rev-parse --verify refs/heads/main
+          baseline=refs/remotes/origin/main
+          if [ "$EVENT_NAME" = push ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            baseline="$PUSH_BEFORE"
+          fi
+          git update-ref refs/heads/contract-baseline "$(git rev-parse --verify "${baseline}^{commit}")"
+          git log -1 --format='contract baseline: %H %s' refs/heads/contract-baseline
 
       # Lint the signer proto and fail the build on a wire-incompatible change to the
       # control-plane↔signer gRPC contract (AN-4): a removed/renumbered field, a
@@ -1682,8 +1692,8 @@ jobs:
       - name: buf lint
         run: buf lint
 
-      - name: buf breaking (against main)
-        run: buf breaking --against '.git#branch=main'
+      - name: buf breaking (against the contract baseline)
+        run: buf breaking --against '.git#branch=contract-baseline'
 
       # SCHEMA-004: regenerate the committed signer protobuf/gRPC Go and fail on any
       # drift. `make generate` (raw protoc) and `buf breaking` exist, but nothing

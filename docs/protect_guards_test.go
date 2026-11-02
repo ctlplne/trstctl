@@ -2173,12 +2173,19 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff",
 		"version: 1.47.2",
 		"run: buf lint",
-		"run: buf breaking --against '.git#branch=main'",
+		// A push to main is compared with main's previous tip, a pull request with
+		// main; never main with itself, which passes vacuously.
+		"PUSH_BEFORE: ${{ github.event.before }}",
+		"git update-ref refs/heads/contract-baseline",
+		"run: buf breaking --against '.git#branch=contract-baseline'",
 		"Contract check (FE types vs served OpenAPI)",
 	} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("SCHEMA-102/103: ci.yml no longer contains %q; contract drift may not be a merge gate", want)
 		}
+	}
+	if strings.Contains(ci, "git branch --force main") || strings.Contains(ci, "--against '.git#branch=main'") {
+		t.Error("SCHEMA-102: the proto gate compares against the local main branch again; on a push to main that is the change itself")
 	}
 	proto := read(t, "../internal/signing/proto/signer.proto")
 	for _, want := range []string{
