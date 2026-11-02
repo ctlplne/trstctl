@@ -22,7 +22,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/api/discovery.go:createDiscoverySource":                             "tenant-authored generic declaration",
 		"internal/api/ct_monitoring.go:updateCTMonitoring":                            "tenant-authored CT declaration",
 		"internal/api/secrets_scanning.go:ingestThirdPartySecretScan":                 "product-owned third-party secret scan",
-		"internal/api/secrets_scanning.go:receiveSecretRepoWebhook":                   "product-owned repository secret scan",
+		"internal/api/secrets_scanning.go:queueSecretRepoScan":                        "product-owned repository secret scan (authenticated and provider-signed webhooks)",
 		"internal/orchestrator/discovery.go:RecordAgentInventory":                     "product-owned authenticated agent inventory",
 		"internal/orchestrator/discovery.go:RecordSecretScan":                         "product-owned local secret scan",
 		"internal/orchestrator/weak_key_audit.go:RecordWeakKeyAudit":                  "product-owned inventory weak-key audit",
