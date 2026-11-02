@@ -684,6 +684,10 @@ func writeAtomic(path string, content []byte, mode os.FileMode) error {
 		cleanup()
 		return err
 	}
+	if err := allowReplace(path); err != nil {
+		cleanup()
+		return err
+	}
 	if err := os.Rename(tmp, path); err != nil {
 		cleanup()
 		return err

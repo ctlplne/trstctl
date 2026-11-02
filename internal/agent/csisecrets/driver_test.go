@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+// The node plugin serves Linux nodes only; its tests read Unix file ownership.
+
+//go:build unix
+
 package csisecrets
 
 import (

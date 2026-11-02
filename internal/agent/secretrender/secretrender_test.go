@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -147,8 +148,14 @@ func TestRendererWritesAtomicallyReloadsAndReportsInjectedThenVerifiedA238(t *te
 	if raw, _ := os.ReadFile(file); string(raw) != "app:{PLAIN}pw-one\n" { // #nosec G304 -- the test's own temp file (CWE-22)
 		t.Fatalf("file %q", raw)
 	}
-	if info, _ := os.Stat(file); info.Mode().Perm() != 0o440 {
-		t.Fatalf("mode %v", info.Mode().Perm())
+	// Windows has no permission bits: Go maps a mode without write bits to the
+	// read-only attribute and reports it as 0444.
+	wantMode := os.FileMode(0o440)
+	if runtime.GOOS == "windows" {
+		wantMode = 0o444
+	}
+	if info, _ := os.Stat(file); info.Mode().Perm() != wantMode {
+		t.Fatalf("mode %v, want %v", info.Mode().Perm(), wantMode)
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatal("the reload hook did not run")

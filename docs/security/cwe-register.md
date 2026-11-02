@@ -102,7 +102,7 @@ not this file.
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `ee/provider/scim_groups_test.go:36` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
-| `internal/agent/csisecrets/driver_test.go:419` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/agent/csisecrets/driver_test.go:423` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:36` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -140,7 +140,7 @@ not this file.
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/secretrender/secretrender_test.go:125` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/transport/agentservice.go:917` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:924` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1622,9 +1622,9 @@ not this file.
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/wiring.go:130` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
-| `internal/agent/csisecrets/driver_test.go:220` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:249` | the test's own temp file (CWE-22) |
-| `internal/agent/csisecrets/driver_test.go:386` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:224` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:253` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:390` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:114` | the file the driver wrote under this test's temp dir (CWE-22) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1683,14 +1683,14 @@ not this file.
 | `internal/agent/secretrender/secretrender.go:313` | the renderer's own state directory and a validated template name (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:572` | operator-configured pid file (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:663` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:691` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:738` | operator-configured token file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:82` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:141` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:147` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:162` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:217` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:245` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:695` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:742` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:83` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:142` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:148` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:169` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:224` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:252` | the test's own temp file (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:60` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:79` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
