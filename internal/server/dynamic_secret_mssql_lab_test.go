@@ -3,10 +3,10 @@
 package server
 
 import (
-	"bufio"
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -48,6 +48,15 @@ func (lab mssqlLab) run(t *testing.T, user, password, database, query string) st
 	defer cancel()
 	out, _ := lab.sqlcmd(t, ctx, user, password, database, query).CombinedOutput()
 	return strings.TrimSpace(string(out))
+}
+
+func mustReadMSSQLDSN(t *testing.T, file string) []byte {
+	t.Helper()
+	dsn, err := os.ReadFile(file) // #nosec G304,G703 -- runner-provided lab fixture path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dsn
 }
 
 // leaseMSSQL issues a lease from a provider of providerType against the lab.
@@ -128,54 +137,57 @@ func TestServedDynamicSQLServerLoginAgainstSQLServerA239(t *testing.T) {
 	if out := lab.run(t, user, password, "payments", "SELECT 1"); !strings.Contains(out, "Login failed") && !strings.Contains(out, "Cannot open database") {
 		t.Fatalf("SQL Server let the leased login into payments: %q", out)
 	}
-	// A session the leased login holds open across the revocation.
+	// A session the leased login holds open across the revocation. sqlcmd
+	// buffers its output on a pipe, so the test waits on SQL Server's own view
+	// of the session (as the administrator) rather than on what sqlcmd prints.
+	admin, err := sql.Open("sqlserver", strings.TrimSpace(string(mustReadMSSQLDSN(t, lab.dsnFile))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = admin.Close() }()
+	sessions := func() int {
+		t.Helper()
+		var n int
+		if err := admin.QueryRow("SELECT COUNT(*) FROM sys.dm_exec_sessions WHERE login_name = @login", sql.Named("login", user)).Scan(&n); err != nil {
+			t.Fatalf("count the login's sessions: %v", err)
+		}
+		return n
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	held := lab.sqlcmd(t, ctx, user, password, "orders", "SELECT 'held-session-open'; WAITFOR DELAY '00:02:00'; SELECT 'held-session-finished'")
-	reader, writer := io.Pipe()
-	held.Stdout, held.Stderr = writer, writer
+	held := lab.sqlcmd(t, ctx, user, password, "orders", "WAITFOR DELAY '00:02:00'; SELECT 'held-session-finished'")
+	var heldOutput bytes.Buffer
+	held.Stdout, held.Stderr = &heldOutput, &heldOutput
 	if err := held.Start(); err != nil {
 		t.Fatal(err)
 	}
-	lines := make(chan string, 64)
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			lines <- scanner.Text()
-		}
-		close(lines)
-	}()
 	done := make(chan error, 1)
-	go func() { done <- held.Wait(); _ = writer.Close() }()
-	var heldOutput []string
-	for open := false; !open; {
+	go func() { done <- held.Wait() }()
+	for deadline := time.Now().Add(60 * time.Second); sessions() == 0; {
 		select {
-		case line, ok := <-lines:
-			if !ok {
-				t.Fatalf("the held session ended before revocation: %q", heldOutput)
-			}
-			heldOutput = append(heldOutput, line)
-			open = strings.Contains(line, "held-session-open")
-		case <-time.After(60 * time.Second):
-			t.Fatalf("the held session did not start: %q", heldOutput)
+		case err := <-done:
+			t.Fatalf("the held session ended before revocation: %v %q", err, heldOutput.String())
+		default:
 		}
+		if time.Now().After(deadline) {
+			t.Fatal("SQL Server never showed the held session")
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 	renewAndRevokeMSSQL(t, h, tok, leaseID)
+	var heldErr error
 	select {
-	case <-done:
+	case heldErr = <-done:
 	case <-time.After(60 * time.Second):
-		t.Fatalf("the held session survived the revocation: %q", heldOutput)
+		t.Fatalf("the held session survived the revocation: %q", heldOutput.String())
 	}
-	for line := range lines {
-		heldOutput = append(heldOutput, line)
-	}
-	if strings.Contains(strings.Join(heldOutput, "\n"), "held-session-finished") {
-		t.Fatalf("the held session ran to completion after revocation: %q", heldOutput)
+	if heldErr == nil || strings.Contains(heldOutput.String(), "held-session-finished") || sessions() != 0 {
+		t.Fatalf("the held session was not ended by the revocation: exit %v, output %q, sessions %d", heldErr, heldOutput.String(), sessions())
 	}
 	if out := lab.run(t, user, password, "orders", "SELECT 1"); !strings.Contains(out, "Login failed for user") {
 		t.Fatalf("SQL Server still accepts the revoked login: %q", out)
 	}
-	t.Logf("A239_MSSQL_OK lease=%s login=%s held_session=%q", leaseID, user, heldOutput[len(heldOutput)-1])
+	t.Logf("A239_MSSQL_OK lease=%s login=%s held_session_ended=%q", leaseID, user, strings.TrimSpace(heldOutput.String()))
 }
 
 // A239 Azure SQL contained users, against SQL Server's contained database
