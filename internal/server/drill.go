@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -237,6 +238,18 @@ func RunRestoreDrill(
 	backupDir string,
 	factories ...EditionProjectionOptionsFactory,
 ) (backup.DrillAttestation, error) {
+	return runRestoreDrillWithMigrations(ctx, cfg, backupDir, nil, factories...)
+}
+
+// runRestoreDrillWithMigrations is RunRestoreDrill whose throwaway target
+// also gets the attached families' schemas, as the live database did.
+func runRestoreDrillWithMigrations(
+	ctx context.Context,
+	cfg *config.Config,
+	backupDir string,
+	extraMigrations []fs.FS,
+	factories ...EditionProjectionOptionsFactory,
+) (backup.DrillAttestation, error) {
 	if cfg == nil || cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
 		// Without an external Postgres there is nowhere to make a throwaway
 		// database. Reported as skipped rather than failed: nothing is broken,
@@ -264,7 +277,7 @@ func RunRestoreDrill(
 		if err != nil {
 			return backup.RestoreResult{}, err
 		}
-		restored, err := runFullRestore(ctx, &drillCfg, backupDir, true, true, factories...)
+		restored, err := runFullRestore(ctx, &drillCfg, backupDir, true, true, extraMigrations, factories...)
 		if err != nil {
 			return backup.RestoreResult{
 				EventsRestored:          restored.EventsRestored,
@@ -343,6 +356,7 @@ func isolatedRestoreConfig(source *config.Config, postgresDSN, root string) (con
 // would manufacture an alert out of a choice somebody made deliberately.
 func restoreDrillRunner(
 	cfg *config.Config,
+	extraMigrations []fs.FS,
 	factories ...EditionProjectionOptionsFactory,
 ) func(context.Context) (backup.DrillAttestation, error) {
 	if cfg == nil || strings.TrimSpace(cfg.Backup.Directory) == "" {
@@ -353,7 +367,7 @@ func restoreDrillRunner(
 	// caller's struct cannot redirect a drill at a different database.
 	snapshot := *cfg
 	return func(ctx context.Context) (backup.DrillAttestation, error) {
-		return RunRestoreDrill(ctx, &snapshot, dir, factories...)
+		return runRestoreDrillWithMigrations(ctx, &snapshot, dir, extraMigrations, factories...)
 	}
 }
 
@@ -363,7 +377,17 @@ func RestoreDrillRunner(
 	cfg *config.Config,
 	factories ...EditionProjectionOptionsFactory,
 ) func(context.Context) (backup.DrillAttestation, error) {
-	return restoreDrillRunner(cfg, factories...)
+	return restoreDrillRunner(cfg, nil, factories...)
+}
+
+// RestoreDrillRunnerWithMigrations is RestoreDrillRunner whose throwaway
+// target also gets the attached families' schemas.
+func RestoreDrillRunnerWithMigrations(
+	cfg *config.Config,
+	extraMigrations []fs.FS,
+	factories ...EditionProjectionOptionsFactory,
+) func(context.Context) (backup.DrillAttestation, error) {
+	return restoreDrillRunner(cfg, extraMigrations, factories...)
 }
 
 // createEphemeralDatabase makes a throwaway database and returns its DSN plus a

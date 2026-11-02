@@ -274,7 +274,7 @@ func attachEEProviderAPI(
 		return err
 	}
 	if deps.RestoreDrill != nil {
-		deps.RestoreDrill = server.RestoreDrillRunner(cfg, attachEEProjectionOptions)
+		deps.RestoreDrill = server.RestoreDrillRunnerWithMigrations(cfg, extraMigrationSources(), attachEEProjectionOptions)
 	}
 	providerConfig := eeprovider.Config{
 		License:                  lic,

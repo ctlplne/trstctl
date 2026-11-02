@@ -279,6 +279,13 @@ func (s *Store) WithExtraMigrations(fsys fs.FS) *Store {
 	return s
 }
 
+// ExtraMigrations returns the registered extension migration sources, so a
+// recovery that migrates another database (the restore drill's throwaway
+// target) applies the same schema this store did.
+func (s *Store) ExtraMigrations() []fs.FS {
+	return append([]fs.FS(nil), s.extraMigrations...)
+}
+
 // ErrMigrationChecksumMismatch means an already-applied migration's file no longer
 // hashes to what was recorded under that version: a shipped migration was edited
 // in place. The run fails closed, because this node's schema and the file the

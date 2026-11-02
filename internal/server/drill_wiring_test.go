@@ -186,16 +186,16 @@ func TestADrillThatCouldNotRunLeavesTheLastAttestationAlone(t *testing.T) {
 // nobody chose.
 func TestNoBackupDirectoryMeansNoDrillRunner(t *testing.T) {
 	t.Parallel()
-	if runner := restoreDrillRunner(&config.Config{}); runner != nil {
+	if runner := restoreDrillRunner(&config.Config{}, nil); runner != nil {
 		t.Error("a deployment with no backup directory was given a drill runner; it would fail " +
 			"every night and the failure would mean nothing")
 	}
-	if runner := restoreDrillRunner(nil); runner != nil {
+	if runner := restoreDrillRunner(nil, nil); runner != nil {
 		t.Error("a nil config was given a drill runner")
 	}
 	cfg := &config.Config{}
 	cfg.Backup.Directory = t.TempDir()
-	if runner := restoreDrillRunner(cfg); runner == nil {
+	if runner := restoreDrillRunner(cfg, nil); runner == nil {
 		t.Error("a configured backup directory produced no drill runner, so the drill never runs")
 	}
 }
@@ -206,7 +206,7 @@ func TestTheDrillRunnerCannotBeRedirectedAfterAssembly(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{}
 	cfg.Backup.Directory = dir
-	runner := restoreDrillRunner(cfg)
+	runner := restoreDrillRunner(cfg, nil)
 	if runner == nil {
 		t.Fatal("no runner built")
 	}

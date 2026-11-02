@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -530,7 +531,14 @@ func requireFullBackupSignerCustody(dir string, handles ...string) error {
 // It requires external Postgres and NATS (the recovered datastores), and the
 // event store must be empty. It returns the number of events restored.
 func RunRestore(ctx context.Context, cfg *config.Config, path string, factories ...EditionProjectionOptionsFactory) (int, error) {
-	return restoreEventLog(ctx, cfg, path, false, false, factories...)
+	return restoreEventLog(ctx, cfg, path, false, false, nil, factories...)
+}
+
+// RunRestoreWithMigrations is RunRestore for a binary whose attached families
+// keep their own schemas: their migrations apply with the core schema's, so a
+// fresh target has every table the rebuild resets and the restore fills.
+func RunRestoreWithMigrations(ctx context.Context, cfg *config.Config, path string, extraMigrations []fs.FS, factories ...EditionProjectionOptionsFactory) (int, error) {
+	return restoreEventLog(ctx, cfg, path, false, false, extraMigrations, factories...)
 }
 
 func restoreEventLog(
@@ -538,6 +546,7 @@ func restoreEventLog(
 	cfg *config.Config,
 	path string,
 	resumeIfMatching, isolatedTarget bool,
+	extraMigrations []fs.FS,
 	factories ...EditionProjectionOptionsFactory,
 ) (int, error) {
 	if err := validateRestoreTargets(cfg, isolatedTarget); err != nil {
@@ -575,6 +584,7 @@ func restoreEventLog(
 		return 0, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	registerExtraMigrations(st, extraMigrations)
 	if err := st.Migrate(ctx); err != nil {
 		return 0, fmt.Errorf("migrate: %w", err)
 	}
@@ -704,7 +714,15 @@ func validateRestoreTargets(cfg *config.Config, isolatedTarget bool) error {
 // The deployment KEK is deliberately not copied into the artifact; operators must
 // restore it separately at cfg.Secrets.KEKFile before invoking this function.
 func RunFullRestore(ctx context.Context, cfg *config.Config, dir string, factories ...EditionProjectionOptionsFactory) (backup.PostgresStateSummary, error) {
-	result, err := runFullRestore(ctx, cfg, dir, false, false, factories...)
+	result, err := runFullRestore(ctx, cfg, dir, false, false, nil, factories...)
+	return result.Postgres, err
+}
+
+// RunFullRestoreWithMigrations is RunFullRestore with the attached families'
+// migration sources, applied with the core schema's before anything is
+// rebuilt or imported (see RunRestoreWithMigrations).
+func RunFullRestoreWithMigrations(ctx context.Context, cfg *config.Config, dir string, extraMigrations []fs.FS, factories ...EditionProjectionOptionsFactory) (backup.PostgresStateSummary, error) {
+	result, err := runFullRestore(ctx, cfg, dir, false, false, extraMigrations, factories...)
 	return result.Postgres, err
 }
 
@@ -730,8 +748,8 @@ func runFullRestore(
 	ctx context.Context,
 	cfg *config.Config,
 	dir string,
-	isolatedEventTarget bool,
-	proveRecoveredRuntime bool,
+	isolatedEventTarget, proveRecoveredRuntime bool,
+	extraMigrations []fs.FS,
 	factories ...EditionProjectionOptionsFactory,
 ) (fullRestoreResult, error) {
 	result := fullRestoreResult{}
@@ -784,7 +802,7 @@ func runFullRestore(
 	}
 	result.ReportsRestored, result.ReportsMissingAtBackup = reports.Restored, reports.MissingAtBackup
 
-	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, factories...)
+	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, extraMigrations, factories...)
 	if err != nil {
 		return result, err
 	}
@@ -1057,6 +1075,12 @@ func verifyFullRestoreArtifactPair(
 // model rather than leaving a partial inventory. It requires external Postgres and
 // NATS (the operational datastores), like restore.
 func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionProjectionOptionsFactory) (int, error) {
+	return RunRebuildWithMigrations(ctx, cfg, nil, factories...)
+}
+
+// RunRebuildWithMigrations is RunRebuild with the attached families'
+// migration sources (see RunRestoreWithMigrations).
+func RunRebuildWithMigrations(ctx context.Context, cfg *config.Config, extraMigrations []fs.FS, factories ...EditionProjectionOptionsFactory) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
 		return 0, errors.New("rebuild requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
@@ -1068,6 +1092,7 @@ func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionPro
 		return 0, fmt.Errorf("open store: %w", err)
 	}
 	defer st.Close()
+	registerExtraMigrations(st, extraMigrations)
 	if err := st.Migrate(ctx); err != nil {
 		return 0, fmt.Errorf("migrate: %w", err)
 	}

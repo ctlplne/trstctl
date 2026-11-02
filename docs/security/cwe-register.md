@@ -791,8 +791,8 @@ not this file.
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/audit_archive_download_served_test.go:55` | a test fixture count (CWE-190) |
-| `internal/server/backup.go:222` | record counts bounded by the event log (CWE-190) |
-| `internal/server/backup.go:389` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:223` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:390` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/crypto_risk_report_served_test.go:58` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/ct_inclusion.go:162` | a log timestamp after 1970 (CWE-190) |
@@ -1952,14 +1952,14 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:160` | the runner's mounted rsyslog output (CWE-22) |
-| `internal/server/backup.go:146` | operator-configured public trust anchor path (CWE-22) |
-| `internal/server/backup.go:209` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:380` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:454` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:546` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:797` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:913` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:917` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:147` | operator-configured public trust anchor path (CWE-22) |
+| `internal/server/backup.go:210` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:381` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:455` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:555` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:815` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:931` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:935` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup_reports.go:165` | the restore's own staging tree (CWE-22) |
 | `internal/server/backup_reports.go:181` | the restore's own staging tree; names validated above (CWE-22) |
 | `internal/server/backup_test.go:388` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2023,9 +2023,9 @@ not this file.
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:585` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1201` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1385` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1830` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1203` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1387` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1832` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:43` | test fixture under t.TempDir (CWE-22) |
@@ -2503,7 +2503,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/run.go:1201` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1203` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_dynamic_lease_rotation_served_test.go:58` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:146` | the test's own temp file or the lab directory the runner created (CWE-22) |
