@@ -467,12 +467,16 @@ func TestEveryPostgresArchiveRestoreSeedsTheBundledSource(t *testing.T) {
 	}
 	// The fuzz lanes start an embedded PostgreSQL too (internal/query's
 	// FuzzPlanQuestion); fetching it mid-run failed a lane (CI 41578461348).
-	restored := false
-	for _, step := range wf.Jobs["fuzz-shards"].Steps {
-		restored = restored || step.Name == "Restore the pinned embedded PostgreSQL archive"
-	}
-	if !restored {
-		t.Error("the fuzz lanes must restore the pinned PostgreSQL archive")
+	// So do the orchestrator's fault-injection tests in the chaos job (HTTP 429
+	// from the Maven mirror, CI 41673053105).
+	for _, id := range []string{"fuzz-shards", "chaos"} {
+		restored := false
+		for _, step := range wf.Jobs[id].Steps {
+			restored = restored || step.Name == "Restore the pinned embedded PostgreSQL archive"
+		}
+		if !restored {
+			t.Errorf("job %s starts an embedded PostgreSQL and must restore the pinned archive", id)
+		}
 	}
 	script := read(t, "../scripts/ci/seed-bundled-pg-archive.sh")
 	for _, want := range []string{`src="${HOME}/.embedded-postgres-go"`, `dst="${TMPDIR:-/tmp}/trstctl-pg-bin"`, `install -m 600 "$archive"`, `! -L "$archive"`} {

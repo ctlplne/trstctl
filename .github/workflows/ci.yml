@@ -1590,6 +1590,22 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
+      # The orchestrator's fault-injection tests start an embedded PostgreSQL;
+      # fetching its archive from the Maven mirror drew HTTP 429 and failed the
+      # suite before any fault ran (CI 41673053105).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+
       - name: Fault-injection suite
         run: make chaos
 
