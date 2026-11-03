@@ -71,6 +71,19 @@ $log = Join-Path $work 'lab.log'
 & go test -count=1 -timeout 20m -run '^TestWindowsLocalAccountsLabA240$' -v ./internal/dynsecret/ 2>&1 | Tee-Object -FilePath $log
 $status = $LASTEXITCODE
 if ($status -ne 0 -or -not (Select-String -Path $log -Pattern 'A240_WINDOWS_OK' -Quiet)) {
+    # Why a logon was refused, without any password: sshd's own log and the
+    # Security log's failed-logon status codes.
+    Write-Host '>> OpenSSH/Operational, newest 25:'
+    Get-WinEvent -LogName 'OpenSSH/Operational' -MaxEvents 25 -ErrorAction SilentlyContinue |
+        ForEach-Object { Write-Host ("   {0:HH:mm:ss} {1}" -f $_.TimeCreated, ($_.Message -replace '\s+', ' ')) }
+    Write-Host '>> Security 4625 (failed logon), newest 5:'
+    Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625 } -MaxEvents 5 -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $x = [xml]$_.ToXml()
+            $d = @{}
+            foreach ($n in $x.Event.EventData.Data) { $d[$n.Name] = $n.'#text' }
+            Write-Host ("   user={0} logonType={1} status={2} subStatus={3} process={4}" -f $d['TargetUserName'], $d['LogonType'], $d['Status'], $d['SubStatus'], $d['LogonProcessName'])
+        }
     Write-Host '::error::a240-windows-accounts-lab: TestWindowsLocalAccountsLabA240 did not run and pass'
     exit 1
 }
