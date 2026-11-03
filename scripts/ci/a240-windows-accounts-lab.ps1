@@ -28,7 +28,7 @@ while (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction Silen
 }
 $config = Join-Path $env:ProgramData 'ssh\sshd_config'
 Write-Host ">> sshd_config authentication lines:"
-Select-String -Path $config -Pattern '^\s*#?\s*(PasswordAuthentication|KbdInteractiveAuthentication|PubkeyAuthentication|Match|AuthorizedKeysFile)' |
+Select-String -Path $config -Pattern '^\s*#?\s*(PasswordAuthentication|KbdInteractiveAuthentication|PubkeyAuthentication|Match|AuthorizedKeysFile|AllowGroups|AllowUsers|DenyGroups|DenyUsers)' |
     ForEach-Object { Write-Host "   $($_.Line)" }
 
 # One initial password meeting Windows' complexity rule (upper, lower, digit).
@@ -40,11 +40,36 @@ $initialFile = Join-Path $work 'initial-password'
 [System.IO.File]::WriteAllText($initialFile, $initial)
 $secure = ConvertTo-SecureString $initial -AsPlainText -Force
 
+# The runner's sshd admits only the groups its AllowGroups names (it refused
+# the accounts with "none of user's groups are listed in AllowGroups"). The lab
+# accounts get a group of their own, which the directive is extended to admit;
+# they stay ordinary users.
+New-LocalGroup -Name 'trstctl_lab' -Description 'trstctl A240 lab accounts' | Out-Null
 foreach ($name in 'orders_app_a', 'orders_app_b', 'orders_single') {
     New-LocalUser -Name $name -Password $secure -PasswordNeverExpires -AccountNeverExpires | Out-Null
     # Users holds the network logon right sshd's password logon needs; a
     # member already there is fine.
     try { Add-LocalGroupMember -Group 'Users' -Member $name } catch [Microsoft.PowerShell.Commands.MemberExistsException] { }
+    Add-LocalGroupMember -Group 'trstctl_lab' -Member $name
+}
+# AllowGroups may sit in sshd_config or in a file it includes.
+$sshDir = Join-Path $env:ProgramData 'ssh'
+$candidates = @($config) + @(Get-ChildItem -Path $sshDir -Recurse -Filter '*.conf' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+$changed = $false
+foreach ($file in $candidates) {
+    $lines = Get-Content -Path $file
+    if (-not ($lines | Where-Object { $_ -match '^\s*AllowGroups\s' })) { continue }
+    $lines = $lines | ForEach-Object { if ($_ -match '^\s*AllowGroups\s') { "$_ trstctl_lab" } else { $_ } }
+    Set-Content -Path $file -Value $lines -Encoding ascii
+    Write-Host ">> AllowGroups in $($file): $((Select-String -Path $file -Pattern '^\s*AllowGroups\s').Line)"
+    $changed = $true
+}
+if (-not $changed) { Write-Host '>> no AllowGroups directive found in the sshd configuration' }
+Restart-Service sshd
+$deadline = (Get-Date).AddSeconds(30)
+while (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $deadline) { throw 'sshd is not listening on port 22 after the restart' }
+    Start-Sleep -Milliseconds 250
 }
 [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
 $adminSecret = 'Aa1' + (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] }))
