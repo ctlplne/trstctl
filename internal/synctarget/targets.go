@@ -32,6 +32,48 @@ var (
 	rundeckKey      = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`)
 )
 
+var (
+	windmillWorkspace = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,49}$`)
+	windmillPath      = regexp.MustCompile(`^(u|f)/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)+$`)
+	zabbixMacro       = regexp.MustCompile(`^[A-Z0-9_.]+$`)
+	devinOrg          = regexp.MustCompile(`^org-[A-Za-z0-9_-]{1,64}$`)
+	daytonaName       = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	onaName           = regexp.MustCompile(`^[0-9a-zA-Z_]{3,127}$`)
+	onaScopes         = map[string]bool{"organization": true, "project": true, "user": true}
+	triggerProject    = regexp.MustCompile(`^proj_[A-Za-z0-9]{4,40}$`)
+	triggerEnv        = regexp.MustCompile(`^(dev|staging|prod)$`)
+)
+
+// zabbixBinding is "global" (global macros) or "host <ID>" (one host's).
+func zabbixBinding(f []string) (Binding, error) {
+	switch {
+	case len(f) == 1 && f[0] == "global":
+		return Binding{}, nil
+	case len(f) == 2 && f[0] == "host" && numeric.MatchString(f[1]):
+		return Binding{"host": f[1]}, nil
+	}
+	return nil, errors.New("global, or host <numeric ID>")
+}
+
+// daytonaBinding is empty (the token's organization) or "organization <ID>".
+func daytonaBinding(f []string) (Binding, error) {
+	switch {
+	case len(f) == 0:
+		return Binding{}, nil
+	case len(f) == 2 && f[0] == "organization" && uuidRule.MatchString(f[1]):
+		return Binding{"organization": f[1]}, nil
+	}
+	return nil, errors.New("empty, or organization <ID>")
+}
+
+// onaBinding is "<organization|project|user> <ID>": the secrets' scope.
+func onaBinding(f []string) (Binding, error) {
+	if len(f) != 2 || !onaScopes[f[0]] || !uuidRule.MatchString(f[1]) {
+		return nil, errors.New("organization, project or user, and its UUID")
+	}
+	return Binding{"scope": f[0], "id": f[1]}, nil
+}
+
 // circleCIBinding is "project <vcs/org/repo>" or "context <ID>".
 func circleCIBinding(f []string) (Binding, error) {
 	if len(f) != 2 {
@@ -120,6 +162,28 @@ func all() []Target {
 		{Type: "checkly", Name: "Checkly", Platform: "checkly", Grammar: "account <ID>",
 			Endpoint: "https://api.checklyhq.com", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "account", rule: uuidRule, what: "a UUID"})},
+		{Type: "windmill", Name: "Windmill", Platform: "windmill", Grammar: "workspace <ID>",
+			Endpoint: "https://app.windmill.dev/api", Keys: PathKeys, keyRule: windmillPath,
+			keyHelp: "a variable path, u/<user>/<name> or f/<folder>/<name>", maxKey: 255,
+			parse: pairs(pair{word: "workspace", rule: windmillWorkspace, what: "a workspace ID"})},
+		{Type: "zabbix", Name: "Zabbix", Platform: "zabbix", Grammar: "global | host <ID>",
+			Keys: FlatKeys, keyRule: zabbixMacro, keyHelp: "a macro name of upper-case letters, digits, underscores and dots (stored as {$NAME})", maxKey: 251,
+			parse: zabbixBinding},
+		{Type: "portainer", Name: "Portainer", Platform: "portainer", Grammar: "stack <ID> environment <ID>",
+			Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
+			parse: pairs(pair{word: "stack", rule: numeric, what: "a stack ID"}, pair{word: "environment", rule: numeric, what: "an environment (endpoint) ID"})},
+		{Type: "devin", Name: "Devin", Platform: "devin", Grammar: "org <org-...>",
+			Endpoint: "https://api.devin.ai", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
+			parse: pairs(pair{word: "org", rule: devinOrg, what: "an organization ID (org-...)"})},
+		{Type: "daytona", Name: "Daytona", Platform: "daytona", Grammar: "[organization <ID>]",
+			Endpoint: "https://app.daytona.io/api", Keys: FlatKeys, keyRule: daytonaName, keyHelp: "letters, digits, hyphens and underscores", maxKey: 255,
+			parse: daytonaBinding},
+		{Type: "ona", Name: "Ona", Platform: "ona", Grammar: "<organization|project|user> <ID>",
+			Endpoint: "https://app.ona.com/api", Keys: FlatKeys, keyRule: onaName, keyHelp: "3 to 127 letters, digits and underscores", maxKey: 127,
+			parse: onaBinding},
+		{Type: "trigger-dev", Name: "Trigger.dev", Platform: "trigger-dev", Grammar: "project <proj_...> env <dev|staging|prod>",
+			Endpoint: "https://api.trigger.dev", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
+			parse: pairs(pair{word: "project", rule: triggerProject, what: "a project ref (proj_...)"}, pair{word: "env", rule: triggerEnv, what: "dev, staging or prod"})},
 		{Type: "laravel-forge", Name: "Laravel Forge", Platform: "laravel-forge", Grammar: "org <slug> server <ID> site <ID>",
 			Endpoint: "https://forge.laravel.com/api", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "org", rule: forgeOrg, what: "an organization slug"}, pair{word: "server", rule: numeric, what: "a server ID"},

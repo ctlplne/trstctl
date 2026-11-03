@@ -84,8 +84,10 @@ type hostedSyncCase struct {
 	username string
 	token    string
 	standIn  *syncStandIn
-	// path is true for a destination that holds paths, not variable names.
-	path bool
+	// path is true for a destination that holds paths, not variable names;
+	// pathPrefix is then its folder (default inv241).
+	path       bool
+	pathPrefix string
 	// remote maps a destination key to the stand-in's name for it (a vendor
 	// may decorate names, for example Zabbix macros); nil is identity.
 	remote func(key string) string
@@ -174,7 +176,11 @@ func hostedSyncProof(t *testing.T, c hostedSyncCase) {
 	// path destination holds inv241/db_password.
 	prefix, transform, dbName, apiName, legacy := "APP_", "env", "APP_DB_PASSWORD", "APP_API_TOKEN", "APP_LEGACY"
 	if c.path {
-		prefix, transform, dbName, apiName, legacy = "inv241", "path", "inv241/db_password", "inv241/api_token", "inv241/legacy"
+		folder := c.pathPrefix
+		if folder == "" {
+			folder = "inv241"
+		}
+		prefix, transform, dbName, apiName, legacy = folder, "path", folder+"/db_password", folder+"/api_token", folder+"/legacy"
 	}
 	write(http.MethodPost, "a241/"+ns+"/prod/db_password", "pw-one-a241")
 	write(http.MethodPost, "a241/"+ns+"/prod/api_token", "tok-one-a241")
@@ -1459,4 +1465,492 @@ func TestServedChecklyScopedSyncA241(t *testing.T) {
 		}
 	})
 	hostedSyncProof(t, hostedSyncCase{typ: "checkly", endpoint: standIn.server.URL, binding: "account " + account, token: token, standIn: standIn})
+}
+
+// TestServedWindmillScopedSyncA241: Windmill's workspace variables API —
+// POST /w/{ws}/variables/create and /update/{path}, GET /get/{path} (404
+// when absent) and /get_value/{path}, DELETE /delete/{path}, a paged list.
+// Keys are paths (f/<folder>/<name>).
+func TestServedWindmillScopedSyncA241(t *testing.T) {
+	const token = "windmill-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/w/payments/variables/")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		op, path, _ := strings.Cut(rest, "/")
+		switch {
+		case op == "list" && r.Method == http.MethodGet:
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			list := []map[string]any{}
+			if page <= 1 {
+				for _, k := range sortedKeys(s.vars) {
+					list = append(list, map[string]any{"path": k, "is_secret": true, "workspace_id": "payments"})
+				}
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case op == "create" && r.Method == http.MethodPost:
+			var body struct {
+				Path, Value, Description string
+				IsSecret                 bool `json:"is_secret"`
+			}
+			if !decodeStandIn(w, r, &body) || !body.IsSecret {
+				return
+			}
+			if _, exists := s.vars[body.Path]; exists {
+				jsonStandIn(w, http.StatusBadRequest, "already exists")
+				return
+			}
+			s.vars[body.Path] = body.Value
+			jsonStandIn(w, http.StatusCreated, body.Path)
+		case op == "update" && r.Method == http.MethodPost:
+			var body struct{ Value string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[path]; !exists {
+				jsonStandIn(w, http.StatusNotFound, "not found")
+				return
+			}
+			s.vars[path] = body.Value
+			jsonStandIn(w, http.StatusOK, path)
+		case op == "get" && r.Method == http.MethodGet:
+			if _, exists := s.vars[path]; !exists || r.URL.Query().Get("decrypt_secret") != "false" {
+				jsonStandIn(w, http.StatusNotFound, "not found")
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"path": path, "is_secret": true})
+		case op == "get_value" && r.Method == http.MethodGet:
+			v, exists := s.vars[path]
+			if !exists {
+				jsonStandIn(w, http.StatusNotFound, "not found")
+				return
+			}
+			jsonStandIn(w, http.StatusOK, v)
+		case op == "delete" && r.Method == http.MethodDelete:
+			if _, exists := s.vars[path]; !exists {
+				jsonStandIn(w, http.StatusNotFound, "not found")
+				return
+			}
+			delete(s.vars, path)
+			jsonStandIn(w, http.StatusOK, path)
+		default:
+			jsonStandIn(w, http.StatusNotFound, "not found")
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "windmill", endpoint: standIn.server.URL, binding: "workspace payments", token: token, standIn: standIn,
+		path: true, pathPrefix: "f/inv241"})
+}
+
+// TestServedZabbixScopedSyncA241: the Zabbix 7.0 JSON-RPC API —
+// usermacro.get/createglobal/updateglobal/deleteglobal with a Bearer token;
+// a secret-text macro's value is never returned (receipt-only).
+func TestServedZabbixScopedSyncA241(t *testing.T) {
+	const token = "zabbix-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	ids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) || r.Header.Get("Content-Type") != "application/json-rpc" {
+			jsonStandIn(w, http.StatusUnauthorized, nil)
+			return
+		}
+		var req struct {
+			JSONRPC string          `json:"jsonrpc"`
+			Method  string          `json:"method"`
+			Params  json.RawMessage `json:"params"`
+			ID      int             `json:"id"`
+		}
+		if !decodeStandIn(w, r, &req) || req.JSONRPC != "2.0" {
+			return
+		}
+		reply := func(result any) {
+			jsonStandIn(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "result": result, "id": req.ID})
+		}
+		fail := func() {
+			jsonStandIn(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "error": map[string]any{"code": -32602, "message": "Invalid params."}, "id": req.ID})
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		name := func(macro string) string {
+			return strings.TrimSuffix(strings.TrimPrefix(macro, "{$"), "}")
+		}
+		switch req.Method {
+		case "usermacro.get":
+			list := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]string{"globalmacroid": ids[k], "macro": "{$" + k + "}"})
+			}
+			reply(list)
+		case "usermacro.createglobal":
+			var p struct {
+				Macro, Value string
+				Type         int
+			}
+			if json.Unmarshal(req.Params, &p) != nil || p.Type != 1 {
+				fail()
+				return
+			}
+			k := name(p.Macro)
+			if _, exists := s.vars[k]; exists {
+				fail()
+				return
+			}
+			ids[k] = strconv.Itoa(len(ids) + 100)
+			s.vars[k] = p.Value
+			reply(map[string][]string{"globalmacroids": {ids[k]}})
+		case "usermacro.updateglobal":
+			var p struct {
+				GlobalMacroID string `json:"globalmacroid"`
+				Value         string
+				Type          int
+			}
+			if json.Unmarshal(req.Params, &p) != nil || p.Type != 1 {
+				fail()
+				return
+			}
+			for k, id := range ids {
+				if id == p.GlobalMacroID {
+					if _, live := s.vars[k]; live {
+						s.vars[k] = p.Value
+						reply(map[string][]string{"globalmacroids": {id}})
+						return
+					}
+				}
+			}
+			fail()
+		case "usermacro.deleteglobal":
+			var del []string
+			if json.Unmarshal(req.Params, &del) != nil {
+				fail()
+				return
+			}
+			for _, id := range del {
+				for k, v := range ids {
+					if v == id {
+						delete(s.vars, k)
+					}
+				}
+			}
+			reply(map[string][]string{"globalmacroids": del})
+		default:
+			fail()
+		}
+	})
+	// The journey's keys are upper-case macro names, as Zabbix requires; the
+	// stand-in holds them without the {$ } decoration.
+	hostedSyncProof(t, hostedSyncCase{typ: "zabbix", endpoint: standIn.server.URL + "/api_jsonrpc.php", binding: "global", token: token, standIn: standIn})
+}
+
+// TestServedPortainerScopedSyncA241: Portainer's stack API — GET
+// /api/stacks/{id} (Env) and /file (StackFileContent), PUT
+// /api/stacks/{id}?endpointId= with the compose file, Env and Prune.
+func TestServedPortainerScopedSyncA241(t *testing.T) {
+	const token = "portainer-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const compose = "services:\n  web:\n    image: nginx:stable\n"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "X-API-Key", token) {
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		env := func() []map[string]string {
+			out := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				out = append(out, map[string]string{"name": k, "value": s.vars[k]})
+			}
+			return out
+		}
+		switch {
+		case r.URL.Path == "/api/stacks/7" && r.Method == http.MethodGet:
+			jsonStandIn(w, http.StatusOK, map[string]any{"Id": 7, "Name": "payments", "EndpointId": 3, "Env": env()})
+		case r.URL.Path == "/api/stacks/7/file" && r.Method == http.MethodGet:
+			jsonStandIn(w, http.StatusOK, map[string]string{"StackFileContent": compose})
+		case r.URL.Path == "/api/stacks/7" && r.Method == http.MethodPut:
+			var body struct {
+				StackFileContent string
+				Env              []struct{ Name, Value string }
+				Prune            bool
+			}
+			if r.URL.Query().Get("endpointId") != "3" || !decodeStandIn(w, r, &body) || body.StackFileContent != compose || body.Prune {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"message": "bad stack update"})
+				return
+			}
+			next := map[string]string{}
+			for _, e := range body.Env {
+				next[e.Name] = e.Value
+			}
+			s.vars = next
+			jsonStandIn(w, http.StatusOK, map[string]any{"Id": 7, "Env": env()})
+		default:
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "portainer", endpoint: standIn.server.URL, binding: "stack 7 environment 3", token: token, standIn: standIn})
+}
+
+// TestServedDevinScopedSyncA241: Devin's v3 organization secrets — POST
+// creates (no update: a change deletes and creates), DELETE by secret_id,
+// a cursor-paged list without values.
+func TestServedDevinScopedSyncA241(t *testing.T) {
+	const token = "cog_a241_token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	ids := map[string]string{}
+	seq := 0
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/v3/organizations/org-acme/secrets")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"detail": "not found"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case rest == "" && r.Method == http.MethodGet:
+			items := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				items = append(items, map[string]any{"secret_id": ids[k], "key": k, "secret_type": "key-value", "is_sensitive": true})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"items": items, "has_next_page": false, "end_cursor": nil, "total": len(items)})
+		case rest == "" && r.Method == http.MethodPost:
+			var body struct {
+				Type, Key, Value string
+				IsSensitive      bool `json:"is_sensitive"`
+			}
+			if !decodeStandIn(w, r, &body) || body.Type != "key-value" || !body.IsSensitive {
+				return
+			}
+			if _, exists := s.vars[body.Key]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string]string{"detail": "conflict"})
+				return
+			}
+			seq++
+			ids[body.Key] = "secret-" + strconv.Itoa(seq)
+			s.vars[body.Key] = body.Value
+			jsonStandIn(w, http.StatusOK, map[string]any{"secret_id": ids[body.Key], "key": body.Key})
+		case r.Method == http.MethodDelete:
+			id := strings.TrimPrefix(rest, "/")
+			for k, v := range ids {
+				if v == id {
+					if _, live := s.vars[k]; live {
+						delete(s.vars, k)
+						jsonStandIn(w, http.StatusOK, map[string]any{"secret_id": id})
+						return
+					}
+				}
+			}
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"detail": "not found"})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "devin", endpoint: standIn.server.URL, binding: "org org-acme", token: token, standIn: standIn})
+}
+
+// TestServedDaytonaScopedSyncA241: Daytona organization secrets — POST
+// /secret {name,value}, PATCH /secret/{id} {value}, DELETE, and the
+// cursor-paged /secret/paginated list without values.
+func TestServedDaytonaScopedSyncA241(t *testing.T) {
+	const token = "daytona-a241-key" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const org = "dddddddd-eeee-4fff-8000-111111111111"
+	ids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) || !standInAuth(w, r, "X-Daytona-Organization-ID", org) {
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case r.URL.Path == "/secret/paginated" && r.Method == http.MethodGet:
+			items := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				items = append(items, map[string]any{"id": ids[k], "name": k, "placeholder": "dtn_secret_x"})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"items": items, "total": len(items), "nextCursor": nil})
+		case r.URL.Path == "/secret" && r.Method == http.MethodPost:
+			var body struct{ Name, Value, Description string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[body.Name]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string]string{"message": "exists"})
+				return
+			}
+			ids[body.Name] = "sec-" + strings.ToLower(body.Name)
+			s.vars[body.Name] = body.Value
+			jsonStandIn(w, http.StatusCreated, map[string]any{"id": ids[body.Name], "name": body.Name})
+		case strings.HasPrefix(r.URL.Path, "/secret/"):
+			id := strings.TrimPrefix(r.URL.Path, "/secret/")
+			key := ""
+			for k, v := range ids {
+				if _, live := s.vars[k]; live && v == id {
+					key = k
+				}
+			}
+			if key == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			switch r.Method {
+			case http.MethodPatch:
+				var body struct{ Value string }
+				if !decodeStandIn(w, r, &body) {
+					return
+				}
+				s.vars[key] = body.Value
+				jsonStandIn(w, http.StatusOK, map[string]any{"id": id, "name": key})
+			case http.MethodDelete:
+				delete(s.vars, key)
+				w.WriteHeader(http.StatusNoContent)
+			}
+		default:
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "daytona", endpoint: standIn.server.URL, binding: "organization " + org, token: token, standIn: standIn})
+}
+
+// TestServedOnaScopedSyncA241: Ona's SecretService over Connect RPC —
+// CreateSecret, UpdateSecretValue, DeleteSecret and ListSecrets (metadata
+// only), each a JSON POST, scoped to an organization.
+func TestServedOnaScopedSyncA241(t *testing.T) {
+	const token = "ona-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const org = "eeeeeeee-ffff-4000-8111-222222222222"
+	ids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) || r.Method != http.MethodPost {
+			return
+		}
+		method, ok := strings.CutPrefix(r.URL.Path, "/gitpod.v1.SecretService/")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "not_found"})
+			return
+		}
+		var req map[string]any
+		if !decodeStandIn(w, r, &req) {
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		keyOf := func(id string) string {
+			for k, v := range ids {
+				if _, live := s.vars[k]; live && v == id {
+					return k
+				}
+			}
+			return ""
+		}
+		switch method {
+		case "ListSecrets":
+			filter, _ := req["filter"].(map[string]any)
+			scope, _ := filter["scope"].(map[string]any)
+			if scope["organizationId"] != org {
+				jsonStandIn(w, http.StatusOK, map[string]any{"secrets": []any{}, "pagination": map[string]string{"nextToken": ""}})
+				return
+			}
+			list := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]any{"id": ids[k], "name": k, "environmentVariable": true})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"secrets": list, "pagination": map[string]string{"nextToken": ""}})
+		case "CreateSecret":
+			name, _ := req["name"].(string)
+			value, _ := req["value"].(string)
+			scope, _ := req["scope"].(map[string]any)
+			if scope["organizationId"] != org || req["environmentVariable"] != true {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"code": "invalid_argument"})
+				return
+			}
+			ids[name] = "s-" + strings.ToLower(name)
+			s.vars[name] = value
+			jsonStandIn(w, http.StatusOK, map[string]any{"secret": map[string]string{"id": ids[name], "name": name}})
+		case "UpdateSecretValue":
+			id, _ := req["secretId"].(string)
+			key := keyOf(id)
+			if key == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "not_found"})
+				return
+			}
+			s.vars[key], _ = req["value"].(string)
+			jsonStandIn(w, http.StatusOK, map[string]any{})
+		case "DeleteSecret":
+			id, _ := req["secretId"].(string)
+			key := keyOf(id)
+			if key == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "not_found"})
+				return
+			}
+			delete(s.vars, key)
+			jsonStandIn(w, http.StatusOK, map[string]any{})
+		default:
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "unimplemented"})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "ona", endpoint: standIn.server.URL, binding: "organization " + org, token: token, standIn: standIn})
+}
+
+// TestServedTriggerDevScopedSyncA241: Trigger.dev's environment variables
+// API — POST .../envvars/{env}/import with override upserts, DELETE removes,
+// GET lists [{name,value}] and GET .../{name} returns {value}.
+func TestServedTriggerDevScopedSyncA241(t *testing.T) {
+	const token = "tr_pat_a241" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/api/v1/projects/proj_a241payments/envvars/prod")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		name := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case name == "" && r.Method == http.MethodGet:
+			list := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]string{"name": k, "value": s.vars[k]})
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case name == "import" && r.Method == http.MethodPost:
+			var body struct {
+				Variables []struct{ Name, Value string }
+				Override  bool
+			}
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			for _, v := range body.Variables {
+				if _, exists := s.vars[v.Name]; exists && !body.Override {
+					continue
+				}
+				s.vars[v.Name] = v.Value
+			}
+			jsonStandIn(w, http.StatusOK, map[string]bool{"success": true})
+		case r.Method == http.MethodGet:
+			v, exists := s.vars[name]
+			if !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]string{"value": v})
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[name]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				return
+			}
+			delete(s.vars, name)
+			jsonStandIn(w, http.StatusOK, map[string]bool{"success": true})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "trigger-dev", endpoint: standIn.server.URL, binding: "project proj_a241payments env prod", token: token, standIn: standIn})
 }

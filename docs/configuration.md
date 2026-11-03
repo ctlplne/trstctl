@@ -2237,6 +2237,13 @@ paths into names. Values are text (UTF-8). Keys are variable names except where 
 | `humanitec` | `org <ID> app <ID>` | `https://api.humanitec.io` | receipt-only | Secret shared app values. |
 | `rundeck` | `folder <keys/...>` | none (self-hosted: set `endpoint`) | receipt-only | Key Storage password keys; keys are paths under the folder, so a scoped sync's destination prefix is a subfolder. |
 | `checkly` | `account <ID>` | `https://api.checklyhq.com` | receipt-only | Secret environment variables of the account. |
+| `windmill` | `workspace <ID>` | `https://app.windmill.dev/api` (set `endpoint` for a self-hosted instance) | value | Secret variables at paths (`u/<user>/…` or `f/<folder>/…`); a scoped sync's destination prefix is a folder such as `f/payments`. |
+| `zabbix` | `global` or `host <ID>` | none (set `endpoint` to the frontend's `api_jsonrpc.php`) | receipt-only | Secret-text user macros `{$NAME}` (keys are the names: upper-case letters, digits, `_` and `.`); global macros need a Super admin token. |
+| `portainer` | `stack <ID> environment <ID>` | none (self-hosted: set `endpoint`) | value | A stack's environment variables, written with its own compose file; each change redeploys the stack. |
+| `devin` | `org <org-…>` | `https://api.devin.ai` | receipt-only | Organization secrets (v3); a change deletes and creates, as the API has no update. |
+| `daytona` | empty, or `organization <ID>` | `https://app.daytona.io/api` | receipt-only | Organization secrets. |
+| `ona` | `organization`, `project` or `user`, and its ID | `https://app.ona.com/api` | receipt-only | Environment-variable secrets at that scope (names of 3 to 127 letters, digits and `_`). |
+| `trigger-dev` | `project <proj_…> env <dev, staging or prod>` | `https://api.trigger.dev` | value | Environment variables of one environment. |
 | `laravel-forge` | `org <slug> server <ID> site <ID>` | `https://forge.laravel.com/api` | value | One `KEY='value'` line in the site's `.env` (written whole, asynchronously); lines the sync doesn't own are kept. A value with a line break, or with both `'` and `${`, is refused. |
 
 ```json

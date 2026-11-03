@@ -44,6 +44,10 @@ func TestParseBindingA241(t *testing.T) {
 		{"circleci", "context 0f0e0d0c-0b0a-4908-8706-050403020100", Binding{"context": "0f0e0d0c-0b0a-4908-8706-050403020100"}, ""},
 		{"circleci", "project gh/acme/payments context x", nil, "project <vcs/org/repo> or context <ID>"},
 		{"rundeck", "folder keys/project/payments", Binding{"folder": "keys/project/payments"}, ""},
+		{"zabbix", "global", Binding{}, ""},
+		{"zabbix", "host 10084", Binding{"host": "10084"}, ""},
+		{"zabbix", "host web01", nil, "global, or host <numeric ID>"},
+		{"daytona", "", Binding{}, ""},
 		{"nope", "x", nil, "not a hosted secret-sync target"},
 	} {
 		got, err := ParseBinding(c.typ, c.binding)
@@ -80,6 +84,11 @@ func TestValidKeyA241(t *testing.T) {
 		{"rundeck", "inv241/db_password", true},
 		{"rundeck", "inv241//x", false},
 		{"teamcity", "env.DB_PASSWORD", true},
+		{"windmill", "f/payments/db_password", true},
+		{"windmill", "payments/db_password", false},
+		{"zabbix", "DB.PASSWORD", true},
+		{"zabbix", "db_password", false},
+		{"ona", "DB", false},
 	} {
 		target, _ := Lookup(c.typ)
 		if err := target.ValidKey(c.key); (err == nil) != c.ok {

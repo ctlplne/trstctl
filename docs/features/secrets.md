@@ -1294,7 +1294,8 @@ the body; see [configuration](../configuration.md#signed-webhook-parameter-store
 a generic CI/JSON endpoint with no payload signature, and the hosted targets of
 A241 (Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,
 Cloud 66, Laravel Forge, CircleCI, Travis CI, Bitbucket Pipelines, TeamCity, Spacelift,
-Humanitec, Rundeck and Checkly so far; see
+Humanitec, Rundeck, Checkly, Windmill, Zabbix, Portainer, Devin, Daytona, Ona and
+Trigger.dev so far; see
 [configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
 whether a scoped sync can target it, what it reads back (`readback`: `value` or
 `receipt-only`) and how far it is proven (`proof`: `locally-proven` against the
@@ -2202,7 +2203,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2, signed webhook,
   generic CI/JSON, and the hosted targets (Heroku, Render, Railway, Fly.io,
   DigitalOcean App Platform, Northflank, Qovery, Cloud 66, Laravel Forge, CircleCI,
-  Travis CI, Bitbucket Pipelines, TeamCity, Spacelift, Humanitec, Rundeck, Checkly).
+  Travis CI, Bitbucket Pipelines, TeamCity, Spacelift, Humanitec, Rundeck, Checkly,
+  Windmill, Zabbix, Portainer, Devin, Daytona, Ona, Trigger.dev).
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,

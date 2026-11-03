@@ -93,6 +93,13 @@ var hostedVendors = map[string]*hostedVendor{
 	"humanitec":                 humanitecVendor,
 	"rundeck":                   rundeckVendor,
 	"checkly":                   checklyVendor,
+	"windmill":                  windmillVendor,
+	"zabbix":                    zabbixVendor,
+	"portainer":                 portainerVendor,
+	"devin":                     devinVendor,
+	"daytona":                   daytonaVendor,
+	"ona":                       onaVendor,
+	"trigger-dev":               triggerVendor,
 }
 
 // HostedSyncConfig configures one hosted destination.

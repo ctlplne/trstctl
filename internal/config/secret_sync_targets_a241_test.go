@@ -47,6 +47,21 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 			return c
 		}(),
 		hosted("checkly", "account cccccccc-dddd-4eee-8fff-000000000000"),
+		hosted("windmill", "workspace payments"),
+		func() SecretSyncTargetConfig {
+			c := hosted("zabbix", "host 10084")
+			c.Endpoint = "https://zabbix.example.test/api_jsonrpc.php"
+			return c
+		}(),
+		func() SecretSyncTargetConfig {
+			c := hosted("portainer", "stack 7 environment 3")
+			c.Endpoint = "https://portainer.example.test:9443"
+			return c
+		}(),
+		hosted("devin", "org org-acme"),
+		hosted("daytona", ""),
+		hosted("ona", "project eeeeeeee-ffff-4000-8111-222222222222"),
+		hosted("trigger-dev", "project proj_a241payments env staging"),
 	} {
 		if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{target}}, true); err != nil {
 			t.Fatalf("%s: %v", target.Type, err)
@@ -71,6 +86,9 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 		}(), "username is required for spacelift"},
 		{hosted("circleci", "project acme/payments"), "project must be a project slug"},
 		{hosted("rundeck", "folder project/payments"), "a Key Storage folder under keys/"},
+		{hosted("zabbix", "global"), "zabbix is self-hosted: endpoint is required"},
+		{hosted("trigger-dev", "project proj_a241payments env preview"), "env must be dev, staging or prod"},
+		{hosted("ona", "team eeeeeeee-ffff-4000-8111-222222222222"), "organization, project or user"},
 		{func() SecretSyncTargetConfig { c := hosted("fly", "payments"); c.Username = "ops"; return c }(), "username is not used by fly"},
 		{func() SecretSyncTargetConfig {
 			return SecretSyncTargetConfig{TenantID: tenant, ID: "gh", Type: "github-actions", Owner: "o", Repo: "r", TokenRef: "secret://gh", Binding: "x"}
