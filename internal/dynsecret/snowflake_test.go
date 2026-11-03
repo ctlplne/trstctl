@@ -309,3 +309,28 @@ func TestIssuedPrincipalNameRequiresTheLeaseSuffixA239(t *testing.T) {
 		}
 	}
 }
+
+// A240: "user <NAME>" binds a role to an existing user's key pair; a
+// reference to a slot of any user the provider does not rotate is refused
+// before anything is sent.
+func TestSnowflakeKeyPairBindingsA240(t *testing.T) {
+	for binding, want := range map[string]string{"user ETL_SVC": "ETL_SVC", "user etl_svc": "ETL_SVC"} {
+		if got, ok := SnowflakeKeyPairUser(binding); !ok || got != want {
+			t.Errorf("%q = %q, %v", binding, got, ok)
+		}
+	}
+	for _, binding := range []string{"ANALYST", "ANALYST,REPORTER", "user", "user A B"} {
+		if _, ok := SnowflakeKeyPairUser(binding); ok {
+			t.Errorf("%q parsed as a key-pair binding", binding)
+		}
+	}
+	b := &SnowflakeBackend{keyPairUsers: map[string]string{"etl": "ETL_SVC"}}
+	for _, ref := range []string{"OTHER_SVC/1/SHA256:x", "ETL_SVC/3/SHA256:x", "ETL_SVC/1/MD5:x", "ETL_SVC/1"} {
+		if err := b.Revoke(context.Background(), ref); err == nil {
+			t.Errorf("revoked %q", ref)
+		}
+	}
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "etl"}); err == nil || !strings.Contains(err.Error(), "issues no leases") {
+		t.Fatalf("a lease of a key-pair role: %v", err)
+	}
+}

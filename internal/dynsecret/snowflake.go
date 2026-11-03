@@ -71,15 +71,18 @@ type SnowflakeConfig struct {
 
 // SnowflakeBackend issues Snowflake service users.
 type SnowflakeBackend struct {
-	endpoint   string
-	account    string
-	adminUser  string
-	adminKey   *secret.Buffer
-	roles      map[string][]string
-	prefix     string
-	expiryDays int
-	client     *http.Client
-	now        func() time.Time
+	endpoint  string
+	account   string
+	adminUser string
+	adminKey  *secret.Buffer
+	roles     map[string][]string
+	// keyPairUsers maps a role bound to "user <NAME>" to the existing user
+	// whose key pair it rotates (A240).
+	keyPairUsers map[string]string
+	prefix       string
+	expiryDays   int
+	client       *http.Client
+	now          func() time.Time
 }
 
 // NewSnowflakeBackend validates cfg.
@@ -97,20 +100,27 @@ func NewSnowflakeBackend(cfg SnowflakeConfig) (*SnowflakeBackend, error) {
 		return nil, errors.New("dynsecret snowflake: the maximum lifetime must be at least a minute")
 	}
 	b := &SnowflakeBackend{endpoint: strings.TrimRight(cfg.Endpoint, "/"), account: strings.ToUpper(strings.ReplaceAll(cfg.Account, ".", "-")),
-		adminUser: strings.ToUpper(cfg.AdminUser), roles: map[string][]string{}, prefix: cfg.UsernamePrefix,
+		adminUser: strings.ToUpper(cfg.AdminUser), roles: map[string][]string{}, keyPairUsers: map[string]string{}, prefix: cfg.UsernamePrefix,
 		expiryDays: int(math.Ceil(cfg.MaxLifetime.Hours() / 24)), client: cfg.HTTPClient, now: cfg.Now}
 	if b.now == nil {
 		b.now = time.Now
 	}
 	for role, binding := range cfg.RoleBindings {
+		if user, ok := SnowflakeKeyPairUser(binding); ok {
+			if !snowflakeUser.MatchString(user) {
+				return nil, fmt.Errorf("dynsecret snowflake: role %q: %q is not a plain Snowflake user name", role, user)
+			}
+			b.keyPairUsers[role] = user
+			continue
+		}
 		roles, err := ParseSnowflakeRoles(binding)
 		if err != nil {
 			return nil, fmt.Errorf("dynsecret snowflake: role %q: %w", role, err)
 		}
 		b.roles[role] = roles
 	}
-	if len(b.roles) == 0 {
-		return nil, errors.New("dynsecret snowflake: every allowed role needs Snowflake roles in role_bindings")
+	if len(b.roles) == 0 && len(b.keyPairUsers) == 0 {
+		return nil, errors.New("dynsecret snowflake: every allowed role needs Snowflake roles, or \"user <NAME>\", in role_bindings")
 	}
 	if _, err := crypto.PublicKeyDERFromPEMKey(cfg.AdminPrivateKey); err != nil {
 		return nil, fmt.Errorf("dynsecret snowflake: the administrator private key: %w", err)
@@ -158,8 +168,14 @@ func (b *SnowflakeBackend) Create(ctx context.Context, role string) (string, []b
 // held stays), so a retry after an uncertain attempt converges on one user with
 // the new key. If a grant fails, the user is disabled and dropped again.
 func (b *SnowflakeBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	if user, rotates := b.keyPairUsers[req.Role]; rotates {
+		if !req.Static {
+			return "", nil, fmt.Errorf("dynsecret snowflake: role %q rotates %s's key pair; it issues no leases", req.Role, user)
+		}
+		return b.rotateKeyPair(ctx, user, req.Predecessor)
+	}
 	if req.Static {
-		return "", nil, errors.New("dynsecret snowflake: static credentials are not served")
+		return "", nil, errors.New("dynsecret snowflake: a static rotation needs a role bound to \"user <NAME>\"")
 	}
 	roles, ok := b.roles[req.Role]
 	if !ok {
@@ -219,6 +235,9 @@ func (b *SnowflakeBackend) CreateCredential(ctx context.Context, req GenerateReq
 // queries and refuses its logins, then dropped. Only users this provider names
 // are touched; one already gone counts as revoked.
 func (b *SnowflakeBackend) Revoke(ctx context.Context, ref string) error {
+	if strings.Contains(ref, "/") {
+		return b.retireKeyPair(ctx, ref)
+	}
 	if !snowflakeUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret snowflake: refusing to drop %q, which this provider did not create", ref)
 	}
@@ -233,20 +252,27 @@ func (b *SnowflakeBackend) Revoke(ctx context.Context, ref string) error {
 	return nil
 }
 
-// execute runs one statement through the SQL API as the administrator,
-// waiting (bounded) while Snowflake answers 202 for a statement still running.
+// execute runs one statement through the SQL API as the administrator.
 func (b *SnowflakeBackend) execute(ctx context.Context, statement string) error {
+	_, err := b.run(ctx, statement)
+	return err
+}
+
+// run runs one statement through the SQL API as the administrator, waiting
+// (bounded) while Snowflake answers 202 for a statement still running, and
+// returns the result.
+func (b *SnowflakeBackend) run(ctx context.Context, statement string) ([]byte, error) {
 	var jwt string
 	if err := b.adminKey.Use(func(key []byte) error {
 		var err error
 		jwt, err = SnowflakeKeyPairJWT(b.account, b.adminUser, key, b.now())
 		return err
 	}); err != nil {
-		return fmt.Errorf("sign the key-pair JWT: %w", err)
+		return nil, fmt.Errorf("sign the key-pair JWT: %w", err)
 	}
 	body, err := json.Marshal(map[string]any{"statement": statement, "timeout": 60})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	status, response, err := b.call(ctx, http.MethodPost, "/api/v2/statements", jwt, body)
 	for attempt := 0; err == nil && status == http.StatusAccepted && attempt < 30; attempt++ {
@@ -254,17 +280,17 @@ func (b *SnowflakeBackend) execute(ctx context.Context, statement string) error 
 			Handle string `json:"statementHandle"`
 		}
 		if json.Unmarshal(response, &pending) != nil || !snowflakeHandle.MatchString(pending.Handle) {
-			return errors.New("the SQL API answered 202 without a statement handle")
+			return nil, errors.New("the SQL API answered 202 without a statement handle")
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(time.Second):
 		}
 		status, response, err = b.call(ctx, http.MethodGet, "/api/v2/statements/"+pending.Handle, jwt, nil)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status != http.StatusOK {
 		var failure struct {
@@ -272,9 +298,9 @@ func (b *SnowflakeBackend) execute(ctx context.Context, statement string) error 
 			Message string `json:"message"`
 		}
 		_ = json.Unmarshal(response, &failure)
-		return fmt.Errorf("the SQL API answered HTTP %d (code %s): %s", status, failure.Code, failure.Message)
+		return nil, fmt.Errorf("the SQL API answered HTTP %d (code %s): %s", status, failure.Code, failure.Message)
 	}
-	return nil
+	return response, nil
 }
 
 func (b *SnowflakeBackend) call(ctx context.Context, method, path, jwt string, body []byte) (int, []byte, error) {

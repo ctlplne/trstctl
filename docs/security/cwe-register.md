@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2356 annotated sites across 29 rules. Each row is
+2357 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1002,7 +1002,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (44 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (45 sites)
 
 | Location | Reason |
 |---|---|
@@ -1043,7 +1043,8 @@ not this file.
 | `internal/dynsecret/providers_real.go:1568` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/snowflake.go:205` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/snowflake.go:221` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/snowflake_keypair.go:94` | the rotated key pair is this provider's output: the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/supabase.go:53` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
@@ -2619,7 +2620,7 @@ not this file.
 | `internal/dynsecret/providers_real.go:1689` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:212` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/snowflake.go:289` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/snowflake.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:53` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:60` | the runner's own lab search engine (CWE-918) |

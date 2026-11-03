@@ -196,7 +196,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -1469,6 +1469,16 @@ func validateSnowflakeProvider(where string, c DynamicSecretProviderConfig) []er
 	for _, role := range normalizedStrings(c.AllowedRoles) {
 		binding := strings.TrimSpace(c.RoleBindings[role])
 		if binding == "" {
+			continue
+		}
+		// "user <NAME>": the role rotates that existing user's key pair (A240).
+		if fields := strings.Fields(binding); len(fields) == 2 && fields[0] == "user" {
+			if !snowflakeRoleName.MatchString(fields[1]) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a Snowflake user name", where, role, fields[1]))
+			}
+			if !c.AllowStaticRotation {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q] rotates a user's key pair: set allow_static_rotation", where, role))
+			}
 			continue
 		}
 		for _, name := range strings.Split(binding, ",") {

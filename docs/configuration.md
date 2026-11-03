@@ -2081,6 +2081,10 @@ An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`
 ID (`proj_...`) its service accounts are created in. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+A `snowflake` provider's role may be bound to `user <NAME>` instead of roles: with
+`allow_static_rotation: true` it rotates that existing user's key pair through the user's
+two key slots and issues no leases (A240).
+
 A `gcp-iam` provider with `allow_static_rotation: true` also rotates a stored
 service-account key in two phases (A240): a new key beside the predecessor, which
 retirement deletes; verification reports `not_available`, so give a rotation its

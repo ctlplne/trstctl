@@ -2,6 +2,10 @@
 
 ### Added
 
+- Snowflake key-pair rotation (A240): a `snowflake` role bound to `user <NAME>` rotates that existing user's key pair in
+  two phases through its two key slots; retirement unsets the predecessor's slot only while it still holds that key.
+  Verified by `SELECT 1` as the user. Built against a stand-in of the SQL API.
+
 - Google Cloud service-account key rotation (A240): `gcp-iam` providers with `allow_static_rotation` rotate a stored key
   in two phases (a new key beside the predecessor, deleted at retirement); verification reports `not_available`.
 

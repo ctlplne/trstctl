@@ -920,6 +920,16 @@ minute to work and Google offers no side-effect-free check of one, so verificati
 reports `not_available` and retirement waits for consumer evidence or the approved
 deadline. It is built against a stand-in of the IAM API, with no Google Cloud proof yet.
 
+`snowflake` also rotates an existing user's key pair (A240): a role bound to
+`user <NAME>` (with `allow_static_rotation`) rotates that user's key through its two key
+slots, `RSA_PUBLIC_KEY` and `RSA_PUBLIC_KEY_2`. The successor goes in the slot the
+predecessor is not in, both keys sign in until retirement unsets the predecessor's slot,
+and only while that slot still holds the predecessor's key; the reference is
+`<NAME>/<slot>/<fingerprint>`. A key pair is proven by running `SELECT 1` as its user
+through the SQL API (`verify_mode: authenticated`). When both slots hold keys, the first
+rotation names the one consumers use in `old_ref`. Built against a stand-in of the SQL
+API, with no Snowflake proof yet.
+
 The hosted API key providers (A240) share one engine: a lease, or a rotation's
 successor, is a new key created with the administrator's credential under the target
 the role is bound to, named for the lease or command, and revocation (or retirement)

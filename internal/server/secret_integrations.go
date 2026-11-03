@@ -1726,7 +1726,7 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		// address (Oracle's service, SQL Server's database) and runs a
 		// trivial query (A240).
 		return p.verifyDatabaseWithBackend(ctx, credential)
-	case "auth0", "datadog", "openai", "azure-entra", "okta", "databricks", "ldap", "unix", "windows", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
+	case "auth0", "datadog", "openai", "azure-entra", "okta", "databricks", "snowflake", "ldap", "unix", "windows", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key
 		// lists models, a directory entry binds, and a hosted API key passes
