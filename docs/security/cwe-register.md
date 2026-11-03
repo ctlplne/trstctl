@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2357 annotated sites across 29 rules. Each row is
+2358 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2464,7 +2464,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1294` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:935` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (128 sites)
+### G703 — CWE-22 Path traversal (taint) (129 sites)
 
 | Location | Reason |
 |---|---|
@@ -2508,6 +2508,7 @@ not this file.
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
+| `internal/dynsecret/windows_accounts_lab_test.go:45` | runner-provided lab path (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/kmip/pykmip_tenants_test.go:72` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/pluginhost/raw_api_boundary_test.go:34` | writes fixed manifest name only under the owned t.TempDir (CWE-22). |

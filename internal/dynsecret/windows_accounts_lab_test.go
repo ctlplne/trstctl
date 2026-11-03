@@ -5,12 +5,15 @@ package dynsecret
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // A240 Windows local accounts, against the windows-latest runner itself,
@@ -23,14 +26,40 @@ import (
 // proven by the Unix served test; the windows-latest runner has no embedded
 // PostgreSQL for the served harness, so this proves the provider itself.
 func TestWindowsLocalAccountsLabA240(t *testing.T) {
-	keyFile, fingerprint, initialFile := os.Getenv("TRSTCTL_A240_WINDOWS_ADMIN_KEY_FILE"), os.Getenv("TRSTCTL_A240_WINDOWS_HOST_KEY"), os.Getenv("TRSTCTL_A240_WINDOWS_INITIAL_PASSWORD_FILE")
-	if keyFile == "" || fingerprint == "" || initialFile == "" {
+	authorized, fingerprint, initialFile := os.Getenv("TRSTCTL_A240_WINDOWS_AUTHORIZED_KEYS"), os.Getenv("TRSTCTL_A240_WINDOWS_HOST_KEY"), os.Getenv("TRSTCTL_A240_WINDOWS_INITIAL_PASSWORD_FILE")
+	if authorized == "" || fingerprint == "" || initialFile == "" {
 		t.Skip("lab test: scripts/ci/a240-windows-accounts-lab.ps1 prepares the windows-latest runner and sets TRSTCTL_A240_WINDOWS_*")
 	}
-	adminPEM, err := os.ReadFile(keyFile) // #nosec G304,G703 -- runner-provided lab fixture path (CWE-22)
+	// The administrator's key is generated here, in memory, and only its
+	// public half reaches the runner: administrators_authorized_keys, which
+	// sshd reads only while Administrators and SYSTEM alone may write it.
+	adminKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer adminKey.Destroy()
+	authorizedLine, err := crypto.SSHPublicKeyFromSigner(adminKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(authorized, authorizedLine, 0o600); err != nil { // #nosec G703 -- runner-provided lab path (CWE-22)
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{authorized, "/setowner", "Administrators"},
+		{authorized, "/inheritance:r", "/grant", "Administrators:F", "/grant", "SYSTEM:F"},
+	} {
+		if out, err := exec.Command("icacls.exe", args...).CombinedOutput(); err != nil { // #nosec G204,G702 -- fixed Windows tool on the lab's own file (CWE-78)
+			t.Fatalf("restrict administrators_authorized_keys: %v %s", err, out)
+		}
+	}
+	der, err := adminKey.PKCS8()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(der)
+	adminPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	defer secret.Wipe(adminPEM)
 	initial, err := os.ReadFile(initialFile) // #nosec G304,G703 -- runner-provided lab fixture path (CWE-22)
 	if err != nil {
 		t.Fatal(err)
