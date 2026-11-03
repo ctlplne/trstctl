@@ -355,14 +355,15 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-six backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-nine backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
 tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Connect app
-credentials, SQL Server logins, and Azure SQL contained database users (A239). SSH user
+credentials, SQL Server logins, Azure SQL contained database users and Cassandra login
+roles (A239), and Datadog and OpenAI keys (A240). SSH user
 certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
 through the served KRL), not as dynamic-secret leases.
 
@@ -460,6 +461,19 @@ credential, so the next login fails. A retry after an uncertain attempt replaces
 same user's password and leaves its ACLs as they are, and if the ACLs fail the new user
 is deleted again. Only users with the provider's issued-name shape (its prefix, the role, and the lease digest suffix) are ever revoked.
 
+The Cassandra backend creates one login role per lease with a generated password,
+granted only its role's existing Cassandra roles (`"orders_reader"`), as an
+administrator role over verified TLS to one configured node, or plaintext to a literal
+loopback or private IP. Only the password's bcrypt hash travels in CQL (`HASHED
+PASSWORD`), so the password never appears in a CQL statement or a log or trace of one,
+and the administrator's password goes only to Cassandra's PasswordAuthenticator. Revocation
+drops the role: the next login fails, and a connection already open is refused from
+its next query once the node's role and permission caches expire (`roles_validity`
+and `permissions_validity`, 2 s by default; Cassandra does not end the connection). A
+retry after an uncertain attempt finds the same role, sets the new password and keeps
+the grants it already has, and if a grant fails the new role is dropped again. Only
+roles with the provider's issued-name shape are ever dropped.
+
 The Couchbase backend creates one local user per lease through the cluster's
 management REST API, with a generated password and only its role's roles on the named
 buckets (`"bucket_full_access on orders"`). Couchbase's user PUT replaces an existing
@@ -540,8 +554,8 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns twenty-seven safe setup recipes (including the
-  `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
+- `GET /api/v1/secrets/leases/providers` returns thirty-two safe setup recipes (including the
+  `aws-iam` compatibility name for `aws-sts`, and `auth0` and `unix`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that

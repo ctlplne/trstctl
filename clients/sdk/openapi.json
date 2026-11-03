@@ -18679,7 +18679,8 @@
               "auth0",
               "datadog",
               "openai",
-              "unix"
+              "unix",
+              "cassandra"
             ],
             "type": "string"
           }

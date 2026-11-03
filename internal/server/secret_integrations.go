@@ -484,6 +484,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredTailscaleBackend(opener)
 	case "mongodb-atlas":
 		return openConfiguredMongoDBAtlasBackend(opener)
+	case "cassandra":
+		return openConfiguredCassandraBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}

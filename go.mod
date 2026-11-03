@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.26.10
 
 require (
+	github.com/apache/cassandra-gocql-driver/v2 v2.1.2
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.53.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.1
@@ -135,4 +136,5 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
 )

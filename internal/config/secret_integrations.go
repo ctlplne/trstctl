@@ -152,8 +152,9 @@ type DynamicSecretProviderConfig struct {
 	Sudo               bool   `json:"sudo,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
-	// invalidates API keys as, or a kafka provider's SCRAM user that sets
-	// credentials and ACLs (its password is password_ref, A239).
+	// invalidates API keys as, a kafka provider's SCRAM user that sets
+	// credentials and ACLs, or the role a cassandra provider creates, grants and
+	// drops login roles as (its password is password_ref, A239).
 	AdminUser string `json:"admin_user,omitempty"`
 	// Tailnet is a tailscale provider's tailnet, "-" (the API token's own) by
 	// default; its API token is bearer_token_ref (A239).
@@ -293,15 +294,15 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
-	"datadog": {}, "openai": {}, "unix": {},
+	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
-var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true}
+var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -477,8 +478,8 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
-	"ibm-api-connect": validateAPIConnectProvider,
-	"auth0":           validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
+	"ibm-api-connect": validateAPIConnectProvider, "cassandra": validateCassandraProvider,
+	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"unix": validateUnixProvider,
 }
 
@@ -975,7 +976,7 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
 	}
 	if !adminUserProviderTypes[c.Type] && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase, milvus and snowflake", where))
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for %s", where, strings.Join(sortedTrueKeys(adminUserProviderTypes), ", ")))
 	}
 	return errs
 }
@@ -1576,6 +1577,40 @@ func validKafkaGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+// cassandraRoleName is a role a cassandra provider grants, double-quoted
+// into CQL as written.
+var cassandraRoleName = regexp.MustCompile(`^[A-Za-z0-9_]{1,128}$`)
+
+// validateCassandraProvider checks a Cassandra provider (A239): addr is one
+// node's native-protocol port (client encryption, or plaintext at a literal
+// loopback or private IP with allow_plaintext), admin_user and password_ref a
+// role that creates, grants and drops login roles, and each allowed role is
+// bound to existing Cassandra roles.
+func validateCassandraProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for cassandra", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	if strings.TrimSpace(c.TLSCARef) != "" {
+		if err := validateCredentialRef(c.TLSCARef); err != nil {
+			errs = append(errs, fmt.Errorf("%s tls_ca_ref: %w", where, err))
+		}
+	}
+	errs = append(errs, validateProviderTransport(where, c)...)
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		for _, name := range strings.Split(c.RoleBindings[role], ",") {
+			if name = strings.TrimSpace(name); name != "" && !cassandraRoleName.MatchString(name) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a plain Cassandra role name", where, role, name))
+			}
+		}
+	}
+	return errs
 }
 
 var (

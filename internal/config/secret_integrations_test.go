@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka, couchbase, milvus and snowflake") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for cassandra, clickhouse, couchbase, elasticsearch, kafka, milvus, rabbitmq, snowflake, unix") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }
@@ -855,6 +855,48 @@ func TestValidateAPIConnectProviderA239(t *testing.T) {
 	} {
 		c := base
 		c.RoleBindings = map[string]string{"partner": "acme/sandbox/partners/orders-app"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestValidateCassandraProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders-cassandra", Type: "cassandra",
+		Addr: "cassandra.internal:9142", AdminUser: "trstctl_admin", PasswordRef: "file:/run/secrets/cassandra-admin",
+		TLSCARef: "file:/run/secrets/cassandra-ca.pem", AllowedRoles: []string{"reader"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"reader": "orders_reader, audit_reader"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	lab := base
+	lab.Addr, lab.TLSCARef, lab.AllowPlaintext = "127.0.0.1:9042", "", true
+	if err := check(lab); err != nil {
+		t.Fatalf("plaintext at loopback: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no addr":         {func(c *DynamicSecretProviderConfig) { c.Addr = "" }, "addr must be host:port"},
+		"no admin":        {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for cassandra"},
+		"no password":     {func(c *DynamicSecretProviderConfig) { c.PasswordRef = "" }, "password_ref"},
+		"IP without name": {func(c *DynamicSecretProviderConfig) { c.Addr = "10.0.0.5:9142" }, "tls_server_name is required"},
+		"plaintext public": {func(c *DynamicSecretProviderConfig) {
+			c.Addr, c.TLSCARef, c.AllowPlaintext = "203.0.113.7:9042", "", true
+		}, "literal loopback or private IP"},
+		"no binding": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["reader"] is required for cassandra`},
+		"quoted role": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": `orders"; DROP ROLE cassandra; --`}
+		}, "is not a plain Cassandra role name"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "orders_reader"}
 		tc.mutate(&c)
 		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)

@@ -2090,7 +2090,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
-`datadog`, `openai` and `unix`. Sync `type` values are
+`datadog`, `openai`, `unix` and `cassandra`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
@@ -2514,6 +2514,31 @@ user granted exactly those roles; revocation drops it.
   "endpoint": "https://milvus.internal:19530",
   "admin_user": "root",
   "password_ref": "file:/run/secrets/milvus-root",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "orders_reader"},
+  "max_ttl": "8h"
+}
+```
+
+For Cassandra (A239, `cassandra`), set `addr` to one node's native-protocol `host:port`
+with client encryption on (verified against `tls_server_name`, or `addr`'s host;
+`tls_ca_ref` pins a private CA), `admin_user` and `password_ref` to a login role
+allowed to create, alter and drop roles and grant the bound ones (`CREATE`, `ALTER`,
+`DROP` and `AUTHORIZE` on `ALL ROLES`, or a superuser), and `role_bindings` to existing
+Cassandra roles per allowed role (comma separated), each holding the permissions the
+lease should carry, for example a role with `SELECT` on one keyspace. Only that node is
+contacted. Each lease is a login role granted exactly those roles; revocation drops it.
+`allow_plaintext` permits plaintext to a literal loopback or private IP only.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "orders-cassandra",
+  "type": "cassandra",
+  "addr": "cassandra-1.internal:9142",
+  "tls_ca_ref": "file:/run/secrets/cassandra-ca.pem",
+  "admin_user": "trstctl_admin",
+  "password_ref": "file:/run/secrets/cassandra-admin",
   "allowed_roles": ["reader"],
   "role_bindings": {"reader": "orders_reader"},
   "max_ttl": "8h"

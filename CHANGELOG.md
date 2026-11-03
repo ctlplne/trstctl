@@ -2,6 +2,12 @@
 
 ### Added
 
+- Cassandra dynamic secrets (`type: cassandra`): each lease is a login role with a generated password, granted only
+  the existing Cassandra roles its role is bound to; only the password's bcrypt hash travels in CQL (`HASHED PASSWORD`).
+  Revocation drops the role, so the next login fails and an open connection is refused once the node's caches expire.
+  One node is contacted, over verified TLS or plaintext to a literal loopback or private IP. Proven against stock
+  Apache Cassandra 5.0.9.
+
 - Rotation library with consumer cutover (A240): two-user rotation for PostgreSQL, LDAP, MongoDB and Unix/Linux
   local accounts (`rotation_accounts`): stage sets a new password on the account consumers are not using, retire
   sets one nobody holds on the other, and both keep their grants, roles or groups. `consumers` and

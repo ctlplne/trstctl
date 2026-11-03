@@ -210,6 +210,31 @@ func openConfiguredKafkaBackend(o *configuredDynamicBackendOpener) (requestDynam
 	return backend, o.closeWith(backend, nil), nil
 }
 
+// openConfiguredCassandraBackend reads the administrator's password (and a
+// private CA) into a backend that keeps its own sealed copy and reaches the one
+// configured node over verified TLS, or the allowed plaintext (A239).
+func openConfiguredCassandraBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	var caPEM []byte
+	if cfg.TLSCARef != "" {
+		if caPEM, err = o.resolve(cfg.TLSCARef); err != nil {
+			return o.fail(err)
+		}
+	}
+	backend, err := dynsecret.NewCassandraBackend(dynsecret.CassandraConfig{
+		Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
+		AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
 // openConfiguredCouchbaseBackend reads the administrator password into a backend
 // that keeps its own sealed copy and calls the management REST API through the
 // SSRF-guarded client (A239).
