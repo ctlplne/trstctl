@@ -288,8 +288,12 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleIssue(ctx, m)
 	case "ca.renew":
 		return d.handleRenew(ctx, m)
-	case "revocation.publish", store.CertificateCRLPublicationDestination, orchestrator.DestinationRevocationProbeRequest:
-		return d.deliverRevocation(ctx, m)
+	case "revocation.publish":
+		return d.handleRevoke(ctx, m) // an identity's revocation publish
+	case store.CertificateCRLPublicationDestination:
+		return d.handleCertificateCRLPublication(ctx, m) // a certificate's CRL publication
+	case orchestrator.DestinationRevocationProbeRequest:
+		return d.handleRevocationProbeRequest(ctx, m) // an operator's on-demand endpoint probe request
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
 	case orchestrator.DestinationFleetReissuanceBatch:
@@ -1954,20 +1958,6 @@ func (d *issuanceDispatcher) relayPresenceSource() relayPresence {
 		return d.store
 	}
 	return nil
-}
-
-// deliverRevocation routes the revocation family: an identity's revocation
-// publish, a certificate's CRL publication, and an operator's on-demand
-// endpoint probe request.
-func (d *issuanceDispatcher) deliverRevocation(ctx context.Context, m orchestrator.Message) error {
-	switch m.Destination {
-	case "revocation.publish":
-		return d.handleRevoke(ctx, m)
-	case store.CertificateCRLPublicationDestination:
-		return d.handleCertificateCRLPublication(ctx, m)
-	default:
-		return d.handleRevocationProbeRequest(ctx, m)
-	}
 }
 
 // handleRevocationProbeRequest turns an operator's recorded probe request into

@@ -18,8 +18,9 @@ import (
 // These destinations used to share case lines in deliver and reach their
 // handlers through hop functions that picked one by elimination: anything that
 // was not LDAP went to SCIM, anything that was not a legal hold to report
-// expiry, anything not named to the migration appliance's issuance, and the
-// email challenge through the DNS-01 hop. A destination added to one of those
+// expiry, anything not named to the migration appliance's issuance, anything
+// that was neither a revocation publish nor a CRL publication to the probe
+// request, and the email challenge through the DNS-01 hop. A destination added to one of those
 // case lines but not to its hop would have run another destination's external
 // action instead of failing.
 var deliverOwnHandlers = []struct {
@@ -37,6 +38,9 @@ var deliverOwnHandlers = []struct {
 	{orchestrator.DestinationLDAPWriteback, "DestinationLDAPWriteback", "d.ldapWriteback.Deliver", "LDAP directory writeback is not configured"},
 	{store.ComplianceReportArtifactExpiryDestination, "ComplianceReportArtifactExpiryDestination", "d.reportExpiry.Deliver", "report retention is not configured"},
 	{store.ArchiveLegalHoldDestination, "ArchiveLegalHoldDestination", "d.archiveHolds.Deliver", "archive legal holds are not configured"},
+	{"revocation.publish", `"revocation.publish"`, "d.handleRevoke", "revocation intent has no exact identity"},
+	{store.CertificateCRLPublicationDestination, "CertificateCRLPublicationDestination", "d.handleCertificateCRLPublication", "requested certificate CRL authority is not served"},
+	{orchestrator.DestinationRevocationProbeRequest, "DestinationRevocationProbeRequest", "d.handleRevocationProbeRequest", "revocation health probing is not configured"},
 }
 
 func TestDeliverSendsEachDestinationToItsOwnHandler(t *testing.T) {
@@ -56,38 +60,56 @@ func TestDeliverSendsEachDestinationToItsOwnHandler(t *testing.T) {
 
 	// Each is named by a case of its own whose body calls its handler, so a
 	// destination added beside it can never inherit its handler.
-	file, err := parser.ParseFile(token.NewFileSet(), "issuance.go", nil, 0)
+	want := make([]ownCase, 0, len(deliverOwnHandlers))
+	for _, tc := range deliverOwnHandlers {
+		want = append(want, ownCase{tc.constant, tc.handler})
+	}
+	assertOwnCases(t, "issuance.go", "deliver", "m.Destination", want)
+}
+
+// ownCase is a switch case that must name one value and call one handler.
+type ownCase struct {
+	constant string // the identifier (or literal) the case names
+	handler  string // the call its body makes
+}
+
+// assertOwnCases checks that fn's switch on tag gives each wanted value a case
+// of its own whose body calls its handler directly.
+func assertOwnCases(t *testing.T, path, fn, tag string, want []ownCase) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var cases []*ast.CaseClause
 	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "deliver" || fn.Recv == nil {
+		d, ok := decl.(*ast.FuncDecl)
+		if !ok || d.Name.Name != fn || d.Recv == nil {
 			continue
 		}
-		for _, stmt := range fn.Body.List {
-			if sw, ok := stmt.(*ast.SwitchStmt); ok && types.ExprString(sw.Tag) == "m.Destination" {
+		ast.Inspect(d.Body, func(n ast.Node) bool {
+			if sw, ok := n.(*ast.SwitchStmt); ok && sw.Tag != nil && types.ExprString(sw.Tag) == tag {
 				for _, c := range sw.Body.List {
 					cases = append(cases, c.(*ast.CaseClause))
 				}
 			}
-		}
+			return true
+		})
 	}
 	if len(cases) == 0 {
-		t.Fatal("deliver's switch on m.Destination was not found in issuance.go")
+		t.Fatalf("%s's switch on %s was not found in %s", fn, tag, path)
 	}
-	for _, tc := range deliverOwnHandlers {
+	for _, w := range want {
 		var clause *ast.CaseClause
 		for _, c := range cases {
 			for _, e := range c.List {
-				if name := types.ExprString(e); name == tc.constant || strings.HasSuffix(name, "."+tc.constant) {
+				if name := types.ExprString(e); name == w.constant || strings.HasSuffix(name, "."+w.constant) {
 					clause = c
 				}
 			}
 		}
 		if clause == nil {
-			t.Errorf("deliver has no case for %s", tc.constant)
+			t.Errorf("%s has no case for %s", fn, w.constant)
 			continue
 		}
 		if len(clause.List) != 1 {
@@ -95,17 +117,17 @@ func TestDeliverSendsEachDestinationToItsOwnHandler(t *testing.T) {
 			for _, e := range clause.List {
 				names = append(names, types.ExprString(e))
 			}
-			t.Errorf("%s shares its case with %s; give it a case of its own", tc.constant, strings.Join(names, ", "))
+			t.Errorf("%s shares its case with %s; give it a case of its own", w.constant, strings.Join(names, ", "))
 		}
 		calls := false
 		ast.Inspect(&ast.BlockStmt{List: clause.Body}, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok && types.ExprString(call.Fun) == tc.handler {
+			if call, ok := n.(*ast.CallExpr); ok && types.ExprString(call.Fun) == w.handler {
 				calls = true
 			}
 			return true
 		})
 		if !calls {
-			t.Errorf("the case for %s does not call %s directly", tc.constant, tc.handler)
+			t.Errorf("the case for %s does not call %s directly", w.constant, w.handler)
 		}
 	}
 }
