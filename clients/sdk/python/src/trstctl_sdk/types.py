@@ -10522,6 +10522,34 @@ OffboardMemberResponse = TypedDict(
     total=False,
 )
 
+OperationLedgerItem = TypedDict(
+    'OperationLedgerItem',
+    {
+        'created_at': str,
+        'credential_type': str,
+        'fingerprint': str,
+        'id': str,
+        'observed_vantage': str,
+        'outbox': dict[str, Any],
+        'source': str,
+        'source_status': str,
+        'state': str,
+        'state_reason': str,
+        'subject': dict[str, Any],
+        'updated_at': str,
+    },
+    total=False,
+)
+
+OperationLedgerPage = TypedDict(
+    'OperationLedgerPage',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 OutboxCircuit = TypedDict(
     'OutboxCircuit',
     {

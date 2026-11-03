@@ -82,6 +82,8 @@ import type {
   AgentJobPosture,
   BulkheadStats,
   RenewalSLO,
+  OperationLedgerItem,
+  OperationLedgerPage,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
@@ -1155,6 +1157,8 @@ export type {
   AgentJobPosture,
   BulkheadStats,
   RenewalSLO,
+  OperationLedgerItem,
+  OperationLedgerPage,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
   ACMEDNS01PreflightRequest,
@@ -2498,6 +2502,7 @@ export interface Api {
   agentJobPosture(): Promise<AgentJobPosture>;
   bulkheadStats(): Promise<BulkheadStats>;
   renewalSLO(): Promise<RenewalSLO>;
+  operationLedger(params?: { limit?: number; cursor?: string; state?: string; credential_type?: string }): Promise<OperationLedgerPage>;
   connectorDelivery(id: string): Promise<ConnectorDelivery>;
   previewEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredentialPreview>;
   requestEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredential>;
@@ -3377,6 +3382,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   agentJobPosture: () => req<AgentJobPosture>("/api/v1/operations/jobs"),
   bulkheadStats: () => req<BulkheadStats>("/api/v1/operations/bulkheads"),
   renewalSLO: () => req<RenewalSLO>("/api/v1/operations/renewal-slo"),
+  operationLedger: (params = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
+    const suffix = query.toString();
+    return req<OperationLedgerPage>(`/api/v1/operations/ledger${suffix ? `?${suffix}` : ""}`);
+  },
   connectorDelivery: (id) => req<ConnectorDelivery>(`/api/v1/connectors/deliveries/${encodeURIComponent(id)}`),
   previewEphemeralCredential: (input) => postRead<EphemeralCredentialPreview>("/api/v1/ephemeral/preview", input),
   requestEphemeralCredential: (input) => mutate<EphemeralCredential>("POST", "/api/v1/ephemeral", input),

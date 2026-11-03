@@ -134,5 +134,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.secretMigrationRoutes()...)    // see secret_migrations.go
 	out = append(out, a.changeImpactRoutes()...)       // see approval_destination.go
 	out = append(out, identityApplicationRoutes(a)...) // see identity_application.go
+	out = append(out, operationLedgerRoutes(a)...)     // see operations_ledger.go
 	return out
 }

@@ -198,6 +198,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range identityApplicationSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range operationLedgerSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}

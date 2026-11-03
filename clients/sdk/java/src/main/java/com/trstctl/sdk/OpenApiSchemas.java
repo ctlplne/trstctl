@@ -740,6 +740,8 @@ public final class OpenApiSchemas {
       "ObserverRequest",
       "OffboardMemberRequest",
       "OffboardMemberResponse",
+      "OperationLedgerItem",
+      "OperationLedgerPage",
       "OutboxCircuit",
       "OutboxCircuitList",
       "OutboxReconciliationConflict",

@@ -7612,6 +7612,26 @@ export interface OffboardMemberResponse {
   rotation_evidence: string;
 }
 
+export interface OperationLedgerItem {
+  created_at: string;
+  credential_type: string;
+  fingerprint?: string;
+  id: string;
+  observed_vantage?: string;
+  outbox?: { attempts: number; id: number; status: string };
+  source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+  source_status: string;
+  state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
+  state_reason: string;
+  subject: { id?: string; name: string };
+  updated_at: string;
+}
+
+export interface OperationLedgerPage {
+  items: OperationLedgerItem[];
+  next_cursor?: string;
+}
+
 export interface OutboxCircuit {
   destination: string;
   failures: number;

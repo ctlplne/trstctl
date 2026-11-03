@@ -6038,6 +6038,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone */
+        get: operations["listOperationLedger"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/renewal-slo": {
         parameters: {
             query?: never;
@@ -18492,6 +18509,35 @@ export interface components {
             member: components["schemas"]["Member"];
             revoked_token_count: number;
             rotation_evidence: string;
+        };
+        OperationLedgerItem: {
+            /** Format: date-time */
+            created_at: string;
+            credential_type: string;
+            fingerprint?: string;
+            id: string;
+            observed_vantage?: string;
+            outbox?: {
+                attempts: number;
+                id: number;
+                status: string;
+            };
+            /** @enum {string} */
+            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+            source_status: string;
+            /** @enum {string} */
+            state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
+            state_reason: string;
+            subject: {
+                id?: string;
+                name: string;
+            };
+            /** Format: date-time */
+            updated_at: string;
+        };
+        OperationLedgerPage: {
+            items: components["schemas"]["OperationLedgerItem"][];
+            next_cursor?: string;
         };
         OutboxCircuit: {
             destination: string;
@@ -39965,6 +40011,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentJobPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listOperationLedger: {
+        parameters: {
+            query?: {
+                /** @description maximum source rows read per page (1-100, default 20); a filtered page may hold fewer items */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+                /** @description Optional normalized state: reviewed, awaiting_approval, queued, executing, delivered, verified, failed, uncertain, recovered. */
+                state?: string;
+                /** @description Optional credential type, for example x509_certificate or secret. */
+                credential_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationLedgerPage"];
                 };
             };
             /** @description client error */

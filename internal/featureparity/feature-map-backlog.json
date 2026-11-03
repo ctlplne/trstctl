@@ -11417,6 +11417,8 @@
                 "internal/api/connectors_lifecycle.go",
                 "internal/api/lifecycle_automation.go",
                 "internal/api/identity_application.go",
+                "internal/api/operations_ledger.go",
+                "internal/store/operations_ledger.go",
                 "internal/store/identity_inventory.go",
                 "internal/api/notifications.go",
                 "internal/lifecycle/lifecycle.go",
@@ -11426,7 +11428,8 @@
                 "/api/v1/lifecycle/automation-plan",
                 "/api/v1/notifications",
                 "/api/v1/identities/{id}/transitions",
-                "/api/v1/identities/{id}/application"
+                "/api/v1/identities/{id}/application",
+                "/api/v1/operations/ledger"
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
@@ -11452,7 +11455,8 @@
                 "searchAudit",
                 "listRotationRuns",
                 "getRotationRun",
-                "getRenewalSLO"
+                "getRenewalSLO",
+                "listOperationLedger"
             ],
             "api_na": "",
             "cli_surface": [
@@ -11470,7 +11474,8 @@
                 "notifications get",
                 "lifecycle rotation-runs list",
                 "lifecycle rotation-runs get",
-                "operations renewal-slo"
+                "operations renewal-slo",
+                "operations ledger"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -32702,6 +32702,121 @@
         ],
         "type": "object"
       },
+      "OperationLedgerItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_type": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "observed_vantage": {
+            "type": "string"
+          },
+          "outbox": {
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "attempts"
+            ],
+            "type": "object"
+          },
+          "source": {
+            "enum": [
+              "certificate_rotation",
+              "connector_delivery",
+              "secret_rotation",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "source_status": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "reviewed",
+              "awaiting_approval",
+              "queued",
+              "executing",
+              "delivered",
+              "verified",
+              "failed",
+              "uncertain",
+              "recovered"
+            ],
+            "type": "string"
+          },
+          "state_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "credential_type",
+          "subject",
+          "state",
+          "state_reason",
+          "source_status",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "OperationLedgerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OperationLedgerItem"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "OutboxCircuit": {
         "properties": {
           "destination": {
@@ -73724,6 +73839,87 @@
         ],
         "summary": "Get agent job-ledger queue depth and claim health",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/operations/ledger": {
+      "get": {
+        "operationId": "listOperationLedger",
+        "parameters": [
+          {
+            "description": "maximum source rows read per page (1-100, default 20); a filtered page may hold fewer items",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional normalized state: reviewed, awaiting_approval, queued, executing, delivered, verified, failed, uncertain, recovered.",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional credential type, for example x509_certificate or secret.",
+            "in": "query",
+            "name": "credential_type",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationLedgerPage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
+        "x-trstctl-permission": "lifecycle:read"
       }
     },
     "/api/v1/operations/renewal-slo": {

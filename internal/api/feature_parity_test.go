@@ -364,9 +364,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// reporting and listing secret deliveries (640). A243 adds migration runs:
 	// assess, list, show, stage, permissions, cutover, reissue, rollback (648).
 	// A244 adds the change impact of a target and of a profile (650) and the
-	// application view of a certificate (651).
-	if len(out) != 651 {
-		t.Fatalf("OpenAPI operationIds = %d, want 651", len(out))
+	// application view of a certificate (651). A245 adds the operations ledger
+	// (652).
+	if len(out) != 652 {
+		t.Fatalf("OpenAPI operationIds = %d, want 652", len(out))
 	}
 	return out
 }
