@@ -1144,6 +1144,12 @@
 
 ### Fixed
 
+- The Windows agent MSI installs again on current Windows releases: Windows Installer applied the service's
+  restart-on-failure actions without the start right a restart action needs, so the install failed with error 1939
+  and rolled back. The agent's service now sets its restart policy (30 seconds, 60 seconds, then 5 minutes) on itself
+  whenever it starts, and `--service=install` sets it at registration; the MSI keeps only the setting that counts an
+  error exit as a failure.
+
 - `gcp-iam` revocation deletes only keys of the bound service account: a reference naming any other resource, or
   another account's key, is refused instead of becoming a DELETE path (A240).
 

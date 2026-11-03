@@ -88,10 +88,6 @@ func TestWiXSourceRegistersServiceAndBinary(t *testing.T) {
 		`Start="auto"`,
 		`<ServiceControl`,
 		`FailureActionsWhen="failedToStopOrReturnedError"`,
-		`<ServiceConfigFailureActions`,
-		`<Failure Action="restartService" Delay="30000"`,
-		`<Failure Action="restartService" Delay="60000"`,
-		`<Failure Action="restartService" Delay="300000"`,
 		`trstctl-agent.exe`,
 		`Version="1.2.3"`,
 		`UpgradeCode="`,
@@ -99,6 +95,12 @@ func TestWiXSourceRegistersServiceAndBinary(t *testing.T) {
 		if !strings.Contains(src, want) {
 			t.Errorf("WiX source missing %q", want)
 		}
+	}
+	// Windows Installer opens the service without SERVICE_START when it
+	// applies this table, so restart actions in it fail the whole install
+	// (error 1939). The service sets its restart actions itself.
+	if strings.Contains(src, "ServiceConfigFailureActions") {
+		t.Error("WiX source carries ServiceConfigFailureActions, which fails the install with error 1939")
 	}
 }
 

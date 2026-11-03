@@ -82,7 +82,11 @@ line reproduces the supplied flags with `--service=run`; the SCM then starts the
 agent, which enrolls, maintains mutual TLS, and installs and rotates credentials.
 If the agent exits with an error, SCM classifies that as a failed service and
 restarts it after 30 seconds, then 60 seconds, then 5 minutes. A deliberate
-operator stop remains a clean exit and does not trigger recovery.
+operator stop remains a clean exit and does not trigger recovery. The agent
+sets that restart policy on its own service each time the service starts, and
+`--service=install` sets it at registration. The MSI sets only the error-exit
+classification: Windows Installer applies restart actions without the start
+right they need, which fails the install with error 1939.
 The token file is single-use. After enrollment succeeds and the service persists
 its certificate, rotate or delete the token file.
 

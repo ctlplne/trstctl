@@ -27,10 +27,6 @@ func TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties(t *testing.T) {
 		`--server [SERVER]`,
 		`--server-name [SERVERNAME]`,
 		`FailureActionsWhen="failedToStopOrReturnedError"`,
-		`<ServiceConfigFailureActions`,
-		`<Failure Action="restartService" Delay="30000"`,
-		`<Failure Action="restartService" Delay="60000"`,
-		`<Failure Action="restartService" Delay="300000"`,
 	} {
 		if !strings.Contains(wxs, want) {
 			t.Errorf("trstctl-agent.wxs missing %q", want)
@@ -39,6 +35,10 @@ func TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties(t *testing.T) {
 	for _, bad := range []string{
 		"https://control-plane.example:8443/enroll",
 		"--bootstrap-token ",
+		// Windows Installer applies this table without SERVICE_START, so its
+		// restart actions fail the install (error 1939); the agent's service
+		// sets them itself when it starts.
+		"<ServiceConfigFailureActions",
 	} {
 		if strings.Contains(wxs, bad) {
 			t.Errorf("trstctl-agent.wxs still contains unsafe/non-runnable marker %q", bad)

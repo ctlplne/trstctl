@@ -38,14 +38,11 @@
                          FailureActionsWhen="failedToStopOrReturnedError"
                          OnInstall="yes"
                          OnReinstall="yes" />
-          <ServiceConfigFailureActions Id="AgentRecoveryActions"
-                                       ResetPeriod="86400"
-                                       OnInstall="yes"
-                                       OnReinstall="yes">
-            <Failure Action="restartService" Delay="30000" />
-            <Failure Action="restartService" Delay="60000" />
-            <Failure Action="restartService" Delay="300000" />
-          </ServiceConfigFailureActions>
+          <!-- The restart actions (30 s, 60 s, then 5 min) are set by the
+               agent on its own service whenever it starts. Windows
+               Installer's failure-action table opens the service without
+               the start right a restart action needs, so the install would
+               fail with error 1939. -->
         </ServiceInstall>
         <ServiceControl Id="AgentServiceControl"
                         Name="trstctl-agent"
