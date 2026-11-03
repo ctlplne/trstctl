@@ -183,6 +183,9 @@ func parseNativeProbeOutput(stdout, stderr []byte, offered []string) (Result, er
 	if len(stdout) >= nativeProbeOutputLimit || len(stderr) >= nativeProbeOutputLimit {
 		return fail()
 	}
+	// An OpenSSL built for Windows writes its text sections with CRLF line
+	// endings; the markers below are matched on LF.
+	stdout, stderr = bytes.ReplaceAll(stdout, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(stderr, []byte("\r\n"), []byte("\n"))
 	if countNativeLine(stderr, []byte("CONNECTION ESTABLISHED")) != 1 || countNativeLine(stderr, []byte("Protocol version: TLSv1.3")) != 1 {
 		return fail()
 	}

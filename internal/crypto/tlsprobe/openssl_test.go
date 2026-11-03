@@ -119,6 +119,12 @@ func TestNativeProbeParserRequiresCompletedBoundedEvidence(t *testing.T) {
 	if got, err := parseNativeProbeOutput(stdout, stderr, nil); err != nil || got.CipherSuite != tls.TLS_AES_128_GCM_SHA256 || len(got.PeerCertificates) != 1 || !bytes.Equal(got.PeerCertificates[0], srv.Certificate().Raw) {
 		t.Fatal("valid public certificate evidence rejected")
 	}
+	// windows-latest (CI 41585418047): an OpenSSL built for Windows ends its
+	// lines with CRLF; the same evidence must parse the same way.
+	crlf := func(b []byte) []byte { return bytes.ReplaceAll(b, []byte("\n"), []byte("\r\n")) }
+	if got, err := parseNativeProbeOutput(crlf(stdout), crlf(stderr), nil); err != nil || got.CipherSuite != tls.TLS_AES_128_GCM_SHA256 || len(got.PeerCertificates) != 1 || !bytes.Equal(got.PeerCertificates[0], srv.Certificate().Raw) {
+		t.Fatalf("CRLF evidence rejected: %v", err)
+	}
 	for _, tc := range []struct {
 		name            string
 		out, diagnostic []byte
