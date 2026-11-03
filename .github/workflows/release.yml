@@ -1,7 +1,7 @@
 name: Release
 
 # Build, sign, and publish the trstctl control-plane image on a version tag:
-# a reproducible distroless image (at most 180 MB of exported runtime files),
+# a reproducible distroless image (at most 300 MB of exported runtime files),
 # pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
@@ -17,11 +17,12 @@ env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trstctl' }}/trstctl
   NPM_AUDIT_VERSION: "11.16.0"
-  # Decimal-byte cap for the exported runtime filesystem, shared with the FIPS
-  # CI gate. Four static binaries and the embedded console serve every topology.
+  # Decimal-byte cap for the exported runtime filesystem, shared with the
+  # standard and FIPS CI gates. Five static binaries and the embedded console
+  # serve every topology.
   # Docker image inspect counts retained layers differently across builders, so
   # the size step below exports the final container filesystem instead.
-  MAX_IMAGE_BYTES: "180000000"
+  MAX_IMAGE_BYTES: "300000000"
 
 jobs:
   # Re-run the full test suite against the EXACT tagged ref before anything is

@@ -159,11 +159,13 @@ or outbox waves.
 
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
   manager, runs as uid/gid 65532. The standard and FIPS images each have a
-  180,000,000-byte (decimal 180 MB) exported-runtime-filesystem cap. The gates
+  300,000,000-byte (decimal 300 MB) exported-runtime-filesystem cap, checked in
+  CI for both and again at release. The gates
   create a container and measure `docker export | wc -c` so retained layers do
   not inflate the result on a particular Docker builder.
-- **Contents:** `trstctl`, `trstctl-signer`, `trstctl-agent`, and
-  `trstctl-operator`, with the embedded web UI. In single-node mode the
+- **Contents:** `trstctl`, `trstctl-signer`, `trstctl-agent`,
+  `trstctl-operator`, and `trstctl-kms-wrap` (the signer's KMS wrap adapter),
+  with the embedded web UI. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
 - **Reproducible:** built with `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, and
@@ -186,7 +188,7 @@ or outbox waves.
 
 1. builds the multi-arch image reproducibly (and the two cgo variants,
    `-signer-hsm` and `-agent-pkcs11`, from pinned base digests),
-2. enforces the 180 MB exported-runtime-filesystem budget,
+2. enforces the 300 MB exported-runtime-filesystem budget,
 3. pushes to GHCR (primary) and Docker Hub (mirror),
 4. generates a CycloneDX SBOM, and
 5. cosign-signs the image and attests the SBOM (keyless, via OIDC).

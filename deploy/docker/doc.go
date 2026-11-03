@@ -3,7 +3,7 @@
 // Package docker holds trstctl's container distribution artifacts — the
 // reproducible image Dockerfile, the one-command Compose evaluation stack, and
 // the release pipeline — together with tests that hold those artifacts to the
-// S7.4 acceptance criteria (distroless/scratch with an at-most-180 MB
+// S7.4 acceptance criteria (distroless/scratch with an at-most-300 MB
 // exported-runtime budget, cosign signing, a CycloneDX SBOM, a reproducible
 // build, a GHCR primary with a Docker Hub mirror,
 // and a tested external-datastore configuration).

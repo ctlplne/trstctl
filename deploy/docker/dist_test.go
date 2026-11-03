@@ -806,15 +806,22 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	// Both release image gates use the same decimal-byte budget and measure the
 	// exported runtime filesystem, not Docker's layer-accounting image size.
 	mustContainAll(t, "release image size gate", wf,
-		`MAX_IMAGE_BYTES: "180000000"`,
+		`MAX_IMAGE_BYTES: "300000000"`,
 		`docker create trstctl:sizecheck`,
 		`docker export "$container" | wc -c`,
 	)
 	ci := readArtifact(t, filepath.Join("..", "..", ".github", "workflows", "ci.yml"))
 	mustContainAll(t, "FIPS image size gate", ci,
-		`MAX_FIPS_IMAGE_BYTES: "180000000"`,
+		`MAX_FIPS_IMAGE_BYTES: "300000000"`,
 		`docker create trstctl:ci-fips`,
 		`docker export "$container" | wc -c`,
+	)
+	// The standard image is held to the same cap in CI, so a release is not
+	// the first to see its size.
+	mustContainAll(t, "standard image size gate in CI", ci,
+		"make image VERSION=ci",
+		`MAX_IMAGE_BYTES: "300000000"`,
+		`docker create trstctl:ci)`,
 	)
 }
 

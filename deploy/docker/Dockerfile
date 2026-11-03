@@ -3,14 +3,15 @@
 # trstctl control-plane image.
 #
 # Reproducible and minimal: distroless "static" with standard and FIPS image
-# gates that each cap the exported runtime filesystem at 180,000,000 bytes.
+# gates that each cap the exported runtime filesystem at 300,000,000 bytes.
 # Both run unprivileged. It carries the control plane, the isolated signing service
-# (AN-4), the in-network agent, AND the Kubernetes Operator: in single-node mode
+# (AN-4), the in-network agent, the Kubernetes Operator, AND the signer's KMS wrap
+# adapter (trstctl-kms-wrap, which trstctl-signer runs): in single-node mode
 # trstctl supervises trstctl-signer as a child process; the Kubernetes
 # DaemonSet runs trstctl-agent from this same image (overriding the entrypoint);
 # and the operator Deployment runs trstctl-operator from it the same way. So one
 # image serves every topology and there is no separate per-binary image to build
-# (OPS-002). All four are tiny static Go binaries.
+# (OPS-002). All five are static Go binaries.
 #
 # Reproducibility: CGO is disabled, paths are trimmed, the build id is pinned
 # empty, and VCS stamping is turned off (the build context excludes .git — see
