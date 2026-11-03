@@ -269,3 +269,8 @@ d660e567d75ff385aa15996daa8d92f849400fc4:internal/server/adcs_revoke_relay_serve
 db4b127a3545f3e3cdaf67097e9bd02b847ee5e4:internal/discovery/cloudsecret/apikeys_test.go:private-key:45
 ee2924e848d831294bb8d8bf2e311d0a6ee8efb4:internal/mdm/entra_test.go:generic-api-key:22
 fd80632089317f695643c85ef05b402c08db371e:internal/kms/pkcs11/attestation_softhsm_real_test.go:generic-api-key:34
+# A241 (commit 30fd42805): the hosted-sync journey's destination key names
+# for a path target ("inv241/db_password", "inv241/api_token") on one test
+# line matched generic-api-key; they are key names, not values. The line was
+# rewritten in a later commit; this exact fingerprint keeps any new match red.
+30fd4280520e09abe0641b6be0427444c37c7579:internal/server/secret_sync_hosted_targets_served_test.go:generic-api-key:175
