@@ -173,3 +173,70 @@ func TestMSSQLConfigAndPasswordA239(t *testing.T) {
 		seen[string(pw)] = true
 	}
 }
+
+// A240: a two-user rotation sets a new password on the login the
+// predecessor does not name and retires the other with a password nobody
+// holds, killing its sessions; nothing is created, disabled or dropped, so
+// both keep their role memberships. Contained users do the same inside the
+// database.
+func TestMSSQLTwoUserRotationOnlyChangesPasswordsA240(t *testing.T) {
+	for _, contained := range []bool{false, true} {
+		exec := &recordingMSSQL{}
+		b, err := NewMSSQLBackend(exec, MSSQLConfig{Contained: contained, Database: "orders",
+			RotationAccounts: map[string][2]string{"app": {"orders_app_a", "orders_app_b"}},
+			AdminDSN:         []byte("sqlserver://sa:admin@127.0.0.1:1433?database=master&encrypt=true\n")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref, raw, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "app", Static: true, Predecessor: "orders_app_a"})
+		if err != nil || ref != "orders_app_b" {
+			t.Fatalf("contained=%v stage = %q, %v", contained, ref, err)
+		}
+		var credential struct{ Username, Password, Database string }
+		if err := json.Unmarshal(raw, &credential); err != nil || credential.Username != "orders_app_b" || credential.Database != "orders" || len(credential.Password) != 32 {
+			t.Fatalf("contained=%v credential = %s", contained, raw)
+		}
+		if len(exec.calls) != 1 || exec.calls[0].args["login"] != "orders_app_b" || string(exec.calls[0].args["password"].([]byte)) != credential.Password {
+			t.Fatalf("contained=%v stage calls = %+v", contained, exec.calls)
+		}
+		if strings.Contains(exec.calls[0].query, credential.Password) {
+			t.Fatal("the password reached the statement text")
+		}
+		wantAlter := "N'ALTER LOGIN '"
+		if contained {
+			wantAlter = "N'ALTER USER '"
+		}
+		if !strings.Contains(fmtArgs(exec.calls[0]), wantAlter) {
+			t.Fatalf("contained=%v stage ran %q", contained, exec.calls[0].query)
+		}
+		exec.calls = nil
+		if err := b.Revoke(context.Background(), "orders_app_a"); err != nil {
+			t.Fatal(err)
+		}
+		if len(exec.calls) != 2 || exec.calls[1].query != mssqlKillSessions || exec.calls[0].args["login"] != "orders_app_a" ||
+			string(exec.calls[0].args["password"].([]byte)) == credential.Password {
+			t.Fatalf("contained=%v retire calls = %+v", contained, exec.calls)
+		}
+		for _, call := range exec.calls {
+			for _, verb := range []string{"DROP ", "CREATE ", "DISABLE"} {
+				if strings.Contains(fmtArgs(call), verb) {
+					t.Fatalf("contained=%v a two-user retirement ran %s: %q", contained, verb, call.query)
+				}
+			}
+		}
+	}
+	if _, err := NewMSSQLBackend(&recordingMSSQL{}, MSSQLConfig{Database: "orders",
+		RotationAccounts: map[string][2]string{"app": {"orders_app_a", "orders_app_a"}}}); err == nil {
+		t.Fatal("one account named twice was accepted")
+	}
+	b, err := NewMSSQLBackend(&recordingMSSQL{}, MSSQLConfig{Database: "orders", RoleBindings: map[string]string{"reader": "db_datareader"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.CreateCredential(context.Background(), GenerateRequest{Role: "reader", Static: true}); err == nil {
+		t.Fatal("a static credential without rotation_accounts was accepted")
+	}
+	if err := b.VerifyCredential(context.Background(), []byte(`{"username":"x","password":"y"}`)); !errors.Is(err, ErrNoSelfProof) {
+		t.Fatalf("verify without an admin DSN = %v", err)
+	}
+}

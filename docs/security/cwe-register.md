@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2342 annotated sites across 29 rules. Each row is
+2343 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -517,7 +517,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1342` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1343` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1002,7 +1002,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (34 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (35 sites)
 
 | Location | Reason |
 |---|---|
@@ -1027,7 +1027,8 @@ not this file.
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:155` | the new user's password goes to the Atlas Admin API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/mssql.go:199` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:242` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:297` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1037,7 +1038,7 @@ not this file.
 | `internal/dynsecret/snowflake.go:205` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:130` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
-| `internal/server/dynamic_secret_oracle_lab_test.go:402` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
+| `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 

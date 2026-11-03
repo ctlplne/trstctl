@@ -16,8 +16,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,11 +86,6 @@ func (lab labOracle) connects(user, password string) bool {
 	return db.QueryRowContext(ctx, "SELECT 1 FROM DUAL").Scan(&one) == nil && one == 1
 }
 
-type oracleCredential struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // A239 against stock Oracle Database Free (26ai), configured by the A239
 // runner: in pluggable database FREEPDB1, administrator LAB_ADMIN (CREATE,
 // ALTER and DROP USER, ALTER SYSTEM, SELECT on V$SESSION, and ORDERS_READER
@@ -131,7 +124,7 @@ func TestServedDynamicOracleUserAgainstOracleA239(t *testing.T) {
 	if err := json.Unmarshal(body, &lease); err != nil || lease.ID == "" || lease.Credential == "" {
 		t.Fatalf("decode the lease: %v %s", err, body)
 	}
-	var credential oracleCredential
+	var credential userPassword
 	if err := json.Unmarshal([]byte(lease.Credential), &credential); err != nil || credential.Username == "" || credential.Password == "" {
 		t.Fatalf("credential: %v", err)
 	}
@@ -244,125 +237,6 @@ const (
 	oracleTwoUserAccountB = "ORDERS_APP_B"
 )
 
-// oracleOrdersApp connects with whatever credential it last read, every
-// tick, and reports a version verified once it connected with it.
-type oracleOrdersApp struct {
-	lab    labOracle
-	base   string
-	token  string
-	client *http.Client
-	paused atomic.Bool
-	quiet  atomic.Bool
-
-	mu         sync.Mutex
-	version    int
-	credential oracleCredential
-	reported   int
-	logins     map[string]int
-	failures   []string
-}
-
-func (app *oracleOrdersApp) run(ctx context.Context, done chan<- struct{}) {
-	defer close(done)
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-		app.tick(ctx)
-	}
-}
-
-func (app *oracleOrdersApp) tick(ctx context.Context) {
-	var read struct {
-		Value   string `json:"value"`
-		Version int    `json:"version"`
-	}
-	readOK := false
-	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, app.base+"/api/v1/secrets/store/"+oracleTwoUserRole, nil); err == nil {
-		req.Header.Set("Authorization", "Bearer "+app.token)
-		if resp, err := app.client.Do(req); err == nil {
-			readOK = resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&read) == nil
-			_ = resp.Body.Close()
-		}
-	}
-	app.mu.Lock()
-	current, credential := app.version, app.credential
-	app.mu.Unlock()
-	if readOK && read.Version != current {
-		var next oracleCredential
-		if json.Unmarshal([]byte(read.Value), &next) != nil || !app.lab.connects(next.Username, next.Password) {
-			app.fail(fmt.Sprintf("adopt version %d", read.Version))
-		} else {
-			app.mu.Lock()
-			app.version, app.credential = read.Version, next
-			app.mu.Unlock()
-			current, credential = read.Version, next
-		}
-	}
-	if current == 0 {
-		return
-	}
-	if !app.lab.connects(credential.Username, credential.Password) {
-		if ctx.Err() == nil {
-			app.fail(fmt.Sprintf("connect with version %d", current))
-		}
-		return
-	}
-	app.mu.Lock()
-	app.logins[credential.Username]++
-	reported := app.reported
-	app.mu.Unlock()
-	if current != reported && !app.quiet.Load() && app.report(ctx, current) == nil {
-		app.mu.Lock()
-		app.reported = current
-		app.mu.Unlock()
-	}
-}
-
-func (app *oracleOrdersApp) fail(message string) {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	if app.paused.Load() {
-		message = "paused: " + message
-	}
-	app.failures = append(app.failures, message)
-}
-
-func (app *oracleOrdersApp) report(ctx context.Context, version int) error {
-	body, _ := json.Marshal(map[string]any{"consumer": "orders-app", "state": "verified",
-		"secrets": []map[string]any{{"name": oracleTwoUserRole, "version": version}}})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, app.base+"/api/v1/secrets/deliveries", strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+app.token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Idempotency-Key", fmt.Sprintf("oracle-orders-app-verified-%d", version))
-	resp, err := app.client.Do(req)
-	if err != nil {
-		return err
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("report version %d: HTTP %d", version, resp.StatusCode)
-	}
-	return nil
-}
-
-func (app *oracleOrdersApp) snapshot() (map[string]int, []string) {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	logins := map[string]int{}
-	for user, n := range app.logins {
-		logins[user] = n
-	}
-	return logins, append([]string(nil), app.failures...)
-}
-
 // A240 on a real Oracle Database: a two-user static rotation alternates a
 // role between two existing users that hold its grants (the runner's
 // ORDERS_APP_A and ORDERS_APP_B, granted ORDERS_READER). Three unattended
@@ -399,7 +273,7 @@ func TestServedOracleTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 	registerServedTenant(t, h, "A240 Oracle two-user tenant")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 	ctx := t.Context()
-	seed, _ := json.Marshal(oracleCredential{Username: oracleTwoUserAccountA, Password: initialPassword}) // #nosec G117 -- the lab's own initial password, seeded into the test tenant's secret store (CWE-200)
+	seed, _ := json.Marshal(userPassword{Username: oracleTwoUserAccountA, Password: initialPassword}) // #nosec G117 -- the lab's own initial password, seeded into the test tenant's secret store (CWE-200)
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store", tok, "seed-oracle-orders",
 		map[string]any{"name": oracleTwoUserRole, "value": string(seed)}); status != http.StatusCreated && status != http.StatusOK {
 		t.Fatalf("seed secret: %d %s", status, body)
@@ -415,7 +289,7 @@ func TestServedOracleTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(body, &schedule)
-	app := &oracleOrdersApp{lab: lab, base: h.ts.URL, token: seedScopedTokenSubject(t, h.store, h.tenant, "orders-app", "secrets:read"),
+	app := &twoUserApp{secret: oracleTwoUserRole, connects: lab.connects, base: h.ts.URL, token: seedScopedTokenSubject(t, h.store, h.tenant, "orders-app", "secrets:read"),
 		client: &http.Client{Timeout: 5 * time.Second}, logins: map[string]int{}}
 	appCtx, stopApp := context.WithCancel(ctx)
 	appDone := make(chan struct{})
@@ -488,13 +362,13 @@ func TestServedOracleTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 		}
 		return list.Items[0]
 	}
-	readCredential := func() oracleCredential {
+	readCredential := func() userPassword {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/"+oracleTwoUserRole, tok, nil)
 		var out struct {
 			Value string `json:"value"`
 		}
-		var credential oracleCredential
+		var credential userPassword
 		if status != http.StatusOK || json.Unmarshal(body, &out) != nil || json.Unmarshal([]byte(out.Value), &credential) != nil {
 			t.Fatalf("read the secret: %d", status)
 		}
@@ -510,7 +384,7 @@ func TestServedOracleTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 		}
 	}
 
-	live := oracleCredential{Username: oracleTwoUserAccountA, Password: initialPassword}
+	live := userPassword{Username: oracleTwoUserAccountA, Password: initialPassword}
 	for _, step := range []struct {
 		n    int
 		user string

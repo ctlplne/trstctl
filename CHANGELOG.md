@@ -13,14 +13,15 @@
   One node is contacted, over verified TLS or plaintext to a literal loopback or private IP. Proven against stock
   Apache Cassandra 5.0.9.
 
-- Rotation library with consumer cutover (A240): two-user rotation for PostgreSQL, LDAP, MongoDB, Oracle and
-  Unix/Linux local accounts (`rotation_accounts`): stage sets a new password on the account consumers are not using,
-  retire sets one nobody holds on the other, and both keep their grants, roles or groups. `consumers` and
-  `retire_after_seconds` hold the predecessor until the named consumers report the new version or an approved deadline
-  passes, and the command view keeps `credential_valid` apart from `consumer_adoption`. Single-phase providers
-  (`auth0`, an in-place `unix` account) run only with `acknowledge_single_phase`; `datadog` and `openai` keys issue
-  leases and rotate in two phases. Proven against PostgreSQL, OpenLDAP, MongoDB 7.0, Oracle Database Free and a Debian
-  OpenSSH host; Auth0, Datadog and OpenAI are built against stand-ins of their APIs.
+- Rotation library with consumer cutover (A240): two-user rotation for PostgreSQL, LDAP, MongoDB, Oracle, SQL Server
+  (and Azure SQL contained users) and Unix/Linux local accounts (`rotation_accounts`): stage sets a new password on
+  the account consumers are not using, retire sets one nobody holds on the other, and both keep their grants, roles or
+  groups. `consumers` and `retire_after_seconds` hold the predecessor until the named consumers report the new version
+  or an approved deadline passes, and the command view keeps `credential_valid` apart from `consumer_adoption`.
+  Single-phase providers (`auth0`, an in-place `unix` account) run only with `acknowledge_single_phase`; `datadog` and
+  `openai` keys issue leases and rotate in two phases. Proven against PostgreSQL, OpenLDAP, MongoDB 7.0, Oracle
+  Database Free, SQL Server 2022 (x86 CI lab) and a Debian OpenSSH host; Auth0, Datadog and OpenAI are built against
+  stand-ins of their APIs.
 
 - IBM API Connect dynamic secrets (`type: ibm-api-connect`): each lease is a credential (client ID and generated secret)
   on the consumer app its role is bound to (`"<org>/<catalog>/<consumer-org>/<app>"`), carrying that app's

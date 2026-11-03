@@ -781,6 +781,17 @@ the credential it last read and reports each version it used, then a retirement 
 a paused database that times out and leaves the predecessor connecting until the
 database resumes.
 
+A SQL Server role rotates the same way between two existing logins whose users in
+`database` hold its role memberships (A240; for Azure SQL, two contained users there):
+**stage** sets a new password on the login `old_ref` does not name (`ALTER LOGIN … WITH
+PASSWORD`, the password a parameter the server quotes itself) and verifies it by
+connecting, and **retire** sets a password nobody holds on the other and ends its
+sessions; nothing is disabled, created or dropped, so memberships stay. Its served proof
+runs in the x86 CI lab against SQL Server 2022 Developer Edition: three unattended
+scheduled cycles while an application connects with the credential it last read, then a
+retirement against a paused server that times out and leaves the predecessor connecting
+until the server resumes.
+
 An Oracle role rotates the same way between two existing users that hold its grants
 (A240): `rotation_accounts` names them, **stage** sets a new password on the user `old_ref`
 does not name and verifies it by connecting, and **retire** sets a password nobody holds on

@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	mssql "github.com/microsoft/go-mssqldb"
 
@@ -81,6 +83,22 @@ BEGIN
 	DECLARE @stmt nvarchar(max) = N'DROP LOGIN ' + QUOTENAME(@login);
 	EXEC (@stmt);
 END`
+	// A two-user rotation (A240) only ever changes a password: a server
+	// login's, or a contained user's inside its database.
+	mssqlRekeyLogin = `DECLARE @pw nvarchar(128) = CONVERT(nvarchar(128), CONVERT(varchar(128), @password));
+DECLARE @stmt nvarchar(max) = N'ALTER LOGIN ' + QUOTENAME(@login) + N' WITH PASSWORD = ' + QUOTENAME(@pw, N'''');
+SET @pw = NULL;
+EXEC (@stmt);`
+	mssqlRekeyContainedUser = `DECLARE @pw nvarchar(128) = CONVERT(nvarchar(128), CONVERT(varchar(128), @password));
+DECLARE @stmt nvarchar(max) = N'ALTER USER ' + QUOTENAME(@login) + N' WITH PASSWORD = ' + QUOTENAME(@pw, N'''');
+SET @pw = NULL;
+EXEC (@stmt);`
+	// mssqlKillSessions ends a retired account's open sessions without
+	// disabling it, so the next cycle only sets a password.
+	mssqlKillSessions = `DECLARE @kill nvarchar(max) = N'';
+SELECT @kill = @kill + N'KILL ' + CONVERT(nvarchar(11), session_id) + N';'
+	FROM sys.dm_exec_sessions WHERE (login_name = @login OR original_login_name = @login) AND session_id <> @@SPID;
+EXEC (@kill);`
 )
 
 // MSSQLConfig configures the SQL Server and Azure SQL providers (A239).
@@ -94,16 +112,23 @@ type MSSQLConfig struct {
 	// join, comma separated, for example "db_datareader".
 	RoleBindings   map[string]string
 	UsernamePrefix string
+	// RotationAccounts maps a role to the two existing logins (contained:
+	// users) its static rotation alternates between (A240); AdminDSN is the
+	// administrator's DSN, whose address a staged credential is verified at.
+	RotationAccounts map[string][2]string
+	AdminDSN         []byte
 }
 
 // MSSQLBackend issues SQL Server logins (or contained database users) with
-// database role memberships.
+// database role memberships, and rotates a role between two existing ones.
 type MSSQLBackend struct {
-	exec      SQLExecutor
-	contained bool
-	database  string
-	roles     map[string][]string
-	prefix    string
+	exec             SQLExecutor
+	contained        bool
+	database         string
+	roles            map[string][]string
+	prefix           string
+	rotationAccounts map[string][2]string
+	verifyURL        *url.URL
 }
 
 // NewMSSQLBackend validates cfg; exec runs as an administrator allowed to
@@ -115,7 +140,8 @@ func NewMSSQLBackend(exec SQLExecutor, cfg MSSQLConfig) (*MSSQLBackend, error) {
 	if !mssqlDatabase.MatchString(cfg.Database) {
 		return nil, errors.New("dynsecret mssql: database must be a plain database name")
 	}
-	b := &MSSQLBackend{exec: exec, contained: cfg.Contained, database: cfg.Database, roles: map[string][]string{}, prefix: cfg.UsernamePrefix}
+	b := &MSSQLBackend{exec: exec, contained: cfg.Contained, database: cfg.Database, roles: map[string][]string{}, prefix: cfg.UsernamePrefix,
+		rotationAccounts: map[string][2]string{}}
 	for role, binding := range cfg.RoleBindings {
 		for _, name := range strings.Split(binding, ",") {
 			name = strings.TrimSpace(name)
@@ -125,8 +151,22 @@ func NewMSSQLBackend(exec SQLExecutor, cfg MSSQLConfig) (*MSSQLBackend, error) {
 			b.roles[role] = append(b.roles[role], name)
 		}
 	}
-	if len(b.roles) == 0 {
-		return nil, errors.New("dynsecret mssql: every allowed role needs database roles in role_bindings")
+	for role, pair := range cfg.RotationAccounts {
+		if !mssqlUser.MatchString(pair[0]) || !mssqlUser.MatchString(pair[1]) || pair[0] == pair[1] {
+			return nil, fmt.Errorf("dynsecret mssql: role %q needs two distinct plain account names to rotate between", role)
+		}
+		b.rotationAccounts[role] = pair
+	}
+	if len(b.roles) == 0 && len(b.rotationAccounts) == 0 {
+		return nil, errors.New("dynsecret mssql: every allowed role needs database roles in role_bindings or two rotation_accounts")
+	}
+	if len(cfg.AdminDSN) > 0 {
+		parsed, err := url.Parse(secrettext.String(bytes.TrimRight(cfg.AdminDSN, "\r\n")))
+		if err != nil || parsed.Scheme != "sqlserver" || parsed.Host == "" {
+			return nil, errors.New("dynsecret mssql: the admin DSN must be a sqlserver:// URL with a host")
+		}
+		parsed.User = nil
+		b.verifyURL = parsed
 	}
 	return b, nil
 }
@@ -161,8 +201,11 @@ func (b *MSSQLBackend) Create(ctx context.Context, role string) (string, []byte,
 // after an uncertain attempt converges on one principal. If a role
 // membership fails, the new principal is removed again.
 func (b *MSSQLBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	if account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor); ok && req.Static {
+		return b.stageTwoUser(ctx, account)
+	}
 	if req.Static {
-		return "", nil, errors.New("dynsecret mssql: static credentials are not served")
+		return "", nil, errors.New("dynsecret mssql: static credentials need two rotation_accounts for the role")
 	}
 	roles, ok := b.roles[req.Role]
 	if !ok {
@@ -213,6 +256,10 @@ func (b *MSSQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 // principals this provider names are touched; one already gone counts as
 // revoked.
 func (b *MSSQLBackend) Revoke(ctx context.Context, ref string) error {
+	if isRotationAccount(b.rotationAccounts, ref) {
+		// A two-user account is retired, never dropped: its grants persist.
+		return b.retireTwoUser(ctx, ref)
+	}
 	if !mssqlUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret mssql: refusing to revoke %q, which this provider did not create", ref)
 	}
@@ -231,6 +278,92 @@ func (b *MSSQLBackend) Revoke(ctx context.Context, ref string) error {
 		if _, err := b.exec.ExecContext(ctx, mssqlDropLogin, login); err != nil {
 			return fmt.Errorf("dynsecret mssql: drop login %s failed (%s)", ref, mssqlErrorNumber(err))
 		}
+	}
+	return nil
+}
+
+// stageTwoUser sets a new password on the role's inactive account (A240). A
+// retry sets the same account's password again, so an uncertain attempt
+// leaves no second credential; the predecessor is untouched.
+func (b *MSSQLBackend) stageTwoUser(ctx context.Context, account string) (string, []byte, error) {
+	password, err := randomPolicyPassword(32)
+	if err != nil {
+		return "", nil, err
+	}
+	defer secret.Wipe(password)
+	if err := b.setAccountPassword(ctx, account, password); err != nil {
+		return "", nil, fmt.Errorf("dynsecret mssql: set the password of %s failed (%s)", account, mssqlErrorNumber(err))
+	}
+	credential, err := json.Marshal(struct { // #nosec G117 -- the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200)
+		Username string           `json:"username"`
+		Password secret.JSONBytes `json:"password"`
+		Database string           `json:"database"`
+	}{Username: account, Password: password, Database: b.database})
+	if err != nil {
+		return "", nil, err
+	}
+	return account, credential, nil
+}
+
+// retireTwoUser replaces the account's password with one nobody holds, then
+// ends its sessions; it is not disabled, so the next cycle only sets a
+// password.
+func (b *MSSQLBackend) retireTwoUser(ctx context.Context, account string) error {
+	scrambled, err := randomPolicyPassword(32)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(scrambled)
+	if err := b.setAccountPassword(ctx, account, scrambled); err != nil {
+		return fmt.Errorf("dynsecret mssql: retire %s failed (%s)", account, mssqlErrorNumber(err))
+	}
+	if _, err := b.exec.ExecContext(ctx, mssqlKillSessions, sql.Named("login", account)); err != nil {
+		return fmt.Errorf("dynsecret mssql: end the sessions of %s failed (%s)", account, mssqlErrorNumber(err))
+	}
+	return nil
+}
+
+func (b *MSSQLBackend) setAccountPassword(ctx context.Context, account string, password []byte) error {
+	login, pw := sql.Named("login", account), sql.Named("password", password)
+	if b.contained {
+		return b.inDatabase(ctx, mssqlRekeyContainedUser, "@login sysname, @password varbinary(256)", login, pw)
+	}
+	_, err := b.exec.ExecContext(ctx, mssqlRekeyLogin, login, pw)
+	return err
+}
+
+// VerifyCredential connects as the credential's account to the
+// administrator's address, in the credential's database, and runs SELECT 1.
+func (b *MSSQLBackend) VerifyCredential(ctx context.Context, credential []byte) error {
+	if b.verifyURL == nil {
+		return ErrNoSelfProof
+	}
+	var parsed struct {
+		Username string           `json:"username"`
+		Password secret.JSONBytes `json:"password"`
+		Database string           `json:"database"`
+	}
+	if err := json.Unmarshal(credential, &parsed); err != nil || parsed.Username == "" || len(parsed.Password) == 0 {
+		return errors.New("dynsecret mssql: the credential is not a username and password")
+	}
+	defer secret.Wipe(parsed.Password)
+	target := *b.verifyURL
+	target.User = url.UserPassword(parsed.Username, secrettext.String(parsed.Password))
+	if parsed.Database != "" {
+		query := target.Query()
+		query.Set("database", parsed.Database)
+		target.RawQuery = query.Encode()
+	}
+	db, err := sql.Open("sqlserver", target.String())
+	if err != nil {
+		return errors.New("dynsecret mssql: open the credential's connection failed")
+	}
+	defer func() { _ = db.Close() }()
+	verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var one int
+	if err := db.QueryRowContext(verifyCtx, "SELECT 1").Scan(&one); err != nil || one != 1 {
+		return fmt.Errorf("dynsecret mssql: the credential did not connect (%s)", mssqlErrorNumber(err))
 	}
 	return nil
 }

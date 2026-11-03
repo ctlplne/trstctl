@@ -618,9 +618,10 @@ jobs:
 
 
   # A239 providers whose stock servers ship only x86_64 images (SQL Server)
-  # are proven on this x86 runner (owner decisions 2026-11-02): the lab driver
-  # starts the pinned image, runs both lab tests and fails unless they ran and
-  # passed with no leased principal left.
+  # are proven on this x86 runner (owner decisions 2026-11-02), with A240's
+  # SQL Server two-user rotation: the lab driver starts the pinned image, runs
+  # every lab test and fails unless they ran and passed with no leased
+  # principal left and both rotated logins still enabled members.
   a239-x86-labs:
     name: a239 labs (SQL Server, Azure SQL contained users)
     runs-on: ubuntu-latest
@@ -651,7 +652,7 @@ jobs:
       - name: Prefetch dependencies
         run: scripts/ci/go-mod-download.sh
 
-      - name: SQL Server and Azure SQL dynamic secrets against SQL Server 2022 (A239)
+      - name: SQL Server and Azure SQL dynamic secrets (A239) and SQL Server two-user rotation (A240) against SQL Server 2022
         run: bash scripts/ci/a239-mssql-lab.sh
 
   build-test-lint:

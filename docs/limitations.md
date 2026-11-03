@@ -5313,8 +5313,11 @@ when off, requiring a KEK when on):
   only): the stock sqlcmd reads the bound database as a leased principal and is
   refused an insert and another database, a session held open across the
   revocation is ended, a new login fails afterwards, and no leased principal is
-  left. Azure SQL is exercised through SQL Server's contained database users;
-  there is no Azure proof yet. GitHub App installation tokens (A239) are built
+  left. The same x86 lab runs SQL Server's two-user rotation (A240): three
+  scheduled cycles between two logins while an application connects with the
+  credential it last read, a retirement against a paused server, and both
+  logins left enabled members of db_datareader. Azure SQL is exercised through
+  SQL Server's contained database users; there is no Azure proof yet. GitHub App installation tokens (A239) are built
   against a stand-in of GitHub's API only (the app JWT is verified against the
   app's key; a narrowed token works, renewal is refused, revocation presents the
   retained token and GitHub then refuses it); a live GitHub proof needs an app

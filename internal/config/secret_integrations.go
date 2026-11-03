@@ -191,7 +191,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -200,7 +200,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -525,7 +525,9 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a local account name", where, account))
 			case c.Type == "oracle" && !oracleIdentifier.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an Oracle user name", where, account))
-			case c.Type != "ldap" && c.Type != "unix" && c.Type != "mongodb" && c.Type != "oracle" && (len(account) > 63 || strings.ContainsRune(account, 0)):
+			case (c.Type == "mssql" || c.Type == "azure-sql") && !mssqlAccountName.MatchString(account):
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a plain SQL Server account name", where, account))
+			case c.Type == "postgresql" && (len(account) > 63 || strings.ContainsRune(account, 0)):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
 			}
 			if other, taken := owner[account]; taken {
@@ -1431,7 +1433,16 @@ func validateMSSQLProvider(where string, c DynamicSecretProviderConfig) []error 
 	if !mssqlDatabaseName.MatchString(c.Database) {
 		errs = append(errs, fmt.Errorf("%s database is required for %s and must be a plain database name", where, c.Type))
 	}
-	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	// A role that rotates between two existing accounts (A240) needs no
+	// role_bindings: the accounts already hold its grants.
+	bindings := c
+	bindings.AllowedRoles = nil
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if len(c.RotationAccounts[role]) == 0 {
+			bindings.AllowedRoles = append(bindings.AllowedRoles, role)
+		}
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, bindings)...)
 	for _, role := range normalizedStrings(c.AllowedRoles) {
 		binding := strings.TrimSpace(c.RoleBindings[role])
 		if binding == "" {
@@ -1445,6 +1456,10 @@ func validateMSSQLProvider(where string, c DynamicSecretProviderConfig) []error 
 	}
 	return errs
 }
+
+// mssqlAccountName is a login or contained user a two-user rotation alternates
+// between (A240), passed to QUOTENAME.
+var mssqlAccountName = regexp.MustCompile(`^[A-Za-z0-9_]{1,128}$`)
 
 var milvusRoleName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,31}$`)
 

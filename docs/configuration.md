@@ -2053,11 +2053,13 @@ the connection value and creating a workload credential.
 }
 ```
 
-`rotation_accounts` (PostgreSQL, MongoDB, Oracle, LDAP or unix, with
+`rotation_accounts` (PostgreSQL, MongoDB, Oracle, SQL Server, Azure SQL, LDAP or unix, with
 `allow_static_rotation: true`) maps an allowed role to the two existing accounts its static
 rotation alternates between, for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for
 MongoDB, two users of `database`; for Oracle, two users as Oracle stores their names, such
-as `ORDERS_APP_A`), or for LDAP two entry DNs under `users_dn`; the owner provisions both
+as `ORDERS_APP_A`; for SQL Server, two logins with users in `database`, and for Azure SQL two
+contained users there; a role with `rotation_accounts` needs no `role_bindings`), or for LDAP
+two entry DNs under `users_dn`; the owner provisions both
 with the role's grants (for MongoDB, its roles; for LDAP, as members of the role's group),
 and rotation only ever changes their passwords.
 
