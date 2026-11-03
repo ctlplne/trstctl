@@ -1144,6 +1144,12 @@
 
 ### Fixed
 
+- A host destination whose key the control plane generates (no `"executor": "agent"`) deploys again. Since a host
+  destination must name its agent in `required_agent_id`, the credential grant still asked for the key-custody marker
+  as well, so the assigned agent was refused the sealed deploy ("credential redemption was not granted") and every such
+  deploy failed. The grant now binds the work to the agent the target's reviewed configuration names, whichever side
+  generates the key; a target naming another agent, or none, is still refused.
+
 - The Windows agent MSI installs again on current Windows releases: Windows Installer applied the service's
   restart-on-failure actions without the start right a restart action needs, so the install failed with error 1939
   and rolled back. The agent's service now sets its restart policy (30 seconds, 60 seconds, then 5 minutes) on itself

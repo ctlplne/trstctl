@@ -100,3 +100,54 @@ func TestHostRedemptionGrantRechecksResolvedJobAndCurrentAuthority(t *testing.T)
 		})
 	}
 }
+
+// A host destination whose key the control plane generates (no "executor":
+// "agent") redeems its sealed deploy for the agent its config names, like one
+// whose key the host generates; a target naming another agent refuses. Before
+// the fix every exact-assigned host target without the key-custody marker was
+// refused at redemption, so its deploys failed (census connector rows).
+func TestHostDeployRedemptionBindsTheAssignedAgentNotTheKeyCustodyMarker(t *testing.T) {
+	st := newStore(t)
+	ctx := t.Context()
+	tenantID := tenantA
+	const agentID = "bbbbbbbb-0000-0000-0000-000000000011"
+	const otherAgentID = "bbbbbbbb-0000-0000-0000-000000000019"
+	for _, tc := range []struct {
+		name    string
+		config  string
+		granted bool
+	}{
+		{"control-plane key, assigned to this agent", `{"profile":"nginx","required_agent_id":"` + agentID + `"}`, true},
+		{"host key, assigned to this agent", `{"profile":"nginx","executor":"agent","required_agent_id":"` + agentID + `"}`, true},
+		{"control-plane key, assigned to another agent", `{"profile":"nginx","required_agent_id":"` + otherAgentID + `"}`, false},
+		{"host key, assigned to another agent", `{"profile":"nginx","executor":"agent","required_agent_id":"` + otherAgentID + `"}`, false},
+		{"no assignment", `{"profile":"nginx"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			targetID := googleuuid.NewString()
+			if err := st.UpsertDeploymentTarget(ctx, store.DeploymentTarget{ID: targetID, TenantID: tenantID, Name: "web-" + targetID[:8], Type: "nginx", Config: []byte(tc.config), Enabled: true, EnabledSet: true}); err != nil {
+				t.Fatal(err)
+			}
+			payload := []byte(`{"connector":"nginx","target_id":"` + targetID + `","identity_id":"` + googleuuid.NewString() + `"}`)
+			var id int64
+			if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+				return tx.QueryRow(ctx, `INSERT INTO outbox(tenant_id,destination,payload,idempotency_key,required_agent_id,required_agent_role) VALUES($1,'connector.deploy',$2,$3,$4,'host') RETURNING id`, tenantID, payload, "deploy-"+targetID, agentID).Scan(&id)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().UTC()
+			jobs, err := st.ClaimAgentJobs(ctx, tenantID, agentID, []string{"connector.deploy"}, []string{"host"}, 1, time.Minute, now)
+			if err != nil || len(jobs) != 1 || jobs[0].ID != id {
+				t.Fatalf("claim: %+v %v", jobs, err)
+			}
+			job, held, err := st.GetAgentJobForRedemption(ctx, tenantID, agentID, id, now)
+			if err != nil || !held {
+				t.Fatalf("snapshot: held=%v %v", held, err)
+			}
+			_, granted, err := st.RedeemAgentJobCredential(ctx, tenantID, agentID, id, job.ClaimAttempts, job, []byte("test-binding"), now)
+			if err != nil || granted != tc.granted {
+				t.Fatalf("grant=%v err=%v, want %v", granted, err, tc.granted)
+			}
+		})
+	}
+}

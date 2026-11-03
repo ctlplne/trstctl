@@ -641,9 +641,13 @@ func (s *Store) RedeemAgentJobCredential(
 			                  -- or cloud-store target that names no host executor, and
 			                  -- the row's role plus the target's enabled type and (for
 			                  -- a rollback) its reviewed config are what bind it (A59).
+			                  -- Assigned work redeems only for the agent the target's
+			                  -- reviewed config names. "executor": "agent" is not
+			                  -- asked for: it chooses where the key is generated, and a
+			                  -- host target whose key the control plane generates
+			                  -- redeems that sealed key the same way.
 			                  AND ((o.required_agent_role <> 'host' AND $10::text = '') OR
-			                       (dt.config->>'executor' = 'agent'
-			                        AND dt.config->>'required_agent_id' = o.claimed_by_agent_id::text))
+			                       dt.config->>'required_agent_id' = o.claimed_by_agent_id::text)
 			                  AND ($7 <> 'connector.rollback' OR
 			                       dt.config - 'auto_rollback_on_verify_failure' =
 			                       (convert_from($9, 'UTF8')::jsonb->'target_config') - 'auto_rollback_on_verify_failure')
