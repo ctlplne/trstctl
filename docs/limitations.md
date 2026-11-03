@@ -5024,6 +5024,10 @@ and the trstctl roles as the User's `roles`, reads the User back, and records
 `scim.writeback.recorded` with the verdict; a directory answer that disagrees
 with what was written is recorded as refused, a transport failure retries
 through the outbox, and the directory's own words never enter the event log.
+A directory on a private network is reached only through the networks the
+operator lists in `writeback_private_egress_cidrs` (with its internal CA in
+`writeback_ca_file`); an unlisted private address is refused at dial and
+recorded as refused with that reason, not retried.
 A change the directory itself pushed is never echoed back, and a member with
 no SCIM identity is never written. The directory must serve SCIM 2.0 for its
 own users (an identity broker, a SCIM-fronted directory, or an IdP whose SCIM

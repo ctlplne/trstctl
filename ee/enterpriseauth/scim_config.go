@@ -4,8 +4,10 @@ package enterpriseauth
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"trstctl.com/trstctl/internal/api"
@@ -58,9 +60,28 @@ func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 				return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_token_file is empty", i)
 			}
 			token.WritebackEndpoint = strings.TrimRight(strings.TrimSpace(tok.WritebackEndpoint), "/")
-			writebacks[tok.TenantID] = scimWritebackTarget{
-				TokenName: tok.Name, Endpoint: token.WritebackEndpoint, SubjectAttribute: strings.TrimSpace(tok.SubjectAttribute), bearer: buffer,
+			prefixes, prefixErrs := tok.WritebackPrivatePrefixes()
+			if len(prefixErrs) > 0 {
+				buffer.Destroy()
+				return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_private_egress_cidrs %w", i, errors.Join(prefixErrs...))
 			}
+			var rootPEM []byte
+			if caFile := strings.TrimSpace(tok.WritebackCAFile); caFile != "" {
+				rootPEM, err = os.ReadFile(caFile) // #nosec G304 -- the operator's own configured CA file (CWE-22)
+				if err != nil {
+					buffer.Destroy()
+					return nil, fmt.Errorf("auth.scim.tokens[%d].writeback_ca_file: %w", i, err)
+				}
+			}
+			target, err := withSCIMWritebackClient(scimWritebackTarget{
+				TokenName: tok.Name, Endpoint: token.WritebackEndpoint, SubjectAttribute: strings.TrimSpace(tok.SubjectAttribute), bearer: buffer,
+				privateCIDRs: prefixes, rootPEM: rootPEM,
+			})
+			if err != nil {
+				buffer.Destroy()
+				return nil, fmt.Errorf("auth.scim.tokens[%d] writeback client: %w", i, err)
+			}
+			writebacks[tok.TenantID] = target
 		}
 		out.Tokens = append(out.Tokens, token)
 	}

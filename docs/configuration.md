@@ -1532,6 +1532,17 @@ directory's User (`active` and `roles`), read back, and recorded as
 `scim.writeback.recorded`. The outbound bearer is loaded at startup into locked
 memory and read only at startup: rotate it by writing the file and restarting.
 
+A directory on a private network is reached only through the networks the
+operator lists for that token in `writeback_private_egress_cidrs` (exact private
+networks, the same rule as `notifications.tenant_private_egress`; never
+loopback, link-local or a metadata address). A literal private endpoint that is
+not listed fails validation, naming the setting; a host name that resolves to
+an unlisted private address is refused at dial, and the writeback is recorded
+as refused with that reason instead of being retried. When the directory's
+certificate chains to an internal CA, name its PEM root in `writeback_ca_file`
+(an absolute path, read at startup); that root is trusted for this directory
+only, and the runtime distrust list still applies.
+
 The environment variables replace the token list as one complete single-token
 configuration. A mapping-only environment override fails validation when enabled;
 use the per-token config field for a multi-token deployment. Example:
@@ -1555,6 +1566,8 @@ auth:
         token_file: /etc/trstctl/scim/entra-platform.token
         writeback_endpoint: https://directory.example.internal/scim/v2 # the directory's own SCIM server
         writeback_token_file: /etc/trstctl/scim/entra-platform.writeback.token
+        writeback_private_egress_cidrs: [10.20.0.0/24] # the directory's private network
+        writeback_ca_file: /etc/trstctl/scim/directory-root.pem # its internal CA
 ```
 
 Example SAML config:

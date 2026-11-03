@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -844,6 +845,13 @@ type SCIMToken struct {
 	// neither; the endpoint must be https, or http to a loopback host.
 	WritebackEndpoint  string `json:"writeback_endpoint,omitempty"`
 	WritebackTokenFile string `json:"writeback_token_file,omitempty"`
+	// WritebackPrivateEgressCIDRs are the private networks the operator lets
+	// writeback reach, for a directory on a private network; any other
+	// private address is refused at dial with the reason. WritebackCAFile is
+	// the PEM root the directory's certificate chains to, when that is an
+	// internal CA rather than a public one.
+	WritebackPrivateEgressCIDRs []string `json:"writeback_private_egress_cidrs,omitempty"`
+	WritebackCAFile             string   `json:"writeback_ca_file,omitempty"`
 	// GroupRoles maps a directory group's displayName to the role its members
 	// hold in the tenant (A207): a built-in role or a tenant custom role. A
 	// group named for a built-in role needs no entry; any other group is
@@ -5839,18 +5847,64 @@ func validateSCIMWriteback(i int, tok SCIMToken) []error {
 	if endpoint == "" || tokenFile == "" {
 		errs = append(errs, fmt.Errorf("auth.scim.tokens[%d]: writeback_endpoint and writeback_token_file are set together", i))
 	}
+	prefixes, prefixErrs := tok.WritebackPrivatePrefixes()
+	for _, err := range prefixErrs {
+		errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_private_egress_cidrs %w", i, err))
+	}
+	if caFile := strings.TrimSpace(tok.WritebackCAFile); caFile != "" && !filepath.IsAbs(caFile) {
+		errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_ca_file must be an absolute path", i))
+	}
 	if endpoint != "" {
 		parsed, err := url.Parse(endpoint)
 		switch {
 		case err != nil || parsed.Host == "":
 			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_endpoint must be an absolute URL", i))
 		case parsed.Scheme == "https":
+			// A literal private address is known now: it must be listed, or
+			// every delivery would be refused at dial. A host name is checked
+			// where it resolves, at dial.
+			if addr, err := netip.ParseAddr(parsed.Hostname()); err == nil && addr.Unmap().IsPrivate() && !prefixesContain(prefixes, addr.Unmap()) {
+				errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_endpoint %s is a private address; list its network in auth.scim.tokens[%d].writeback_private_egress_cidrs", i, addr, i))
+			}
 		case parsed.Scheme == "http" && isLoopbackHost(parsed.Hostname()):
 		default:
 			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].writeback_endpoint must use https (http is accepted only for a loopback host)", i))
 		}
+	} else if len(tok.WritebackPrivateEgressCIDRs) > 0 || strings.TrimSpace(tok.WritebackCAFile) != "" {
+		errs = append(errs, fmt.Errorf("auth.scim.tokens[%d]: writeback_private_egress_cidrs and writeback_ca_file apply only with writeback_endpoint", i))
 	}
 	return errs
+}
+
+// WritebackPrivatePrefixes parses the private networks the operator lets this
+// token's writeback reach (A73): each must be an exact private network a
+// tenant may be granted (the notifications' A223 rule), never loopback,
+// link-local or a metadata address.
+func (t SCIMToken) WritebackPrivatePrefixes() ([]netip.Prefix, []error) {
+	var prefixes []netip.Prefix
+	var errs []error
+	for _, raw := range t.WritebackPrivateEgressCIDRs {
+		prefix, err := netsec.ParseEgressAllowPrefix(raw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("entry %q is invalid: %w", raw, err))
+			continue
+		}
+		if !tenantPrivatePrefix(prefix) {
+			errs = append(errs, fmt.Errorf("entry %q is not a private network a directory may be granted", raw))
+			continue
+		}
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes, errs
+}
+
+func prefixesContain(prefixes []netip.Prefix, addr netip.Addr) bool {
+	for _, prefix := range prefixes {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func isLoopbackHost(host string) bool {

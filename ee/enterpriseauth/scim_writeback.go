@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strings"
@@ -18,7 +19,9 @@ import (
 
 	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -33,6 +36,11 @@ type scimWritebackTarget struct {
 	Endpoint         string
 	SubjectAttribute string
 	bearer           *secret.Buffer
+	// privateCIDRs are the private networks the operator lets this
+	// directory's writeback reach; rootPEM is the internal CA its
+	// certificate chains to, when it names one.
+	privateCIDRs []netip.Prefix
+	rootPEM      []byte
 	// client is the SSRF-bounded outbound client for this endpoint: the
 	// safe client for a real directory, the loopback client only for the
 	// loopback endpoints configuration validation admits.
@@ -57,17 +65,53 @@ const (
 
 func newSCIMWriteback(deps api.SCIMWritebackDeps, targets map[string]scimWritebackTarget) *scimWriteback {
 	for tenantID, target := range targets {
-		switch {
-		case deps.HTTPClient != nil:
+		if deps.HTTPClient != nil {
 			target.client = deps.HTTPClient
-		case scimWritebackLoopback(target.Endpoint):
-			target.client = netsec.InsecureLoopbackClient(scimWritebackTimeout)
-		default:
-			target.client = netsec.SafeClient(scimWritebackTimeout)
 		}
 		targets[tenantID] = target
 	}
 	return &scimWriteback{deps: deps, targets: targets}
+}
+
+// withSCIMWritebackClient gives a target its outbound client: the loopback
+// client only for the loopback endpoints configuration validation admits, the
+// SSRF-bounded client for a real directory.
+func withSCIMWritebackClient(target scimWritebackTarget) (scimWritebackTarget, error) {
+	if scimWritebackLoopback(target.Endpoint) {
+		target.client = netsec.InsecureLoopbackClient(scimWritebackTimeout)
+		return target, nil
+	}
+	client, err := scimWritebackClient(target)
+	if err != nil {
+		return target, err
+	}
+	target.client = client
+	return target, nil
+}
+
+// scimWritebackClient is the SSRF-bounded client for one directory: public
+// addresses, plus the private networks the operator listed for it, and its
+// internal CA when one is named. The TLS configuration comes from the crypto
+// boundary; only its dial path is replaced by the resolved-address guard, as
+// the external CA clients do.
+func scimWritebackClient(target scimWritebackTarget) (*http.Client, error) {
+	opts := netsec.SafeClientOptions{AllowPrivateCIDRs: target.privateCIDRs}
+	client := netsec.SafeClientWithOptions(scimWritebackTimeout, opts)
+	if len(target.rootPEM) == 0 {
+		return client, nil
+	}
+	safe := netsec.SafeTransportWithOptions(opts)
+	trusted, err := mtls.HTTPTransportForServerName(target.rootPEM, "")
+	if err != nil {
+		return nil, err
+	}
+	trusted.DialContext = safe.DialContext
+	trusted.DialTLSContext = nil
+	trusted.TLSHandshakeTimeout = safe.TLSHandshakeTimeout
+	trusted.ResponseHeaderTimeout = safe.ResponseHeaderTimeout
+	// An operator-pinned root is still subject to the runtime distrust list.
+	client.Transport = trust.HardenTransport(trusted)
+	return client, nil
 }
 
 func scimWritebackLoopback(endpoint string) bool {
@@ -236,6 +280,15 @@ func (w *scimWriteback) call(ctx context.Context, target scimWritebackTarget, me
 	}
 	resp, err := target.client.Do(req)
 	if err != nil {
+		if errors.Is(err, netsec.ErrSSRFBlocked) {
+			// Retrying cannot reach an address the guard refuses; the
+			// operator lists the directory's network to allow it.
+			reason := err.Error()
+			if opErr := (*net.OpError)(nil); errors.As(err, &opErr) && opErr.Err != nil {
+				reason = opErr.Err.Error()
+			}
+			return scimWritebackRefused{detail: fmt.Sprintf("directory %s %s: %s; a directory on a private network needs its network in auth.scim.tokens[].writeback_private_egress_cidrs", method, path, reason)}
+		}
 		return fmt.Errorf("enterpriseauth: directory %s %s: transport failure", method, path)
 	}
 	defer func() { _ = resp.Body.Close() }()
