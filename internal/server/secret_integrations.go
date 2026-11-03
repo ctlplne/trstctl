@@ -444,7 +444,7 @@ func (p *configuredDynamicProvider) openBackend(ctx context.Context) (requestDyn
 func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvider) (requestDynamicBackend, func(), error) {
 	opener := &configuredDynamicBackendOpener{ctx: ctx, provider: p}
 	switch p.cfg.Type {
-	case "postgresql", "mysql", "mongodb", "redis", "ldap", "mssql", "azure-sql", "oracle":
+	case "postgresql", "mysql", "mongodb", "redis", "ldap", "mssql", "azure-sql", "oracle", "hana":
 		return openConfiguredDatabaseBackend(opener)
 	case "kubernetes", "aws-iam", "aws-sts", "gcp-iam", "azure-entra":
 		return openConfiguredCloudBackend(opener)
@@ -570,42 +570,8 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 			return o.fail(err)
 		}
 		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
-	case "mssql", "azure-sql":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
-		if err != nil {
-			return o.fail(err)
-		}
-		db, err := dynsecret.OpenMSSQLExecutor(o.ctx, dsn)
-		if err != nil {
-			return o.fail(err)
-		}
-		backend, err := dynsecret.NewMSSQLBackend(db, dynsecret.MSSQLConfig{
-			Contained: cfg.Type == "azure-sql", Database: cfg.Database, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
-			RotationAccounts: o.provider.rotationAccountPairs(), AdminDSN: dsn,
-		})
-		if err != nil {
-			_ = db.Close()
-			return o.fail(err)
-		}
-		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
-	case "oracle":
-		dsn, err := o.resolve(cfg.AdminDSNRef)
-		if err != nil {
-			return o.fail(err)
-		}
-		db, err := dynsecret.OpenOracleExecutor(o.ctx, dsn)
-		if err != nil {
-			return o.fail(err)
-		}
-		backend, err := dynsecret.NewOracleBackend(db, dynsecret.OracleConfig{
-			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
-			RotationAccounts: o.provider.rotationAccountPairs(),
-		})
-		if err != nil {
-			_ = db.Close()
-			return o.fail(err)
-		}
-		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
+	case "mssql", "azure-sql", "oracle", "hana":
+		return openConfiguredSQLDriverBackend(o)
 	case "mongodb":
 		uri, err := o.resolve(cfg.AdminDSNRef)
 		if err != nil {

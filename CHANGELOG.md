@@ -2,6 +2,11 @@
 
 ### Added
 
+- SAP HANA dynamic secrets (`type: hana`): each lease is a user with a generated password and no password lifetime,
+  granted only the existing HANA roles its role is bound to; the password and names travel only as parameters of an
+  anonymous SQLScript block. Revocation deactivates the user, disconnects its sessions and drops it. Its lab test runs on
+  an x86 CI runner against SAP HANA, express edition.
+
 - Oracle Database dynamic secrets (`type: oracle`): each lease is a user with a generated password granted only the
   existing Oracle roles its role is bound to; the password and names travel only as binds, quoted by the database.
   Revocation locks the user, kills its sessions and drops it. A role with `rotation_accounts` instead rotates between

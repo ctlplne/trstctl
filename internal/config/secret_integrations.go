@@ -294,7 +294,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
-	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {},
+	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -479,6 +479,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider, "cassandra": validateCassandraProvider, "oracle": validateOracleProvider,
+	"hana":  validateHANAProvider,
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"unix": validateUnixProvider,
 }
@@ -1594,6 +1595,29 @@ func validKafkaGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+// hanaRoleName is an SAP HANA role as HANA stores it (an unquoted name is
+// stored in upper case).
+var hanaRoleName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,126}$`)
+
+// validateHANAProvider checks an SAP HANA provider (A239): admin_dsn_ref is
+// the administrator's go-hdb URL, and each allowed role is bound to existing
+// HANA roles.
+func validateHANAProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if err := validateCredentialRef(c.AdminDSNRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s admin_dsn_ref: %w", where, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		for _, name := range strings.Split(c.RoleBindings[role], ",") {
+			if name = strings.TrimSpace(name); name != "" && !hanaRoleName.MatchString(name) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a HANA role name", where, role, name))
+			}
+		}
+	}
+	return errs
 }
 
 // oracleIdentifier is an Oracle user or role name as Oracle stores it (an

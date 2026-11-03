@@ -655,9 +655,46 @@ jobs:
       - name: SQL Server and Azure SQL dynamic secrets (A239) and SQL Server two-user rotation (A240) against SQL Server 2022
         run: bash scripts/ci/a239-mssql-lab.sh
 
+  # SAP HANA, express edition ships only an x86_64 image and needs most of a
+  # runner's memory, so it has its own x86 job (owner decision 2026-11-02,
+  # item 6): the lab driver measures the runner, starts the pinned image, runs
+  # the lab test and fails unless it ran and passed with no leased user left.
+  a239-x86-hana:
+    name: a239 lab (SAP HANA, express edition)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+
+      - name: Prefetch dependencies
+        run: scripts/ci/go-mod-download.sh
+
+      - name: SAP HANA dynamic secrets against SAP HANA, express edition (A239)
+        run: bash scripts/ci/a239-hana-lab.sh
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

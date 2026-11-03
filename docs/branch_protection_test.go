@@ -84,6 +84,7 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"core-integration-succession": ciUmbrellaCheck,
 	"core-integration-wire":       ciUmbrellaCheck,
 	"a239-x86-labs":               ciUmbrellaCheck,
+	"a239-x86-hana":               ciUmbrellaCheck,
 	"dod-census":                  dodUmbrellaCheck,
 	"dod-selftests":               dodUmbrellaCheck,
 	"fuzz-shards":                 fuzzUmbrellaCheck,

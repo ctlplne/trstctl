@@ -18681,7 +18681,8 @@
               "openai",
               "unix",
               "cassandra",
-              "oracle"
+              "oracle",
+              "hana"
             ],
             "type": "string"
           }

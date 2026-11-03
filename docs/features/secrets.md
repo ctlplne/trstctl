@@ -355,7 +355,7 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Thirty backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Thirty-one backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
@@ -363,7 +363,8 @@ users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atla
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
 tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Connect app
 credentials, SQL Server logins, Azure SQL contained database users, Cassandra login
-roles and Oracle Database users (A239), and Datadog and OpenAI keys (A240). SSH user
+roles, Oracle Database users and SAP HANA users (A239), and Datadog and OpenAI keys
+(A240). SSH user
 certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
 through the served KRL), not as dynamic-secret leases.
 
@@ -474,6 +475,15 @@ retry after an uncertain attempt finds the same role, sets the new password and 
 the grants it already has, and if a grant fails the new role is dropped again. Only
 roles with the provider's issued-name shape are ever dropped.
 
+The SAP HANA backend creates one user per lease with a generated password and no
+password lifetime, granted only its role's existing HANA roles, through go-hdb. Like the
+Oracle backend, it sends the password and every name only as parameters of an anonymous
+SQLScript block, which quotes them into the DDL it runs (`ESCAPE_DOUBLE_QUOTES`).
+Revocation deactivates the user, disconnects its sessions and drops it with what it owns;
+a retry after an uncertain attempt finds the same user, sets the new password and
+reactivates it. Its lab test runs only on the x86 CI runner (the express edition's image is
+x86 only).
+
 The Oracle Database backend creates one user per lease with a generated password,
 granted only its role's existing Oracle roles (`"ORDERS_READER"`, carrying `CREATE
 SESSION`), as an administrator through go-ora. The password and every name travel only as
@@ -564,7 +574,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns thirty-three safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns thirty-four safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0` and `unix`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

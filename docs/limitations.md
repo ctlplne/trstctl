@@ -5243,7 +5243,7 @@ when off, requiring a KEK when on):
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
-  `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra` and `oracle` (A239), and `datadog` and `openai`
+  `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog` and `openai`
   (A240). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
@@ -5316,7 +5316,13 @@ when off, requiring a KEK when on):
   left. The same x86 lab runs SQL Server's two-user rotation (A240): three
   scheduled cycles between two logins while an application connects with the
   credential it last read, a retirement against a paused server, and both
-  logins left enabled members of db_datareader. Azure SQL is exercised through
+  logins left enabled members of db_datareader. SAP HANA users (A239) have a lab
+  test against SAP HANA, express edition 2.00.088 that runs only on an x86 CI
+  runner (job "a239 lab (SAP HANA, express edition)"; the image is x86 only and
+  the run records the runner's memory and the database's footprint): the stock
+  hdbsql reads the bound schema as a leased user and is refused an insert and
+  another schema, a session held open across the revocation is disconnected, a
+  new login fails afterwards, and no leased user is left. Azure SQL is exercised through
   SQL Server's contained database users; there is no Azure proof yet. GitHub App installation tokens (A239) are built
   against a stand-in of GitHub's API only (the app JWT is verified against the
   app's key; a narrowed token works, renewal is refused, revocation presents the
@@ -5330,13 +5336,12 @@ when off, requiring a KEK when on):
   IBM API Connect app credentials (A239) are built against a stand-in of the
   platform API only (the gateway accepts a leased credential and refuses it once
   revoked); a live proof needs an API Connect instance. What comes next in
-  A239's library: SAP HANA (its image and driver are approved), Vertica
-  (waiting on an image source: the official Community Edition image is no
-  longer published) and SAP ASE (waiting on an image: none is freely
-  available). The provider catalog states each adapter's authority and whether
-  its revocation is confirmed or TTL-only. A239 is served for every provider in
-  the integration catalog except the three named above, and SSH user
-  certificates are served by the SSH CA rather than as leases.
+  A239's library: Vertica (its freely available image runs Community Edition
+  under an evaluation-only license, which doesn't cover continuous CI testing)
+  and SAP ASE (no freely available image). The provider catalog states each
+  adapter's authority and whether its revocation is confirmed or TTL-only. A239
+  is served for every provider in the integration catalog except those two, and
+  SSH user certificates are served by the SSH CA rather than as leases.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,
   CloudTrail reconciliation, or rejection after native expiry. The local query

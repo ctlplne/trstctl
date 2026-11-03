@@ -210,6 +210,70 @@ func openConfiguredKafkaBackend(o *configuredDynamicBackendOpener) (requestDynam
 	return backend, o.closeWith(backend, nil), nil
 }
 
+// openConfiguredSQLDriverBackend opens the providers that reach their database
+// through a database/sql driver and an administrator DSN — SQL Server and Azure
+// SQL, Oracle and SAP HANA — and hands the DSN to the backend so a credential is
+// verified at the same address (A239, A240).
+func openConfiguredSQLDriverBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	switch cfg.Type {
+	case "mssql", "azure-sql":
+		dsn, err := o.resolve(cfg.AdminDSNRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		db, err := dynsecret.OpenMSSQLExecutor(o.ctx, dsn)
+		if err != nil {
+			return o.fail(err)
+		}
+		backend, err := dynsecret.NewMSSQLBackend(db, dynsecret.MSSQLConfig{
+			Contained: cfg.Type == "azure-sql", Database: cfg.Database, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+			RotationAccounts: o.provider.rotationAccountPairs(), AdminDSN: dsn,
+		})
+		if err != nil {
+			_ = db.Close()
+			return o.fail(err)
+		}
+		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
+	case "hana":
+		dsn, err := o.resolve(cfg.AdminDSNRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		db, err := dynsecret.OpenHANAExecutor(o.ctx, dsn)
+		if err != nil {
+			return o.fail(err)
+		}
+		backend, err := dynsecret.NewHANABackend(db, dynsecret.HANAConfig{
+			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+		})
+		if err != nil {
+			_ = db.Close()
+			return o.fail(err)
+		}
+		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
+	case "oracle":
+		dsn, err := o.resolve(cfg.AdminDSNRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		db, err := dynsecret.OpenOracleExecutor(o.ctx, dsn)
+		if err != nil {
+			return o.fail(err)
+		}
+		backend, err := dynsecret.NewOracleBackend(db, dynsecret.OracleConfig{
+			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+			RotationAccounts: o.provider.rotationAccountPairs(),
+		})
+		if err != nil {
+			_ = db.Close()
+			return o.fail(err)
+		}
+		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
+	}
+	return o.fail(fmt.Errorf("server: %q is not a SQL-driver provider", cfg.Type))
+}
+
 // openConfiguredCassandraBackend reads the administrator's password (and a
 // private CA) into a backend that keeps its own sealed copy and reaches the one
 // configured node over verified TLS, or the allowed plaintext (A239).

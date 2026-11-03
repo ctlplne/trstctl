@@ -290,6 +290,11 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Optional: with rotation_accounts, rotate a role between two existing users in two phases; their grants never change.", false),
 			roles(`Each allowed role maps to existing Oracle roles, comma separated, as Oracle stores them (for example "ORDERS_READER"); the roles carry CREATE SESSION and the lease's privileges. A role may instead name two existing users in rotation_accounts.`),
 		)},
+		{Type: "hana", Label: "SAP HANA users", Purpose: "Creates an SAP HANA user with a generated password (sent only as a bind) granted only its role's HANA roles, and at revocation deactivates it, disconnects its sessions and drops it; the database then refuses its login.", Requirements: dynamicSecretProviderRequirements(
+			credential("admin_dsn_ref", "Administrator URL reference", "A go-hdb URL (hdb://user:password@host:port, TLS options in its query) of an administrator with USER ADMIN, SESSION ADMIN and CATALOG READ who holds the bound roles WITH ADMIN OPTION.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl, stored upper case); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
+			roles(`Each allowed role maps to existing HANA roles, comma separated, as HANA stores them (for example "ORDERS_READER").`),
+		)},
 		{Type: "couchbase", Label: "Couchbase users", Purpose: "Creates a local Couchbase user with a generated password and only its role's roles on the named buckets through the management REST API, and deletes it at revocation; Couchbase then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Management REST API", "HTTPS URL of the cluster's management REST API (port 18091).", true),
 			value("admin_user", "Administrator", "A user allowed to create and delete local users (Full Admin or Security Admin).", true),
@@ -435,6 +440,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's ACL operations on its topics, consumer groups and transactional IDs, until the ACLs and the SCRAM credential are deleted", "confirmed"
 	case "oracle":
 		return "the privileges of the Oracle roles the lease role is bound to, until the user is locked, its sessions killed and the user dropped", "confirmed"
+	case "hana":
+		return "the privileges of the HANA roles the lease role is bound to, until the user is deactivated, its sessions disconnected and the user dropped", "confirmed"
 	case "cassandra":
 		return "the permissions of the Cassandra roles the lease role is bound to, until the role is dropped (a connection already open keeps them until the node's role and permission caches expire, 2 s by default)", "confirmed"
 	case "couchbase":

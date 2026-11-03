@@ -944,6 +944,39 @@ func TestValidateOracleProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateHANAProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "warehouse-hana", Type: "hana",
+		AdminDSNRef: "file:/run/secrets/hana-admin-url", AllowedRoles: []string{"reader"}, MaxTTL: "1h",
+		RoleBindings: map[string]string{"reader": "ORDERS_READER, AUDIT_READER"}}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no admin URL": {func(c *DynamicSecretProviderConfig) { c.AdminDSNRef = "" }, "admin_dsn_ref"},
+		"no binding":   {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["reader"] is required for hana`},
+		"quoted role": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": `ORDERS" TO PUBLIC --`}
+		}, "is not a HANA role name"},
+		"static rotation": {func(c *DynamicSecretProviderConfig) {
+			c.AllowStaticRotation, c.RotationAccounts = true, map[string][]string{"reader": {"APP_A", "APP_B"}}
+		}, "rotation_accounts needs allow_static_rotation on a provider of type"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "ORDERS_READER"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateTailscaleProviderA239(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
 		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},

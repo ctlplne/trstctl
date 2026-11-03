@@ -2093,7 +2093,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
-`datadog`, `openai`, `unix`, `cassandra` and `oracle`. Sync `type` values are
+`datadog`, `openai`, `unix`, `cassandra`, `oracle` and `hana`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
@@ -2524,6 +2524,14 @@ existing users in `rotation_accounts` (A240).
   "max_ttl": "8h"
 }
 ```
+
+For SAP HANA (A239, `hana`), set `admin_dsn_ref` to a go-hdb URL
+(`hdb://<user>:<password>@<host>:<port>`, the tenant database's SQL port; TLS options go in
+its query) of an administrator with `USER ADMIN`, `SESSION ADMIN` and `CATALOG READ` who
+holds the bound roles `WITH ADMIN OPTION`, and `role_bindings` to existing HANA roles per
+allowed role, as HANA stores them. Each lease is an upper-case user granted exactly those
+roles, with no password lifetime; revocation deactivates it, disconnects its sessions and
+drops it.
 
 For Milvus (A239, `milvus`), set `endpoint` to the proxy's RESTful API
 (`https://<host>:19530`), `admin_user` and `password_ref` to a user allowed to create
