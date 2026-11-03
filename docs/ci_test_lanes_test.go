@@ -439,6 +439,15 @@ func TestEveryPostgresArchiveRestoreSeedsTheBundledSource(t *testing.T) {
 	if restores == 0 {
 		t.Error("no CI job restores the pinned PostgreSQL archive")
 	}
+	// The fuzz lanes start an embedded PostgreSQL too (internal/query's
+	// FuzzPlanQuestion); fetching it mid-run failed a lane (CI 41578461348).
+	restored := false
+	for _, step := range wf.Jobs["fuzz-shards"].Steps {
+		restored = restored || step.Name == "Restore the pinned embedded PostgreSQL archive"
+	}
+	if !restored {
+		t.Error("the fuzz lanes must restore the pinned PostgreSQL archive")
+	}
 	script := read(t, "../scripts/ci/seed-bundled-pg-archive.sh")
 	for _, want := range []string{`src="${HOME}/.embedded-postgres-go"`, `dst="${TMPDIR:-/tmp}/trstctl-pg-bin"`, `install -m 600 "$archive"`, `! -L "$archive"`} {
 		if !strings.Contains(script, want) {

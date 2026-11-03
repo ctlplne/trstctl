@@ -1369,6 +1369,20 @@ jobs:
           check-latest: true
           cache: true
 
+      # Some targets start an embedded PostgreSQL (internal/query's
+      # FuzzPlanQuestion): restore the pinned archive like the test jobs instead
+      # of fetching it from the Maven mirror mid-run (CI 41578461348: the
+      # download failed and the lane read as a crash).
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+
       # Property tests prove generated semantic invariants. This denominator is
       # deliberately separate from the hostile-byte fuzz-target denominator.
       - name: Property guard (every mandatory parser family has semantic invariants)
