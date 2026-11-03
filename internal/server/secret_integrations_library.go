@@ -552,6 +552,34 @@ func openConfiguredHostedKeyBackend(o *configuredDynamicBackendOpener) (requestD
 	return backend, o.closeWith(backend, nil), nil
 }
 
+// openConfiguredClientSecretBackend reads the administrator's credential (an
+// Okta API token, or a Databricks admin service principal's OAuth secret)
+// into a client secret rotator that keeps its own sealed copy and calls the
+// vendor through the SSRF-guarded client (A240).
+func openConfiguredClientSecretBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	ref := cfg.APIKeyRef
+	if cfg.Type == "databricks" {
+		ref = cfg.ClientSecretRef
+	}
+	adminKey, err := o.resolve(ref)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewClientSecretBackend(cfg.Type, dynsecret.ClientSecretConfig{
+		Endpoint: cfg.Endpoint, AdminKey: adminKey, AdminClientID: cfg.ClientID, RoleBindings: cfg.RoleBindings,
+		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
 // openConfiguredDatadogBackend reads the administrator's API and application
 // keys into a backend that keeps its own sealed copies and calls the site's
 // API through the SSRF-guarded client (A240).

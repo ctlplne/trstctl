@@ -196,7 +196,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -301,13 +301,22 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
+	"okta": {}, "databricks": {},
 }
+
+// clientIDProviderTypes take client_id, and clientSecretProviderTypes
+// client_secret_ref: an OAuth client the provider authenticates as.
+var (
+	clientIDProviderTypes     = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "github-app": true, "ibm-api-connect": true, "auth0": true, "databricks": true}
+	clientSecretProviderTypes = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "ibm-api-connect": true, "auth0": true, "databricks": true}
+)
 
 // apiKeyProviderTypes take api_key_ref, an administrator's key or token
 // (A239, A240).
 var apiKeyProviderTypes = map[string]bool{
 	"ibm-api-connect": true, "datadog": true, "openai": true,
 	"openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true,
+	"okta": true,
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -496,6 +505,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"openrouter": validateHostedKeyProvider, "fireworks": validateHostedKeyProvider, "litellm": validateHostedKeyProvider, "supabase": validateHostedKeyProvider, "convex": validateHostedKeyProvider, "dbt": validateHostedKeyProvider, "cloudflare": validateHostedKeyProvider, "cloudflare-r2": validateHostedKeyProvider,
 	"unix": validateUnixProvider,
+	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -975,11 +985,11 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.RevocationEndpoint != "" {
 		errs = append(errs, fmt.Errorf("%s revocation_endpoint is only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientSecretRef != "" {
-		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials, mongodb-atlas, ibm-api-connect and auth0", where))
+	if !clientSecretProviderTypes[c.Type] && c.ClientSecretRef != "" {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for %s", where, strings.Join(sortedTrueKeys(clientSecretProviderTypes), ", ")))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientID != "" {
-		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app, ibm-api-connect and auth0", where))
+	if !clientIDProviderTypes[c.Type] && c.ClientID != "" {
+		errs = append(errs, fmt.Errorf("%s client_id is only valid for %s", where, strings.Join(sortedTrueKeys(clientIDProviderTypes), ", ")))
 	}
 	if !apiKeyProviderTypes[c.Type] && c.APIKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for %s", where, strings.Join(sortedTrueKeys(apiKeyProviderTypes), ", ")))
@@ -1278,6 +1288,44 @@ func validateHostedKeyProvider(where string, c DynamicSecretProviderConfig) []er
 	}
 	if err := validateCredentialRef(c.APIKeyRef); err != nil {
 		errs = append(errs, fmt.Errorf("%s api_key_ref (%s): %w", where, spec.AdminKey, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" {
+			if _, err := hostedkey.ParseBinding(c.Type, binding); err != nil {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+			}
+		}
+	}
+	return errs
+}
+
+// validateClientSecretProvider checks a client secret rotator (A240): it
+// rotates only, so allow_static_rotation is required; endpoint is the vendor's
+// API; Okta authenticates with an API token (api_key_ref) and Databricks as an
+// account admin service principal (client_id and client_secret_ref); each
+// allowed role is bound to the client whose secret rotates.
+func validateClientSecretProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	spec := hostedkey.Providers[c.Type]
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (%s) is required for %s", where, spec.Endpoint, c.Type))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s %s rotates client secrets and issues no leases: set allow_static_rotation", where, c.Type))
+	}
+	switch c.Type {
+	case "okta":
+		if err := validateCredentialRef(c.APIKeyRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s api_key_ref (%s): %w", where, spec.AdminKey, err))
+		}
+	case "databricks":
+		if strings.TrimSpace(c.ClientID) == "" {
+			errs = append(errs, fmt.Errorf("%s client_id (the admin service principal's application ID) is required for databricks", where))
+		}
+		if err := validateCredentialRef(c.ClientSecretRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s client_secret_ref (%s): %w", where, spec.AdminKey, err))
+		}
 	}
 	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
 	for _, role := range normalizedStrings(c.AllowedRoles) {

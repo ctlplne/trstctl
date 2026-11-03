@@ -27,6 +27,8 @@ func TestBindingsParseToOneCanonicalTargetA240(t *testing.T) {
 		{"cloudflare", "template 0123456789abcdef0123456789abcdef", "user:0123456789abcdef0123456789abcdef"},
 		{"cloudflare", "account fedcba9876543210fedcba9876543210 template 0123456789abcdef0123456789abcdef", "account:fedcba9876543210fedcba9876543210:0123456789abcdef0123456789abcdef"},
 		{"cloudflare-r2", "account fedcba9876543210fedcba9876543210 template 0123456789abcdef0123456789abcdef", "account:fedcba9876543210fedcba9876543210:0123456789abcdef0123456789abcdef"},
+		{"okta", "0oa1b2c3d4e5f6g7h8i9", "0oa1b2c3d4e5f6g7h8i9"},
+		{"databricks", "a1b2c3d4-0000-4000-8000-0123456789ab 4471234567890123", "a1b2c3d4-0000-4000-8000-0123456789ab:4471234567890123"},
 	} {
 		got, err := ParseBinding(tc.provider, tc.binding)
 		if err != nil || got != tc.want {
@@ -62,6 +64,11 @@ func TestBindingsRefuseWhatTheVendorCannotScopeA240(t *testing.T) {
 		{"cloudflare", "template 0123456789ABCDEF0123456789ABCDEF"},
 		{"cloudflare", "account fedcba9876543210fedcba9876543210 0123456789abcdef0123456789abcdef"},
 		{"cloudflare-r2", "template 0123456789abcdef0123456789abcdef"},
+		{"okta", "1oa1b2c3d4e5f6g7h8i9"},
+		{"okta", "0oa1b2/c3d4"},
+		{"databricks", "a1b2c3d4-0000-4000-8000-0123456789ab"},
+		{"databricks", "not-a-uuid 44712"},
+		{"databricks", "a1b2c3d4-0000-4000-8000-0123456789ab sp-1"},
 		{"unknown", "anything"},
 	} {
 		if got, err := ParseBinding(tc.provider, tc.binding); err == nil {
@@ -74,7 +81,7 @@ func TestBindingsRefuseWhatTheVendorCannotScopeA240(t *testing.T) {
 // binding, which configuration errors and the catalog quote.
 func TestEveryProviderDescribesItsConfigurationA240(t *testing.T) {
 	types := Types()
-	if len(types) != len(Providers) || strings.Join(types, ",") != "cloudflare,cloudflare-r2,convex,dbt,fireworks,litellm,openrouter,supabase" {
+	if len(types) != len(Providers) || strings.Join(types, ",") != "cloudflare,cloudflare-r2,convex,databricks,dbt,fireworks,litellm,okta,openrouter,supabase" {
 		t.Fatalf("types = %v", types)
 	}
 	for name, spec := range Providers {

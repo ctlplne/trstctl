@@ -18690,7 +18690,9 @@
               "convex",
               "dbt",
               "cloudflare",
-              "cloudflare-r2"
+              "cloudflare-r2",
+              "okta",
+              "databricks"
             ],
             "type": "string"
           }

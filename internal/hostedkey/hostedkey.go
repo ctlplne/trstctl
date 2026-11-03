@@ -71,6 +71,18 @@ var Providers = map[string]Provider{
 		Binding:  `"account <account-id> template <token-id>": each key pair derives from a new account token that copies the template's R2 policies`,
 		parse:    cloudflareR2,
 	},
+	"okta": {
+		Endpoint: "the Okta org, https://<your-org>.okta.com",
+		AdminKey: "an API token (SSWS) allowed to manage the bound apps' client secrets (okta.apps.manage)",
+		Binding:  "an app ID (0oa...): the app whose client secret rotates; it rotates only",
+		parse:    okta,
+	},
+	"databricks": {
+		Endpoint: "the account console, https://accounts.cloud.databricks.com",
+		AdminKey: "an account admin service principal's OAuth secret (client_secret_ref, with its application ID in client_id)",
+		Binding:  `"<account-id> <service-principal-id>": the service principal whose OAuth secret rotates; it rotates only`,
+		parse:    databricks,
+	},
 	"dbt": {
 		Endpoint: "the account's access URL, https://cloud.getdbt.com or a regional host",
 		AdminKey: "an administrator's service token (dbt refuses to create service tokens with a personal access token)",
@@ -254,4 +266,30 @@ func cloudflareR2(binding string) (string, error) {
 		return "", errShape
 	}
 	return canonical, nil
+}
+
+// oktaApp is an Okta app ID.
+var oktaApp = regexp.MustCompile(`^0oa[0-9A-Za-z]{10,30}$`)
+
+func okta(binding string) (string, error) {
+	if !oktaApp.MatchString(binding) {
+		return "", errShape
+	}
+	return binding, nil
+}
+
+// databricksAccount is a Databricks account ID (a UUID).
+var databricksAccount = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// DatabricksAccount reports whether v is a Databricks account ID.
+func DatabricksAccount(v string) bool { return databricksAccount.MatchString(v) }
+
+// databricks reads "<account-id> <service-principal-id>" and returns
+// "<account-id>:<service-principal-id>".
+func databricks(binding string) (string, error) {
+	fields := strings.Fields(binding)
+	if len(fields) != 2 || !DatabricksAccount(fields[0]) || !NumericID(fields[1]) {
+		return "", errShape
+	}
+	return fields[0] + ":" + fields[1], nil
 }

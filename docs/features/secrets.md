@@ -575,8 +575,9 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns forty-two safe setup recipes (including the
-  `aws-iam` compatibility name for `aws-sts`, and `auth0` and `unix`, which only rotate). Each states its `authority` (what a
+- `GET /api/v1/secrets/leases/providers` returns forty-four safe setup recipes (including the
+  `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `okta` and `databricks`,
+  which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -887,6 +888,16 @@ provider did not add, are never removed. A secret is verified with a client-cred
 token request (`verify_mode: authenticated`); a new secret can take a moment to reach
 every Entra region, and the rotation's verify retries. Rotation is built against a
 stand-in of Graph and the identity platform, with no Entra proof yet.
+
+`okta` and `databricks` (A240) rotate an existing client's secret: an Okta app's client
+secret (two per app) or a Databricks service principal's OAuth secret (five per principal).
+A rotation adds a secret beside the one consumers use, and retirement removes the old one:
+Okta deactivates and then deletes it, as Okta requires. These secrets carry no name, so the
+bound client is the boundary: a reference to a secret of any other client is refused, and
+every secret of the bound client is a version of the credential being rotated. Okta proves a
+secret by authenticating the app at the org's introspection endpoint, Databricks by getting
+an account-level OAuth token with it (`verify_mode: authenticated`). Both rotate only and
+are built against stand-ins of their APIs, with no live proof yet.
 
 The hosted API key providers (A240) share one engine: a lease, or a rotation's
 successor, is a new key created with the administrator's credential under the target

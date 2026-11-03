@@ -27,6 +27,10 @@ type hostedKeyProof struct {
 	newRefPrefix   string
 	leases         bool
 	wantVerifyMode string
+	// firstOldRef is the first rotation's old_ref: "none", or a credential
+	// the provider must retire (an Okta app holds two secrets, so the first
+	// rotation retires the app's original one).
+	firstOldRef string
 }
 
 // run proves, through the served API: a lease's key authenticates until
@@ -127,7 +131,11 @@ func (p hostedKeyProof) run(t *testing.T) {
 		map[string]any{"name": p.role, "value": p.seed}); status != http.StatusCreated && status != http.StatusOK {
 		t.Fatalf("seed secret: %d %s", status, body)
 	}
-	first := await(rotate(providerID+"-rotate-1", map[string]any{"old_ref": "none"}), terminal)
+	firstOldRef := p.firstOldRef
+	if firstOldRef == "" {
+		firstOldRef = "none"
+	}
+	first := await(rotate(providerID+"-rotate-1", map[string]any{"old_ref": firstOldRef}), terminal)
 	if first.Phase != store.SecretStaticRotationCompleted || first.RotationPhase != "two_phase" || first.VerifyMode != p.wantVerifyMode ||
 		!strings.HasPrefix(first.NewRef, p.newRefPrefix) {
 		t.Fatalf("the first rotation: %+v", first)

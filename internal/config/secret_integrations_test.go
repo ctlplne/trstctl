@@ -196,7 +196,7 @@ func TestValidateOAuthClientCredentialsProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", ClientID: "trstctl-leases"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "only valid for oauth-client-credentials") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "client_id is only valid for") || !strings.Contains(err.Error(), "oauth-client-credentials") {
 		t.Fatalf("a client_id on another provider type = %v", err)
 	}
 }
@@ -750,6 +750,50 @@ func TestValidateAzureEntraRotationA240(t *testing.T) {
 		RoleBindings: map[string]string{"app": "proj_orders01"}, MaxTTL: "1h", AuthorityHost: "https://login.microsoftonline.com"}
 	if err := check(other); err == nil || !strings.Contains(err.Error(), "authority_host is only valid for azure-entra") {
 		t.Fatalf("authority_host on another type: %v", err)
+	}
+}
+
+// A240: the client secret rotators rotate only, and each authenticates its own
+// way (Okta an API token, Databricks an admin service principal).
+func TestValidateClientSecretRotatorsA240(t *testing.T) {
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	okta := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "okta", Type: "okta",
+		Endpoint: "https://acme.okta.com", APIKeyRef: "file:/run/secrets/okta", AllowedRoles: []string{"portal"},
+		RoleBindings: map[string]string{"portal": "0oa1b2c3d4e5f6g7h8i9"}, MaxTTL: "1h", AllowStaticRotation: true}
+	databricks := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "dbx", Type: "databricks",
+		Endpoint: "https://accounts.cloud.databricks.com", ClientID: "admin-sp", ClientSecretRef: "file:/run/secrets/dbx",
+		AllowedRoles: []string{"etl"}, RoleBindings: map[string]string{"etl": "a1b2c3d4-0000-4000-8000-0123456789ab 4471"},
+		MaxTTL: "1h", AllowStaticRotation: true}
+	for _, base := range []DynamicSecretProviderConfig{okta, databricks} {
+		if err := check(base); err != nil {
+			t.Fatalf("%s: %v", base.Type, err)
+		}
+		if !StaticRotationProviderTypes[base.Type] || SinglePhaseRotationProviderTypes[base.Type] {
+			t.Fatalf("%s must rotate statically, in two phases", base.Type)
+		}
+		leases := base
+		leases.AllowStaticRotation = false
+		if err := check(leases); err == nil || !strings.Contains(err.Error(), "issues no leases: set allow_static_rotation") {
+			t.Errorf("%s without static rotation: %v", base.Type, err)
+		}
+		bad := base
+		bad.RoleBindings = map[string]string{bad.AllowedRoles[0]: "not a client"}
+		if err := check(bad); err == nil || !strings.Contains(err.Error(), "expected") {
+			t.Errorf("%s with a bad binding: %v", base.Type, err)
+		}
+	}
+	noToken := okta
+	noToken.APIKeyRef = ""
+	if err := check(noToken); err == nil || !strings.Contains(err.Error(), "api_key_ref (") {
+		t.Errorf("okta without a token: %v", err)
+	}
+	noClient := databricks
+	noClient.ClientID = ""
+	if err := check(noClient); err == nil || !strings.Contains(err.Error(), "client_id (the admin service principal") {
+		t.Errorf("databricks without its admin principal: %v", err)
 	}
 }
 

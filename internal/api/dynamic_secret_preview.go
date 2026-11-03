@@ -430,6 +430,19 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 			roles(`Each allowed role maps to "account <account-id> template <token-id>"; key pairs copy that template token's R2 policies.`),
 		)},
+		{Type: "okta", Label: "Okta app client secrets", Purpose: "Rotates an Okta app's client secret in two phases: a new secret is added beside the one consumers use (Okta allows two) and retirement deactivates and deletes the old one. Secrets carry no name, so the bound app is the boundary: only its secrets are removed. A secret is proven by authenticating the app at the org's introspection endpoint. It rotates only; it issues no leases. Built against a stand-in of the Okta API; no Okta proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Okta org", "HTTPS URL of the Okta org.", true),
+			credential("api_key_ref", "API token reference", "An API token (SSWS) allowed to manage the bound apps' client secrets.", true),
+			value("allow_static_rotation", "Static rotation", "Required: the provider rotates only.", true),
+			roles(`Each allowed role maps to the app ID ("0oa...") whose client secret rotates.`),
+		)},
+		{Type: "databricks", Label: "Databricks service principal secrets", Purpose: "Rotates a Databricks service principal's OAuth secret in two phases at the account API, authenticating as an account admin service principal: a new secret beside the old one (a principal holds five), and retirement deletes the old one. Only secrets of the bound principal are removed. A secret is proven by getting an account-level OAuth token with it. It rotates only; it issues no leases. Built against a stand-in of the account API; no Databricks proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Account console", "HTTPS URL of the account console, https://accounts.cloud.databricks.com.", true),
+			value("client_id", "Admin service principal", "The application ID of an account admin service principal.", true),
+			credential("client_secret_ref", "Admin secret reference", "That service principal's OAuth secret.", true),
+			value("allow_static_rotation", "Static rotation", "Required: the provider rotates only.", true),
+			roles(`Each allowed role maps to "<account-id> <service-principal-id>", the principal whose OAuth secret rotates.`),
+		)},
 		{Type: "unix", Label: "Unix/Linux local accounts", Purpose: "Rotates local account passwords on a host over SSH as an administrator authenticating with a key, the host key pinned; the only command run is chpasswd with the change on stdin. A role with rotation_accounts alternates between two accounts its owner provisioned (two-phase: the predecessor keeps working until retirement sets a password nobody holds; groups and files stay). A role bound to one account changes its password in place (single phase: a rotation runs only when acknowledged). Verified by logging in with the new password. It rotates only; it issues no leases.", Requirements: dynamicSecretProviderRequirements(
 			value("addr", "SSH endpoint", "The host's SSH host:port.", true),
 			value("admin_user", "Administrator", "root, or an account allowed `sudo -n /usr/sbin/chpasswd` (set sudo).", true),
@@ -520,6 +533,10 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "an organization API key, or a service account's application key restricted to the role's scopes, until the key is deleted", "confirmed"
 	case "openai":
 		return "a member service account of the bound project, through its API key, until the service account is deleted", "confirmed"
+	case "okta":
+		return "the bound app's own grants, through its client secret; the old secret works until retirement deletes it", "confirmed"
+	case "databricks":
+		return "the bound service principal's own permissions, through its OAuth secret; the old secret works until retirement deletes it", "confirmed"
 	case "openrouter":
 		return "model usage on the account up to the role's credit limit, through an API key, until the key is deleted", "confirmed"
 	case "fireworks":

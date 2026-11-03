@@ -2,6 +2,11 @@
 
 ### Added
 
+- Okta and Databricks client secret rotation (A240): `okta` (an app's client secret, two per app) and `databricks` (a
+  service principal's OAuth secret, five per principal) rotate in two phases and issue no leases. A rotation adds a
+  secret beside the one in use and retirement removes the old one (Okta: deactivate, then delete); only secrets of a
+  bound client are ever removed. Verified by client authentication at the vendor. Built against stand-ins.
+
 - Azure Entra client-secret rotation (A240): `azure-entra` providers with `allow_static_rotation` rotate a stored
   client secret in two phases — a second password beside the predecessor, verified with a client-credentials token
   request at `authority_host`, and retirement removes only passwords the provider added (display name `trstctl-...`).

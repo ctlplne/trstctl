@@ -74,6 +74,11 @@ func (h hostedAPI) send(ctx context.Context, method, path string, body []byte, c
 	return resp.StatusCode, response, nil
 }
 
+// callForm posts a form-encoded body, an OAuth client authentication (A240).
+func (h hostedAPI) callForm(ctx context.Context, path string, form []byte, authenticate func(http.Header) error) (int, []byte, error) {
+	return h.send(ctx, http.MethodPost, path, form, "application/x-www-form-urlencoded", authenticate)
+}
+
 // appendQueryEscaped percent-encodes raw into dst the way url.QueryEscape
 // would, without making a string of a secret.
 func appendQueryEscaped(dst, raw []byte) []byte {
