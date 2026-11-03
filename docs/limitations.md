@@ -5910,7 +5910,7 @@ This is a deliberate, documented trust boundary, not an accident.
 
 ## Protocols
 
-- S/MIME over ACME, RFC 8823 (P15, server half): with `protocols.acme_email`, the ACME
+- S/MIME over ACME, RFC 8823 (P15): with `protocols.acme_email`, the ACME
   server orders `email` identifiers, offers `email-reply-00` (token-part2 in the
   challenge, token-part1 mailed through the outbox and the configured SMTP relay, which
   must DKIM-sign it), validates a reply against digests only (wrong mailbox or token →
@@ -5920,11 +5920,17 @@ This is a deliberate, documented trust boundary, not an accident.
   (`protocols.acme_email.smtp_listen`) that verifies each reply's DKIM signature for its
   From domain (rsa-sha256, ed25519-sha256; keys from DNS or `dkim_keys`) before the
   ACME server matches it; refusals bounce with a 5xx reason. ACME state is per process,
-  so replies must reach the process that created the order. Not yet proven: a stock
-  RFC 8823 client and a stock mail client (waits for the owner's approval of the
-  downloads). SPF/DMARC checks, trstctl signing its own challenge mail (the relay
-  signs), internationalized addresses, quoted local parts and EAB credentials scoped to
-  mail domains are not supported.
+  so replies must reach the process that created the order. Proven in the lab with
+  stock software: an RFC 8823 client library (acme4j-smime 5.1.0) ordered a certificate
+  for a mailbox through a real mail server (maddy 0.9.6) that DKIM-signed both
+  directions — replies from another mailbox and with another token-part1 were refused
+  with 550 5.7.1, the right reply validated the challenge, and the certificate was
+  issued for a CSR naming the mailbox as its common name — and a stock mail client
+  (s-nail 14.9.24) signed a message with it, sent it through the mail server and
+  verified it, as did `openssl smime`; a tampered copy failed. That proof runs in the
+  lab, not in CI: the client library stays outside the repository. SPF/DMARC checks,
+  trstctl signing its own challenge mail (the relay signs), internationalized addresses,
+  quoted local parts and EAB credentials scoped to mail domains are not supported.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when

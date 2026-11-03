@@ -420,7 +420,8 @@ func TestServedACMEEmailReplyIntakeVerifiesDKIMP15(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+	// Stock S/MIME clients name the mailbox as the common name too; it is never a DNS name.
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "alice@p15.test",
 		EmailAddresses: []string{"alice@p15.test"}, ExtraExtensions: []crypto.CertificateExtension{ku}}, dkimKey)
 	if err != nil {
 		t.Fatal(err)

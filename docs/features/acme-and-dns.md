@@ -529,6 +529,12 @@ reply, and `550 5.7.1` for no matching challenge or a wrong response. A signatur
 part of the body (`l=`) or `rsa-sha1` is never accepted. Like every ACME request, a
 reply must reach the control-plane process that created the order.
 
+A stock RFC 8823 client library and a stock mail client have been run against this in
+the lab, through a real mail server that DKIM-signs both directions: the certificate
+issues for a CSR that names the mailbox as its common name (as S/MIME clients do), and
+a message signed with it verifies in the mail client. See
+[Known limitations](../limitations.md#protocols).
+
 ## Use it
 
 Point any ACME client at trstctl's directory. With certbot, using DNS-01:

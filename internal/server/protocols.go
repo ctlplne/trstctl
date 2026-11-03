@@ -228,10 +228,7 @@ func (p *protocolIssuer) issueProtocolLeafChainForProfile(ctx context.Context, t
 		if err != nil {
 			return nil, fmt.Errorf("server: protocol CSR does not parse: %w", err)
 		}
-		dnsNames := csrInfo.DNSNames
-		if len(dnsNames) == 0 && csrInfo.CommonName != "" {
-			dnsNames = []string{csrInfo.CommonName}
-		}
+		dnsNames := protocolDNSNames(csrInfo)
 		// PKIGOV-002 served profile gate: validate before signing, fail closed, and
 		// record the decision (AN-2). A no-op when no default profile is configured.
 		leafProfile, selectedTTL, err := p.enforceProfile(ctx, tenantID, protocolName, selectedProfile, csrInfo, dnsNames, ttl)
@@ -348,10 +345,7 @@ func (p *protocolIssuer) issueUpstream(ctx context.Context, tenantID, protocolNa
 	if err != nil {
 		return nil, nil, fmt.Errorf("server: protocol CSR does not parse: %w", err)
 	}
-	dnsNames := csrInfo.DNSNames
-	if len(dnsNames) == 0 && csrInfo.CommonName != "" {
-		dnsNames = []string{csrInfo.CommonName}
-	}
+	dnsNames := protocolDNSNames(csrInfo)
 	_, ttl, err = p.enforceProfile(ctx, tenantID, protocolName, selectedProfile, csrInfo, dnsNames, ttl)
 	if err != nil {
 		return nil, nil, err
@@ -538,6 +532,19 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 	}
 	p.auditProfileDecision(ctx, tenantID, protocolName, selectedProfile, rec.Version, "allow", "")
 	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), ttl, nil
+}
+
+// protocolDNSNames is what a protocol CSR asks for as DNS names: its DNS SANs,
+// or, for a legacy CSR with none, its common name. A common name that is a
+// mailbox (stock S/MIME clients put the address there) is never a DNS name.
+func protocolDNSNames(info crypto.CSRInfo) []string {
+	if len(info.DNSNames) > 0 {
+		return info.DNSNames
+	}
+	if cn := strings.TrimSpace(info.CommonName); cn != "" && !strings.Contains(cn, "@") {
+		return []string{cn}
+	}
+	return nil
 }
 
 // caCA adapts the protocol issuer to the ca.CA interface so the built-in ACME

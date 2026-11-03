@@ -1232,6 +1232,11 @@
 
 ### Fixed
 
+- ACME S/MIME orders (P15): a CSR that names the mailbox as its common name, as stock S/MIME
+  clients do, is issued; the protocol profile gate took that common name for a DNS name and
+  refused the order. Proven with a stock RFC 8823 client library through a real mail server, and
+  a stock mail client verifying a message signed with the certificate.
+
 - A host destination whose key the control plane generates (no `"executor": "agent"`) deploys again. Since a host
   destination must name its agent in `required_agent_id`, the credential grant still asked for the key-custody marker
   as well, so the assigned agent was refused the sealed deploy ("credential redemption was not granted") and every such
