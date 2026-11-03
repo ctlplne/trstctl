@@ -91,6 +91,11 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 			c.Username = "a241-client"
 			return c
 		}(),
+		func() SecretSyncTargetConfig {
+			c := hosted("chef", "data-bag payments")
+			c.Endpoint, c.Username = "https://chef.example.test/organizations/acme", "trstctl-sync"
+			return c
+		}(),
 	} {
 		if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{target}}, true); err != nil {
 			t.Fatalf("%s: %v", target.Type, err)

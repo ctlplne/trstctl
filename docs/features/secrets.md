@@ -1296,7 +1296,8 @@ A241 (Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qo
 Cloud 66, Laravel Forge, CircleCI, Travis CI, Bitbucket Pipelines, TeamCity, Spacelift,
 Humanitec, Rundeck, Checkly, Windmill, Zabbix, Portainer, Devin, Daytona, Ona,
 Trigger.dev, Cloudflare Workers, Cloudflare Pages, Cloudflare Secrets Store, Azure App
-Configuration, OCI Vault, OVHcloud Secret Manager, Databricks, Supabase and Camunda; see
+Configuration, OCI Vault, OVHcloud Secret Manager, Databricks, Supabase, Camunda and Chef
+Infra Server; see
 [configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
 whether a scoped sync can target it, what it reads back (`readback`: `value`, `digest`
 or `receipt-only`) and how far it is proven (`proof`: `locally-proven` against the
@@ -2207,7 +2208,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   Travis CI, Bitbucket Pipelines, TeamCity, Spacelift, Humanitec, Rundeck, Checkly,
   Windmill, Zabbix, Portainer, Devin, Daytona, Ona, Trigger.dev, Cloudflare Workers,
   Cloudflare Pages, Cloudflare Secrets Store, Azure App Configuration, OCI Vault,
-  OVHcloud Secret Manager, Databricks, Supabase, Camunda).
+  OVHcloud Secret Manager, Databricks, Supabase, Camunda, Chef Infra Server).
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,

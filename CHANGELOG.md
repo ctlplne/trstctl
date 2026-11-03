@@ -7,7 +7,7 @@
   `travis-ci`, `bitbucket`, `teamcity`, `spacelift`, `humanitec`, `rundeck`, `checkly`, `windmill`,
   `zabbix`, `portainer`, `devin`, `daytona`, `ona`, `trigger-dev`, `cloudflare-workers`,
   `cloudflare-pages`, `cloudflare-secrets-store`, `azure-app-configuration`, `oci-vault`,
-  `ovh-secret-manager`, `databricks-secrets`, `supabase-secrets` and `camunda`, each
+  `ovh-secret-manager`, `databricks-secrets`, `supabase-secrets`, `camunda` and `chef`, each
   bound by one `binding` string in its type's grammar (internal/synctarget) and run by one
   engine (`secretsync.HostedSyncPusher`). Every hosted target takes a scoped sync: it lists,
   reads back and deletes keys. A scoped sync to a flat (variable-name) destination joins its

@@ -114,6 +114,7 @@ var hostedVendors = map[string]*hostedVendor{
 	"databricks-secrets":        databricksVendor,
 	"supabase-secrets":          supabaseVendor,
 	"camunda":                   camundaVendor,
+	"chef":                      chefVendor,
 }
 
 // HostedSyncConfig configures one hosted destination.

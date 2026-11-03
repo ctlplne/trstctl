@@ -57,6 +57,7 @@ var (
 	databricksName    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 	supabaseProject   = regexp.MustCompile(`^[a-z]{20}$`)
 	camundaName       = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	chefItem          = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )
 
 // zabbixBinding is "global" (global macros) or "host <ID>" (one host's).
@@ -228,6 +229,9 @@ func all() []Target {
 		{Type: "camunda", Name: "Camunda", Platform: "camunda", Grammar: "cluster <ID>", Credential: UserAndToken,
 			Endpoint: "https://api.cloud.camunda.io", Keys: FlatKeys, keyRule: camundaName, keyHelp: "letters, digits, underscores and hyphens", maxKey: 49,
 			parse: pairs(pair{word: "cluster", rule: uuidRule, what: "a cluster UUID"})},
+		{Type: "chef", Name: "Chef Infra Server", Platform: "chef", Grammar: "data-bag <name>", Credential: UserAndToken,
+			Keys: FlatKeys, keyRule: chefItem, keyHelp: "letters, digits, underscores and hyphens (a data bag item ID)", maxKey: 255,
+			parse: pairs(pair{word: "data-bag", rule: chefItem, what: "a data bag name"})},
 		{Type: "laravel-forge", Name: "Laravel Forge", Platform: "laravel-forge", Grammar: "org <slug> server <ID> site <ID>",
 			Endpoint: "https://forge.laravel.com/api", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "org", rule: forgeOrg, what: "an organization slug"}, pair{word: "server", rule: numeric, what: "a server ID"},

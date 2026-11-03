@@ -5539,13 +5539,39 @@ target under a destination prefix from a value-free plan applied by its digest: 
 update (drift named), delete within a reviewed scope (managed keys, or every key under
 the prefix), unmanaged keys never touched otherwise, nested-key and two-source
 collisions blocked, a stale plan refused, and a crash after the remote write settled by
-readback without a second write — proven against OpenBao 2.0.0. Only KV v2 targets list
-their keys, so other targets can't take a scoped sync. Continuous mode (A237 part b):
+readback without a second write — proven against OpenBao 2.0.0. KV v2 and the hosted
+targets of A241 list their keys; the earlier built-in targets (AWS, GCP, Azure, GitHub,
+GitLab, Vercel, Netlify, Kubernetes, Terraform Cloud, the webhook and generic CI JSON)
+take single syncs only. Continuous mode (A237 part b):
 an `auto` definition is re-planned on the leader when its source set changes (checked
 every 30 seconds) or its 15-minute drift check is due, and applied when nothing is
 blocked; a blocked or failed plan is recorded on the definition and writes nothing. The
 console's Secrets → Sync page defines, previews, applies and switches scoped syncs.
 Approval-gated convergence is not served.
+Hosted sync targets (A241) — served. Thirty-four destinations run on one engine
+(`secretsync.HostedSyncPusher`), each bound by one `binding` string in its type's
+grammar: Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,
+Cloud 66, Laravel Forge, CircleCI, Travis CI, Bitbucket Pipelines, TeamCity, Spacelift,
+Humanitec, Rundeck, Checkly, Windmill, Zabbix, Portainer, Devin, Daytona, Ona,
+Trigger.dev, Cloudflare Workers, Cloudflare Pages, Cloudflare Secrets Store, Azure App
+Configuration, OCI Vault, OVHcloud Secret Manager, Databricks, Supabase, Camunda and Chef
+Infra Server. Every one takes a scoped sync: create, update and delete within the
+reviewed scope, unmanaged keys kept, and readback where the vendor returns a value (or a
+digest, Supabase); a vendor that never returns a secret is labeled `receipt-only` in the
+catalog, its plan says a change made outside the sync can't be seen, and only a
+delivered job for the source version counts as unchanged. Each is proven through the
+served API against a stand-in built from the vendor's API documentation, so every
+catalog row says `stand-in-only`; a live proof needs each vendor's account (Track B).
+The build list's local proofs of the self-hostable ones (TeamCity, Rundeck, Windmill,
+Zabbix, Portainer, Octopus Deploy, Supabase) wait for the owner's approval of their
+images. What comes next: Snowflake secrets (the value can only travel as a SQL literal,
+and whether Snowflake redacts SECRET_STRING from query history is not documented: a
+Snowflake account to confirm it), Hasura Cloud (its API documents no delete), Azure
+DevOps variable groups and Octopus Deploy variable sets (each write replaces the whole
+set while the API never returns the other secrets' values, so a write could clear them:
+an Azure DevOps organization, and Octopus's image, to settle the round trip), and Entra
+ID provisioning secrets (write-only, with no list or delete, so no scoped sync).
+
 Secret rendering (A238 part a): `trstctl-agent --secret-render-config` renders
 `{{ secret "name" }}` templates into files for a host application. Writes are atomic
 with the template's mode (never readable by others), followed by a reload hook (argv or

@@ -2605,3 +2605,91 @@ func TestServedCamundaScopedSyncA241(t *testing.T) {
 	})
 	hostedSyncProof(t, hostedSyncCase{typ: "camunda", endpoint: standIn.server.URL, binding: "cluster " + cluster, username: clientID, token: clientSecret, standIn: standIn})
 }
+
+// TestServedChefScopedSyncA241: Chef Infra Server data bags — POST
+// /data/{bag} creates an item, PUT /data/{bag}/{id} replaces it, GET reads
+// it, DELETE removes it, GET /data/{bag} lists {id: url}; every request's
+// X-Ops 1.3 signature is verified with the client key's public half.
+func TestServedChefScopedSyncA241(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	der, err := key.PKCS8()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	const client, base = "trstctl-sync", "/organizations/acme/data/payments"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var signature strings.Builder
+		for i := 1; r.Header.Get("X-Ops-Authorization-"+strconv.Itoa(i)) != ""; i++ {
+			signature.WriteString(r.Header.Get("X-Ops-Authorization-" + strconv.Itoa(i)))
+		}
+		raw, _ := base64.StdEncoding.DecodeString(signature.String())
+		canonical := "Method:" + r.Method + "\nPath:" + r.URL.EscapedPath() + "\nX-Ops-Content-Hash:" + r.Header.Get("X-Ops-Content-Hash") +
+			"\nX-Ops-Sign:version=1.3\nX-Ops-Timestamp:" + r.Header.Get("X-Ops-Timestamp") + "\nX-Ops-UserId:" + r.Header.Get("X-Ops-Userid") +
+			"\nX-Ops-Server-API-Version:" + r.Header.Get("X-Ops-Server-API-Version")
+		if r.Header.Get("X-Ops-Userid") != client || r.Header.Get("X-Ops-Sign") != "algorithm=sha256;version=1.3" ||
+			r.Header.Get("X-Ops-Content-Hash") != base64.StdEncoding.EncodeToString(crypto.SHA256Sum(body)) ||
+			crypto.Verify(key.Public(), []byte(canonical), raw, crypto.SignOptions{Hash: crypto.SHA256, RSAPadding: crypto.RSAPKCS1v15}) != nil {
+			jsonStandIn(w, http.StatusUnauthorized, map[string][]string{"error": {"Failed to authenticate"}})
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, base)
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string][]string{"error": {"not found"}})
+			return
+		}
+		id := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		var item struct{ ID, Value string }
+		switch {
+		case id == "" && r.Method == http.MethodGet:
+			out := map[string]string{}
+			for k := range s.vars {
+				out[k] = "https://chef.example" + base + "/" + k
+			}
+			jsonStandIn(w, http.StatusOK, out)
+		case id == "" && r.Method == http.MethodPost:
+			if json.Unmarshal(body, &item) != nil {
+				jsonStandIn(w, http.StatusBadRequest, nil)
+				return
+			}
+			if _, exists := s.vars[item.ID]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string][]string{"error": {"Data Bag Item already exists"}})
+				return
+			}
+			s.vars[item.ID] = item.Value
+			jsonStandIn(w, http.StatusCreated, map[string]string{"id": item.ID})
+		case r.Method == http.MethodPut:
+			if _, exists := s.vars[id]; !exists || json.Unmarshal(body, &item) != nil || item.ID != id {
+				jsonStandIn(w, http.StatusNotFound, map[string][]string{"error": {"Cannot load data bag item"}})
+				return
+			}
+			s.vars[id] = item.Value
+			jsonStandIn(w, http.StatusOK, map[string]string{"id": id, "value": item.Value})
+		case r.Method == http.MethodGet:
+			v, exists := s.vars[id]
+			if !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string][]string{"error": {"Cannot load data bag item"}})
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]string{"id": id, "value": v})
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[id]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string][]string{"error": {"Cannot load data bag item"}})
+				return
+			}
+			delete(s.vars, id)
+			jsonStandIn(w, http.StatusOK, map[string]string{"id": id})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "chef", endpoint: standIn.server.URL + "/organizations/acme", binding: "data-bag payments",
+		username: client, token: keyPEM, standIn: standIn})
+}

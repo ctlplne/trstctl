@@ -2254,6 +2254,7 @@ paths into names. Values are text (UTF-8). Keys are variable names except where 
 | `databricks-secrets` | `scope <name>` | none (set `endpoint` to the workspace URL) | receipt-only | Secrets in an existing scope (names up to 128 characters, matched case-insensitively). |
 | `supabase-secrets` | `project <ref>` | `https://api.supabase.com` | digest | Edge Function secrets; the list's SHA-256 digests are compared. `SUPABASE_` names are refused. |
 | `camunda` | `cluster <ID>` | `https://api.cloud.camunda.io` | value | Cluster (connector) secrets; `username` is the API client ID and `token_ref` its secret, exchanged for a token per operation. |
+| `chef` | `data-bag <name>` | none (set `endpoint` to `https://<server>/organizations/<org>`) | value | Data bag items `{"id", "value"}`; `username` is the client name and `token_ref` its PEM private key (X-Ops 1.3 request signing). |
 | `laravel-forge` | `org <slug> server <ID> site <ID>` | `https://forge.laravel.com/api` | value | One `KEY='value'` line in the site's `.env` (written whole, asynchronously); lines the sync doesn't own are kept. A value with a line break, or with both `'` and `${`, is refused. |
 
 ```json
