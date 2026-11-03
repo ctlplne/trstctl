@@ -233,14 +233,14 @@ func (s *Store) GetIdentity(ctx context.Context, tenantID, id string) (Identity,
 		kind  string
 		attrs []byte
 	)
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
-			        status, not_before, not_after, attributes, created_at
-			   FROM identities WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+	err := s.tenantQueryRow(ctx, tenantID,
+		`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
+		        status, not_before, not_after, attributes, created_at
+		   FROM identities WHERE tenant_id = $1 AND id = $2`, []any{tenantID, id},
+		func(row pgx.Row) error {
+			return row.Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
 				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt)
-	})
+		})
 	it.Kind = IdentityKind(kind)
 	it.Attributes = attrs
 	return it, err

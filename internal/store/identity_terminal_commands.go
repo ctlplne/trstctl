@@ -148,10 +148,10 @@ func (s *Store) ClaimIdentityTerminalCommand(ctx context.Context, candidate Iden
 // IdentityTerminalState is a bounded, tenant-scoped admission read. A pending
 // command is already authoritative even if the projected identity is stale.
 func (s *Store) IdentityTerminalState(ctx context.Context, tenantID, identityID string) (state string, pending bool, found bool, err error) {
-	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = s.tenantQueryRow(ctx, tenantID, `SELECT target_state,status FROM identity_terminal_commands
+			WHERE tenant_id=$1 AND identity_id=$2`, []any{tenantID, identityID}, func(row pgx.Row) error {
 		var status string
-		readErr := tx.QueryRow(ctx, `SELECT target_state,status FROM identity_terminal_commands
-			WHERE tenant_id=$1 AND identity_id=$2`, tenantID, identityID).Scan(&state, &status)
+		readErr := row.Scan(&state, &status)
 		if errors.Is(readErr, pgx.ErrNoRows) {
 			return nil
 		}

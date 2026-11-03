@@ -133,10 +133,10 @@ func certificateSPKISHA256(der []byte) (string, bool) {
 // (AN-1), with no bound on how many revocations the tenant records.
 func (s *Store) CompromisedSubjectKey(ctx context.Context, tenantID, spkiSHA256 string) (string, bool, error) {
 	var fingerprint string
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT certificate_fingerprint FROM compromised_subject_keys
+	err := s.tenantQueryRow(ctx, tenantID, `SELECT certificate_fingerprint FROM compromised_subject_keys
 			WHERE tenant_id = $1 AND spki_sha256 = $2
-			ORDER BY revoked_at, certificate_fingerprint LIMIT 1`, tenantID, strings.ToLower(spkiSHA256)).Scan(&fingerprint)
+			ORDER BY revoked_at, certificate_fingerprint LIMIT 1`, []any{tenantID, strings.ToLower(spkiSHA256)}, func(row pgx.Row) error {
+		return row.Scan(&fingerprint)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", false, nil

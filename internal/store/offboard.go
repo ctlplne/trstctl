@@ -47,37 +47,38 @@ func (s *Store) TenantOffboardPending(ctx context.Context, tenantID string) (boo
 // authorize an old credential. This is independent of editions and does not
 // replace the operation lifetime that excludes concurrent lifecycle changes.
 func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) error {
-	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		// The four conditions are read in one statement and refused in the
-		// order they always were, each naming its own reason.
-		//
-		// The provider_tenants registry is retained during core-only rebuild
-		// and in PostgreSQL backups. Removing an edition must not restore a
-		// suspended or legacy offboarded customer's access. Ordinary core
-		// tenants have no row there; only an explicit active row is
-		// unrestricted when a row does exist.
-		var registered, restricted, suspended, erasing bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1),
+	// The four conditions are read in one statement, in a read-only
+	// transaction of its own sent as one round trip, and refused in the order
+	// they always were, each naming its own reason.
+	//
+	// The provider_tenants registry is retained during core-only rebuild
+	// and in PostgreSQL backups. Removing an edition must not restore a
+	// suspended or legacy offboarded customer's access. Ordinary core
+	// tenants have no row there; only an explicit active row is
+	// unrestricted when a row does exist.
+	return s.tenantQueryRow(ctx, tenantID, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1),
 			EXISTS (SELECT 1 FROM provider_tenants WHERE tenant_id=$1 AND status IS DISTINCT FROM 'active'),
 			`+providerSuspendCommandActiveSQL+`,
 			`+tenantOffboardReceiverExistsSQL,
-			tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&registered, &restricted, &suspended, &erasing); err != nil {
-			return fmt.Errorf("store: inspect live tenant service: %w", err)
-		}
-		// Each refusal reads as ErrServiceUnavailable, as it always did, so
-		// no caller's answer changes; the reason rides on it for the server.
-		switch {
-		case !registered:
-			return tenancy.Refused("the tenant is not registered")
-		case restricted:
-			return tenancy.Refused("the tenant's provider record is not active")
-		case suspended:
-			return tenancy.Refused("a provider suspension is pending or in force")
-		case erasing:
-			return tenancy.Refused("the tenant's erasure is pending")
-		}
-		return nil
-	})
+		[]any{tenantID, TenantOffboardReceiverKeyPrefix + "%"}, func(row pgx.Row) error {
+			var registered, restricted, suspended, erasing bool
+			if err := row.Scan(&registered, &restricted, &suspended, &erasing); err != nil {
+				return fmt.Errorf("store: inspect live tenant service: %w", err)
+			}
+			// Each refusal reads as ErrServiceUnavailable, as it always did, so
+			// no caller's answer changes; the reason rides on it for the server.
+			switch {
+			case !registered:
+				return tenancy.Refused("the tenant is not registered")
+			case restricted:
+				return tenancy.Refused("the tenant's provider record is not active")
+			case suspended:
+				return tenancy.Refused("a provider suspension is pending or in force")
+			case erasing:
+				return tenancy.Refused("the tenant's erasure is pending")
+			}
+			return nil
+		})
 }
 
 // tenantOffboardReceiverExistsSQL is true while a core erasure receiver for

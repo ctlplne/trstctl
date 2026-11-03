@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -497,18 +498,19 @@ func (i *Idempotency) doClaimed(ctx context.Context, tenantID, key, binding stri
 func (i *Idempotency) claimKey(ctx context.Context, tenantID, key, binding string) (bool, error) {
 	ctx = store.WithBookkeepingPool(ctx)
 	claimed := false
-	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
+	// The claim's BEGIN, setup and INSERT travel as one round trip; COMMIT
+	// follows once the result is seen (CI-L37 d′).
+	err := i.store.WithTenantFirst(ctx, tenantID,
+		`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
 			 VALUES ($1, $2, 'pending', $3)
 			 ON CONFLICT (tenant_id, key) DO NOTHING`,
-			tenantID, key, binding)
-		if err != nil {
-			return fmt.Errorf("orchestrator: claim idempotency key: %w", err)
-		}
-		claimed = tag.RowsAffected() == 1
-		return nil
-	})
+		[]any{tenantID, key, binding}, func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
+			if err != nil {
+				return fmt.Errorf("orchestrator: claim idempotency key: %w", err)
+			}
+			claimed = tag.RowsAffected() == 1
+			return nil
+		})
 	return claimed, err
 }
 
@@ -651,18 +653,17 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 	recordCtx := store.WithBookkeepingPool(ctx)
 	for attempt := 0; attempt < recordAttempts; attempt++ {
 		recorded := false
-		recordErr = i.store.WithTenant(recordCtx, tenantID, func(tx pgx.Tx) error {
-			tag, err := tx.Exec(recordCtx,
-				`UPDATE idempotency_keys
+		recordErr = i.store.WithTenantFirst(recordCtx, tenantID,
+			`UPDATE idempotency_keys
 				    SET status = 'completed', result_codec = $4, result = $5, completed_at = now()
 				  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3 AND status = 'pending'`,
-				tenantID, key, binding, codec, protected)
-			if err != nil {
-				return fmt.Errorf("orchestrator: record idempotency result: %w", err)
-			}
-			recorded = tag.RowsAffected() == 1
-			return nil
-		})
+			[]any{tenantID, key, binding, codec, protected}, func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
+				if err != nil {
+					return fmt.Errorf("orchestrator: record idempotency result: %w", err)
+				}
+				recorded = tag.RowsAffected() == 1
+				return nil
+			})
 		if recordErr == nil {
 			if !recorded {
 				return nil, ErrInProgress
@@ -1365,12 +1366,10 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 		resultCodec  string
 	)
 	defer func() { secret.Wipe(storedResult) }()
-	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
+	const bindDurableKey = `INSERT INTO idempotency_keys (tenant_id, key, status, request_binding)
 			 VALUES ($1, $2, 'bound', $3)
-			 ON CONFLICT (tenant_id, key) DO NOTHING`,
-			tenantID, key, binding)
+			 ON CONFLICT (tenant_id, key) DO NOTHING`
+	err := i.store.WithTenantFirst(ctx, tenantID, bindDurableKey, []any{tenantID, key, binding}, func(tag pgconn.CommandTag, err error, tx store.TxStatements) error {
 		if err != nil {
 			return fmt.Errorf("orchestrator: bind durable key: %w", err)
 		}
@@ -1442,13 +1441,11 @@ func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, b
 	}
 	defer secret.Wipe(protected)
 	usedStored := false
-	err = i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`UPDATE idempotency_keys
+	const completeDurableKey = `UPDATE idempotency_keys
 			    SET status = 'completed', result_codec = $4, result = $5, completed_at = now()
 			  WHERE tenant_id = $1 AND key = $2
-			    AND status = 'bound' AND request_binding = $3`,
-			tenantID, key, binding, codec, protected)
+			    AND status = 'bound' AND request_binding = $3`
+	err = i.store.WithTenantFirst(ctx, tenantID, completeDurableKey, []any{tenantID, key, binding, codec, protected}, func(tag pgconn.CommandTag, err error, tx store.TxStatements) error {
 		if err != nil {
 			return fmt.Errorf("orchestrator: complete bound durable key: %w", err)
 		}

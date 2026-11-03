@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Claiming precedes service admission. A different replica may finish erasure
@@ -47,17 +50,17 @@ func (o *Outbox) completeRemoteDelivery(ctx context.Context, claim claimedOutbox
 	// A durable terminal event may already have removed this same token.
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return o.store.WithTenant(cleanup, claim.msg.TenantID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(cleanup, `UPDATE outbox
+	return o.store.WithTenantFirst(cleanup, claim.msg.TenantID, `UPDATE outbox
 			SET receiver_pending_ids=array_remove(receiver_pending_ids,$3::uuid)
 			WHERE tenant_id=$1 AND id=$2 AND destination=$4 AND idempotency_key=$5`,
-			claim.msg.TenantID, claim.id, attemptID, claim.msg.Destination, claim.msg.IdempotencyKey)
-		if err != nil {
-			return fmt.Errorf("orchestrator: retain terminal receiver result: %w", err)
-		}
-		if tag.RowsAffected() != 1 {
-			return errors.New("orchestrator: terminal receiver attempt is missing")
-		}
-		return nil
-	})
+		[]any{claim.msg.TenantID, claim.id, attemptID, claim.msg.Destination, claim.msg.IdempotencyKey},
+		func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
+			if err != nil {
+				return fmt.Errorf("orchestrator: retain terminal receiver result: %w", err)
+			}
+			if tag.RowsAffected() != 1 {
+				return errors.New("orchestrator: terminal receiver attempt is missing")
+			}
+			return nil
+		})
 }

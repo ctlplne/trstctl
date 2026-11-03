@@ -106,11 +106,10 @@ func (s *Store) ApplyControlPlaneKeygenSetTx(ctx context.Context, tx pgx.Tx, p C
 func (s *Store) ControlPlaneKeygenFor(ctx context.Context, tenantID string) (ControlPlaneKeygenPolicy, bool, error) {
 	var out ControlPlaneKeygenPolicy
 	found := false
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := s.tenantQueryRow(ctx, tenantID, `SELECT tenant_id::text, enabled, source, reason, set_by, set_at, evidence
+			FROM tenant_control_plane_keygen WHERE tenant_id = $1`, []any{tenantID}, func(row pgx.Row) error {
 		var evidence []byte
-		err := tx.QueryRow(ctx, `SELECT tenant_id::text, enabled, source, reason, set_by, set_at, evidence
-			FROM tenant_control_plane_keygen WHERE tenant_id = $1`, tenantID).
-			Scan(&out.TenantID, &out.Enabled, &out.Source, &out.Reason, &out.SetBy, &out.SetAt, &evidence)
+		err := row.Scan(&out.TenantID, &out.Enabled, &out.Source, &out.Reason, &out.SetBy, &out.SetAt, &evidence)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

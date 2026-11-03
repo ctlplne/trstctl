@@ -107,6 +107,15 @@ func backupWriteFenceLeaseFromContext(
 	return lease, true
 }
 
+// underBackupWriteFence reports whether ctx came from this store's exclusive
+// backup fence, live or not, without taking the lease's single-user token.
+// Such a caller keeps WithTenant's path, which decides whether its tenant work
+// reuses the fence's own session.
+func underBackupWriteFence(ctx context.Context, s *Store) bool {
+	lease, ok := ctx.Value(backupWriteFenceContextKey{}).(*backupWriteFenceLease)
+	return ok && lease != nil && lease.store == s
+}
+
 func (l *backupWriteFenceLease) releaseUse() {
 	<-l.use
 }

@@ -405,11 +405,11 @@ func (s *Store) CRLDueForRegeneration(ctx context.Context, tenantID, caID string
 		return true, nil
 	}
 	var stale bool
-	err = s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (
+	err = s.tenantQueryRow(ctx, tenantID, `SELECT EXISTS (
 		  SELECT 1 FROM ca_issued_certs
 		   WHERE tenant_id = $1 AND ca_id = $2 AND revoked_at > $3
-		)`, tenantID, caID, crl.ThisUpdate).Scan(&stale)
+		)`, []any{tenantID, caID, crl.ThisUpdate}, func(row pgx.Row) error {
+		return row.Scan(&stale)
 	})
 	return stale, err
 }
@@ -419,23 +419,22 @@ func (s *Store) CRLDueForRegeneration(ctx context.Context, tenantID, caID string
 func (s *Store) LatestCRL(ctx context.Context, tenantID, caID string) (CRL, bool, error) {
 	var c CRL
 	found := true
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx,
-			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
+	err := s.tenantQueryRow(ctx, tenantID,
+		`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
 			        COALESCE(crl_kind, 'full'), COALESCE(shard_index, 0), COALESCE(shard_count, 1),
 			        delta_base_number, parent_crl_number, COALESCE(revoked_count, 0)
 			   FROM ca_crls
 			  WHERE tenant_id = $1 AND ca_id = $2 AND COALESCE(crl_kind, 'full') = 'full'
 			  ORDER BY crl_number DESC LIMIT 1`,
-			tenantID, caID)
-		switch err := scanCRL(row, &c); {
-		case IsNotFound(err):
-			found = false
-			return nil
-		default:
-			return err
-		}
-	})
+		[]any{tenantID, caID}, func(row pgx.Row) error {
+			switch err := scanCRL(row, &c); {
+			case IsNotFound(err):
+				found = false
+				return nil
+			default:
+				return err
+			}
+		})
 	return c, found, err
 }
 

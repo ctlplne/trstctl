@@ -690,11 +690,12 @@ func (s *Store) SetCertificateSupersededTx(ctx context.Context, tx pgx.Tx, tenan
 // the canonical row after recording (the row's id is stable across re-ingest).
 func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, fingerprint string) (Certificate, error) {
 	var c Certificate
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return scanCertificate(tx.QueryRow(ctx,
-			`SELECT `+certificateColumns+`
-			   FROM certificates WHERE tenant_id = $1 AND fingerprint = $2`, tenantID, fingerprint), &c)
-	})
+	err := s.tenantQueryRow(ctx, tenantID,
+		`SELECT `+certificateColumns+`
+			   FROM certificates WHERE tenant_id = $1 AND fingerprint = $2`, []any{tenantID, fingerprint},
+		func(row pgx.Row) error {
+			return scanCertificate(row, &c)
+		})
 	return c, err
 }
 
@@ -776,16 +777,34 @@ func (s *Store) ApplyProfileVersionTx(ctx context.Context, tx pgx.Tx, r ProfileR
 // and never scans another tenant's rows (SPINE-001). The caller supplies the
 // WithTenant transaction so the read shares the tenant scope.
 func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID, identityID string) ([]IdentityTransition, error) {
-	rows, err := tx.Query(ctx,
-		`SELECT seq, from_state, to_state, event_type, reason, occurred_at
-		   FROM identity_transitions
-		  WHERE tenant_id = $1 AND identity_id = $2
-		  ORDER BY seq`,
-		tenantID, identityID)
+	rows, err := tx.Query(ctx, identityTransitionsSQL, tenantID, identityID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanIdentityTransitions(rows, identityID)
+}
+
+// IdentityTransitions is ListIdentityTransitions in a read-only tenant
+// transaction of its own, sent as one round trip.
+func (s *Store) IdentityTransitions(ctx context.Context, tenantID, identityID string) ([]IdentityTransition, error) {
+	var out []IdentityTransition
+	err := s.tenantQuery(ctx, tenantID, identityTransitionsSQL, []any{tenantID, identityID}, func(rows pgx.Rows) error {
+		var err error
+		out, err = scanIdentityTransitions(rows, identityID)
+		return err
+	})
+	return out, err
+}
+
+// identityTransitionsSQL reads an identity's ($2) transitions in a tenant ($1),
+// in order.
+const identityTransitionsSQL = `SELECT seq, from_state, to_state, event_type, reason, occurred_at
+		   FROM identity_transitions
+		  WHERE tenant_id = $1 AND identity_id = $2
+		  ORDER BY seq`
+
+func scanIdentityTransitions(rows pgx.Rows, identityID string) ([]IdentityTransition, error) {
 	var out []IdentityTransition
 	for rows.Next() {
 		t := IdentityTransition{IdentityID: identityID}

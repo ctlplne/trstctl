@@ -792,9 +792,9 @@ func (s *Store) IdentityApprovalTarget(ctx context.Context, tenantID, identityID
 		identity Identity
 		version  uint64
 	)
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := s.tenantQueryRow(ctx, tenantID, identityApprovalTargetSQL, []any{tenantID, identityID}, func(row pgx.Row) error {
 		var err error
-		identity, version, err = s.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, false)
+		identity, version, err = scanIdentityApprovalTarget(row)
 		return err
 	})
 	return identity, version, err
@@ -805,21 +805,28 @@ func (s *Store) IdentityApprovalTargetTx(ctx context.Context, tx pgx.Tx, tenantI
 	if lock {
 		locking = " FOR UPDATE OF i"
 	}
-	var (
-		identity Identity
-		kind     string
-		attrs    []byte
-		version  int64
-	)
-	err := tx.QueryRow(ctx, `
+	return scanIdentityApprovalTarget(tx.QueryRow(ctx, identityApprovalTargetSQL+locking, tenantID, identityID))
+}
+
+// identityApprovalTargetSQL reads an identity ($2) of a tenant ($1) with its
+// lifecycle version: the highest sequence of its projected transitions.
+const identityApprovalTargetSQL = `
 		SELECT i.id::text, i.tenant_id::text, i.kind, i.name, i.owner_id::text,
 		       i.issuer_id::text, i.status, i.not_before, i.not_after,
 		       i.attributes, i.created_at,
 		       coalesce((SELECT max(t.seq) FROM identity_transitions t
 		                  WHERE t.tenant_id = i.tenant_id AND t.identity_id = i.id), 0)
 		  FROM identities i
-		 WHERE i.tenant_id = $1 AND i.id = $2`+locking,
-		tenantID, identityID).Scan(&identity.ID, &identity.TenantID, &kind,
+		 WHERE i.tenant_id = $1 AND i.id = $2`
+
+func scanIdentityApprovalTarget(row pgx.Row) (Identity, uint64, error) {
+	var (
+		identity Identity
+		kind     string
+		attrs    []byte
+		version  int64
+	)
+	err := row.Scan(&identity.ID, &identity.TenantID, &kind,
 		&identity.Name, &identity.OwnerID, &identity.IssuerID, &identity.Status,
 		&identity.NotBefore, &identity.NotAfter, &attrs, &identity.CreatedAt, &version)
 	if err != nil {

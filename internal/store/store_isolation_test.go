@@ -219,8 +219,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/store/rls_inventory.go":   3,
 		"internal/idemgc/idemgc.go":         2,
 		"internal/perf/live.go":             1,
-		"internal/orchestrator/outbox.go":   2,
-		"internal/outboxgc/outboxgc.go":     2,
+		// finalizeClaim records its outcome — one UPDATE of the claimed row by
+		// id, tenant and lease worker, never a payload — through WithSystemFirst
+		// (CI-L37 d′), once per outcome: that is two of the three.
+		"internal/orchestrator/outbox.go": 3,
+		"internal/outboxgc/outboxgc.go":   2,
 		// The readiness "db" check moved to the store's dedicated probe pool
 		// (ProbePing, DP2-054), so server.go no longer touches SystemPool.
 		// The leader enumerates tenant IDs for renewal, then reads rows under RLS.
@@ -398,7 +401,9 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if n := strings.Count(string(src), ".SystemPool()"); n > 0 {
+		// WithSystemFirst is a system-pool transaction too (CI-L37 d′), so its
+		// call sites count as SystemPool uses.
+		if n := strings.Count(string(src), ".SystemPool()") + strings.Count(string(src), ".WithSystemFirst("); n > 0 {
 			found[rel] = n
 		}
 		return nil

@@ -1090,13 +1090,11 @@ func mapKeys(m map[string]bool) []string {
 // finalizeClaim records the result in a second short transaction. If the worker
 // dies after delivery but before this update, the lease expires and another worker
 // redelivers with the same idempotency key.
+//
+// Each outcome is one UPDATE in a system transaction whose BEGIN travels with
+// it in one round trip; COMMIT follows only once the update is seen to hold
+// the lease (CI-L37 d′).
 func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, deliverErr error) error {
-	tx, err := o.store.SystemPool().Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
 	if deliverErr != nil {
 		deferred := IsDeliveryDeferred(deliverErr)
 		status := "pending"
@@ -1108,7 +1106,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		if deferred && deferredResumeAt(deliverErr).After(next) {
 			next = deferredResumeAt(deliverErr)
 		}
-		tag, err := tx.Exec(ctx,
+		err := o.store.WithSystemFirst(ctx,
 			`UPDATE outbox
 			    SET attempts = CASE WHEN $7 THEN GREATEST(attempts - 1, 0) ELSE attempts END,
 			        last_error = CASE
@@ -1126,14 +1124,17 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 			    AND tenant_id = $2
 			    AND status = 'processing'
 			    AND worker_id = $3`,
-			claim.id, claim.msg.TenantID, o.workerID, persistedDeliveryError(deliverErr), next, status, deferred)
+			[]any{claim.id, claim.msg.TenantID, o.workerID, persistedDeliveryError(deliverErr), next, status, deferred},
+			func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
+				if err != nil {
+					return fmt.Errorf("orchestrator: record failure: %w", err)
+				}
+				if tag.RowsAffected() != 1 {
+					return fmt.Errorf("orchestrator: finalize outbox failure: lease for row %d was lost", claim.id)
+				}
+				return nil
+			})
 		if err != nil {
-			return fmt.Errorf("orchestrator: record failure: %w", err)
-		}
-		if tag.RowsAffected() != 1 {
-			return fmt.Errorf("orchestrator: finalize outbox failure: lease for row %d was lost", claim.id)
-		}
-		if err := tx.Commit(ctx); err != nil {
 			return err
 		}
 		var existingClaim existingAtMostOnceClaimError
@@ -1153,7 +1154,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		return nil
 	}
 
-	tag, err := tx.Exec(ctx,
+	err := o.store.WithSystemFirst(ctx,
 		`UPDATE outbox
 		    SET status = 'delivered',
 		        delivered_at = now(),
@@ -1164,14 +1165,17 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		    AND tenant_id = $2
 		    AND status = 'processing'
 		    AND worker_id = $3`,
-		claim.id, claim.msg.TenantID, o.workerID)
+		[]any{claim.id, claim.msg.TenantID, o.workerID},
+		func(tag pgconn.CommandTag, err error, _ store.TxStatements) error {
+			if err != nil {
+				return fmt.Errorf("orchestrator: record delivery: %w", err)
+			}
+			if tag.RowsAffected() != 1 {
+				return fmt.Errorf("orchestrator: finalize outbox delivery: lease for row %d was lost", claim.id)
+			}
+			return nil
+		})
 	if err != nil {
-		return fmt.Errorf("orchestrator: record delivery: %w", err)
-	}
-	if tag.RowsAffected() != 1 {
-		return fmt.Errorf("orchestrator: finalize outbox delivery: lease for row %d was lost", claim.id)
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	o.recordCircuitSuccess(claim.msg, o.clockNow())

@@ -355,23 +355,23 @@ func (s *Store) GetOwner(ctx context.Context, tenantID, id string) (Owner, error
 		o    Owner
 		kind string
 	)
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
-			        coalesce(application_id, ''), coalesce(service, ''),
-			        coalesce(business_unit, ''), coalesce(environment, ''),
-			        escalation_chain, ownership_verified_at,
-			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
-			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
-			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
-			        ownership_source_observed_at
-			   FROM owners WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
+	err := s.tenantQueryRow(ctx, tenantID,
+		`SELECT id::text, tenant_id::text, kind, name, email, created_at,
+		        coalesce(application_id, ''), coalesce(service, ''),
+		        coalesce(business_unit, ''), coalesce(environment, ''),
+		        escalation_chain, ownership_verified_at,
+		        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+		        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
+		        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+		        ownership_source_observed_at
+		   FROM owners WHERE tenant_id = $1 AND id = $2`, []any{tenantID, id},
+		func(row pgx.Row) error {
+			return row.Scan(&o.ID, &o.TenantID, &kind, &o.Name, &o.Email, &o.CreatedAt,
 				&o.ApplicationID, &o.Service, &o.BusinessUnit, &o.Environment,
 				&o.EscalationChain, &o.OwnershipVerifiedAt, &o.OwnershipVerifiedBy, &o.OwnershipModelDigest,
 				&o.OwnershipReattestationRequestedAt, &o.OwnershipReattestationRequestedFor,
 				&o.OwnershipSource, &o.OwnershipSourceRef, &o.OwnershipSourceObservedAt)
-	})
+		})
 	o.Kind = OwnerKind(kind)
 	return o, err
 }

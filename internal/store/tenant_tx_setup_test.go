@@ -14,10 +14,12 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// setupTracer records every statement and batch the store sends, in order.
+// setupTracer records every statement and batch the store sends, in order,
+// and apart from them the statements inside each batch.
 type setupTracer struct {
-	mu   sync.Mutex
-	sent []string
+	mu      sync.Mutex
+	sent    []string
+	batched []string
 }
 
 func (r *setupTracer) record(sql string) {
@@ -43,8 +45,21 @@ func (r *setupTracer) TraceBatchStart(ctx context.Context, _ *pgx.Conn, _ pgx.Tr
 	r.record("[batch]")
 	return ctx
 }
-func (r *setupTracer) TraceBatchQuery(context.Context, *pgx.Conn, pgx.TraceBatchQueryData) {}
-func (r *setupTracer) TraceBatchEnd(context.Context, *pgx.Conn, pgx.TraceBatchEndData)     {}
+func (r *setupTracer) TraceBatchQuery(_ context.Context, _ *pgx.Conn, d pgx.TraceBatchQueryData) {
+	r.mu.Lock()
+	r.batched = append(r.batched, d.SQL)
+	r.mu.Unlock()
+}
+
+// takeBatched returns the statements sent inside batches since the last call.
+func (r *setupTracer) takeBatched() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := r.batched
+	r.batched = nil
+	return out
+}
+func (r *setupTracer) TraceBatchEnd(context.Context, *pgx.Conn, pgx.TraceBatchEndData) {}
 
 // A tenant transaction's setup — BEGIN, the shared backup write fence, the RLS
 // role and the tenant GUC — is one round trip, in that order, and in force

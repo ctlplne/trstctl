@@ -145,12 +145,12 @@ func (s *Store) GetIssuer(ctx context.Context, tenantID, id string) (Issuer, err
 		i    Issuer
 		kind string
 	)
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, kind, name, chain, public_key, internal, created_at
-			   FROM issuers WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&i.ID, &i.TenantID, &kind, &i.Name, &i.Chain, &i.PublicKey, &i.Internal, &i.CreatedAt)
-	})
+	err := s.tenantQueryRow(ctx, tenantID,
+		`SELECT id::text, tenant_id::text, kind, name, chain, public_key, internal, created_at
+			   FROM issuers WHERE tenant_id = $1 AND id = $2`, []any{tenantID, id},
+		func(row pgx.Row) error {
+			return row.Scan(&i.ID, &i.TenantID, &kind, &i.Name, &i.Chain, &i.PublicKey, &i.Internal, &i.CreatedAt)
+		})
 	i.Kind = IssuerKind(kind)
 	return i, err
 }

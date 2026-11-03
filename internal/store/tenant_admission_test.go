@@ -14,8 +14,10 @@ import (
 
 // Tenant admission reads its four conditions — a registered tenant, no
 // inactive provider record, no provider suspension pending or in force, no
-// erasure pending — in one statement instead of four, and each refusal names
-// its own reason, in the order the conditions were always checked.
+// erasure pending — in one statement instead of four, sent with its tenant
+// transaction's setup and COMMIT as one round trip (CI-L37 d′), and each
+// refusal names its own reason, in the order the conditions were always
+// checked.
 func TestTenantAdmissionIsOneStatementAndNamesEachRefusal(t *testing.T) {
 	base := newStore(t)
 	seedTwoTenants(t, base)
@@ -40,17 +42,21 @@ func TestTenantAdmissionIsOneStatementAndNamesEachRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	if err := s.RequireLiveTenantService(ctx, tenantA); err != nil { // the session's first use prepares the batch
+		t.Fatalf("a live tenant was refused: %v", err)
+	}
 	tracer.take()
+	tracer.takeBatched()
 	if err := s.RequireLiveTenantService(ctx, tenantA); err != nil {
 		t.Fatalf("a live tenant was refused: %v", err)
 	}
-	sent := tracer.take()
-	if len(sent) != 3 || sent[2] != "commit" {
-		t.Fatalf("admission sent %d messages %q; want the setup, one statement, commit", len(sent), sent)
+	sent, batched := tracer.take(), tracer.takeBatched()
+	if len(sent) != 1 || sent[0] != "[batch]" || len(batched) != 6 || batched[5] != "commit" {
+		t.Fatalf("admission sent %q carrying %q; want one batch: the setup, one statement, commit", sent, batched)
 	}
 	for _, table := range []string{"FROM tenants", "provider_tenants", "provider_suspend_commands", "idempotency_keys"} {
-		if !strings.Contains(sent[1], table) {
-			t.Fatalf("the admission statement %q does not read %s", sent[1], table)
+		if !strings.Contains(batched[4], table) {
+			t.Fatalf("the admission statement %q does not read %s", batched[4], table)
 		}
 	}
 

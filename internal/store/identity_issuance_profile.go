@@ -15,14 +15,9 @@ import (
 func (s *Store) IdentityInitialIssuance(ctx context.Context, tenantID, identityID string) (IdentityTransition, bool, error) {
 	var result IdentityTransition
 	count := 0
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT seq, idempotency_key FROM identity_transitions
+	err := s.tenantQuery(ctx, tenantID, `SELECT seq, idempotency_key FROM identity_transitions
 		 WHERE tenant_id=$1 AND identity_id=$2 AND event_type='identity.issued'
-		 AND from_state='requested' AND to_state='issued' ORDER BY seq LIMIT 2`, tenantID, identityID)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
+		 AND from_state='requested' AND to_state='issued' ORDER BY seq LIMIT 2`, []any{tenantID, identityID}, func(rows pgx.Rows) error {
 		for rows.Next() {
 			count++
 			if err := rows.Scan(&result.Seq, &result.IdempotencyKey); err != nil {

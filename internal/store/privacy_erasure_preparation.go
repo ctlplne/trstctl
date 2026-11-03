@@ -649,10 +649,10 @@ func (s *Store) hasPrivacySubjectErasurePreparation(
 	tenantID string,
 ) (bool, error) {
 	var active bool
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (
+	err := s.tenantQueryRow(ctx, tenantID, `SELECT EXISTS (
 			SELECT 1 FROM privacy_subject_erasure_preparations WHERE tenant_id = $1
-		)`, tenantID).Scan(&active)
+		)`, []any{tenantID}, func(row pgx.Row) error {
+		return row.Scan(&active)
 	})
 	return active, err
 }

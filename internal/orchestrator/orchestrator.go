@@ -2404,15 +2404,7 @@ func (o *Orchestrator) State(ctx context.Context, tenantID, identityID string) (
 // projection of the event log, which remains the source of truth (AN-2): a
 // projection Rebuild re-derives them from the log.
 func (o *Orchestrator) History(ctx context.Context, tenantID, identityID string) ([]Transition, error) {
-	var rows []store.IdentityTransition
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		got, err := o.store.ListIdentityTransitions(ctx, tx, tenantID, identityID)
-		if err != nil {
-			return err
-		}
-		rows = got
-		return nil
-	})
+	rows, err := o.store.IdentityTransitions(ctx, tenantID, identityID)
 	if err != nil {
 		return nil, fmt.Errorf("orchestrator: load identity %s history: %w", identityID, err)
 	}
