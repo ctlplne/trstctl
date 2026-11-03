@@ -65,6 +65,7 @@ var branchProtectionExemptCIJobs = map[string]string{
 	"perf live / served hot-path load gate":    "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
 	"web storybook (workbench build)":          "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
 	"definition of done / arm64 proof profile": "runs the managed-key proof on a native arm64 runner; it joins the required set once it has run green there, which is the repository owner's branch-protection decision",
+	"ClusterFuzzLite / coverage (nightly)":     "scheduled/manual-only coverage recorder (CI-L32): it stores the coverage report that lets each push's code-change fuzzing pick the affected targets; it runs no gate of its own and cannot run on pull_request",
 }
 
 // branchProtectionUmbrellaLanes names CI jobs, by job id, that block merge through

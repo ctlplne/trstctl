@@ -129,6 +129,7 @@ jobs:
           name: coverage-packages-${{ matrix.shard }}
           path: cover.out.main.${{ matrix.shard }}
           if-no-files-found: error
+          retention-days: 1  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   # The internal/server race + coverage test binary is built once and shared by
   # every server slice, instead of each slice compiling it (about 4.4 minutes).
@@ -253,6 +254,7 @@ jobs:
             cover.out.server.${{ matrix.slice }}.shards/result.json
             cover.out.server.${{ matrix.slice }}.shards/part-*.ndjson
           if-no-files-found: error
+          retention-days: 1  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   go-test-extra:
     name: go test / fairness + live perf
@@ -304,6 +306,7 @@ jobs:
             cover.out.server-rotation-cursor
             cover.out.liveperf
           if-no-files-found: error
+          retention-days: 1  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   build-lint:
     name: build + lint gates
@@ -514,6 +517,7 @@ jobs:
           name: perf-smoke-slo
           path: ${{ runner.temp }}/perf-smoke.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       - name: Perf capacity calibration gate
         run: scripts/perf/run-capacity-calibration.sh --out "${RUNNER_TEMP}/capacity-measurement-baseline.json"
@@ -524,6 +528,7 @@ jobs:
           name: perf-capacity-calibration
           path: ${{ runner.temp }}/capacity-measurement-baseline.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
 
   core-integration-succession:
@@ -868,6 +873,7 @@ jobs:
           name: wiring-census-part-${{ matrix.shard }}
           path: wiring-census.part-${{ matrix.shard }}.json
           if-no-files-found: error
+          retention-days: 1  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   dod-selftests:
     name: definition of done / census self-tests + canary
@@ -961,6 +967,7 @@ jobs:
         with:
           name: wiring-census
           path: wiring-census.json
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       # Last and always: even when the merge already failed, a failed, cancelled
       # or skipped shard or self-test job fails this required check.
@@ -1026,6 +1033,7 @@ jobs:
           name: wiring-census-arm64
           path: wiring-census-arm64.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   captured-soak:
     name: captured soak / leak gate
@@ -1078,6 +1086,7 @@ jobs:
             ${{ runner.temp }}/soak-trend.json
             ${{ runner.temp }}/soak-induced-leak.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   spine-burst:
     name: spine burst / replay-outbox gate
@@ -1112,6 +1121,7 @@ jobs:
             ${{ runner.temp }}/spine-burst-cap-small.json
             ${{ runner.temp }}/spine-burst-trend.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   branch-protection-drift:
     name: branch protection / live policy drift
@@ -1137,6 +1147,7 @@ jobs:
           name: branch-protection-live-drift-receipt
           path: ${{ runner.temp }}/branch-protection-drift-receipt.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   # TEST-VAULT-001: prove the Vault-compat shim against a REAL vault/openbao CLI
   # (a pinned OpenBao binary), non-skipped, as a required check — the acceptance
@@ -1353,6 +1364,7 @@ jobs:
           name: perf-live-slo
           path: ${{ runner.temp }}/perf-live.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   # OPS-CI-105/106/107 (+ perf-live above): scheduled-only verifiers cannot be
   # per-PR status checks, so this REQUIRED job fails closed unless the latest
@@ -1457,6 +1469,8 @@ jobs:
   # smoke job above stays fast and required; this job runs the upstream
   # ClusterFuzzLite build/run actions against the same auto-discovered Go fuzz
   # targets and archives the hosted-run manifest plus any crash/SARIF artifacts.
+  # A push runs code-change mode: with the nightly coverage report (job below) it
+  # fuzzes only the targets that cover the changed files; the nightly runs batch.
   clusterfuzzlite:
     name: ClusterFuzzLite / OSS-Fuzz (address)
     runs-on: ubuntu-latest
@@ -1523,6 +1537,36 @@ jobs:
             ${{ github.workspace }}/crash-*
             ${{ github.workspace }}/*.sarif
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
+
+  # Nightly ClusterFuzzLite coverage (CI-L32; owner decision 2026-11-03, (b)): with
+  # the latest coverage report in ClusterFuzzLite's store, each push's code-change
+  # run (above) fuzzes only the targets that cover the files the push changed,
+  # instead of every target. Runs on the nightly schedule and on a manual dispatch.
+  clusterfuzzlite-coverage:
+    name: ClusterFuzzLite / coverage (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build ClusterFuzzLite coverage fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: go
+          sanitizer: coverage
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Record coverage for code-change fuzzing
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          language: go
+          sanitizer: coverage
+          mode: coverage
+          fuzz-seconds: 600
 
   # RESIL-003: required chaos/fault-injection gate. These tests deliberately break
   # the system's dependencies (signer death, NATS restart/partition, PostgreSQL
@@ -1627,6 +1671,7 @@ jobs:
           name: a11y-evidence-receipt
           path: ${{ runner.temp }}/accessibility-evidence-receipt.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       - name: First-run usability receipt
         working-directory: .
@@ -1642,6 +1687,7 @@ jobs:
           name: first-run-usability-receipt
           path: ${{ runner.temp }}/first-run-receipt.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       - name: Build (Vite -> internal/webui/dist)
         run: npm run build
@@ -1767,6 +1813,7 @@ jobs:
             dist/release-evidence/license-audit.json
             dist/release-evidence/npm-license-audit.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   supply-chain:
     name: supply-chain (SBOM + binary SCA)
@@ -1812,6 +1859,7 @@ jobs:
           name: npm-audit-dependency-surfaces
           path: ${{ runner.temp }}/npm-audit-dependency-surfaces.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       # A CycloneDX SBOM of the Go module graph, complementing the image SBOM the
       # release pipeline attaches. The generator is pinned for reproducibility.
@@ -1824,6 +1872,7 @@ jobs:
           name: sbom-module-cyclonedx
           path: dist/release-evidence/sbom.module.cyclonedx.json
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       # Dependency freshness is separate from SCA: govulncheck/npm audit answer
       # "is a known vulnerability reachable?", while this gate answers "is the
@@ -1849,6 +1898,7 @@ jobs:
           name: embedded-postgres-trivy-receipt
           path: ${{ runner.temp }}/embedded-postgres-scan
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   embedded-postgres-scan:
     name: embedded-postgres scan (${{ matrix.embedded-postgres-arch }})
@@ -1878,6 +1928,7 @@ jobs:
           name: embedded-postgres-trivy-receipt-${{ matrix.embedded-postgres-arch }}
           path: ${{ runner.temp }}/embedded-postgres-scan-${{ matrix.embedded-postgres-arch }}
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   embedded-postgres-scan-receipts:
     name: embedded-postgres scan receipts
@@ -2152,6 +2203,7 @@ jobs:
           name: acme-certbot-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   est-libest-conformance:
     name: est client conformance (libest estclient)
@@ -2211,6 +2263,7 @@ jobs:
           name: est-libest-simpleenroll-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   cmp-client-conformance:
     name: cmp client conformance (OpenSSL transcript)
@@ -2265,6 +2318,7 @@ jobs:
           name: cmp-openssl-p10cr-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   tsa-client-conformance:
     name: tsa client conformance (OpenSSL ts transcript)
@@ -2319,6 +2373,7 @@ jobs:
           name: tsa-openssl-ts-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   scep-client-conformance:
     name: scep client conformance (sscep transcript)
@@ -2378,6 +2433,7 @@ jobs:
           name: scep-sscep-enroll-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   spiffe-workloadapi-conformance:
     name: spiffe workload api conformance (go-spiffe + helper)
@@ -2433,6 +2489,7 @@ jobs:
           name: spiffe-workloadapi-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   compose-e2e:
     name: compose e2e + PKI conformance (EXC-GATE-01)
@@ -2522,6 +2579,7 @@ jobs:
             ${{ runner.temp }}/profile-lint-fixtures
             ${{ runner.temp }}/profile-lint-zlint
           if-no-files-found: error
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
       - name: Dump compose logs on failure
         if: failure()
         run: |
@@ -2749,6 +2807,7 @@ jobs:
             dist/trstctl-agent.exe
             dist/trstctl-agent.msi
             dist/SHA256SUMS
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       - name: Upload Windows lifecycle evidence
         if: always()
@@ -2757,6 +2816,7 @@ jobs:
           name: windows-msi-lifecycle
           path: ${{ runner.temp }}/windows-msi-lifecycle
           if-no-files-found: warn
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
   kubernetes:
     name: kubernetes / kind e2e
@@ -3048,6 +3108,7 @@ jobs:
           name: playwright-report
           path: web/playwright-report
           if-no-files-found: ignore
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
       - name: Demo stack logs on failure
         if: failure()
