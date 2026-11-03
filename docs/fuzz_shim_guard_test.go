@@ -3,6 +3,7 @@
 package docs
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -206,5 +207,131 @@ func TestFuzzTargetSetupReadsNoFilesAndStopsAfterFatal(t *testing.T) {
 	sort.Strings(findings)
 	if len(findings) > 0 {
 		t.Fatalf("fuzz target setup the ClusterFuzzLite runner cannot run:\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+// ClusterFuzzLite's testing shim implements testing.F and testing.T only in
+// part (CI 41558210954, the first run whose fuzzers all built): Context()
+// panics on both, the fuzz body's t.Cleanup runs its function at once (so
+// t.Cleanup(key.Destroy) destroyed internal/crypto/mtls's CA key before the
+// target used it), and t.Deadline, Failed, Parallel, Run and Skipped panic.
+// A fuzz target's setup therefore never asks f (or a same-package helper it
+// hands f to) for Context, and its fuzz body never asks t (or a helper it
+// hands t to) for any of those; it uses context.Background and defer.
+func TestFuzzTargetsCallOnlyWhatTheFuzzShimRuns(t *testing.T) {
+	setupForbidden := map[string]bool{"Context": true}
+	bodyForbidden := map[string]bool{"Context": true, "Cleanup": true, "Deadline": true, "Failed": true, "Parallel": true, "Run": true, "Skipped": true}
+	var findings []string
+	fset := token.NewFileSet()
+	byDir := map[string][]*ast.File{}
+	for _, root := range []string{"../internal", "../ee", "../cmd", "../tools"} {
+		_ = filepath.WalkDir(filepath.FromSlash(root), func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, perr := parser.ParseFile(fset, path, read(t, filepath.ToSlash(path)), 0)
+			if perr == nil {
+				byDir[filepath.Dir(path)] = append(byDir[filepath.Dir(path)], file)
+			}
+			return nil
+		})
+	}
+	// calls reports each method called on the variable named recv in body,
+	// skipping nothing: a closure that captures it still runs under the shim.
+	calls := func(body ast.Node, recv string, forbidden map[string]bool, report func(method string, at token.Pos)) {
+		ast.Inspect(body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == recv && forbidden[sel.Sel.Name] {
+					report(sel.Sel.Name, call.Pos())
+				}
+			}
+			return true
+		})
+	}
+	for _, files := range byDir {
+		helpers := map[string]*ast.FuncDecl{}
+		for _, file := range files {
+			for _, decl := range file.Decls {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Body != nil {
+					helpers[fn.Name.Name] = fn
+				}
+			}
+		}
+		// check reports forbidden calls on recv in body and, one level down, in
+		// each same-package helper body receives recv as an argument.
+		check := func(target string, body ast.Node, recv string, forbidden map[string]bool, what string) {
+			calls(body, recv, forbidden, func(method string, at token.Pos) {
+				findings = append(findings, fmt.Sprintf("%s %s: %s calls %s.%s", fset.Position(at), target, what, recv, method))
+			})
+			ast.Inspect(body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				id, ok := call.Fun.(*ast.Ident)
+				if !ok || helpers[id.Name] == nil {
+					return true
+				}
+				helper := helpers[id.Name]
+				var params []string
+				for _, field := range helper.Type.Params.List {
+					for _, name := range field.Names {
+						params = append(params, name.Name)
+					}
+				}
+				for i, arg := range call.Args {
+					if a, ok := arg.(*ast.Ident); ok && a.Name == recv && i < len(params) {
+						calls(helper.Body, params[i], forbidden, func(method string, at token.Pos) {
+							findings = append(findings, fmt.Sprintf("%s %s: %s hands %s to %s, which calls %s.%s", fset.Position(at), target, what, recv, id.Name, params[i], method))
+						})
+					}
+				}
+				return true
+			})
+		}
+		for _, file := range files {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || !strings.HasPrefix(fn.Name.Name, "Fuzz") || fn.Body == nil || len(fn.Type.Params.List) != 1 || len(fn.Type.Params.List[0].Names) != 1 {
+					continue
+				}
+				star, ok := fn.Type.Params.List[0].Type.(*ast.StarExpr)
+				if !ok {
+					continue
+				}
+				if sel, ok := star.X.(*ast.SelectorExpr); !ok || sel.Sel.Name != "F" {
+					continue
+				}
+				f := fn.Type.Params.List[0].Names[0].Name
+				check(fn.Name.Name, fn.Body, f, setupForbidden, "setup")
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					call, ok := n.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					sel, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok || sel.Sel.Name != "Fuzz" || len(call.Args) != 1 {
+						return true
+					}
+					if id, ok := sel.X.(*ast.Ident); !ok || id.Name != f {
+						return true
+					}
+					lit, ok := call.Args[0].(*ast.FuncLit)
+					if !ok || len(lit.Type.Params.List) == 0 || len(lit.Type.Params.List[0].Names) == 0 {
+						return true
+					}
+					check(fn.Name.Name, lit.Body, lit.Type.Params.List[0].Names[0].Name, bodyForbidden, "the fuzz body")
+					return false
+				})
+			}
+		}
+	}
+	sort.Strings(findings)
+	if len(findings) > 0 {
+		t.Fatalf("fuzz targets call what the ClusterFuzzLite shim does not run:\n%s", strings.Join(findings, "\n"))
 	}
 }

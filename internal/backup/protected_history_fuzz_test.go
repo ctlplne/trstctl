@@ -4,6 +4,7 @@ package backup
 
 import (
 	"bytes"
+	"context"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func FuzzProtectedEventBackup(f *testing.F) {
 	log, _, _ := protectedHistoryFixture(f)
 	integrity := []byte("owned backup integrity fixture")
 	var seed bytes.Buffer
-	if _, err := WriteLogWithKey(f.Context(), log, &seed, integrity); err != nil {
+	if _, err := WriteLogWithKey(context.Background(), log, &seed, integrity); err != nil {
 		f.Fatal(err)
 		return
 	}

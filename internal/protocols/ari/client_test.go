@@ -82,7 +82,7 @@ func FuzzDiscoverRenewalInfo(f *testing.F) {
 		client := NewClient(&http.Client{Transport: directoryRoundTrip(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}}, nil
 		})})
-		endpoint, err := client.DiscoverRenewalInfo(t.Context(), "https://acme.example.test/dir")
+		endpoint, err := client.DiscoverRenewalInfo(context.Background(), "https://acme.example.test/dir")
 		if err == nil {
 			parsed, parseErr := renewalInfoEndpoint(endpoint)
 			if parseErr != nil || parsed.Scheme != "https" {

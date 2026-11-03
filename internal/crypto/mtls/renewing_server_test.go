@@ -20,16 +20,26 @@ import (
 
 func renewingTestAuthority(t *testing.T) (*boundary.LockedSigner, []byte, []byte) {
 	t.Helper()
-	key, err := boundary.GenerateLockedKey(boundary.ECDSAP256)
+	key, der, ca, err := renewingAuthority()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(key.Destroy)
+	return key, der, ca
+}
+
+// renewingAuthority makes the test CA; the caller destroys its key.
+func renewingAuthority() (*boundary.LockedSigner, []byte, []byte, error) {
+	key, err := boundary.GenerateLockedKey(boundary.ECDSAP256)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	der, err := boundary.SelfSignedCACert(key, "renewing server test", time.Hour)
 	if err != nil {
-		t.Fatal(err)
+		key.Destroy()
+		return nil, nil, nil, err
 	}
-	return key, der, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	return key, der, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), nil
 }
 
 func TestRenewingServerCertificateRetainsTrustAcrossOutageAndExpiry(t *testing.T) {
@@ -219,7 +229,13 @@ func FuzzRenewingServerCertificateReplacement(f *testing.F) {
 		if len(chain) > 128*1024 {
 			t.Skip()
 		}
-		key, der, ca := renewingTestAuthority(t)
+		// Not renewingTestAuthority: the ClusterFuzzLite shim runs t.Cleanup at
+		// once, which destroyed the key before the target used it.
+		key, der, ca, err := renewingAuthority()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer key.Destroy()
 		var replace bool
 		source, err := NewRenewingServerCertificate(ca, []string{"localhost"}, func(csr []byte) ([]byte, error) {
 			if replace {

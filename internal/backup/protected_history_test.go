@@ -71,20 +71,23 @@ func protectedHistoryFixture(t fuzzFixtureTB) (*events.Log, *protectedBackupKeys
 		t.Fatal(err)
 	}
 	t.Cleanup(key.Destroy)
+	// Not t.Context: FuzzProtectedEventBackup hands this its *testing.F, and
+	// the ClusterFuzzLite shim's F panics on Context.
+	ctx := context.Background()
 	f := &protectedBackupKeys{key: key, ref: eventprotect.KeyRef{TenantID: "60aad68e-4613-4658-a75a-10ee97084edf", ID: "06bc0318-6b02-471c-b3c4-54257995848a"}}
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithEventProtection(events.EventProtection{Admission: f, Keys: f}))
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithEventProtection(events.EventProtection{Admission: f, Keys: f}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	if _, err := log.Append(t.Context(), events.Event{Type: protectedBackupFixtureType, TenantID: f.ref.TenantID, Data: []byte(`{"email":"protected-backup@example.invalid"}`), Actor: &events.Actor{Subject: "private-backup-actor@example.invalid"}}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: protectedBackupFixtureType, TenantID: f.ref.TenantID, Data: []byte(`{"email":"protected-backup@example.invalid"}`), Actor: &events.Actor{Subject: "private-backup-actor@example.invalid"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := log.Append(t.Context(), events.Event{Type: "neighbor.created", TenantID: "c35cd6e9-8580-42bc-8123-ff65267f526f", Data: []byte(`{"name":"neighbor"}`)}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: "neighbor.created", TenantID: "c35cd6e9-8580-42bc-8123-ff65267f526f", Data: []byte(`{"name":"neighbor"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	var history []events.BackupHistoryRecord
-	if err := log.ExportBackupHistoryThrough(t.Context(), 2, func(record events.BackupHistoryRecord) error { history = append(history, record); return nil }); err != nil {
+	if err := log.ExportBackupHistoryThrough(ctx, 2, func(record events.BackupHistoryRecord) error { history = append(history, record); return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if history[0].Event.Protection == nil || history[0].Event.SchemaVersion != 1 || f.calls != 1 {
@@ -222,6 +225,5 @@ type fuzzFixtureTB interface {
 	Fatal(args ...any)
 	Fatalf(format string, args ...any)
 	Cleanup(func())
-	Context() context.Context
 	TempDir() string
 }

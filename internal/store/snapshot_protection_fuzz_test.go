@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"testing"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -11,7 +12,7 @@ import (
 func FuzzProtectedSnapshotPayload(f *testing.F) {
 	metadata, raw, provider := newSnapshotProtectionFixture(f, "snapshot fuzz fixture")
 	defer secret.Wipe(raw)
-	encoded, err := protectSnapshotPayload(f.Context(), snapshotProtectionFixtureTenant, metadata, raw, provider)
+	encoded, err := protectSnapshotPayload(context.Background(), snapshotProtectionFixtureTenant, metadata, raw, provider)
 	if err != nil {
 		f.Fatal(err)
 		return
@@ -23,7 +24,7 @@ func FuzzProtectedSnapshotPayload(f *testing.F) {
 		if len(data) > 1<<20 {
 			return
 		}
-		opened, _ := openSnapshotPayload(t.Context(), snapshotProtectionFixtureTenant, metadata, data, provider)
+		opened, _ := openSnapshotPayload(context.Background(), snapshotProtectionFixtureTenant, metadata, data, provider)
 		secret.Wipe(opened)
 	})
 }
