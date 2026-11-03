@@ -138,6 +138,10 @@ func (app *unixOrdersApp) run(ctx context.Context, done chan<- struct{}) {
 }
 
 func (app *unixOrdersApp) tick(ctx context.Context) {
+	// A tick that starts while the host is paused counts as paused however
+	// late it finishes: a login queued behind the pause can complete after
+	// the flag clears (CI-L33).
+	pausedAtStart := app.paused.Load()
 	var read struct {
 		Value   string `json:"value"`
 		Version int    `json:"version"`
@@ -157,7 +161,7 @@ func (app *unixOrdersApp) tick(ctx context.Context) {
 		var next unixTestCredential
 		if json.Unmarshal([]byte(read.Value), &next) == nil {
 			if !app.lab.logsIn(next.Username, next.Password) {
-				app.fail(fmt.Sprintf("adopt version %d", read.Version))
+				app.fail(fmt.Sprintf("adopt version %d", read.Version), pausedAtStart)
 			} else {
 				app.mu.Lock()
 				app.version, app.credential = read.Version, next
@@ -171,7 +175,7 @@ func (app *unixOrdersApp) tick(ctx context.Context) {
 	}
 	if !app.lab.logsIn(credential.Username, credential.Password) {
 		if ctx.Err() == nil {
-			app.fail(fmt.Sprintf("log in with version %d", current))
+			app.fail(fmt.Sprintf("log in with version %d", current), pausedAtStart)
 		}
 		return
 	}
@@ -186,10 +190,10 @@ func (app *unixOrdersApp) tick(ctx context.Context) {
 	}
 }
 
-func (app *unixOrdersApp) fail(message string) {
+func (app *unixOrdersApp) fail(message string, pausedAtStart bool) {
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	if app.paused.Load() {
+	if pausedAtStart || app.paused.Load() {
 		message = "paused: " + message
 	}
 	app.failures = append(app.failures, message)
@@ -443,10 +447,11 @@ func TestServedUnixLocalAccountsRotateA240(t *testing.T) {
 	if out, err := exec.Command("docker", "unpause", lab.id).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Fatalf("unpause the host: %v %s", err, out)
 	}
-	app.paused.Store(false)
 	if !lab.logsIn(live.Username, live.Password) {
 		t.Fatal("a timed-out retirement left the predecessor unable to log in")
 	}
+	// The paused window ends once the resumed host serves logins again.
+	app.paused.Store(false)
 	if final := await(cmd.ID, ""); final.Phase != store.SecretStaticRotationCompleted {
 		t.Fatalf("cycle 4 after the host resumed: %+v", final)
 	}
