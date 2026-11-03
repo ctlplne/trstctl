@@ -65,6 +65,12 @@ foreach ($file in $candidates) {
     $changed = $true
 }
 if (-not $changed) { Write-Host '>> no AllowGroups directive found in the sshd configuration' }
+# The administrator's key logon was accepted and the connection then closed
+# while the rotation opened its session ("unexpected packet in response to
+# channel open"), with nothing more in the Operational log. Debug logging,
+# first in the file so no Match block scopes it, says why.
+$labStarted = Get-Date
+Set-Content -Path $config -Value (@('LogLevel DEBUG3') + (Get-Content -Path $config)) -Encoding ascii
 Restart-Service sshd
 $deadline = (Get-Date).AddSeconds(30)
 while (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) {
@@ -98,9 +104,14 @@ $status = $LASTEXITCODE
 if ($status -ne 0 -or -not (Select-String -Path $log -Pattern 'A240_WINDOWS_OK' -Quiet)) {
     # Why a logon was refused, without any password: sshd's own log and the
     # Security log's failed-logon status codes.
-    Write-Host '>> OpenSSH/Operational, newest 25:'
-    Get-WinEvent -LogName 'OpenSSH/Operational' -MaxEvents 25 -ErrorAction SilentlyContinue |
+    Write-Host '>> OpenSSH/Operational since the lab started, oldest first (sshd at LogLevel DEBUG3):'
+    Get-WinEvent -FilterHashtable @{ LogName = 'OpenSSH/Operational'; StartTime = $labStarted } -ErrorAction SilentlyContinue |
+        Sort-Object TimeCreated | Select-Object -Last 400 |
+        ForEach-Object { Write-Host ("   {0:HH:mm:ss.fff} {1}" -f $_.TimeCreated, ($_.Message -replace '\s+', ' ')) }
+    Write-Host '>> OpenSSH/Admin, newest 20:'
+    Get-WinEvent -LogName 'OpenSSH/Admin' -MaxEvents 20 -ErrorAction SilentlyContinue |
         ForEach-Object { Write-Host ("   {0:HH:mm:ss} {1}" -f $_.TimeCreated, ($_.Message -replace '\s+', ' ')) }
+    Write-Host (">> trstctl_admin profile directory present: {0}" -f (Test-Path (Join-Path $env:SystemDrive 'Users\trstctl_admin')))
     Write-Host '>> Security 4625 (failed logon), newest 5:'
     Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4625 } -MaxEvents 5 -ErrorAction SilentlyContinue |
         ForEach-Object {
