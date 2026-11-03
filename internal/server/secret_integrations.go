@@ -478,7 +478,7 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredHostedKeyBackend(opener)
 	case "okta", "databricks":
 		return openConfiguredClientSecretBackend(opener)
-	case "unix":
+	case "unix", "windows":
 		return openConfiguredUnixBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
@@ -1652,7 +1652,7 @@ func (p *configuredDynamicProvider) TwoUserRetirement() string {
 	switch strings.TrimSpace(p.cfg.Type) {
 	case "ldap":
 		return "replacing its password; binds already open last until they bind again"
-	case "unix":
+	case "unix", "windows":
 		return "replacing its password; sessions already open last until they end"
 	case "mongodb":
 		return "replacing its password; connections already authenticated last until they reconnect"
@@ -1667,8 +1667,9 @@ func (p *configuredDynamicProvider) RotationPhase(role string) string {
 	if config.SinglePhaseRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] {
 		return dynsecret.RotationSinglePhase
 	}
-	// A unix role without a pair changes its one account's password in place.
-	if strings.TrimSpace(p.cfg.Type) == "unix" {
+	// A unix or windows role without a pair changes its one account's
+	// password in place.
+	if providerType := strings.TrimSpace(p.cfg.Type); providerType == "unix" || providerType == "windows" {
 		if _, paired := p.RotationAccounts(role); !paired {
 			return dynsecret.RotationSinglePhase
 		}
@@ -1725,7 +1726,7 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		// address (Oracle's service, SQL Server's database) and runs a
 		// trivial query (A240).
 		return p.verifyDatabaseWithBackend(ctx, credential)
-	case "auth0", "datadog", "openai", "azure-entra", "okta", "databricks", "ldap", "unix", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
+	case "auth0", "datadog", "openai", "azure-entra", "okta", "databricks", "ldap", "unix", "windows", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key
 		// lists models, a directory entry binds, and a hosted API key passes

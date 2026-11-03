@@ -5,10 +5,14 @@ package crypto
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"syscall"
 	"time"
+	"unicode/utf16"
 
 	"golang.org/x/crypto/ssh"
 
@@ -23,6 +27,10 @@ type SSHAccountTarget struct {
 	// Sudo runs the profile as `sudo -n /usr/sbin/chpasswd`, for an
 	// administrator that is not root but may run chpasswd.
 	Sudo bool
+	// Windows runs the Windows profile instead (A240): Windows PowerShell's
+	// Set-LocalUser, for a member of Administrators on a host serving
+	// OpenSSH.
+	Windows bool
 	// DialControl, when set, is applied to the connection's socket.
 	DialControl func(network, address string, c syscall.RawConn) error
 }
@@ -34,6 +42,25 @@ const (
 	sshChpasswdCommand     = "/usr/sbin/chpasswd"         // #nosec G101 -- a command path the profile runs, not a credential (CWE-798)
 	sshChpasswdSudoCommand = "sudo -n /usr/sbin/chpasswd" // #nosec G101 -- a command path the profile runs, not a credential (CWE-798)
 )
+
+// sshWindowsSetLocalUser is the Windows profile's script. The account is a
+// validated name (no quote can occur in it) and is the only value in the
+// script, which travels as -EncodedCommand; the password arrives on stdin and
+// never reaches a command line.
+const sshWindowsSetLocalUser = "$ErrorActionPreference = 'Stop'\n" +
+	"$password = ConvertTo-SecureString -String ([Console]::In.ReadToEnd()) -AsPlainText -Force\n" +
+	"Set-LocalUser -Name '%s' -Password $password\n"
+
+// sshWindowsCommand is the Windows profile's command line for account.
+func sshWindowsCommand(account string) string {
+	script := fmt.Sprintf(sshWindowsSetLocalUser, account)
+	units := utf16.Encode([]rune(script))
+	raw := make([]byte, 0, 2*len(units))
+	for _, unit := range units {
+		raw = binary.LittleEndian.AppendUint16(raw, unit)
+	}
+	return "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + base64.StdEncoding.EncodeToString(raw)
+}
 
 // ValidSSHAccountName reports whether name is a portable local user name
 // ([a-z_][a-z0-9_-]{0,31}); it can never carry the chpasswd separator or a
@@ -55,11 +82,15 @@ func ValidSSHAccountName(name string) bool {
 
 // SetSSHAccountPassword authenticates as the target's administrator with a
 // byte-backed locked PKCS#8 key and runs the fixed chpasswd profile with
-// "account:password" on stdin. The caller owns and must wipe adminPKCS8 and
-// password.
+// "account:password" on stdin, or on a Windows target the Set-LocalUser
+// profile with the password alone on stdin. The caller owns and must wipe
+// adminPKCS8 and password.
 func SetSSHAccountPassword(ctx context.Context, target SSHAccountTarget, adminPKCS8 []byte, account string, password []byte) error {
 	if !ValidSSHAccountName(account) || len(password) == 0 || bytes.ContainsAny(password, ":\n\r") {
 		return errors.New("SSH account rotation requires a local account name and a password without separators")
+	}
+	if target.Windows && len(account) > 20 {
+		return errors.New("SSH account rotation: a Windows local account name has at most 20 characters")
 	}
 	key, err := LockedKeyFromPKCS8PEM(adminPKCS8)
 	if err != nil {
@@ -81,6 +112,15 @@ func SetSSHAccountPassword(ctx context.Context, target SSHAccountTarget, adminPK
 		return errors.New("SSH account rotation could not open its session")
 	}
 	defer func() { _ = session.Close() }()
+	if target.Windows {
+		stdin := append([]byte(nil), password...)
+		defer secret.Wipe(stdin)
+		session.Stdin = bytes.NewReader(stdin)
+		if err := session.Run(sshWindowsCommand(account)); err != nil {
+			return errors.New("SSH account rotation: Set-LocalUser refused the change; check the administrator's rights, the account and the host's password policy")
+		}
+		return nil
+	}
 	line := append(append(append([]byte(account), ':'), password...), '\n')
 	defer secret.Wipe(line)
 	session.Stdin = bytes.NewReader(line)

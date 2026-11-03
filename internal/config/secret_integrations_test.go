@@ -496,7 +496,12 @@ func TestValidateUnixProviderA240(t *testing.T) {
 		"bad pair": {func(c *DynamicSecretProviderConfig) {
 			c.RotationAccounts["host/orders"] = []string{"orders-svc-a", "Orders B"}
 		}, "is not a local account name"},
-		"sudo elsewhere": {func(c *DynamicSecretProviderConfig) { c.Type, c.Sudo = "ldap", true }, "host_key_fingerprint and sudo are only valid for unix"},
+		"sudo elsewhere":  {func(c *DynamicSecretProviderConfig) { c.Type, c.Sudo = "ldap", true }, "sudo is only valid for unix"},
+		"pin elsewhere":   {func(c *DynamicSecretProviderConfig) { c.Type = "ldap" }, "host_key_fingerprint is only valid for unix and windows"},
+		"sudo on windows": {func(c *DynamicSecretProviderConfig) { c.Type, c.Sudo = "windows", true }, "sudo is only valid for unix"},
+		"long windows account": {func(c *DynamicSecretProviderConfig) {
+			c.Type, c.RoleBindings["host/single"] = "windows", "a_windows_name_over_20"
+		}, "longer than 20 characters"},
 	} {
 		c := valid()
 		tc.mutate(&c)

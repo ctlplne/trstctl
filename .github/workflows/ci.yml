@@ -692,9 +692,33 @@ jobs:
       - name: SAP HANA dynamic secrets against SAP HANA, express edition (A239)
         run: bash scripts/ci/a239-hana-lab.sh
 
+  # A240's Windows local accounts (Track A on windows-latest since 2026-11-02):
+  # the runner serves OpenSSH to itself, and the provider rotates its local
+  # accounts' passwords over it (scripts/ci/a240-windows-accounts-lab.ps1).
+  a240-windows-accounts:
+    name: a240 lab (Windows local accounts)
+    runs-on: windows-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Windows local accounts over OpenSSH (A240)
+        shell: pwsh
+        run: ./scripts/ci/a240-windows-accounts-lab.ps1
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

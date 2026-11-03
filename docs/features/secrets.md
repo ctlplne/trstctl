@@ -575,9 +575,9 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns forty-four safe setup recipes (including the
-  `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `okta` and `databricks`,
-  which only rotate). Each states its `authority` (what a
+- `GET /api/v1/secrets/leases/providers` returns forty-five safe setup recipes (including the
+  `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `okta` and
+  `databricks`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -829,6 +829,19 @@ unattended two-user cycles while an application logs in with the credential it l
 read and reports each version it used, a retirement against a paused host that times
 out and leaves the predecessor working until the host resumes, and an acknowledged
 in-place rotation after which only the new password logs in.
+
+`windows` (A240) rotates local account passwords on a Windows host serving OpenSSH, the
+same way: an administrator in Administrators authenticating with a key (its public key in
+`administrators_authorized_keys`), the host key pinned, and one command, Windows
+PowerShell's `Set-LocalUser`, its script passed encoded and naming only the account, the
+password on stdin. Passwords mix upper and lower case letters and digits, which Windows'
+complexity rule needs, and account names have at most 20 characters. Two-user pairs and
+single in-place accounts work as for `unix` (`sudo` does not apply). The proof runs on a
+windows-latest CI runner serving OpenSSH to itself: two two-user cycles in which the
+predecessor logs in until its retirement and only the successor after, and an in-place
+change after which only the new password logs in. The served rotation around those calls
+is the one the Unix proof exercises; the runner has no embedded PostgreSQL for the served
+harness.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

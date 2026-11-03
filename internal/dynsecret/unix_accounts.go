@@ -32,10 +32,16 @@ type UnixAccountsConfig struct {
 	Sudo               bool
 	RoleAccounts       map[string]string
 	RotationAccounts   map[string][2]string
+	// Windows rotates a Windows host's local accounts instead (A240): the
+	// host serves OpenSSH, AdminUser is in Administrators, and the profile is
+	// Set-LocalUser with the password on stdin. Its passwords mix upper and
+	// lower case letters and digits, which Windows' complexity rule needs.
+	Windows bool
 }
 
 // UnixAccountsBackend changes local account passwords over SSH.
 type UnixAccountsBackend struct {
+	provider string
 	target   crypto.SSHAccountTarget
 	adminKey *secret.Buffer
 	accounts map[string]string
@@ -50,10 +56,17 @@ func NewUnixAccountsBackend(cfg UnixAccountsConfig) (*UnixAccountsBackend, error
 	if !crypto.ValidSSHAccountName(cfg.AdminUser) || !strings.HasPrefix(cfg.HostKeyFingerprint, "SHA256:") || len(cfg.AdminKey) == 0 {
 		return nil, errors.New("dynsecret unix: admin_user, its private key and the pinned host_key_fingerprint are required")
 	}
+	if cfg.Windows && cfg.Sudo {
+		return nil, errors.New("dynsecret windows: sudo is a Unix setting")
+	}
 	b := &UnixAccountsBackend{
+		provider: "unix",
 		target: crypto.SSHAccountTarget{Address: strings.TrimSpace(cfg.Address), AdminUser: cfg.AdminUser,
-			HostKeyFingerprint: cfg.HostKeyFingerprint, Sudo: cfg.Sudo},
+			HostKeyFingerprint: cfg.HostKeyFingerprint, Sudo: cfg.Sudo, Windows: cfg.Windows},
 		accounts: map[string]string{}, pairs: map[string][2]string{},
+	}
+	if cfg.Windows {
+		b.provider = "windows"
 	}
 	owner := map[string]string{}
 	claim := func(role, account string) error {
@@ -119,7 +132,7 @@ func (b *UnixAccountsBackend) CreateCredential(ctx context.Context, req Generate
 	} else {
 		return "", nil, fmt.Errorf("dynsecret unix: role %q has no account", req.Role)
 	}
-	password, err := randomSecretHex(24)
+	password, err := b.newPassword(24)
 	if err != nil {
 		return "", nil, err
 	}
@@ -141,10 +154,20 @@ func (b *UnixAccountsBackend) CreateCredential(ctx context.Context, req Generate
 func (b *UnixAccountsBackend) setPassword(ctx context.Context, account string, password []byte) error {
 	return b.adminKey.Use(func(adminKey []byte) error {
 		if err := crypto.SetSSHAccountPassword(ctx, b.target, adminKey, account, password); err != nil {
-			return fmt.Errorf("dynsecret unix: %w", err)
+			return fmt.Errorf("dynsecret %s: %w", b.provider, err)
 		}
 		return nil
 	})
+}
+
+// newPassword returns n characters a host accepts: hex on Unix; on Windows,
+// whose complexity rule wants three character classes, upper and lower case
+// letters and digits.
+func (b *UnixAccountsBackend) newPassword(n int) ([]byte, error) {
+	if b.target.Windows {
+		return randomPolicyPassword(n)
+	}
+	return randomSecretHex(n)
 }
 
 // Revoke implements Backend. A two-user account is retired by setting a
@@ -154,7 +177,7 @@ func (b *UnixAccountsBackend) setPassword(ctx context.Context, account string, p
 func (b *UnixAccountsBackend) Revoke(ctx context.Context, ref string) error {
 	for _, pair := range b.pairs {
 		if ref == pair[0] || ref == pair[1] {
-			scrambled, err := randomSecretHex(32)
+			scrambled, err := b.newPassword(32)
 			if err != nil {
 				return err
 			}
@@ -168,7 +191,7 @@ func (b *UnixAccountsBackend) Revoke(ctx context.Context, ref string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("dynsecret unix: refusing %q, which names no account this provider rotates", ref)
+	return fmt.Errorf("dynsecret %s: refusing %q, which names no account this provider rotates", b.provider, ref)
 }
 
 // VerifyCredential proves the credential logs in at the host (password
@@ -183,7 +206,7 @@ func (b *UnixAccountsBackend) VerifyCredential(ctx context.Context, credential [
 	}
 	defer secret.Wipe(parsed.Password)
 	if err := crypto.VerifySSHAccountPassword(ctx, b.target, parsed.Username, parsed.Password); err != nil {
-		return fmt.Errorf("dynsecret unix: %w", err)
+		return fmt.Errorf("dynsecret %s: %w", b.provider, err)
 	}
 	return nil
 }

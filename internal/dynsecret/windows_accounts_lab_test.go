@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package dynsecret
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
+)
+
+// A240 Windows local accounts, against the windows-latest runner itself,
+// prepared by scripts/ci/a240-windows-accounts-lab.ps1: OpenSSH Server on
+// 127.0.0.1:22, administrator trstctl_admin (Administrators; its ECDSA key in
+// administrators_authorized_keys), the pair orders_app_a/orders_app_b and the
+// single account orders_single, each with the lab's initial password. The
+// served rotation around these calls (phases, the approved deadline, the
+// single-phase acknowledgement) is the same for unix and windows and is
+// proven by the Unix served test; the windows-latest runner has no embedded
+// PostgreSQL for the served harness, so this proves the provider itself.
+func TestWindowsLocalAccountsLabA240(t *testing.T) {
+	keyFile, fingerprint, initialFile := os.Getenv("TRSTCTL_A240_WINDOWS_ADMIN_KEY_FILE"), os.Getenv("TRSTCTL_A240_WINDOWS_HOST_KEY"), os.Getenv("TRSTCTL_A240_WINDOWS_INITIAL_PASSWORD_FILE")
+	if keyFile == "" || fingerprint == "" || initialFile == "" {
+		t.Skip("lab test: scripts/ci/a240-windows-accounts-lab.ps1 prepares the windows-latest runner and sets TRSTCTL_A240_WINDOWS_*")
+	}
+	adminPEM, err := os.ReadFile(keyFile) // #nosec G304,G703 -- runner-provided lab fixture path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial, err := os.ReadFile(initialFile) // #nosec G304,G703 -- runner-provided lab fixture path (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialPassword := []byte(strings.TrimSpace(string(initial)))
+	const addr = "127.0.0.1:22"
+	target := crypto.SSHAccountTarget{Address: addr, HostKeyFingerprint: fingerprint, Windows: true}
+	logsIn := func(account string, password []byte) bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return crypto.VerifySSHAccountPassword(ctx, target, account, password) == nil
+	}
+	if !logsIn("orders_app_a", initialPassword) || !logsIn("orders_single", initialPassword) {
+		t.Fatal("the lab's initial password does not log in")
+	}
+	b, err := NewUnixAccountsBackend(UnixAccountsConfig{Address: addr, AdminUser: "trstctl_admin", AdminKey: adminPEM,
+		HostKeyFingerprint: fingerprint, Windows: true, RoleAccounts: map[string]string{"single": "orders_single"},
+		RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	type credential struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	parse := func(raw []byte) credential {
+		t.Helper()
+		var c credential
+		if err := json.Unmarshal(raw, &c); err != nil || c.Username == "" || c.Password == "" {
+			t.Fatalf("the credential: %v", err)
+		}
+		return c
+	}
+
+	// Two two-user cycles: stage the other account, both log in, retire the
+	// predecessor, only the successor logs in.
+	live := credential{Username: "orders_app_a", Password: string(initialPassword)}
+	for cycle, next := range []string{"orders_app_b", "orders_app_a"} {
+		ref, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, LeaseID: "a240-windows-" + next, Predecessor: live.Username})
+		if err != nil {
+			t.Fatalf("cycle %d stage: %v", cycle+1, err)
+		}
+		successor := parse(raw)
+		if ref != next || successor.Username != next {
+			t.Fatalf("cycle %d staged %s (%s), want %s", cycle+1, ref, successor.Username, next)
+		}
+		if err := b.VerifyCredential(ctx, raw); err != nil {
+			t.Fatalf("cycle %d verify: %v", cycle+1, err)
+		}
+		if !logsIn(live.Username, []byte(live.Password)) {
+			t.Fatalf("cycle %d: the predecessor must keep working until retirement", cycle+1)
+		}
+		if err := b.Revoke(ctx, live.Username); err != nil {
+			t.Fatalf("cycle %d retire: %v", cycle+1, err)
+		}
+		if logsIn(live.Username, []byte(live.Password)) || !logsIn(next, []byte(successor.Password)) {
+			t.Fatalf("cycle %d: after retirement only the successor may log in", cycle+1)
+		}
+		live = successor
+	}
+
+	// The single account changes in place: the old password stops at once.
+	_, raw, err := b.CreateCredential(ctx, GenerateRequest{Role: "single", Static: true, LeaseID: "a240-windows-single"})
+	if err != nil {
+		t.Fatalf("single: %v", err)
+	}
+	single := parse(raw)
+	if !logsIn("orders_single", []byte(single.Password)) || logsIn("orders_single", initialPassword) {
+		t.Fatal("an in-place change must leave only the new password working")
+	}
+	if err := b.Revoke(ctx, "trstctl_admin"); err == nil {
+		t.Fatal("an account the provider does not rotate was accepted")
+	}
+	t.Logf("A240_WINDOWS_OK two two-user cycles and an in-place change on %s", addr)
+}

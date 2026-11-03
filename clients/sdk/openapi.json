@@ -18692,7 +18692,8 @@
               "cloudflare",
               "cloudflare-r2",
               "okta",
-              "databricks"
+              "databricks",
+              "windows"
             ],
             "type": "string"
           }

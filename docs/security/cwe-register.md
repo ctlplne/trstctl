@@ -260,10 +260,10 @@ not this file.
 | `internal/config/scim_writeback_test.go:20` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:28` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/secret_integrations_test.go:52` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:1368` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1372` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1376` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1380` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1373` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1377` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1381` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1385` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -284,8 +284,8 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
-| `internal/crypto/ssh_account_password.go:34` | a command path the profile runs, not a credential (CWE-798) |
-| `internal/crypto/ssh_account_password.go:35` | a command path the profile runs, not a credential (CWE-798) |
+| `internal/crypto/ssh_account_password.go:42` | a command path the profile runs, not a credential (CWE-798) |
+| `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `internal/discovery/adcs/endpoint_probe_test.go:15` | public logical reference fixture, never a credential value (CWE-798). |
@@ -1046,7 +1046,7 @@ not this file.
 | `internal/dynsecret/snowflake.go:205` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/supabase.go:53` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/unix_accounts.go:130` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
+| `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |

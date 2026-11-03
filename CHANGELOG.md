@@ -2,6 +2,11 @@
 
 ### Added
 
+- Windows local account rotation (A240): `windows` providers rotate local account passwords on a Windows host serving
+  OpenSSH, as an Administrators member authenticating with a key, the host key pinned; the only command is
+  `Set-LocalUser`, its encoded script naming the account and the password on stdin. Two-user pairs and acknowledged
+  in-place changes work as for `unix`. Proven on a windows-latest runner serving OpenSSH to itself.
+
 - Okta and Databricks client secret rotation (A240): `okta` (an app's client secret, two per app) and `databricks` (a
   service principal's OAuth secret, five per principal) rotate in two phases and issue no leases. A rotation adds a
   secret beside the one in use and retirement removes the old one (Okta: deactivate, then delete); only secrets of a

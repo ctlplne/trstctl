@@ -5244,8 +5244,8 @@ when off, requiring a KEK when on):
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
   `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog`, `openai`,
-  `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240; `okta` and
-  `databricks` rotate only). Issuance is
+  `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240; `okta`,
+  `databricks` and `windows` rotate only). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5348,7 +5348,10 @@ when off, requiring a KEK when on):
   Azure Entra client-secret rotation (A240) is built the same way, against stand-ins
   of Graph and the identity platform; a live proof needs an Entra tenant. So are the
   Okta and Databricks client secret rotators (rotation only); a live proof needs an
-  Okta org and a Databricks account.
+  Okta org and a Databricks account. Windows local accounts (A240) are proven on a
+  windows-latest CI runner serving OpenSSH to itself, at the provider (two-user
+  cycles and an in-place change); the served rotation around them is the Unix
+  proof's, since the runner has no embedded PostgreSQL for the served harness.
   Supabase, Convex and R2 keys have no side-effect-free check, so their rotations verify
   as `not_available` and retire on consumer evidence or the approved deadline. The provider catalog states each
   adapter's authority and whether its revocation is confirmed or TTL-only. A239

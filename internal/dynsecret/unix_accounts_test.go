@@ -51,3 +51,35 @@ func TestUnixAccountsBackendRefusesBeforeContactingTheHost(t *testing.T) {
 		}
 	}
 }
+
+// A240: a windows backend uses the Windows profile, refuses sudo, and makes
+// passwords with the three character classes Windows' complexity rule wants.
+func TestWindowsAccountsBackendA240(t *testing.T) {
+	cfg := UnixAccountsConfig{Address: "127.0.0.1:22", AdminUser: "trstctl_admin", AdminKey: []byte("pkcs8"),
+		HostKeyFingerprint: "SHA256:pin", Windows: true, RoleAccounts: map[string]string{"single": "orders_single"}}
+	b, err := NewUnixAccountsBackend(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if b.provider != "windows" || !b.target.Windows {
+		t.Fatalf("provider %q, Windows %v", b.provider, b.target.Windows)
+	}
+	for range 20 {
+		password, err := b.newPassword(24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var upper, lower, digit bool
+		for _, c := range password {
+			upper, lower, digit = upper || (c >= 'A' && c <= 'Z'), lower || (c >= 'a' && c <= 'z'), digit || (c >= '0' && c <= '9')
+		}
+		if len(password) != 24 || !upper || !lower || !digit {
+			t.Fatalf("password %q misses a character class", password)
+		}
+	}
+	cfg.Sudo = true
+	if _, err := NewUnixAccountsBackend(cfg); err == nil {
+		t.Fatal("sudo on Windows was accepted")
+	}
+}

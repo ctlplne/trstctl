@@ -499,6 +499,7 @@ func openConfiguredUnixBackend(o *configuredDynamicBackendOpener) (requestDynami
 	backend, err := dynsecret.NewUnixAccountsBackend(dynsecret.UnixAccountsConfig{
 		Address: cfg.Addr, AdminUser: cfg.AdminUser, AdminKey: adminKey, HostKeyFingerprint: cfg.HostKeyFingerprint,
 		Sudo: cfg.Sudo, RoleAccounts: cfg.RoleBindings, RotationAccounts: o.provider.rotationAccountPairs(),
+		Windows: cfg.Type == "windows",
 	})
 	if err != nil {
 		return o.fail(err)

@@ -196,7 +196,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -205,7 +205,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "windows": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -301,7 +301,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
-	"okta": {}, "databricks": {},
+	"okta": {}, "databricks": {}, "windows": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -320,7 +320,7 @@ var apiKeyProviderTypes = map[string]bool{
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -504,7 +504,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"hana":  validateHANAProvider,
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"openrouter": validateHostedKeyProvider, "fireworks": validateHostedKeyProvider, "litellm": validateHostedKeyProvider, "supabase": validateHostedKeyProvider, "convex": validateHostedKeyProvider, "dbt": validateHostedKeyProvider, "cloudflare": validateHostedKeyProvider, "cloudflare-r2": validateHostedKeyProvider,
-	"unix": validateUnixProvider,
+	"unix": validateUnixProvider, "windows": validateUnixProvider,
 	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
@@ -546,7 +546,7 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an entry under users_dn", where, account))
 			case c.Type == "mongodb" && !mongoUserName.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a MongoDB user name", where, account))
-			case c.Type == "unix" && !unixAccountName.MatchString(account):
+			case (c.Type == "unix" || c.Type == "windows") && !unixAccountName.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a local account name", where, account))
 			case c.Type == "oracle" && !oracleIdentifier.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an Oracle user name", where, account))
@@ -1000,11 +1000,14 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
 	}
-	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.PrivateKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake and unix", where))
+	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix and windows", where))
 	}
-	if c.Type != "unix" && (c.HostKeyFingerprint != "" || c.Sudo) {
-		errs = append(errs, fmt.Errorf("%s host_key_fingerprint and sudo are only valid for unix", where))
+	if c.Type != "unix" && c.Type != "windows" && c.HostKeyFingerprint != "" {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix and windows", where))
+	}
+	if c.Type != "unix" && c.Sudo {
+		errs = append(errs, fmt.Errorf("%s sudo is only valid for unix", where))
 	}
 	if c.Type != "snowflake" && c.Account != "" {
 		errs = append(errs, fmt.Errorf("%s account is only valid for snowflake", where))
@@ -1232,19 +1235,37 @@ var unixAccountName = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 func validateUnixProvider(where string, c DynamicSecretProviderConfig) []error {
 	var errs []error
 	if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
-		errs = append(errs, fmt.Errorf("%s addr must be the host's SSH host:port for unix", where))
+		errs = append(errs, fmt.Errorf("%s addr must be the host's SSH host:port for %s", where, c.Type))
 	}
-	if !unixAccountName.MatchString(c.AdminUser) {
+	switch {
+	case c.Type == "windows" && !unixAccountName.MatchString(c.AdminUser):
+		errs = append(errs, fmt.Errorf("%s admin_user must be a local account in Administrators for windows", where))
+	case !unixAccountName.MatchString(c.AdminUser):
 		errs = append(errs, fmt.Errorf("%s admin_user must be a local account allowed to run chpasswd for unix", where))
 	}
 	if err := validateCredentialRef(c.PrivateKeyRef); err != nil {
 		errs = append(errs, fmt.Errorf("%s private_key_ref: %w", where, err))
 	}
 	if !strings.HasPrefix(c.HostKeyFingerprint, "SHA256:") || len(c.HostKeyFingerprint) < 20 {
-		errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the host key (SHA256:...) for unix", where))
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the host key (SHA256:...) for %s", where, c.Type))
 	}
 	if !c.AllowStaticRotation {
-		errs = append(errs, fmt.Errorf("%s unix rotates local account passwords and issues no leases: set allow_static_rotation", where))
+		errs = append(errs, fmt.Errorf("%s %s rotates local account passwords and issues no leases: set allow_static_rotation", where, c.Type))
+	}
+	if c.Type == "windows" {
+		// A Windows local account name has at most 20 characters.
+		for role, account := range c.RoleBindings {
+			if len(strings.TrimSpace(account)) > 20 {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q] names a Windows account longer than 20 characters", where, role))
+			}
+		}
+		for role, accounts := range c.RotationAccounts {
+			for _, account := range accounts {
+				if len(account) > 20 {
+					errs = append(errs, fmt.Errorf("%s rotation_accounts[%q] names a Windows account longer than 20 characters", where, role))
+				}
+			}
+		}
 	}
 	for _, role := range normalizedStrings(c.AllowedRoles) {
 		if _, paired := c.RotationAccounts[role]; paired {

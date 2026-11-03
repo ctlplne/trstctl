@@ -2121,6 +2121,11 @@ it. A `databricks` provider sets `endpoint` to the account console
 account admin service principal's application ID and OAuth secret, and binds each role to
 `<account-id> <service-principal-id>`.
 
+A `windows` provider (A240) takes the same fields for a Windows host serving OpenSSH:
+`admin_user` is a local account in Administrators whose public key is in
+`C:\ProgramData\ssh\administrators_authorized_keys`, account names have at most 20
+characters, and `sudo` does not apply.
+
 A `unix` provider (A240) sets `addr` to the host's SSH `host:port`, `admin_user` and
 `private_key_ref` (PKCS#8 PEM) to an administrator that may run `/usr/sbin/chpasswd`
 (through `sudo -n` when `sudo: true`), `host_key_fingerprint` to one of the host's key
@@ -2134,8 +2139,8 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
-`litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta` and
-`databricks`. Sync `type` values are
+`litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
+`databricks` and `windows`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
