@@ -94,9 +94,9 @@ SIGNAL_CONTRACTS = {
         _exact("postfix", "reload"), _exact("doveadm", "reload"),
     ],
     "connector.postgresql": [_exact("pg_ctl", "reload")],
-    "connector.mysql": [_exact("mysqladmin", "reload")],
+    "connector.mysql": [_exact("mysql-tls-reload")],
     "connector.rabbitmq": [_exact("rabbitmqctl", "rotate_certs")],
-    "connector.tomcat": [_exact("catalina.sh", "reload")],
+    "connector.tomcat": [_exact("tomcat-tls-reload")],
 }
 
 

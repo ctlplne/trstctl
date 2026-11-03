@@ -28,9 +28,9 @@ sequences = {
     "connector.haproxy": [("haproxy", ["-c", "-f", "/target/haproxy.cfg"]), ("systemctl", ["reload", "haproxy"])],
     "connector.postfix": [("postfix", ["check"]), ("doveconf", ["-n"]), ("postfix", ["reload"]), ("doveadm", ["reload"])],
     "connector.postgresql": [("pg_ctl", ["reload"])],
-    "connector.mysql": [("mysqladmin", ["reload"])],
+    "connector.mysql": [("mysql-tls-reload", [])],
     "connector.rabbitmq": [("rabbitmqctl", ["rotate_certs"])],
-    "connector.tomcat": [("catalina.sh", ["reload"])],
+    "connector.tomcat": [("tomcat-tls-reload", [])],
 }
 
 for entry, sequence in sequences.items():

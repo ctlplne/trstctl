@@ -1225,9 +1225,12 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 	// that has actually retired control-plane fallback. Cisco, FortiGate, and
 	// Palo Alto deliberately retain that fallback until their device APIs can
 	// prove rollback/readback, so the DoD journey must not invent a relay-only
-	// production policy for them.
+	// production policy for them. A cloud certificate store
+	// (ControlPlaneCarriesNatively) is the relay's work whenever a network
+	// relay is enrolled, as this proof's agent is (A59): the control plane
+	// refuses it then.
 	agentOwned := vantage == connector.VantageHostAgent ||
-		(vantage == connector.VantageNetworkRelay && connector.RelayMigrated(connectorName))
+		(vantage == connector.VantageNetworkRelay && (connector.RelayMigrated(connectorName) || connector.ControlPlaneCarriesNatively(connectorName)))
 	if agentOwned {
 		if agentRuntime == nil {
 			t.Fatalf("%s requires %s execution but the connector agent runtime is absent", entryID, vantage)
