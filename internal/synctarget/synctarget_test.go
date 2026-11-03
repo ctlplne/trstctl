@@ -41,6 +41,9 @@ func TestParseBindingA241(t *testing.T) {
 		{"railway", "project 11111111-2222-4333-8444-555555555555 region x", nil, "unknown keyword"},
 		{"qovery", "environment aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", Binding{"scope": "ENVIRONMENT", "parent": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"}, ""},
 		{"laravel-forge", "org acme server 101 site 202", Binding{"org": "acme", "server": "101", "site": "202"}, ""},
+		{"circleci", "context 0f0e0d0c-0b0a-4908-8706-050403020100", Binding{"context": "0f0e0d0c-0b0a-4908-8706-050403020100"}, ""},
+		{"circleci", "project gh/acme/payments context x", nil, "project <vcs/org/repo> or context <ID>"},
+		{"rundeck", "folder keys/project/payments", Binding{"folder": "keys/project/payments"}, ""},
 		{"nope", "x", nil, "not a hosted secret-sync target"},
 	} {
 		got, err := ParseBinding(c.typ, c.binding)
@@ -74,6 +77,9 @@ func TestValidKeyA241(t *testing.T) {
 		{"qovery", "_LEADING", false},
 		{"northflank", "db/password", true},
 		{"render", strings.Repeat("A", 256), false},
+		{"rundeck", "inv241/db_password", true},
+		{"rundeck", "inv241//x", false},
+		{"teamcity", "env.DB_PASSWORD", true},
 	} {
 		target, _ := Lookup(c.typ)
 		if err := target.ValidKey(c.key); (err == nil) != c.ok {

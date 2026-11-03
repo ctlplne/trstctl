@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2367 annotated sites across 29 rules. Each row is
+2375 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (525 sites)
+### G101 — CWE-798 Use of hardcoded credentials (533 sites)
 
 | Location | Reason |
 |---|---|
@@ -532,15 +532,23 @@ not this file.
 | `internal/server/secret_store_providers_served_test.go:117` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:160` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:161` | credential references to fabricated fixture values (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:348` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:405` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:464` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:522` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:575` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:647` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:686` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:779` | fabricated fixture credential; no value is real (CWE-798) |
-| `internal/server/secret_sync_hosted_targets_served_test.go:839` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:350` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:407` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:466` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:524` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:577` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:649` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:688` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:781` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:841` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:926` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:971` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1044` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1130` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1184` | fabricated fixture credentials; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1243` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1310` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:1396` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_retention_served_test.go:25` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |

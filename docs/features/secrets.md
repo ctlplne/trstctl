@@ -1293,7 +1293,8 @@ a signed webhook (templated JSON with an HMAC-SHA256 signature over a timestamp 
 the body; see [configuration](../configuration.md#signed-webhook-parameter-store-and-netlify-targets)),
 a generic CI/JSON endpoint with no payload signature, and the hosted targets of
 A241 (Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,
-Cloud 66 and Laravel Forge so far; see
+Cloud 66, Laravel Forge, CircleCI, Travis CI, Bitbucket Pipelines, TeamCity, Spacelift,
+Humanitec, Rundeck and Checkly so far; see
 [configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
 whether a scoped sync can target it, what it reads back (`readback`: `value` or
 `receipt-only`) and how far it is proven (`proof`: `locally-proven` against the
@@ -2200,7 +2201,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Netlify,
   Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2, signed webhook,
   generic CI/JSON, and the hosted targets (Heroku, Render, Railway, Fly.io,
-  DigitalOcean App Platform, Northflank, Qovery, Cloud 66, Laravel Forge).
+  DigitalOcean App Platform, Northflank, Qovery, Cloud 66, Laravel Forge, CircleCI,
+  Travis CI, Bitbucket Pipelines, TeamCity, Spacelift, Humanitec, Rundeck, Checkly).
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,

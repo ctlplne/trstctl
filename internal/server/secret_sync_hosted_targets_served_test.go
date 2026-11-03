@@ -5,9 +5,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -915,4 +917,546 @@ func (f *forgeSeeder) seed(name, value string) {
 	out = append(out, name+"='"+value+"'")
 	*f.content = strings.Join(out, "\n") + "\n"
 	f.standIn.seed(name, value)
+}
+
+// TestServedCircleCIScopedSyncA241: CircleCI API v2 project variables —
+// POST /project/{slug}/envvar {name,value}, DELETE by name, GET the list
+// with values masked to xxxx plus the last four characters (receipt-only).
+func TestServedCircleCIScopedSyncA241(t *testing.T) {
+	const token = "circleci-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Circle-Token", token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/project/gh/acme/payments/envvar")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "Project not found"})
+			return
+		}
+		name := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case name == "" && r.Method == http.MethodGet:
+			items := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				v := s.vars[k]
+				if len(v) > 4 {
+					v = v[len(v)-4:]
+				}
+				items = append(items, map[string]string{"name": k, "value": "xxxx" + v})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"items": items, "next_page_token": nil})
+		case name == "" && r.Method == http.MethodPost:
+			var body struct{ Name, Value string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			s.vars[body.Name] = body.Value
+			jsonStandIn(w, http.StatusCreated, map[string]string{"name": body.Name, "value": "xxxx"})
+		case r.Method == http.MethodDelete:
+			delete(s.vars, name)
+			jsonStandIn(w, http.StatusOK, map[string]string{"message": "Environment variable deleted."})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "circleci", endpoint: standIn.server.URL, binding: "project gh/acme/payments", token: token, standIn: standIn})
+}
+
+// TestServedTravisCIScopedSyncA241: Travis CI API v3 — POST
+// /repo/{slug}/env_vars with namespaced fields, PATCH and DELETE
+// /repo/{slug}/env_var/{id}; a private variable lists without its value.
+func TestServedTravisCIScopedSyncA241(t *testing.T) {
+	const token = "travis-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	ids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "token "+token) || !standInAuth(w, r, "Travis-API-Version", "3") {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.EscapedPath(), "/repo/acme%2Fpayments")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"@type": "error", "error_type": "not_found"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		keyOf := func(id string) string {
+			for k, v := range ids {
+				if v == id {
+					if _, live := s.vars[k]; live {
+						return k
+					}
+				}
+			}
+			return ""
+		}
+		switch {
+		case rest == "/env_vars" && r.Method == http.MethodGet:
+			list := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]any{"id": ids[k], "name": k, "public": false})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"env_vars": list})
+		case rest == "/env_vars" && r.Method == http.MethodPost:
+			var body map[string]any
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			name, _ := body["env_var.name"].(string)
+			value, _ := body["env_var.value"].(string)
+			if public, _ := body["env_var.public"].(bool); public || name == "" {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"@type": "error"})
+				return
+			}
+			ids[name] = "ev-" + strings.ToLower(name)
+			s.vars[name] = value
+			jsonStandIn(w, http.StatusCreated, map[string]any{"id": ids[name], "name": name, "public": false})
+		case strings.HasPrefix(rest, "/env_var/"):
+			key := keyOf(strings.TrimPrefix(rest, "/env_var/"))
+			if key == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"@type": "error", "error_type": "not_found"})
+				return
+			}
+			switch r.Method {
+			case http.MethodPatch:
+				var body map[string]any
+				if !decodeStandIn(w, r, &body) {
+					return
+				}
+				s.vars[key], _ = body["env_var.value"].(string)
+				jsonStandIn(w, http.StatusOK, map[string]any{"id": ids[key], "name": key})
+			case http.MethodDelete:
+				delete(s.vars, key)
+				w.WriteHeader(http.StatusNoContent)
+			}
+		default:
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"@type": "error"})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "travis-ci", endpoint: standIn.server.URL, binding: "acme/payments", token: token, standIn: standIn})
+}
+
+// TestServedBitbucketScopedSyncA241: Bitbucket Cloud repository Pipelines
+// variables — POST (409 if the key exists), PUT and DELETE by {uuid}, a
+// paged list where a secured variable has no value.
+func TestServedBitbucketScopedSyncA241(t *testing.T) {
+	const token = "bitbucket-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const base = "/repositories/acme/payments/pipelines_config/variables"
+	uuids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, base)
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]any{"type": "error"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		keyOf := func(uuid string) string {
+			for k, v := range uuids {
+				if v == uuid {
+					if _, live := s.vars[k]; live {
+						return k
+					}
+				}
+			}
+			return ""
+		}
+		switch {
+		case rest == "" && r.Method == http.MethodGet:
+			// One variable per page, so the engine follows the next links.
+			keys := sortedKeys(s.vars)
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			if page < 1 {
+				page = 1
+			}
+			out := map[string]any{"values": []any{}, "pagelen": 1}
+			if page <= len(keys) {
+				k := keys[page-1]
+				out["values"] = []map[string]any{{"uuid": uuids[k], "key": k, "secured": true}}
+			}
+			if page < len(keys) {
+				out["next"] = "https://api.bitbucket.org/2.0" + base + "?pagelen=100&page=" + strconv.Itoa(page+1)
+			}
+			jsonStandIn(w, http.StatusOK, out)
+		case rest == "" && r.Method == http.MethodPost:
+			var body struct {
+				Key, Value string
+				Secured    bool
+			}
+			if !decodeStandIn(w, r, &body) || !body.Secured {
+				return
+			}
+			if _, exists := s.vars[body.Key]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string]any{"type": "error", "error": map[string]string{"message": "A variable with the provided key already exists."}})
+				return
+			}
+			uuids[body.Key] = "{" + strings.ToLower(body.Key) + "-uuid}"
+			s.vars[body.Key] = body.Value
+			jsonStandIn(w, http.StatusCreated, map[string]any{"uuid": uuids[body.Key], "key": body.Key, "secured": true})
+		default:
+			key := keyOf(strings.TrimPrefix(rest, "/"))
+			if key == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]any{"type": "error"})
+				return
+			}
+			switch r.Method {
+			case http.MethodPut:
+				var body struct {
+					Key, Value string
+					Secured    bool
+				}
+				if !decodeStandIn(w, r, &body) || body.Key != key || !body.Secured {
+					return
+				}
+				s.vars[key] = body.Value
+				jsonStandIn(w, http.StatusOK, map[string]any{"uuid": uuids[key], "key": key})
+			case http.MethodDelete:
+				delete(s.vars, key)
+				w.WriteHeader(http.StatusNoContent)
+			}
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "bitbucket", endpoint: standIn.server.URL, binding: "workspace acme repository payments", token: token, standIn: standIn})
+}
+
+// TestServedTeamCityScopedSyncA241: TeamCity REST — PUT
+// /app/rest/projects/id:{id}/parameters/{name} with a password type, DELETE,
+// and the list (inherited parameters marked, password values withheld).
+func TestServedTeamCityScopedSyncA241(t *testing.T) {
+	const token = "teamcity-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.EscapedPath(), "/app/rest/projects/id:Payments/parameters")
+		if !ok {
+			rest, ok = strings.CutPrefix(r.URL.EscapedPath(), "/app/rest/projects/id%3APayments/parameters")
+		}
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "No project found"})
+			return
+		}
+		name := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case name == "" && r.Method == http.MethodGet:
+			props := []map[string]any{{"name": "env.INHERITED_FROM_ROOT", "inherited": true, "type": map[string]string{"rawValue": "password"}}}
+			for _, k := range sortedKeys(s.vars) {
+				props = append(props, map[string]any{"name": k, "type": map[string]string{"rawValue": "password"}})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"count": len(props), "property": props})
+		case r.Method == http.MethodPut:
+			var body struct {
+				Name, Value string
+				Type        struct {
+					RawValue string `json:"rawValue"`
+				} `json:"type"`
+			}
+			if !decodeStandIn(w, r, &body) || body.Name != name || body.Type.RawValue != "password" {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"message": "bad parameter"})
+				return
+			}
+			s.vars[name] = body.Value
+			jsonStandIn(w, http.StatusOK, map[string]any{"name": name, "type": map[string]string{"rawValue": "password"}})
+		case r.Method == http.MethodDelete:
+			if _, ok := s.vars[name]; !ok {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			delete(s.vars, name)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "teamcity", endpoint: standIn.server.URL, binding: "project Payments", token: token, standIn: standIn})
+}
+
+// TestServedSpaceliftScopedSyncA241: Spacelift GraphQL — apiKeyUser trades
+// the API key for a JWT; contextConfigAdd and contextConfigDelete manage
+// write-only environment variables; context(id){config} lists them.
+func TestServedSpaceliftScopedSyncA241(t *testing.T) {
+	const keyID, keySecret, jwt = "01A241KEYID", "spacelift-a241-secret", "spacelift-a241-jwt" // #nosec G101 -- fabricated fixture credentials; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		if r.Method != http.MethodPost || !decodeStandIn(w, r, &req) {
+			return
+		}
+		if strings.Contains(req.Query, "apiKeyUser(") {
+			if req.Variables["id"] != keyID || req.Variables["secret"] != keySecret || r.Header.Get("Authorization") != "" {
+				jsonStandIn(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "unauthorized"}}})
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"data": map[string]any{"apiKeyUser": map[string]string{"jwt": jwt}}})
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+jwt {
+			jsonStandIn(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "unauthorized"}}})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case strings.Contains(req.Query, "contextConfigAdd("):
+			config, _ := req.Variables["config"].(map[string]any)
+			id, _ := config["id"].(string)
+			value, _ := config["value"].(string)
+			if req.Variables["context"] != "payments-env" || config["type"] != "ENVIRONMENT_VARIABLE" || config["writeOnly"] != true {
+				jsonStandIn(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "bad config"}}})
+				return
+			}
+			if _, exists := s.vars[id]; exists {
+				jsonStandIn(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "already exists"}}})
+				return
+			}
+			s.vars[id] = value
+			jsonStandIn(w, http.StatusOK, map[string]any{"data": map[string]any{"contextConfigAdd": map[string]string{"id": id}}})
+		case strings.Contains(req.Query, "contextConfigDelete("):
+			id, _ := req.Variables["id"].(string)
+			delete(s.vars, id)
+			jsonStandIn(w, http.StatusOK, map[string]any{"data": map[string]any{"contextConfigDelete": map[string]string{"id": id}}})
+		case strings.Contains(req.Query, "context(id:"):
+			config := []map[string]any{{"id": "/mnt/workspace/kubeconfig", "type": "FILE_MOUNT"}}
+			for _, k := range sortedKeys(s.vars) {
+				config = append(config, map[string]any{"id": k, "type": "ENVIRONMENT_VARIABLE", "writeOnly": true, "value": nil})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"data": map[string]any{"context": map[string]any{"config": config}}})
+		default:
+			jsonStandIn(w, http.StatusOK, map[string]any{"errors": []map[string]string{{"message": "unknown operation"}}})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "spacelift", endpoint: standIn.server.URL, binding: "context payments-env", username: keyID, token: keySecret, standIn: standIn})
+}
+
+// TestServedHumanitecScopedSyncA241: Humanitec shared app values — POST
+// (409 if present), PUT and DELETE by key, and the list with a secret's
+// value empty.
+func TestServedHumanitecScopedSyncA241(t *testing.T) {
+	const token = "humanitec-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/orgs/acme/apps/payments/values")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		key := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case key == "" && r.Method == http.MethodGet:
+			list := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]any{"key": k, "value": "", "is_secret": true, "description": "managed by trstctl"})
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case key == "" && r.Method == http.MethodPost:
+			var body struct {
+				Key, Value, Description string
+				IsSecret                bool `json:"is_secret"`
+			}
+			if !decodeStandIn(w, r, &body) || !body.IsSecret {
+				return
+			}
+			if _, exists := s.vars[body.Key]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string]string{"error": "Shared Value already exists."})
+				return
+			}
+			s.vars[body.Key] = body.Value
+			jsonStandIn(w, http.StatusCreated, map[string]any{"key": body.Key, "is_secret": true})
+		case key == "" && r.Method == http.MethodDelete:
+			t.Error("the target deleted every value in the app")
+			jsonStandIn(w, http.StatusNoContent, nil)
+		case r.Method == http.MethodPut:
+			var body struct{ Value, Description string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "Shared Value does not exist."})
+				return
+			}
+			s.vars[key] = body.Value
+			jsonStandIn(w, http.StatusOK, map[string]any{"key": key})
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error": "Shared Value does not exist."})
+				return
+			}
+			delete(s.vars, key)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "humanitec", endpoint: standIn.server.URL, binding: "org acme app payments", token: token, standIn: standIn})
+}
+
+// TestServedRundeckScopedSyncA241: Rundeck Key Storage — POST creates and
+// PUT modifies a password key (application/x-rundeck-data-password, the
+// value as the body), DELETE removes it, and a directory GET lists its
+// resources; password contents are never returned. Keys are paths.
+func TestServedRundeckScopedSyncA241(t *testing.T) {
+	const token = "rundeck-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const base = "/api/41/storage/keys/project/payments"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "X-Rundeck-Auth-Token", token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, base)
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if r.Method == http.MethodGet && strings.HasSuffix(rest, "/") {
+			dir := strings.Trim(rest, "/")
+			seen := map[string]string{}
+			for k := range s.vars {
+				rel := k
+				if dir != "" {
+					var inside bool
+					if rel, inside = strings.CutPrefix(k, dir+"/"); !inside {
+						continue
+					}
+				}
+				head, _, nested := strings.Cut(rel, "/")
+				if nested {
+					seen[head] = "directory"
+				} else {
+					seen[head] = "file"
+				}
+			}
+			if len(seen) == 0 && dir != "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			resources := []map[string]any{}
+			for _, name := range sortedKeys(seen) {
+				item := map[string]any{"name": name, "type": seen[name]}
+				if seen[name] == "file" {
+					item["meta"] = map[string]string{"Rundeck-key-type": "password", "Rundeck-content-type": "application/x-rundeck-data-password"}
+				}
+				resources = append(resources, item)
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"type": "directory", "resources": resources})
+			return
+		}
+		key := strings.TrimPrefix(rest, "/")
+		switch r.Method {
+		case http.MethodPost, http.MethodPut:
+			if r.Header.Get("Content-Type") != "application/x-rundeck-data-password" {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"message": "content type"})
+				return
+			}
+			_, exists := s.vars[key]
+			if (r.Method == http.MethodPut && !exists) || (r.Method == http.MethodPost && exists) {
+				status := http.StatusNotFound
+				if exists {
+					status = http.StatusConflict
+				}
+				jsonStandIn(w, status, map[string]string{"message": "no"})
+				return
+			}
+			body := new(strings.Builder)
+			_, _ = io.Copy(body, r.Body)
+			s.vars[key] = body.String()
+			jsonStandIn(w, http.StatusCreated, map[string]any{"path": "keys/project/payments/" + key, "type": "file"})
+		case http.MethodDelete:
+			if _, exists := s.vars[key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			delete(s.vars, key)
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodGet:
+			jsonStandIn(w, http.StatusForbidden, map[string]string{"message": "Retrieving private key or password file contents is not allowed"})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "rundeck", endpoint: standIn.server.URL, binding: "folder keys/project/payments", token: token, standIn: standIn, path: true})
+}
+
+// TestServedChecklyScopedSyncA241: Checkly environment variables — POST
+// (409 if present), PUT and DELETE by key, a paged list where a secret's
+// value is null; every call names the account.
+func TestServedChecklyScopedSyncA241(t *testing.T) {
+	const token = "checkly-a241-key" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const account = "cccccccc-dddd-4eee-8fff-000000000000"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) || !standInAuth(w, r, "X-Checkly-Account", account) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/v1/variables")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+			return
+		}
+		key := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case key == "" && r.Method == http.MethodGet:
+			keys := sortedKeys(s.vars)
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			list := []map[string]any{}
+			for i, k := range keys {
+				if i >= (page-1)*limit && i < page*limit {
+					list = append(list, map[string]any{"key": k, "value": nil, "locked": false, "secret": true})
+				}
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case key == "" && r.Method == http.MethodPost:
+			var body struct {
+				Key, Value string
+				Secret     bool
+			}
+			if !decodeStandIn(w, r, &body) || !body.Secret {
+				return
+			}
+			if _, exists := s.vars[body.Key]; exists {
+				jsonStandIn(w, http.StatusConflict, map[string]string{"message": "exists"})
+				return
+			}
+			s.vars[body.Key] = body.Value
+			jsonStandIn(w, http.StatusCreated, map[string]any{"key": body.Key, "secret": true})
+		case r.Method == http.MethodPut:
+			var body struct {
+				Value  string
+				Secret bool
+			}
+			if !decodeStandIn(w, r, &body) || !body.Secret {
+				return
+			}
+			if _, exists := s.vars[key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			s.vars[key] = body.Value
+			jsonStandIn(w, http.StatusOK, map[string]any{"key": key})
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"message": "not found"})
+				return
+			}
+			delete(s.vars, key)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "checkly", endpoint: standIn.server.URL, binding: "account " + account, token: token, standIn: standIn})
 }

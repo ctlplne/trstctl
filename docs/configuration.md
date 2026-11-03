@@ -2217,7 +2217,7 @@ sync compares: `value` (the stored value, hashed and wiped at once) or `receipt-
 (the vendor never returns a secret's value; the delivery receipt is the evidence, and
 a change made outside the sync can't be seen). Keys are variable names: a scoped sync's
 `destination_prefix` is a name prefix (`APP_`), and `key_transform: env` turns secret
-paths into names. Values are text (UTF-8).
+paths into names. Values are text (UTF-8). Keys are variable names except where a row says paths.
 
 | `type` | `binding` | Default endpoint | Reads back | Notes |
 |---|---|---|---|---|
@@ -2229,6 +2229,14 @@ paths into names. Values are text (UTF-8).
 | `northflank` | `project <ID> secret-group <ID>` | `https://api.northflank.com/v1` | value | A secret group's variables, written whole. |
 | `qovery` | `<scope> <ID>` (`application`, `container`, `job`, `helm`, `terraform`, `environment` or `project`) | `https://api.qovery.com` | receipt-only | Secrets at that scope; `QOVERY_` and `__` names are refused; applied on the next deploy. |
 | `cloud66` | `<stack UID>` | `https://app.cloud66.com/api/3` | value | Stack variables (admin scope); applied on the next deploy. |
+| `circleci` | `project <vcs/org/repo>` or `context <ID>` | `https://circleci.com/api/v2` | receipt-only | Project variables (a change is delete-and-create, as CircleCI documents) or context variables; `token_ref` is a personal API token. |
+| `travis-ci` | `<owner/repo or repository ID>` | `https://api.travis-ci.com` | receipt-only | Private repository variables (API v3). |
+| `bitbucket` | `workspace <slug> repository <slug>` | `https://api.bitbucket.org/2.0` | receipt-only | Secured Pipelines repository variables; `token_ref` is a repository, project or workspace access token. |
+| `teamcity` | `project <external ID>` | none (self-hosted: set `endpoint`) | receipt-only | Password-typed project parameters; name a key `env.NAME` for a build environment variable. |
+| `spacelift` | `context <ID>` | none (set `endpoint` to `https://<account>.app.spacelift.io/graphql`) | receipt-only | Write-only context variables; `username` is the API key ID and `token_ref` its secret, exchanged for a short-lived token per operation. |
+| `humanitec` | `org <ID> app <ID>` | `https://api.humanitec.io` | receipt-only | Secret shared app values. |
+| `rundeck` | `folder <keys/...>` | none (self-hosted: set `endpoint`) | receipt-only | Key Storage password keys; keys are paths under the folder, so a scoped sync's destination prefix is a subfolder. |
+| `checkly` | `account <ID>` | `https://api.checklyhq.com` | receipt-only | Secret environment variables of the account. |
 | `laravel-forge` | `org <slug> server <ID> site <ID>` | `https://forge.laravel.com/api` | value | One `KEY='value'` line in the site's `.env` (written whole, asynchronously); lines the sync doesn't own are kept. A value with a line break, or with both `'` and `${`, is refused. |
 
 ```json

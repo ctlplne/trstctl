@@ -85,6 +85,14 @@ var hostedVendors = map[string]*hostedVendor{
 	"qovery":                    qoveryVendor,
 	"cloud66":                   cloud66Vendor,
 	"laravel-forge":             forgeVendor,
+	"circleci":                  circleCIVendor,
+	"travis-ci":                 travisVendor,
+	"bitbucket":                 bitbucketVendor,
+	"teamcity":                  teamCityVendor,
+	"spacelift":                 spaceliftVendor,
+	"humanitec":                 humanitecVendor,
+	"rundeck":                   rundeckVendor,
+	"checkly":                   checklyVendor,
 }
 
 // HostedSyncConfig configures one hosted destination.
