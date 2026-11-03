@@ -67,21 +67,13 @@ go vet -vettool=$BIN ./...                # also usable as a vet tool
 Each analyzer is independently testable with `go test ./tools/trstctllint/...`,
 which uses `analysistest` fixtures under each analyzer's `testdata/`.
 
-## Code hotspot guard
+## No size or length budgets
 
-`go test ./tools/trstctllint/...` also runs a CODE-001 startup-shape guard. It
-parses non-generated, non-test Go functions under `cmd/trstctl`,
-`internal/config`, and `internal/server`, and fails if any function spans more
-than 140 lines. Those paths are where control-plane boot, config validation,
-server assembly, API/protocol mounting, and worker startup live; they must stay
-split into named stages that can be audited independently.
-
-The guard is intentionally scoped to the startup/assembly surface. Current
-longer runtime functions outside that surface, such as OpenAPI schema table
-construction, graph assembly, and projection event dispatch, remain visible in
-ordinary complexity scans but are not CODE-001 exceptions for startup code. If
-one of the guarded paths genuinely needs an exception, document the reason here
-and encode it in the test with the narrowest function-level allowance.
+The file-size budget (2,000 lines per served file) and the startup-function length
+budget (140 lines) were removed on 2026-11-03 by the owner: they forced code to be
+split or compressed to fit a number, which is not a product reason. A file or a
+function is as long as its feature needs; split one when that makes it clearer to
+read or test, not to satisfy a count.
 
 ## Escape hatch
 
