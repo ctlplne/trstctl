@@ -47,6 +47,9 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
       - name: Install gitleaks with trstctl installer
         id: install-gitleaks
         env:

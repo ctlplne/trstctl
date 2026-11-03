@@ -433,6 +433,9 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
       - name: Set up Node for SDK generators
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -545,6 +548,9 @@ jobs:
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -590,6 +596,9 @@ jobs:
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -1195,6 +1204,9 @@ jobs:
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -1397,6 +1409,9 @@ jobs:
       # FuzzPlanQuestion): restore the pinned archive like the test jobs instead
       # of fetching it from the Maven mirror mid-run (CI 41578461348: the
       # download failed and the lane read as a crash).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -1565,6 +1580,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Install dependencies
         run: npm ci
@@ -2059,6 +2077,9 @@ jobs:
       # (pebble.minica.pem, baked into the pinned image); trust it so the default
       # client can reach the directory. No crypto/tls in the test itself (AN-3) —
       # SSL_CERT_FILE makes Go's standard pool trust Pebble's CA.
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Trust Pebble's test CA
         run: curl -fsSL "https://raw.githubusercontent.com/letsencrypt/pebble/v2.10.1/test/certs/pebble.minica.pem" -o "${RUNNER_TEMP}/pebble-ca.pem"
 
@@ -2096,6 +2117,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2149,6 +2173,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2205,6 +2232,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2256,6 +2286,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2307,6 +2340,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2363,6 +2399,9 @@ jobs:
       # restored instead of fetched: each Go test job downloading it from the
       # Maven mirror at once drew HTTP 429 for minutes (CI 41439816582; the EST
       # conformance job's server test timed out on it, CI 41451560632).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Restore the pinned embedded PostgreSQL archive
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -2412,6 +2451,8 @@ jobs:
       # No host-side trstctl build: the bootstrap API token is minted INSIDE the
       # running control-plane container (the compose Postgres has no host port), so the
       # gate needs only docker + curl + jq + openssl, all present on the runner.
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: Prepare PKI profile artifact directories
         run: |
           set -euo pipefail
@@ -2551,6 +2592,9 @@ jobs:
       # GOFIPS140=v1.0.0 and self-verifies the
       # control plane reports `crypto.fips.module_active: true` (fails the job
       # otherwise — a build whose module is inactive is not FIPS-capable).
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
       - name: FIPS-capable build (+ verify module active)
         run: make fips-build
 
@@ -2633,6 +2677,10 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+        shell: bash
 
       - name: Build
         run: go build ./...
@@ -2726,6 +2774,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Create kind cluster
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
@@ -2903,6 +2954,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Run SPIRE upstream-authority container e2e
         env:

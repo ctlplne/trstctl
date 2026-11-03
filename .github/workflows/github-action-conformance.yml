@@ -50,6 +50,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
       - name: github-action-conformance against served deployment
         run: go test ./internal/server -run 'GitHub(Action|SignedAttempt|ConcurrentIssuers)|ShippedGitHubAction' -count=1
 

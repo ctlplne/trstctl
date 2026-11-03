@@ -50,6 +50,9 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
       - name: Build (all three binaries)
         run: make build
 
@@ -914,6 +917,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Build the plugin (linux amd64 + arm64, reproducible flags)
         run: |
