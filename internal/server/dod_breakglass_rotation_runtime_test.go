@@ -51,6 +51,9 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	dodRegisterActiveTenant(t, ctx, log, st, dodBreakglassTenant, "DoD breakglass tenant")
+	// The other tenant is a live tenant, so its attempt passes tenant
+	// admission and is refused by break-glass isolation itself.
+	dodRegisterActiveTenant(t, ctx, log, st, dodBreakglassOther, "DoD other tenant")
 	t.Cleanup(func() { _ = log.Close() })
 	signer, reconnectSigner := dodStartRestartableAuthorizedSoftwareSignerProcess(t, dir)
 	cfg := config.Default()

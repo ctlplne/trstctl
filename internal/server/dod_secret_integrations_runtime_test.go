@@ -1300,7 +1300,9 @@ func dodRedisCredentialConnection(t *testing.T, credential []byte) net.Conn {
 	}
 	requireRedisPrefix("+", []byte("AUTH"), user, password)
 	requireRedisPrefix("+", []byte("PING"))
-	requireRedisPrefix("+", []byte("SELECT"), []byte(strconv.Itoa(db)))
+	// SELECT is refused on purpose: Redis ACLs cannot constrain its database
+	// argument, so a lease works in the database its URI names (0) only.
+	requireRedisPrefix("-NOPERM", []byte("SELECT"), []byte(strconv.Itoa(db)))
 	requireRedisPrefix("$-1\r\n", []byte("GET"), []byte("trstctl:dod:read-only-probe"))
 	requireRedisPrefix("-NOPERM", []byte("SET"), []byte("trstctl:dod:write-denied"), []byte("must-not-land"))
 	// A denied write must not poison or close the authenticated connection that
