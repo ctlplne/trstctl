@@ -278,31 +278,10 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 	return err
 }
 
-// deliverDirectoryWriteback routes a directory writeback row (SCIM A73, LDAP
-// A83) to its licensed worker; an unconfigured worker is a definite no-effect.
-func (d *issuanceDispatcher) deliverDirectoryWriteback(ctx context.Context, m orchestrator.Message) error {
-	if m.Destination == orchestrator.DestinationLDAPWriteback {
-		if d.ldapWriteback == nil {
-			return orchestrator.DefiniteNoEffect(errors.New("server: LDAP directory writeback is not configured"))
-		}
-		return d.ldapWriteback.Deliver(ctx, m)
-	}
-	if d.scimWriteback == nil {
-		return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
-	}
-	return d.scimWriteback.Deliver(ctx, m)
-}
-
-func (d *issuanceDispatcher) deliverACMEDNS01(ctx context.Context, m orchestrator.Message) error {
-	if m.Destination == destinationACMEEmailChallenge {
-		return d.deliverACMEEmailChallenge(ctx, m) // P15: RFC 8823 challenge mail
-	}
-	if d.dns01 == nil {
-		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
-	}
-	return d.dns01.Deliver(ctx, m)
-}
-
+// deliver sends each outbox row to the handler for its destination. Every
+// destination with its own handler has its own case, so a destination nobody
+// listed reaches the unsupported error below instead of another destination's
+// external action.
 func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
@@ -319,10 +298,24 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRotateVerification(ctx, m)
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
-	case orchestrator.DestinationMigrationApplianceIssue, orchestrator.DestinationAttackPathValidate, orchestrator.DestinationOAuthProviderAction, orchestrator.DestinationScanAnnotation:
-		return d.deliverControlPlaneEffect(ctx, m)
-	case orchestrator.DestinationSCIMWriteback, orchestrator.DestinationLDAPWriteback:
-		return d.deliverDirectoryWriteback(ctx, m)
+	case orchestrator.DestinationMigrationApplianceIssue:
+		return d.handleMigrationApplianceIssue(ctx, m) // an appliance or cloud-store successor's issuance (A33, A166)
+	case orchestrator.DestinationAttackPathValidate:
+		return d.handleAttackPathValidate(ctx, m) // A167
+	case orchestrator.DestinationOAuthProviderAction:
+		return d.handleOAuthProviderAction(ctx, m) // A170, A171
+	case orchestrator.DestinationScanAnnotation:
+		return d.handleScanAnnotation(ctx, m) // a finding's annotation at its provider (A174)
+	case orchestrator.DestinationSCIMWriteback:
+		if d.scimWriteback == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
+		}
+		return d.scimWriteback.Deliver(ctx, m) // A73
+	case orchestrator.DestinationLDAPWriteback:
+		if d.ldapWriteback == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: LDAP directory writeback is not configured"))
+		}
+		return d.ldapWriteback.Deliver(ctx, m) // A83
 	case orchestrator.DestinationConnectorRollback:
 		// Agent-executed rows are deferred so they stay claimable; a
 		// control_plane row (a cloud store's re-bind, A58) runs here. See
@@ -345,8 +338,13 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 				"server: network and SSH discovery execute on a network relay, not the control plane"))
 		}
 		return d.handleDiscoveryRun(ctx, m)
-	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup, destinationACMEEmailChallenge:
-		return d.deliverACMEDNS01(ctx, m)
+	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
+		if d.dns01 == nil {
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
+		}
+		return d.dns01.Deliver(ctx, m)
+	case destinationACMEEmailChallenge:
+		return d.deliverACMEEmailChallenge(ctx, m) // P15: RFC 8823 challenge mail
 	case ca.DestinationExternalCAIssue:
 		if d.externalCAs == nil {
 			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
@@ -366,8 +364,10 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleAuditFeedBatch(ctx, m)
 	case store.ObserverEventDestination:
 		return d.deliverObserverEvent(ctx, m)
-	case store.ComplianceReportArtifactExpiryDestination, store.ArchiveLegalHoldDestination:
-		return d.deliverArchiveEffect(ctx, m)
+	case store.ComplianceReportArtifactExpiryDestination:
+		return d.reportExpiry.Deliver(ctx, m) // a report removal under the report retention (A206)
+	case store.ArchiveLegalHoldDestination:
+		return d.archiveHolds.Deliver(ctx, m) // an archive object's legal hold (A208)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:
@@ -1983,13 +1983,4 @@ func (d *issuanceDispatcher) handleRevocationProbeRequest(ctx context.Context, m
 	}
 	_, err := d.revocationProbeNow(ctx, m.TenantID, request.Bucket)
 	return err
-}
-
-// deliverArchiveEffect routes the archive's own effects: a report removal under
-// the report retention (A206) and an archive object's legal hold (A208).
-func (d *issuanceDispatcher) deliverArchiveEffect(ctx context.Context, m orchestrator.Message) error {
-	if m.Destination == store.ArchiveLegalHoldDestination {
-		return d.archiveHolds.Deliver(ctx, m)
-	}
-	return d.reportExpiry.Deliver(ctx, m)
 }

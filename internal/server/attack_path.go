@@ -45,22 +45,6 @@ type attackPathReader interface {
 	Path(ctx context.Context, ip netip.Addr) (netpath.Config, bool, error)
 }
 
-// deliverControlPlaneEffect routes the control-plane-only rows that carry a
-// run's own work: an appliance or cloud-store successor's issuance (A33, A166),
-// an attack-path validation (A167), an OAuth provider action (A170, A171) and
-// a finding's annotation at its provider (A174).
-func (d *issuanceDispatcher) deliverControlPlaneEffect(ctx context.Context, m orchestrator.Message) error {
-	switch m.Destination {
-	case orchestrator.DestinationAttackPathValidate:
-		return d.handleAttackPathValidate(ctx, m)
-	case orchestrator.DestinationOAuthProviderAction:
-		return d.handleOAuthProviderAction(ctx, m)
-	case orchestrator.DestinationScanAnnotation:
-		return d.handleScanAnnotation(ctx, m)
-	}
-	return d.handleMigrationApplianceIssue(ctx, m)
-}
-
 func (d *issuanceDispatcher) handleAttackPathValidate(ctx context.Context, m orchestrator.Message) error {
 	if d.store == nil || d.orch == nil {
 		return errors.New("server: attack-path validation is not configured")
