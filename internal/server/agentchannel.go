@@ -576,7 +576,9 @@ func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) 
 	}
 	if err := a.tenantServiceCheck.Check(ctx, info.TenantID); err != nil {
 		if errors.Is(err, tenancy.ErrServiceUnavailable) {
-			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, err.Error())
+			// The agent hears the same refusal for every tenant condition,
+			// whatever an inner error adds to the text.
+			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, tenancy.ErrServiceUnavailable.Error())
 		}
 		return mtls.PeerCertInfo{}, status.Error(codes.Unavailable, "tenant service authority is unavailable")
 	}

@@ -157,7 +157,11 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 	chain, err := a.agentEnroller.EnrollBootstrap(r.Context(), []byte(req.Token), csrDER)
 	if err != nil {
 		if errors.Is(err, tenancy.ErrServiceUnavailable) {
-			a.writeError(w, errStatusFrom(http.StatusForbidden, err))
+			// The token holder hears the same refusal for every tenant
+			// condition, whatever an inner error adds to the text.
+			refusal := errStatus(http.StatusForbidden, tenancy.ErrServiceUnavailable.Error())
+			refusal.cause = err
+			a.writeError(w, refusal)
 			return
 		}
 		if errors.Is(err, ErrInvalidBootstrapToken) {

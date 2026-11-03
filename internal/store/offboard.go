@@ -64,15 +64,17 @@ func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) e
 			tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&registered, &restricted, &suspended, &erasing); err != nil {
 			return fmt.Errorf("store: inspect live tenant service: %w", err)
 		}
+		// Each refusal reads as ErrServiceUnavailable, as it always did, so
+		// no caller's answer changes; the reason rides on it for the server.
 		switch {
 		case !registered:
-			return fmt.Errorf("%w: the tenant is not registered", tenancy.ErrServiceUnavailable)
+			return tenancy.Refused("the tenant is not registered")
 		case restricted:
-			return fmt.Errorf("%w: the tenant's provider record is not active", tenancy.ErrServiceUnavailable)
+			return tenancy.Refused("the tenant's provider record is not active")
 		case suspended:
-			return fmt.Errorf("%w: a provider suspension is pending or in force", tenancy.ErrServiceUnavailable)
+			return tenancy.Refused("a provider suspension is pending or in force")
 		case erasing:
-			return fmt.Errorf("%w: the tenant's erasure is pending", tenancy.ErrServiceUnavailable)
+			return tenancy.Refused("the tenant's erasure is pending")
 		}
 		return nil
 	})

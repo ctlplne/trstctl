@@ -57,8 +57,13 @@ func TestTenantAdmissionIsOneStatementAndNamesEachRefusal(t *testing.T) {
 	refused := func(name, tenantID, reason string) {
 		t.Helper()
 		err := s.RequireLiveTenantService(ctx, tenantID)
-		if !errors.Is(err, tenancy.ErrServiceUnavailable) || !strings.Contains(err.Error(), reason) {
-			t.Errorf("%s: %v; want ErrServiceUnavailable naming %q", name, err, reason)
+		if !errors.Is(err, tenancy.ErrServiceUnavailable) || tenancy.RefusalReason(err) != reason {
+			t.Errorf("%s: %v (reason %q); want ErrServiceUnavailable naming %q", name, err, tenancy.RefusalReason(err), reason)
+		}
+		// Callers answer with the error's text; it must not change with the
+		// condition, so it is ErrServiceUnavailable's exactly.
+		if err != nil && err.Error() != tenancy.ErrServiceUnavailable.Error() {
+			t.Errorf("%s: the refusal reads %q; want %q, the same for every condition", name, err.Error(), tenancy.ErrServiceUnavailable.Error())
 		}
 	}
 	exec := func(sql string, args ...any) {
