@@ -983,8 +983,19 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindADCSDatabase, relay.KindADCSRevoke:
-		return a.ingestADCSReport(ctx, info, claim, req)
+	case relay.KindADCSDatabase:
+		// A162: the CA database read's counts; the rows stay on the relay.
+		if a.recordADCSDatabase == nil {
+			return errors.New("CA database result receiver is not configured")
+		}
+		return a.recordADCSDatabase(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindADCSRevoke:
+		// A162: the revocation's report is checked against its job before the
+		// job closes; the revocation's own delivery records it.
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("AD CS revocation result needs a terminal executed report")
+		}
+		return validateADCSRevokeResult(info.TenantID, info.CommonName, claim.Payload, req.Detail)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -992,27 +1003,21 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("revocation health result receiver is not configured")
 		}
 		return a.recordRevocationHealth(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail, req.EvidenceDigest)
-	default:
+	case "connector.test", agentJobKindUpgrade, relay.KindAgentSelfCheck:
+		// Nothing to apply before the lease closes: the signed receipt and the
+		// observations recorded after it (recordExecutedReportObservations) are
+		// the whole record.
 		return nil
+	default:
+		// A kind with no case here was never given an ingest step; accepting
+		// its report would close the job with its result unrecorded.
+		return fmt.Errorf("%w %q", errUnknownAgentJobKind, claim.Destination)
 	}
 }
 
-// ingestADCSReport is the AD CS relay stage of ingestExecutedReport (A162): a
-// CA database read's counts are recorded, and a revocation's report is checked
-// against its job before the job closes (the revocation's own delivery records
-// it).
-func (a *agentService) ingestADCSReport(ctx context.Context, info mtls.PeerCertInfo, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
-	if claim.Destination == relay.KindADCSRevoke {
-		if req.Outcome != transport.JobOutcomeExecuted {
-			return errors.New("AD CS revocation result needs a terminal executed report")
-		}
-		return validateADCSRevokeResult(info.TenantID, info.CommonName, claim.Payload, req.Detail)
-	}
-	if a.recordADCSDatabase == nil {
-		return errors.New("CA database result receiver is not configured")
-	}
-	return a.recordADCSDatabase(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-}
+// errUnknownAgentJobKind refuses an executed report for a kind
+// ingestExecutedReport does not name.
+var errUnknownAgentJobKind = errors.New("server: no ingest step for agent job kind")
 
 // ingestRightSizeReport is the connector.right_size stage of ingestExecutedReport
 // (A64): the relay's signed report is validated against the queued intent and
