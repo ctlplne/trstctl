@@ -207,6 +207,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range operationsDashboardSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range rehearsalSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}

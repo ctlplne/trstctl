@@ -8762,6 +8762,59 @@ export interface RegionalIssuanceLane {
   signer_mode: string;
 }
 
+export interface RehearsalRun {
+  candidate: { kind: "identity" | "issuer" | "profile" | "target" | "binary"; ref: string; revision?: string };
+  completed_at?: string;
+  connector_versions: Record<string, unknown>;
+  data_set_digest: string;
+  detail?: string;
+  expected: { action: string; expect: string; target?: string }[];
+  id: string;
+  label?: string;
+  mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation";
+  observations: ({ effect: string; receipt?: string; source: "preview" | "mock" | "sandbox_receipt" | "live_receipt"; step: number })[];
+  scenario_id: string;
+  scenario_revision: number;
+  started_at: string;
+  started_by?: string;
+  status: "running" | "completed";
+  tool_version: string;
+  verdict?: "matched" | "diverged" | "blocked";
+}
+
+export interface RehearsalRunList {
+  runs: ({ candidate: { kind: "identity" | "issuer" | "profile" | "target" | "binary"; ref: string; revision?: string }; completed_at?: string; connector_versions: Record<string, unknown>; data_set_digest: string; detail?: string; expected: { action: string; expect: string; target?: string }[]; id: string; label?: string; mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation"; observations: ({ effect: string; receipt?: string; source: "preview" | "mock" | "sandbox_receipt" | "live_receipt"; step: number })[]; scenario_id: string; scenario_revision: number; started_at: string; started_by?: string; status: "running" | "completed"; tool_version: string; verdict?: "matched" | "diverged" | "blocked" })[];
+}
+
+export interface RehearsalRunRequest {
+  mode: "static_preview" | "mocked_rehearsal";
+}
+
+export interface RehearsalScenario {
+  candidate: { kind: "identity" | "issuer" | "profile" | "target" | "binary"; ref: string; revision?: string };
+  created_at: string;
+  created_by?: string;
+  data_set: { failure?: { code?: string; ref: string; source: string; step?: string }; identity_ids?: string[]; kind: "identities" | "scrubbed_failure"; secret_refs?: string[] };
+  id: string;
+  kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry";
+  name: string;
+  revision: number;
+  steps: { action: string; expect: string; target?: string }[];
+  updated_at: string;
+}
+
+export interface RehearsalScenarioList {
+  scenarios: ({ candidate: { kind: "identity" | "issuer" | "profile" | "target" | "binary"; ref: string; revision?: string }; created_at: string; created_by?: string; data_set: { failure?: { code?: string; ref: string; source: string; step?: string }; identity_ids?: string[]; kind: "identities" | "scrubbed_failure"; secret_refs?: string[] }; id: string; kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry"; name: string; revision: number; steps: { action: string; expect: string; target?: string }[]; updated_at: string })[];
+}
+
+export interface RehearsalScenarioRequest {
+  candidate: { kind: "identity" | "issuer" | "profile" | "target" | "binary"; ref: string; revision?: string };
+  data_set: { failure?: { code?: string; ref: string; source: string; step?: string }; identity_ids?: string[]; kind: "identities" | "scrubbed_failure"; secret_refs?: string[] };
+  kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry";
+  name: string;
+  steps?: { action: string; expect: string; target?: string }[];
+}
+
 export interface RelayPluginEntry {
   digest: string;
   execution_context: "network_relay_wasm";

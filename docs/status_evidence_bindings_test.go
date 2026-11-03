@@ -167,6 +167,11 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("PolicyVersion", "status", eventProjectionPredicate, "internal/api/policy_versions.go:API.policyVersions"),
 	evidence("Problem", "status", predicate(evidenceProtocol, "the integer is the HTTP response code written with the RFC 9457 problem document, not a workflow verdict"), "internal/api/problem/problem.go:Problem.Write"),
 	evidence("RemediationPlaybook", "status", configurationPredicate, "internal/api/remediation_playbooks.go:remediationPlaybookCatalog"),
+	// A247: a rehearsal run is rebuilt from rehearsal.run.started and
+	// rehearsal.run.completed; the API appends both around the observations its
+	// mode produced.
+	evidence("RehearsalRun", "status", predicate(evidenceEventProjection, "running requires the tenant's rehearsal.run.started event and completed its rehearsal.run.completed event, both rebuilt by the rehearsal projection"), "internal/projections/rehearsals.go:Projector.applyRehearsalTx"),
+	evidence("RehearsalRun", "verdict", predicate(evidenceEventProjection, "matched requires an observation of every step's expected effect from the one source the run's mode may record (preview, mock, sandbox receipt or live receipt); the run's label names that mode, so a previewed or mocked match is never served as a live one"), "internal/projections/rehearsals.go:Projector.applyRehearsalTx"),
 	evidence("RemediationPlaybookCatalog", "status", configurationPredicate, "internal/api/remediation_playbooks.go:remediationPlaybookCatalog"),
 	evidence("RemediationPlaybookRun", "status", eventProjectionPredicate, "internal/store/remediation_playbooks.go:Store.ApplyRemediationPlaybookRunRecordedTx"),
 	evidence("SSHKRLHost", "outcome", predicate(evidenceObservation, "the host agent read the installed digest and version back from its sshd RevokedKeys file after the attempt and signed the receipt with its certificate key; the control plane verified that signature against the exact mTLS peer certificate, the agent's host role, its own tenant, freshness, and monotonic issue time before projecting it, and a missing or stale receipt is reported as stale rather than current"), "cmd/trstctl-agent/sshkrl_watch.go:sshKRLReceiptFor"),

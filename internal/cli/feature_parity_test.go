@@ -405,9 +405,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// cutover|reissue|rollback`. A244 adds `connector target impact`,
 	// `profiles impact` and `identities application`. A245 adds `operations
 	// ledger`, `operations ledger get` and `identities revocation-report`. A246
-	// adds `operations dashboard`.
-	if len(out) != 720 {
-		t.Fatalf("CLI commands = %d, want 720", len(out))
+	// adds `operations dashboard`. A247 adds `rehearsals scenarios
+	// save|list|show|revise`, `rehearsals run` and `rehearsals runs list|show`.
+	if len(out) != 727 {
+		t.Fatalf("CLI commands = %d, want 727", len(out))
 	}
 	return out
 }

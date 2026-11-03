@@ -366,9 +366,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A244 adds the change impact of a target and of a profile (650) and the
 	// application view of a certificate (651). A245 adds the operations ledger
 	// (652), the revocation report (653) and one operation's chain (654). A246
-	// adds the operations dashboard (655).
-	if len(out) != 655 {
-		t.Fatalf("OpenAPI operationIds = %d, want 655", len(out))
+	// adds the operations dashboard (655). A247 adds rehearsals: save, list,
+	// show and revise a scenario, start and list its runs, show a run (662).
+	if len(out) != 662 {
+		t.Fatalf("OpenAPI operationIds = %d, want 662", len(out))
 	}
 	return out
 }

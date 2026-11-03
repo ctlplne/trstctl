@@ -37820,6 +37820,769 @@
         ],
         "type": "object"
       },
+      "RehearsalRun": {
+        "properties": {
+          "candidate": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "identity",
+                  "issuer",
+                  "profile",
+                  "target",
+                  "binary"
+                ],
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "ref"
+            ],
+            "type": "object"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "connector_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_set_digest": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "expected": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "expect": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "static_preview",
+              "mocked_rehearsal",
+              "sandbox_execution",
+              "live_observation"
+            ],
+            "type": "string"
+          },
+          "observations": {
+            "items": {
+              "properties": {
+                "effect": {
+                  "type": "string"
+                },
+                "receipt": {
+                  "type": "string"
+                },
+                "source": {
+                  "enum": [
+                    "preview",
+                    "mock",
+                    "sandbox_receipt",
+                    "live_receipt"
+                  ],
+                  "type": "string"
+                },
+                "step": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "step",
+                "effect",
+                "source"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scenario_revision": {
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "started_by": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "tool_version": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "matched",
+              "diverged",
+              "blocked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scenario_id",
+          "scenario_revision",
+          "mode",
+          "status",
+          "tool_version",
+          "connector_versions",
+          "candidate",
+          "data_set_digest",
+          "expected",
+          "observations",
+          "started_at"
+        ],
+        "type": "object"
+      },
+      "RehearsalRunList": {
+        "properties": {
+          "runs": {
+            "items": {
+              "properties": {
+                "candidate": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "identity",
+                        "issuer",
+                        "profile",
+                        "target",
+                        "binary"
+                      ],
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref"
+                  ],
+                  "type": "object"
+                },
+                "completed_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "connector_versions": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "data_set_digest": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "expected": {
+                  "items": {
+                    "properties": {
+                      "action": {
+                        "type": "string"
+                      },
+                      "expect": {
+                        "type": "string"
+                      },
+                      "target": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "expect"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "mode": {
+                  "enum": [
+                    "static_preview",
+                    "mocked_rehearsal",
+                    "sandbox_execution",
+                    "live_observation"
+                  ],
+                  "type": "string"
+                },
+                "observations": {
+                  "items": {
+                    "properties": {
+                      "effect": {
+                        "type": "string"
+                      },
+                      "receipt": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "preview",
+                          "mock",
+                          "sandbox_receipt",
+                          "live_receipt"
+                        ],
+                        "type": "string"
+                      },
+                      "step": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "effect",
+                      "source"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "scenario_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "scenario_revision": {
+                  "type": "integer"
+                },
+                "started_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "started_by": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "running",
+                    "completed"
+                  ],
+                  "type": "string"
+                },
+                "tool_version": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "enum": [
+                    "matched",
+                    "diverged",
+                    "blocked"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "scenario_id",
+                "scenario_revision",
+                "mode",
+                "status",
+                "tool_version",
+                "connector_versions",
+                "candidate",
+                "data_set_digest",
+                "expected",
+                "observations",
+                "started_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "type": "object"
+      },
+      "RehearsalRunRequest": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "static_preview",
+              "mocked_rehearsal"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "RehearsalScenario": {
+        "properties": {
+          "candidate": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "identity",
+                  "issuer",
+                  "profile",
+                  "target",
+                  "binary"
+                ],
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "ref"
+            ],
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "data_set": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "ref"
+                ],
+                "type": "object"
+              },
+              "identity_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "identities",
+                  "scrubbed_failure"
+                ],
+                "type": "string"
+              },
+              "secret_refs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "approval_resumption",
+              "target_outage",
+              "renewal_failure",
+              "revoked_credential",
+              "stale_policy",
+              "restore",
+              "retry"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "expect": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "revision",
+          "candidate",
+          "data_set",
+          "steps",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "RehearsalScenarioList": {
+        "properties": {
+          "scenarios": {
+            "items": {
+              "properties": {
+                "candidate": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "identity",
+                        "issuer",
+                        "profile",
+                        "target",
+                        "binary"
+                      ],
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref"
+                  ],
+                  "type": "object"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "data_set": {
+                  "properties": {
+                    "failure": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "step": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "source",
+                        "ref"
+                      ],
+                      "type": "object"
+                    },
+                    "identity_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "kind": {
+                      "enum": [
+                        "identities",
+                        "scrubbed_failure"
+                      ],
+                      "type": "string"
+                    },
+                    "secret_refs": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "approval_resumption",
+                    "target_outage",
+                    "renewal_failure",
+                    "revoked_credential",
+                    "stale_policy",
+                    "restore",
+                    "retry"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "steps": {
+                  "items": {
+                    "properties": {
+                      "action": {
+                        "type": "string"
+                      },
+                      "expect": {
+                        "type": "string"
+                      },
+                      "target": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "expect"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind",
+                "revision",
+                "candidate",
+                "data_set",
+                "steps",
+                "created_at",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scenarios"
+        ],
+        "type": "object"
+      },
+      "RehearsalScenarioRequest": {
+        "properties": {
+          "candidate": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "identity",
+                  "issuer",
+                  "profile",
+                  "target",
+                  "binary"
+                ],
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "ref"
+            ],
+            "type": "object"
+          },
+          "data_set": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "ref"
+                ],
+                "type": "object"
+              },
+              "identity_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "identities",
+                  "scrubbed_failure"
+                ],
+                "type": "string"
+              },
+              "secret_refs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "kind": {
+            "enum": [
+              "approval_resumption",
+              "target_outage",
+              "renewal_failure",
+              "revoked_credential",
+              "stale_policy",
+              "restore",
+              "retry"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "expect": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "candidate",
+          "data_set"
+        ],
+        "type": "object"
+      },
       "RelayPluginEntry": {
         "properties": {
           "digest": {
@@ -79506,6 +80269,443 @@
         ],
         "summary": "List the Provider emergency requests recorded under this tenant that have not expired, with this tenant's decisions",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/rehearsals/runs/{id}": {
+      "get": {
+        "operationId": "getRehearsalRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show one rehearsal run with what it expected and what it observed",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/rehearsals/scenarios": {
+      "get": {
+        "operationId": "listRehearsalScenarios",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalScenarioList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the saved failure scenarios",
+        "x-trstctl-permission": "incidents:read"
+      },
+      "post": {
+        "operationId": "saveRehearsalScenario",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RehearsalScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalScenario"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Save a failure scenario to rehearse: its kind, candidate, data set and the effect each step should have",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/rehearsals/scenarios/{id}": {
+      "get": {
+        "operationId": "getRehearsalScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalScenario"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show one saved failure scenario",
+        "x-trstctl-permission": "incidents:read"
+      },
+      "put": {
+        "operationId": "reviseRehearsalScenario",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RehearsalScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalScenario"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revise a saved failure scenario; its runs keep the revision they replayed",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/rehearsals/scenarios/{id}/runs": {
+      "get": {
+        "operationId": "listRehearsalRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List a scenario's runs, newest first",
+        "x-trstctl-permission": "incidents:read"
+      },
+      "post": {
+        "operationId": "startRehearsalRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RehearsalRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RehearsalRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replay a scenario in one mode and record the versions, candidate, data set, expected effects and observations; a mocked success is never labeled live",
+        "x-trstctl-permission": "incidents:game-day"
       }
     },
     "/api/v1/remediation/owner-actions": {

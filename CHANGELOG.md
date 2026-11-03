@@ -2,6 +2,35 @@
 
 ### Added
 
+- Rehearsals of failure scenarios (A247, first part): save a scenario — approval resumption,
+  target outage, renewal failure, revoked credential, stale policy, restore or retry — with its
+  candidate, data set (named identities, or a scrubbed failure: identifiers and codes, no values)
+  and the effect each step should have (`POST /api/v1/rehearsals/scenarios`, CLI `rehearsals
+  scenarios save`; revise with `PUT`). A run (`rehearsals run`, permission `incidents:game-day`)
+  replays it as a static preview against the configuration or a mocked rehearsal of the
+  documented behavior, and records the tool and connector versions, the candidate, the data
+  set's digest, the expected effects and what it observed. Its label is its mode's: a mocked
+  success reads `mocked: matched`, never live. Sandbox execution and live observation come next.
+- Operations dashboard, upgrade preflight and rollback (A246): **Deployment health** (`GET
+  /api/v1/operations/dashboard`, CLI `operations dashboard`) shows backup freshness, restore
+  proof, queue lag, signer readiness, data freshness and dependency health with the numbers
+  behind each state. `trstctl --upgrade-preflight` reads what a binary would apply to the
+  database, what blocks it and how the upgrade is rolled back, changing nothing; it exits 1 when
+  blocked. A failed migration leaves the ones before it applied and itself rolled back, and a
+  failed concurrent index build drops its invalid index, so the previous binary runs and the
+  fixed one continues. The restore drill reads the restored events, CA keys and stored secrets
+  back against the backup, and its signed attestation carries the counts. Install and failover
+  runbooks join the upgrade and disaster-recovery runbooks.
+
+### Fixed
+
+- With `TRSTCTL_MIGRATE_AUTO=false` the startup gate counted core migrations only: an extension
+  family's new migration passed it and was applied at startup, and `--migrate-status` did not
+  list it. Both now read every migration source (A246).
+- A tenant refusal answered bootstrap enrollment and the agent channel with the condition that
+  refused it; every surface again answers "tenant service is suspended or offboarded", and the
+  condition stays on the server.
+
 - One operations view for rotation, revocation and proof (A245): `GET /api/v1/operations/ledger`
   (CLI `operations ledger`, the Operations page) lists certificate rotations, connector deliveries,
   secret rotations and approvals in nine normalized states — verified only on consumer evidence,

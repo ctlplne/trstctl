@@ -7209,6 +7209,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rehearsals/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show one rehearsal run with what it expected and what it observed */
+        get: operations["getRehearsalRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rehearsals/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the saved failure scenarios */
+        get: operations["listRehearsalScenarios"];
+        put?: never;
+        /** Save a failure scenario to rehearse: its kind, candidate, data set and the effect each step should have */
+        post: operations["saveRehearsalScenario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rehearsals/scenarios/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show one saved failure scenario */
+        get: operations["getRehearsalScenario"];
+        /** Revise a saved failure scenario; its runs keep the revision they replayed */
+        put: operations["reviseRehearsalScenario"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rehearsals/scenarios/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a scenario's runs, newest first */
+        get: operations["listRehearsalRuns"];
+        put?: never;
+        /** Replay a scenario in one mode and record the versions, candidate, data set, expected effects and observations; a mocked success is never labeled live */
+        post: operations["startRehearsalRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -19919,6 +19990,200 @@ export interface components {
             recovery: string;
             region: string;
             signer_mode: string;
+        };
+        RehearsalRun: {
+            candidate: {
+                /** @enum {string} */
+                kind: "identity" | "issuer" | "profile" | "target" | "binary";
+                ref: string;
+                revision?: string;
+            };
+            /** Format: date-time */
+            completed_at?: string;
+            connector_versions: {
+                [key: string]: string;
+            };
+            data_set_digest: string;
+            detail?: string;
+            expected: {
+                action: string;
+                expect: string;
+                target?: string;
+            }[];
+            /** Format: uuid */
+            id: string;
+            label?: string;
+            /** @enum {string} */
+            mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation";
+            observations: {
+                effect: string;
+                receipt?: string;
+                /** @enum {string} */
+                source: "preview" | "mock" | "sandbox_receipt" | "live_receipt";
+                step: number;
+            }[];
+            /** Format: uuid */
+            scenario_id: string;
+            scenario_revision: number;
+            /** Format: date-time */
+            started_at: string;
+            started_by?: string;
+            /** @enum {string} */
+            status: "running" | "completed";
+            tool_version: string;
+            /** @enum {string} */
+            verdict?: "matched" | "diverged" | "blocked";
+        };
+        RehearsalRunList: {
+            runs: {
+                candidate: {
+                    /** @enum {string} */
+                    kind: "identity" | "issuer" | "profile" | "target" | "binary";
+                    ref: string;
+                    revision?: string;
+                };
+                /** Format: date-time */
+                completed_at?: string;
+                connector_versions: {
+                    [key: string]: string;
+                };
+                data_set_digest: string;
+                detail?: string;
+                expected: {
+                    action: string;
+                    expect: string;
+                    target?: string;
+                }[];
+                /** Format: uuid */
+                id: string;
+                label?: string;
+                /** @enum {string} */
+                mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation";
+                observations: {
+                    effect: string;
+                    receipt?: string;
+                    /** @enum {string} */
+                    source: "preview" | "mock" | "sandbox_receipt" | "live_receipt";
+                    step: number;
+                }[];
+                /** Format: uuid */
+                scenario_id: string;
+                scenario_revision: number;
+                /** Format: date-time */
+                started_at: string;
+                started_by?: string;
+                /** @enum {string} */
+                status: "running" | "completed";
+                tool_version: string;
+                /** @enum {string} */
+                verdict?: "matched" | "diverged" | "blocked";
+            }[];
+        };
+        RehearsalRunRequest: {
+            /** @enum {string} */
+            mode: "static_preview" | "mocked_rehearsal";
+        };
+        RehearsalScenario: {
+            candidate: {
+                /** @enum {string} */
+                kind: "identity" | "issuer" | "profile" | "target" | "binary";
+                ref: string;
+                revision?: string;
+            };
+            /** Format: date-time */
+            created_at: string;
+            created_by?: string;
+            data_set: {
+                failure?: {
+                    code?: string;
+                    ref: string;
+                    source: string;
+                    step?: string;
+                };
+                identity_ids?: string[];
+                /** @enum {string} */
+                kind: "identities" | "scrubbed_failure";
+                secret_refs?: string[];
+            };
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry";
+            name: string;
+            revision: number;
+            steps: {
+                action: string;
+                expect: string;
+                target?: string;
+            }[];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RehearsalScenarioList: {
+            scenarios: {
+                candidate: {
+                    /** @enum {string} */
+                    kind: "identity" | "issuer" | "profile" | "target" | "binary";
+                    ref: string;
+                    revision?: string;
+                };
+                /** Format: date-time */
+                created_at: string;
+                created_by?: string;
+                data_set: {
+                    failure?: {
+                        code?: string;
+                        ref: string;
+                        source: string;
+                        step?: string;
+                    };
+                    identity_ids?: string[];
+                    /** @enum {string} */
+                    kind: "identities" | "scrubbed_failure";
+                    secret_refs?: string[];
+                };
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry";
+                name: string;
+                revision: number;
+                steps: {
+                    action: string;
+                    expect: string;
+                    target?: string;
+                }[];
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
+        RehearsalScenarioRequest: {
+            candidate: {
+                /** @enum {string} */
+                kind: "identity" | "issuer" | "profile" | "target" | "binary";
+                ref: string;
+                revision?: string;
+            };
+            data_set: {
+                failure?: {
+                    code?: string;
+                    ref: string;
+                    source: string;
+                    step?: string;
+                };
+                identity_ids?: string[];
+                /** @enum {string} */
+                kind: "identities" | "scrubbed_failure";
+                secret_refs?: string[];
+            };
+            /** @enum {string} */
+            kind: "approval_resumption" | "target_outage" | "renewal_failure" | "revoked_credential" | "stale_policy" | "restore" | "retry";
+            name: string;
+            steps?: {
+                action: string;
+                expect: string;
+                target?: string;
+            }[];
         };
         RelayPluginEntry: {
             digest: string;
@@ -43738,6 +44003,303 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderAccessRequestList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getRehearsalRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRehearsalScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalScenarioList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    saveRehearsalScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RehearsalScenarioRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalScenario"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getRehearsalScenario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalScenario"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reviseRehearsalScenario: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RehearsalScenarioRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalScenario"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRehearsalRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startRehearsalRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RehearsalRunRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RehearsalRun"];
                 };
             };
             /** @description client error */

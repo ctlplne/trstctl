@@ -264,6 +264,8 @@ var TenantScopedTables = []string{
 	"secret_deliveries",
 	// A243: secret migrations, their objects and consumer reads; no foreign keys.
 	"secret_migration_consumer_reads", "secret_migration_objects", "secret_migrations",
+	// A247: rehearsal scenarios and their runs; no foreign keys.
+	"rehearsal_runs", "rehearsal_scenarios",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.

@@ -848,6 +848,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"secret_deliveries",
 	// A243: projected from the secret.migration.* events.
 	"secret_migrations", "secret_migration_objects", "secret_migration_consumer_reads",
+	// A247: projected from the rehearsal.* events.
+	"rehearsal_scenarios", "rehearsal_runs",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",

@@ -393,6 +393,40 @@ request digest returned by the mutation. The matching CLI commands are
 `trstctl-cli breakglass authority-receipts list` and
 `trstctl-cli breakglass authority-receipts get <ceremony-id>`.
 
+### Rehearsals of failure scenarios (A247)
+
+A scenario is a failure you want to rehearse before it happens: approval
+resumption, target outage, renewal failure, revoked credential, stale policy,
+restore or retry. It names a **candidate** (an identity, issuer, profile,
+deployment target or binary version), a **data set** (named identities, or a
+scrubbed failure — where it was recorded, its identifier, the failed step and
+code, with no field for values) and **steps**, each an action and the effect it
+should have. Each kind starts from steps written as the product behaves.
+
+A run replays the scenario in one mode and records the tool version, the version
+of each connector its steps touch, the candidate, the data set's digest, the
+expected effects and what it observed, then compares them:
+
+| Mode | What runs | Observations |
+| --- | --- | --- |
+| `static_preview` | nothing; each step's references (candidate, identities, target) are resolved against the configuration | `preview` |
+| `mocked_rehearsal` | nothing real; each step gets the product's documented effect, so a wrong expectation diverges | `mock` |
+
+A run's label is its mode's word and the verdict — `preview: matched`,
+`mocked: diverged` — so a mocked success is never presented as live. Starting a
+run needs `incidents:game-day`, like a fleet re-issuance game day; saving a
+scenario needs `incidents:write`. Sandbox execution against non-production
+targets with generated credentials, and live observation of production
+receipts, come next; a sandbox replay will read each target's and identity's
+environment from their records, as a game day does, and refuse a production one
+or a data set that names stored secrets.
+
+```sh
+trstctl rehearsals scenarios save -f scenario.json
+trstctl rehearsals run <scenario-id> -f run.json      # {"mode":"mocked_rehearsal"}
+trstctl rehearsals runs list <scenario-id>
+```
+
 ### In the console
 
 The `/incidents` screen is the response console: a served **blast-radius** preview for the

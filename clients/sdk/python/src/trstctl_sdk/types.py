@@ -12136,6 +12136,83 @@ RegionalIssuanceLane = TypedDict(
     total=False,
 )
 
+RehearsalRun = TypedDict(
+    'RehearsalRun',
+    {
+        'candidate': dict[str, Any],
+        'completed_at': str,
+        'connector_versions': dict[str, Any],
+        'data_set_digest': str,
+        'detail': str,
+        'expected': list[dict[str, Any]],
+        'id': str,
+        'label': str,
+        'mode': str,
+        'observations': list[dict[str, Any]],
+        'scenario_id': str,
+        'scenario_revision': int,
+        'started_at': str,
+        'started_by': str,
+        'status': str,
+        'tool_version': str,
+        'verdict': str,
+    },
+    total=False,
+)
+
+RehearsalRunList = TypedDict(
+    'RehearsalRunList',
+    {
+        'runs': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+RehearsalRunRequest = TypedDict(
+    'RehearsalRunRequest',
+    {
+        'mode': str,
+    },
+    total=False,
+)
+
+RehearsalScenario = TypedDict(
+    'RehearsalScenario',
+    {
+        'candidate': dict[str, Any],
+        'created_at': str,
+        'created_by': str,
+        'data_set': dict[str, Any],
+        'id': str,
+        'kind': str,
+        'name': str,
+        'revision': int,
+        'steps': list[dict[str, Any]],
+        'updated_at': str,
+    },
+    total=False,
+)
+
+RehearsalScenarioList = TypedDict(
+    'RehearsalScenarioList',
+    {
+        'scenarios': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+RehearsalScenarioRequest = TypedDict(
+    'RehearsalScenarioRequest',
+    {
+        'candidate': dict[str, Any],
+        'data_set': dict[str, Any],
+        'kind': str,
+        'name': str,
+        'steps': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 RelayPluginEntry = TypedDict(
     'RelayPluginEntry',
     {

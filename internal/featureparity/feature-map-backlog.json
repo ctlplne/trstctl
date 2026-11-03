@@ -14133,7 +14133,14 @@
                 "pauseFleetReissuance",
                 "resumeFleetReissuance",
                 "rollbackFleetReissuance",
-                "exportFleetReissuanceEvidence"
+                "exportFleetReissuanceEvidence",
+                "saveRehearsalScenario",
+                "listRehearsalScenarios",
+                "getRehearsalScenario",
+                "reviseRehearsalScenario",
+                "startRehearsalRun",
+                "listRehearsalRuns",
+                "getRehearsalRun"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14144,7 +14151,14 @@
                 "incidents fleet-reissuance pause",
                 "incidents fleet-reissuance resume",
                 "incidents fleet-reissuance rollback",
-                "incidents fleet-reissuance evidence"
+                "incidents fleet-reissuance evidence",
+                "rehearsals scenarios save",
+                "rehearsals scenarios list",
+                "rehearsals scenarios show",
+                "rehearsals scenarios revise",
+                "rehearsals run",
+                "rehearsals runs list",
+                "rehearsals runs show"
             ],
             "cli_na": "",
             "facet_evidence": {
