@@ -67,13 +67,16 @@ func TestWindowsLocalAccountsLabA240(t *testing.T) {
 	initialPassword := []byte(strings.TrimSpace(string(initial)))
 	const addr = "127.0.0.1:22"
 	target := crypto.SSHAccountTarget{Address: addr, HostKeyFingerprint: fingerprint, Windows: true}
-	logsIn := func(account string, password []byte) bool {
+	loginErr := func(account string, password []byte) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return crypto.VerifySSHAccountPassword(ctx, target, account, password) == nil
+		return crypto.VerifySSHAccountPassword(ctx, target, account, password)
 	}
-	if !logsIn("orders_app_a", initialPassword) || !logsIn("orders_single", initialPassword) {
-		t.Fatal("the lab's initial password does not log in")
+	logsIn := func(account string, password []byte) bool { return loginErr(account, password) == nil }
+	if errA, errS := loginErr("orders_app_a", initialPassword), loginErr("orders_single", initialPassword); errA != nil || errS != nil {
+		// The errors name the stage (unreachable, host identity, the SSH
+		// authentication answer), never a password.
+		t.Fatalf("the lab's initial password does not log in: orders_app_a: %v; orders_single: %v", errA, errS)
 	}
 	b, err := NewUnixAccountsBackend(UnixAccountsConfig{Address: addr, AdminUser: "trstctl_admin", AdminKey: adminPEM,
 		HostKeyFingerprint: fingerprint, Windows: true, RoleAccounts: map[string]string{"single": "orders_single"},

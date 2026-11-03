@@ -20,6 +20,16 @@ if ($capability.State -ne 'Installed') {
 }
 Start-Service sshd
 Write-Host ">> sshd: $((Get-Service sshd).Status)"
+# sshd answers on 127.0.0.1:22 a moment after the service starts.
+$deadline = (Get-Date).AddSeconds(30)
+while (-not (Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $deadline) { throw 'sshd is not listening on port 22' }
+    Start-Sleep -Milliseconds 250
+}
+$config = Join-Path $env:ProgramData 'ssh\sshd_config'
+Write-Host ">> sshd_config authentication lines:"
+Select-String -Path $config -Pattern '^\s*#?\s*(PasswordAuthentication|KbdInteractiveAuthentication|PubkeyAuthentication|Match|AuthorizedKeysFile)' |
+    ForEach-Object { Write-Host "   $($_.Line)" }
 
 # One initial password meeting Windows' complexity rule (upper, lower, digit).
 $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
