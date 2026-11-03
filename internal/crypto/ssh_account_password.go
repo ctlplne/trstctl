@@ -109,7 +109,9 @@ func SetSSHAccountPassword(ctx context.Context, target SSHAccountTarget, adminPK
 	key.Destroy()
 	session, err := client.NewSession()
 	if err != nil {
-		return errors.New("SSH account rotation could not open its session")
+		// The SSH layer's reason (a refused channel, a closed connection) carries
+		// no credential and is what an operator needs to fix the host.
+		return fmt.Errorf("SSH account rotation could not open its session: %w", err)
 	}
 	defer func() { _ = session.Close() }()
 	if target.Windows {
