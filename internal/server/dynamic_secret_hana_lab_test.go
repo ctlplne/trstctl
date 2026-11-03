@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/dynsecret"
 )
 
 // A239 against SAP HANA, express edition (2.00.088), configured by
@@ -35,6 +36,7 @@ func TestServedDynamicHANAUserAgainstHANAExpressA239(t *testing.T) {
 		t.Fatal(err)
 	}
 	adminDSN := strings.TrimSpace(string(raw))
+	hanaLabDirectRoundTrip(t, adminDSN)
 	configs := []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "hana-lab", Type: "hana",
 		AdminDSNRef:  writeServedCredentialFile(t, "hana-lab-admin-dsn", adminDSN),
@@ -131,4 +133,37 @@ func TestServedDynamicHANAUserAgainstHANAExpressA239(t *testing.T) {
 		t.Fatalf("SAP HANA still accepts the revoked user's login:\n%s", out)
 	}
 	t.Logf("A239_HANA_OK lease=%s user=%s", lease.ID, credential.Username)
+}
+
+// hanaLabDirectRoundTrip creates and revokes one user through the provider
+// itself before the served flow. The served path keeps a provider error in
+// the outbox (the API answers 504 while issuance retries), and the provider's
+// errors name SAP HANA's error code only, so this is where a lab failure
+// reports which statement failed and why (CI 41578461348's first HANA run).
+func hanaLabDirectRoundTrip(t *testing.T, adminDSN string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	db, err := dynsecret.OpenHANAExecutor(ctx, []byte(adminDSN))
+	if err != nil {
+		t.Fatalf("the administrator's connection: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	backend, err := dynsecret.NewHANABackend(db, dynsecret.HANAConfig{AdminDSN: []byte(adminDSN), RoleBindings: map[string]string{"reader": "ORDERS_READER"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, credential, err := backend.CreateCredential(ctx, dynsecret.GenerateRequest{Role: "reader", LeaseID: "a239-hana-direct-round-trip"})
+	if err != nil {
+		t.Fatalf("the provider, called directly: %v", err)
+	}
+	if err := backend.VerifyCredential(ctx, credential); err != nil {
+		t.Fatalf("the provider's own check of its user: %v", err)
+	}
+	if err := backend.Revoke(ctx, ref); err != nil {
+		t.Fatalf("the provider's revoke, called directly: %v", err)
+	}
+	if err := backend.VerifyCredential(ctx, credential); err == nil {
+		t.Fatal("the directly revoked user still connects")
+	}
 }
