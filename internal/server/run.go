@@ -663,14 +663,13 @@ func buildRunSecurityGuardDeps(ctx context.Context, cfg *config.Config, st *stor
 // buildRunDeps: static configuration, validated before any credential-owning
 // constructor runs.
 type runLifecycleWindows struct {
-	auditRetention              time.Duration
-	reportRetention             time.Duration
-	privacyRetentionEnabled     bool
-	privacyRetentionInterval    time.Duration
-	privacyRetentionPolicy      privacy.RetentionPolicy
-	renewBefore, alertBefore    time.Duration
-	maintenanceWindows          lifecycle.WindowSet
-	ownershipAttestationCadence time.Duration
+	auditRetention           time.Duration
+	reportRetention          time.Duration
+	privacyRetentionEnabled  bool
+	privacyRetentionInterval time.Duration
+	privacyRetentionPolicy   privacy.RetentionPolicy
+	renewBefore, alertBefore time.Duration
+	maintenanceWindows       lifecycle.WindowSet
 }
 
 func buildRunLifecycleWindows(cfg *config.Config) (runLifecycleWindows, error) {
@@ -688,9 +687,6 @@ func buildRunLifecycleWindows(cfg *config.Config) (runLifecycleWindows, error) {
 	if w.reportRetention, err = cfg.Audit.ReportRetentionDuration(); err != nil {
 		return runLifecycleWindows{}, fmt.Errorf("audit report retention: %w", err)
 	}
-	if w.ownershipAttestationCadence, err = ownershipAttestationCadenceFromConfig(cfg.Lifecycle); err != nil {
-		return runLifecycleWindows{}, err
-	}
 	return w, nil
 }
 
@@ -704,6 +700,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		return Deps{}, err
 	}
 	leafValidity, pluginCfg, aiModel, aiModelStatus, machineAuthMethods, err := runLeafPluginAndModelConfig(cfg, egressGuard)
+	if err != nil {
+		return Deps{}, err
+	}
+	ownershipAttestationCadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -790,7 +790,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		MaintenanceWindows:           windows.maintenanceWindows,
 		LifecycleAlertBefore:         windows.alertBefore,
 		LifecycleLeafValidity:        leafValidity,
-		OwnershipAttestationCadence:  windows.ownershipAttestationCadence,
+		OwnershipAttestationCadence:  ownershipAttestationCadence,
 		NotificationChannels:         notificationChannels,
 		NotificationTenantEgress:     cfg.Notifications.TenantPrivateEgress,
 		notificationChannelOwner:     notificationOwner,
