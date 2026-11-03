@@ -116,7 +116,7 @@ func (a *API) startKubernetesTrustRollout(w http.ResponseWriter, r *http.Request
 	}
 	bundle, hash, err := projections.NormalizeKubernetesTrustBundlePEM(req.CABundlePEM)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusUnprocessableEntity, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusUnprocessableEntity, err))
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -143,7 +143,7 @@ func (a *API) startKubernetesTrustRollout(w http.ResponseWriter, r *http.Request
 			Namespaces: req.Namespaces, Clusters: req.Clusters,
 		}
 		if err := projections.ValidateKubernetesTrustRolloutStarted(started); err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		known, err := reader.KnownKubernetesClusters(ctx, tenantID)
 		if err != nil {

@@ -138,7 +138,7 @@ func (a *API) listApprovalRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	var afterCreatedAt *time.Time

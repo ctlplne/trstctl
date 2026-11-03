@@ -333,7 +333,7 @@ func (a *API) listRemediationPlaybookRuns(w http.ResponseWriter, r *http.Request
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	playbookID := strings.TrimSpace(r.URL.Query().Get("playbook_id"))

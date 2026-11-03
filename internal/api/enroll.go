@@ -151,13 +151,13 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	csrDER, err := decodeCSR(req.CSR)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	chain, err := a.agentEnroller.EnrollBootstrap(r.Context(), []byte(req.Token), csrDER)
 	if err != nil {
 		if errors.Is(err, tenancy.ErrServiceUnavailable) {
-			a.writeError(w, errStatus(http.StatusForbidden, err.Error()))
+			a.writeError(w, errStatusFrom(http.StatusForbidden, err))
 			return
 		}
 		if errors.Is(err, ErrInvalidBootstrapToken) {
@@ -228,7 +228,7 @@ func (a *API) enrollRenewal(w http.ResponseWriter, r *http.Request) {
 	}
 	csrDER, err := decodeCSR(req.CSR)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	signRenewal := func(ctx context.Context) ([]byte, error) {

@@ -364,7 +364,7 @@ func (a *API) getSSHStatus(w http.ResponseWriter, r *http.Request) {
 		if a.writeSSHWorkflowError(w, err) {
 			return
 		}
-		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusInternalServerError, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, status)
@@ -382,7 +382,7 @@ func (a *API) previewSSHCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	var req SSHCertificateRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	preview, err := a.sshWorkflow.PreviewSSHCertificate(r.Context(), tenantID, req)
@@ -390,7 +390,7 @@ func (a *API) previewSSHCertificate(w http.ResponseWriter, r *http.Request) {
 		if a.writeSSHWorkflowError(w, err) {
 			return
 		}
-		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusInternalServerError, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, preview)
@@ -445,7 +445,7 @@ func (a *API) previewAttestedSSHUserCert(w http.ResponseWriter, r *http.Request)
 	var wire sshAttestedUserCertJSON
 	defer wire.wipeSecrets()
 	if err := decodeJSON(r, &wire); err != nil {
-		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	req, err := sshAttestedUserCertRequestFromJSON(wire)
@@ -459,7 +459,7 @@ func (a *API) previewAttestedSSHUserCert(w http.ResponseWriter, r *http.Request)
 		if a.writeSSHWorkflowError(w, err) {
 			return
 		}
-		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusInternalServerError, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, preview)
@@ -519,7 +519,7 @@ func (a *API) getSSHKRLFleet(w http.ResponseWriter, r *http.Request) {
 		if a.writeSSHWorkflowError(w, err) {
 			return
 		}
-		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusInternalServerError, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, fleet)

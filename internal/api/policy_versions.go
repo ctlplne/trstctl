@@ -177,7 +177,7 @@ func (a *API) createPolicyVersion(w http.ResponseWriter, r *http.Request) {
 		}
 		_, info, module, err := live.PrepareModule(req.Module)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		author := ""
 		if actor, ok := events.ActorFromContext(ctx); ok {
@@ -291,7 +291,7 @@ func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 		}
 		_, info, module, err := live.PrepareModule(rec.Module)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		previousModule, previousInfo, err := live.ActiveModule(ctx, tenantID)
 		if err != nil {

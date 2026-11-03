@@ -137,7 +137,7 @@ func (a *API) listDatabaseDecoys(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	items, err := a.store.ListDatabaseDecoysPage(r.Context(), tenantID, after, limit)

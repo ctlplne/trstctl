@@ -87,7 +87,7 @@ func (a *API) importCBOM(w http.ResponseWriter, r *http.Request) {
 		}
 		bom, err := cbom.ParseCycloneDXImport(doc, source, cbom.DefaultPolicy())
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		resp, err := importer.Import(ctx, tenantID, source, bom, crypto.SHA256Hex(doc))
 		if err != nil {

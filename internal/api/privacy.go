@@ -531,7 +531,7 @@ func (a *API) listPrivacySubjectErasures(w http.ResponseWriter, r *http.Request)
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	after := ""
@@ -566,7 +566,7 @@ func (a *API) listPrivacyRetentionRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	after := ""
@@ -601,7 +601,7 @@ func (a *API) listPrivacyArchiveErasureAttestations(w http.ResponseWriter, r *ht
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	after := ""

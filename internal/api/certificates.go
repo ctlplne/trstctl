@@ -417,7 +417,7 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	// The cursor is keyset state. For the expiring query it carries (not_after, id)

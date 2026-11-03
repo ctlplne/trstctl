@@ -432,7 +432,7 @@ func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseRe
 func dynamicLeaseError(err error) error {
 	switch {
 	case errors.Is(err, dynsecret.ErrUnknownProvider):
-		return errStatus(http.StatusUnprocessableEntity, err.Error())
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
 	case errors.Is(err, dynsecret.ErrLeaseNotFound):
 		return errStatus(http.StatusNotFound, "no such dynamic secret lease")
 	case errors.Is(err, dynsecret.ErrLeaseNotActive):

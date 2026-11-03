@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2331 annotated sites across 29 rules. Each row is
+2332 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1554,7 +1554,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (624 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (625 sites)
 
 | Location | Reason |
 |---|---|
@@ -1787,6 +1787,7 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agentid/delegation/reachtruststore.go:81` | signer-owned floor and validated key ID; open only to fsync the published directory |
 | `internal/agentid/orchestrator/reachability_key.go:156` | configured control-plane key directory; open only to fsync the sealed-key publication |
+| `internal/api/backpressure_errors_test.go:86` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/public_route_abuse_guard_test.go:91` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |

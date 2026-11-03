@@ -85,7 +85,7 @@ func (a *API) createCMDBCertificateExport(w http.ResponseWriter, r *http.Request
 		}
 		result, err := a.cmdbExports.Queue(ctx, tenantID, key, input)
 		if errors.Is(err, ErrCMDBExportInvalid) {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusAccepted, result, err
 	})

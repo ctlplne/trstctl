@@ -97,7 +97,7 @@ func (a *API) graphQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := g.Query(req.Query)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	if rows == nil {

@@ -88,7 +88,7 @@ func (a *API) listIncidentExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	identityID := r.URL.Query().Get("identity_id")

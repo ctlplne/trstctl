@@ -141,7 +141,7 @@ func (a *API) approvedServiceNowBinding(req serviceNowTicketRequest, relayOnly b
 					return ServiceNowBinding{}, errStatus(http.StatusServiceUnavailable, "operator-approved private ServiceNow binding has no private_egress_cidrs grant")
 				}
 				if err := validatePrivateEgressCIDRs(privateCIDRs); err != nil {
-					return ServiceNowBinding{}, errStatus(http.StatusServiceUnavailable, err.Error())
+					return ServiceNowBinding{}, errStatusFrom(http.StatusServiceUnavailable, err)
 				}
 			}
 			return ServiceNowBinding{

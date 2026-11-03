@@ -73,9 +73,9 @@ func (a *API) createAccessChangeRequest(w http.ResponseWriter, r *http.Request) 
 		created, err := a.orch.CreateAccessChangeRequest(ctx, tenantID, req)
 		if err != nil {
 			if errors.Is(err, store.ErrAccessChangeActorUnauthorized) {
-				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+				return 0, nil, errStatusFrom(http.StatusForbidden, err)
 			}
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusCreated, toAccessChangeRequestResponse(created, true), nil
 	})
@@ -89,7 +89,7 @@ func (a *API) listAccessChangeRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListAccessChangeRequestsPage(r.Context(), tenantID, after, limit)
@@ -148,15 +148,15 @@ func (a *API) decideAccessChangeRequest(w http.ResponseWriter, r *http.Request) 
 		updated, err := a.orch.DecideAccessChangeRequest(ctx, tenantID, requestID, req)
 		if err != nil {
 			if errors.Is(err, store.ErrAccessChangeActorUnauthorized) {
-				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+				return 0, nil, errStatusFrom(http.StatusForbidden, err)
 			}
 			if errors.Is(err, store.ErrAccessChangeRequestTerminal) || errors.Is(err, store.ErrAccessChangeDecisionDuplicate) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			if store.IsNotFound(err) {
 				return 0, nil, errStatus(http.StatusNotFound, "access change request not found")
 			}
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusOK, toAccessChangeRequestResponse(updated, true), nil
 	})

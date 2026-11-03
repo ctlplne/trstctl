@@ -1263,7 +1263,7 @@ func (a *API) listSecretRotationSchedules(w http.ResponseWriter, r *http.Request
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListSecretRotationSchedulesPage(r.Context(), tenantID, after, limit)
@@ -1561,7 +1561,7 @@ func (a *API) listSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	hidden, err := a.hiddenSecretPrefixes(r.Context(), tenantID)

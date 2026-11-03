@@ -161,7 +161,7 @@ func (a *API) assessMigration(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err := migration.ValidatePlan(plan); err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 
@@ -294,7 +294,7 @@ func (a *API) startMigrationRun(w http.ResponseWriter, r *http.Request) {
 			}
 			run, gated, err := a.buildMigrationRun(ctx, tenantID, idempotencyKey, req)
 			if err != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+				return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 			}
 			if len(gated) > 0 {
 				// A40: the members' profiles demand a distinct issuance approval.
@@ -329,7 +329,7 @@ func (a *API) startMigrationRun(w http.ResponseWriter, r *http.Request) {
 			}
 			started, actions, err := migration.StartRun(run)
 			if err != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+				return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 			}
 			recorded, err := a.orch.RecordMigrationRun(ctx, tenantID,
 				orchestrator.MigrationEventID(tenantID, started.ID, "start"), started, actions)
@@ -899,7 +899,7 @@ func (a *API) mutateMigrationRun(w http.ResponseWriter, r *http.Request, idempot
 				}
 			})
 		if err != nil {
-			return 0, nil, errStatus(http.StatusConflict, err.Error())
+			return 0, nil, errStatusFrom(http.StatusConflict, err)
 		}
 		return http.StatusOK, updated.Run, nil
 	})

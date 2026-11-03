@@ -91,9 +91,9 @@ func (a *API) tsaCertificateManager(w http.ResponseWriter) (TSACertificateManage
 func tsaCertificateError(err error) error {
 	switch {
 	case errors.Is(err, ErrInvalidTSARequest):
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	case errors.Is(err, ErrTSACertificateNotFound), errors.Is(err, ErrTSANotServed):
-		return errStatus(http.StatusNotFound, err.Error())
+		return errStatusFrom(http.StatusNotFound, err)
 	}
 	return err
 }

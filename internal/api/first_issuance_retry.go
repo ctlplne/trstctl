@@ -75,7 +75,7 @@ func (a *API) retryFirstIssuance(w http.ResponseWriter, r *http.Request) {
 		}
 		receipt, err := a.firstIssuanceRetry.RetryFirstIssuance(ctx, tenantID, r.PathValue("id"), req.RequestKey, idempotencyKey, req.Reason)
 		if errors.Is(err, store.ErrIssuanceRetryUnavailable) {
-			return 0, nil, errStatus(http.StatusConflict, err.Error())
+			return 0, nil, errStatusFrom(http.StatusConflict, err)
 		}
 		if err != nil {
 			return 0, nil, err

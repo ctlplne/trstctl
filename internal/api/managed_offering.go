@@ -88,7 +88,7 @@ func (a *API) provisionManagedTenant(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusCreated, tenant, nil
 	}, false)

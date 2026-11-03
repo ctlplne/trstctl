@@ -33,7 +33,7 @@ func (a *API) getCertificateAssuranceRecord(w http.ResponseWriter, r *http.Reque
 	}
 	signed, err := assurance.Sign(a.pqcCampaignSigner, record)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusServiceUnavailable, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, signed)

@@ -273,7 +273,7 @@ func (a *API) listOwners(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	owners, err := a.store.ListOwnersPage(r.Context(), tenantID, after, limit)
@@ -344,7 +344,7 @@ func (a *API) createIssuer(w http.ResponseWriter, r *http.Request) {
 		}
 		iss := store.Issuer{TenantID: tenantID, Kind: store.IssuerKind(req.Kind), Name: req.Name, Chain: req.Chain, PublicKey: req.PublicKey, Internal: req.Internal}
 		if err := iss.Validate(); err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		created, err := a.orch.CreateIssuer(ctx, tenantID, iss)
 		if err != nil {
@@ -376,7 +376,7 @@ func (a *API) listIssuers(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	issuers, err := a.store.ListIssuersPage(r.Context(), tenantID, after, limit)
@@ -508,7 +508,7 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))

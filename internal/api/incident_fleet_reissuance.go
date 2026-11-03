@@ -334,7 +334,7 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 		plan.AffectedIdentityIDs = append(plan.AffectedIdentityIDs, identity.ID)
 	}
 	if len(plan.AffectedIdentityIDs) == 0 {
-		return plan, errStatus(http.StatusConflict, errIncidentPredecessorIssuerMismatch.Error())
+		return plan, errStatusFrom(http.StatusConflict, errIncidentPredecessorIssuerMismatch)
 	}
 	plan.GraphImpact, err = json.Marshal(g.BlastRadius(issuerNodeID))
 	if err != nil {
@@ -345,7 +345,7 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 		PlanID: "incident:" + req.IssuerID, NewAuthorityID: req.ReplacementAuthorityID, Waves: req.Cohorts,
 	})
 	if err != nil {
-		return plan, errStatus(http.StatusBadRequest, err.Error())
+		return plan, errStatusFrom(http.StatusBadRequest, err)
 	}
 	if len(gated) > 0 {
 		// Incident reissuance has no start approval of its own yet; a cohort
@@ -355,9 +355,9 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 	}
 	if err := a.bindIncidentMigrationMembers(ctx, tenantID, plan.ExactTrustHosts, compromisedCADER, &plan.Run); err != nil {
 		if errors.Is(err, errIncidentPredecessorIssuerMismatch) {
-			return plan, errStatus(http.StatusConflict, err.Error())
+			return plan, errStatusFrom(http.StatusConflict, err)
 		}
-		return plan, errStatus(http.StatusBadRequest, err.Error())
+		return plan, errStatusFrom(http.StatusBadRequest, err)
 	}
 	plan.Run.Incident = &migration.IncidentPlan{
 		Mode: req.Mode, CompromisedIssuerID: req.IssuerID,
@@ -366,7 +366,7 @@ func (a *API) prepareFleetReissuance(ctx context.Context, tenantID, idempotencyK
 		AffectedIdentityIDs: plan.AffectedIdentityIDs,
 	}
 	if err := migration.ValidateExecutableRunForStart(plan.Run); err != nil {
-		return plan, errStatus(http.StatusBadRequest, err.Error())
+		return plan, errStatusFrom(http.StatusBadRequest, err)
 	}
 	return plan, nil
 }
@@ -413,7 +413,7 @@ func (a *API) startFleetReissuance(w http.ResponseWriter, r *http.Request) {
 		planDigest := crypto.SHA256Hex(planBytes)
 		started, actions, err := migration.StartRun(run)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 
 		rollbackRef := strings.TrimSpace(req.RollbackRef)
@@ -470,7 +470,7 @@ func (a *API) listFleetReissuanceRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	issuerID := r.URL.Query().Get("issuer_id")
@@ -567,7 +567,7 @@ func (a *API) fleetReissuanceStateMutation(r *http.Request, idempotencyKey, stat
 					}
 				})
 			if err != nil {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			applyMigrationRunToIncident(&run, updatedMigration.Run)
 			if reason := strings.TrimSpace(req.Reason); reason != "" {

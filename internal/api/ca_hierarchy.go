@@ -1109,7 +1109,7 @@ func (a *API) writeCAHierarchyError(w http.ResponseWriter, err error) bool {
 		errors.Is(err, store.ErrKeyCeremonyNotPending),
 		errors.Is(err, store.ErrKeyCeremonyPurposeMismatch),
 		errors.Is(err, store.ErrKeyCeremonyQuorumNotMet):
-		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusConflict, err))
 	default:
 		return false
 	}

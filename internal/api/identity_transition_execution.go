@@ -34,6 +34,11 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 			return 0, nil, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
 		}
 		if err := a.validateSubjectCSRPEM(ctx, tenantID, csrPEM); err != nil {
+			if store.IsBusy(err) {
+				// A busy datastore refuses nothing: answer the retryable 503
+				// and record no disposition, so the same key can retry.
+				return 0, nil, err
+			}
 			// Persist this exact refusal through the bound recorder. No
 			// transition, approval intent or signer/outbox call has run.
 			// A lost reply can retry the SAME key and recover this specific
@@ -119,7 +124,7 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	if state == orchestrator.StateIssued {
 		if err := usage.AllowCreate(ctx, tenantID, usage.MeterCertificatesStored); err != nil {
 			if errors.Is(err, usage.ErrQuotaExhausted) {
-				return 0, nil, errStatus(http.StatusTooManyRequests, err.Error())
+				return 0, nil, errStatusFrom(http.StatusTooManyRequests, err)
 			}
 			return 0, nil, err
 		}

@@ -834,7 +834,7 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		}
 		ttl, err := parseVaultTTL(req.TTL, req.TTLSeconds)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		// This route generates the key in the control plane, so the tenant's
@@ -843,14 +843,14 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		if err := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "vault_pki_issue"); err != nil {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, err.Error())
+			return 0, nil, errStatusFrom(http.StatusServiceUnavailable, err)
 		}
 		cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{
 			Role: req.CommonName,
 			TTL:  ttl,
 		})
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		certPEM, keyPEM := splitCertKeyPEM(cred.Secret)
 		secret.Wipe(cred.Secret)
@@ -910,16 +910,16 @@ func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
 		}
 		ttl, err := parseVaultTTL(req.TTL, req.TTLSeconds)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		csrDER, commonName, err := decodePKISecretCSR([]byte(strings.TrimSpace(req.CSR)))
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		cred, err := provider.GenerateFromCSR(ctx, csrDER, ttl)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		certPEM, _ := splitCertKeyPEM(cred.Secret)
 		secret.Wipe(cred.Secret)

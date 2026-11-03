@@ -101,7 +101,7 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 		ttl, err := normalizeSecretShareTTL(req.TTLSeconds)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
 		if req.PreviewFingerprint != "" {
@@ -304,7 +304,7 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		var err error
 		csrDER, req.CommonName, err = decodePKISecretCSR([]byte(req.CSRPEM))
 		if err != nil {
-			a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+			a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 			return
 		}
 	}
@@ -323,7 +323,7 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		plan, planErr := pkiSecretIssuancePlan(provider, req, csrDER)
 		if planErr != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, planErr.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, planErr)
 		}
 		if req.PreviewFingerprint != "" {
 			want, fingerprintErr := a.pkiSecretPreviewFingerprint(tenantID, principal, req, plan, caCertDER, csrDER)
@@ -349,12 +349,12 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 			// Fail closed before creating the key: a legacy custody choice is allowed
 			// only when its immutable deprecation receipt is already durable.
 			if evidenceErr := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "native_pki_secret"); evidenceErr != nil {
-				return 0, nil, errStatus(http.StatusServiceUnavailable, evidenceErr.Error())
+				return 0, nil, errStatusFrom(http.StatusServiceUnavailable, evidenceErr)
 			}
 			cred, err = provider.Generate(ctx, dynsecret.GenerateRequest{Role: req.CommonName, TTL: plan.EffectiveTTL})
 		}
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		certPEM, keyPEM := splitCertKeyPEM(cred.Secret)
 		public, err := certinfo.Inspect(certPEM)

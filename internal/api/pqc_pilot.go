@@ -160,7 +160,7 @@ func (a *API) listPQCPilots(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListPQCPilotsPage(r.Context(), tenantID, after, limit)
@@ -201,10 +201,10 @@ func mapPQCPilotError(err error) error {
 	case store.IsNotFound(err):
 		return errStatus(http.StatusNotFound, "PQC pilot not found")
 	case errors.Is(err, store.ErrPQCPilotExists), errors.Is(err, orchestrator.ErrPQCPilotFinished):
-		return errStatus(http.StatusConflict, err.Error())
+		return errStatusFrom(http.StatusConflict, err)
 	case errors.Is(err, orchestrator.ErrPQCPilotInvalid):
-		return errStatus(http.StatusUnprocessableEntity, err.Error())
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
 	default:
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	}
 }

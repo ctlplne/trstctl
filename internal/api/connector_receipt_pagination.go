@@ -23,7 +23,7 @@ func encodeConnectorReceiptCursor(r store.ConnectorDeliveryReceipt) string {
 func (a *API) connectorReceiptPageParams(r *http.Request, tenantID string) (int, *time.Time, string, error) {
 	limit, err := pageLimit(r)
 	if err != nil {
-		return 0, nil, "", errStatus(http.StatusBadRequest, err.Error())
+		return 0, nil, "", errStatusFrom(http.StatusBadRequest, err)
 	}
 	cursor := r.URL.Query().Get("cursor")
 	if cursor == "" {

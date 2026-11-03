@@ -241,7 +241,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 	if req.Kind == "network" || req.Kind == "ssh" {
 		intent, resolveErr := segmentscan.Resolve(req.Kind, cfg)
 		if resolveErr != nil {
-			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, resolveErr)
 		}
 		segment, segmentErr := a.store.GetDiscoverySegmentByName(ctx, tenantID, intent.Segment)
 		if segmentErr != nil {
@@ -255,7 +255,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
 		}
 		if scopeErr := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); scopeErr != nil {
-			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, scopeErr.Error())
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, scopeErr)
 		}
 		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
 		if relayErr != nil {
@@ -289,7 +289,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 	if req.Kind == "drift" {
 		plan, resolveErr := driftplan.Resolve(cfg)
 		if resolveErr != nil {
-			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, resolveErr)
 		}
 		preview.NormalizedTargetCount = len(plan.NormalizedTargets)
 		preview.NormalizedTargets = append([]string(nil), plan.NormalizedTargets...)
@@ -308,7 +308,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 	if req.Kind == adcsdiscovery.SourceKind {
 		intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
 		if resolveErr != nil {
-			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, resolveErr)
 		}
 		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, intent.RequiredAgentID, intent.JobKind)
 		if relayErr != nil {
@@ -877,7 +877,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		if kind == "network" || kind == "ssh" {
 			intent, resolveErr := segmentscan.Resolve(kind, cfg)
 			if resolveErr != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, resolveErr.Error())
+				return 0, nil, errStatusFrom(http.StatusBadRequest, resolveErr)
 			}
 			segment, segmentErr := a.store.GetDiscoverySegmentByName(ctx, tenantID, intent.Segment)
 			if segmentErr != nil {
@@ -890,7 +890,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusBadRequest, "an excluded segment cannot back an executable discovery source")
 			}
 			if err := segmentscan.ValidateDeclaredSegment(intent, segment.Ranges); err != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+				return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 			}
 			if intent.RequiredAgentID != "" {
 				readiness, err := a.orch.DiscoveryNetworkRelayReadiness(ctx, tenantID, intent.RequiredAgentID)
@@ -914,7 +914,7 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		if kind == adcsdiscovery.SourceKind {
 			intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
 			if resolveErr != nil {
-				return 0, nil, errStatus(http.StatusBadRequest, resolveErr.Error())
+				return 0, nil, errStatusFrom(http.StatusBadRequest, resolveErr)
 			}
 			if intent.RequiredAgentID != "" {
 				agent, agentErr := a.store.GetAgent(ctx, tenantID, intent.RequiredAgentID)
@@ -953,7 +953,7 @@ func (a *API) listDiscoverySources(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListDiscoverySourcesPage(r.Context(), tenantID, after, limit)
@@ -1011,7 +1011,7 @@ func (a *API) listDiscoverySchedules(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListDiscoverySchedulesPage(r.Context(), tenantID, after, limit)
@@ -1214,7 +1214,7 @@ func (a *API) listDiscoveryRuns(w http.ResponseWriter, r *http.Request) {
 		limit, after, err = a.pageParams(r)
 	}
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	var rows []store.DiscoveryRun
@@ -1320,12 +1320,12 @@ func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	filter, err := discoveryFindingFilterFromQuery(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListDiscoveryFindingsFiltered(r.Context(), tenantID, filter, after, limit)
@@ -1393,7 +1393,7 @@ func (a *API) dismissDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 
 func discoveryTriageError(err error) error {
 	if errors.Is(err, discovery.ErrInvalidTriageTransition) {
-		return errStatus(http.StatusConflict, err.Error())
+		return errStatusFrom(http.StatusConflict, err)
 	}
 	if store.IsNotFound(err) {
 		return errStatus(http.StatusNotFound, "discovery finding not found")
@@ -1425,56 +1425,56 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "config may contain credential references, not inline secret values")
 	}
 	if err := sourcecatalog.ValidateConfig(req.Kind, cfg); err != nil {
-		return nil, errStatus(http.StatusBadRequest, err.Error())
+		return nil, errStatusFrom(http.StatusBadRequest, err)
 	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == sshcollection.SourceKind {
 		if _, err := sshcollection.DecodeConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == adcsdiscovery.SourceKind {
 		if _, err := adcsdiscovery.ResolveInventoryIntent(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == nhi.SourceKind {
 		if err := nhi.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == apikey.SourceKind {
 		if err := apikey.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == oauthgrant.SourceKind {
 		if err := oauthgrant.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == serviceaccount.SourceKind {
 		if err := serviceaccount.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == nhibehavior.SourceKind {
 		if err := nhibehavior.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == compromise.SourceKind {
 		if err := compromise.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	if req.Kind == k8stls.SourceKind {
 		if err := k8stls.ValidateConfig(cfg); err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 	return append(json.RawMessage(nil), cfg...), nil
@@ -1497,7 +1497,7 @@ func validateDiscoverySegmentRequest(req discoverySegmentRequest) (store.Discove
 		ranges = append(ranges, value)
 	}
 	if err := segmentscan.ValidateDeclarations(ranges); err != nil {
-		return store.DiscoverySegment{}, errStatus(http.StatusBadRequest, err.Error())
+		return store.DiscoverySegment{}, errStatusFrom(http.StatusBadRequest, err)
 	}
 	staleness := req.StalenessHours
 	if staleness == 0 {

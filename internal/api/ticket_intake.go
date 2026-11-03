@@ -144,7 +144,7 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 			RequesterField: strings.TrimSpace(body.RequesterField), JustificationField: strings.TrimSpace(body.JustificationField),
 			PageLimit: ticketintake.MaxTickets,
 		}); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		saved := store.TicketIntakeSchedule{
 			TenantID: tenantID, System: system, Name: name, OwnerField: strings.TrimSpace(body.OwnerField),

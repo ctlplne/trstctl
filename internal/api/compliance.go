@@ -397,7 +397,7 @@ func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Requ
 func normalizeComplianceReportScheduleRequest(req complianceReportScheduleRequest) (complianceReportScheduleRequest, error) {
 	fw, err := ParseComplianceFramework(req.Framework)
 	if err != nil {
-		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, err.Error())
+		return complianceReportScheduleRequest{}, errStatusFrom(http.StatusBadRequest, err)
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -592,7 +592,7 @@ func (a *API) listComplianceReportSchedules(w http.ResponseWriter, r *http.Reque
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListComplianceReportSchedulesPage(r.Context(), tenantID, after, limit)
@@ -683,7 +683,7 @@ func (a *API) getComplianceEvidencePack(w http.ResponseWriter, r *http.Request) 
 	}
 	fw, err := ParseComplianceFramework(r.PathValue("framework"))
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	pack, err := a.complianceEvidence.ExportEvidencePack(r.Context(), tenantID, fw)

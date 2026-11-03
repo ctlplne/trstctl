@@ -567,12 +567,12 @@ func (a *API) listManagedKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	provider, keyID, err := parseManagedKeyCursor(r.URL.Query().Get("cursor"))
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	keys, err := a.store.ListManagedKeysPage(r.Context(), tenantID, provider, keyID, limit+1)

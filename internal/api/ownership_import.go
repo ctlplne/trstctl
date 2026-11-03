@@ -70,7 +70,7 @@ func (a *API) importOwnership(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		records, err := ownership.ParseCSV(io.LimitReader(r.Body, 8<<20))
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		owners, err := a.store.ListOwners(ctx, tenantID)
 		if err != nil {

@@ -229,7 +229,7 @@ func eventProtectionHTTPError(err error) error {
 		return errWithStatus(http.StatusConflict, err)
 	case errors.Is(err, ErrEventProtectionUnavailable):
 		// Fixed public detail: the cause stays in server logs.
-		return errStatus(http.StatusServiceUnavailable, ErrEventProtectionUnavailable.Error())
+		return errStatusFrom(http.StatusServiceUnavailable, ErrEventProtectionUnavailable)
 	}
 	return err
 }

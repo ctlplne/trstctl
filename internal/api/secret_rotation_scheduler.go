@@ -69,7 +69,7 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 	outerKey, requestBinding, err := secretRotationScheduleTickAuthority(
 		tenantID, registration, idempotencyKey, routeBinding)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	const (

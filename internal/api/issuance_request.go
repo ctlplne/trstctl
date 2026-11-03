@@ -228,7 +228,7 @@ func (a *API) issuanceRequestPreview(ctx context.Context, tenantID string, body 
 	csrPEM := strings.TrimSpace(body.CSRPEM)
 	if csrPEM != "" {
 		if err := a.validateSubjectCSRPEM(ctx, tenantID, csrPEM); err != nil {
-			return issuanceRequestPreviewResponse{}, errStatus(http.StatusBadRequest, err.Error())
+			return issuanceRequestPreviewResponse{}, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}
 
@@ -451,7 +451,7 @@ func (a *API) prepareIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 		request, identity, err := a.orch.PrepareIssuanceRequest(ctx, tenantID, r.PathValue("id"), principalSubject(ctx))
 		if err != nil {
 			if errors.Is(err, orchestrator.ErrIssuanceRequestNotReady) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			return 0, nil, err
 		}
@@ -469,7 +469,7 @@ func (a *API) completeIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 		request, err := a.orch.CompleteIssuanceRequest(ctx, tenantID, r.PathValue("id"))
 		if err != nil {
 			if errors.Is(err, orchestrator.ErrIssuanceRequestNotReady) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			return 0, nil, err
 		}

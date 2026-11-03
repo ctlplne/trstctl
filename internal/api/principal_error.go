@@ -36,3 +36,13 @@ func (e *apiError) Unwrap() error { return e.cause }
 func errStatus(status int, detail string) *apiError {
 	return &apiError{status: status, detail: detail}
 }
+
+// errStatusFrom is errStatus(status, err.Error()) that keeps err as the cause,
+// so a transient condition under it still answers as itself: a busy datastore
+// answers 503 with Retry-After on every route, whatever status the handler
+// chose for its own errors.
+func errStatusFrom(status int, err error) *apiError {
+	out := errStatus(status, err.Error())
+	out.cause = err
+	return out
+}

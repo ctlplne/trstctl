@@ -11,7 +11,7 @@ import (
 func (a *API) previewSSHCollection(ctx context.Context, tenantID string, raw []byte, preview *discoveryPlanPreviewResponse) error {
 	cfg, err := sshcollection.DecodeConfig(raw)
 	if err != nil {
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	}
 	command := cfg.Resolve()
 	segment, err := a.store.GetDiscoverySegmentByName(ctx, tenantID, command.Segment)
@@ -22,7 +22,7 @@ func (a *API) previewSSHCollection(ctx context.Context, tenantID string, raw []b
 		return errStatus(http.StatusBadRequest, "SSH collection segment is excluded")
 	}
 	if err := segmentscan.ValidateDeclaredSegment(command.ScopeIntent(), segment.Ranges); err != nil {
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	}
 	readiness, err := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, command.RequiredAgentID, sshcollection.Destination)
 	if err != nil {

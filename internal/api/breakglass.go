@@ -256,7 +256,7 @@ func (a *API) previewBreakglassIssue(w http.ResponseWriter, r *http.Request) {
 	fingerprint := strings.TrimPrefix(breakglass.IssuePurpose(tenantID, emergency, ttl), "breakglass-issue:")
 	csrInfo, err := breakglass.InspectEmergencyCSR(emergency.Subject, emergency.CSRDer)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	preview := BreakglassIssuePlanPreview{
@@ -306,7 +306,7 @@ func (a *API) issueBreakglass(w http.ResponseWriter, r *http.Request) {
 		}
 		bundle, reconciled, err := a.breakglassIssuer.IssueBreakglass(ctx, tenantID, emergency, ttl)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		return http.StatusCreated, breakglassIssueResponse{
 			Bundle: bundle, Reconciled: reconciled, AuditEventType: "breakglass.issued",
@@ -381,7 +381,7 @@ func (a *API) rotateBreakglass(w http.ResponseWriter, r *http.Request) {
 		}
 		result, err := a.breakglassRotation.RotateBreakglass(ctx, tenantID, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusConflict, err.Error())
+			return 0, nil, errStatusFrom(http.StatusConflict, err)
 		}
 		return http.StatusCreated, result, nil
 	})
@@ -432,7 +432,7 @@ func (a *API) crossSignBreakglass(w http.ResponseWriter, r *http.Request) {
 		}
 		result, err := a.breakglassRotation.CrossSignBreakglass(ctx, tenantID, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusConflict, err.Error())
+			return 0, nil, errStatusFrom(http.StatusConflict, err)
 		}
 		return http.StatusCreated, result, nil
 	})
@@ -467,7 +467,7 @@ func (a *API) reconcileBreakglass(w http.ResponseWriter, r *http.Request) {
 		reconciled, err := a.breakglass.ReconcileBreakglass(ctx, tenantID, req.Bundles)
 		if err != nil {
 			if errors.Is(err, ErrBreakglassInvalidBundle) {
-				return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+				return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 			}
 			if errors.Is(err, store.ErrIdempotencyConflict) {
 				return 0, nil, errStatus(http.StatusConflict, "break-glass request ID was already reconciled with a different signed bundle")
@@ -502,7 +502,7 @@ func validateBreakglassIssueRequest(req breakglassIssueRequest, requireCeremony 
 		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der is required")
 	}
 	if _, err := breakglass.InspectEmergencyCSR(subject, req.CSRDer); err != nil {
-		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, err.Error())
+		return breakglass.EmergencyRequest{}, 0, errStatusFrom(http.StatusBadRequest, err)
 	}
 	ttl := time.Duration(req.TTLSeconds) * time.Second
 	if ttl <= 0 {

@@ -50,7 +50,7 @@ func (a *API) AttachProtocolProfileControl(control ProtocolProfileControl) {
 
 func (a *API) getProtocolProfile(w http.ResponseWriter, r *http.Request) {
 	if a.protocolProfile == nil {
-		a.writeError(w, errStatus(http.StatusNotFound, ErrProtocolProfileUnavailable.Error()))
+		a.writeError(w, errStatusFrom(http.StatusNotFound, ErrProtocolProfileUnavailable))
 		return
 	}
 	tenantID, ok := a.tenant(r)
@@ -69,17 +69,17 @@ func (a *API) getProtocolProfile(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) activateProtocolProfile(w http.ResponseWriter, r *http.Request) {
 	if a.protocolProfile == nil {
-		a.writeError(w, errStatus(http.StatusNotFound, ErrProtocolProfileUnavailable.Error()))
+		a.writeError(w, errStatusFrom(http.StatusNotFound, ErrProtocolProfileUnavailable))
 		return
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutateDurable(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		status, err := a.protocolProfile.Activate(ctx, tenantID, idempotencyKey)
 		if errors.Is(err, ErrProtocolProfileUnavailable) {
-			return 0, nil, errStatus(http.StatusNotFound, err.Error())
+			return 0, nil, errStatusFrom(http.StatusNotFound, err)
 		}
 		if errors.Is(err, ErrProtocolProfileTenantMismatch) {
-			return 0, nil, errStatus(http.StatusForbidden, err.Error())
+			return 0, nil, errStatusFrom(http.StatusForbidden, err)
 		}
 		if err != nil {
 			return 0, nil, err
@@ -91,9 +91,9 @@ func (a *API) activateProtocolProfile(w http.ResponseWriter, r *http.Request) {
 func (a *API) writeProtocolProfileError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrProtocolProfileUnavailable):
-		a.writeError(w, errStatus(http.StatusNotFound, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusNotFound, err))
 	case errors.Is(err, ErrProtocolProfileTenantMismatch):
-		a.writeError(w, errStatus(http.StatusForbidden, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusForbidden, err))
 	default:
 		a.writeError(w, err)
 	}

@@ -60,7 +60,7 @@ func (a *API) dryRunPolicy(w http.ResponseWriter, r *http.Request) {
 			TraceLimit: req.TraceLimit,
 		})
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		summary := summarizePolicyDryRunInput(input, tenantID)
 		payload, err := json.Marshal(struct {

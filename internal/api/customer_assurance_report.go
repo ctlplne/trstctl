@@ -248,7 +248,7 @@ func (a *API) ReportSigningKey() (ReportSigningKey, error) {
 func (a *API) getReportSigningKey(w http.ResponseWriter, _ *http.Request) {
 	key, err := a.ReportSigningKey()
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusServiceUnavailable, err))
 		return
 	}
 	a.writeJSON(w, http.StatusOK, key)

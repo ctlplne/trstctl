@@ -85,7 +85,7 @@ func (a *API) generateNHIReviewCampaign(w http.ResponseWriter, r *http.Request) 
 		start.Name, start.ReviewerSubject, start.DueAt = req.Name, req.ReviewerSubject, req.DueAt
 		campaign, err := a.orch.StartNHIReviewCampaign(ctx, tenantID, start)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusCreated, nhiReviewGenerateResponse{Campaign: toNHIReviewCampaignResponse(campaign, true), Coverage: coverage}, nil
 	})

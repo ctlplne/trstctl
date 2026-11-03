@@ -85,7 +85,7 @@ func (a *API) startNHIReviewCampaign(w http.ResponseWriter, r *http.Request) {
 		}
 		campaign, err := a.orch.StartNHIReviewCampaign(ctx, tenantID, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusCreated, toNHIReviewCampaignResponse(campaign, true), nil
 	})
@@ -99,7 +99,7 @@ func (a *API) listNHIReviewCampaigns(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListNHIReviewCampaignsPage(r.Context(), tenantID, after, limit)
@@ -164,15 +164,15 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 		campaign, err := a.orch.DecideNHIReviewItem(ctx, tenantID, campaignID, itemID, req)
 		if err != nil {
 			if errors.Is(err, store.ErrNHIReviewReviewerUnauthorized) {
-				return 0, nil, errStatus(http.StatusForbidden, err.Error())
+				return 0, nil, errStatusFrom(http.StatusForbidden, err)
 			}
 			if errors.Is(err, store.ErrNHIReviewItemAlreadyDecided) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			if store.IsNotFound(err) {
 				return 0, nil, errStatus(http.StatusNotFound, "NHI access review item not found")
 			}
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		// Q1: the decision acts. A revoke runs the credential's own revoke
 		// once; a keep renews the named owner's attestation.

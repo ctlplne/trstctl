@@ -100,7 +100,7 @@ func (a *API) previewShare(w http.ResponseWriter, r *http.Request) {
 	}
 	ttl, err := normalizeSecretShareTTL(req.TTLSeconds)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	principal, err := requestPrincipalSubject(r.Context())

@@ -173,7 +173,7 @@ func (a *API) listMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	after, err := accessCursor(r.URL.Query().Get("cursor"))
@@ -337,7 +337,7 @@ func (a *API) listAPITokens(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	subject := r.URL.Query().Get("subject")

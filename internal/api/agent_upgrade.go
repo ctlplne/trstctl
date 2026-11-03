@@ -170,7 +170,7 @@ func (a *API) campaignControl(action string) http.HandlerFunc {
 				}
 				d, err = fleet.Resume(c.Status, at)
 				if err != nil {
-					return 0, nil, errStatus(http.StatusConflict, err.Error())
+					return 0, nil, errStatusFrom(http.StatusConflict, err)
 				}
 			}
 			if err := a.orch.AdvanceAgentUpgradeCampaign(ctx, tenantID, c.ID, d, ""); err != nil {
@@ -240,7 +240,7 @@ func (a *API) autoAssignAgentRings(w http.ResponseWriter, r *http.Request) {
 		plan, err := a.orch.AutoAssignAgentUpgradeRings(ctx, tenantID, body.CanaryCount, body.EarlyPercent)
 		if err != nil {
 			if errors.Is(err, fleet.ErrAutoRingsTooFew) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
 		}

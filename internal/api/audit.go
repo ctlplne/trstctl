@@ -67,7 +67,7 @@ func (a *API) auditQueryFromRequest(r *http.Request, tenantID string) (audit.Que
 	}
 	if err := audit.ValidateTool(q.Tool); err != nil {
 		if errors.Is(err, audit.ErrUnknownTool) {
-			return audit.Query{}, errStatus(http.StatusBadRequest, err.Error())
+			return audit.Query{}, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return audit.Query{}, err
 	}
@@ -170,7 +170,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	format, err := auditanchor.ParseFormat(r.URL.Query().Get("format"))
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	logFrom, err := anchorLogFrom(r)

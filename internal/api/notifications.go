@@ -1055,7 +1055,7 @@ func (a *API) requeueNotification(w http.ResponseWriter, r *http.Request) {
 		row, err := a.store.RequeueNotificationOutbox(ctx, tenantID, id)
 		if err != nil {
 			if errors.Is(err, store.ErrNotificationAlreadyProcessing) || errors.Is(err, store.ErrNotificationNotDead) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			return 0, nil, err
 		}
@@ -1404,7 +1404,7 @@ func notificationPageParams(r *http.Request) (limit int, after int64, status str
 	}
 	limit, err = pageLimit(r)
 	if err != nil {
-		return 0, 0, "", errStatus(http.StatusBadRequest, err.Error())
+		return 0, 0, "", errStatusFrom(http.StatusBadRequest, err)
 	}
 	if c := r.URL.Query().Get("cursor"); c != "" {
 		after, err = decodeNotificationCursor(c)

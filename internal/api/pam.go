@@ -303,7 +303,7 @@ func (a *API) listPAMSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))

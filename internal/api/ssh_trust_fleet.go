@@ -183,7 +183,7 @@ func (a *API) listSSHTrustFleetRollouts(w http.ResponseWriter, r *http.Request) 
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	var after *time.Time
@@ -218,7 +218,7 @@ func sshTrustFleetAPIError(err error) error {
 		return errStatus(http.StatusNotFound, "no such SSH trust fleet rollout")
 	}
 	if errors.Is(err, ErrSSHWorkflowInvalid) {
-		return errStatus(http.StatusUnprocessableEntity, err.Error())
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
 	}
 	return approvalAPIError(err)
 }

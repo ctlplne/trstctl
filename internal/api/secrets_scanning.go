@@ -217,7 +217,7 @@ func normalizeSecretScanRequest(scanner SecretScanner, req secretScanRequest) (s
 	}
 	mode, err := secretscan.NormalizeScanMode(req.Mode)
 	if err != nil {
-		return secretscan.Plan{}, errStatus(http.StatusBadRequest, err.Error())
+		return secretscan.Plan{}, errStatusFrom(http.StatusBadRequest, err)
 	}
 	opts := secretscan.ScanOptions{Mode: mode, CustomRulesPath: strings.TrimSpace(req.CustomRulesPath)}
 	if planner, ok := scanner.(secretScannerPlanner); ok {
@@ -241,9 +241,9 @@ func normalizeSecretScanRequest(scanner SecretScanner, req secretScanRequest) (s
 func secretScanRequestError(err error) error {
 	switch {
 	case errors.Is(err, secretscan.ErrInvalidScanTarget):
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	case errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules):
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	case errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
 		return errStatus(http.StatusServiceUnavailable, "gitleaks binary is not configured")
 	default:
@@ -407,7 +407,7 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, secretscan.ErrInvalidScanTarget), errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules), errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
 				return 0, nil, secretScanRequestError(err)
 			default:
-				return 0, nil, errStatus(http.StatusBadGateway, err.Error())
+				return 0, nil, errStatusFrom(http.StatusBadGateway, err)
 			}
 		}
 		if report.RulesActive < secretscan.GitleaksMinRulesActive {
@@ -866,7 +866,7 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 		}
 	}
 	if err := secretscan.ValidateAnnotation(provider, req.Annotation); err != nil {
-		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, err.Error())
+		return secretscan.ThirdPartyScanConfig{}, errStatusFrom(http.StatusBadRequest, err)
 	}
 	return secretscan.ThirdPartyScanConfig{
 		Provider:                provider,

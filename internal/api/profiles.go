@@ -60,7 +60,7 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "name and spec are required")
 		}
 		if err := profile.ValidateSpec(req.Spec); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		if err := a.checkProfileUpstream(ctx, tenantID, req.Spec); err != nil {
 			return 0, nil, err

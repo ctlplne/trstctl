@@ -355,7 +355,7 @@ func (a *API) ApplyTenantBaseline(ctx context.Context, tenantID, scope string, b
 		return TenantBaselineApplication{}, ErrBaselineTenantNotRegistered
 	}
 	if err := a.ValidateTenantBaseline(b); err != nil {
-		return TenantBaselineApplication{}, errStatus(http.StatusUnprocessableEntity, err.Error())
+		return TenantBaselineApplication{}, errStatusFrom(http.StatusUnprocessableEntity, err)
 	}
 	out := TenantBaselineApplication{TenantID: tenantID, BaselineDigest: TenantBaselineDigest(b), Complete: true, Results: []BaselineObjectResult{}}
 	for _, step := range a.baselineSteps(tenantID, scope, b) {
@@ -485,7 +485,7 @@ func (a *API) baselinePolicyStep(tenantID, scope string, p BaselinePolicy) basel
 			}
 			_, want, _, err := live.PrepareModule(module)
 			if err != nil {
-				return BaselineObjectState{}, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+				return BaselineObjectState{}, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 			}
 			activeModule, active, err := live.ActiveModule(ctx, tenantID)
 			if err != nil {
@@ -519,7 +519,7 @@ func (a *API) authorAndActivateBaselinePolicy(ctx context.Context, tenantID, sco
 	}
 	_, info, prepared, err := live.PrepareModule(module)
 	if err != nil {
-		return errStatus(http.StatusUnprocessableEntity, err.Error())
+		return errStatusFrom(http.StatusUnprocessableEntity, err)
 	}
 	state, err := a.policyVersions(ctx, tenantID)
 	if err != nil {
@@ -619,7 +619,7 @@ func (a *API) baselineTargetStep(tenantID, scope string, x BaselineDeploymentTar
 	return baselineStep{
 		read: func(ctx context.Context) (BaselineObjectState, any, error) {
 			if reqErr != nil {
-				return BaselineObjectState{}, nil, errStatus(http.StatusUnprocessableEntity, reqErr.Error())
+				return BaselineObjectState{}, nil, errStatusFrom(http.StatusUnprocessableEntity, reqErr)
 			}
 			got, err := a.store.GetDeploymentTarget(ctx, tenantID, id)
 			missing, err := missingOrErr(err)
@@ -666,7 +666,7 @@ func (a *API) baselineChannelStep(tenantID string, x BaselineNotificationChannel
 	return baselineStep{
 		read: func(ctx context.Context) (BaselineObjectState, any, error) {
 			if wantErr != nil {
-				return BaselineObjectState{}, nil, errStatus(http.StatusUnprocessableEntity, wantErr.Error())
+				return BaselineObjectState{}, nil, errStatusFrom(http.StatusUnprocessableEntity, wantErr)
 			}
 			got, err := a.store.GetNotificationChannel(ctx, tenantID, want.ID)
 			missing, err := missingOrErr(err)

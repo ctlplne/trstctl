@@ -140,7 +140,7 @@ func (a *API) updateACMEEABPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		credential, ok, err := a.acmeEABPolicy(ctx, tenantID, keyID, update)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		if !ok {
 			return 0, nil, errStatus(http.StatusNotFound, "no external account credential with that key id is configured for this tenant")
@@ -173,7 +173,7 @@ func (a *API) rotateACMEEABCredential(w http.ResponseWriter, r *http.Request) {
 		}
 		credential, ok, err := a.acmeEABRotate(ctx, tenantID, keyID, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)
 		}
 		if !ok {
 			return 0, nil, errStatus(http.StatusNotFound, "no external account credential with that key id is configured for this tenant")

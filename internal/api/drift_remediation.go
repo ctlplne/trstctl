@@ -118,7 +118,7 @@ func (a *API) getDriftRemediation(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := discoveryDashboardPageFromQuery(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	out, err := a.driftRemediationStatus(r.Context(), tenantID, page)

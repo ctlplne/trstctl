@@ -113,7 +113,7 @@ func (a *API) previewACMEDNS01Qualification(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if a.acmeDNS01Qualification == nil {
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable.Error()))
+		a.writeError(w, errStatusFrom(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable))
 		return
 	}
 	var req ACMEDNS01QualificationRequest
@@ -162,7 +162,7 @@ func (a *API) listACMEDNS01QualificationRuns(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if a.acmeDNS01Qualification == nil {
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable.Error()))
+		a.writeError(w, errStatusFrom(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable))
 		return
 	}
 	items, err := a.acmeDNS01Qualification.ListACMEDNS01QualificationRuns(r.Context(), tenantID, r.PathValue("id"), 25)
@@ -191,9 +191,9 @@ func (a *API) writeACMEDNS01QualificationError(w http.ResponseWriter, err error)
 	case errors.Is(err, store.ErrACMEDNS01ProviderConfigNotFound):
 		a.writeError(w, errStatus(http.StatusNotFound, "ACME DNS-01 provider config not found"))
 	case errors.Is(err, ErrACMEDNS01QualificationUnavailable):
-		a.writeError(w, errStatus(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable.Error()))
+		a.writeError(w, errStatusFrom(http.StatusServiceUnavailable, ErrACMEDNS01QualificationUnavailable))
 	case errors.Is(err, ErrACMEDNS01QualificationRunNotFound):
-		a.writeError(w, errStatus(http.StatusNotFound, ErrACMEDNS01QualificationRunNotFound.Error()))
+		a.writeError(w, errStatusFrom(http.StatusNotFound, ErrACMEDNS01QualificationRunNotFound))
 	default:
 		a.writeError(w, err)
 	}

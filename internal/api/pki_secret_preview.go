@@ -149,7 +149,7 @@ func (a *API) previewPKISecret(w http.ResponseWriter, r *http.Request) {
 		var err error
 		csrDER, req.CommonName, err = decodePKISecretCSR([]byte(req.CSRPEM))
 		if err != nil {
-			a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+			a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 			return
 		}
 	}
@@ -167,7 +167,7 @@ func (a *API) previewPKISecret(w http.ResponseWriter, r *http.Request) {
 	provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 	plan, err := pkiSecretIssuancePlan(provider, req, csrDER)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 

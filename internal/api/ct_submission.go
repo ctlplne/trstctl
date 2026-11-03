@@ -75,7 +75,7 @@ func mapCTSubmissionError(err error) error {
 		strings.Contains(msg, "certificate transparency log"),
 		strings.Contains(msg, "outbound endpoint"),
 		strings.Contains(msg, "ssrf"):
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	default:
 		return err
 	}

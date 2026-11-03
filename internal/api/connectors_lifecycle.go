@@ -498,7 +498,7 @@ func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	afterID := store.ZeroUUID
@@ -1752,7 +1752,7 @@ func (a *API) listRotationRuns(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	identityID := r.URL.Query().Get("identity_id")
@@ -1969,7 +1969,7 @@ func (a *API) resumeIdentityRenewal(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.orch.ResumeIdentityRenewal(ctx, tenantID, identityID, body.TargetID); err != nil {
 			if errors.Is(err, orchestrator.ErrInvalidTransition) {
-				return 0, nil, errStatus(http.StatusConflict, err.Error())
+				return 0, nil, errStatusFrom(http.StatusConflict, err)
 			}
 			return 0, nil, err
 		}

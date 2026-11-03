@@ -451,7 +451,7 @@ func (a *API) vaultPutPolicy(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "policy must be non-empty and at most 256 KiB")
 		}
 		if _, err := parseVaultACL(req.Policy); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		if r.Header.Get("Idempotency-Key") == "" {
 			state, err := a.vaultCompat.snapshot(ctx, tenantID)
@@ -757,7 +757,7 @@ func (a *API) vaultTransitDecrypt(w http.ResponseWriter, r *http.Request) {
 	a.vaultTransitMutation(w, r, func(ctx context.Context, tenantID, name string, req vaultTransitInputRequest) (any, error) {
 		ciphertext, err := nativeCiphertextFromVault(req.Ciphertext)
 		if err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		plaintext, err := a.transit.Decrypt(ctx, tenantID, name, ciphertext, req.Context)
 		if err != nil {
@@ -775,7 +775,7 @@ func (a *API) vaultTransitRewrap(w http.ResponseWriter, r *http.Request) {
 	a.vaultTransitMutation(w, r, func(ctx context.Context, tenantID, name string, req vaultTransitInputRequest) (any, error) {
 		ciphertext, err := nativeCiphertextFromVault(req.Ciphertext)
 		if err != nil {
-			return nil, errStatus(http.StatusBadRequest, err.Error())
+			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		out, err := a.transit.Rewrap(ctx, tenantID, name, ciphertext, req.Context)
 		if err != nil {

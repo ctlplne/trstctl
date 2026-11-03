@@ -114,7 +114,7 @@ func (a *API) startPQCMigrationCampaign(w http.ResponseWriter, r *http.Request) 
 		}
 		campaign, err := a.orch.StartPQCMigrationCampaign(ctx, tenantID, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 		return http.StatusCreated, toPQCCampaignResponse(campaign, true), nil
 	})
@@ -128,7 +128,7 @@ func (a *API) listPQCMigrationCampaigns(w http.ResponseWriter, r *http.Request) 
 	}
 	limit, after, err := a.pageParams(r)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := a.store.ListPQCMigrationCampaignsPage(r.Context(), tenantID, after, limit)
@@ -341,9 +341,9 @@ func mapPQCCampaignError(err error) error {
 	case store.IsNotFound(err):
 		return errStatus(http.StatusNotFound, "PQC migration campaign or finding not found")
 	case errors.Is(err, store.ErrPQCCampaignClosed), errors.Is(err, store.ErrPQCCampaignExists), errors.Is(err, store.ErrPQCCampaignNotReady), errors.Is(err, store.ErrPQCCampaignTopologyStale):
-		return errStatus(http.StatusConflict, err.Error())
+		return errStatusFrom(http.StatusConflict, err)
 	default:
-		return errStatus(http.StatusBadRequest, err.Error())
+		return errStatusFrom(http.StatusBadRequest, err)
 	}
 }
 
