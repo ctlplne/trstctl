@@ -731,7 +731,7 @@ not this file.
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/events/backup_history_test.go:227` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_restore_floor_test.go:598` | tiny fixed test sequence |
-| `internal/events/event_id_index_test.go:148` | the fixture index is bounded to one or two. |
+| `internal/events/event_id_index_test.go:149` | the fixture index is bounded to one or two. |
 | `internal/historycontinuity/continuity_test.go:203` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/idemgc/idemgc_test.go:35` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/kms/awskms/awskms_test.go:84` | bounded fixture/corpus value packing inside a test (CWE-190) |

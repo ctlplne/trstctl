@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -231,5 +232,48 @@ func TestEventIDIndexRefusesRetentionCapInsteadOfRepairingIt(t *testing.T) {
 	}
 	if got, found, err := log.EventByID(ctx, "retention-index"); err == nil || found || got.ID != "" {
 		t.Fatalf("retention-capped index returned a result: %+v, %t, %v", got, found, err)
+	}
+}
+
+// A lookup pins the stream head, then takes the index lock. A concurrent
+// lookup holding a newer head can index past the pinned one in between; the
+// first lookup then pins again instead of failing (CI 41533216865:
+// "identity projection cursor exceeds pinned source head" refused a
+// concurrent dynamic-secret issuer).
+func TestEventIDLookupPinsAgainWhenAnotherIndexedPastItsHead(t *testing.T) {
+	ctx := t.Context()
+	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	first, err := log.Append(ctx, Event{ID: "pinned-first", Type: "test.index", TenantID: "tenant-a", Data: []byte(`{"one":true}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raced atomic.Bool
+	var later Event
+	log.eventIDLookupPinnedTestHook = func() {
+		// Once (the hook is not re-entered by the lookup it makes): another
+		// caller appends and looks up its own event, indexing through a head
+		// newer than the one this lookup pinned.
+		if !raced.CompareAndSwap(false, true) {
+			return
+		}
+		var appendErr error
+		if later, appendErr = log.Append(ctx, Event{ID: "pinned-later", Type: "test.index", TenantID: "tenant-a", Data: []byte(`{"two":true}`)}); appendErr != nil {
+			t.Error(appendErr)
+			return
+		}
+		if _, found, lookupErr := log.EventByID(ctx, later.ID); lookupErr != nil || !found {
+			t.Errorf("the concurrent lookup: found=%t err=%v", found, lookupErr)
+		}
+	}
+	got, found, err := log.EventByID(ctx, first.ID)
+	if err != nil || !found || got.Sequence != first.Sequence {
+		t.Fatalf("the lookup whose head fell behind the index = %+v, %t, %v", got, found, err)
+	}
+	if got, found, err := log.EventByID(ctx, later.ID); err != nil || !found || got.Sequence != later.Sequence {
+		t.Fatalf("the later event = %+v, %t, %v", got, found, err)
 	}
 }

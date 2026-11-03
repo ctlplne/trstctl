@@ -174,6 +174,10 @@ type Log struct {
 	// pruneTestHook leaves a durable checkpointed prune at a crash boundary so
 	// tests can prove restart/retry removes only the remaining authorized prefix.
 	pruneTestHook func(sequence uint64) error
+	// eventIDLookupPinnedTestHook runs after an identity lookup pinned its head
+	// and before it takes the index lock: the window in which a concurrent
+	// lookup can index past that head.
+	eventIDLookupPinnedTestHook func()
 }
 
 // streamInfo fetches metadata through a private client handle. NATS Stream handles
@@ -566,10 +570,30 @@ func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error
 	return event, found, err
 }
 
+// eventIDLookupPins bounds how often one identity lookup pins a fresh head
+// after concurrent lookups indexed past the one it held.
+const eventIDLookupPins = 8
+
+// errEventIDIndexPastPin is a lookup's pinned head falling behind the identity
+// index: another lookup, holding a newer head, indexed past it between the pin
+// and the index lock. The snapshot is stale, not the index; pin again.
+var errEventIDIndexPastPin = fmt.Errorf("%w: identity projection advanced past the pinned head", ErrGenerationChanged)
+
 func (l *Log) rawEventByID(ctx context.Context, eventID string) (Event, bool, error) {
 	if strings.TrimSpace(eventID) == "" {
 		return Event{}, false, errors.New("events: event id lookup is empty")
 	}
+	for pin := 1; ; pin++ {
+		canonical, found, err := l.rawEventByIDPinned(ctx, eventID)
+		if errors.Is(err, errEventIDIndexPastPin) && pin < eventIDLookupPins {
+			continue
+		}
+		return canonical, found, err
+	}
+}
+
+// rawEventByIDPinned is one identity lookup against one pinned head.
+func (l *Log) rawEventByIDPinned(ctx context.Context, eventID string) (Event, bool, error) {
 	var (
 		canonical Event
 		found     bool
@@ -578,6 +602,9 @@ func (l *Log) rawEventByID(ctx context.Context, eventID string) (Event, bool, er
 		name, stream, head, err := l.resolveReplayStream(ctx)
 		if err != nil {
 			return err
+		}
+		if l.eventIDLookupPinnedTestHook != nil {
+			l.eventIDLookupPinnedTestHook()
 		}
 		state, err := l.schedulerSafetySnapshot(ctx)
 		if err != nil {
@@ -599,7 +626,7 @@ func (l *Log) rawEventByID(ctx context.Context, eventID string) (Event, bool, er
 		}
 		if covered > head {
 			l.idIndexMu.Unlock()
-			return errors.New("events: identity projection cursor exceeds pinned source head")
+			return errEventIDIndexPastPin
 		}
 		limit := min(head, covered+eventIDIndexReadLimit)
 		for covered < limit {
