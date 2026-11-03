@@ -235,9 +235,11 @@ func (a *API) getRehearsalScenario(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, view)
 }
 
-// rehearsalModesServed are the modes a run can use today; sandbox execution
-// and live observation come with A247 part 2.
-var rehearsalModesServed = map[rehearsal.Mode]bool{rehearsal.ModeStaticPreview: true, rehearsal.ModeMockedRehearsal: true}
+// rehearsalModes are the modes a run can use.
+var rehearsalModes = map[rehearsal.Mode]bool{
+	rehearsal.ModeStaticPreview: true, rehearsal.ModeMockedRehearsal: true,
+	rehearsal.ModeSandboxExecution: true, rehearsal.ModeLiveObservation: true,
+}
 
 //trstctl:mutation
 func (a *API) startRehearsalRun(w http.ResponseWriter, r *http.Request) {
@@ -247,8 +249,8 @@ func (a *API) startRehearsalRun(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		mode := rehearsal.Mode(req.Mode)
-		if !rehearsalModesServed[mode] {
-			return 0, nil, errStatus(http.StatusBadRequest, "mode must be static_preview or mocked_rehearsal")
+		if !rehearsalModes[mode] {
+			return 0, nil, errStatus(http.StatusBadRequest, "mode must be static_preview, mocked_rehearsal, sandbox_execution or live_observation")
 		}
 		row, err := a.store.GetRehearsalScenario(ctx, tenantID, r.PathValue("id"))
 		if errors.Is(err, store.ErrRehearsalNotFound) {
@@ -284,13 +286,24 @@ func (a *API) startRehearsalRun(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		var observations []rehearsal.Observation
+		var unsupported []rehearsal.Unsupported
+		var runErr error
 		switch mode {
 		case rehearsal.ModeStaticPreview:
 			observations = rehearsal.Preview(sc.Steps, a.rehearsalResolver(ctx, tenantID, sc))
 		case rehearsal.ModeMockedRehearsal:
 			observations = rehearsal.Mock(sc.Steps)
+		case rehearsal.ModeLiveObservation:
+			observations, unsupported, runErr = a.rehearsalLive(ctx, tenantID, sc)
+		case rehearsal.ModeSandboxExecution:
+			observations, unsupported, runErr = a.rehearsalSandbox(ctx, tenantID, runID, sc)
 		}
-		verdict, detail := rehearsal.Compare(mode, sc.Steps, observations)
+		verdict, detail := rehearsal.Decide(mode, sc.Steps, observations, unsupported)
+		if runErr != nil {
+			// The start is recorded, so the run completes either way: a run
+			// that stopped partway is blocked, never left running.
+			verdict, detail = rehearsal.VerdictBlocked, "the run stopped before every step was observed: "+runErr.Error()
+		}
 		if err := a.orch.CompleteRehearsalRun(ctx, tenantID, projections.RehearsalRunCompleted{
 			ID: runID, Verdict: string(verdict), Label: rehearsal.Label(mode, verdict, observations),
 			Observations: observations, Detail: detail,
@@ -508,7 +521,7 @@ func rehearsalSchemas() map[string]*Schema {
 		"RehearsalScenarioRequest": object(map[string]*Schema{"name": str(), "kind": enum(kinds...), "candidate": candidate, "data_set": dataSet, "steps": list(step)}, "name", "kind", "candidate", "data_set"),
 		"RehearsalScenario":        scenario,
 		"RehearsalScenarioList":    object(map[string]*Schema{"scenarios": list(scenario)}, "scenarios"),
-		"RehearsalRunRequest":      object(map[string]*Schema{"mode": enum(string(rehearsal.ModeStaticPreview), string(rehearsal.ModeMockedRehearsal))}, "mode"),
+		"RehearsalRunRequest":      object(map[string]*Schema{"mode": enum(string(rehearsal.ModeStaticPreview), string(rehearsal.ModeMockedRehearsal), string(rehearsal.ModeSandboxExecution), string(rehearsal.ModeLiveObservation))}, "mode"),
 		"RehearsalRun":             run,
 		"RehearsalRunList":         object(map[string]*Schema{"runs": list(run)}, "runs"),
 	}

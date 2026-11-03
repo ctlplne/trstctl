@@ -7584,6 +7584,32 @@ failover have runbooks under `docs/runbooks/`. What comes next:
 - **One host.** Multi-host qualification of install, upgrade and failover is A176,
   on the x86 machine.
 
+## Rehearsals of failure scenarios (A247) — served
+
+`POST /api/v1/rehearsals/scenarios` (`trstctl rehearsals scenarios save`) saves a
+scenario — approval resumption, target outage, renewal failure, revoked credential,
+stale policy, restore or retry — with its candidate, data set (named identities, or
+a scrubbed failure carrying identifiers and codes only) and the effect each step
+should have; `trstctl rehearsals run` replays it as a static preview, a mocked
+rehearsal, a sandbox execution or a live observation. Every run records the tool
+and connector versions, the candidate, the data set's digest, the expected effects
+and what it observed, with each observation's source; its label is its mode's, so a
+mocked success is never labeled live. A sandbox replay reads environments from the
+target and owner records and refuses production targets and identities, unclassified
+ones, and data sets that name stored secrets. What it runs today, and what comes
+next:
+
+- **Sandbox executors.** A retry is executed for real: the target's dry-run test,
+  twice through the production idempotency layer with one key. The other actions
+  block a sandbox run, naming the step; executors for them come next.
+- **Live readers.** A restore step reads the newest signed restore-drill
+  attestation (A246) and verifies it. Readers for the other actions — the A245
+  revocation report for a revoked credential, dead letters for a target outage —
+  come next; until then those steps block a live run.
+- **Signed observations.** A run cites signed records where they exist (the drill
+  attestation); the run itself is an event in the tenant's log, not a separately
+  signed statement.
+
 ## Cryptographic risk report
 
 `GET /api/v1/reports/crypto-risk` (and the `crypto_risk` scheduled report,

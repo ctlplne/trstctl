@@ -2,15 +2,20 @@
 
 ### Added
 
-- Rehearsals of failure scenarios (A247, first part): save a scenario — approval resumption,
+- Rehearsals of failure scenarios (A247): save a scenario — approval resumption,
   target outage, renewal failure, revoked credential, stale policy, restore or retry — with its
   candidate, data set (named identities, or a scrubbed failure: identifiers and codes, no values)
   and the effect each step should have (`POST /api/v1/rehearsals/scenarios`, CLI `rehearsals
   scenarios save`; revise with `PUT`). A run (`rehearsals run`, permission `incidents:game-day`)
-  replays it as a static preview against the configuration or a mocked rehearsal of the
-  documented behavior, and records the tool and connector versions, the candidate, the data
-  set's digest, the expected effects and what it observed. Its label is its mode's: a mocked
-  success reads `mocked: matched`, never live. Sandbox execution and live observation come next.
+  replays it as a static preview against the configuration, a mocked rehearsal of the
+  documented behavior, a sandbox execution against a non-production target (a retry runs the
+  target's dry-run test twice through the idempotency layer) or a live observation of
+  production's records (a restore reads the newest signed drill attestation), and records the
+  tool and connector versions, the candidate, the data set's digest, the expected effects and
+  what it observed. Its label is its mode's: a mocked success reads `mocked: matched`, never
+  live. A sandbox replay reads environments from the target and owner records and refuses
+  production ones and data sets that name stored secrets; a step a mode cannot run yet blocks
+  the run.
 - Operations dashboard, upgrade preflight and rollback (A246): **Deployment health** (`GET
   /api/v1/operations/dashboard`, CLI `operations dashboard`) shows backup freshness, restore
   proof, queue lag, signer readiness, data freshness and dependency health with the numbers

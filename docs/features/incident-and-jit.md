@@ -411,15 +411,22 @@ expected effects and what it observed, then compares them:
 | --- | --- | --- |
 | `static_preview` | nothing; each step's references (candidate, identities, target) are resolved against the configuration | `preview` |
 | `mocked_rehearsal` | nothing real; each step gets the product's documented effect, so a wrong expectation diverges | `mock` |
+| `sandbox_execution` | the step for real against a non-production target: a retry sends the target's dry-run test twice through the production idempotency layer with one key | `sandbox_receipt` (the idempotency key) |
+| `live_observation` | nothing; production's own records are read: a restore step reads the newest signed restore-drill attestation and verifies its signature | `live_receipt` (the attestation) |
 
 A run's label is its mode's word and the verdict — `preview: matched`,
-`mocked: diverged` — so a mocked success is never presented as live. Starting a
-run needs `incidents:game-day`, like a fleet re-issuance game day; saving a
-scenario needs `incidents:write`. Sandbox execution against non-production
-targets with generated credentials, and live observation of production
-receipts, come next; a sandbox replay will read each target's and identity's
-environment from their records, as a game day does, and refuse a production one
-or a data set that names stored secrets.
+`mocked: diverged`, `live: matched` — so a mocked success is never presented
+as live, and `live` needs every observation to be a live receipt. A step a mode
+has no executor or reader for blocks the run (`sandbox: blocked`, naming the
+step) instead of passing it.
+
+A sandbox replay cannot reach production or reuse production secrets: it reads
+each target's environment from the target's configuration and each identity's
+from its owner's application model — never from the scenario — and refuses a
+step whose environment is not on the game-day non-production allowlist (an
+unclassified one included), and a data set that names stored secrets. Starting
+a run needs `incidents:game-day`, like a fleet re-issuance game day; saving a
+scenario needs `incidents:write`.
 
 ```sh
 trstctl rehearsals scenarios save -f scenario.json

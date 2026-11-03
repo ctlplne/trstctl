@@ -8787,7 +8787,7 @@ export interface RehearsalRunList {
 }
 
 export interface RehearsalRunRequest {
-  mode: "static_preview" | "mocked_rehearsal";
+  mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation";
 }
 
 export interface RehearsalScenario {

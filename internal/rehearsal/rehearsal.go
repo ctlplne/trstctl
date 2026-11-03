@@ -326,3 +326,23 @@ func documentedEffects() map[string]string {
 	}
 	return documented
 }
+
+// Unsupported is a step the run's mode has no executor or reader for yet.
+type Unsupported struct {
+	Step   int    `json:"step"`
+	Reason string `json:"reason"`
+}
+
+// Decide is Compare for a run some of whose steps its mode could not run:
+// any such step makes the verdict blocked, naming why; otherwise the
+// observations decide.
+func Decide(mode Mode, steps []Step, observations []Observation, unsupported []Unsupported) (Verdict, string) {
+	if len(unsupported) > 0 {
+		parts := make([]string, 0, len(unsupported))
+		for _, u := range unsupported {
+			parts = append(parts, fmt.Sprintf("step %d: %s", u.Step, u.Reason))
+		}
+		return VerdictBlocked, strings.Join(parts, "; ")
+	}
+	return Compare(mode, steps, observations)
+}

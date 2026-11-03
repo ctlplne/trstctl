@@ -38156,7 +38156,9 @@
           "mode": {
             "enum": [
               "static_preview",
-              "mocked_rehearsal"
+              "mocked_rehearsal",
+              "sandbox_execution",
+              "live_observation"
             ],
             "type": "string"
           }

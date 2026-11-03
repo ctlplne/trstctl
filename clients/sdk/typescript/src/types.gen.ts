@@ -20081,7 +20081,7 @@ export interface components {
         };
         RehearsalRunRequest: {
             /** @enum {string} */
-            mode: "static_preview" | "mocked_rehearsal";
+            mode: "static_preview" | "mocked_rehearsal" | "sandbox_execution" | "live_observation";
         };
         RehearsalScenario: {
             candidate: {

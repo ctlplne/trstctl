@@ -686,44 +686,50 @@ func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	targetID := r.PathValue("id")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
-		if err != nil {
-			return 0, nil, err
-		}
-		if err := requireDeploymentTargetEnabled(target); err != nil {
-			return 0, nil, err
-		}
-		if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config); err != nil {
-			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
-		}
-		// D5: when a relay can take the work, this enqueues a real dry-run that
-		// reaches the target and returns a mutation plan. When it cannot — no
-		// job ledger, or connector.test not enabled — it falls back to the
-		// honest local answer rather than pretending, exactly as before.
-		if a.enqueueConnectorTest != nil {
-			queued, err := a.enqueueConnectorTest(ctx, tenantID, target, idempotencyKey)
-			if err != nil {
-				return 0, nil, err
-			}
-			if queued != nil {
-				return http.StatusAccepted, toConnectorDeliveryResponse(*queued), nil
-			}
-		}
-		// The target is not contacted here: this route resolves schema and
-		// credential references locally and nothing else. The status says exactly
-		// that (servedstatus.ConnectorConfigValidated) rather than claiming a
-		// successful test — truth-integrity 3.
-		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-			Destination: "connector.test", Connector: target.Type, Target: target.Name,
-			Status: servedstatus.ConnectorConfigValidated, Attempts: 1, Reason: "target_config_validated",
-			Detail:         "connector target metadata and credential references validated locally; no relay is enabled for connector.test, so the target was not contacted and nothing was changed",
-			IdempotencyKey: idempotencyKey,
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
+		return a.runConnectorTargetTest(ctx, tenantID, targetID, idempotencyKey)
 	})
+}
+
+// runConnectorTargetTest is the target-vantage dry run behind the test route;
+// a retry rehearsal (A247) runs the same operation.
+func (a *API) runConnectorTargetTest(ctx context.Context, tenantID, targetID, idempotencyKey string) (int, any, error) {
+	target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := requireDeploymentTargetEnabled(target); err != nil {
+		return 0, nil, err
+	}
+	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config); err != nil {
+		return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+	}
+	// D5: when a relay can take the work, this enqueues a real dry-run that
+	// reaches the target and returns a mutation plan. When it cannot — no
+	// job ledger, or connector.test not enabled — it falls back to the
+	// honest local answer rather than pretending, exactly as before.
+	if a.enqueueConnectorTest != nil {
+		queued, err := a.enqueueConnectorTest(ctx, tenantID, target, idempotencyKey)
+		if err != nil {
+			return 0, nil, err
+		}
+		if queued != nil {
+			return http.StatusAccepted, toConnectorDeliveryResponse(*queued), nil
+		}
+	}
+	// The target is not contacted here: this route resolves schema and
+	// credential references locally and nothing else. The status says exactly
+	// that (servedstatus.ConnectorConfigValidated) rather than claiming a
+	// successful test — truth-integrity 3.
+	receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+		Destination: "connector.test", Connector: target.Type, Target: target.Name,
+		Status: servedstatus.ConnectorConfigValidated, Attempts: 1, Reason: "target_config_validated",
+		Detail:         "connector target metadata and credential references validated locally; no relay is enabled for connector.test, so the target was not contacted and nothing was changed",
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
 }
 
 //trstctl:mutation

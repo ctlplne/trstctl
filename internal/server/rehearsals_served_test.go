@@ -127,9 +127,10 @@ func TestServedRehearsalsRecordWhatTheyReplayedA247(t *testing.T) {
 		t.Fatalf("static preview against a missing target = %d %+v", code, diverged)
 	}
 
-	// The modes that run against real resources are not offered yet.
-	if code, _ := start("a247-run-sandbox", "sandbox_execution"); code != http.StatusBadRequest {
-		t.Fatalf("sandbox execution = %d; want 400 until it is built", code)
+	// A sandbox replay reads each target's environment from its record; a
+	// target that no longer exists has none, and the replay is refused.
+	if code, _ := start("a247-run-sandbox", "sandbox_execution"); code != http.StatusUnprocessableEntity {
+		t.Fatalf("sandbox execution against a missing target = %d; want 422", code)
 	}
 
 	// The CLI lists the scenario's runs, newest first, with their labels.

@@ -116,3 +116,20 @@ func TestAStaticPreviewObservesWhatTheConfigurationResolves(t *testing.T) {
 		t.Fatalf("label %q", got)
 	}
 }
+
+// A step the mode cannot run blocks the run, whatever the other steps showed.
+func TestAStepTheModeCannotRunBlocksTheRun(t *testing.T) {
+	steps, _ := Template(KindApprovalResumption)
+	observed := []Observation{{Step: 1, Effect: "awaiting_approval", Source: SourceSandboxReceipt}}
+	verdict, detail := Decide(ModeSandboxExecution, steps, observed, []Unsupported{{Step: 2, Reason: "no sandbox executor for approve yet"}})
+	if verdict != VerdictBlocked || detail != "step 2: no sandbox executor for approve yet" {
+		t.Fatalf("verdict %s: %s", verdict, detail)
+	}
+	if got := Label(ModeSandboxExecution, verdict, observed); got != "sandbox: blocked" {
+		t.Fatalf("label %q", got)
+	}
+	observed = append(observed, Observation{Step: 2, Effect: "issued", Source: SourceSandboxReceipt})
+	if verdict, _ := Decide(ModeSandboxExecution, steps, observed, nil); verdict != VerdictMatched {
+		t.Fatalf("every step observed: %s", verdict)
+	}
+}
