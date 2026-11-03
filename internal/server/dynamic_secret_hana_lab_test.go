@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	hdb "github.com/SAP/go-hdb/driver"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -155,6 +158,7 @@ func hanaLabDirectRoundTrip(t *testing.T, adminDSN string) {
 	}
 	ref, credential, err := backend.CreateCredential(ctx, dynsecret.GenerateRequest{Role: "reader", LeaseID: "a239-hana-direct-round-trip"})
 	if err != nil {
+		hanaLabProbeSQLScript(ctx, t, db)
 		t.Fatalf("the provider, called directly: %v", err)
 	}
 	if err := backend.VerifyCredential(ctx, credential); err != nil {
@@ -165,5 +169,38 @@ func hanaLabDirectRoundTrip(t *testing.T, adminDSN string) {
 	}
 	if err := backend.VerifyCredential(ctx, credential); err == nil {
 		t.Fatal("the directly revoked user still connects")
+	}
+}
+
+// hanaLabProbeSQLScript runs, after a failed direct round trip, the
+// SQLScript constructs the provider's blocks are made of, one at a time and
+// with no credential in any of them, and logs SAP HANA's answer to each (its
+// code and text), so a run that fails names the construct the server refused.
+func hanaLabProbeSQLScript(ctx context.Context, t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, probe := range []struct {
+		name, statement string
+		args            []any
+	}{
+		{"anonymous block", `DO BEGIN DECLARE n INTEGER; SELECT COUNT(*) INTO n FROM SYS.USERS; END`, nil},
+		{"bound NVARCHAR parameter", `DO (IN uname NVARCHAR(256) => ?) BEGIN DECLARE n INTEGER; SELECT COUNT(*) INTO n FROM SYS.USERS WHERE USER_NAME = :uname; END`, []any{"SYSTEM"}},
+		{"ESCAPE_DOUBLE_QUOTES", `DO (IN uname NVARCHAR(256) => ?) BEGIN DECLARE quoted NVARCHAR(512); quoted = '"' || ESCAPE_DOUBLE_QUOTES(:uname) || '"'; END`, []any{"A\"B"}},
+		{"bound VARBINARY + BINTOSTR", `DO (IN pw VARBINARY(256) => ?) BEGIN DECLARE s NVARCHAR(1024); s = BINTOSTR(:pw); END`, []any{[]byte("probe")}},
+		{"EXEC literal", `DO BEGIN EXEC 'SELECT 1 FROM DUMMY'; END`, nil},
+		{"EXEC concatenation", `DO BEGIN EXEC 'SELECT 1 ' || 'FROM DUMMY'; END`, nil},
+		{"EXEC :variable", `DO BEGIN DECLARE stmt NVARCHAR(100); stmt = 'SELECT 1 FROM DUMMY'; EXEC :stmt; END`, nil},
+		{"EXECUTE IMMEDIATE :variable", `DO BEGIN DECLARE stmt NVARCHAR(100); stmt = 'SELECT 1 FROM DUMMY'; EXECUTE IMMEDIATE :stmt; END`, nil},
+		{"EXEC DDL", `DO BEGIN DECLARE stmt NVARCHAR(200); stmt = 'CREATE ROLE TRSTCTL_PROBE_ROLE'; EXEC :stmt; stmt = 'DROP ROLE TRSTCTL_PROBE_ROLE'; EXEC :stmt; END`, nil},
+	} {
+		_, err := db.ExecContext(ctx, probe.statement, probe.args...)
+		var hanaErr hdb.Error
+		switch {
+		case err == nil:
+			t.Logf("A239_HANA_PROBE %s: ok", probe.name)
+		case errors.As(err, &hanaErr):
+			t.Logf("A239_HANA_PROBE %s: SAP HANA error %d: %s", probe.name, hanaErr.Code(), hanaErr.Text())
+		default:
+			t.Logf("A239_HANA_PROBE %s: %v", probe.name, err)
+		}
 	}
 }

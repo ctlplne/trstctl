@@ -28,26 +28,37 @@ var hanaName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,126}$`)
 // The SQLScript below never carries a value in its text: the password
 // arrives as a VARBINARY bind the database turns into the quoted identifier
 // it splices into the DDL it runs itself, and every name is a bind quoted
-// the same way (ESCAPE_DOUBLE_QUOTES).
+// the same way (ESCAPE_DOUBLE_QUOTES). Each statement is built in a variable
+// and run as EXEC :stmt (CI 41585418047: SAP HANA answered error 257, a
+// syntax error, to EXEC of a concatenated expression).
 const (
 	hanaUpsertUser = `DO (IN uname NVARCHAR(256) => ?, IN pw VARBINARY(256) => ?) BEGIN
   DECLARE n INTEGER;
   DECLARE quoted NVARCHAR(512);
+  DECLARE secret_literal NVARCHAR(1024);
+  DECLARE stmt NVARCHAR(2048);
   quoted = '"' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
+  secret_literal = '"' || ESCAPE_DOUBLE_QUOTES(BINTOSTR(:pw)) || '"';
   SELECT COUNT(*) INTO n FROM SYS.USERS WHERE USER_NAME = :uname;
   IF :n = 0 THEN
-    EXEC 'CREATE USER ' || :quoted || ' PASSWORD "' || ESCAPE_DOUBLE_QUOTES(BINTOSTR(:pw)) || '" NO FORCE_FIRST_PASSWORD_CHANGE';
+    stmt = 'CREATE USER ' || :quoted || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
+    EXEC :stmt;
   ELSE
-    EXEC 'ALTER USER ' || :quoted || ' PASSWORD "' || ESCAPE_DOUBLE_QUOTES(BINTOSTR(:pw)) || '" NO FORCE_FIRST_PASSWORD_CHANGE';
-    EXEC 'ALTER USER ' || :quoted || ' ACTIVATE USER NOW';
+    stmt = 'ALTER USER ' || :quoted || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
+    EXEC :stmt;
+    stmt = 'ALTER USER ' || :quoted || ' ACTIVATE USER NOW';
+    EXEC :stmt;
   END IF;
-  EXEC 'ALTER USER ' || :quoted || ' DISABLE PASSWORD LIFETIME';
+  stmt = 'ALTER USER ' || :quoted || ' DISABLE PASSWORD LIFETIME';
+  EXEC :stmt;
 END`
 	hanaGrantRole = `DO (IN rname NVARCHAR(256) => ?, IN uname NVARCHAR(256) => ?) BEGIN
   DECLARE n INTEGER;
+  DECLARE stmt NVARCHAR(1024);
   SELECT COUNT(*) INTO n FROM SYS.GRANTED_ROLES WHERE GRANTEE = :uname AND ROLE_NAME = :rname;
   IF :n = 0 THEN
-    EXEC 'GRANT "' || ESCAPE_DOUBLE_QUOTES(:rname) || '" TO "' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
+    stmt = 'GRANT "' || ESCAPE_DOUBLE_QUOTES(:rname) || '" TO "' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
+    EXEC :stmt;
   END IF;
 END`
 	// hanaRevokeUser deactivates the user so no session starts, disconnects
@@ -55,15 +66,19 @@ END`
 	hanaRevokeUser = `DO (IN uname NVARCHAR(256) => ?) BEGIN
   DECLARE n INTEGER;
   DECLARE quoted NVARCHAR(512);
+  DECLARE stmt NVARCHAR(1024);
   DECLARE CURSOR sessions FOR SELECT CONNECTION_ID FROM SYS.M_CONNECTIONS WHERE USER_NAME = :uname AND OWN = 'FALSE' AND CONNECTION_STATUS <> '';
   quoted = '"' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
   SELECT COUNT(*) INTO n FROM SYS.USERS WHERE USER_NAME = :uname;
   IF :n > 0 THEN
-    EXEC 'ALTER USER ' || :quoted || ' DEACTIVATE USER NOW';
+    stmt = 'ALTER USER ' || :quoted || ' DEACTIVATE USER NOW';
+    EXEC :stmt;
     FOR s AS sessions DO
-      EXEC 'ALTER SYSTEM DISCONNECT SESSION ''' || s.CONNECTION_ID || '''';
+      stmt = 'ALTER SYSTEM DISCONNECT SESSION ''' || TO_NVARCHAR(s.CONNECTION_ID) || '''';
+      EXEC :stmt;
     END FOR;
-    EXEC 'DROP USER ' || :quoted || ' CASCADE';
+    stmt = 'DROP USER ' || :quoted || ' CASCADE';
+    EXEC :stmt;
   END IF;
 END`
 )
