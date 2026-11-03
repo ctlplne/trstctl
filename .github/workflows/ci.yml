@@ -1627,6 +1627,8 @@ jobs:
 
       - name: Prefetch dependencies (retries a transient module-proxy failure)
         run: scripts/ci/go-mod-download.sh
+        # The job's steps run in web/ by default; the module graph is at the root.
+        working-directory: ${{ github.workspace }}
 
       - name: Install dependencies
         run: npm ci
