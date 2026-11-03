@@ -7,22 +7,14 @@ import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import { api, type ExternalCA, type RogueCertificatePosture } from "@/lib/api";
 import { newIdempotencyKey } from "@/lib/apiTransport";
+import { HealthStat } from "./HealthStat";
 import { ROGUE_REVOCATION_REASONS, RogueIssuerRevocationCell, type RogueRevocationReason } from "./RogueIssuerRevocation";
 
 // The rogue-certificate panel of the Certificates page (A43 takedown lives
 // here), its own component because it is its own workflow.
 
-export function formatCount(value: number): string {
+function formatCount(value: number): string {
   return formatNumberPolicy(value);
-}
-
-export function HealthStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold">{value}</div>
-    </div>
-  );
 }
 
 type RogueCertificateFinding = RogueCertificatePosture["findings"][number];

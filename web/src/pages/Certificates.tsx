@@ -65,7 +65,8 @@ import {
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCertificateInventory } from "@/pages/certificates/useCertificateInventory";
-import { HealthStat, RogueCertificatePanel } from "@/pages/certificates/RogueCertificatePanel";
+import { HealthStat } from "@/pages/certificates/HealthStat";
+import { RogueCertificatePanel } from "@/pages/certificates/RogueCertificatePanel";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
