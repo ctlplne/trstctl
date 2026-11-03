@@ -9,7 +9,6 @@ package localexec
 
 import (
 	"io/fs"
-	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -29,7 +28,9 @@ func IsProgram(path string, info fs.FileInfo) bool { return isProgram(runtime.GO
 
 func isAbsolute(goos, path string) bool {
 	if goos != "windows" {
-		return filepath.IsAbs(path)
+		// filepath.IsAbs on Unix, spelled out so the rule reads the same on
+		// every host that evaluates it.
+		return strings.HasPrefix(path, "/")
 	}
 	if len(path) < 3 || path[1] != ':' || (path[2] != '\\' && path[2] != '/') {
 		return false

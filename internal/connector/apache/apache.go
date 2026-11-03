@@ -12,7 +12,6 @@ package apache
 import (
 	"context"
 	"fmt"
-	"path"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -55,8 +54,8 @@ func (c *Connector) Name() string { return "apache" }
 // never needs the network.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	g := pluginhost.NewGrant(pluginhost.CapFSWrite, connector.CapExec).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.certPath))
-	if d := path.Dir(c.keyPath); d != path.Dir(c.certPath) {
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.certPath))
+	if d := connector.TargetDir(c.keyPath); d != connector.TargetDir(c.certPath) {
 		g = g.WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
 	return g

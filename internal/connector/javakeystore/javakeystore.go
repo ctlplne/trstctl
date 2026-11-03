@@ -145,11 +145,11 @@ func (c *Connector) Name() string { return "java-keystore" }
 // selected. Reload also needs read access to preserve a predecessor on failure.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	g := pluginhost.NewGrant(pluginhost.CapFSWrite).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.keystorePath))
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.keystorePath))
 	if c.reloadAction != "" {
 		g = pluginhost.NewGrant(pluginhost.CapFSWrite, pluginhost.CapFSRead, connector.CapExec).
-			WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.keystorePath)).
-			WithPathPrefix(pluginhost.CapFSRead, path.Dir(c.keystorePath))
+			WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.keystorePath)).
+			WithPathPrefix(pluginhost.CapFSRead, connector.TargetDir(c.keystorePath))
 	}
 	return g
 }

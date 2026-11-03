@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -72,13 +71,13 @@ func (c *Connector) Name() string { return "traefik" }
 // idempotency and rollback. Traefik needs no command or network capability.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	g := pluginhost.NewGrant(pluginhost.CapFSRead, pluginhost.CapFSWrite).
-		WithPathPrefix(pluginhost.CapFSRead, path.Dir(c.certPath)).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.certPath))
-	if d := path.Dir(c.keyPath); d != path.Dir(c.certPath) {
+		WithPathPrefix(pluginhost.CapFSRead, connector.TargetDir(c.certPath)).
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.certPath))
+	if d := connector.TargetDir(c.keyPath); d != connector.TargetDir(c.certPath) {
 		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
 	if c.dynamicConfigPath != "" {
-		d := path.Dir(c.dynamicConfigPath)
+		d := connector.TargetDir(c.dynamicConfigPath)
 		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
 	return g

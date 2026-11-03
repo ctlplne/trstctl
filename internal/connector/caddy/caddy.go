@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -74,9 +73,9 @@ func (c *Connector) Name() string { return "caddy" }
 // idempotency and rollback, and run the reload command.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	g := pluginhost.NewGrant(pluginhost.CapFSRead, pluginhost.CapFSWrite, connector.CapExec).
-		WithPathPrefix(pluginhost.CapFSRead, path.Dir(c.certPath)).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.certPath))
-	if d := path.Dir(c.keyPath); d != path.Dir(c.certPath) {
+		WithPathPrefix(pluginhost.CapFSRead, connector.TargetDir(c.certPath)).
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.certPath))
+	if d := connector.TargetDir(c.keyPath); d != connector.TargetDir(c.certPath) {
 		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
 	return g

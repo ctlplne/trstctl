@@ -5,12 +5,16 @@ package pfx_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/crypto/pfx"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -119,8 +123,16 @@ func TestJavaAliasStockKeytoolImportsPrivateKeyAndChain(t *testing.T) {
 			if err := os.WriteFile(pass, password, 0600); err != nil {
 				t.Fatal(err)
 			}
-			args := []string{"-importkeystore", "-noprompt", "-srckeystore", source, "-srcstoretype", "PKCS12", "-srcstorepass:file", pass, "-srcalias", alias,
-				"-destkeystore", dest, "-deststoretype", "PKCS12", "-deststorepass:file", pass, "-destalias", "restored"}
+			args := []string{"-importkeystore", "-noprompt", "-srckeystore", source, "-srcstoretype", "PKCS12", "-srcstorepass:file", pass,
+				"-destkeystore", dest, "-deststoretype", "PKCS12", "-deststorepass:file", pass}
+			// keytool on Windows receives its arguments in the ANSI code page,
+			// which has no 付款, so there no alias is named: keytool imports the
+			// entry under the alias it reads from the file, which the check
+			// below finds in the result (owner decision 2026-11-02, item 2g e).
+			byFile := runtime.GOOS == "windows" && !isASCII(alias)
+			if !byFile {
+				args = append(args, "-srcalias", alias, "-destalias", "restored")
+			}
 			if output, err := exec.CommandContext(ctx, keytool, args...).CombinedOutput(); err != nil { // #nosec G204 -- stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78).
 				t.Fatalf("stock keytool import failed: %v: %s", err, output)
 			}
@@ -129,6 +141,9 @@ func TestJavaAliasStockKeytoolImportsPrivateKeyAndChain(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer secret.Wipe(imported)
+			if byFile && !bytes.Contains(imported, bmpString(alias)) {
+				t.Fatal("keytool did not keep the entry's Unicode alias")
+			}
 			gotKey, gotChain, err := pfx.Decode(imported, string(password))
 			if err != nil {
 				t.Fatal(err)
@@ -139,4 +154,23 @@ func TestJavaAliasStockKeytoolImportsPrivateKeyAndChain(t *testing.T) {
 			}
 		})
 	}
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// bmpString is s as a PKCS#12 friendlyName carries it: UTF-16 big-endian. A
+// keystore keytool writes keeps its key bags' attributes in the clear.
+func bmpString(s string) []byte {
+	var out []byte
+	for _, unit := range utf16.Encode([]rune(s)) {
+		out = binary.BigEndian.AppendUint16(out, unit)
+	}
+	return out
 }

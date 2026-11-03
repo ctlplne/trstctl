@@ -37,7 +37,7 @@ func TestWindowsAcceptsOnlyDriveLetterPaths(t *testing.T) {
 		}
 	}
 	if !isAbsolute("linux", "/usr/sbin/nginx") || isAbsolute("linux", "usr/sbin/nginx") {
-		t.Fatal("the Unix rule is filepath.IsAbs")
+		t.Fatal("the Unix rule is a leading slash")
 	}
 }
 

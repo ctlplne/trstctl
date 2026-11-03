@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -165,7 +164,7 @@ func defaultService(got, def ServiceConfig) ServiceConfig {
 }
 
 func withFileGrant(g pluginhost.Grant, file string) pluginhost.Grant {
-	dir := path.Dir(file)
+	dir := connector.TargetDir(file)
 	return g.WithPathPrefix(pluginhost.CapFSRead, dir).WithPathPrefix(pluginhost.CapFSWrite, dir)
 }
 

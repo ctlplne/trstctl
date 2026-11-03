@@ -13,7 +13,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -37,12 +36,11 @@ func ProbeWithOpenSSL(ctx context.Context, executable, addr string, opts ...Opti
 	if cfg.preHandshake != nil {
 		return Result{}, errors.New("tlsprobe: native probe requires direct TLS")
 	}
-	if !filepath.IsAbs(executable) {
-		return Result{}, errors.New("tlsprobe: native executable must be an absolute local path")
-	}
-	info, err := os.Lstat(executable)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
-		return Result{}, errors.New("tlsprobe: native executable must be a regular executable file")
+	// The same rule the operator's pin is validated with: an absolute local
+	// path to a regular program, not a link (a .exe on Windows, which reports
+	// no execute bits).
+	if err := ValidateOpenSSLExecutable(executable); err != nil {
+		return Result{}, err
 	}
 	host, port, err := net.SplitHostPort(addr)
 	n, portErr := strconv.Atoi(port)

@@ -12,7 +12,6 @@ package haproxy
 import (
 	"context"
 	"fmt"
-	"path"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -63,7 +62,7 @@ func (c *Connector) Name() string { return "haproxy" }
 // command. It never needs the network.
 func (c *Connector) Capabilities() pluginhost.Grant {
 	return pluginhost.NewGrant(pluginhost.CapFSWrite, connector.CapExec).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(c.crtPath))
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(c.crtPath))
 }
 
 // Deploy writes the combined certificate+key bundle, validates the

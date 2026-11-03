@@ -5,8 +5,11 @@ package samltest
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 func TestPersistentIdentitySurvivesRestart(t *testing.T) {
@@ -24,6 +27,14 @@ func TestPersistentIdentitySurvivesRestart(t *testing.T) {
 	}
 	if secondKey == nil || !firstCert.Equal(secondCert) {
 		t.Fatal("IdP identity rotated across a restart")
+	}
+	if runtime.GOOS == "windows" {
+		// Windows reports every file as 0666; the owner-only ACL is the
+		// permission there (owner decision 2026-11-02, item 2g d).
+		if private, err := secretfile.IsPrivate(path); err != nil || !private {
+			t.Fatalf("identity is not owner-only: private=%v err=%v", private, err)
+		}
+		return
 	}
 	info, err := os.Stat(path)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -99,9 +98,9 @@ func rollback(sb connector.Sandbox, certPath string, oldCert []byte, hadCert boo
 
 func fileGrant(certPath, keyPath string) pluginhost.Grant {
 	g := pluginhost.NewGrant(pluginhost.CapFSRead, pluginhost.CapFSWrite).
-		WithPathPrefix(pluginhost.CapFSRead, path.Dir(certPath)).
-		WithPathPrefix(pluginhost.CapFSWrite, path.Dir(certPath))
-	if d := path.Dir(keyPath); d != path.Dir(certPath) {
+		WithPathPrefix(pluginhost.CapFSRead, connector.TargetDir(certPath)).
+		WithPathPrefix(pluginhost.CapFSWrite, connector.TargetDir(certPath))
+	if d := connector.TargetDir(keyPath); d != connector.TargetDir(certPath) {
 		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
 	return g
