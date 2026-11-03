@@ -1,7 +1,18 @@
 import { translateNow } from "@/i18n/I18nProvider";
 export type StatusTone = "operate" | "observe" | "disclose" | "success" | "warning" | "critical" | "high" | "medium" | "low" | "neutral" | "info";
 
-export type StatusVocabulary = "agent" | "certificate" | "delivery" | "discovery" | "expiry" | "honesty" | "inventory" | "lifecycle" | "risk";
+export type StatusVocabulary =
+  | "agent"
+  | "certificate"
+  | "delivery"
+  | "discovery"
+  | "expiry"
+  | "honesty"
+  | "inventory"
+  | "lifecycle"
+  | "operation"
+  | "revocation"
+  | "risk";
 
 export type StatusDescriptor = {
   label: string;
@@ -126,6 +137,105 @@ export const inventoryStatus: Record<string, StatusDescriptor> = {
     },
     tone: "neutral",
     order: 6,
+  },
+};
+
+/** One operation's normalized state (A245): verified needs consumer evidence. */
+export const operationStatus: Record<string, StatusDescriptor> = {
+  reviewed: {
+    get label() {
+      return translateNow("operations.state.reviewed");
+    },
+    tone: "operate",
+    order: 1,
+  },
+  awaiting_approval: {
+    get label() {
+      return translateNow("operations.state.awaitingApproval");
+    },
+    tone: "warning",
+    order: 2,
+  },
+  queued: {
+    get label() {
+      return translateNow("operations.state.queued");
+    },
+    tone: "observe",
+    order: 3,
+  },
+  executing: {
+    get label() {
+      return translateNow("operations.state.executing");
+    },
+    tone: "operate",
+    order: 4,
+  },
+  delivered: {
+    get label() {
+      return translateNow("operations.state.delivered");
+    },
+    tone: "info",
+    order: 5,
+  },
+  verified: {
+    get label() {
+      return translateNow("operations.state.verified");
+    },
+    tone: "success",
+    order: 6,
+  },
+  failed: {
+    get label() {
+      return translateNow("operations.state.failed");
+    },
+    tone: "critical",
+    order: 7,
+  },
+  uncertain: {
+    get label() {
+      return translateNow("operations.state.uncertain");
+    },
+    tone: "high",
+    order: 8,
+  },
+  recovered: {
+    get label() {
+      return translateNow("operations.state.recovered");
+    },
+    tone: "neutral",
+    order: 9,
+  },
+};
+
+/** One revocation facet (A245): confirmed needs evidence that facet took hold. */
+export const revocationStatus: Record<string, StatusDescriptor> = {
+  confirmed: {
+    get label() {
+      return translateNow("identities.revocation.state.confirmed");
+    },
+    tone: "success",
+    order: 1,
+  },
+  pending: {
+    get label() {
+      return translateNow("identities.revocation.state.pending");
+    },
+    tone: "warning",
+    order: 2,
+  },
+  failed: {
+    get label() {
+      return translateNow("identities.revocation.state.failed");
+    },
+    tone: "critical",
+    order: 3,
+  },
+  not_observed: {
+    get label() {
+      return translateNow("identities.revocation.state.notObserved");
+    },
+    tone: "neutral",
+    order: 4,
   },
 };
 
@@ -604,6 +714,8 @@ export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDes
   honesty: honestyModes,
   inventory: inventoryStatus,
   lifecycle: lifecycleStatus,
+  operation: operationStatus,
+  revocation: revocationStatus,
   risk: riskBands,
 };
 

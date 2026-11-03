@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2405 annotated sites across 29 rules. Each row is
+2406 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (559 sites)
+### G101 — CWE-798 Use of hardcoded credentials (560 sites)
 
 | Location | Reason |
 |---|---|
@@ -502,8 +502,9 @@ not this file.
 | `internal/server/notification_tenant_channel_families_served_test.go:87` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/notification_tenant_channel_families_served_test.go:88` | fabricated fixture credential (CWE-798) |
 | `internal/server/oauth_provider_action_served_test.go:34` | fabricated fixture credential (CWE-798) |
-| `internal/server/operations_ledger_served_test.go:42` | fabricated test-only credential (CWE-798) |
-| `internal/server/operations_ledger_served_test.go:243` | fabricated test-only credential (CWE-798) |
+| `internal/server/operations_ledger_served_test.go:46` | fabricated test-only credential (CWE-798) |
+| `internal/server/operations_ledger_served_test.go:247` | fabricated test-only credential (CWE-798) |
+| `internal/server/operations_ledger_served_test.go:366` | fabricated test-only credential (CWE-798) |
 | `internal/server/protocols_certbot_aud73_test.go:18` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:59` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:188` | fabricated secret reference, never raw credential material (CWE-798) |

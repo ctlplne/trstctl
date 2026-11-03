@@ -8,6 +8,7 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { AgentJobLedgerPanel } from "@/pages/operations/AgentJobLedgerPanel";
+import { OperationsLedgerPanel } from "@/pages/operations/OperationsLedgerPanel";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -265,6 +266,8 @@ export function Operations() {
       </section>
 
       <RenewalReliability data={renewalSLO.data} loading={renewalSLO.loading} error={renewalSLO.error} />
+
+      <OperationsLedgerPanel />
 
       <TechnicalDisclosure title={t("operations.disclosure.pools")}>
         <BulkheadEvidence stats={bulkheads.data} loading={bulkheads.loading} error={bulkheads.error} />

@@ -3,14 +3,18 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/cli"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/acm"
@@ -348,5 +352,112 @@ func TestServedRevocationReportSeparatesTheFourFacetsA245(t *testing.T) {
 	}
 	if r := report("after a CRL"); r.CAStatus.State != "confirmed" || r.NewConnections.State != "failed" || r.DeployedMaterial.State != "pending" {
 		t.Fatalf("after a CRL: %+v / %+v / %+v", r.CAStatus, r.NewConnections, r.DeployedMaterial)
+	}
+}
+
+// A245 Done-when: UI, API and CLI agree after a restart and a partial failure.
+// One certificate deploys to a cloud store, another to a load balancer nobody
+// can reach; the ledger reads one delivered and one failed, and a cold
+// restart over the same datastores answers the same bytes to the API and the
+// same items to the CLI.
+func TestServedOperationsAgreeAcrossARestartAndAPartialFailureA245(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDA245P"
+		awsSecretKey = "A245PartialKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewHTTPOps(provider.Client()) })
+	registry.Register(acm.New("us-east-1", acm.Credentials{AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey)},
+		acm.WithEndpoint(provider.URL())))
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:read", "identities:write", "certs:read",
+		"certs:write", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read")
+	post := func(path, key string, body any) map[string]any {
+		t.Helper()
+		status, raw := secretsReqKey(t, h, http.MethodPost, path, tok, key, body)
+		if status != http.StatusCreated && status != http.StatusOK {
+			t.Fatalf("POST %s: %d %s", path, status, raw)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return out
+	}
+	owner := post("/api/v1/owners", "a245p-owner", map[string]any{"kind": "workload", "name": "a245-partial-app"})
+	cloud := post("/api/v1/connectors/targets", "a245p-cloud", map[string]any{
+		"name": "arn:aws:acm:us-east-1:123456789012:certificate/a245p", "connector": "aws-acm", "enabled": true,
+		"config": map[string]any{"region": "us-east-1", "access_key_id": awsAccessKey, "secret_access_key_ref": "secret://connectors/aws-acm/a245p"},
+	})
+	unreachable := post("/api/v1/connectors/targets", "a245p-lb", map[string]any{
+		"name": "a245p/lb", "connector": "f5", "enabled": true,
+		"config": map[string]any{"endpoint": "https://lb-a245p.invalid", "partition": "Common"},
+	})
+	bind := func(name string, target map[string]any) string {
+		t.Helper()
+		request := map[string]any{"owner_id": owner["id"], "identity_name": name, "target_id": target["id"], "reason": "A245 partial failure",
+			"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"}}
+		preview := post("/api/v1/lifecycle/endpoint-bindings/preview", "", request)
+		request["preview_fingerprint"] = preview["request_fingerprint"]
+		return post("/api/v1/lifecycle/endpoint-bindings", "a245p-bind-"+name, request)["identity"].(map[string]any)["id"].(string)
+	}
+	cloudID := bind("a245p-cloud.served.test", cloud)
+	lbID := bind("a245p-lb.served.test", unreachable)
+	_ = h.srv.Drain(t.Context()) // the load balancer's delivery fails; the drain reports it
+
+	listBody := func(stage string, srv *servedHarness) []byte {
+		t.Helper()
+		status, raw := secretsReq(t, srv, http.MethodGet, "/api/v1/operations/ledger?limit=100", tok, nil)
+		if status != http.StatusOK {
+			t.Fatalf("%s: ledger %d %s", stage, status, raw)
+		}
+		return raw
+	}
+	states := func(raw []byte) map[string]string {
+		t.Helper()
+		var page struct {
+			Items []servedOperation `json:"items"`
+		}
+		if err := json.Unmarshal(raw, &page); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, item := range page.Items {
+			if item.Source == "connector_delivery" {
+				out[item.Subject.ID] = item.State
+			}
+		}
+		return out
+	}
+	before := listBody("before the restart", h)
+	if got := states(before); got[cloudID] != "delivered" || got[lbID] != "failed" {
+		t.Fatalf("the partial failure reads %v, want the cloud delivery delivered and the load balancer's failed", got)
+	}
+
+	// A cold restart over the same PostgreSQL, events and signer.
+	restarted, err := Build(t.Context(), Deps{Store: h.store, Log: h.log, Signer: h.signer, SignAuthorizer: h.authz,
+		CACertFile: h.caFile, KEK: h.kek, ConnectorRegistry: registry})
+	if err != nil {
+		t.Fatalf("restart assembly: %v", err)
+	}
+	cleanupServedServer(t, restarted)
+	restartedHTTP := httptest.NewServer(restarted.Handler())
+	t.Cleanup(restartedHTTP.Close)
+	cold := &servedHarness{srv: restarted, ts: restartedHTTP, store: h.store, log: h.log, tenant: h.tenant,
+		signer: h.signer, authz: h.authz, caFile: h.caFile, kek: h.kek}
+	if after := listBody("after the restart", cold); !bytes.Equal(after, before) {
+		t.Fatalf("the ledger changed across a restart:\nbefore %s\nafter  %s", before, after)
+	}
+
+	// The CLI reads the same operations in the same states.
+	var cliOut, cliErr bytes.Buffer
+	if exit := cli.Run(t.Context(), []string{"operations", "ledger", "--limit", "100"},
+		cli.Env{Server: cold.ts.URL, Token: tok, Tenant: h.tenant, HTTPClient: cold.ts.Client()},
+		strings.NewReader(""), &cliOut, &cliErr); exit != 0 {
+		t.Fatalf("cli operations ledger: exit %d: %s", exit, cliErr.String())
+	}
+	if got, want := states(cliOut.Bytes()), states(before); len(got) == 0 || fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("the CLI reads %v, the API %v", got, want)
 	}
 }

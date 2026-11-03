@@ -37,6 +37,9 @@ func (a *API) bindApprovalDestination(ctx context.Context, tenantID string, iden
 			b.DestinationTargetID, b.DestinationRevision = rec.ID, rec.RevisionID
 		}
 	}
+	// An identity that names no issuer issues from the platform CA; the
+	// approval binds that too, so a later move to another CA supersedes it.
+	b.IssuerSource, b.IssuerID = store.PlatformIssuerSource, store.PlatformIssuerID
 	if source := strings.TrimSpace(attrs.Source); source != "" {
 		b.IssuerSource, b.IssuerID = source, strings.TrimSpace(attrs.Issuer)
 	}

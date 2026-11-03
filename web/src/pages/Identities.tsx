@@ -31,6 +31,7 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
 import { IdentityCertificateEvidence } from "@/pages/identities/IdentityCertificateEvidence";
 import { IdentityApplicationPanel } from "@/pages/identities/IdentityApplicationPanel";
+import { IdentityRevocationReport } from "@/pages/identities/IdentityRevocationReport";
 import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
 import { IdentityRenewalHold } from "@/pages/identities/IdentityRenewalHold";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -1754,6 +1755,9 @@ function IdentityDetailPanel({
 
           {["x509_certificate", "x509"].includes(identity.kind) && <IdentityCertificateEvidence key={identity.id} identityId={identity.id} />}
           {["x509_certificate", "x509"].includes(identity.kind) && <IdentityApplicationPanel key={`application-${identity.id}`} identityId={identity.id} />}
+          {["x509_certificate", "x509"].includes(identity.kind) && ["revoked", "retired"].includes(identity.status) && (
+            <IdentityRevocationReport key={`revocation-${identity.id}`} identityId={identity.id} />
+          )}
 
           <section aria-labelledby="identity-attributes-heading" className="mt-4">
             <h3 id="identity-attributes-heading" className="font-semibold">

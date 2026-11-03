@@ -1112,6 +1112,15 @@ func validateOperationApprovalIssuanceBinding(b OperationApprovalIssuanceBinding
 // the same configuration revision, and the same issuing authority. A change
 // is ErrApprovalDrifted, which supersedes the approval. A binding that names
 // neither (approvals asked for before A244) passes.
+// PlatformIssuerSource and PlatformIssuerID name the platform issuing CA, the
+// issuer of an identity whose attributes name none. An issuance approval binds
+// it explicitly, so moving such an identity to another CA supersedes the
+// approval (A245).
+const (
+	PlatformIssuerSource = "platform"
+	PlatformIssuerID     = "trstctl-issuing-ca"
+)
+
 func (s *Store) ValidateIdentityDestinationApprovalBindingTx(ctx context.Context, tx pgx.Tx, tenantID, identityID string, b OperationApprovalIssuanceBinding) error {
 	if !b.BindsDestinationOrIssuer() {
 		return nil
@@ -1141,6 +1150,9 @@ func (s *Store) ValidateIdentityDestinationApprovalBindingTx(ctx context.Context
 		if revision != b.DestinationRevision {
 			return ErrApprovalDrifted
 		}
+	}
+	if source == "" {
+		source, issuer = PlatformIssuerSource, PlatformIssuerID
 	}
 	if b.IssuerSource != "" && (source != b.IssuerSource || issuer != b.IssuerID) {
 		return ErrApprovalDrifted

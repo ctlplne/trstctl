@@ -7488,6 +7488,36 @@ it does not see:
   first and says when there are more; ephemeral certificates, issued per use and
   never renewed, are left out as the expiry views leave them out.
 
+## One operations view for rotation, revocation and proof (A245) — served
+
+The operations ledger (`GET /api/v1/operations/ledger`, `trstctl operations
+ledger`, the Operations page) reads certificate rotations, connector deliveries,
+secret rotations and approvals from their projections in nine normalized states;
+verified needs a connector readback, a clean endpoint verification or every
+named consumer's confirmation, never an HTTP 200 or an outbox receipt alone, and
+a stranded or quarantined command reads uncertain. Each operation opens to its
+causal chain and the retry and rollback that apply to exactly it. The revocation
+report separates CA status, deployed material, new-connection rejection and
+existing-session termination. Issuance approvals bind the issuer (the platform
+CA when none is named), destination and profile version. Proven in served
+journeys: a partial failure (one delivery succeeds, one fails) reads the same
+through the API before and after a cold restart and through the CLI; an old
+approval is superseded by an issuer change and refused after a new profile
+version (A244 proved the destination). What it reads from, and what comes next:
+
+- **Four sources.** Host and relay job executions, SSH certificate and session
+  revocations, and managed-key operations are not in the ledger yet; adding them
+  is what comes next.
+- **Sessions are not observed.** Existing-session termination is confirmed only
+  by a containment stop or removal receipt after the revocation; trstctl does
+  not see the sessions themselves.
+- **External CAs are not read back.** The CA facet reads the platform and
+  hierarchy CAs' records; an external CA's own status is reported as not
+  observed.
+- **Actions link, they do not run.** Retry and rollback name the exact route and
+  scope; the console shows them, and running one goes through that route's own
+  preview and approval.
+
 ## Application view for certificates (A244) — served
 
 `GET /api/v1/identities/{id}/application`, `trstctl identities application` and the

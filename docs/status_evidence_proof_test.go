@@ -306,6 +306,8 @@ var consoleSuccessEvidenceValues = map[string]string{
 	"expiryBands.healthy":                "a parsed expiry is more than ninety days away",
 	"inventoryStatus.served":             "the latest completed delivery carried the still-active certificate and a connector readback or a clean local or relay endpoint verification observed that exact fingerprint",
 	"lifecycleStatus.deployed":           "the event-sourced lifecycle records deployment",
+	"operationStatus.verified":           "a connector readback, a clean endpoint verification of the delivered fingerprint, or every named consumer reporting the new secret version — never a provider acknowledgement or an outbox receipt alone",
+	"revocationStatus.confirmed":         "that facet's own evidence: a CA record marked revoked with a CRL generated since, every destination replaced or removed, endpoints checked since the revocation no longer presenting it, or a containment stop after it",
 	"lifecycleStatus.issued":             "the event-sourced lifecycle records issuance",
 }
 

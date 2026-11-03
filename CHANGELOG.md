@@ -2,6 +2,15 @@
 
 ### Added
 
+- One operations view for rotation, revocation and proof (A245): `GET /api/v1/operations/ledger`
+  (CLI `operations ledger`, the Operations page) lists certificate rotations, connector deliveries,
+  secret rotations and approvals in nine normalized states — verified only on consumer evidence,
+  uncertain when an effect's outcome is unknown; `GET /api/v1/operations/ledger/{id}` (CLI
+  `operations ledger get`) shows one operation's causal chain and its exactly scoped retry and
+  rollback; `GET /api/v1/identities/{id}/revocation-report` (CLI `identities revocation-report`, the
+  revoked identity's detail) keeps CA status, deployed material, new connections and open sessions
+  apart. An issuance approval now binds the platform CA when the identity names no issuer, so
+  moving it to another CA supersedes the approval.
 - Application view for certificates (A244): `GET /api/v1/identities/{id}/application` (CLI
   `identities application`, the console's **Application view** in an identity's detail) shows
   the owner, profile and its enrollment methods, the exact issuer, the destination and latest

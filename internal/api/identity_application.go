@@ -226,7 +226,7 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 			IssuerSource: attrs.Source, IssuerID: attrs.IssuerID},
 	}
 	if view.Issuer.Source == "" {
-		view.Issuer.Source = "platform"
+		view.Issuer.Source, view.Issuer.ID = store.PlatformIssuerSource, store.PlatformIssuerID
 	}
 	if identity.OwnerID != "" {
 		if owner, err := a.store.GetOwner(ctx, tenantID, identity.OwnerID); err == nil {

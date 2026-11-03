@@ -73,6 +73,45 @@ notification history. List readers can request `order=desc`; retain that order
 with every cursor. The API default remains `order=asc` for existing clients.
 New notifications do not shift an older page's ID cursor.
 
+## One operations view: rotation, revocation and proof (A245)
+
+`GET /api/v1/operations/ledger` (`trstctl operations ledger`, the **Operations
+ledger** on the Operations page) lists every certificate rotation, connector
+delivery, secret rotation and open approval, newest first, in one of nine
+states: reviewed, awaiting approval, queued, executing, delivered, verified,
+failed, uncertain or recovered. The source's own status travels beside it.
+
+- **Verified needs a consumer.** A connector reading the certificate back, an
+  endpoint seen presenting it, or every named consumer reporting a secret's new
+  version. A provider's 200 or an outbox receipt alone reads delivered.
+- **Uncertain** means the external effect's outcome is unknown: its worker's
+  lease ran out, or its command is quarantined for reconciliation.
+- Rows are filtered by the caller's domain permission, and `state` and
+  `credential_type` filter the normalized result (a filtered page may hold
+  fewer items than `limit`; follow `next_cursor`).
+
+`GET /api/v1/operations/ledger/{id}` (`trstctl operations ledger get <id>`)
+shows one operation's causal chain — the request and what asked for it, the
+authority it ran under (the approval consumed for it, or the caller's
+permission), the external action's command and attempts, the receipt, the
+consumer's observation, and for a revoked identity its revocation report — and
+the retry and rollback that apply to exactly it, each naming its scope and
+route, or why it does not apply.
+
+`GET /api/v1/identities/{id}/revocation-report` (`trstctl identities
+revocation-report <id>`, the **Revocation report** in a revoked identity's
+detail) keeps four answers apart for each revoked certificate, each confirmed,
+pending, failed or not observed: the CA status (what OCSP and the CRL answer,
+and the first CRL generated since), the deployed material (every destination
+it was delivered to: replaced, removed, still holding it, or failed), new
+connections (endpoints checked since the revocation, and whether they still
+present it) and existing sessions (a containment stop after the revocation).
+
+An issuance approval binds the identity's destination and revision, its issuer
+— the platform CA when the identity names none — and the profile version and
+spec digest, so an old approval never authorizes a changed issuer, target or
+profile version.
+
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the
