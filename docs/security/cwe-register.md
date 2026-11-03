@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2344 annotated sites across 29 rules. Each row is
+2346 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1012,7 +1012,7 @@ not this file.
 | `internal/dynsecret/aws_cache_users.go:201` | the new user's password goes to the MemoryDB API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
 | `internal/dynsecret/aws_sts.go:164` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
-| `internal/dynsecret/cassandra.go:183` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/cassandra.go:179` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/clickhouse.go:131` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/couchbase.go:145` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/datadog.go:179` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
@@ -1148,7 +1148,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (304 sites)
+### G204 — CWE-78 OS command injection (305 sites)
 
 | Location | Reason |
 |---|---|
@@ -1196,6 +1196,7 @@ not this file.
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
 | `docs/docs_drift_test.go:192` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/fuzz_shim_guard_test.go:384` | the go tool with fixed flags over this repository's own package directories (CWE-78) |
 | `docs/lint_failure_test.go:59` | fixed timeout regression over an owned Python child (CWE-78) |
 | `docs/lint_failure_test.go:232` | fixed local Make target in an owned test fixture (CWE-78) |
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1570,7 +1571,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (621 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (622 sites)
 
 | Location | Reason |
 |---|---|
@@ -1699,6 +1700,7 @@ not this file.
 | `docs/doctor_doc_test.go:33` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/fuzz_shim_guard_test.go:369` | this repository's own test sources (CWE-22) |
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -333,5 +334,76 @@ func TestFuzzTargetsCallOnlyWhatTheFuzzShimRuns(t *testing.T) {
 	sort.Strings(findings)
 	if len(findings) > 0 {
 		t.Fatalf("fuzz targets call what the ClusterFuzzLite shim does not run:\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+// reviewedGofuzzFiles are the third-party files ClusterFuzzLite's -tags
+// gofuzz build adds to a fuzz target's dependencies, each reviewed and seen
+// to compile in that build.
+var reviewedGofuzzFiles = map[string]bool{
+	"github.com/cloudflare/circl/math/fp448/fuzzer.go":                    true,
+	"github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule/fuzz.go": true,
+	"github.com/nats-io/nats-server/v2/conf/fuzz.go":                      true,
+	"github.com/valyala/fastjson/fuzz.go":                                 true,
+}
+
+// ClusterFuzzLite compiles every fuzz target with -tags gofuzz, which also
+// compiles each dependency's gofuzz-only files: gocql v2.1.2's fuzz.go calls
+// functions with their v1 signatures and broke the whole fuzzer build (CI
+// 41571974614) until the Cassandra driver left fuzz builds
+// (internal/dynsecret/cassandra_gofuzz.go). A new third-party gofuzz-only
+// file reaching a fuzz target is reviewed here first.
+func TestFuzzBuildsCompileOnlyReviewedThirdPartyGofuzzFiles(t *testing.T) {
+	target := regexp.MustCompile(`(?m)^func Fuzz[A-Za-z0-9_]+\(`)
+	var tests []string
+	for _, root := range []string{"../internal", "../ee"} {
+		_ = filepath.WalkDir(filepath.FromSlash(root), func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.HasSuffix(path, "_test.go") {
+				tests = append(tests, path)
+			}
+			return nil
+		})
+	}
+	dirs := map[string]bool{}
+	for _, path := range tests {
+		if src, err := os.ReadFile(path); err == nil && target.Match(src) { // #nosec G304 -- this repository's own test sources (CWE-22)
+			dirs["./"+filepath.ToSlash(filepath.Dir(path))] = true
+		}
+	}
+	if len(dirs) == 0 {
+		t.Fatal("found no fuzz targets")
+	}
+	var pkgs []string
+	for dir := range dirs {
+		pkgs = append(pkgs, dir)
+	}
+	sort.Strings(pkgs)
+	files := func(tags ...string) map[string]bool {
+		args := append([]string{"list"}, tags...)
+		args = append(args, "-deps", "-f", `{{if not .Standard}}{{$p := .ImportPath}}{{range .GoFiles}}{{$p}}/{{.}}{{"\n"}}{{end}}{{end}}`)
+		out, err := exec.Command("go", append(args, pkgs...)...).Output() // #nosec G204 -- the go tool with fixed flags over this repository's own package directories (CWE-78)
+		if err != nil {
+			t.Fatalf("go %s: %v", strings.Join(args, " "), err)
+		}
+		set := map[string]bool{}
+		for _, file := range strings.Fields(string(out)) {
+			if !strings.HasPrefix(file, "trstctl.com/") {
+				set[file] = true
+			}
+		}
+		return set
+	}
+	plain, fuzz := files(), files("-tags", "gofuzz")
+	var unreviewed []string
+	for file := range fuzz {
+		if !plain[file] && !reviewedGofuzzFiles[file] {
+			unreviewed = append(unreviewed, file)
+		}
+	}
+	sort.Strings(unreviewed)
+	if len(unreviewed) > 0 {
+		t.Fatalf("the gofuzz build tag adds third-party files to the fuzz targets' builds that no one has reviewed:\n%s\n"+
+			"check each compiles with go build -tags gofuzz and list it in reviewedGofuzzFiles, or keep its package out of fuzz builds",
+			strings.Join(unreviewed, "\n"))
 	}
 }
