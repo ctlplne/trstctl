@@ -2,6 +2,13 @@
 
 ### Added
 
+- Integration catalogs say how far each entry is proven (A242): the connector catalog and the
+  secret-sync target catalog carry `qualification` on one ladder (discovered, implemented,
+  served, locally-proven, vendor-qualified). The sync catalog flags the signed webhook and
+  generic CI JSON as `generic`, never native, and lists the integration catalog's unbuilt
+  targets as `discovered` with a `note` on what each waits for. Both console catalogs show the
+  rung.
+
 - Hosted secret-sync targets (A241): `heroku`, `render`, `railway`, `fly`,
   `digitalocean-app-platform`, `northflank`, `qovery`, `cloud66`, `laravel-forge`, `circleci`,
   `travis-ci`, `bitbucket`, `teamcity`, `spacelift`, `humanitec`, `rundeck`, `checkly`, `windmill`,

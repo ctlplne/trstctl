@@ -3153,7 +3153,10 @@ func componentSchemas() map[string]*Schema {
 		// E1: present for every family in the accepted 13-family denominator,
 		// including host/cloud families whose network-relay path is unimplemented.
 		"relay_parity": ref("ConnectorRelayParity"),
-	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage", "device_proven")
+		// A242: how far the family is proven, on one ladder.
+		"qualification": {Type: "string", Enum: []string{"discovered", "implemented", "served", "locally-proven", "vendor-qualified"},
+			Description: "discovered: known, not implemented; implemented: the code ships but nothing here executes it; served: the product executes it, proven through its served path against a stand-in; locally-proven: also against the vendor's own software; vendor-qualified: also against the vendor's live service or hardware."},
+	}, "name", "kind", "delivery_mode", "rollback", "native", "capabilities", "replay_safety", "target_vantage", "device_proven", "qualification")
 	// E1: which per-family gates a family has cleared, and which hold it back.
 	// Missing gates are named rather than counted: "two gates left" invites a
 	// reader to assume the remaining two are small and alike.
@@ -7235,7 +7238,11 @@ func componentSchemas() map[string]*Schema {
 			Description: "What a scoped sync reads back of a stored value: the value (hashed, never returned), the destination's digest, or nothing (receipt-only: the delivery receipt is the evidence and outside changes can't be seen). Absent when the target takes no scoped sync."},
 		"proof": {Type: "string", Enum: []string{"locally-proven", "stand-in-only"},
 			Description: "locally-proven: proven against the vendor's own software run locally or on a CI runner; stand-in-only: proven against a stand-in built from the vendor's API documentation."},
-	}, "id", "name", "platform", "configured", "delivery_mode", "auth_mode", "wire_format", "secret_handling", "capabilities", "scoped_sync", "proof")
+		"qualification": {Type: "string", Enum: []string{"discovered", "implemented", "served", "locally-proven", "vendor-qualified"},
+			Description: "How far the target is proven (A242): discovered rows are in the integration catalog without an implementation, and say why in note."},
+		"generic": {Type: "boolean", Description: "A generic delivery (the signed webhook, generic CI JSON): any receiver of the format, never counted as a native integration."},
+		"note":    {Type: "string", Description: "For a discovered target, what it needs before it can be built."},
+	}, "id", "name", "platform", "configured", "delivery_mode", "auth_mode", "wire_format", "secret_handling", "capabilities", "scoped_sync", "qualification", "generic")
 	secretSyncTargetCatalog := object(map[string]*Schema{
 		"capability":         str(),
 		"served":             {Type: "boolean"},

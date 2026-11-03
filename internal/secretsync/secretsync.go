@@ -167,6 +167,35 @@ type ProviderCatalogEntry struct {
 	ReadBack ReadBack
 	// Proof is ProofLocal or ProofStandIn.
 	Proof string
+	// Qualification is how far the target is proven (A242): served (proven
+	// through the served path against a stand-in) or locally-proven.
+	Qualification string
+	// Generic marks a delivery any receiver of the format can take (the
+	// signed webhook, generic CI JSON): never counted as native support.
+	Generic bool
+}
+
+// DiscoveredTarget is an integration catalog target with no implementation,
+// listed so the catalog says what each needs (A241, A242).
+type DiscoveredTarget struct {
+	ID, Name, Platform, Note string
+}
+
+// DiscoveredTargets are the catalog's sync targets not built, each with the
+// outside input it waits for.
+func DiscoveredTargets() []DiscoveredTarget {
+	return []DiscoveredTarget{
+		{ID: "snowflake-secrets", Name: "Snowflake secrets", Platform: "snowflake",
+			Note: "a secret's value can only travel as a SQL literal; a Snowflake account must confirm SECRET_STRING stays out of query history"},
+		{ID: "hasura-cloud", Name: "Hasura Cloud environment variables", Platform: "hasura",
+			Note: "the API documents no delete and no response format for the variables"},
+		{ID: "azure-devops", Name: "Azure DevOps variable groups", Platform: "azure-devops",
+			Note: "each write replaces the whole group while secret values never come back; an organization must show the round trip keeps them"},
+		{ID: "octopus-deploy", Name: "Octopus Deploy variable sets", Platform: "octopus",
+			Note: "each write replaces the whole set while sensitive values never come back; the server image (awaiting approval) must show the round trip keeps them"},
+		{ID: "entra-provisioning", Name: "Microsoft Entra ID provisioning secrets", Platform: "azure",
+			Note: "write-only, with no list or delete, so it can't take a scoped sync"},
+	}
 }
 
 // SyncItem is a queued sync delivery.
@@ -443,6 +472,10 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			ReadBack:     ReadBackValue,
 		},
 	}
+	for i := range entries {
+		entries[i].Qualification = qualificationFor(entries[i].Proof)
+		entries[i].Generic = entries[i].ID == "webhook" || entries[i].ID == "ci"
+	}
 	for _, typ := range synctarget.Types() {
 		target, _ := synctarget.Lookup(typ)
 		vendor := hostedVendors[typ]
@@ -459,12 +492,24 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			ID: typ, Name: vendor.name, Platform: target.Platform,
 			DeliveryMode: vendor.deliveryMode, AuthMode: vendor.authMode, WireFormat: vendor.wireFormat,
 			Capabilities: capabilities, ScopedSync: true, ReadBack: vendor.readBack, Proof: vendor.proof,
+			Qualification: qualificationFor(vendor.proof),
 		})
 	}
 	for i := range entries {
 		entries[i].Capabilities = append([]string(nil), entries[i].Capabilities...)
 	}
 	return entries
+}
+
+// qualificationFor maps a target's proof onto the A242 ladder: every
+// catalog target is served (the product delivers to it); one proven against
+// the vendor's own software is locally-proven. None is vendor-qualified until
+// a live account proof exists.
+func qualificationFor(proof string) string {
+	if proof == ProofLocal {
+		return "locally-proven"
+	}
+	return "served"
 }
 
 // MemoryOutbox is an in-process durable-semantics Outbox for single-node and tests.

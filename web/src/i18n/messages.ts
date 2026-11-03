@@ -22949,6 +22949,34 @@ export const messages = {
     defaultMessage: "Delivery",
     description: "Secret-sync provider catalog delivery-mode column.",
   },
+  "catalog.qualificationColumn": {
+    defaultMessage: "Qualification",
+    description: "Integration catalog column (A242): how far a connector or target is proven.",
+  },
+  "catalog.qualification.discovered": {
+    defaultMessage: "Discovered: not built",
+    description: "Qualification ladder rung: known from the integration catalog or an estate, with no implementation.",
+  },
+  "catalog.qualification.implemented": {
+    defaultMessage: "Implemented: not executed here",
+    description: "Qualification ladder rung: the code ships but nothing in this estate executes it.",
+  },
+  "catalog.qualification.served": {
+    defaultMessage: "Served: proven against a stand-in",
+    description: "Qualification ladder rung: the product executes it, proven through its served path against a stand-in of the vendor's API.",
+  },
+  "catalog.qualification.locally-proven": {
+    defaultMessage: "Locally proven: the vendor's own software",
+    description: "Qualification ladder rung: also proven against the vendor's real software run locally or on a CI runner.",
+  },
+  "catalog.qualification.vendor-qualified": {
+    defaultMessage: "Vendor-qualified: the live service",
+    description: "Qualification ladder rung: also proven against the vendor's live service or hardware.",
+  },
+  "catalog.generic": {
+    defaultMessage: "Generic delivery, not a native integration",
+    description: "Marks the signed webhook and generic CI JSON targets, which any receiver of the format can take.",
+  },
   "secrets.sync.scopedColumn": {
     defaultMessage: "Scoped sync",
     description: "Secret-sync provider catalog column: whether a scoped sync can target it and what it reads back.",

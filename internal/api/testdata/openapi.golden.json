@@ -13804,6 +13804,17 @@
           "native": {
             "type": "boolean"
           },
+          "qualification": {
+            "description": "discovered: known, not implemented; implemented: the code ships but nothing here executes it; served: the product executes it, proven through its served path against a stand-in; locally-proven: also against the vendor's own software; vendor-qualified: also against the vendor's live service or hardware.",
+            "enum": [
+              "discovered",
+              "implemented",
+              "served",
+              "locally-proven",
+              "vendor-qualified"
+            ],
+            "type": "string"
+          },
           "relay_parity": {
             "$ref": "#/components/schemas/ConnectorRelayParity"
           },
@@ -13838,7 +13849,8 @@
           "capabilities",
           "replay_safety",
           "target_vantage",
-          "device_proven"
+          "device_proven",
+          "qualification"
         ],
         "type": "object"
       },
@@ -43711,10 +43723,18 @@
           "delivery_mode": {
             "type": "string"
           },
+          "generic": {
+            "description": "A generic delivery (the signed webhook, generic CI JSON): any receiver of the format, never counted as a native integration.",
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "note": {
+            "description": "For a discovered target, what it needs before it can be built.",
             "type": "string"
           },
           "platform": {
@@ -43725,6 +43745,17 @@
             "enum": [
               "locally-proven",
               "stand-in-only"
+            ],
+            "type": "string"
+          },
+          "qualification": {
+            "description": "How far the target is proven (A242): discovered rows are in the integration catalog without an implementation, and say why in note.",
+            "enum": [
+              "discovered",
+              "implemented",
+              "served",
+              "locally-proven",
+              "vendor-qualified"
             ],
             "type": "string"
           },
@@ -43759,7 +43790,8 @@
           "secret_handling",
           "capabilities",
           "scoped_sync",
-          "proof"
+          "qualification",
+          "generic"
         ],
         "type": "object"
       },

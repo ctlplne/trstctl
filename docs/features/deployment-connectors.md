@@ -105,6 +105,17 @@ This surface contains no module bytes, publisher keys, credential bytes, or secr
 It is evidence of what the relay loaded, not a control-plane mechanism for pushing
 modules or widening an operator-owned grant.
 
+Each catalog row also carries `qualification`, one rung of a ladder (A242):
+`discovered` (known, with no implementation), `implemented` (the code ships but
+nothing in this estate executes it), `served` (the product executes it, proven through
+its served path against a stand-in of the device API or service), `locally-proven`
+(also against the vendor's own software, locally or on a CI runner) and
+`vendor-qualified` (also against the vendor's live service or hardware). Today every
+shipped family is `served` or `implemented`: the census runs each against an emulator,
+the device proofs run against faithful doubles, and no family has a lab run of the real
+software or hardware yet. The Connectors catalog shows the rung beside the device
+proof.
+
 Retries use capped backoff with jitter, and a tenant/destination circuit breaker opens
 after repeated failures, skipping new claims until a half-open probe succeeds. A failure
 that provably happened before any receiver I/O (a local refusal such as a certificate

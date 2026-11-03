@@ -115,3 +115,30 @@ func TestDotenvLinesRoundTripA241(t *testing.T) {
 		t.Fatalf("unquoted value: %q %q", key, dotenvValue(raw))
 	}
 }
+
+// A242: every catalog target sits on the qualification ladder; the generic
+// webhook and generic CI JSON are flagged generic and never served as native;
+// the catalog's unbuilt targets are discovered with a reason.
+func TestCatalogQualificationA242(t *testing.T) {
+	for _, entry := range ProviderCatalog() {
+		switch entry.Qualification {
+		case "served", "locally-proven":
+		default:
+			t.Fatalf("%s qualification %q", entry.ID, entry.Qualification)
+		}
+		if entry.Generic != (entry.ID == "webhook" || entry.ID == "ci") {
+			t.Fatalf("%s generic=%v", entry.ID, entry.Generic)
+		}
+		if entry.Qualification == "locally-proven" && entry.Proof != ProofLocal {
+			t.Fatalf("%s is locally-proven without a local proof", entry.ID)
+		}
+	}
+	for _, d := range DiscoveredTargets() {
+		if d.Note == "" {
+			t.Fatalf("discovered %s has no reason", d.ID)
+		}
+		if _, built := synctarget.Lookup(d.ID); built {
+			t.Fatalf("discovered %s is also a built target", d.ID)
+		}
+	}
+}

@@ -3323,6 +3323,7 @@ export interface ConnectorCatalogItem {
   kind: string;
   name: string;
   native: boolean;
+  qualification: "discovered" | "implemented" | "served" | "locally-proven" | "vendor-qualified";
   relay_parity?: ConnectorRelayParity;
   replay_safety: "at-most-once" | "reconciled";
   rollback: string;
@@ -10283,10 +10284,13 @@ export interface SecretSyncTarget {
   capabilities: string[];
   configured: boolean;
   delivery_mode: string;
+  generic: boolean;
   id: string;
   name: string;
+  note?: string;
   platform: string;
-  proof: "locally-proven" | "stand-in-only";
+  proof?: "locally-proven" | "stand-in-only";
+  qualification: "discovered" | "implemented" | "served" | "locally-proven" | "vendor-qualified";
   readback?: "value" | "digest" | "receipt-only";
   scoped_sync: boolean;
   secret_handling: string;

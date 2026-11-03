@@ -2784,6 +2784,7 @@ export function Secrets() {
                             <th scope="col">{t("secrets.sync.delivery")}</th>
                             <th scope="col">{t("secrets.sync.scopedColumn")}</th>
                             <th scope="col">{t("secrets.sync.proofColumn")}</th>
+                            <th scope="col">{t("catalog.qualificationColumn")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2805,7 +2806,18 @@ export function Secrets() {
                                       ? t("secrets.sync.readbackDigest")
                                       : t("secrets.sync.readbackValue")}
                               </td>
-                              <td>{target.proof === "locally-proven" ? t("secrets.sync.proofLocal") : t("secrets.sync.proofStandIn")}</td>
+                              <td>
+                                {target.proof === "locally-proven"
+                                  ? t("secrets.sync.proofLocal")
+                                  : target.proof === "stand-in-only"
+                                    ? t("secrets.sync.proofStandIn")
+                                    : "—"}
+                              </td>
+                              <td className="max-w-[18rem]">
+                                <span>{target.qualification ? t(`catalog.qualification.${target.qualification}` as "catalog.qualification.served") : "—"}</span>
+                                {target.generic && <span className="mt-1 block text-xs text-muted-foreground">{t("catalog.generic")}</span>}
+                                {target.note && <span className="mt-1 block text-xs text-muted-foreground">{target.note}</span>}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

@@ -147,7 +147,10 @@ type secretSyncTargetResponse struct {
 	Capabilities   []string `json:"capabilities"`
 	ScopedSync     bool     `json:"scoped_sync"`
 	ReadBack       string   `json:"readback,omitempty"`
-	Proof          string   `json:"proof"`
+	Proof          string   `json:"proof,omitempty"`
+	Qualification  string   `json:"qualification"`
+	Generic        bool     `json:"generic"`
+	Note           string   `json:"note,omitempty"`
 }
 
 type secretSyncTargetCatalogResponse struct {
@@ -773,6 +776,15 @@ func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]*sec
 		row.Name += " (" + id + ")"
 		targets = append(targets, row)
 	}
+	// The integration catalog's targets with no implementation are listed
+	// as discovered, each with what it waits for (A242).
+	for _, d := range secretsync.DiscoveredTargets() {
+		targets = append(targets, secretSyncTargetResponse{
+			ID: d.ID, Name: d.Name, Platform: d.Platform, DeliveryMode: "not built",
+			SecretHandling: secretSyncTargetSecretHandling, Capabilities: []string{},
+			Qualification: "discovered", Note: d.Note,
+		})
+	}
 	return secretSyncTargetCatalogResponse{
 		Capability:        "CAP-SECR-03",
 		Served:            true,
@@ -806,6 +818,7 @@ func secretSyncTargetCatalogRow(id string, entry secretsync.ProviderCatalogEntry
 		AuthMode: authMode, WireFormat: entry.WireFormat,
 		SecretHandling: secretSyncTargetSecretHandling, Capabilities: capabilities,
 		ScopedSync: entry.ScopedSync, ReadBack: string(entry.ReadBack), Proof: entry.Proof,
+		Qualification: entry.Qualification, Generic: entry.Generic,
 	}
 }
 

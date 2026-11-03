@@ -920,6 +920,7 @@ export function Connectors() {
                         <th scope="col">{translateNow("source.rollback.evidence.bf960c995c")}</th>
                         <th scope="col">{translateNow("source.device.proof.e1dev00001")}</th>
                         <th scope="col">{translateNow("source.relay.migration.e1par00001")}</th>
+                        <th scope="col">{t("catalog.qualificationColumn")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1049,6 +1050,10 @@ export function Connectors() {
                                 {translateNow("source.outstanding.gates.e1par00005")} {connector.relay_parity.outstanding.join(", ")}
                               </span>
                             ) : null}
+                          </td>
+                          {/* A242: how far the family is proven, on one ladder. */}
+                          <td className="max-w-[16rem]">
+                            {connector.qualification ? t(`catalog.qualification.${connector.qualification}` as "catalog.qualification.served") : "—"}
                           </td>
                         </tr>
                       ))}

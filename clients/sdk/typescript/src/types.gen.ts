@@ -13210,6 +13210,11 @@ export interface components {
             kind: string;
             name: string;
             native: boolean;
+            /**
+             * @description discovered: known, not implemented; implemented: the code ships but nothing here executes it; served: the product executes it, proven through its served path against a stand-in; locally-proven: also against the vendor's own software; vendor-qualified: also against the vendor's live service or hardware.
+             * @enum {string}
+             */
+            qualification: "discovered" | "implemented" | "served" | "locally-proven" | "vendor-qualified";
             relay_parity?: components["schemas"]["ConnectorRelayParity"];
             /** @enum {string} */
             replay_safety: "at-most-once" | "reconciled";
@@ -21274,14 +21279,23 @@ export interface components {
             capabilities: string[];
             configured: boolean;
             delivery_mode: string;
+            /** @description A generic delivery (the signed webhook, generic CI JSON): any receiver of the format, never counted as a native integration. */
+            generic: boolean;
             id: string;
             name: string;
+            /** @description For a discovered target, what it needs before it can be built. */
+            note?: string;
             platform: string;
             /**
              * @description locally-proven: proven against the vendor's own software run locally or on a CI runner; stand-in-only: proven against a stand-in built from the vendor's API documentation.
              * @enum {string}
              */
-            proof: "locally-proven" | "stand-in-only";
+            proof?: "locally-proven" | "stand-in-only";
+            /**
+             * @description How far the target is proven (A242): discovered rows are in the integration catalog without an implementation, and say why in note.
+             * @enum {string}
+             */
+            qualification: "discovered" | "implemented" | "served" | "locally-proven" | "vendor-qualified";
             /**
              * @description What a scoped sync reads back of a stored value: the value (hashed, never returned), the destination's digest, or nothing (receipt-only: the delivery receipt is the evidence and outside changes can't be seen). Absent when the target takes no scoped sync.
              * @enum {string}

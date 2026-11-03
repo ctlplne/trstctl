@@ -106,6 +106,10 @@ type connectorCatalogItem struct {
 	// whose current runtime is host-agent or control-plane. Omitting those rows
 	// would let implementation scope silently shrink product acceptance.
 	RelayParity *connectorRelayParity `json:"relay_parity,omitempty"`
+	// Qualification is how far the family is proven (A242): implemented,
+	// served, locally-proven or vendor-qualified (discovered for a name with
+	// no implementation).
+	Qualification string `json:"qualification"`
 }
 
 // connectorRelayParity is one appliance family's E1 gate status.
@@ -1861,6 +1865,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		}
 		item.Executor = connectorExecutorFor(item.TargetVantage, item.Native)
 		item.Isolation = connectorIsolationFor(item.Executor, a.connectorRegistry.IsolationFor(item.Name))
+		item.Qualification = string(connector.QualificationFor(item.Name, true, item.Executor != "none"))
 		out = append(out, item)
 	}
 	return out

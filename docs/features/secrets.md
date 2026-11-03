@@ -1299,7 +1299,11 @@ Trigger.dev, Cloudflare Workers, Cloudflare Pages, Cloudflare Secrets Store, Azu
 Configuration, OCI Vault, OVHcloud Secret Manager, Databricks, Supabase, Camunda and Chef
 Infra Server; see
 [configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
-whether a scoped sync can target it, what it reads back (`readback`: `value`, `digest`
+whether a scoped sync can target it, its `qualification` on the A242 ladder (`served`,
+or `locally-proven` for KV v2; the integration catalog's unbuilt targets are listed as
+`discovered`, each with a `note` on what it waits for), whether it is `generic` (the
+signed webhook and generic CI JSON take any receiver of their format and are never
+counted as native support), what it reads back (`readback`: `value`, `digest`
 or `receipt-only`) and how far it is proven (`proof`: `locally-proven` against the
 vendor's own software, or `stand-in-only` against a stand-in built from the vendor's
 API documentation).
