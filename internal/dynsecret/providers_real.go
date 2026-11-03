@@ -1465,7 +1465,15 @@ type AzureEntraConfig struct {
 	TenantID            string
 	BearerToken         []byte
 	UsernamePrefix      string
+	// AuthorityHost is the Microsoft identity platform
+	// (https://login.microsoftonline.com by default), where a client secret is
+	// proven with a client-credentials token request (A240).
+	AuthorityHost string
 }
+
+// azureEntraIssuedPrefix starts the display name of every password this
+// provider adds; revocation removes no other.
+const azureEntraIssuedPrefix = "trstctl-"
 
 // AzureEntraBackend creates and revokes Entra application passwords.
 type AzureEntraBackend struct {
@@ -1475,6 +1483,7 @@ type AzureEntraBackend struct {
 	applicationClientID string
 	tenantID            string
 	bearerToken         *secret.Buffer
+	authorityHost       string
 }
 
 // NewAzureEntraBackend builds an Azure Entra dynamic-secret backend.
@@ -1487,6 +1496,9 @@ func NewAzureEntraBackend(cfg AzureEntraConfig) (*AzureEntraBackend, error) {
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
+	}
+	if cfg.AuthorityHost == "" {
+		cfg.AuthorityHost = "https://login.microsoftonline.com"
 	}
 	var token *secret.Buffer
 	var err error
@@ -1503,6 +1515,7 @@ func NewAzureEntraBackend(cfg AzureEntraConfig) (*AzureEntraBackend, error) {
 		applicationClientID: cfg.ApplicationClientID,
 		tenantID:            cfg.TenantID,
 		bearerToken:         token,
+		authorityHost:       strings.TrimRight(cfg.AuthorityHost, "/"),
 	}, nil
 }
 
@@ -1512,9 +1525,9 @@ func (b *AzureEntraBackend) Create(ctx context.Context, role string) (string, []
 }
 
 func (b *AzureEntraBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
-	displayName := "trstctl-" + sanitizeFragment(req.Role, "role")
+	displayName := azureEntraIssuedPrefix + sanitizeFragment(req.Role, "role")
 	if req.LeaseID != "" {
-		displayName = "trstctl-" + sanitizeFragment(req.LeaseID, "lease")
+		displayName = azureEntraIssuedPrefix + sanitizeFragment(req.LeaseID, "lease")
 		if err := b.removePasswordsByDisplayName(ctx, displayName); err != nil {
 			return "", nil, err
 		}
@@ -1553,18 +1566,30 @@ func (b *AzureEntraBackend) CreateCredential(ctx context.Context, req GenerateRe
 	return out.KeyID, credential, nil
 }
 
-func (b *AzureEntraBackend) removePasswordsByDisplayName(ctx context.Context, displayName string) error {
+type azurePasswordCredential struct {
+	KeyID       string `json:"keyId"`
+	DisplayName string `json:"displayName"`
+}
+
+// passwordCredentials lists the application's passwords (no secret values:
+// Graph returns only hints).
+func (b *AzureEntraBackend) passwordCredentials(ctx context.Context) ([]azurePasswordCredential, error) {
 	path := "/v1.0/applications/" + pathEscape(b.applicationObjectID) + "?$select=passwordCredentials"
 	var out struct {
-		PasswordCredentials []struct {
-			KeyID       string `json:"keyId"`
-			DisplayName string `json:"displayName"`
-		} `json:"passwordCredentials"`
+		PasswordCredentials []azurePasswordCredential `json:"passwordCredentials"`
 	}
 	if err := azureJSON(ctx, b.doer, b.endpoint, b.tokenBytes(), http.MethodGet, path, nil, &out); err != nil {
-		return fmt.Errorf("dynsecret azure-entra: reconcile password credentials: %w", err)
+		return nil, fmt.Errorf("dynsecret azure-entra: read password credentials: %w", err)
 	}
-	for _, item := range out.PasswordCredentials {
+	return out.PasswordCredentials, nil
+}
+
+func (b *AzureEntraBackend) removePasswordsByDisplayName(ctx context.Context, displayName string) error {
+	passwords, err := b.passwordCredentials(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range passwords {
 		if item.DisplayName != displayName || item.KeyID == "" {
 			continue
 		}
@@ -1590,14 +1615,75 @@ func (b *AzureEntraBackend) Close() {
 	}
 }
 
-// Revoke implements Backend.
+// Revoke implements Backend: the password is removed after its display name
+// is checked, so a key ID of a password someone else added (a static
+// rotation's old_ref is operator input) is refused; one already gone counts
+// as revoked (A240).
 func (b *AzureEntraBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
+		return nil
+	}
+	passwords, err := b.passwordCredentials(ctx)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, item := range passwords {
+		if item.KeyID != ref {
+			continue
+		}
+		if !strings.HasPrefix(item.DisplayName, azureEntraIssuedPrefix) {
+			return fmt.Errorf("dynsecret azure-entra: refusing to remove password %s, which this provider did not add", ref)
+		}
+		found = true
+	}
+	if !found {
 		return nil
 	}
 	path := "/v1.0/applications/" + pathEscape(b.applicationObjectID) + "/removePassword"
 	if err := azureJSON(ctx, b.doer, b.endpoint, b.tokenBytes(), http.MethodPost, path, map[string]string{"keyId": ref}, nil); err != nil && !statusIs(err, http.StatusNotFound) {
 		return fmt.Errorf("dynsecret azure-entra: remove password: %w", err)
+	}
+	return nil
+}
+
+// VerifyCredential proves a client secret with a client-credentials token
+// request at the Microsoft identity platform (A240): only a live secret of
+// this application gets a token. The form is built from the sealed bytes and
+// wiped; the token is discarded.
+func (b *AzureEntraBackend) VerifyCredential(ctx context.Context, credential []byte) error {
+	var parsed struct {
+		TenantID     string           `json:"tenant_id"`
+		ClientID     string           `json:"client_id"`
+		ClientSecret secret.JSONBytes `json:"client_secret"`
+	}
+	if err := json.Unmarshal(credential, &parsed); err != nil || len(parsed.ClientSecret) == 0 {
+		secret.Wipe(parsed.ClientSecret)
+		return errors.New("dynsecret azure-entra: the credential is not a client ID and secret")
+	}
+	defer secret.Wipe(parsed.ClientSecret)
+	if parsed.TenantID != b.tenantID || parsed.ClientID != b.applicationClientID {
+		return errors.New("dynsecret azure-entra: the credential names another application")
+	}
+	form := []byte("grant_type=client_credentials&scope=" + url.QueryEscape("https://graph.microsoft.com/.default") +
+		"&client_id=" + url.QueryEscape(parsed.ClientID) + "&client_secret=")
+	form = appendQueryEscaped(form, parsed.ClientSecret)
+	defer secret.Wipe(form)
+	target := b.authorityHost + "/" + pathEscape(b.tenantID) + "/oauth2/v2.0/token"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(form))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := b.doer.Do(req) // #nosec G704 -- the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918)
+	if err != nil {
+		return fmt.Errorf("dynsecret azure-entra: token request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	secret.Wipe(body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dynsecret azure-entra: the secret did not get a token (HTTP %d)", resp.StatusCode)
 	}
 	return nil
 }

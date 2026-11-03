@@ -5344,6 +5344,8 @@ when off, requiring a KEK when on):
   built against stand-ins of their APIs only: a leased key works until revocation
   deletes it and the vendor then refuses it, and a rotation keeps both keys working
   until retirement deletes the predecessor; a live proof needs each vendor's account.
+  Azure Entra client-secret rotation (A240) is built the same way, against stand-ins
+  of Graph and the identity platform; a live proof needs an Entra tenant.
   Supabase, Convex and R2 keys have no side-effect-free check, so their rotations verify
   as `not_available` and retire on consumer evidence or the approved deadline. The provider catalog states each
   adapter's authority and whether its revocation is confirmed or TTL-only. A239

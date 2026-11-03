@@ -720,7 +720,7 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		backend, err := dynsecret.NewAzureEntraBackend(dynsecret.AzureEntraConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, ApplicationObjectID: cfg.ApplicationObject,
 			ApplicationClientID: cfg.ApplicationClient, TenantID: cfg.AzureTenant,
-			BearerToken: token, UsernamePrefix: cfg.UsernamePrefix,
+			BearerToken: token, UsernamePrefix: cfg.UsernamePrefix, AuthorityHost: cfg.AuthorityHost,
 		})
 		if err != nil {
 			return o.fail(err)
@@ -1696,7 +1696,7 @@ func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, c
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "redis", "datadog", "openai", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
+	case "redis", "datadog", "openai", "azure-entra", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
 		return p.verifyWithBackend(ctx, credential)
 	case "oracle", "mssql", "azure-sql":
 		return p.verifyDatabaseWithBackend(ctx, credential)
@@ -1723,7 +1723,7 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		// address (Oracle's service, SQL Server's database) and runs a
 		// trivial query (A240).
 		return p.verifyDatabaseWithBackend(ctx, credential)
-	case "auth0", "datadog", "openai", "ldap", "unix", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
+	case "auth0", "datadog", "openai", "azure-entra", "ldap", "unix", "openrouter", "fireworks", "litellm", "supabase", "convex", "dbt", "cloudflare", "cloudflare-r2":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key
 		// lists models, a directory entry binds, and a hosted API key passes

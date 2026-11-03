@@ -180,12 +180,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("service_account", "Service account", "Email of the narrowly scoped service account.", true),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Google access-token reference.", true),
 		)},
-		{Type: "azure-entra", Label: "Azure Entra", Purpose: "Creates and deletes an application credential in Microsoft Graph.", Requirements: dynamicSecretProviderRequirements(
+		{Type: "azure-entra", Label: "Azure Entra", Purpose: "Adds a client secret to the application through Microsoft Graph, named for the lease or rotation, and removes it at revocation after checking the provider named it. A static rotation is two-phase: the successor is a second secret beside the predecessor, which keeps working until the rotation retires it. Secrets are proven with a client-credentials token request. Rotation is built against a stand-in of Graph and the identity platform; no Entra proof yet.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Graph endpoint", "HTTPS Microsoft Graph endpoint.", true),
 			value("application_object_id", "Application object ID", "Object ID of the application receiving the temporary credential.", true),
 			value("application_client_id", "Application client ID", "Client ID returned with the generated credential.", true),
 			value("azure_tenant_id", "Azure tenant ID", "Entra tenant containing the application.", true),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Microsoft Graph token reference.", true),
+			value("authority_host", "Authority host", "Optional: the Microsoft identity platform a rotated secret is proven at (default https://login.microsoftonline.com).", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored client secret in two phases.", false),
 		)},
 		{Type: "kubernetes", Label: "Kubernetes", Purpose: "Requests a 10-minute-or-longer audience-scoped token bound to a temporary Secret; deleting the Secret invalidates the token.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Kubernetes API endpoint", "HTTPS Kubernetes API server endpoint.", true),

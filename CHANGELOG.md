@@ -2,6 +2,11 @@
 
 ### Added
 
+- Azure Entra client-secret rotation (A240): `azure-entra` providers with `allow_static_rotation` rotate a stored
+  client secret in two phases — a second password beside the predecessor, verified with a client-credentials token
+  request at `authority_host`, and retirement removes only passwords the provider added (display name `trstctl-...`).
+  Built against stand-ins of Graph and the identity platform.
+
 - Hosted API key rotation (A240): `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and
   `cloudflare-r2` providers issue
   leases and rotate in two phases with one shared engine. Each key is created with the administrator's credential

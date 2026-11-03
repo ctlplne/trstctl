@@ -723,6 +723,36 @@ func TestValidateHostedKeyProvidersA240(t *testing.T) {
 	}
 }
 
+// A240: azure-entra rotates statically; authority_host is its own field,
+// validated like an endpoint.
+func TestValidateAzureEntraRotationA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "entra", Type: "azure-entra",
+		Endpoint: "https://graph.microsoft.com", ApplicationObject: "obj", ApplicationClient: "client", AzureTenant: "tenant",
+		BearerTokenRef: "file:/run/secrets/graph", AllowedRoles: []string{"app"}, MaxTTL: "1h", AllowStaticRotation: true,
+		AuthorityHost: "https://login.microsoftonline.com"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	if !StaticRotationProviderTypes["azure-entra"] || SinglePhaseRotationProviderTypes["azure-entra"] {
+		t.Fatal("azure-entra must rotate statically, in two phases")
+	}
+	plain := base
+	plain.AuthorityHost = "http://login.example"
+	if err := check(plain); err == nil || !strings.Contains(err.Error(), "authority_host") {
+		t.Fatalf("a plaintext authority host: %v", err)
+	}
+	other := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "openai", Type: "openai",
+		Endpoint: "https://api.openai.com", APIKeyRef: "file:/run/secrets/openai", AllowedRoles: []string{"app"},
+		RoleBindings: map[string]string{"app": "proj_orders01"}, MaxTTL: "1h", AuthorityHost: "https://login.microsoftonline.com"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "authority_host is only valid for azure-entra") {
+		t.Fatalf("authority_host on another type: %v", err)
+	}
+}
+
 func TestValidateMSSQLProvidersA239(t *testing.T) {
 	for _, providerType := range []string{"mssql", "azure-sql"} {
 		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,

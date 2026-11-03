@@ -40,6 +40,10 @@ func newHostedAPI(name, endpoint string, allowInsecureLoopback bool, client *htt
 // call sends body (JSON, or none when nil) and returns the status and the
 // response body.
 func (h hostedAPI) call(ctx context.Context, method, path string, body []byte, authenticate func(http.Header) error) (int, []byte, error) {
+	return h.send(ctx, method, path, body, "application/json", authenticate)
+}
+
+func (h hostedAPI) send(ctx context.Context, method, path string, body []byte, contentType string, authenticate func(http.Header) error) (int, []byte, error) {
 	var payload io.Reader
 	if body != nil {
 		payload = bytes.NewReader(body)
@@ -49,7 +53,7 @@ func (h hostedAPI) call(ctx context.Context, method, path string, body []byte, a
 		return 0, nil, err
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
 	if authenticate != nil {
@@ -68,6 +72,23 @@ func (h hostedAPI) call(ctx context.Context, method, path string, body []byte, a
 		return 0, nil, fmt.Errorf("dynsecret %s: read the response: %w", h.name, err)
 	}
 	return resp.StatusCode, response, nil
+}
+
+// appendQueryEscaped percent-encodes raw into dst the way url.QueryEscape
+// would, without making a string of a secret.
+func appendQueryEscaped(dst, raw []byte) []byte {
+	const hexDigits = "0123456789ABCDEF"
+	for _, c := range raw {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_', c == '.', c == '~':
+			dst = append(dst, c)
+		case c == ' ':
+			dst = append(dst, '+')
+		default:
+			dst = append(dst, '%', hexDigits[c>>4], hexDigits[c&15])
+		}
+	}
+	return dst
 }
 
 // bearerFrom authenticates as "Authorization: Bearer" with a sealed token.

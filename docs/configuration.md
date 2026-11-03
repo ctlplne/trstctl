@@ -2081,6 +2081,16 @@ An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`
 ID (`proj_...`) its service accounts are created in. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+An `azure-entra` provider sets `endpoint` to Microsoft Graph, `application_object_id`,
+`application_client_id` and `azure_tenant_id` to the application whose client secrets it
+adds, and `bearer_token_ref` to a Graph token allowed to add and remove that
+application's passwords (Application.ReadWrite.OwnedBy). With `allow_static_rotation:
+true` it also rotates a stored client secret in two phases (A240): the successor is a
+second secret beside the predecessor, verified with a client-credentials token request at
+`authority_host` (optional; `https://login.microsoftonline.com` by default), and
+retirement removes only a secret this provider added (its display name starts
+`trstctl-`).
+
 The hosted API key providers (A240) each set `endpoint` to the vendor's API,
 `api_key_ref` to the credential that creates, lists and deletes keys, and bind each
 allowed role to what its keys are created under. All issue leases, and with

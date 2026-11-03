@@ -85,8 +85,12 @@ type DynamicSecretProviderConfig struct {
 	ApplicationObject        string `json:"application_object_id,omitempty"`
 	ApplicationClient        string `json:"application_client_id,omitempty"`
 	AzureTenant              string `json:"azure_tenant_id,omitempty"`
-	DB                       int    `json:"db,omitempty"`
-	UsernamePrefix           string `json:"username_prefix,omitempty"`
+	// AuthorityHost (azure-entra) is the Microsoft identity platform a rotated
+	// client secret is proven at (A240); https://login.microsoftonline.com by
+	// default.
+	AuthorityHost  string `json:"authority_host,omitempty"`
+	DB             int    `json:"db,omitempty"`
+	UsernamePrefix string `json:"username_prefix,omitempty"`
 
 	// IAMEndpoint is where an aws-iam or aws-sts provider reads the policies
 	// of the roles its leases assume (G2). Empty means AWS IAM for the
@@ -192,7 +196,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -663,6 +667,14 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		require(c.ApplicationClient, "application_client_id")
 		require(c.AzureTenant, "azure_tenant_id")
 		ref(c.BearerTokenRef, "bearer_token_ref", false)
+		if c.AuthorityHost != "" {
+			if err := validateSecretIntegrationEndpoint(c.AuthorityHost, c.AllowInsecureLoopback); err != nil {
+				errs = append(errs, fmt.Errorf("%s authority_host: %w", where, err))
+			}
+		}
+	}
+	if c.Type != "azure-entra" && c.AuthorityHost != "" {
+		errs = append(errs, fmt.Errorf("%s authority_host is only valid for azure-entra", where))
 	}
 	if c.IAMEndpoint != "" {
 		if c.Type != "aws-iam" && c.Type != "aws-sts" {

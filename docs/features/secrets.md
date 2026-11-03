@@ -879,6 +879,15 @@ rotation is two-phase, and a key is verified by listing models with it
 (`verify_mode: authenticated`). It is built against a stand-in of the admin API, with
 no OpenAI proof yet.
 
+`azure-entra` also rotates a stored client secret (A240): the successor is a second
+password of the bound application, added through Microsoft Graph and named for the
+rotation, and the predecessor keeps working until retirement removes it. Removal first
+checks the password's display name, so the application's own secrets, which the
+provider did not add, are never removed. A secret is verified with a client-credentials
+token request (`verify_mode: authenticated`); a new secret can take a moment to reach
+every Entra region, and the rotation's verify retries. Rotation is built against a
+stand-in of Graph and the identity platform, with no Entra proof yet.
+
 The hosted API key providers (A240) share one engine: a lease, or a rotation's
 successor, is a new key created with the administrator's credential under the target
 the role is bound to, named for the lease or command, and revocation (or retirement)
