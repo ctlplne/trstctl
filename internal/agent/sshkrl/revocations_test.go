@@ -4,6 +4,7 @@ package sshkrl
 
 import (
 	"bytes"
+	"embed"
 	"encoding/binary"
 	"os"
 	"os/exec"
@@ -14,11 +15,18 @@ import (
 	sshprotocol "trstctl.com/trstctl/internal/protocols/ssh"
 )
 
+// krlFixtures are the committed ssh-keygen lists, compiled in: fuzz targets
+// seed from them, and the ClusterFuzzLite runner has no source tree.
+//
+//go:embed testdata/*.krl
+var krlFixtures embed.FS
+
 func readFixture(t fuzzFixtureTB, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", name)) // #nosec G304 -- committed test fixture
+	data, err := krlFixtures.ReadFile("testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
+		return nil // the ClusterFuzzLite shim's Fatal returns
 	}
 	return data
 }

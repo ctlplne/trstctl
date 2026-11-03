@@ -14,6 +14,7 @@ func FuzzProtectedSnapshotPayload(f *testing.F) {
 	encoded, err := protectSnapshotPayload(f.Context(), snapshotProtectionFixtureTenant, metadata, raw, provider)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(encoded)
 	f.Add([]byte(`{"_trstctl_snapshot_protection":null}`))

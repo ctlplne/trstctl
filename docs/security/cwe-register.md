@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2332 annotated sites across 29 rules. Each row is
+2330 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -660,7 +660,7 @@ not this file.
 | `internal/agent/observe/wire_test.go:122` | bounded test fixture length (CWE-190) |
 | `internal/agent/relay/adcsscan_wire_test.go:246` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
 | `internal/agent/relay/adcsscan_wire_test.go:258` | this fixed fixture is below MaxUint16 (CWE-190). |
-| `internal/agent/sshkrl/revocations_test.go:159` | test fixture strings are a few bytes, far under the uint32 bound |
+| `internal/agent/sshkrl/revocations_test.go:167` | test fixture strings are a few bytes, far under the uint32 bound |
 | `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:64` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:210` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1216,7 +1216,7 @@ not this file.
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/secretrender/secretrender.go:590` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
-| `internal/agent/sshkrl/revocations_test.go:84` | fixed ssh-keygen argv over test-owned temp paths |
+| `internal/agent/sshkrl/revocations_test.go:92` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:179` | live-sshd test harness validating its own config with the resolved sshd binary (CWE-78) |
@@ -1554,7 +1554,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (625 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (623 sites)
 
 | Location | Reason |
 |---|---|
@@ -1779,8 +1779,7 @@ not this file.
 | `internal/agent/sshkrl/install_test.go:29` | test fixture path created under t.TempDir |
 | `internal/agent/sshkrl/install_test.go:106` | committed test fixture |
 | `internal/agent/sshkrl/install_test.go:261` | test fixture path under t.TempDir |
-| `internal/agent/sshkrl/revocations_test.go:19` | committed test fixture |
-| `internal/agent/sshkrl/revocations_test.go:102` | test-created path under t.TempDir |
+| `internal/agent/sshkrl/revocations_test.go:110` | test-created path under t.TempDir |
 | `internal/agent/sshtrust/sshd_live_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:99` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:149` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1891,7 +1890,6 @@ not this file.
 | `internal/crypto/samltest/material_test.go:46` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
-| `internal/crypto/sshkeys/certificate_fuzz_test.go:14` | committed test fixture |
 | `internal/crypto/sshkeys/certificate_test.go:20` | committed test fixture |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |

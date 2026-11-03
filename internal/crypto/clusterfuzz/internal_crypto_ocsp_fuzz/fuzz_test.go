@@ -19,15 +19,18 @@ func FuzzParseOCSPRequestSerial(f *testing.F) {
 	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer signer.Destroy()
 	issuerDER, err := crypto.SelfSignedCACert(signer, "ocsp fuzz issuer", time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	validReqDER, err := crypto.BuildOCSPRequestForSerial(issuerDER, "a1b2c3d4e5f6")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil))

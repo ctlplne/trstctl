@@ -21,6 +21,7 @@ func FuzzProtectedStoredEnvelope(f *testing.F) {
 	})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(seed)
 	f.Add(append([]byte(`{"id":"shadow",`), seed[1:]...))

@@ -22,11 +22,13 @@ func FuzzGCPMetaAttest(f *testing.F) {
 	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer signer.Destroy()
 	jwk, err := crypto.PublicJWK(signer.Public(), "g1")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	mkClaims := func() map[string]any {

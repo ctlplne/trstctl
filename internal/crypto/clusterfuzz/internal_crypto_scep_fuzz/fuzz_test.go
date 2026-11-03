@@ -13,15 +13,18 @@ func FuzzParseSCEPRequest(f *testing.F) {
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer signer.Destroy()
 	raCertDER, err := crypto.SelfSignedCACert(signer, "fuzz RA", time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	raKeyPKCS8, err := signer.PKCS8()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil))

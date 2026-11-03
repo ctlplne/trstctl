@@ -35,11 +35,13 @@ func FuzzOpenSeal(f *testing.F) {
 	good, err := seal.Seal(w, plaintext, nil)
 	if err != nil {
 		f.Fatalf("seed Seal: %v", err)
+		return
 	}
 	f.Add(good)
 	goodV2, err := seal.SealDomain(w, plaintext, nil, []byte("tenant:fuzz:generation:1"))
 	if err != nil {
 		f.Fatalf("seed SealDomain: %v", err)
+		return
 	}
 	f.Add(goodV2)
 

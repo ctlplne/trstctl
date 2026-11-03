@@ -14,6 +14,7 @@ func FuzzParsePublicKeyPEM(f *testing.F) {
 	key, err := GenerateLockedKey(ECDSAP256)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	public := MarshalPublicKeyPEM(key.Public().DER)
 	key.Destroy()

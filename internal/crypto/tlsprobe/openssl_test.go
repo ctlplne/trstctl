@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	_ "embed"
 	"encoding/pem"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -162,14 +162,17 @@ func TestNativeProbeParserRequiresCompletedBoundedEvidence(t *testing.T) {
 	}
 }
 
+// nativeProbeLeafPEM is the fuzz seed's public certificate, compiled in: the
+// ClusterFuzzLite runner has no source tree to read it from.
+//
+//go:embed testdata/native-probe-leaf.pem
+var nativeProbeLeafPEM []byte
+
 func FuzzNativeProbeOutput(f *testing.F) {
-	public, err := os.ReadFile("../certinfo/testdata/der-whitespace/signature-09.pem")
-	if err != nil {
-		f.Fatal(err)
-	}
-	cert, _ := pem.Decode(public)
+	cert, _ := pem.Decode(nativeProbeLeafPEM)
 	if cert == nil {
 		f.Fatal("public certificate seed missing")
+		return // the ClusterFuzzLite shim's Fatal returns
 	}
 	out, diagnostic := nativeOutputFixture(cert.Bytes)
 	f.Add(out, diagnostic)

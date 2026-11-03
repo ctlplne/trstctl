@@ -5,9 +5,11 @@ package conformance
 import (
 	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,12 +119,23 @@ func TestFuzz_DigestWitnessDecode(t *testing.T) {
 	}
 }
 
+// publishedVectorSeeds are the fuzz seeds, compiled in: the ClusterFuzzLite
+// runner has no source tree to read the published vectors from.
+//
+//go:embed testdata/vectors/*.fixture.json
+var publishedVectorSeeds embed.FS
+
 func FuzzDigestWitnessDecode(f *testing.F) {
-	vectors := vectorsRoot(f)
-	for _, name := range vectorNames(f) {
-		raw, err := vectors.ReadFile(name)
+	seeds, err := fs.Glob(publishedVectorSeeds, "testdata/vectors/*.fixture.json")
+	if err != nil || len(seeds) == 0 {
+		f.Fatalf("no published vector seeds compiled in: %v", err)
+		return // the ClusterFuzzLite shim's Fatal returns
+	}
+	for _, name := range seeds {
+		raw, err := publishedVectorSeeds.ReadFile(name)
 		if err != nil {
 			f.Fatalf("read seed %s: %v", name, err)
+			return // the ClusterFuzzLite shim's Fatal returns
 		}
 		f.Add(raw)
 	}

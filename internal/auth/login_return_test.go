@@ -123,6 +123,7 @@ func FuzzLoginReturnOpen(f *testing.F) {
 	token, err := s.SealLoginReturn("saml", "state", "request", "/certificates")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(token)
 	f.Add("")

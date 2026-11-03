@@ -17,6 +17,7 @@ func FuzzParseWireKey(f *testing.F) {
 		blob, err := base64.StdEncoding.DecodeString(encoded)
 		if err != nil {
 			f.Fatal(err)
+			return
 		}
 		f.Add(blob)
 	}

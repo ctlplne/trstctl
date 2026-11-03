@@ -5,6 +5,7 @@ package conformance
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,12 @@ import (
 )
 
 const vectorPath = "testdata/vectors/destruction-record-v1.json"
+
+// destructionRecordVectorJSON is the published vector, compiled in for the
+// fuzz seeds: the ClusterFuzzLite runner has no source tree.
+//
+//go:embed testdata/vectors/destruction-record-v1.json
+var destructionRecordVectorJSON []byte
 
 type destructionRecordVector struct {
 	Version               int                           `json:"version"`
@@ -247,24 +254,16 @@ func same(a, b []byte) bool {
 }
 
 func vectorRecordSeed() []byte {
-	raw, err := os.ReadFile(vectorPath)
-	if err != nil {
-		return []byte("{}")
-	}
 	var v destructionRecordVector
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if err := json.Unmarshal(destructionRecordVectorJSON, &v); err != nil {
 		return []byte("{}")
 	}
 	return append([]byte(nil), v.Vector.EncodedRecord...)
 }
 
 func vectorRequestSeed() []byte {
-	raw, err := os.ReadFile(vectorPath)
-	if err != nil {
-		return []byte("{}")
-	}
 	var v destructionRecordVector
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if err := json.Unmarshal(destructionRecordVectorJSON, &v); err != nil {
 		return []byte("{}")
 	}
 	out, err := json.Marshal(v.Request)

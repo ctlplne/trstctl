@@ -22,11 +22,13 @@ func FuzzAWSIIDAttest(f *testing.F) {
 	validP7, root, err := crypto.SignCMS(doc)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	// A CMS over a non-JSON body (signature is valid, payload is not a document).
 	badBodyP7, _, err := crypto.SignCMS([]byte("not-json"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil))

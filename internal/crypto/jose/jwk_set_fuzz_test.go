@@ -8,10 +8,12 @@ func FuzzParseJWKSet(f *testing.F) {
 	key, err := GenerateRSASigningKey("public-verification-fuzz")
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	public, err := key.PublicJWKS()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(public)
 	f.Add([]byte(`{"keys":[]}`))

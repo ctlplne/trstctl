@@ -95,11 +95,13 @@ func FuzzKeyImportOpen(f *testing.F) {
 	key, err := GenerateKeyImportKey()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	info := KeyImportInfo("tenant", "operation", []byte("spki"))
 	sealed, err := SealKeyImport(key.Public(), info, []byte("plaintext private key"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(sealed)
 	f.Add([]byte{})

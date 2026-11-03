@@ -3,8 +3,8 @@
 package conformance
 
 import (
+	_ "embed"
 	"encoding/json"
-	"os"
 	"testing"
 
 	"trstctl.com/trstctl/internal/succession"
@@ -15,13 +15,15 @@ import (
 // seedFromVector adds a valid encoded artifact from the published vector, plus a few
 // adversarial seeds, to a fuzz corpus. The seed corpus runs under an ordinary
 // `go test` (and `make fuzz-smoke`), so the targets execute in CI without -fuzz.
+// chainVectorJSON is the published chain vector, compiled in for the fuzz
+// seeds: the ClusterFuzzLite runner has no source tree.
+//
+//go:embed testdata/chain_vector.json
+var chainVectorJSON []byte
+
 func recordSeed() []byte {
-	raw, err := os.ReadFile(chainVectorPath)
-	if err != nil {
-		return []byte("{}")
-	}
 	var v ChainVector
-	if err := json.Unmarshal(raw, &v); err != nil || len(v.Chain) == 0 {
+	if err := json.Unmarshal(chainVectorJSON, &v); err != nil || len(v.Chain) == 0 {
 		return []byte("{}")
 	}
 	b, _ := json.Marshal(v.Chain[0])
@@ -29,12 +31,8 @@ func recordSeed() []byte {
 }
 
 func chainSeed() []byte {
-	raw, err := os.ReadFile(chainVectorPath)
-	if err != nil {
-		return []byte("[]")
-	}
 	var v ChainVector
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if err := json.Unmarshal(chainVectorJSON, &v); err != nil {
 		return []byte("[]")
 	}
 	b, _ := json.Marshal(v.Chain)

@@ -12,6 +12,7 @@ func FuzzSSHTrustCommand(f *testing.F) {
 	valid, err := json.Marshal(reviewedCommand(f))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add([]byte(`{"confirmed":true,"mode":"remove"}`))

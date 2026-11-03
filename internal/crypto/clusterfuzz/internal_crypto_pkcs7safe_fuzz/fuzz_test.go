@@ -15,15 +15,18 @@ func FuzzParseSCEPResponse(f *testing.F) {
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer signer.Destroy()
 	certDER, err := crypto.SelfSignedCACert(signer, "fuzz recipient", time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	keyPKCS8, err := signer.PKCS8()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil))
@@ -46,6 +49,7 @@ func FuzzVerifyCMSSignature(f *testing.F) {
 	validP7, rootDER, err := crypto.SignCMS([]byte("instance-identity-document"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil), rootDER)

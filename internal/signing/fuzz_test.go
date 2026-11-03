@@ -21,6 +21,7 @@ func FuzzSignRequestParser(f *testing.F) {
 	})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add([]byte{})

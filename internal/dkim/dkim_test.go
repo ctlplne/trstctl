@@ -4,10 +4,10 @@ package dkim
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,12 +19,15 @@ import (
 // (Debian's python3-dkim 1.1.4, dkimpy) with fresh keys, generated in a lab
 // container: rsa-sha256 and ed25519-sha256, relaxed and simple, and one
 // signature over part of the body (l=).
+// dkimpyVectorsJSON is the committed dkimpy vector set, compiled in: fuzz
+// targets seed from it, and the ClusterFuzzLite runner has no source tree.
+//
+//go:embed testdata/dkimpy-vectors.json
+var dkimpyVectorsJSON []byte
+
 func dkimpyVectors(t fuzzFixtureTB) (map[string]string, map[string][]byte) {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/dkimpy-vectors.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := dkimpyVectorsJSON
 	var v struct {
 		Records  map[string]string `json:"records"`
 		Messages map[string]string `json:"messages"`

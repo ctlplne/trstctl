@@ -3,6 +3,9 @@
 package docs
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -61,5 +64,147 @@ func TestFuzzTargetsDoNotHandFToTestingTBHelpers(t *testing.T) {
 	sort.Strings(findings)
 	if len(findings) > 0 {
 		t.Fatalf("fuzz targets hand *testing.F to testing.TB helpers (ClusterFuzzLite cannot compile them):\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+// ClusterFuzzLite runs each fuzz binary away from the source tree, and its
+// shim's f.Fatal returns instead of stopping (owner note 2026-11-02, item 3:
+// internal/crypto/tlsprobe FuzzNativeProbeOutput read its seed from
+// ../certinfo/testdata by relative path, the read failed, Fatal returned, and
+// the target crashed on a nil *pem.Block before its first input). A fuzz
+// target's setup (everything before f.Fuzz) therefore reads no files — seeds
+// are compiled in with go:embed or literals — and every setup Fatal or FailNow
+// inside a block is followed by return.
+func TestFuzzTargetSetupReadsNoFilesAndStopsAfterFatal(t *testing.T) {
+	fileReads := map[string]bool{"os.ReadFile": true, "os.Open": true, "os.OpenFile": true, "os.OpenRoot": true,
+		"os.ReadDir": true, "filepath.Glob": true, "filepath.WalkDir": true, "filepath.Walk": true, "ioutil.ReadFile": true}
+	var findings []string
+	fset := token.NewFileSet()
+	byDir := map[string][]*ast.File{}
+	for _, root := range []string{"../internal", "../ee", "../cmd", "../tools"} {
+		_ = filepath.WalkDir(filepath.FromSlash(root), func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, perr := parser.ParseFile(fset, path, read(t, filepath.ToSlash(path)), 0)
+			if perr == nil {
+				byDir[filepath.Dir(path)] = append(byDir[filepath.Dir(path)], file)
+			}
+			return nil
+		})
+	}
+	callName := func(call *ast.CallExpr) string {
+		switch fn := call.Fun.(type) {
+		case *ast.SelectorExpr:
+			if id, ok := fn.X.(*ast.Ident); ok {
+				return id.Name + "." + fn.Sel.Name
+			}
+		case *ast.Ident:
+			return fn.Name
+		}
+		return ""
+	}
+	readsFiles := func(body ast.Node) bool {
+		found := false
+		ast.Inspect(body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok && fileReads[callName(call)] {
+				found = true
+			}
+			return !found
+		})
+		return found
+	}
+	for _, files := range byDir {
+		// Same-package helpers that read files count as reads (one level).
+		readers := map[string]bool{}
+		for _, file := range files {
+			for _, decl := range file.Decls {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Body != nil && readsFiles(fn.Body) {
+					readers[fn.Name.Name] = true
+				}
+			}
+		}
+		for _, file := range files {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || !strings.HasPrefix(fn.Name.Name, "Fuzz") || fn.Body == nil || len(fn.Type.Params.List) != 1 || len(fn.Type.Params.List[0].Names) != 1 {
+					continue
+				}
+				star, ok := fn.Type.Params.List[0].Type.(*ast.StarExpr)
+				if !ok {
+					continue
+				}
+				if sel, ok := star.X.(*ast.SelectorExpr); !ok || sel.Sel.Name != "F" {
+					continue
+				}
+				f := fn.Type.Params.List[0].Names[0].Name
+				where := fset.Position(fn.Pos())
+				isCallOn := func(st ast.Stmt, names ...string) bool {
+					es, ok := st.(*ast.ExprStmt)
+					if !ok {
+						return false
+					}
+					call, ok := es.X.(*ast.CallExpr)
+					if !ok {
+						return false
+					}
+					for _, name := range names {
+						if callName(call) == f+"."+name {
+							return true
+						}
+					}
+					return false
+				}
+				var walk func(stmts []ast.Stmt, nested bool) bool
+				walk = func(stmts []ast.Stmt, nested bool) bool {
+					for i, st := range stmts {
+						if isCallOn(st, "Fuzz") {
+							return true
+						}
+						ast.Inspect(st, func(n ast.Node) bool {
+							if _, lit := n.(*ast.FuncLit); lit {
+								return false
+							}
+							if call, ok := n.(*ast.CallExpr); ok && (fileReads[callName(call)] || readers[callName(call)]) {
+								findings = append(findings, where.String()+" "+fn.Name.Name+": setup reads a file ("+callName(call)+")")
+							}
+							return true
+						})
+						if isCallOn(st, "Fatal", "Fatalf", "FailNow") && nested && (i+1 >= len(stmts)) {
+							findings = append(findings, fset.Position(st.Pos()).String()+" "+fn.Name.Name+": setup "+f+".Fatal is not followed by return")
+						} else if isCallOn(st, "Fatal", "Fatalf", "FailNow") && i+1 < len(stmts) {
+							if _, ret := stmts[i+1].(*ast.ReturnStmt); !ret {
+								findings = append(findings, fset.Position(st.Pos()).String()+" "+fn.Name.Name+": setup "+f+".Fatal is not followed by return")
+							}
+						}
+						var stop bool
+						switch s := st.(type) {
+						case *ast.IfStmt:
+							stop = walk(s.Body.List, true)
+							if blk, ok := s.Else.(*ast.BlockStmt); ok && !stop {
+								stop = walk(blk.List, true)
+							} else if elif, ok := s.Else.(*ast.IfStmt); ok && !stop {
+								stop = walk([]ast.Stmt{elif}, true)
+							}
+						case *ast.ForStmt:
+							stop = walk(s.Body.List, true)
+						case *ast.RangeStmt:
+							stop = walk(s.Body.List, true)
+						case *ast.BlockStmt:
+							stop = walk(s.List, true)
+						}
+						if stop {
+							return true
+						}
+					}
+					return false
+				}
+				walk(fn.Body.List, false)
+			}
+		}
+	}
+	sort.Strings(findings)
+	if len(findings) > 0 {
+		t.Fatalf("fuzz target setup the ClusterFuzzLite runner cannot run:\n%s", strings.Join(findings, "\n"))
 	}
 }

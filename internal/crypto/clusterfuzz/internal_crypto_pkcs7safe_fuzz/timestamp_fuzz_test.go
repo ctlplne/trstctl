@@ -31,10 +31,12 @@ func FuzzVerifyRFC3161Timestamp(f *testing.F) {
 	}
 	if err := json.Unmarshal(timestampFixtureJSON, &fixture); err != nil {
 		f.Fatal(err)
+		return
 	}
 	expected := crypto.TSTInfoParams{PolicyOID: fixture.Policy, HashedMessage: fixture.Imprint, SerialNumber: fixture.Serial, GenTime: fixture.Time, Nonce: big.NewInt(739)}
 	if err := crypto.VerifyTimeStampToken(fixture.DER, fixture.Certificate, expected); err != nil {
 		f.Fatalf("public timestamp seed must verify: %v", err)
+		return
 	}
 	f.Add(fixture.DER)
 	f.Add([]byte(nil))

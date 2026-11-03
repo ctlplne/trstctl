@@ -16,6 +16,7 @@ func FuzzProtectedEventBackup(f *testing.F) {
 	var seed bytes.Buffer
 	if _, err := WriteLogWithKey(f.Context(), log, &seed, integrity); err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(bytes.Clone(seed.Bytes()))
 	f.Add([]byte(`{"format":"trstctl-event-log-backup","version":3}`))

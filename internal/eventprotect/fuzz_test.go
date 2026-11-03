@@ -23,6 +23,7 @@ func FuzzProtectedPayloadFrame(f *testing.F) {
 		frame, err := encodePayload(payload)
 		if err != nil {
 			f.Fatal(err)
+			return
 		}
 		f.Add(frame)
 	}
@@ -64,6 +65,7 @@ func FuzzDestructionClaims(f *testing.F) {
 	seed, err := json.Marshal(claims)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(seed)
 	f.Add([]byte(`{"schema":"ignored",` + string(seed[1:])))

@@ -22,13 +22,16 @@ func FuzzProtectedPostgresState(f *testing.F) {
 	row := protectedPostgresRecord{Table: "api_tokens", Ordinal: 1, TenantID: "60aad68e-4613-4658-a75a-10ee97084edf", Protection: &eventprotect.Envelope{Version: 1, KeyID: "06bc0318-6b02-471c-b3c4-54257995848a", PolicyDigest: postgresRowPolicyDigest(), Ciphertext: []byte("opaque framing seed")}}
 	if err := encoder.Encode(h); err != nil {
 		f.Fatal(err)
+		return
 	}
 	if err := encoder.Encode(row); err != nil {
 		f.Fatal(err)
+		return
 	}
 	tr := postgresStateTrailer{Format: postgresStateTrailerTag, SHA256: digest.sumHex(), HMACSHA256: digest.macHex(), Records: 1, Tables: map[string]int{"api_tokens": 1}, EventCutSequence: 17}
 	if err := json.NewEncoder(&seed).Encode(tr); err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(bytes.Clone(seed.Bytes()))
 	f.Add([]byte(`{}`))

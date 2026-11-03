@@ -35,6 +35,7 @@ func FuzzGate_PreconditionDecode(f *testing.F) {
 	})
 	if err != nil {
 		f.Fatalf("NewGate: %v", err)
+		return
 	}
 
 	f.Fuzz(func(t *testing.T, pre, repr, att []byte) {

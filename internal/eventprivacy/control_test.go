@@ -51,10 +51,12 @@ func FuzzRequestedControl(f *testing.F) {
 	request, err := NewRequested(controlTestTenant, "fuzz-registration", time.Second)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	wire, err := json.Marshal(request)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(wire)
 	f.Add([]byte(`{"registration_identity":"x","retention_ns":0}`))

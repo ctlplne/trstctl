@@ -174,6 +174,7 @@ func FuzzAUD56VerifyBoundLicense(f *testing.F) {
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	now := time.Date(2026, 8, 13, 8, 0, 0, 0, time.UTC)
 	valid, err := Sign(Claims{
@@ -187,6 +188,7 @@ func FuzzAUD56VerifyBoundLicense(f *testing.F) {
 	}, priv)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add([]byte(`{"payload":"","signature":""}`))

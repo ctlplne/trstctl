@@ -22,10 +22,12 @@ func FuzzAzureIMDSAttest(f *testing.F) {
 	validP7, root, err := crypto.SignCMS(doc)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	badBodyP7, _, err := crypto.SignCMS([]byte("not-json"))
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	f.Add([]byte(nil))

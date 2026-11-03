@@ -24,30 +24,36 @@ func FuzzTPMQuoteAttest(f *testing.F) {
 	manu, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer manu.Destroy()
 	manuCert, err := crypto.SelfSignedCACert(manu, "TPM Manufacturer CA", time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	ak, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	defer ak.Destroy()
 	akCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "AK"}, ak)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	akCert, err := crypto.SignLeafFromCSR(manuCert, manu, akCSR, time.Hour)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	nonce := []byte("challenge-nonce-123")
 	message := append([]byte("PCR0:abcd|nonce:"), nonce...)
 	sig, err := crypto.SignMessage(ak, message)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 
 	if good, err := json.Marshal(Quote{AKCertDER: akCert, Message: message, Signature: sig, Nonce: nonce}); err == nil {

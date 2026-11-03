@@ -16,6 +16,7 @@ func FuzzGatedDestructionEvidenceStream(f *testing.F) {
 	valid, err := EncodeLedgerSegment(1, []eventspec.Event{})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(valid)
 	f.Add([]byte(`{"version":1,"final_epoch":1,"events":[`))
@@ -23,6 +24,7 @@ func FuzzGatedDestructionEvidenceStream(f *testing.F) {
 	g, err := New(Config{SignerID: "fuzz-stream", Sink: NewMemorySink()})
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		req := signing.GatedDestroyRequest{

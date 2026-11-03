@@ -16,6 +16,7 @@ func FuzzActivatedControl(f *testing.F) {
 	request, err := NewRequested(controlTestTenant, "fuzz-registration", time.Second)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	base := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
 	// This is a wire-shape seed only. A production activation additionally
@@ -24,6 +25,7 @@ func FuzzActivatedControl(f *testing.F) {
 	wire, err := json.Marshal(activation)
 	if err != nil {
 		f.Fatal(err)
+		return
 	}
 	f.Add(wire, false, false)
 	f.Add(wire, true, false)

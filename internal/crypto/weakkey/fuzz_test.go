@@ -4,7 +4,7 @@ package weakkey
 
 import (
 	"context"
-	"os"
+	_ "embed"
 	"testing"
 )
 
@@ -18,11 +18,15 @@ func FuzzCheckSPKI(f *testing.F) {
 	})
 }
 
+// emOVTLSCAG3C is a fuzz seed, compiled in: the ClusterFuzzLite runner has no
+// source tree to read it from.
+//
+//go:embed testdata/em-ov-tls-ca-g3c.pem
+var emOVTLSCAG3C []byte
+
 func FuzzCheckCertificate(f *testing.F) {
 	f.Add([]byte{})
-	if pem, err := os.ReadFile("testdata/em-ov-tls-ca-g3c.pem"); err == nil {
-		f.Add(pem)
-	}
+	f.Add(emOVTLSCAG3C)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = NewChecker().CheckCertificate(data)
 		_, _ = NewChecker().CheckPEM(data)
