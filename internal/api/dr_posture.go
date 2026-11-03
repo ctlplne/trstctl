@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -127,22 +128,30 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	out, err := a.drPostureView(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, out)
+}
+
+// drPostureView builds the DR posture for the tenant; the operations dashboard
+// reads the same view (A246).
+func (a *API) drPostureView(ctx context.Context, tenantID string) (DRPosture, error) {
 	out := DRPosture{Guidance: drGuidance}
 	if a.store != nil && a.restoreDrillKeys != nil {
-		rows, err := a.store.ListAttestationsByKind(r.Context(), tenantID, projections.RestoreDrillAttestationKind, 50)
+		rows, err := a.store.ListAttestationsByKind(ctx, tenantID, projections.RestoreDrillAttestationKind, 50)
 		if err != nil {
-			a.writeError(w, err)
-			return
+			return DRPosture{}, err
 		}
 		for _, row := range rows {
 			var evidence backup.SignedDrillEvidence
 			if err := json.Unmarshal(row.Evidence, &evidence); err != nil {
-				a.writeError(w, err)
-				return
+				return DRPosture{}, err
 			}
 			if err := backup.VerifyDrillEvidence(evidence, a.restoreDrillKeys); err != nil {
-				a.writeError(w, err)
-				return
+				return DRPosture{}, err
 			}
 			out.DrillHistory = append(out.DrillHistory, drDrillFromEvidence(row.ID, evidence))
 		}
@@ -162,8 +171,7 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 		out.Detail = "No backup directory is configured for this deployment, so this control " +
 			"plane cannot report on backup integrity. That is not the same as having no backups " +
 			"— many deployments back up through infrastructure this product does not see."
-		a.writeJSON(w, http.StatusOK, out)
-		return
+		return out, nil
 	}
 	out.BackupConfigured = true
 
@@ -175,8 +183,7 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 		// a restore.
 		out.Detail = "A backup directory is configured and could not be read, so its integrity " +
 			"is unknown. Check the path and the permissions of the process serving this API."
-		a.writeJSON(w, http.StatusOK, out)
-		return
+		return out, nil
 	}
 
 	if !report.CreatedAt.IsZero() {
@@ -206,7 +213,7 @@ func (a *API) listDRPosture(w http.ResponseWriter, r *http.Request) {
 			"longer match what was recorded, which means a restore from it would not reproduce " +
 			"the state it claims to hold."
 	}
-	a.writeJSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 func drDrillFromEvidence(id string, evidence backup.SignedDrillEvidence) DRDrill {

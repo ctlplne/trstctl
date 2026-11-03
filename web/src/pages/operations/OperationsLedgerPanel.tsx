@@ -121,18 +121,18 @@ function OperationDetail({ item }: { item: OperationLedgerItem }) {
     <div className="mt-2 grid gap-2 border-t border-border pt-2">
       <h3 className="font-medium">{t("operations.ledger.chain")}</h3>
       <ol className="grid list-decimal gap-1 ps-5">
-        {detail.data.chain.map((link, index) => (
+        {(detail.data.chain ?? []).map((link, index) => (
           <li key={`${link.step}-${index}`}>
             <span className="font-medium">{t(stepCopy[link.step])}</span> · {t(linkCopy[link.state])} · {link.detail}
             {link.at && <span className="text-xs text-muted-foreground"> · {formatDateTime(link.at)}</span>}
           </li>
         ))}
       </ol>
-      {detail.data.actions.length > 0 && (
+      {(detail.data.actions ?? []).length > 0 && (
         <>
           <h3 className="font-medium">{t("operations.ledger.actions")}</h3>
           <ul className="grid gap-1">
-            {detail.data.actions.map((action) => (
+            {(detail.data.actions ?? []).map((action) => (
               <li key={action.action}>
                 <span className="font-medium">{t(actionCopy[action.action])}</span>:{" "}
                 {action.available

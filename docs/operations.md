@@ -112,6 +112,27 @@ An issuance approval binds the identity's destination and revision, its issuer
 spec digest, so an old approval never authorizes a changed issuer, target or
 profile version.
 
+## Deployment health (A246)
+
+`GET /api/v1/operations/dashboard` (`trstctl operations dashboard`, **Deployment
+health** at the top of the Operations page) answers six questions, each ok,
+warning, critical or unknown, with the numbers behind the answer:
+
+| Panel | Reads | Warning | Critical |
+| --- | --- | --- | --- |
+| Backup freshness | the newest backup in the configured backup directory: when it was taken, and whether its bytes still match its manifest (re-hashed on every read) | taken more than 26 hours ago, its manifest records no time, or an optional artifact no longer matches | taken more than 72 hours ago, a required artifact no longer matches, or the directory cannot be read |
+| Restore proof | the last restore drill: outcome, when it finished, RPO, RTO | no drill has run, or it was skipped | the last drill failed |
+| Queue lag | outbox commands pending, processing, stranded (a worker's lease ran out) and failed, and the oldest pending one's wait | a wait over 15 minutes, or a command failed for good | a wait over an hour, or any stranded command |
+| Signer readiness | the signer's readiness probe | | the signer does not answer |
+| Data freshness | the event log's head against the read model's applied position | more than 1,000 events behind | the read model stopped at an event it could not apply |
+| Dependencies | every readiness probe `/readyz` runs | | a probe fails (listed by name) |
+
+Backup freshness reads unknown when no backup directory is configured: backups
+made outside the control plane are not seen. Every number has an independent
+read to check it against: the outbox table for the queues,
+`GET /api/v1/platform/dr-posture` for backup and restore, `/readyz` for the
+signer and dependencies, and the event log's head for freshness.
+
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the

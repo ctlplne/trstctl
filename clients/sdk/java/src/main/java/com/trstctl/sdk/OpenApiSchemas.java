@@ -744,6 +744,7 @@ public final class OpenApiSchemas {
       "OperationLedgerDetail",
       "OperationLedgerItem",
       "OperationLedgerPage",
+      "OperationsDashboard",
       "OutboxCircuit",
       "OutboxCircuitList",
       "OutboxReconciliationConflict",

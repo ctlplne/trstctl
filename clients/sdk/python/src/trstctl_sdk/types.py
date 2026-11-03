@@ -10580,6 +10580,20 @@ OperationLedgerPage = TypedDict(
     total=False,
 )
 
+OperationsDashboard = TypedDict(
+    'OperationsDashboard',
+    {
+        'backup': dict[str, Any],
+        'data_freshness': dict[str, Any],
+        'dependencies': list[dict[str, Any]],
+        'generated_at': str,
+        'queues': dict[str, Any],
+        'restore_proof': dict[str, Any],
+        'signer': dict[str, Any],
+    },
+    total=False,
+)
+
 OutboxCircuit = TypedDict(
     'OutboxCircuit',
     {

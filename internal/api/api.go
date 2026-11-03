@@ -199,6 +199,7 @@ type API struct {
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
 	platformIssuingCAID                string
+	operationsHealth                   OperationsHealthProvider
 	validityReadiness                  ValidityReadinessProvider
 	assurance                          *assurance.Assembler
 	firstIssuanceRetry                 FirstIssuanceRetryService
@@ -353,6 +354,7 @@ type config struct {
 	acmeOperatorPlan            ACMEOperatorPlanProvider
 	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
 	platformIssuingCAID         string
+	operationsHealth            OperationsHealthProvider
 	validityReadiness           ValidityReadinessProvider
 	assurance                   *assurance.Assembler
 	firstIssuanceRetry          FirstIssuanceRetryService
@@ -682,6 +684,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
 		platformIssuingCAID:         cfg.platformIssuingCAID,
+		operationsHealth:            cfg.operationsHealth,
 		validityReadiness:           cfg.validityReadiness,
 		assurance:                   cfg.assurance,
 		firstIssuanceRetry:          cfg.firstIssuanceRetry,

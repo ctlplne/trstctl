@@ -10,6 +10,7 @@ export type StatusVocabulary =
   | "honesty"
   | "inventory"
   | "lifecycle"
+  | "health"
   | "operation"
   | "revocation"
   | "risk";
@@ -233,6 +234,38 @@ export const revocationStatus: Record<string, StatusDescriptor> = {
   not_observed: {
     get label() {
       return translateNow("identities.revocation.state.notObserved");
+    },
+    tone: "neutral",
+    order: 4,
+  },
+};
+
+/** A dashboard tile's state (A246): ok needs the numbers behind it. */
+export const healthStatus: Record<string, StatusDescriptor> = {
+  ok: {
+    get label() {
+      return translateNow("operations.dashboard.state.ok");
+    },
+    tone: "success",
+    order: 1,
+  },
+  warning: {
+    get label() {
+      return translateNow("operations.dashboard.state.warning");
+    },
+    tone: "warning",
+    order: 2,
+  },
+  critical: {
+    get label() {
+      return translateNow("operations.dashboard.state.critical");
+    },
+    tone: "critical",
+    order: 3,
+  },
+  unknown: {
+    get label() {
+      return translateNow("operations.dashboard.state.unknown");
     },
     tone: "neutral",
     order: 4,
@@ -713,6 +746,7 @@ export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDes
   expiry: expiryBands,
   honesty: honestyModes,
   inventory: inventoryStatus,
+  health: healthStatus,
   lifecycle: lifecycleStatus,
   operation: operationStatus,
   revocation: revocationStatus,

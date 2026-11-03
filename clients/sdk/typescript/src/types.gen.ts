@@ -6038,6 +6038,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show backup freshness, restore proof, queue lag, signer readiness, data freshness and dependency health, each with the numbers behind its state */
+        get: operations["getOperationsDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/jobs": {
         parameters: {
             query?: never;
@@ -18673,6 +18690,59 @@ export interface components {
         OperationLedgerPage: {
             items: components["schemas"]["OperationLedgerItem"][];
             next_cursor?: string;
+        };
+        OperationsDashboard: {
+            backup: {
+                age_seconds?: number;
+                configured: boolean;
+                detail: string;
+                last_backup_at?: string;
+                last_verified_at?: string;
+                /** @enum {string} */
+                state: "ok" | "warning" | "critical" | "unknown";
+                verified: boolean;
+            };
+            data_freshness: {
+                detail: string;
+                event_head: number;
+                failed_sequence?: number;
+                lag_events: number;
+                projection_applied: number;
+                /** @enum {string} */
+                state: "ok" | "warning" | "critical" | "unknown";
+            };
+            dependencies: {
+                detail?: string;
+                healthy: boolean;
+                name: string;
+            }[];
+            /** Format: date-time */
+            generated_at: string;
+            queues: {
+                detail: string;
+                failed: number;
+                oldest_pending_seconds?: number;
+                pending: number;
+                processing: number;
+                /** @enum {string} */
+                state: "ok" | "warning" | "critical" | "unknown";
+                stranded: number;
+            };
+            restore_proof: {
+                completed_at?: string;
+                detail: string;
+                outcome?: string;
+                rpo_seconds?: number;
+                rto_seconds?: number;
+                /** @enum {string} */
+                state: "ok" | "warning" | "critical" | "unknown";
+            };
+            signer: {
+                detail: string;
+                healthy: boolean;
+                /** @enum {string} */
+                state: "ok" | "warning" | "critical" | "unknown";
+            };
         };
         OutboxCircuit: {
             destination: string;
@@ -40148,6 +40218,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkheadStats"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getOperationsDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsDashboard"];
                 };
             };
             /** @description client error */

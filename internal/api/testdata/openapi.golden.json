@@ -33219,6 +33219,217 @@
         ],
         "type": "object"
       },
+      "OperationsDashboard": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "age_seconds": {
+                "type": "integer"
+              },
+              "configured": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "last_backup_at": {
+                "type": "string"
+              },
+              "last_verified_at": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warning",
+                  "critical",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "verified": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "state",
+              "detail",
+              "configured",
+              "verified"
+            ],
+            "type": "object"
+          },
+          "data_freshness": {
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "event_head": {
+                "type": "integer"
+              },
+              "failed_sequence": {
+                "type": "integer"
+              },
+              "lag_events": {
+                "type": "integer"
+              },
+              "projection_applied": {
+                "type": "integer"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warning",
+                  "critical",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "detail",
+              "event_head",
+              "projection_applied",
+              "lag_events"
+            ],
+            "type": "object"
+          },
+          "dependencies": {
+            "items": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "healthy": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "healthy"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "queues": {
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "failed": {
+                "type": "integer"
+              },
+              "oldest_pending_seconds": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "processing": {
+                "type": "integer"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warning",
+                  "critical",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              "stranded": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "state",
+              "detail",
+              "pending",
+              "processing",
+              "stranded",
+              "failed"
+            ],
+            "type": "object"
+          },
+          "restore_proof": {
+            "properties": {
+              "completed_at": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string"
+              },
+              "rpo_seconds": {
+                "type": "integer"
+              },
+              "rto_seconds": {
+                "type": "integer"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warning",
+                  "critical",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "signer": {
+            "properties": {
+              "detail": {
+                "type": "string"
+              },
+              "healthy": {
+                "type": "boolean"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warning",
+                  "critical",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "detail",
+              "healthy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "generated_at",
+          "backup",
+          "restore_proof",
+          "queues",
+          "signer",
+          "data_freshness",
+          "dependencies"
+        ],
+        "type": "object"
+      },
       "OutboxCircuit": {
         "properties": {
           "destination": {
@@ -74251,6 +74462,53 @@
           }
         ],
         "summary": "List bounded worker-pool saturation and rejection counters",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/operations/dashboard": {
+      "get": {
+        "operationId": "getOperationsDashboard",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationsDashboard"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show backup freshness, restore proof, queue lag, signer readiness, data freshness and dependency health, each with the numbers behind its state",
         "x-trstctl-permission": "access:read"
       }
     },

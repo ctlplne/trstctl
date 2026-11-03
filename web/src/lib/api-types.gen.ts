@@ -7654,6 +7654,16 @@ export interface OperationLedgerPage {
   next_cursor?: string;
 }
 
+export interface OperationsDashboard {
+  backup: { age_seconds?: number; configured: boolean; detail: string; last_backup_at?: string; last_verified_at?: string; state: "ok" | "warning" | "critical" | "unknown"; verified: boolean };
+  data_freshness: { detail: string; event_head: number; failed_sequence?: number; lag_events: number; projection_applied: number; state: "ok" | "warning" | "critical" | "unknown" };
+  dependencies: { detail?: string; healthy: boolean; name: string }[];
+  generated_at: string;
+  queues: { detail: string; failed: number; oldest_pending_seconds?: number; pending: number; processing: number; state: "ok" | "warning" | "critical" | "unknown"; stranded: number };
+  restore_proof: { completed_at?: string; detail: string; outcome?: string; rpo_seconds?: number; rto_seconds?: number; state: "ok" | "warning" | "critical" | "unknown" };
+  signer: { detail: string; healthy: boolean; state: "ok" | "warning" | "critical" | "unknown" };
+}
+
 export interface OutboxCircuit {
   destination: string;
   failures: number;

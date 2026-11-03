@@ -305,6 +305,7 @@ var consoleSuccessEvidenceValues = map[string]string{
 	"discoveryStatus.managed":            "the event-sourced triage projection records an operator claim linked to a managed identity",
 	"expiryBands.healthy":                "a parsed expiry is more than ninety days away",
 	"inventoryStatus.served":             "the latest completed delivery carried the still-active certificate and a connector readback or a clean local or relay endpoint verification observed that exact fingerprint",
+	"healthStatus.ok":                    "the dashboard tile's own numbers are inside its threshold: a backup verified within a day, a restored drill, a draining queue with no stranded command, a signer answering its probe, a read model current with the log",
 	"lifecycleStatus.deployed":           "the event-sourced lifecycle records deployment",
 	"operationStatus.verified":           "a connector readback, a clean endpoint verification of the delivered fingerprint, or every named consumer reporting the new secret version — never a provider acknowledgement or an outbox receipt alone",
 	"revocationStatus.confirmed":         "that facet's own evidence: a CA record marked revoked with a CRL generated since, every destination replaced or removed, endpoints checked since the revocation no longer presenting it, or a containment stop after it",

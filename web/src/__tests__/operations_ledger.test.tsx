@@ -6,11 +6,15 @@ import { AppQueryProvider } from "@/lib/query";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { OperationsLedgerPanel } from "@/pages/operations/OperationsLedgerPanel";
 import { IdentityRevocationReport } from "@/pages/identities/IdentityRevocationReport";
+import { OperationsDashboardPanel } from "@/pages/operations/OperationsDashboardPanel";
 
-const { list, detail, report } = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), report: vi.fn() }));
+const { list, detail, report, dashboard } = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), report: vi.fn(), dashboard: vi.fn() }));
 vi.mock("@/lib/api", async (original) => {
   const actual = await original<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, operationLedger: list, operationLedgerItem: detail, identityRevocationReport: report } };
+  return {
+    ...actual,
+    api: { ...actual.api, operationLedger: list, operationLedgerItem: detail, identityRevocationReport: report, operationsDashboard: dashboard },
+  };
 });
 
 const item = (id: string, state: string, source = "connector_delivery") => ({
@@ -41,6 +45,7 @@ describe("operations ledger (A245)", () => {
     list.mockReset();
     detail.mockReset();
     report.mockReset();
+    dashboard.mockReset();
   });
 
   it("shows each operation in its normalized state and filters by state", async () => {
@@ -114,5 +119,36 @@ describe("operations ledger (A245)", () => {
     expect(region.getByText("Not observed")).toBeInTheDocument();
     expect(region.getByText("lb: still holds it")).toBeInTheDocument();
     expect(region.getByText("edge (relay): still presents the revoked certificate")).toBeInTheDocument();
+  });
+
+  it("shows deployment health with the numbers behind each state (A246)", async () => {
+    dashboard.mockResolvedValue({
+      generated_at: "2030-01-01T12:00:00Z",
+      backup: {
+        state: "warning",
+        detail: "the newest backup is more than a day old",
+        configured: true,
+        verified: true,
+        last_backup_at: "2029-12-31T06:00:00Z",
+        age_seconds: 108000,
+      },
+      restore_proof: { state: "ok", detail: "restored", outcome: "restored", completed_at: "2029-12-31T07:00:00Z", rpo_seconds: 600, rto_seconds: 1200 },
+      queues: { state: "critical", detail: "a worker's lease ran out", pending: 4, processing: 1, stranded: 1, failed: 0 },
+      signer: { state: "ok", detail: "the signer answers its readiness probe", healthy: true },
+      data_freshness: { state: "ok", detail: "current", event_head: 120, projection_applied: 118, lag_events: 2 },
+      dependencies: [
+        { name: "db", healthy: true },
+        { name: "nats", healthy: false, detail: "event log unreachable" },
+      ],
+    });
+    show(<OperationsDashboardPanel />);
+    const region = within(await screen.findByRole("region", { name: "Deployment health" }));
+    await region.findByText("4 waiting, 1 running, 1 stranded, 0 failed");
+    expect(region.getByText("Log head 120; read model at 118 (2 behind)")).toBeInTheDocument();
+    expect(region.getByText("nats: event log unreachable")).toBeInTheDocument();
+    expect(region.getByText("db: healthy")).toBeInTheDocument();
+    expect(region.getByText(/^Newest backup taken /)).toBeInTheDocument();
+    expect(region.getByText(/^Last drill .+: RPO 600 s, RTO 1200 s$/)).toBeInTheDocument();
+    expect(region.getAllByText("Critical").length).toBeGreaterThan(0);
   });
 });

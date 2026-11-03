@@ -48,10 +48,10 @@ export function IdentityRevocationReport({ identityId }: { identityId: string })
           <Skeleton className="h-12" />
           <Skeleton className="h-12" />
         </div>
-      ) : result.data.certificates.length === 0 ? (
+      ) : (result.data.certificates ?? []).length === 0 ? (
         <p className="mt-3 text-muted-foreground">{t("identities.revocation.empty")}</p>
       ) : (
-        result.data.certificates.map((cert) => (
+        (result.data.certificates ?? []).map((cert) => (
           <div key={cert.certificate_id} className="mt-3 grid gap-2">
             <p className="font-medium">{t("identities.revocation.certificate", { serial: cert.serial, at: formatDateTime(cert.revoked_at) })}</p>
             <dl className="grid gap-3 sm:grid-cols-2">
@@ -60,16 +60,16 @@ export function IdentityRevocationReport({ identityId }: { identityId: string })
               {facet(t("identities.revocation.facet.newConnections"), cert.new_connections)}
               {facet(t("identities.revocation.facet.sessions"), cert.existing_sessions)}
             </dl>
-            {cert.destinations.length > 0 && (
+            {(cert.destinations ?? []).length > 0 && (
               <ul className="grid gap-1 text-xs text-muted-foreground">
-                {cert.destinations.map((d) => (
+                {(cert.destinations ?? []).map((d) => (
                   <li key={d.target}>{t("identities.revocation.destination", { target: d.target, now: t(nowCopy[d.now]) })}</li>
                 ))}
               </ul>
             )}
-            {cert.endpoints.length > 0 && (
+            {(cert.endpoints ?? []).length > 0 && (
               <ul className="grid gap-1 text-xs text-muted-foreground">
-                {cert.endpoints.map((e) => (
+                {(cert.endpoints ?? []).map((e) => (
                   <li key={`${e.endpoint_id}-${e.vantage}`}>
                     {t("identities.revocation.endpoint", { endpoint: e.endpoint_id, vantage: e.vantage, detail: e.detail })}
                   </li>

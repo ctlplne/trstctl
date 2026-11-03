@@ -9,6 +9,7 @@ import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { AgentJobLedgerPanel } from "@/pages/operations/AgentJobLedgerPanel";
 import { OperationsLedgerPanel } from "@/pages/operations/OperationsLedgerPanel";
+import { OperationsDashboardPanel } from "@/pages/operations/OperationsDashboardPanel";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -266,6 +267,8 @@ export function Operations() {
       </section>
 
       <RenewalReliability data={renewalSLO.data} loading={renewalSLO.loading} error={renewalSLO.error} />
+
+      <OperationsDashboardPanel />
 
       <OperationsLedgerPanel />
 
