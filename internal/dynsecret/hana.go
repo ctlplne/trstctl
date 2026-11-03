@@ -20,36 +20,41 @@ import (
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
-// hanaName is a user or role name this provider passes to
-// ESCAPE_DOUBLE_QUOTES, exactly as SAP HANA stores it (an unquoted name is
-// stored in upper case).
+// hanaName is a role name this provider quotes (ESCAPE_DOUBLE_QUOTES) as SAP
+// HANA stores it, or a user name, which it upper-cases and splices bare.
 var hanaName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,126}$`)
 
+// hanaUser is a user name as this provider issues and splices it: bare
+// upper case, the form SAP HANA stores an unquoted name in.
+var hanaUser = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,126}$`)
+
 // The SQLScript below never carries a value in its text: the password
-// arrives as a VARBINARY bind the database turns into the quoted identifier
-// it splices into the DDL it runs itself, and every name is a bind quoted
-// the same way (ESCAPE_DOUBLE_QUOTES). Each statement is built in a variable
-// and run as EXEC :stmt (CI 41585418047: SAP HANA answered error 257, a
-// syntax error, to EXEC of a concatenated expression).
+// arrives as a VARBINARY bind the database turns into the quoted password it
+// splices into the DDL it runs itself, a role name is quoted the same way
+// (ESCAPE_DOUBLE_QUOTES), and a user name is spliced bare, because SAP HANA's
+// CREATE, ALTER and DROP USER and a GRANT's grantee take a bare user name, not
+// a quoted identifier (CI 41597708898: error 257 "incorrect syntax near" the
+// opening quote). Bare is safe: the provider names users itself, upper case,
+// matching hanaName, before any statement runs. Each statement is built in a
+// variable and run as EXEC :stmt (CI 41585418047: error 257 to EXEC of a
+// concatenated expression).
 const (
 	hanaUpsertUser = `DO (IN uname NVARCHAR(256) => ?, IN pw VARBINARY(256) => ?) BEGIN
   DECLARE n INTEGER;
-  DECLARE quoted NVARCHAR(512);
   DECLARE secret_literal NVARCHAR(1024);
   DECLARE stmt NVARCHAR(2048);
-  quoted = '"' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
   secret_literal = '"' || ESCAPE_DOUBLE_QUOTES(BINTOSTR(:pw)) || '"';
   SELECT COUNT(*) INTO n FROM SYS.USERS WHERE USER_NAME = :uname;
   IF :n = 0 THEN
-    stmt = 'CREATE USER ' || :quoted || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
+    stmt = 'CREATE USER ' || :uname || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
     EXEC :stmt;
   ELSE
-    stmt = 'ALTER USER ' || :quoted || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
+    stmt = 'ALTER USER ' || :uname || ' PASSWORD ' || :secret_literal || ' NO FORCE_FIRST_PASSWORD_CHANGE';
     EXEC :stmt;
-    stmt = 'ALTER USER ' || :quoted || ' ACTIVATE USER NOW';
+    stmt = 'ALTER USER ' || :uname || ' ACTIVATE USER NOW';
     EXEC :stmt;
   END IF;
-  stmt = 'ALTER USER ' || :quoted || ' DISABLE PASSWORD LIFETIME';
+  stmt = 'ALTER USER ' || :uname || ' DISABLE PASSWORD LIFETIME';
   EXEC :stmt;
 END`
 	hanaGrantRole = `DO (IN rname NVARCHAR(256) => ?, IN uname NVARCHAR(256) => ?) BEGIN
@@ -57,7 +62,7 @@ END`
   DECLARE stmt NVARCHAR(1024);
   SELECT COUNT(*) INTO n FROM SYS.GRANTED_ROLES WHERE GRANTEE = :uname AND ROLE_NAME = :rname;
   IF :n = 0 THEN
-    stmt = 'GRANT "' || ESCAPE_DOUBLE_QUOTES(:rname) || '" TO "' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
+    stmt = 'GRANT "' || ESCAPE_DOUBLE_QUOTES(:rname) || '" TO ' || :uname;
     EXEC :stmt;
   END IF;
 END`
@@ -65,19 +70,17 @@ END`
 	// the ones open, and drops it with what it owns.
 	hanaRevokeUser = `DO (IN uname NVARCHAR(256) => ?) BEGIN
   DECLARE n INTEGER;
-  DECLARE quoted NVARCHAR(512);
   DECLARE stmt NVARCHAR(1024);
   DECLARE CURSOR sessions FOR SELECT CONNECTION_ID FROM SYS.M_CONNECTIONS WHERE USER_NAME = :uname AND OWN = 'FALSE' AND CONNECTION_STATUS <> '';
-  quoted = '"' || ESCAPE_DOUBLE_QUOTES(:uname) || '"';
   SELECT COUNT(*) INTO n FROM SYS.USERS WHERE USER_NAME = :uname;
   IF :n > 0 THEN
-    stmt = 'ALTER USER ' || :quoted || ' DEACTIVATE USER NOW';
+    stmt = 'ALTER USER ' || :uname || ' DEACTIVATE USER NOW';
     EXEC :stmt;
     FOR s AS sessions DO
       stmt = 'ALTER SYSTEM DISCONNECT SESSION ''' || TO_NVARCHAR(s.CONNECTION_ID) || '''';
       EXEC :stmt;
     END FOR;
-    stmt = 'DROP USER ' || :quoted || ' CASCADE';
+    stmt = 'DROP USER ' || :uname || ' CASCADE';
     EXEC :stmt;
   END IF;
 END`
@@ -160,7 +163,7 @@ func (b *HANABackend) CreateCredential(ctx context.Context, req GenerateRequest)
 		return "", nil, err
 	}
 	user := strings.ToUpper(name)
-	if !hanaName.MatchString(user) {
+	if !hanaUser.MatchString(user) {
 		return "", nil, fmt.Errorf("dynsecret hana: generated user name %q is not plain", user)
 	}
 	password, err := randomPolicyPassword(32)
@@ -194,7 +197,7 @@ func (b *HANABackend) CreateCredential(ctx context.Context, req GenerateRequest)
 // disconnected and it is dropped, so its next login fails. Only users this
 // provider names are dropped; one already gone counts as revoked.
 func (b *HANABackend) Revoke(ctx context.Context, ref string) error {
-	if !hanaName.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
+	if !hanaUser.MatchString(ref) || !issuedPrincipalName(b.prefix, ref) {
 		return fmt.Errorf("dynsecret hana: refusing to drop %q, which this provider did not create", ref)
 	}
 	if _, err := b.exec.ExecContext(ctx, hanaRevokeUser, ref); err != nil {
