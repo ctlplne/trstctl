@@ -166,9 +166,33 @@ func NewMSSQLBackend(exec SQLExecutor, cfg MSSQLConfig) (*MSSQLBackend, error) {
 			return nil, errors.New("dynsecret mssql: the admin DSN must be a sqlserver:// URL with a host")
 		}
 		parsed.User = nil
+		mssqlBoundConnection(parsed)
 		b.verifyURL = parsed
 	}
 	return b, nil
+}
+
+// The connection bounds the provider adds to an operator's DSN that names
+// none (A240): go-mssqldb leaves a connection's reads without a deadline by
+// default and does not abandon a login when its context ends, so a server
+// that accepts the connection and then stops answering (CI 41578461348: a
+// paused container) held an outbox worker past every delivery deadline and
+// recorded nothing. With these, the attempt fails within the bound and the
+// outbox retries it.
+const (
+	mssqlDefaultDialTimeout       = "10"
+	mssqlDefaultConnectionTimeout = "15"
+)
+
+func mssqlBoundConnection(target *url.URL) {
+	query := target.Query()
+	if query.Get("dial timeout") == "" {
+		query.Set("dial timeout", mssqlDefaultDialTimeout)
+	}
+	if query.Get("connection timeout") == "" {
+		query.Set("connection timeout", mssqlDefaultConnectionTimeout)
+	}
+	target.RawQuery = query.Encode()
 }
 
 // inDatabase runs statement in the configured database through its
@@ -388,7 +412,12 @@ func OpenMSSQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
 	if len(adminDSN) == 0 {
 		return nil, errors.New("dynsecret mssql: admin DSN required")
 	}
-	db, err := sql.Open("sqlserver", secrettext.String(adminDSN))
+	target, err := url.Parse(secrettext.String(adminDSN))
+	if err != nil || target.Scheme != "sqlserver" || target.Host == "" {
+		return nil, errors.New("dynsecret mssql: the admin DSN must be a sqlserver:// URL with a host")
+	}
+	mssqlBoundConnection(target)
+	db, err := sql.Open("sqlserver", target.String())
 	if err != nil {
 		return nil, errors.New("dynsecret mssql: open admin connection failed")
 	}

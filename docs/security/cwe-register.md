@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2346 annotated sites across 29 rules. Each row is
+2347 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1028,8 +1028,8 @@ not this file.
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:155` | the new user's password goes to the Atlas Admin API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/mssql.go:242` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/mssql.go:297` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:266` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
+| `internal/dynsecret/mssql.go:321` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/oracle.go:262` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1148,7 +1148,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (305 sites)
+### G204 — CWE-78 OS command injection (306 sites)
 
 | Location | Reason |
 |---|---|
@@ -1394,6 +1394,7 @@ not this file.
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:65` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:395` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_mongo_two_user_container_test.go:421` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_static_rotation_mssql_two_user_lab_test.go:253` | fixed tool in the runner's lab container (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:53` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |

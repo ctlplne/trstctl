@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -238,5 +239,33 @@ func TestMSSQLTwoUserRotationOnlyChangesPasswordsA240(t *testing.T) {
 	}
 	if err := b.VerifyCredential(context.Background(), []byte(`{"username":"x","password":"y"}`)); !errors.Is(err, ErrNoSelfProof) {
 		t.Fatalf("verify without an admin DSN = %v", err)
+	}
+}
+
+// A240: every SQL Server connection the provider opens carries dial and
+// connection timeouts, so an unresponsive server fails the attempt instead of
+// holding an outbox worker (CI 41578461348); an operator's own values stay.
+func TestMSSQLConnectionsAreBoundedA240(t *testing.T) {
+	for raw, want := range map[string][2]string{
+		"sqlserver://admin:pw@db.internal:1433?database=orders":                                      {"10", "15"},
+		"sqlserver://admin:pw@db.internal:1433?database=orders&dial+timeout=3&connection+timeout=60": {"3", "60"},
+		"sqlserver://admin:pw@db.internal:1433?connection+timeout=5":                                 {"10", "5"},
+	} {
+		target, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mssqlBoundConnection(target)
+		query := target.Query()
+		if query.Get("dial timeout") != want[0] || query.Get("connection timeout") != want[1] || (strings.Contains(raw, "database") && query.Get("database") != "orders") {
+			t.Errorf("%s -> %s", raw, target.Redacted())
+		}
+	}
+	b, err := NewMSSQLBackend(&recordingMSSQL{}, MSSQLConfig{Database: "orders", AdminDSN: []byte("sqlserver://admin:pw@db.internal:1433?database=orders"), RoleBindings: map[string]string{"reader": "db_datareader"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query := b.verifyURL.Query(); query.Get("connection timeout") != "15" || query.Get("dial timeout") != "10" {
+		t.Fatalf("the verification URL is unbounded: %s", b.verifyURL.Redacted())
 	}
 }

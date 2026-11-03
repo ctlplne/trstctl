@@ -28,7 +28,10 @@ const (
 
 // mssqlConnects reports whether user/password logs in at the administrator
 // DSN's address, in orders, and runs SELECT 1, as an application's driver
-// would.
+// would. Its connection is bounded like the provider's: go-mssqldb does not
+// abandon a login when its context ends, so against the paused server an
+// unbounded probe held the application loop (and the test's cleanup) for the
+// rest of the 25-minute timeout (CI 41578461348).
 func mssqlConnects(adminDSN, user, password string) bool {
 	target, err := url.Parse(adminDSN)
 	if err != nil {
@@ -37,6 +40,8 @@ func mssqlConnects(adminDSN, user, password string) bool {
 	target.User = url.UserPassword(user, password)
 	query := target.Query()
 	query.Set("database", "orders")
+	query.Set("dial timeout", "5")
+	query.Set("connection timeout", "10")
 	target.RawQuery = query.Encode()
 	db, err := sql.Open("sqlserver", target.String())
 	if err != nil {
@@ -244,6 +249,8 @@ func TestServedSQLServerTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 	if out, err := exec.Command("docker", "pause", lab.container).CombinedOutput(); err != nil { // #nosec G204,G702 -- fixed tool in the runner's lab container (CWE-78)
 		t.Fatalf("pause the server: %v %s", err, out)
 	}
+	// A failure below must not leave the server paused under the cleanup.
+	t.Cleanup(func() { _ = exec.Command("docker", "unpause", lab.container).Run() }) // #nosec G204 -- fixed tool in the runner's lab container (CWE-78)
 	if err := app.report(ctx, verified.ResultVersion); err != nil {
 		t.Fatalf("report the successor: %v", err)
 	}
