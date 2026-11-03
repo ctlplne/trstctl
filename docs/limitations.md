@@ -7482,6 +7482,34 @@ it does not see:
   first and says when there are more; ephemeral certificates, issued per use and
   never renewed, are left out as the expiry views leave them out.
 
+## Application view for certificates (A244) — served
+
+`GET /api/v1/identities/{id}/application`, `trstctl identities application` and the
+**Application view** in an identity's detail show one certificate's owner, profile
+(with its enrollment methods), exact issuer, destination, the latest delivery, what
+was seen at the endpoint and from which vantage, approvals with what changed under
+them, the next automated action and any failed prerequisite, recent alerts, the
+recover, revoke and retire actions, a value-free review plan and reusable defaults.
+The inventory distinguishes `requested`, `issued`, `delivered`, `served` (*Seen in
+use*), `revoked` and `retired`, on the view and on every identity list item. An
+issuance approval binds the destination, its revision and the issuer, and the
+impact routes for a target and a profile show what a change would supersede. The
+served journey imports a certificate, assigns an owner, selects an external CA,
+deploys to a cloud certificate store and renews twice without losing the CA, with
+the inventory reading delivered after each deploy, served once a relay agent saw the
+active certificate, and revoked and retired after those transitions. What it
+decides from, and what comes next:
+
+- **Seen means observed.** `served` needs a connector readback of the delivery or a
+  clean local or relay endpoint verification of the active certificate's
+  fingerprint. A destination nothing observes stays `delivered`; scheduling an
+  endpoint verification for every destination is what comes next.
+- **The plan is the configuration, not a dry run.** The review plan names the
+  steps and their subjects from the bound profile, CA and destination; the
+  transition preview remains the effect-free check of a specific change.
+- **Bounded reads.** Approvals list the newest ten and alerts the newest ten among
+  the latest two hundred notifications.
+
 ## Cryptographic risk report
 
 `GET /api/v1/reports/crypto-risk` (and the `crypto_risk` scheduled report,

@@ -2,6 +2,14 @@
 
 ### Added
 
+- Application view for certificates (A244): `GET /api/v1/identities/{id}/application` (CLI
+  `identities application`, the console's **Application view** in an identity's detail) shows
+  the owner, profile and its enrollment methods, the exact issuer, the destination and latest
+  delivery, what was seen at the endpoint and from which vantage, approvals with what changed
+  under them, the next automated action and failed prerequisites, recent alerts, the recover,
+  revoke and retire actions, a value-free review plan and reusable defaults (the console carries
+  them into the destination form). Identity list items carry `inventory_state`: requested,
+  issued, delivered, served (shown as *Seen in use*), revoked or retired.
 - Issuance approvals bind the destination and the issuer (A244): an approval asked for an identity
   that deploys to a target now records that target and its configuration revision, and the
   identity's issuing authority, in its evidence (covered by the intent digest). Editing the

@@ -30,6 +30,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
 import { IdentityCertificateEvidence } from "@/pages/identities/IdentityCertificateEvidence";
+import { IdentityApplicationPanel } from "@/pages/identities/IdentityApplicationPanel";
 import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
 import { IdentityRenewalHold } from "@/pages/identities/IdentityRenewalHold";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -772,6 +773,9 @@ export function Identities() {
         header: "Delivery evidence",
         cell: (identity) => (
           <span className="text-muted-foreground">
+            {["x509_certificate", "x509"].includes(identity.kind) && identity.inventory_state && (
+              <StatusBadge className="me-2" vocabulary="inventory" value={identity.inventory_state} />
+            )}
             {evidenceNotice ?? deliverySummary(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}
           </span>
         ),
@@ -1749,6 +1753,7 @@ function IdentityDetailPanel({
           </dl>
 
           {["x509_certificate", "x509"].includes(identity.kind) && <IdentityCertificateEvidence key={identity.id} identityId={identity.id} />}
+          {["x509_certificate", "x509"].includes(identity.kind) && <IdentityApplicationPanel key={`application-${identity.id}`} identityId={identity.id} />}
 
           <section aria-labelledby="identity-attributes-heading" className="mt-4">
             <h3 id="identity-attributes-heading" className="font-semibold">

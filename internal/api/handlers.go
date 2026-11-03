@@ -140,6 +140,10 @@ type identityResponse struct {
 	// RenewalPaused lists the targets on which an operator rollback holds this
 	// identity's automatic renewal (B4-8); empty means it renews everywhere.
 	RenewalPaused []identityRenewalPauseResponse `json:"renewal_paused"`
+	// InventoryState is what the inventory says the certificate is (A244):
+	// requested, issued, delivered, served, revoked or retired. Set on lists
+	// and the application view.
+	InventoryState string `json:"inventory_state,omitempty"`
 }
 
 // identityRenewalPauseResponse is one held target: where, since when, and why.
@@ -543,10 +547,17 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	evidence, err := a.store.IdentityInventoryEvidence(r.Context(), tenantID, ids)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	for _, it := range idents {
 		response := toIdentityResponse(it)
 		response.TerminalTargetState = pending[it.ID]
 		response.TerminalPending = response.TerminalTargetState != ""
+		e, found := evidence[it.ID]
+		response.InventoryState = inventoryState(it.Status, e, found)
 		items = append(items, response)
 	}
 	next := ""

@@ -486,6 +486,49 @@ name the BR version. `trstctl certificates validity-readiness [export]` reads
 both. The rogue-certificate posture applies the same dated maximum to a public
 TLS certificate's own lifetime, by its issuance date.
 
+### Application view for certificates (A244)
+
+`GET /api/v1/identities/{id}/application` (`trstctl identities application <id>`,
+and the **Application view** section of an identity's detail in the console) reads
+everything one certificate's application depends on in one answer:
+
+- **owner and profile**: the owner, the active profile version, whether issuance
+  needs approval, and the enrollment methods the profile permits;
+- **the exact issuer**: the CA the identity is bound to (platform, private or
+  external, by ID) and the issuer name inside the active certificate;
+- **where it goes and what was seen**: the destination (target, connector,
+  configuration revision), the latest completed delivery and its fingerprint, and
+  whether anything saw an endpoint present that certificate — the delivering
+  connector reading it back, the serving host's agent (`local`) or a network agent
+  (`relay`) — with `matches_current` false when the sighting is of an earlier
+  certificate;
+- **approvals**, newest first, each naming what changed since it was asked
+  (profile, destination or issuer); a changed one no longer covers the issuance;
+- **the next automated action** (renew now, renew before expiry, retry, blocked,
+  nothing scheduled) with any failed prerequisite, the latest run, recent alerts,
+  and the **recover, revoke and retire** actions with whether each applies now;
+- a **value-free review plan** — approve, issue from the CA, deploy to the
+  destination, verify from the vantage that saw it last — naming exactly what each
+  step acts on, never a value;
+- **reusable defaults**: the owner, profile and CA, which the console carries into
+  the destination form for the next certificate.
+
+The inventory says what each certificate is: `requested`, `issued` (no completed
+delivery carries the active certificate), `delivered` (a destination accepted it;
+nothing has seen it in use), `served` (shown as *Seen in use*: a readback or a clean
+endpoint verification observed the active certificate), `revoked` or `retired`.
+`GET /api/v1/identities` returns it on every item as `inventory_state`, and a
+renewal's new certificate starts over at `delivered` until something sees it.
+
+What a change would reach is answered before it is made:
+`GET /api/v1/connectors/targets/{id}/impact` and
+`GET /api/v1/profiles/impact/{name}` (`trstctl connector target impact`,
+`trstctl profiles impact`) list the certificates that use the target or profile
+and the open approvals the change would supersede. An issuance approval records
+the destination, its configuration revision and the issuer in its evidence, so
+editing the target, rebinding the identity or a different issuer supersedes it
+when it is decided or used, as a changed profile already did.
+
 ### Cryptographic risk report
 
 `GET /api/v1/reports/crypto-risk` lists every weak, distrusted or quantum-vulnerable

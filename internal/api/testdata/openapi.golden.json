@@ -23111,6 +23111,18 @@
             "format": "uuid",
             "type": "string"
           },
+          "inventory_state": {
+            "description": "issued: the active certificate is not delivered; delivered: a target took it; served: it was seen served (read back by the delivering connector, or observed by an endpoint verification).",
+            "enum": [
+              "requested",
+              "issued",
+              "delivered",
+              "served",
+              "revoked",
+              "retired"
+            ],
+            "type": "string"
+          },
           "issuer_id": {
             "format": "uuid",
             "type": "string"
@@ -23173,6 +23185,399 @@
           "name",
           "owner_id",
           "status"
+        ],
+        "type": "object"
+      },
+      "IdentityApplicationView": {
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "recover",
+                    "revoke",
+                    "retire"
+                  ],
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "available",
+                "method",
+                "path"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "alerts": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "destination": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "destination",
+                "status",
+                "created_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "approvals": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "changed": {
+                  "items": {
+                    "enum": [
+                      "profile",
+                      "destination",
+                      "issuer"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "action",
+                "created_at",
+                "expires_at",
+                "changed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "certificate": {
+            "properties": {
+              "fingerprint": {
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "not_after": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "serial": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fingerprint",
+              "serial",
+              "status"
+            ],
+            "type": "object"
+          },
+          "defaults": {
+            "properties": {
+              "connector": {
+                "type": "string"
+              },
+              "issuer_id": {
+                "type": "string"
+              },
+              "issuer_source": {
+                "type": "string"
+              },
+              "owner_id": {
+                "type": "string"
+              },
+              "profile_name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "destination": {
+            "properties": {
+              "connector": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "last_delivery_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "last_delivery_fingerprint": {
+                "type": "string"
+              },
+              "last_delivery_status": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "target_id": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "target_id",
+              "name",
+              "connector",
+              "revision",
+              "enabled"
+            ],
+            "type": "object"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "inventory_state": {
+            "enum": [
+              "requested",
+              "issued",
+              "delivered",
+              "served",
+              "revoked",
+              "retired"
+            ],
+            "type": "string"
+          },
+          "issuer": {
+            "properties": {
+              "certificate_issuer": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "platform",
+                  "private",
+                  "external"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "type": "object"
+          },
+          "owner": {
+            "properties": {
+              "application": {
+                "type": "string"
+              },
+              "environment": {
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "service": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "profile": {
+            "properties": {
+              "enrollment_methods": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "requires_approval": {
+                "type": "boolean"
+              },
+              "spec_digest": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "version",
+              "spec_digest",
+              "requires_approval",
+              "enrollment_methods"
+            ],
+            "type": "object"
+          },
+          "renewal": {
+            "properties": {
+              "blockers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "due": {
+                "type": "boolean"
+              },
+              "latest_run_status": {
+                "type": "string"
+              },
+              "next_action": {
+                "type": "string"
+              },
+              "not_after": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "due",
+              "next_action",
+              "blockers"
+            ],
+            "type": "object"
+          },
+          "review_plan": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "approve",
+                    "issue",
+                    "deploy",
+                    "verify"
+                  ],
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "subject"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "served": {
+            "properties": {
+              "at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "matches_current": {
+                "type": "boolean"
+              },
+              "vantage": {
+                "enum": [
+                  "connector",
+                  "local",
+                  "relay"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "fingerprint",
+              "vantage",
+              "matches_current"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "identity",
+          "inventory_state",
+          "issuer",
+          "approvals",
+          "renewal",
+          "alerts",
+          "actions",
+          "defaults",
+          "review_plan"
         ],
         "type": "object"
       },
@@ -64499,6 +64904,64 @@
           }
         ],
         "summary": "Get an identity",
+        "x-trstctl-permission": "identities:read"
+      }
+    },
+    "/api/v1/identities/{id}/application": {
+      "get": {
+        "operationId": "getIdentityApplicationView",
+        "parameters": [
+          {
+            "description": "identity ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityApplicationView"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show one certificate's application view: owner, profile, exact issuer, destination, served evidence and vantage, approvals, next automated action, alerts and actions",
         "x-trstctl-permission": "identities:read"
       }
     },

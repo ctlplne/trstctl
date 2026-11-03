@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
@@ -26,6 +26,7 @@ import { EndpointRecoveryReadinessPanel } from "./EndpointRecoveryReadinessPanel
 import { useTranslation } from "@/i18n/I18nProvider";
 
 import { newIdempotencyKey } from "@/lib/apiTransport";
+import type { EndpointBindingDefaults } from "@/lib/endpointBindingDefaults";
 
 const platformIssuer: EndpointIssuer = {
   source: "platform",
@@ -52,10 +53,12 @@ type IssuerOption = EndpointIssuer & { available: boolean };
 export function EndpointBindingWorkflow({
   targets,
   identities,
+  defaults,
   onComplete,
 }: {
   targets: DeploymentTarget[];
   identities: Identity[];
+  defaults?: EndpointBindingDefaults;
   onComplete: (binding: EndpointBinding, reason: string) => Promise<void> | void;
 }) {
   const { t } = useTranslation();
@@ -181,6 +184,25 @@ export function EndpointBindingWorkflow({
     ],
     [externalCAs, privateCAs],
   );
+  // Reused defaults (A244) apply once, when the roster that offers each value
+  // has loaded; a value no longer offered stays unselected.
+  const appliedRosterDefaults = useRef(false);
+  useEffect(() => {
+    if (!defaults || loading || appliedRosterDefaults.current) return;
+    appliedRosterDefaults.current = true;
+    if (defaults.owner_id && owners.some((owner) => owner.id === defaults.owner_id)) setValue("owner_id", defaults.owner_id, { shouldDirty: true });
+    if (defaults.issuer_key && issuerOptions.some((issuer) => issuer.available && encodeIssuer(issuer) === defaults.issuer_key)) {
+      setValue("issuer_key", defaults.issuer_key, { shouldDirty: true });
+    }
+  }, [defaults, loading, owners, issuerOptions, setValue]);
+  const appliedProfileDefault = useRef(false);
+  useEffect(() => {
+    if (!defaults?.profile_name || !profiles.data || appliedProfileDefault.current) return;
+    appliedProfileDefault.current = true;
+    if (profiles.data.some((profile) => profile.active && profile.name === defaults.profile_name)) {
+      setValue("profile_name", defaults.profile_name, { shouldDirty: true });
+    }
+  }, [defaults, profiles.data, setValue]);
   const selectedIssuer = issuerOptions.find((issuer) => issuerKey === encodeIssuer(issuer));
   const selectedTarget = targets.find((target) => target.id === targetID);
   const selectedTargetVerificationName = targetVerificationName(selectedTarget);

@@ -534,6 +534,7 @@ public final class OpenApiSchemas {
       "ITSMTicket",
       "IdempotencyResultProtectionReadout",
       "Identity",
+      "IdentityApplicationView",
       "IdentityConnectorTargetRequest",
       "IdentityDeploymentEvidence",
       "IdentityIssuanceResult",

@@ -304,6 +304,7 @@ var consoleSuccessEvidenceValues = map[string]string{
 	"deliveryStatus.rolled_back":         "an enrolled agent reported a family-specific predecessor restore; receipt detail states whether the listener was reverified",
 	"discoveryStatus.managed":            "the event-sourced triage projection records an operator claim linked to a managed identity",
 	"expiryBands.healthy":                "a parsed expiry is more than ninety days away",
+	"inventoryStatus.served":             "the latest completed delivery carried the still-active certificate and a connector readback or a clean local or relay endpoint verification observed that exact fingerprint",
 	"lifecycleStatus.deployed":           "the event-sourced lifecycle records deployment",
 	"lifecycleStatus.issued":             "the event-sourced lifecycle records issuance",
 }

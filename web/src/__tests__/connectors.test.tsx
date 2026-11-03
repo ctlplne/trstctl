@@ -907,6 +907,49 @@ describe("connector deployment disclosure surface", () => {
     expect(confirmed.queryByRole("button", { name: "Check host recovery readiness" })).not.toBeInTheDocument();
   });
 
+  it("opens the destination form with an application's reusable owner, profile and CA (A244)", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/connectors?bind_owner=owner-1&bind_profile=payments-tls&bind_issuer=external%3Acorporate-digicert"]}>
+        <ToastProvider>
+          <AppQueryProvider>
+            <Connectors />
+          </AppQueryProvider>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByLabelText("Owner")).toHaveValue("owner-1"));
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "a second certificate for the same application");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    expect(await screen.findByLabelText("Issuing CA")).toHaveValue("external:corporate-digicert");
+    expect(screen.getByLabelText("Certificate profile")).toHaveValue("payments-tls");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" });
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ owner_id: "owner-1", profile_name: "payments-tls", issuer: { source: "external", id: "corporate-digicert" } }),
+    );
+  });
+
+  it("leaves a reused CA unselected when it is no longer offered (A244)", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/connectors?bind_owner=owner-gone&bind_issuer=external%3Aretired-ca"]}>
+        <ToastProvider>
+          <AppQueryProvider>
+            <Connectors />
+          </AppQueryProvider>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await user.selectOptions(await screen.findByLabelText("Destination"), "target-1");
+    expect(screen.getByLabelText("Owner")).toHaveValue("");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "the old CA is gone");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    expect(await screen.findByLabelText("Issuing CA")).toHaveValue("");
+  });
+
   it("recovers unavailable profile choices without discarding the endpoint or CA", async () => {
     apiMock.profiles.mockRejectedValueOnce(new Error("profile roster unavailable"));
     const user = userEvent.setup();

@@ -395,6 +395,7 @@ import type {
   Identity as GenIdentity,
   IdentityList,
   IdentityDeploymentEvidence,
+  IdentityApplicationView,
   IdentityTransitionPreview as GenIdentityTransitionPreview,
   IdentityConnectorTargetRequest,
   IdentityRequest,
@@ -800,6 +801,7 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type { IdentityApplicationView } from "./api-types.gen";
 export type {
   SecretProject,
   SecretProjectCreateRequest,
@@ -2196,6 +2198,7 @@ export interface Api {
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
   identityDeploymentEvidence(id: string): Promise<IdentityDeploymentEvidence>;
+  identityApplication(id: string): Promise<IdentityApplicationView>;
   createIdentity(input: IdentityRequest, idempotencyKey?: string): Promise<Identity>;
   previewIdentityTransition(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<IdentityTransitionPreview>;
   transitionIdentity(
@@ -3008,6 +3011,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   identityDeploymentEvidence: (id) => req<IdentityDeploymentEvidence>(`/api/v1/identities/${encodeURIComponent(id)}/deployment-evidence`),
+  identityApplication: (id) => req<IdentityApplicationView>(`/api/v1/identities/${encodeURIComponent(id)}/application`),
   createIdentity: (input, idempotencyKey) => mutate<Identity>("POST", "/api/v1/identities", input, idempotencyKey),
   previewIdentityTransition: (id, to, reason, subjectCSRPEM) =>
     postRead<IdentityTransitionPreview>(`/api/v1/identities/${encodeURIComponent(id)}/transitions/preview`, {

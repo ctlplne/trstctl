@@ -4042,6 +4042,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/application": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show one certificate's application view: owner, profile, exact issuer, destination, served evidence and vantage, approvals, next automated action, alerts and actions */
+        get: operations["getIdentityApplicationView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/approvals": {
         parameters: {
             query?: never;
@@ -15861,6 +15878,11 @@ export interface components {
             created_at?: string;
             /** Format: uuid */
             id: string;
+            /**
+             * @description issued: the active certificate is not delivered; delivered: a target took it; served: it was seen served (read back by the delivering connector, or observed by an endpoint verification).
+             * @enum {string}
+             */
+            inventory_state?: "requested" | "issued" | "delivered" | "served" | "revoked" | "retired";
             /** Format: uuid */
             issuer_id?: string;
             /** @enum {string} */
@@ -15883,6 +15905,111 @@ export interface components {
              * @enum {string}
              */
             terminal_target_state?: "revoked" | "retired";
+        };
+        IdentityApplicationView: {
+            actions: {
+                /** @enum {string} */
+                action: "recover" | "revoke" | "retire";
+                available: boolean;
+                method: string;
+                path: string;
+                reason?: string;
+            }[];
+            alerts: {
+                /** Format: date-time */
+                created_at: string;
+                destination: string;
+                id: string;
+                kind?: string;
+                status: string;
+            }[];
+            approvals: {
+                action: string;
+                changed: ("profile" | "destination" | "issuer")[];
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                expires_at: string;
+                /** Format: uuid */
+                id: string;
+                status: string;
+            }[];
+            certificate?: {
+                fingerprint: string;
+                /** Format: uuid */
+                id: string;
+                /** Format: date-time */
+                not_after?: string;
+                serial: string;
+                status: string;
+            };
+            defaults: {
+                connector?: string;
+                issuer_id?: string;
+                issuer_source?: string;
+                owner_id?: string;
+                profile_name?: string;
+            };
+            destination?: {
+                connector: string;
+                enabled: boolean;
+                /** Format: date-time */
+                last_delivery_at?: string;
+                last_delivery_fingerprint?: string;
+                last_delivery_status?: string;
+                name: string;
+                revision: string;
+                /** Format: uuid */
+                target_id: string;
+            };
+            identity: components["schemas"]["Identity"];
+            /** @enum {string} */
+            inventory_state: "requested" | "issued" | "delivered" | "served" | "revoked" | "retired";
+            issuer: {
+                certificate_issuer?: string;
+                id?: string;
+                name?: string;
+                /** @enum {string} */
+                source: "platform" | "private" | "external";
+            };
+            owner?: {
+                application?: string;
+                environment?: string;
+                /** Format: uuid */
+                id: string;
+                kind: string;
+                name: string;
+                service?: string;
+            };
+            profile?: {
+                enrollment_methods: string[];
+                name: string;
+                requires_approval: boolean;
+                spec_digest: string;
+                version: number;
+            };
+            renewal: {
+                blockers: string[];
+                due: boolean;
+                latest_run_status?: string;
+                next_action: string;
+                /** Format: date-time */
+                not_after?: string;
+                source?: string;
+            };
+            review_plan: {
+                /** @enum {string} */
+                action: "approve" | "issue" | "deploy" | "verify";
+                subject: string;
+            }[];
+            served?: {
+                /** Format: date-time */
+                at?: string;
+                fingerprint: string;
+                matches_current: boolean;
+                /** @enum {string} */
+                vantage: "connector" | "local" | "relay";
+            };
         };
         IdentityConnectorTargetRequest: {
             /** Format: uuid */
@@ -33800,6 +33927,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getIdentityApplicationView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description identity ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityApplicationView"];
                 };
             };
             /** @description client error */

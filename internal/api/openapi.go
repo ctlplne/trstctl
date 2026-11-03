@@ -195,6 +195,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range changeImpactSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range identityApplicationSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}
@@ -1052,6 +1055,9 @@ func componentSchemas() map[string]*Schema {
 		"renewal_paused":        {Type: "array", Items: ref("IdentityRenewalPause")},
 		"terminal_target_state": {Type: "string", Enum: []string{"revoked", "retired"}, Description: "Target of the accepted pending terminal command; absent when no command is pending."},
 		"not_before":            timestamp(), "not_after": timestamp(), "attributes": {Type: "object"}, "created_at": timestamp(),
+		// A244: what the inventory says the certificate is.
+		"inventory_state": {Type: "string", Enum: []string{"requested", "issued", "delivered", "served", "revoked", "retired"},
+			Description: "issued: the active certificate is not delivered; delivered: a target took it; served: it was seen served (read back by the delivering connector, or observed by an endpoint verification)."},
 	}, "id", "kind", "name", "owner_id", "status")
 	identityReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: identityKinds}, "name": str(), "owner_id": uuid(),

@@ -7460,6 +7460,7 @@ Identity = TypedDict(
         'attributes': dict[str, Any],
         'created_at': str,
         'id': str,
+        'inventory_state': str,
         'issuer_id': str,
         'kind': str,
         'name': str,
@@ -7471,6 +7472,27 @@ Identity = TypedDict(
         'tenant_id': str,
         'terminal_pending': bool,
         'terminal_target_state': str,
+    },
+    total=False,
+)
+
+IdentityApplicationView = TypedDict(
+    'IdentityApplicationView',
+    {
+        'actions': list[dict[str, Any]],
+        'alerts': list[dict[str, Any]],
+        'approvals': list[dict[str, Any]],
+        'certificate': dict[str, Any],
+        'defaults': dict[str, Any],
+        'destination': dict[str, Any],
+        'identity': dict[str, Any],
+        'inventory_state': str,
+        'issuer': dict[str, Any],
+        'owner': dict[str, Any],
+        'profile': dict[str, Any],
+        'renewal': dict[str, Any],
+        'review_plan': list[dict[str, Any]],
+        'served': dict[str, Any],
     },
     total=False,
 )

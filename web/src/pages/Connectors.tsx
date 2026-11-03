@@ -24,7 +24,9 @@ import {
   type Identity,
   type OutboxCircuit,
 } from "@/lib/api";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { endpointBindingDefaultsFromSearch } from "@/lib/endpointBindingDefaults";
 import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
 import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
 import { EndpointContainment } from "@/pages/connectors/EndpointContainment";
@@ -126,7 +128,10 @@ export function Connectors() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [destinationOpen, setDestinationOpen] = useState(false);
-  const [open, setOpen] = useState({ destinations: false, health: false, capabilities: false });
+  const [searchParams] = useSearchParams();
+  const bindingDefaults = useMemo(() => endpointBindingDefaultsFromSearch(searchParams), [searchParams]);
+  // A link carrying an application's reusable defaults (A244) opens the destination form.
+  const [open, setOpen] = useState({ destinations: Boolean(bindingDefaults), health: false, capabilities: false });
   const [destinationsLoading, setDestinationsLoading] = useState(false);
   const [destinationsError, setDestinationsError] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
@@ -255,6 +260,14 @@ export function Connectors() {
     };
     // Initial route load is deliberately summary-only. Expert evidence is lazy.
   }, []);
+
+  // A link that opened the destination form loads its evidence once.
+  const loadedFromLink = useRef(false);
+  useEffect(() => {
+    if (!bindingDefaults || loadedFromLink.current) return;
+    loadedFromLink.current = true;
+    void loadDestinationEvidence();
+  });
 
   // A242: connector modules a relay runs are destinations too; one waiting for
   // approval or unable to run there is not offered.
@@ -617,6 +630,7 @@ export function Connectors() {
               <EndpointBindingWorkflow
                 targets={targets}
                 identities={identities}
+                defaults={bindingDefaults}
                 onComplete={async (binding, bindingReason) => {
                   setActionResult(null);
                   setSelectedTarget(binding.target.id);

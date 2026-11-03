@@ -1,7 +1,7 @@
 import { translateNow } from "@/i18n/I18nProvider";
 export type StatusTone = "operate" | "observe" | "disclose" | "success" | "warning" | "critical" | "high" | "medium" | "low" | "neutral" | "info";
 
-export type StatusVocabulary = "agent" | "certificate" | "delivery" | "discovery" | "expiry" | "honesty" | "lifecycle" | "risk";
+export type StatusVocabulary = "agent" | "certificate" | "delivery" | "discovery" | "expiry" | "honesty" | "inventory" | "lifecycle" | "risk";
 
 export type StatusDescriptor = {
   label: string;
@@ -79,6 +79,53 @@ export const lifecycleStatus: Record<string, StatusDescriptor> = {
     },
     tone: "warning",
     order: 9,
+  },
+};
+
+/** What the certificate inventory says a certificate is: issued is not
+ * delivered, and delivered is not seen in use at an endpoint. */
+export const inventoryStatus: Record<string, StatusDescriptor> = {
+  requested: {
+    get label() {
+      return translateNow("source.requested.c6a91ee7f9");
+    },
+    tone: "observe",
+    order: 1,
+  },
+  issued: {
+    get label() {
+      return translateNow("source.issued.c91a3cc769");
+    },
+    tone: "operate",
+    order: 2,
+  },
+  delivered: {
+    get label() {
+      return translateNow("identities.inventory.delivered");
+    },
+    tone: "info",
+    order: 3,
+  },
+  served: {
+    get label() {
+      return translateNow("identities.inventory.served");
+    },
+    tone: "success",
+    order: 4,
+  },
+  revoked: {
+    get label() {
+      return translateNow("source.revoked.4bb47f186d");
+    },
+    tone: "critical",
+    order: 5,
+  },
+  retired: {
+    get label() {
+      return translateNow("source.retired.5b720147b6");
+    },
+    tone: "neutral",
+    order: 6,
   },
 };
 
@@ -555,6 +602,7 @@ export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDes
   discovery: discoveryStatus,
   expiry: expiryBands,
   honesty: honestyModes,
+  inventory: inventoryStatus,
   lifecycle: lifecycleStatus,
   risk: riskBands,
 };

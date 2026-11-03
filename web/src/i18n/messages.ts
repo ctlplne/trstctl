@@ -33474,6 +33474,190 @@ export const messages = {
     defaultMessage: "Review this certificate and revocation",
     description: "Exact historical certificate deployment evidence in identity detail.",
   },
+  "identities.inventory.delivered": {
+    defaultMessage: "Delivered",
+    description: "Inventory state: a destination accepted the active certificate and nothing has seen an endpoint present it yet.",
+  },
+  "identities.inventory.served": { defaultMessage: "Seen in use", description: "Inventory state: an endpoint was seen presenting the active certificate." },
+  "identities.application.title": { defaultMessage: "Application view", description: "Application view of one certificate in identity detail." },
+  "identities.application.scope": {
+    defaultMessage:
+      "One place for what this certificate's application depends on: owner, profile, the exact CA, where the certificate goes, what was seen at the endpoint, approvals and what runs next.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.failed": {
+    defaultMessage: "Couldn't load the application view.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.retry": { defaultMessage: "Retry", description: "Application view of one certificate in identity detail." },
+  "identities.application.mismatch": {
+    defaultMessage: "The application view answered for a different identity, so nothing is shown.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.inventory": { defaultMessage: "Inventory state", description: "Application view of one certificate in identity detail." },
+  "identities.application.state.requested": {
+    defaultMessage: "No certificate has been issued yet.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.state.issued": {
+    defaultMessage: "Issued, but no completed delivery carries the active certificate yet.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.state.delivered": {
+    defaultMessage: "The destination accepted the active certificate. Nothing has seen an endpoint present it yet.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.state.served": {
+    defaultMessage: "An endpoint was seen presenting the active certificate.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.state.revoked": {
+    defaultMessage: "Revoked: relying parties should no longer trust this certificate.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.state.retired": {
+    defaultMessage: "Retired: this certificate is no longer managed.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.owner": { defaultMessage: "Owner", description: "Application view of one certificate in identity detail." },
+  "identities.application.ownerDetail": { defaultMessage: "{name} ({kind})", description: "Application view of one certificate in identity detail." },
+  "identities.application.noOwner": { defaultMessage: "No owner is assigned.", description: "Application view of one certificate in identity detail." },
+  "identities.application.profile": { defaultMessage: "Profile", description: "Application view of one certificate in identity detail." },
+  "identities.application.profileVersion": {
+    defaultMessage: "{name}, version {version}",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.approvalRequired": {
+    defaultMessage: "Issuance needs approval.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.noProfile": { defaultMessage: "No profile is bound.", description: "Application view of one certificate in identity detail." },
+  "identities.application.issuer": { defaultMessage: "Issuing CA", description: "Application view of one certificate in identity detail." },
+  "identities.application.certificateIssuer": {
+    defaultMessage: "Issuer named in the certificate",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.certificate": { defaultMessage: "Active certificate", description: "Application view of one certificate in identity detail." },
+  "identities.application.noCertificate": { defaultMessage: "No active certificate.", description: "Application view of one certificate in identity detail." },
+  "identities.application.destination": { defaultMessage: "Destination", description: "Application view of one certificate in identity detail." },
+  "identities.application.destinationDetail": {
+    defaultMessage: "{name} through {connector}",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.destinationDisabled": {
+    defaultMessage: "This destination is disabled.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.noDestination": {
+    defaultMessage: "No destination is bound.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.lastDelivery": { defaultMessage: "Last delivery at {at}", description: "Application view of one certificate in identity detail." },
+  "identities.application.seen": { defaultMessage: "Seen at the endpoint", description: "Application view of one certificate in identity detail." },
+  "identities.application.seenBy": { defaultMessage: "Seen by {vantage} at {at}.", description: "Application view of one certificate in identity detail." },
+  "identities.application.vantage.connector": {
+    defaultMessage: "the delivering connector reading it back",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.vantage.local": {
+    defaultMessage: "the serving host's agent",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.vantage.relay": {
+    defaultMessage: "a network agent, as a client sees it",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.seenEarlier": {
+    defaultMessage: "That sighting is of an earlier certificate, not the active one.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.notSeen": {
+    defaultMessage: "Nothing has seen an endpoint present the active certificate.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.next": { defaultMessage: "Next automated action", description: "Application view of one certificate in identity detail." },
+  "identities.application.next.issue": { defaultMessage: "Issue when requested", description: "Application view of one certificate in identity detail." },
+  "identities.application.next.none": {
+    defaultMessage: "None: the certificate is no longer active",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.next.retry": { defaultMessage: "Retry the failed renewal", description: "Application view of one certificate in identity detail." },
+  "identities.application.next.blocked": {
+    defaultMessage: "Blocked until the failed prerequisites below are fixed",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.next.renewNow": { defaultMessage: "Renew now", description: "Application view of one certificate in identity detail." },
+  "identities.application.next.renewBeforeExpiry": {
+    defaultMessage: "Renew before it expires",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.next.noneScheduled": { defaultMessage: "Nothing scheduled", description: "Application view of one certificate in identity detail." },
+  "identities.application.latestRun": { defaultMessage: "Latest run: {status}", description: "Application view of one certificate in identity detail." },
+  "identities.application.blockers": { defaultMessage: "Failed prerequisites", description: "Application view of one certificate in identity detail." },
+  "identities.application.approvals": { defaultMessage: "Approvals", description: "Application view of one certificate in identity detail." },
+  "identities.application.noApprovals": {
+    defaultMessage: "No approvals were asked for.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.approval": { defaultMessage: "{action}, asked {at}", description: "Application view of one certificate in identity detail." },
+  "identities.application.changed": {
+    defaultMessage: "Changed since it was asked: {changes}. The approval no longer covers this issuance.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.changed.profile": { defaultMessage: "profile", description: "Application view of one certificate in identity detail." },
+  "identities.application.changed.destination": { defaultMessage: "destination", description: "Application view of one certificate in identity detail." },
+  "identities.application.changed.issuer": { defaultMessage: "issuing CA", description: "Application view of one certificate in identity detail." },
+  "identities.application.enrollment": {
+    defaultMessage: "Enrollment methods: {methods}",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.enrollmentAny": { defaultMessage: "Enrollment methods: any", description: "Application view of one certificate in identity detail." },
+  "identities.application.plan": { defaultMessage: "Review plan", description: "Application view of one certificate in identity detail." },
+  "identities.application.planHelp": {
+    defaultMessage: "What the next issuance or renewal does, step by step. No secret or key material appears here.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.planNone": {
+    defaultMessage: "No further issuance: the certificate is revoked or retired.",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.plan.approve": {
+    defaultMessage: "An approver signs off under profile {subject}",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.plan.issue": { defaultMessage: "Issue from {subject}", description: "Application view of one certificate in identity detail." },
+  "identities.application.plan.deploy": { defaultMessage: "Deploy to {subject}", description: "Application view of one certificate in identity detail." },
+  "identities.application.plan.verify.connector": {
+    defaultMessage: "Read it back through the delivering connector",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.plan.verify.local": {
+    defaultMessage: "Confirm it on the serving host with its agent",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.plan.verify.relay": {
+    defaultMessage: "Confirm it from the network with a network agent",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.plan.verify.none": {
+    defaultMessage: "Nothing observes this destination yet, so the new certificate will read as delivered, not seen in use",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.alerts": { defaultMessage: "Recent alerts", description: "Application view of one certificate in identity detail." },
+  "identities.application.noAlerts": { defaultMessage: "No alerts.", description: "Application view of one certificate in identity detail." },
+  "identities.application.actions": { defaultMessage: "Actions", description: "Application view of one certificate in identity detail." },
+  "identities.application.action.recover": { defaultMessage: "Recover", description: "Application view of one certificate in identity detail." },
+  "identities.application.action.revoke": { defaultMessage: "Revoke", description: "Application view of one certificate in identity detail." },
+  "identities.application.action.retire": { defaultMessage: "Retire", description: "Application view of one certificate in identity detail." },
+  "identities.application.actionAvailable": { defaultMessage: "Available now", description: "Application view of one certificate in identity detail." },
+  "identities.application.reuse": {
+    defaultMessage: "Use these defaults for another certificate",
+    description: "Application view of one certificate in identity detail.",
+  },
+  "identities.application.reuseHelp": {
+    defaultMessage: "Opens the destination form with this owner, profile and CA already chosen.",
+    description: "Application view of one certificate in identity detail.",
+  },
   "identities.issuer.selectedCA": { defaultMessage: "Selected issuance CA", description: "CA selected for the identity's endpoint lifecycle automation." },
   "identities.issuer.selection": {
     defaultMessage: "{source}: {name}",

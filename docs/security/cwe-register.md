@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2402 annotated sites across 29 rules. Each row is
+2403 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (556 sites)
+### G101 — CWE-798 Use of hardcoded credentials (557 sites)
 
 | Location | Reason |
 |---|---|
@@ -175,7 +175,7 @@ not this file.
 | `internal/api/notifications.go:901` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:212` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:215` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1103` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1251` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
@@ -404,6 +404,7 @@ not this file.
 | `internal/server/adcs_nested_samba_test.go:66` | public reference, never a credential value (CWE-798). |
 | `internal/server/agent_jobs_served_test.go:23` | secret-store reference/pointer, never credential material (CWE-798) |
 | `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/application_view_served_test.go:29` | fabricated test-only credential (CWE-798) |
 | `internal/server/attack_path_served_test.go:45` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/attack_path_served_test.go:103` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/audit_feed_lab_p5_test.go:68` | token_ref is a non-secret environment locator (CWE-798) |
