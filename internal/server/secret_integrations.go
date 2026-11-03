@@ -444,7 +444,7 @@ func (p *configuredDynamicProvider) openBackend(ctx context.Context) (requestDyn
 func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvider) (requestDynamicBackend, func(), error) {
 	opener := &configuredDynamicBackendOpener{ctx: ctx, provider: p}
 	switch p.cfg.Type {
-	case "postgresql", "mysql", "mongodb", "redis", "ldap", "mssql", "azure-sql":
+	case "postgresql", "mysql", "mongodb", "redis", "ldap", "mssql", "azure-sql", "oracle":
 		return openConfiguredDatabaseBackend(opener)
 	case "kubernetes", "aws-iam", "aws-sts", "gcp-iam", "azure-entra":
 		return openConfiguredCloudBackend(opener)
@@ -581,6 +581,24 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewMSSQLBackend(db, dynsecret.MSSQLConfig{
 			Contained: cfg.Type == "azure-sql", Database: cfg.Database, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+		})
+		if err != nil {
+			_ = db.Close()
+			return o.fail(err)
+		}
+		return backend, o.closeWith(backend, func() { _ = db.Close() }), nil
+	case "oracle":
+		dsn, err := o.resolve(cfg.AdminDSNRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		db, err := dynsecret.OpenOracleExecutor(o.ctx, dsn)
+		if err != nil {
+			return o.fail(err)
+		}
+		backend, err := dynsecret.NewOracleBackend(db, dynsecret.OracleConfig{
+			AdminDSN: dsn, RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix,
+			RotationAccounts: o.provider.rotationAccountPairs(),
 		})
 		if err != nil {
 			_ = db.Close()
@@ -1711,6 +1729,8 @@ func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, c
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
 	case "redis", "datadog", "openai":
 		return p.verifyWithBackend(ctx, credential)
+	case "oracle":
+		return p.verifyDatabaseWithBackend(ctx, credential)
 	default:
 		return "not_available", nil
 	}
@@ -1729,6 +1749,10 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 	case "mongodb":
 		// A MongoDB credential is a URI: connect with it and ping (A240).
 		return "connected", dynsecret.VerifyMongoCredential(ctx, credential)
+	case "oracle":
+		// An Oracle credential connects at the administrator's address and
+		// service and queries DUAL (A240).
+		return p.verifyDatabaseWithBackend(ctx, credential)
 	case "auth0", "datadog", "openai", "ldap", "unix":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key
@@ -1737,6 +1761,15 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 	default:
 		return "not_available", nil
 	}
+}
+
+// verifyDatabaseWithBackend proves a database credential by opening a session
+// with it through its backend ("connected").
+func (p *configuredDynamicProvider) verifyDatabaseWithBackend(ctx context.Context, credential []byte) (string, error) {
+	if _, err := p.verifyWithBackend(ctx, credential); err != nil {
+		return "", err
+	}
+	return "connected", nil
 }
 
 // verifyWithBackend proves a credential with its backend's own check

@@ -191,7 +191,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -200,7 +200,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -294,7 +294,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
-	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {},
+	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -478,7 +478,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
-	"ibm-api-connect": validateAPIConnectProvider, "cassandra": validateCassandraProvider,
+	"ibm-api-connect": validateAPIConnectProvider, "cassandra": validateCassandraProvider, "oracle": validateOracleProvider,
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"unix": validateUnixProvider,
 }
@@ -523,7 +523,9 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a MongoDB user name", where, account))
 			case c.Type == "unix" && !unixAccountName.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a local account name", where, account))
-			case c.Type != "ldap" && c.Type != "unix" && c.Type != "mongodb" && (len(account) > 63 || strings.ContainsRune(account, 0)):
+			case c.Type == "oracle" && !oracleIdentifier.MatchString(account):
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an Oracle user name", where, account))
+			case c.Type != "ldap" && c.Type != "unix" && c.Type != "mongodb" && c.Type != "oracle" && (len(account) > 63 || strings.ContainsRune(account, 0)):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
 			}
 			if other, taken := owner[account]; taken {
@@ -1577,6 +1579,48 @@ func validKafkaGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+// oracleIdentifier is an Oracle user or role name as Oracle stores it (an
+// unquoted name is stored in upper case).
+var oracleIdentifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_$#]{0,127}$`)
+
+// validateOracleProvider checks an Oracle Database provider (A239, A240):
+// admin_dsn_ref is the administrator's go-ora URL, and each allowed role is
+// bound to existing Oracle roles (role_bindings) or rotates between two
+// existing users (rotation_accounts).
+func validateOracleProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if err := validateCredentialRef(c.AdminDSNRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s admin_dsn_ref: %w", where, err))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			if len(c.RotationAccounts[role]) == 0 {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q] or rotation_accounts[%q] is required for oracle", where, role, role))
+			}
+			continue
+		}
+		for _, name := range strings.Split(binding, ",") {
+			if name = strings.TrimSpace(name); !oracleIdentifier.MatchString(name) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not an Oracle role name", where, role, name))
+			}
+		}
+	}
+	bound := make([]string, 0, len(c.RoleBindings))
+	for role := range c.RoleBindings {
+		bound = append(bound, role)
+	}
+	sort.Strings(bound)
+	for _, role := range bound {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
 }
 
 // cassandraRoleName is a role a cassandra provider grants, double-quoted

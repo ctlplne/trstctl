@@ -355,15 +355,15 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-nine backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Thirty backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
 tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Connect app
-credentials, SQL Server logins, Azure SQL contained database users and Cassandra login
-roles (A239), and Datadog and OpenAI keys (A240). SSH user
+credentials, SQL Server logins, Azure SQL contained database users, Cassandra login
+roles and Oracle Database users (A239), and Datadog and OpenAI keys (A240). SSH user
 certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
 through the served KRL), not as dynamic-secret leases.
 
@@ -474,6 +474,16 @@ retry after an uncertain attempt finds the same role, sets the new password and 
 the grants it already has, and if a grant fails the new role is dropped again. Only
 roles with the provider's issued-name shape are ever dropped.
 
+The Oracle Database backend creates one user per lease with a generated password,
+granted only its role's existing Oracle roles (`"ORDERS_READER"`, carrying `CREATE
+SESSION`), as an administrator through go-ora. The password and every name travel only as
+bind variables: the database quotes them itself (`DBMS_ASSERT.ENQUOTE_NAME`) into the DDL it
+runs, so no statement text carries them. Revocation locks the user, kills its open sessions
+(`ALTER SYSTEM KILL SESSION`) and drops it, waiting out a session that is still going, so
+the next login fails. A retry after an uncertain attempt finds the same user, sets the new
+password and unlocks it, and if a grant fails the new user is dropped again. Only users with
+the provider's issued-name shape are ever dropped.
+
 The Couchbase backend creates one local user per lease through the cluster's
 management REST API, with a generated password and only its role's roles on the named
 buckets (`"bucket_full_access on orders"`). Couchbase's user PUT replaces an existing
@@ -554,7 +564,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns thirty-two safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns thirty-three safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0` and `unix`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
@@ -770,6 +780,15 @@ authorization on: three unattended scheduled cycles while an application connect
 the credential it last read and reports each version it used, then a retirement against
 a paused database that times out and leaves the predecessor connecting until the
 database resumes.
+
+An Oracle role rotates the same way between two existing users that hold its grants
+(A240): `rotation_accounts` names them, **stage** sets a new password on the user `old_ref`
+does not name and verifies it by connecting, and **retire** sets a password nobody holds on
+the other and kills its sessions; the user is not locked or dropped, so its grants and
+objects stay. The served proof runs on Oracle Database Free (26ai): three unattended
+scheduled cycles while an application connects with the credential it last read and reports
+each version it used, then a retirement against a paused database that times out and leaves
+the predecessor connecting until the database resumes.
 
 `unix` (A240) rotates local account passwords on a Unix/Linux host over SSH: the
 control plane authenticates as an administrator with a key (`admin_user`,

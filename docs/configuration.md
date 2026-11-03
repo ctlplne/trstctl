@@ -2053,12 +2053,13 @@ the connection value and creating a workload credential.
 }
 ```
 
-`rotation_accounts` (PostgreSQL, MongoDB, LDAP or unix, with `allow_static_rotation: true`)
-maps an allowed role to the two existing accounts its static rotation alternates between,
-for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for MongoDB, two users of
-`database`), or for LDAP two entry DNs under `users_dn`; the owner provisions both with the
-role's grants (for MongoDB, its roles; for LDAP, as members of the role's group), and
-rotation only ever changes their passwords.
+`rotation_accounts` (PostgreSQL, MongoDB, Oracle, LDAP or unix, with
+`allow_static_rotation: true`) maps an allowed role to the two existing accounts its static
+rotation alternates between, for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for
+MongoDB, two users of `database`; for Oracle, two users as Oracle stores their names, such
+as `ORDERS_APP_A`), or for LDAP two entry DNs under `users_dn`; the owner provisions both
+with the role's grants (for MongoDB, its roles; for LDAP, as members of the role's group),
+and rotation only ever changes their passwords.
 
 An `auth0` provider (A240) only rotates: set `endpoint` to the tenant domain,
 `client_id` and `client_secret_ref` to a machine-to-machine application granted the
@@ -2090,7 +2091,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
-`datadog`, `openai`, `unix` and `cassandra`. Sync `type` values are
+`datadog`, `openai`, `unix`, `cassandra` and `oracle`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
@@ -2495,6 +2496,29 @@ is created.
   "database": "orders",
   "allowed_roles": ["reader"],
   "role_bindings": {"reader": "db_datareader"},
+  "max_ttl": "8h"
+}
+```
+
+For Oracle Database (A239, `oracle`), set `admin_dsn_ref` to a go-ora URL
+(`oracle://<user>:<password>@<host>:1521/<service>`, the service of the pluggable
+database leases live in; options such as `SSL=true` go in its query) of an administrator
+allowed to create, alter and drop users, grant the bound roles (or hold them `WITH ADMIN
+OPTION`) and kill sessions (`ALTER SYSTEM` and `SELECT` on `V$SESSION`), and
+`role_bindings` to existing Oracle roles per allowed role, as Oracle stores them (an
+unquoted name is upper case), each carrying `CREATE SESSION` and the lease's privileges.
+Each lease is an upper-case user granted exactly those roles; revocation locks it, kills its
+sessions and drops it. With `allow_static_rotation: true`, a role may instead name two
+existing users in `rotation_accounts` (A240).
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "orders-oracle",
+  "type": "oracle",
+  "admin_dsn_ref": "file:/run/secrets/oracle-admin-url",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "ORDERS_READER"},
   "max_ttl": "8h"
 }
 ```

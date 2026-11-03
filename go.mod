@@ -34,6 +34,7 @@ require (
 	github.com/open-policy-agent/opa v1.21.1
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
 	github.com/russellhaering/goxmldsig v1.6.0
+	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/spiffe/spire-plugin-sdk v1.15.1
 	github.com/tetratelabs/wazero v1.12.0

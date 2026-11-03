@@ -284,6 +284,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "Role name prefix", "Optional prefix of leased roles (default trstctl); revocation only ever drops roles with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to existing Cassandra roles, comma separated, for example "orders_reader"; each carries the permissions the lease should have.`),
 		)},
+		{Type: "oracle", Label: "Oracle Database users", Purpose: "Creates an Oracle Database user with a generated password (sent only as a bind) granted only its role's Oracle roles, and at revocation locks it, kills its sessions and drops it; the database then refuses its login. A role with rotation_accounts instead rotates between two existing users.", Requirements: dynamicSecretProviderRequirements(
+			credential("admin_dsn_ref", "Administrator URL reference", "A go-ora URL (oracle://user:password@host:1521/service) of an administrator allowed to create, alter and drop users, grant the bound roles (or hold them WITH ADMIN OPTION) and kill sessions (ALTER SYSTEM, SELECT on V$SESSION).", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl, stored upper case); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: with rotation_accounts, rotate a role between two existing users in two phases; their grants never change.", false),
+			roles(`Each allowed role maps to existing Oracle roles, comma separated, as Oracle stores them (for example "ORDERS_READER"); the roles carry CREATE SESSION and the lease's privileges. A role may instead name two existing users in rotation_accounts.`),
+		)},
 		{Type: "couchbase", Label: "Couchbase users", Purpose: "Creates a local Couchbase user with a generated password and only its role's roles on the named buckets through the management REST API, and deletes it at revocation; Couchbase then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Management REST API", "HTTPS URL of the cluster's management REST API (port 18091).", true),
 			value("admin_user", "Administrator", "A user allowed to create and delete local users (Full Admin or Security Admin).", true),
@@ -427,6 +433,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's built-in roles on the named databases of one Atlas project, until the user is deleted or Atlas removes it at its deleteAfterDate", "confirmed"
 	case "kafka":
 		return "the role's ACL operations on its topics, consumer groups and transactional IDs, until the ACLs and the SCRAM credential are deleted", "confirmed"
+	case "oracle":
+		return "the privileges of the Oracle roles the lease role is bound to, until the user is locked, its sessions killed and the user dropped", "confirmed"
 	case "cassandra":
 		return "the permissions of the Cassandra roles the lease role is bound to, until the role is dropped (a connection already open keeps them until the node's role and permission caches expire, 2 s by default)", "confirmed"
 	case "couchbase":

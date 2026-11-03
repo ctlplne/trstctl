@@ -5243,7 +5243,7 @@ when off, requiring a KEK when on):
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
-  `ibm-api-connect`, `mssql`, `azure-sql` and `cassandra` (A239), and `datadog` and `openai`
+  `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra` and `oracle` (A239), and `datadog` and `openai`
   (A240). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
@@ -5301,7 +5301,13 @@ when off, requiring a KEK when on):
   keyspace (Unauthorized), a renewal stays within the maximum lifetime, and
   after revocation a cqlsh session still connected is refused from its next
   query (2 s, the node's cache validity), a new login is refused (Bad
-  credentials) and no leased role is left. SQL Server logins and Azure
+  credentials) and no leased role is left. Oracle Database users (A239) are
+  proven against stock Oracle Database Free (26ai) with a least-privilege
+  administrator (no DBA role): the stock sqlplus reads the bound table as a
+  leased user and is refused an insert (ORA-41900, the missing privilege) and
+  another schema's table, a renewal stays within the maximum lifetime, and
+  after revocation a sqlplus session still open is ended (ORA-03113), a new
+  login is refused (ORA-01017) and no leased user is left. SQL Server logins and Azure
   SQL contained users (A239) have lab tests against SQL Server 2022 Developer
   Edition that run only on an x86 CI runner (job "a239 labs"; the image is x86
   only): the stock sqlcmd reads the bound database as a leased principal and is
@@ -5321,12 +5327,12 @@ when off, requiring a KEK when on):
   IBM API Connect app credentials (A239) are built against a stand-in of the
   platform API only (the gateway accepts a leased credential and refuses it once
   revoked); a live proof needs an API Connect instance. What comes next in
-  A239's library: Oracle Database and SAP HANA (their images and drivers are
-  approved), Vertica (waiting on an image source: the official Community Edition
-  image is no longer published) and SAP ASE (waiting on an image: none is freely
+  A239's library: SAP HANA (its image and driver are approved), Vertica
+  (waiting on an image source: the official Community Edition image is no
+  longer published) and SAP ASE (waiting on an image: none is freely
   available). The provider catalog states each adapter's authority and whether
   its revocation is confirmed or TTL-only. A239 is served for every provider in
-  the integration catalog except the four named above, and SSH user
+  the integration catalog except the three named above, and SSH user
   certificates are served by the SSH CA rather than as leases.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,

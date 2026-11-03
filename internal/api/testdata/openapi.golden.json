@@ -18680,7 +18680,8 @@
               "datadog",
               "openai",
               "unix",
-              "cassandra"
+              "cassandra",
+              "oracle"
             ],
             "type": "string"
           }

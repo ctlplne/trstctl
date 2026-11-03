@@ -2,20 +2,25 @@
 
 ### Added
 
+- Oracle Database dynamic secrets (`type: oracle`): each lease is a user with a generated password granted only the
+  existing Oracle roles its role is bound to; the password and names travel only as binds, quoted by the database.
+  Revocation locks the user, kills its sessions and drops it. A role with `rotation_accounts` instead rotates between
+  two existing users (A240). Proven against Oracle Database Free (26ai).
+
 - Cassandra dynamic secrets (`type: cassandra`): each lease is a login role with a generated password, granted only
   the existing Cassandra roles its role is bound to; only the password's bcrypt hash travels in CQL (`HASHED PASSWORD`).
   Revocation drops the role, so the next login fails and an open connection is refused once the node's caches expire.
   One node is contacted, over verified TLS or plaintext to a literal loopback or private IP. Proven against stock
   Apache Cassandra 5.0.9.
 
-- Rotation library with consumer cutover (A240): two-user rotation for PostgreSQL, LDAP, MongoDB and Unix/Linux
-  local accounts (`rotation_accounts`): stage sets a new password on the account consumers are not using, retire
-  sets one nobody holds on the other, and both keep their grants, roles or groups. `consumers` and
-  `retire_after_seconds` hold the predecessor until the named consumers report the new version or an approved
-  deadline passes, and the command view keeps `credential_valid` apart from `consumer_adoption`. Single-phase
-  providers (`auth0`, an in-place `unix` account) run only with `acknowledge_single_phase`; `datadog` and `openai`
-  keys issue leases and rotate in two phases. Proven against PostgreSQL, OpenLDAP, MongoDB 7.0 and a Debian OpenSSH
-  host; Auth0, Datadog and OpenAI are built against stand-ins of their APIs.
+- Rotation library with consumer cutover (A240): two-user rotation for PostgreSQL, LDAP, MongoDB, Oracle and
+  Unix/Linux local accounts (`rotation_accounts`): stage sets a new password on the account consumers are not using,
+  retire sets one nobody holds on the other, and both keep their grants, roles or groups. `consumers` and
+  `retire_after_seconds` hold the predecessor until the named consumers report the new version or an approved deadline
+  passes, and the command view keeps `credential_valid` apart from `consumer_adoption`. Single-phase providers
+  (`auth0`, an in-place `unix` account) run only with `acknowledge_single_phase`; `datadog` and `openai` keys issue
+  leases and rotate in two phases. Proven against PostgreSQL, OpenLDAP, MongoDB 7.0, Oracle Database Free and a Debian
+  OpenSSH host; Auth0, Datadog and OpenAI are built against stand-ins of their APIs.
 
 - IBM API Connect dynamic secrets (`type: ibm-api-connect`): each lease is a credential (client ID and generated secret)
   on the consumer app its role is bound to (`"<org>/<catalog>/<consumer-org>/<app>"`), carrying that app's

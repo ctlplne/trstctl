@@ -526,8 +526,8 @@ func TestValidateRotationAccountsA240(t *testing.T) {
 		mutate func(*DynamicSecretProviderConfig)
 		want   string
 	}{
-		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or mongodb or postgresql or unix"},
-		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or mongodb or postgresql or unix"},
+		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or mongodb or oracle or postgresql or unix"},
+		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or mongodb or oracle or postgresql or unix"},
 		"unknown role":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/other"] = []string{"x_a", "x_b"} }, `role "db/other" is not in allowed_roles`},
 		"one account":    {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"orders_app_a"} }, "needs two distinct account names"},
 		"same account":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"a", "a"} }, "needs two distinct account names"},
@@ -897,6 +897,46 @@ func TestValidateCassandraProviderA239(t *testing.T) {
 	} {
 		c := base
 		c.RoleBindings = map[string]string{"reader": "orders_reader"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestValidateOracleProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders-oracle", Type: "oracle",
+		AdminDSNRef: "file:/run/secrets/oracle-admin-url", AllowedRoles: []string{"reader", "app"}, MaxTTL: "1h",
+		AllowStaticRotation: true,
+		RoleBindings:        map[string]string{"reader": "ORDERS_READER, AUDIT_READER"},
+		RotationAccounts:    map[string][]string{"app": {"ORDERS_APP_A", "ORDERS_APP_B"}}}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no admin URL": {func(c *DynamicSecretProviderConfig) { c.AdminDSNRef = "" }, "admin_dsn_ref"},
+		"unbound role": {func(c *DynamicSecretProviderConfig) { c.RotationAccounts = nil }, `role_bindings["app"] or rotation_accounts["app"] is required for oracle`},
+		"quoted role": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": `ORDERS_READER" TO PUBLIC --`}
+		}, "is not an Oracle role name"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": "ORDERS_READER", "admin": "DBA"}
+		}, `role_bindings["admin"] has no matching allowed role`},
+		"bad account": {func(c *DynamicSecretProviderConfig) {
+			c.RotationAccounts = map[string][]string{"app": {"ORDERS_APP_A", "1ORDERS"}}
+		}, "is not an Oracle user name"},
+		"not opted in": {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "ORDERS_READER"}
+		c.RotationAccounts = map[string][]string{"app": {"ORDERS_APP_A", "ORDERS_APP_B"}}
 		tc.mutate(&c)
 		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
