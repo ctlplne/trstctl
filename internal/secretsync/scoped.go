@@ -24,6 +24,51 @@ type ScopedTarget interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// A scoped destination may also answer how it names keys and what it reads
+// back (A241). Without these answers it holds paths and reads values.
+type (
+	scopedKeyRules interface {
+		FlatKeys() bool
+		ValidKey(key string) error
+	}
+	scopedReadBack interface {
+		ReadsBack() bool
+		DigestOf(value []byte) string
+	}
+)
+
+// ScopedFlatKeys reports whether t holds variable names, not paths: a scoped
+// sync's destination prefix is then a name prefix, joined without a slash.
+func ScopedFlatKeys(t ScopedTarget) bool {
+	rules, ok := t.(scopedKeyRules)
+	return ok && rules.FlatKeys()
+}
+
+// ScopedValidKey reports whether t can hold key.
+func ScopedValidKey(t ScopedTarget, key string) error {
+	if rules, ok := t.(scopedKeyRules); ok {
+		return rules.ValidKey(key)
+	}
+	return nil
+}
+
+// ScopedReadsBack reports whether t's stored values can be compared; false is
+// a receipt-only destination.
+func ScopedReadsBack(t ScopedTarget) bool {
+	if rb, ok := t.(scopedReadBack); ok {
+		return rb.ReadsBack()
+	}
+	return true
+}
+
+// ScopedDigestOf is the digest ReadDigest returns when t holds value.
+func ScopedDigestOf(t ScopedTarget, value []byte) string {
+	if rb, ok := t.(scopedReadBack); ok {
+		return rb.DigestOf(value)
+	}
+	return crypto.SHA256Hex(value)
+}
+
 // ErrScopedListLimit is a destination holding more keys under a prefix than a
 // plan reads; the operator narrows the scope.
 var ErrScopedListLimit = errors.New("secretsync: the destination holds more keys under the prefix than a plan reads")

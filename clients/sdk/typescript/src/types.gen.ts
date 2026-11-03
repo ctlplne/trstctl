@@ -21277,6 +21277,18 @@ export interface components {
             id: string;
             name: string;
             platform: string;
+            /**
+             * @description locally-proven: proven against the vendor's own software run locally or on a CI runner; stand-in-only: proven against a stand-in built from the vendor's API documentation.
+             * @enum {string}
+             */
+            proof: "locally-proven" | "stand-in-only";
+            /**
+             * @description What a scoped sync reads back of a stored value: the value (hashed, never returned), the destination's digest, or nothing (receipt-only: the delivery receipt is the evidence and outside changes can't be seen). Absent when the target takes no scoped sync.
+             * @enum {string}
+             */
+            readback?: "value" | "digest" | "receipt-only";
+            /** @description A scoped sync can target it: the destination lists, reads back (or is receipt-only) and deletes keys. */
+            scoped_sync: boolean;
             secret_handling: string;
             wire_format: string;
         };

@@ -2,6 +2,20 @@
 
 ### Added
 
+- Hosted secret-sync targets (A241), part one: `heroku`, `render`, `railway`, `fly`,
+  `digitalocean-app-platform`, `northflank`, `qovery`, `cloud66` and `laravel-forge`, each
+  bound by one `binding` string in its type's grammar (internal/synctarget) and run by one
+  engine (`secretsync.HostedSyncPusher`). Every hosted target takes a scoped sync: it lists,
+  reads back and deletes keys. A scoped sync to a flat (variable-name) destination joins its
+  prefix without a slash and blocks a key the target can't hold; a receipt-only target (whose
+  vendor never returns a secret) plans `unchanged` only when this version's delivery job
+  succeeded and says a change made outside the sync can't be seen. The sync target catalog
+  now says, per target, whether a scoped sync can target it (`scoped_sync`), what it reads
+  back (`readback`) and how far it is proven (`proof`); the console's catalog shows both.
+  Each target is proven through the served API against a stand-in built from the vendor's
+  API reference (create, update, drift, delete, unmanaged keys kept, no value in a plan or
+  the logs); none has a live account proof yet.
+
 - Snowflake key-pair rotation (A240): a `snowflake` role bound to `user <NAME>` rotates that existing user's key pair in
   two phases through its two key slots; retirement unsets the predecessor's slot only while it still holds that key.
   Verified by `SELECT 1` as the user. Built against a stand-in of the SQL API.

@@ -22949,6 +22949,39 @@ export const messages = {
     defaultMessage: "Delivery",
     description: "Secret-sync provider catalog delivery-mode column.",
   },
+  "secrets.sync.scopedColumn": {
+    defaultMessage: "Scoped sync",
+    description: "Secret-sync provider catalog column: whether a scoped sync can target it and what it reads back.",
+  },
+  "secrets.sync.proofColumn": {
+    defaultMessage: "Proven against",
+    description: "Secret-sync provider catalog column: how far the target has been proven.",
+  },
+  "secrets.sync.readbackValue": {
+    defaultMessage: "Reads values back",
+    description: "Scoped sync column: the destination returns stored values, so changes made outside the sync show as drift.",
+  },
+  "secrets.sync.readbackDigest": {
+    defaultMessage: "Reads digests back",
+    description: "Scoped sync column: the destination returns a digest of each stored value.",
+  },
+  "secrets.sync.readbackReceiptOnly": {
+    defaultMessage: "Receipt-only",
+    description:
+      "Scoped sync column: the destination never returns stored values; the delivery receipt is the evidence and changes made outside the sync can't be seen.",
+  },
+  "secrets.sync.noScopedSync": {
+    defaultMessage: "Not available",
+    description: "Scoped sync column: the target takes single syncs only.",
+  },
+  "secrets.sync.proofLocal": {
+    defaultMessage: "The vendor's software",
+    description: "Proof column: proven against the vendor's own software run locally or on a CI runner.",
+  },
+  "secrets.sync.proofStandIn": {
+    defaultMessage: "A stand-in only",
+    description: "Proof column: proven against a stand-in built from the vendor's API documentation, not the real service.",
+  },
   "secrets.sync.configured": {
     defaultMessage: "configured",
     description: "Secret-sync target is configured.",

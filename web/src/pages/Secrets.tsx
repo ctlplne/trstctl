@@ -2782,6 +2782,8 @@ export function Secrets() {
                             <th scope="col">{t("secrets.sync.platform")}</th>
                             <th scope="col">{t("secrets.sync.status")}</th>
                             <th scope="col">{t("secrets.sync.delivery")}</th>
+                            <th scope="col">{t("secrets.sync.scopedColumn")}</th>
+                            <th scope="col">{t("secrets.sync.proofColumn")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2794,6 +2796,16 @@ export function Secrets() {
                               <td>{target.platform}</td>
                               <td>{target.configured ? t("secrets.sync.configured") : t("secrets.sync.available")}</td>
                               <td>{target.delivery_mode}</td>
+                              <td>
+                                {!target.scoped_sync
+                                  ? t("secrets.sync.noScopedSync")
+                                  : target.readback === "receipt-only"
+                                    ? t("secrets.sync.readbackReceiptOnly")
+                                    : target.readback === "digest"
+                                      ? t("secrets.sync.readbackDigest")
+                                      : t("secrets.sync.readbackValue")}
+                              </td>
+                              <td>{target.proof === "locally-proven" ? t("secrets.sync.proofLocal") : t("secrets.sync.proofStandIn")}</td>
                             </tr>
                           ))}
                         </tbody>

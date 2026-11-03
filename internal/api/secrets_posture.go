@@ -145,6 +145,9 @@ type secretSyncTargetResponse struct {
 	WireFormat     string   `json:"wire_format"`
 	SecretHandling string   `json:"secret_handling"`
 	Capabilities   []string `json:"capabilities"`
+	ScopedSync     bool     `json:"scoped_sync"`
+	ReadBack       string   `json:"readback,omitempty"`
+	Proof          string   `json:"proof"`
 }
 
 type secretSyncTargetCatalogResponse struct {
@@ -802,6 +805,7 @@ func secretSyncTargetCatalogRow(id string, entry secretsync.ProviderCatalogEntry
 		Configured: target != nil, DeliveryMode: entry.DeliveryMode,
 		AuthMode: authMode, WireFormat: entry.WireFormat,
 		SecretHandling: secretSyncTargetSecretHandling, Capabilities: capabilities,
+		ScopedSync: entry.ScopedSync, ReadBack: string(entry.ReadBack), Proof: entry.Proof,
 	}
 }
 

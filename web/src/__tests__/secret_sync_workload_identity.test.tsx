@@ -112,6 +112,8 @@ describe("AWS workload identity secret sync", () => {
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
+          scoped_sync: false,
+          proof: "stand-in-only",
           wire_format: "aws-json",
         },
         {
@@ -123,6 +125,8 @@ describe("AWS workload identity secret sync", () => {
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
+          scoped_sync: false,
+          proof: "stand-in-only",
           wire_format: "gcp-json",
         },
         {
@@ -134,6 +138,8 @@ describe("AWS workload identity secret sync", () => {
           auth_mode: "workload_identity",
           delivery_mode: "outbox",
           secret_handling: "byte-native",
+          scoped_sync: false,
+          proof: "stand-in-only",
           wire_format: "azure-json",
         },
       ],

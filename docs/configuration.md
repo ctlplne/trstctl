@@ -2152,8 +2152,8 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `databricks` and `windows`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
-`generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
-`vault-kv-v2`. Startup validates each provider's required native fields, role
+`generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,
+`vault-kv-v2`, and the hosted targets below. Startup validates each provider's required native fields, role
 bindings, endpoint scheme, private-egress CIDRs, and credential-reference form before
 accepting traffic. An absent tenant target or provider fails its served mutation
 closed; it never falls back to another tenant or to a test registry.
@@ -2205,6 +2205,36 @@ them to one site. Each delivery reads the variable first, then sets its value fo
 `deploy-preview`, `production`) or creates it as a secret variable with `scopes`
 (`builds`, `functions`, `runtime` by default; also `post-processing`). Netlify applies
 the value on the site's next deploy.
+
+#### Hosted sync targets (A241)
+
+A hosted target names the destination in one `binding` string, in the type's grammar,
+and authenticates with `token_ref` (and `username` where the table says so).
+`endpoint` is optional: empty means the vendor's API base shown below; set it for a
+regional or self-hosted API. Every hosted target takes a scoped sync: it lists its
+keys, reads back what the vendor returns, and deletes. **Reads back** is what a scoped
+sync compares: `value` (the stored value, hashed and wiped at once) or `receipt-only`
+(the vendor never returns a secret's value; the delivery receipt is the evidence, and
+a change made outside the sync can't be seen). Keys are variable names: a scoped sync's
+`destination_prefix` is a name prefix (`APP_`), and `key_transform: env` turns secret
+paths into names. Values are text (UTF-8).
+
+| `type` | `binding` | Default endpoint | Reads back | Notes |
+|---|---|---|---|---|
+| `heroku` | `<app name or ID>` | `https://api.heroku.com` | value | Config vars; every change restarts the app. Names starting `HEROKU_` are refused. |
+| `render` | `<service ID>` (`srv-…`) | `https://api.render.com/v1` | value | Service variables; applied on the next deploy. |
+| `railway` | `project <ID> environment <ID> [service <ID>]` | `https://backboard.railway.com/graphql/v2` | value | Account or workspace token; writes skip the redeploy (next deploy applies them). |
+| `fly` | `<app name>` | `https://api.machines.dev` | receipt-only | App secrets; Machines read them when created or updated at the new secrets version. |
+| `digitalocean-app-platform` | `app <ID> [component <name>]` | `https://api.digitalocean.com` | receipt-only | `SECRET` envs in the app spec (the app's, or one component's); the rest of the spec is sent back unchanged. |
+| `northflank` | `project <ID> secret-group <ID>` | `https://api.northflank.com/v1` | value | A secret group's variables, written whole. |
+| `qovery` | `<scope> <ID>` (`application`, `container`, `job`, `helm`, `terraform`, `environment` or `project`) | `https://api.qovery.com` | receipt-only | Secrets at that scope; `QOVERY_` and `__` names are refused; applied on the next deploy. |
+| `cloud66` | `<stack UID>` | `https://app.cloud66.com/api/3` | value | Stack variables (admin scope); applied on the next deploy. |
+| `laravel-forge` | `org <slug> server <ID> site <ID>` | `https://forge.laravel.com/api` | value | One `KEY='value'` line in the site's `.env` (written whole, asynchronously); lines the sync doesn't own are kept. A value with a line break, or with both `'` and `${`, is refused. |
+
+```json
+{"tenant_id": "…", "id": "payments-heroku", "type": "heroku",
+ "binding": "payments-api", "token_ref": "secret://integrations/heroku"}
+```
 
 ### Privileged access broker targets
 

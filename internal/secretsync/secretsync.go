@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
+	"trstctl.com/trstctl/internal/synctarget"
 )
 
 type operationIDContextKey struct{}
@@ -158,6 +159,14 @@ type ProviderCatalogEntry struct {
 	AuthMode     string
 	WireFormat   string
 	Capabilities []string
+	// ScopedSync reports whether a scoped sync (A237) can target it: the
+	// destination lists, reads back (or is receipt-only) and deletes keys.
+	ScopedSync bool
+	// ReadBack is what a scoped sync reads back of a stored value; empty for
+	// a target that takes no scoped sync.
+	ReadBack ReadBack
+	// Proof is ProofLocal or ProofStandIn.
+	Proof string
 }
 
 // SyncItem is a queued sync delivery.
@@ -309,6 +318,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "AWS SigV4 access key, secret access key, optional session token",
 			WireFormat:   "SecretBinary base64 payload",
 			Capabilities: []string{"cloud-secret-manager", "binary-secret", "sigv4", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "gcp-secret-manager",
@@ -318,6 +328,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token or workload-federated access token supplied by operator config",
 			WireFormat:   "payload.data base64 secret bytes",
 			Capabilities: []string{"cloud-secret-manager", "versioned-secret", CapabilityReceiverReconcile, "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "azure-key-vault",
@@ -327,6 +338,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "base64 value with contentType application/octet-stream;base64",
 			Capabilities: []string{"cloud-secret-manager", "versioned-secret", CapabilityReceiverReconcile, "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "github-actions",
@@ -336,6 +348,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "encoded_value payload accepted by the sync pusher boundary",
 			Capabilities: []string{"ci-secret", "repository-secret", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "gitlab-ci",
@@ -345,6 +358,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "PRIVATE-TOKEN supplied by operator config",
 			WireFormat:   "masked project variable payload",
 			Capabilities: []string{"ci-secret", "project-variable", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "vercel-netlify",
@@ -354,6 +368,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "encrypted environment variable payload",
 			Capabilities: []string{"ci-secret", "deployment-env", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "ci",
@@ -363,6 +378,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "provider/key/encoded_value JSON envelope",
 			Capabilities: []string{"ci-secret", "generic-json", "outbox-delivery"},
+			Proof:        ProofLocal,
 		},
 		{
 			ID:           "webhook",
@@ -372,6 +388,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "HMAC signing key reference, optional bearer token",
 			WireFormat:   "operator JSON template with ${key}, ${value}, ${value_base64}, ${delivery_id} and ${timestamp}, or a value_base64 envelope",
 			Capabilities: []string{"generic-json", "signed-payload", "templated-body", "outbox-delivery"},
+			Proof:        ProofLocal,
 		},
 		{
 			ID:           "aws-parameter-store",
@@ -381,6 +398,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "AWS SigV4 access key, secret access key, optional session token",
 			WireFormat:   "SecureString parameter at /<path_prefix>/<key>, optionally under a KMS key",
 			Capabilities: []string{"cloud-parameter-store", "secure-string", "sigv4", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "netlify",
@@ -390,6 +408,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "secret environment variable with a deploy-context value and scopes",
 			Capabilities: []string{"ci-secret", "deployment-env", "read-before-write", "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "kubernetes",
@@ -399,6 +418,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "Opaque Secret data.value base64 payload",
 			Capabilities: []string{"cluster-secret", "namespace-secret", CapabilityReceiverReconcile, "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "terraform-cloud-opentofu",
@@ -408,6 +428,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer team token supplied by operator config",
 			WireFormat:   "JSON:API vars resource with sensitive=true and terraform/env category",
 			Capabilities: []string{"workspace-variable", "opentofu", "sensitive-variable", "read-before-write", CapabilityReceiverReconcile, "outbox-delivery"},
+			Proof:        ProofStandIn,
 		},
 		{
 			ID:           "vault-kv-v2",
@@ -417,7 +438,28 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "X-Vault-Token and optional X-Vault-Namespace supplied by operator config",
 			WireFormat:   "KV v2 data field plus check-and-set metadata version",
 			Capabilities: []string{"vault", "openbao", "kv-v2", "cas", "read-before-write", CapabilityReceiverReconcile, "outbox-delivery"},
+			Proof:        ProofLocal,
+			ScopedSync:   true,
+			ReadBack:     ReadBackValue,
 		},
+	}
+	for _, typ := range synctarget.Types() {
+		target, _ := synctarget.Lookup(typ)
+		vendor := hostedVendors[typ]
+		if vendor == nil {
+			continue
+		}
+		capabilities := []string{"hosted-sync", "scoped-sync", "outbox-delivery"}
+		if vendor.readBack == ReadBackReceiptOnly {
+			capabilities = append(capabilities, "receipt-only")
+		} else {
+			capabilities = append(capabilities, CapabilityReceiverReconcile)
+		}
+		entries = append(entries, ProviderCatalogEntry{
+			ID: typ, Name: vendor.name, Platform: target.Platform,
+			DeliveryMode: vendor.deliveryMode, AuthMode: vendor.authMode, WireFormat: vendor.wireFormat,
+			Capabilities: capabilities, ScopedSync: true, ReadBack: vendor.readBack, Proof: vendor.proof,
+		})
 	}
 	for i := range entries {
 		entries[i].Capabilities = append([]string(nil), entries[i].Capabilities...)

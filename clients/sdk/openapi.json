@@ -43720,6 +43720,27 @@
           "platform": {
             "type": "string"
           },
+          "proof": {
+            "description": "locally-proven: proven against the vendor's own software run locally or on a CI runner; stand-in-only: proven against a stand-in built from the vendor's API documentation.",
+            "enum": [
+              "locally-proven",
+              "stand-in-only"
+            ],
+            "type": "string"
+          },
+          "readback": {
+            "description": "What a scoped sync reads back of a stored value: the value (hashed, never returned), the destination's digest, or nothing (receipt-only: the delivery receipt is the evidence and outside changes can't be seen). Absent when the target takes no scoped sync.",
+            "enum": [
+              "value",
+              "digest",
+              "receipt-only"
+            ],
+            "type": "string"
+          },
+          "scoped_sync": {
+            "description": "A scoped sync can target it: the destination lists, reads back (or is receipt-only) and deletes keys.",
+            "type": "boolean"
+          },
           "secret_handling": {
             "type": "string"
           },
@@ -43736,7 +43757,9 @@
           "auth_mode",
           "wire_format",
           "secret_handling",
-          "capabilities"
+          "capabilities",
+          "scoped_sync",
+          "proof"
         ],
         "type": "object"
       },

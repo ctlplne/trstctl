@@ -7230,7 +7230,12 @@ func componentSchemas() map[string]*Schema {
 		"wire_format":     str(),
 		"secret_handling": str(),
 		"capabilities":    {Type: "array", Items: str()},
-	}, "id", "name", "platform", "configured", "delivery_mode", "auth_mode", "wire_format", "secret_handling", "capabilities")
+		"scoped_sync":     {Type: "boolean", Description: "A scoped sync can target it: the destination lists, reads back (or is receipt-only) and deletes keys."},
+		"readback": {Type: "string", Enum: []string{"value", "digest", "receipt-only"},
+			Description: "What a scoped sync reads back of a stored value: the value (hashed, never returned), the destination's digest, or nothing (receipt-only: the delivery receipt is the evidence and outside changes can't be seen). Absent when the target takes no scoped sync."},
+		"proof": {Type: "string", Enum: []string{"locally-proven", "stand-in-only"},
+			Description: "locally-proven: proven against the vendor's own software run locally or on a CI runner; stand-in-only: proven against a stand-in built from the vendor's API documentation."},
+	}, "id", "name", "platform", "configured", "delivery_mode", "auth_mode", "wire_format", "secret_handling", "capabilities", "scoped_sync", "proof")
 	secretSyncTargetCatalog := object(map[string]*Schema{
 		"capability":         str(),
 		"served":             {Type: "boolean"},

@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/synctarget"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -772,6 +773,10 @@ func secretSyncTargetsFromConfig(
 	resolver := integrationCredentialResolver{store: st, kek: kek, crypto: access}
 	seen := map[string]bool{}
 	for _, entry := range entries {
+		// A hosted target without an endpoint uses its vendor's API base.
+		if t, hosted := synctarget.Lookup(entry.Type); hosted && strings.TrimSpace(entry.Endpoint) == "" {
+			entry.Endpoint = t.Endpoint
+		}
 		key := entry.TenantID + "\x00" + entry.ID
 		if seen[key] {
 			minter.Close()
@@ -907,7 +912,8 @@ func (p *configuredSyncPusher) ReconcilesReceiver() bool {
 	case "vault-kv-v2", "terraform-cloud-opentofu", "gcp-secret-manager", "azure-key-vault", "kubernetes-secrets":
 		return true
 	default:
-		return false
+		readBack := secretsync.HostedReadBack(p.cfg.Type)
+		return readBack != "" && readBack != secretsync.ReadBackReceiptOnly
 	}
 }
 
@@ -935,8 +941,33 @@ func (p *configuredSyncPusher) ReconcileOperation(ctx context.Context, key strin
 }
 
 // ScopedKeys reports whether this target's receiver lists, reads back and
-// deletes keys for a scoped sync (A237): only KV v2 exposes its key tree.
-func (p *configuredSyncPusher) ScopedKeys() bool { return p.cfg.Type == "vault-kv-v2" }
+// deletes keys for a scoped sync (A237): KV v2 and the hosted targets (A241).
+func (p *configuredSyncPusher) ScopedKeys() bool {
+	_, hosted := synctarget.Lookup(p.cfg.Type)
+	return p.cfg.Type == "vault-kv-v2" || hosted
+}
+
+// FlatKeys, ValidKey, ReadsBack and DigestOf answer a scoped sync's questions
+// from the configured type, without a credential (A241).
+func (p *configuredSyncPusher) FlatKeys() bool {
+	t, hosted := synctarget.Lookup(p.cfg.Type)
+	return hosted && t.Keys == synctarget.FlatKeys
+}
+
+func (p *configuredSyncPusher) ValidKey(key string) error {
+	if t, hosted := synctarget.Lookup(p.cfg.Type); hosted {
+		return t.ValidKey(key)
+	}
+	return nil
+}
+
+func (p *configuredSyncPusher) ReadsBack() bool {
+	return secretsync.HostedReadBack(p.cfg.Type) != secretsync.ReadBackReceiptOnly
+}
+
+func (p *configuredSyncPusher) DigestOf(value []byte) string {
+	return secretsync.HostedDigestOf(p.cfg.Type, value)
+}
 
 // ListKeys, ReadDigest and Delete resolve the target's credential for one call
 // and delegate to the concrete pusher, like a delivery.
@@ -1098,7 +1129,17 @@ func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher
 			PathPrefix: cfg.PathPrefix, Field: cfg.Field, Namespace: cfg.VaultNamespace,
 		})
 	default:
-		return fmt.Errorf("server: unsupported secret-sync target type %q", cfg.Type)
+		if _, hosted := synctarget.Lookup(cfg.Type); !hosted {
+			return fmt.Errorf("server: unsupported secret-sync target type %q", cfg.Type)
+		}
+		token, resolveErr := resolve(cfg.TokenRef)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		concrete, err = secretsync.NewHostedSyncPusher(secretsync.HostedSyncConfig{
+			Type: cfg.Type, Endpoint: cfg.Endpoint, HTTPClient: client, Token: token,
+			Username: cfg.Username, Binding: cfg.Binding,
+		})
 	}
 	if err != nil {
 		return err

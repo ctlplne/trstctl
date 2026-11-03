@@ -1291,7 +1291,14 @@ Parameter Store, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI,
 Vercel, Netlify, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2,
 a signed webhook (templated JSON with an HMAC-SHA256 signature over a timestamp and
 the body; see [configuration](../configuration.md#signed-webhook-parameter-store-and-netlify-targets)),
-and a generic CI/JSON endpoint with no payload signature.
+a generic CI/JSON endpoint with no payload signature, and the hosted targets of
+A241 (Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,
+Cloud 66 and Laravel Forge so far; see
+[configuration](../configuration.md#hosted-sync-targets-a241)). Each catalog row says
+whether a scoped sync can target it, what it reads back (`readback`: `value` or
+`receipt-only`) and how far it is proven (`proof`: `locally-proven` against the
+vendor's own software, or `stand-in-only` against a stand-in built from the vendor's
+API documentation).
 The console's **Check a previous delivery** field accepts a job ID from any
 receipt or CLI run. It reads the same durable status and keeps the ID in the
 page URL, including when the target is no longer configured. A pending status
@@ -1588,7 +1595,10 @@ metadata-only.
 
 A **scoped sync** keeps a whole scope in step with a destination: every secret under a
 source prefix (a project environment such as `payments/prod/`, a folder, any name
-prefix) goes to a configured KV v2 target under a destination prefix. Define it once,
+prefix) goes to a configured KV v2 or hosted target under a destination prefix. A
+hosted target holds variable names, so its destination prefix is a name prefix
+(`APP_`) and `key_transform: env` names nested secrets (`db/password` becomes
+`DB_PASSWORD`); a key the target can't hold is blocked in the plan. Define it once,
 then preview and apply:
 
 ```
@@ -1598,7 +1608,9 @@ trstctl secrets scoped-syncs apply <id> -f apply.json   # {"plan_digest":"…"}
 ```
 
 The plan is value-free and lists every destination key with its action: `create`,
-`update` (named drift when the destination changed outside the sync), `unchanged`,
+`update` (named drift when the destination changed outside the sync), `unchanged`
+(on a receipt-only target, when this source version's delivery job succeeded: the
+target can't show a change made outside the sync, and the plan says so),
 `delete`, `orphaned`, `unmanaged` or `blocked`. A key the sync didn't write is never
 touched: it's listed as `unmanaged`, and if a source maps onto it the item is blocked
 until the definition sets `adopt_existing`. Deletes follow the reviewed delete scope:
@@ -2187,7 +2199,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 - **Sync targets:** AWS Secrets Manager, AWS Systems Manager Parameter Store, GCP
   Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Netlify,
   Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2, signed webhook,
-  generic CI/JSON.
+  generic CI/JSON, and the hosted targets (Heroku, Render, Railway, Fly.io,
+  DigitalOcean App Platform, Northflank, Qovery, Cloud 66, Laravel Forge).
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,

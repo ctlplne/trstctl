@@ -10286,6 +10286,9 @@ export interface SecretSyncTarget {
   id: string;
   name: string;
   platform: string;
+  proof: "locally-proven" | "stand-in-only";
+  readback?: "value" | "digest" | "receipt-only";
+  scoped_sync: boolean;
   secret_handling: string;
   wire_format: string;
 }

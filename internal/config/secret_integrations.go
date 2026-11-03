@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
+	"trstctl.com/trstctl/internal/synctarget"
 )
 
 // SecretIntegrationsConfig is the operator-owned, tenant-bound configuration for
@@ -276,6 +277,12 @@ type SecretSyncTargetConfig struct {
 	// SecureString values; empty uses the account's key for SSM.
 	KMSKeyID string `json:"kms_key_id,omitempty"`
 
+	// Hosted targets (A241, internal/synctarget): what the destination is,
+	// in the type's binding grammar, and the user, key ID or client name a
+	// type that takes one authenticates with beside token_ref.
+	Binding  string `json:"binding,omitempty"`
+	Username string `json:"username,omitempty"`
+
 	TokenRef        string `json:"token_ref,omitempty"`
 	SecretAccessRef string `json:"secret_access_key_ref,omitempty"`
 	SessionTokenRef string `json:"session_token_ref,omitempty"`
@@ -392,12 +399,16 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 			errs = append(errs, fmt.Errorf("%s duplicates tenant/id %q/%q", where, item.TenantID, item.ID))
 		}
 		syncIDs[key] = true
-		if _, ok := secretSyncTypes[item.Type]; !ok {
+		_, builtIn := secretSyncTypes[item.Type]
+		if _, hosted := synctarget.Lookup(item.Type); !builtIn && !hosted {
 			errs = append(errs, fmt.Errorf("%s type %q is not a built-in secret-sync target", where, item.Type))
 			continue
 		}
-		if err := validateSecretIntegrationEndpoint(item.Endpoint, item.AllowInsecureLoopback); err != nil {
-			errs = append(errs, fmt.Errorf("%s endpoint: %w", where, err))
+		// A hosted target may leave endpoint empty for its vendor's API base.
+		if t, hosted := synctarget.Lookup(item.Type); !hosted || strings.TrimSpace(item.Endpoint) != "" || t.Endpoint == "" {
+			if err := validateSecretIntegrationEndpoint(item.Endpoint, item.AllowInsecureLoopback); err != nil {
+				errs = append(errs, fmt.Errorf("%s endpoint: %w", where, err))
+			}
 		}
 		errs = append(errs, validateSyncTarget(where, item)...)
 		errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
@@ -704,7 +715,13 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 }
 
 func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
+	if t, hosted := synctarget.Lookup(c.Type); hosted {
+		return validateHostedSyncTarget(where, t, c)
+	}
 	var errs []error
+	if strings.TrimSpace(c.Binding) != "" || strings.TrimSpace(c.Username) != "" {
+		errs = append(errs, fmt.Errorf("%s binding and username are for hosted targets (%s), not %s", where, strings.Join(synctarget.Types(), ", "), c.Type))
+	}
 	if c.AWSWorkloadIdentity && c.Type != "aws-secrets-manager" {
 		errs = append(errs, fmt.Errorf("%s aws_workload_identity is only valid for aws-secrets-manager", where))
 	}
@@ -832,6 +849,29 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 		if strings.ContainsRune(c.Field, '\x00') {
 			errs = append(errs, fmt.Errorf("%s field must not contain a NUL byte", where))
 		}
+	}
+	return errs
+}
+
+// validateHostedSyncTarget checks a hosted target (A241): its binding in the
+// type's grammar, its token reference, a username where the type takes one,
+// and an endpoint for a self-hosted type.
+func validateHostedSyncTarget(where string, t synctarget.Target, c SecretSyncTargetConfig) []error {
+	var errs []error
+	if _, err := synctarget.ParseBinding(c.Type, c.Binding); err != nil {
+		errs = append(errs, fmt.Errorf("%s %w", where, err))
+	}
+	if err := validateCredentialRef(c.TokenRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s token_ref: %w", where, err))
+	}
+	switch {
+	case t.Credential == synctarget.UserAndToken && strings.TrimSpace(c.Username) == "":
+		errs = append(errs, fmt.Errorf("%s username is required for %s", where, c.Type))
+	case t.Credential != synctarget.UserAndToken && strings.TrimSpace(c.Username) != "":
+		errs = append(errs, fmt.Errorf("%s username is not used by %s", where, c.Type))
+	}
+	if t.Endpoint == "" && strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s %s is self-hosted: endpoint is required", where, c.Type))
 	}
 	return errs
 }

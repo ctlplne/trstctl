@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2358 annotated sites across 29 rules. Each row is
+2367 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (516 sites)
+### G101 — CWE-798 Use of hardcoded credentials (525 sites)
 
 | Location | Reason |
 |---|---|
@@ -176,8 +176,8 @@ not this file.
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:206` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1086` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/secrets_posture.go:1234` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1090` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/secrets_posture.go:1238` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
 | `internal/api/secrets_scanning.go:640` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:664` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -517,7 +517,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1313` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1354` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -532,6 +532,15 @@ not this file.
 | `internal/server/secret_store_providers_served_test.go:117` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:160` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_providers_served_test.go:161` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:348` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:405` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:464` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:522` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:575` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:647` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:686` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:779` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/secret_sync_hosted_targets_served_test.go:839` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_retention_served_test.go:25` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |

@@ -219,7 +219,7 @@ func (a *API) scopedSyncTarget(tenantID, name string) (secretsync.ScopedTarget, 
 	}
 	scoped, ok := target.Scoped()
 	if !ok {
-		return nil, errStatus(http.StatusBadRequest, "target "+name+" does not list its keys, so it can't take a scoped sync (KV v2 targets can)")
+		return nil, errStatus(http.StatusBadRequest, "target "+name+" does not list its keys, so it can't take a scoped sync (the target catalog's scoped_sync says which can)")
 	}
 	return scoped, nil
 }
@@ -440,8 +440,9 @@ func (a *API) previewSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, plan)
 }
 
-// scopedSyncDestinationKey maps a source path under the prefix to its key.
-func scopedSyncDestinationKey(d store.SecretScopedSync, rel string) string {
+// scopedSyncDestinationKey maps a source path under the prefix to its key. A
+// flat destination (variable names) joins its prefix without a slash.
+func scopedSyncDestinationKey(d store.SecretScopedSync, rel string, flat bool) string {
 	key := rel
 	if d.KeyTransform == "env" {
 		var b strings.Builder
@@ -455,6 +456,9 @@ func scopedSyncDestinationKey(d store.SecretScopedSync, rel string) string {
 		key = b.String()
 	}
 	if d.DestinationPrefix != "" {
+		if flat {
+			return d.DestinationPrefix + key
+		}
 		key = d.DestinationPrefix + "/" + key
 	}
 	return key
@@ -506,7 +510,7 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 	bySource := map[string][]store.Secret{}
 	var planned []string
 	for _, src := range sources {
-		key := scopedSyncDestinationKey(d, strings.TrimPrefix(src.Name, d.SourcePrefix))
+		key := scopedSyncDestinationKey(d, strings.TrimPrefix(src.Name, d.SourcePrefix), secretsync.ScopedFlatKeys(scoped))
 		if len(bySource[key]) == 0 {
 			planned = append(planned, key)
 		}
@@ -526,10 +530,12 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 			item.Action, item.Reason = "blocked", "two secrets map to this key: "+srcs[0].Name+" and "+srcs[1].Name
 		case scopedSyncNested(all, key) != "":
 			item.Action, item.Reason = "blocked", "the destination would hold both "+key+" and "+scopedSyncNested(all, key)+"; a key can't also be a folder"
+		case secretsync.ScopedValidKey(scoped, key) != nil:
+			item.Action, item.Reason = "blocked", "the target can't hold "+key+": "+secretsync.ScopedValidKey(scoped, key).Error()+scopedSyncKeyHint(d)
 		case onDestination[key] && managed[key].RemoteKey == "" && !d.AdoptExisting:
 			item.Action, item.Reason = "blocked", "the destination already holds "+key+", which this sync didn't write; set adopt_existing to take it over"
 		default:
-			action, err := a.scopedSyncWriteAction(ctx, tenantID, scoped, srcs[0], key, onDestination[key], digests)
+			action, err := a.scopedSyncWriteAction(ctx, tenantID, scoped, srcs[0], key, onDestination[key], managed[key], digests)
 			if err != nil {
 				return plan, err
 			}
@@ -537,8 +543,12 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 			switch {
 			case action == "update" && managed[key].RemoteKey == "":
 				item.Reason = "adopted: the destination key was not written by this sync"
+			case action == "update" && !secretsync.ScopedReadsBack(scoped):
+				item.Reason = "receipt-only: the source changed since its last delivery; the destination's value can't be read back"
 			case action == "update" && managed[key].SourceVersion == srcs[0].Version:
 				item.Reason = "drift: the destination changed outside this sync"
+			case action == "unchanged" && !secretsync.ScopedReadsBack(scoped):
+				item.Reason = "receipt-only: this version was delivered; the destination's value can't be read back, so a change made outside this sync can't be seen"
 			}
 		}
 		plan.Items = append(plan.Items, item)
@@ -592,6 +602,14 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 	return plan, nil
 }
 
+// scopedSyncKeyHint suggests the env transform when a path key is refused.
+func scopedSyncKeyHint(d store.SecretScopedSync) string {
+	if d.KeyTransform == "env" {
+		return ""
+	}
+	return "; key_transform env makes variable names"
+}
+
 // scopedSyncNested returns a key in all that is key's parent or child path.
 func scopedSyncNested(all []string, key string) string {
 	for _, other := range all {
@@ -606,9 +624,23 @@ func scopedSyncNested(all []string, key string) string {
 // digest: create, update or unchanged. The destination digest joins the plan
 // digest so a destination change makes a reviewed plan stale.
 func (a *API) scopedSyncWriteAction(ctx context.Context, tenantID string, scoped secretsync.ScopedTarget,
-	src store.Secret, key string, exists bool, digests map[string]string) (string, error) {
+	src store.Secret, key string, exists bool, managed store.SecretScopedSyncKey, digests map[string]string) (string, error) {
 	if !exists {
 		return "create", nil
+	}
+	if !secretsync.ScopedReadsBack(scoped) {
+		// A receipt-only destination: this source version's delivered job is
+		// the only evidence of what it holds.
+		if managed.RemoteKey != "" && managed.SourceVersion == src.Version && managed.JobID != "" {
+			job, err := a.secrets.be.Store.GetSecretSyncJob(ctx, tenantID, managed.JobID)
+			if err != nil && !store.IsNotFound(err) {
+				return "", err
+			}
+			if err == nil && job.Status == store.SecretSyncJobDelivered {
+				return "unchanged", nil
+			}
+		}
+		return "update", nil
 	}
 	_, current, err := scoped.ReadDigest(ctx, key)
 	if err != nil {
@@ -624,7 +656,7 @@ func (a *API) scopedSyncWriteAction(ctx context.Context, tenantID string, scoped
 		return "", err
 	}
 	defer secret.Wipe(plain)
-	if current != "" && crypto.ConstantTimeEqual([]byte(current), []byte(crypto.SHA256Hex(plain))) {
+	if current != "" && crypto.ConstantTimeEqual([]byte(current), []byte(secretsync.ScopedDigestOf(scoped, plain))) {
 		return "unchanged", nil
 	}
 	return "update", nil
