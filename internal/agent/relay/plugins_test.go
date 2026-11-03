@@ -190,6 +190,11 @@ func TestPluginCensusComesFromVerifiedLoadedModules(t *testing.T) {
 		got.Grants[1].Constraints[0] != "appliance.internal:443" {
 		t.Fatalf("normalized effective grant = %+v", got.Grants)
 	}
+	// A242: the module's manifest metadata, state and health travel with it.
+	if m := got.Module; m == nil || m.State != "loaded" || m.Version != "1.0.0" || m.Idempotency != "replace-by-name" ||
+		m.HostAPIMin != 1 || m.MemoryPages != pluginhost.DefaultMemoryPages || m.Health.Calls != 0 {
+		t.Fatalf("census module metadata = %+v", got.Module)
+	}
 	wire, err := json.Marshal(entries)
 	if err != nil {
 		t.Fatal(err)

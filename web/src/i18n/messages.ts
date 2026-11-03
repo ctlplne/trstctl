@@ -33740,6 +33740,41 @@ export const messages = {
   "connectors.relayPlugins.metadataOnly": { defaultMessage: "Metadata only", description: "E4 plugin census carries no module or secret bytes." },
   "connectors.relayPlugins.noLoadedPlugins": { defaultMessage: "No loaded plugins", description: "E4 current relay explicitly reported an empty runtime." },
   "connectors.relayPlugins.unrestricted": { defaultMessage: "Unrestricted", description: "E4 capability has no resource constraint." },
+  "connectors.relayPlugins.module": { defaultMessage: "Module", description: "A242 plugin census module version, state and health column." },
+  "connectors.module.state.loaded": { defaultMessage: "Loaded", description: "A242 a connector module runs on this relay." },
+  "connectors.module.state.awaiting-approval": {
+    defaultMessage: "Awaiting approval",
+    description: "A242 a verified connector module waits for its operator to approve its permissions.",
+  },
+  "connectors.module.state.incompatible": {
+    defaultMessage: "Cannot run here",
+    description: "A242 a verified connector module needs another host ABI or more than the relay's grant.",
+  },
+  "connectors.module.pending": { defaultMessage: "Approval would add", description: "A242 permissions an approval would grant." },
+  "connectors.module.approveHint": {
+    defaultMessage: "On the relay, review and approve it with trstctl-agent --approve-connector-module {name}, then restart the agent.",
+    description: "A242 how an operator approves a waiting connector module.",
+  },
+  "connectors.module.behavior": {
+    defaultMessage: "{actions} · retries: {idempotency} · revoke: {revocation}",
+    description: "A242 a module's actions, idempotency and revocation behavior.",
+  },
+  "connectors.module.health": {
+    defaultMessage: "{calls} calls · {failures} failed",
+    description: "A242 a loaded module's call and failure counts since the relay started.",
+  },
+  "connectors.module.lastFailure": { defaultMessage: "last failure: {class}", description: "A242 the class of a module's latest failed call." },
+  "connectors.module.inputs": { defaultMessage: "Setup inputs: {inputs}", description: "A242 the setup fields a module declares." },
+  "connectors.module.setupTitle": { defaultMessage: "Module setup", description: "A242 the setup fields a connector module declares for a destination." },
+  "connectors.module.setupHelp": {
+    defaultMessage: "These fields come from the module's signed manifest; the control plane checks them when you save.",
+    description: "A242 setup form help.",
+  },
+  "connectors.module.secretPlaceholder": { defaultMessage: "secret://name", description: "A242 example secret reference in a setup field." },
+  "connectors.module.secretHelp": {
+    defaultMessage: "A secret reference such as secret://name, never the value itself.",
+    description: "A242 a secret setup input takes a reference.",
+  },
   "connectors.relayPlugins.loadMore": { defaultMessage: "Load more relay runtimes", description: "E4 plugin census pagination action." },
   "identities.automation.eyebrow": { defaultMessage: "Always-on protection", description: "Quiet label above lifecycle automation." },
   "identities.automation.heading": { defaultMessage: "Lifecycle automation", description: "Heading for the server-owned renewal automation plan." },

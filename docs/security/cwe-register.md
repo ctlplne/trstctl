@@ -1794,10 +1794,10 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
 | `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/plugin_modules.go:43` | the operator's own approval record beside the agent key (CWE-22) |
-| `internal/agent/relay/plugins.go:250` | operator-configured plugin directory (CWE-22) |
-| `internal/agent/relay/plugins.go:254` | sibling of an operator-configured module (CWE-22) |
-| `internal/agent/relay/plugins.go:266` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugins.go:255` | operator-configured plugin directory (CWE-22) |
+| `internal/agent/relay/plugins.go:259` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/plugins.go:271` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugins.go:276` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/recovery_check.go:273` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |

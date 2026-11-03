@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -839,7 +840,9 @@ func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time, ske
 // TenantNetworkRelayCarriesPlugin reports whether an enrolled, non-offboarded
 // network relay in this tenant has reported, in its newest signed plugin census,
 // that it loaded the named WASM connector plugin (A63). It reads the projected
-// census only; the signature was verified when the heartbeat was accepted.
+// census only; the signature was verified when the heartbeat was accepted. A
+// module the relay lists as awaiting approval or incompatible (A242) is not
+// carried: it does not run there.
 func (s *Store) TenantNetworkRelayCarriesPlugin(ctx context.Context, tenantID, pluginName string) (bool, error) {
 	pluginName = strings.TrimSpace(pluginName)
 	if pluginName == "" {
@@ -854,13 +857,47 @@ func (s *Store) TenantNetworkRelayCarriesPlugin(ctx context.Context, tenantID, p
 			        AND offboarded_at IS NULL
 			        AND $2 = ANY(roles)
 			        AND relay_plugins_reported_at IS NOT NULL
-			        AND relay_plugins @> jsonb_build_array(jsonb_build_object('name', $3::text))
+			        AND jsonb_path_exists(relay_plugins,
+			              '$[*] ? (@.name == $name && (!exists(@.module) || @.module.state == "loaded"))',
+			              jsonb_build_object('name', $3::text))
 			 )`, tenantID, mtls.AgentRoleNetwork, pluginName).Scan(&present)
 	})
 	if err != nil {
 		return false, fmt.Errorf("store: check tenant relay plugin census: %w", err)
 	}
 	return present, nil
+}
+
+// TenantRelayModuleInputs returns the setup inputs a loaded connector module
+// declares (A242), from the newest signed census of a network relay in this
+// tenant that runs it, and whether any relay reports module metadata for it.
+func (s *Store) TenantRelayModuleInputs(ctx context.Context, tenantID, pluginName string) ([]plugincensus.ModuleInput, bool, error) {
+	var raw []byte
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT elem
+			   FROM agents, jsonb_array_elements(relay_plugins) AS e(elem)
+			  WHERE tenant_id = $1
+			    AND offboarded_at IS NULL
+			    AND $2 = ANY(roles)
+			    AND relay_plugins_reported_at IS NOT NULL
+			    AND jsonb_typeof(relay_plugins) = 'array'
+			    AND elem->>'name' = $3
+			    AND elem->'module'->>'state' = 'loaded'
+			  ORDER BY relay_plugins_reported_at DESC
+			  LIMIT 1`, tenantID, mtls.AgentRoleNetwork, strings.TrimSpace(pluginName)).Scan(&raw)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("store: read relay module inputs: %w", err)
+	}
+	var entry plugincensus.Entry
+	if err := json.Unmarshal(raw, &entry); err != nil || entry.Module == nil {
+		return nil, false, fmt.Errorf("store: relay module census entry is malformed")
+	}
+	return entry.Module.Inputs, true, nil
 }
 
 // TenantHasNetworkRelay reports whether this tenant has an active network relay

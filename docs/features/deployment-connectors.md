@@ -116,6 +116,56 @@ the device proofs run against faithful doubles, and no family has a lab run of t
 software or hardware yet. The Connectors catalog shows the rung beside the device
 proof.
 
+### Connector modules (A242)
+
+A third-party connector is a signed, versioned module with a manifest. Beside
+`<name>.wasm` and its `.sig`, the publisher ships `<name>.manifest.json` and its
+`.sig`, signed by the same key and naming the module's SHA-256, so a manifest speaks
+for exactly one build. It states the version, the host ABI range, the permissions
+(capabilities, `host:port` and path resources, and how the relay may add the target's
+credential: `basic`, `bearer` or `header:<Name>`), the actions (deploy, test,
+readback, rollback, revoke), how a retried deploy converges (`replace-by-name`,
+`create-new`, `read-before-write`; the last two need `readback`), what revoke does, the
+setup inputs a destination form asks for, and the resource limits. The reference
+connector's README shows a complete manifest.
+
+The relay's operator grant is the ceiling: a module runs under exactly what its
+manifest asks for, and one that asks beyond the grant, or needs another host ABI, is
+`incompatible`. Its linear memory and each call are bounded by the runtime, and each
+module has its own worker pool, so a module that spins or floods occupies only its
+own. A module runs only after its operator approves it on the relay:
+
+```bash
+trstctl-agent --connector-plugin-dir /etc/trstctl/modules --connector-plugin-key /etc/trstctl/publisher.pem \
+  --connector-plugin-capability net.http --connector-plugin-capability-prefix net.http=lb.internal:443 \
+  --approve-connector-module partner-lb
+```
+
+prints the version, digest, publisher, permissions and what they add over the current
+approval, and records the approval beside the agent's key (`--connector-plugin-approvals`).
+A later version that asks for no more runs under the same approval; one that asks for
+more, is older or comes from another publisher is `awaiting-approval` until reviewed.
+`--check-connector-modules` with the same flags is the conformance kit: signatures,
+manifest, host ABI, grant fit, limits, every declared action exported, and the
+module's test run read-only against a stand-in target.
+
+A failed call is reported to the control plane as exact evidence: the module's name,
+version and digest, the entry point and what the host observed (`trap`, `timeout`,
+`rejected`, `grant-denied`, or the status it returned), never text the module chose.
+The job stays queued; a `create-new` or `read-before-write` module's retry asks its
+readback first and does not repeat a deploy that already landed. A module's readback
+(0 serving, 1 another certificate bound, 2 nothing installed, 3 installed but not
+bound) feeds the deploy's verification exactly like a native connector's.
+
+The signed census carries each module's version, state, actions, idempotency,
+revocation, setup inputs, limits and health (calls, failures, the last failure's
+class). Only loaded modules count as carried, so no destination or deploy routes to a
+module awaiting approval. On Connectors, the relay plugins table shows each module's
+state and what an approval would add, and loaded modules appear as destination types
+with a setup form built from their inputs; the API checks a module destination's
+configuration against them (required, typed, and a secret input only as a reference
+such as `secret://name`).
+
 Retries use capped backoff with jitter, and a tenant/destination circuit breaker opens
 after repeated failures, skipping new claims until a half-open probe succeeds. A failure
 that provably happened before any receiver I/O (a local refusal such as a certificate

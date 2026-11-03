@@ -8689,6 +8689,7 @@ export interface RelayPluginEntry {
   digest: string;
   execution_context: "network_relay_wasm";
   grants: RelayPluginGrant[];
+  module?: RelayPluginModule;
   name: string;
   publisher: string;
 }
@@ -8696,6 +8697,38 @@ export interface RelayPluginEntry {
 export interface RelayPluginGrant {
   capability: "fs.read" | "fs.write" | "net.dial" | "input.read" | "net.http";
   constraints: string[];
+}
+
+export interface RelayPluginModule {
+  actions: ("deploy" | "test" | "rollback" | "readback" | "revoke")[];
+  credentials: string[];
+  health: RelayPluginModuleHealth;
+  host_api_max: number;
+  host_api_min: number;
+  idempotency: "replace-by-name" | "create-new" | "read-before-write";
+  inputs: RelayPluginModuleInput[];
+  memory_pages: number;
+  pending_permissions: string[];
+  revocation: "delete" | "unbind" | "none";
+  state: "loaded" | "awaiting-approval" | "incompatible";
+  state_reason?: string;
+  timeout_ms: number;
+  version: string;
+}
+
+export interface RelayPluginModuleHealth {
+  calls: number;
+  consecutive_failures: number;
+  failures: number;
+  last_failure?: string;
+}
+
+export interface RelayPluginModuleInput {
+  description?: string;
+  name: string;
+  required: boolean;
+  secret: boolean;
+  type: "string" | "integer" | "boolean";
 }
 
 export interface RelayPluginRuntime {

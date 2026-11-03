@@ -141,6 +141,44 @@ describe("connector deployment disclosure surface", () => {
               publisher: `sha256:${"c".repeat(64)}`,
               execution_context: "network_relay_wasm",
               grants: [{ capability: "net.dial", constraints: ["appliance.internal:443"] }],
+              module: {
+                version: "1.2.0",
+                state: "loaded",
+                host_api_min: 1,
+                host_api_max: 1,
+                actions: ["deploy", "readback", "test"],
+                idempotency: "create-new",
+                revocation: "delete",
+                credentials: ["bearer"],
+                inputs: [{ name: "partition", type: "string", required: true, secret: false }],
+                memory_pages: 1024,
+                timeout_ms: 10000,
+                pending_permissions: [],
+                health: { calls: 4, failures: 1, consecutive_failures: 0, last_failure: "timeout" },
+              },
+            },
+            {
+              name: "partner-fw",
+              digest: `sha256:${"d".repeat(64)}`,
+              publisher: `sha256:${"c".repeat(64)}`,
+              execution_context: "network_relay_wasm",
+              grants: [],
+              module: {
+                version: "2.0.0",
+                state: "awaiting-approval",
+                host_api_min: 1,
+                host_api_max: 1,
+                actions: ["deploy"],
+                idempotency: "replace-by-name",
+                revocation: "none",
+                credentials: [],
+                inputs: [],
+                memory_pages: 1024,
+                timeout_ms: 30000,
+                pending_permissions: ["capability net.http"],
+                state_reason: "no approval on this relay",
+                health: { calls: 0, failures: 0, consecutive_failures: 0 },
+              },
             },
           ],
         },
@@ -403,12 +441,22 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Verified relay plugins" })).toBeInTheDocument();
     expect(screen.getByText("partner-f5")).toBeInTheDocument();
-    expect(screen.getByText("relay-plant-7")).toBeInTheDocument();
-    expect(screen.getByText("network_relay_wasm")).toBeInTheDocument();
+    expect(screen.getAllByText("relay-plant-7").length).toBe(2);
+    expect(screen.getAllByText("network_relay_wasm").length).toBe(2);
     expect(screen.getByText("net.dial")).toBeInTheDocument();
     expect(screen.getByText("appliance.internal:443")).toBeInTheDocument();
-    expect(screen.getByText("Signed by the relay certificate")).toBeInTheDocument();
-    expect(screen.getByText("Metadata only")).toBeInTheDocument();
+    expect(screen.getAllByText("Signed by the relay certificate").length).toBe(2);
+    expect(screen.getAllByText("Metadata only").length).toBe(2);
+    // A242: each module's version, state, behavior and health; a waiting one
+    // says what an approval would add and how to give it.
+    expect(screen.getByText("1.2.0")).toBeInTheDocument();
+    expect(screen.getByText("Loaded")).toBeInTheDocument();
+    expect(screen.getByText("4 calls · 1 failed")).toBeInTheDocument();
+    expect(screen.getByText("last failure: timeout")).toBeInTheDocument();
+    expect(screen.getByText("Setup inputs: partition*")).toBeInTheDocument();
+    expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
+    expect(screen.getByText("Approval would add: capability net.http")).toBeInTheDocument();
+    expect(screen.getByText(/--approve-connector-module partner-fw/)).toBeInTheDocument();
     expect(screen.getAllByText("delivered").length).toBeGreaterThan(0);
     // The shared fingerprint chip keeps the complete value in its tooltip.
     expect(screen.getByTitle("sha256:served-receipt")).toBeInTheDocument();

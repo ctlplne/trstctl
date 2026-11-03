@@ -178,22 +178,6 @@ type relayPluginRuntime struct {
 	Plugins           []plugincensus.Entry `json:"plugins"`
 }
 
-// relayPluginResponseEntries preserves the array shapes promised by OpenAPI.
-// A stored signed census may contain nil slices because nil and empty have the
-// same signing meaning. JSON clients must still receive [] rather than null.
-func relayPluginResponseEntries(entries []plugincensus.Entry) []plugincensus.Entry {
-	out := make([]plugincensus.Entry, len(entries))
-	for i, entry := range entries {
-		out[i] = entry
-		out[i].Grants = make([]plugincensus.Grant, len(entry.Grants))
-		for j, grant := range entry.Grants {
-			out[i].Grants[j] = grant
-			out[i].Grants[j].Constraints = append([]string{}, grant.Constraints...)
-		}
-	}
-	return out
-}
-
 type deploymentTargetRequest struct {
 	Name      string          `json:"name"`
 	Connector string          `json:"connector"`
@@ -554,6 +538,9 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireAdmittedConnector(ctx, tenantID, req.Connector); err != nil {
 			return 0, nil, err
 		}
+		if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
+			return 0, nil, err
+		}
 		if deploymentTargetRequestEnabled(req.Enabled) {
 			if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
 				return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
@@ -616,6 +603,9 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		if err := a.requireAdmittedConnector(ctx, tenantID, req.Connector); err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
 			return 0, nil, err
 		}
 		current, err := a.store.GetDeploymentTarget(ctx, tenantID, id)

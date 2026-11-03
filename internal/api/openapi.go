@@ -3271,7 +3271,31 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "digest": str(), "publisher": str(),
 		"execution_context": {Type: "string", Enum: []string{"network_relay_wasm"}},
 		"grants":            {Type: "array", Items: ref("RelayPluginGrant")},
+		"module":            ref("RelayPluginModule"),
 	}, "name", "digest", "publisher", "execution_context", "grants")
+	relayPluginModuleInput := object(map[string]*Schema{
+		"name": str(), "type": {Type: "string", Enum: []string{"string", "integer", "boolean"}},
+		"required": {Type: "boolean"}, "secret": {Type: "boolean"}, "description": str(),
+	}, "name", "type", "required", "secret")
+	relayPluginModuleHealth := object(map[string]*Schema{
+		"calls": {Type: "integer"}, "failures": {Type: "integer"}, "consecutive_failures": {Type: "integer"},
+		"last_failure": str(),
+	}, "calls", "failures", "consecutive_failures")
+	relayPluginModule := object(map[string]*Schema{
+		"version":      str(),
+		"state":        {Type: "string", Enum: []string{"loaded", "awaiting-approval", "incompatible"}},
+		"host_api_min": {Type: "integer"}, "host_api_max": {Type: "integer"},
+		"actions":      {Type: "array", Items: &Schema{Type: "string", Enum: []string{"deploy", "test", "rollback", "readback", "revoke"}}},
+		"idempotency":  {Type: "string", Enum: []string{"replace-by-name", "create-new", "read-before-write"}},
+		"revocation":   {Type: "string", Enum: []string{"delete", "unbind", "none"}},
+		"credentials":  {Type: "array", Items: str()},
+		"inputs":       {Type: "array", Items: ref("RelayPluginModuleInput")},
+		"memory_pages": {Type: "integer"}, "timeout_ms": {Type: "integer"},
+		"pending_permissions": {Type: "array", Items: str()},
+		"state_reason":        str(),
+		"health":              ref("RelayPluginModuleHealth"),
+	}, "version", "state", "host_api_min", "host_api_max", "actions", "idempotency", "revocation",
+		"credentials", "inputs", "memory_pages", "timeout_ms", "pending_permissions", "health")
 	relayPluginRuntime := object(map[string]*Schema{
 		"agent_id": uuid(), "agent_name": str(), "agent_status": str(),
 		"reported_at": timestamp(), "signer_fingerprint": str(),
@@ -8333,6 +8357,9 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorCatalogItem":                     connectorCatalogItem,
 		"RelayPluginGrant":                         relayPluginGrant,
 		"RelayPluginEntry":                         relayPluginEntry,
+		"RelayPluginModule":                        relayPluginModule,
+		"RelayPluginModuleInput":                   relayPluginModuleInput,
+		"RelayPluginModuleHealth":                  relayPluginModuleHealth,
 		"RelayPluginRuntime":                       relayPluginRuntime,
 		"ConnectorCatalog":                         connectorCatalog,
 		"DeploymentTargetRequest":                  deploymentTargetReq,

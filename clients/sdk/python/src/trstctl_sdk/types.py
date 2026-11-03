@@ -12037,6 +12037,7 @@ RelayPluginEntry = TypedDict(
         'digest': str,
         'execution_context': str,
         'grants': list[dict[str, Any]],
+        'module': dict[str, Any],
         'name': str,
         'publisher': str,
     },
@@ -12048,6 +12049,50 @@ RelayPluginGrant = TypedDict(
     {
         'capability': str,
         'constraints': list[str],
+    },
+    total=False,
+)
+
+RelayPluginModule = TypedDict(
+    'RelayPluginModule',
+    {
+        'actions': list[str],
+        'credentials': list[str],
+        'health': dict[str, Any],
+        'host_api_max': int,
+        'host_api_min': int,
+        'idempotency': str,
+        'inputs': list[dict[str, Any]],
+        'memory_pages': int,
+        'pending_permissions': list[str],
+        'revocation': str,
+        'state': str,
+        'state_reason': str,
+        'timeout_ms': int,
+        'version': str,
+    },
+    total=False,
+)
+
+RelayPluginModuleHealth = TypedDict(
+    'RelayPluginModuleHealth',
+    {
+        'calls': int,
+        'consecutive_failures': int,
+        'failures': int,
+        'last_failure': str,
+    },
+    total=False,
+)
+
+RelayPluginModuleInput = TypedDict(
+    'RelayPluginModuleInput',
+    {
+        'description': str,
+        'name': str,
+        'required': bool,
+        'secret': bool,
+        'type': str,
     },
     total=False,
 )

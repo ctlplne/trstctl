@@ -31,14 +31,18 @@ type Grant struct {
 	Constraints []string `json:"constraints"`
 }
 
-// Entry is one module that passed provenance verification and was instantiated.
-// Digest and Publisher are sha256: fingerprints, never module or key bytes.
+// Entry is one module that passed provenance verification. Digest and
+// Publisher are sha256: fingerprints, never module or key bytes. Module, when
+// present (A242), is the module's manifest metadata, its state on the relay and
+// its health; Grants is what it runs under, empty for a module that is not
+// loaded.
 type Entry struct {
 	Name             string  `json:"name"`
 	Digest           string  `json:"digest"`
 	Publisher        string  `json:"publisher"`
 	ExecutionContext string  `json:"execution_context"`
 	Grants           []Grant `json:"grants"`
+	Module           *Module `json:"module,omitempty"`
 }
 
 // Report is carried on the authenticated heartbeat. Signature is made by the
@@ -86,6 +90,16 @@ func Normalize(entries []Entry) ([]Entry, error) {
 			return nil, fmt.Errorf("plugin %q has unsupported execution context %q", in.Name, in.ExecutionContext)
 		}
 		out[i] = Entry{Name: in.Name, Digest: in.Digest, Publisher: in.Publisher, ExecutionContext: in.ExecutionContext}
+		if in.Module != nil {
+			module, err := normalizeModule(*in.Module)
+			if err != nil {
+				return nil, fmt.Errorf("plugin %q module: %w", in.Name, err)
+			}
+			if module.State != ModuleStateLoaded && len(in.Grants) > 0 {
+				return nil, fmt.Errorf("plugin %q is %s and cannot hold grants", in.Name, module.State)
+			}
+			out[i].Module = &module
+		}
 		if len(in.Grants) > 5 {
 			return nil, fmt.Errorf("plugin %q has too many grants", in.Name)
 		}

@@ -36630,6 +36630,9 @@
             },
             "type": "array"
           },
+          "module": {
+            "$ref": "#/components/schemas/RelayPluginModule"
+          },
           "name": {
             "type": "string"
           },
@@ -36668,6 +36671,155 @@
         "required": [
           "capability",
           "constraints"
+        ],
+        "type": "object"
+      },
+      "RelayPluginModule": {
+        "properties": {
+          "actions": {
+            "items": {
+              "enum": [
+                "deploy",
+                "test",
+                "rollback",
+                "readback",
+                "revoke"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "credentials": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "health": {
+            "$ref": "#/components/schemas/RelayPluginModuleHealth"
+          },
+          "host_api_max": {
+            "type": "integer"
+          },
+          "host_api_min": {
+            "type": "integer"
+          },
+          "idempotency": {
+            "enum": [
+              "replace-by-name",
+              "create-new",
+              "read-before-write"
+            ],
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/RelayPluginModuleInput"
+            },
+            "type": "array"
+          },
+          "memory_pages": {
+            "type": "integer"
+          },
+          "pending_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revocation": {
+            "enum": [
+              "delete",
+              "unbind",
+              "none"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "loaded",
+              "awaiting-approval",
+              "incompatible"
+            ],
+            "type": "string"
+          },
+          "state_reason": {
+            "type": "string"
+          },
+          "timeout_ms": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "state",
+          "host_api_min",
+          "host_api_max",
+          "actions",
+          "idempotency",
+          "revocation",
+          "credentials",
+          "inputs",
+          "memory_pages",
+          "timeout_ms",
+          "pending_permissions",
+          "health"
+        ],
+        "type": "object"
+      },
+      "RelayPluginModuleHealth": {
+        "properties": {
+          "calls": {
+            "type": "integer"
+          },
+          "consecutive_failures": {
+            "type": "integer"
+          },
+          "failures": {
+            "type": "integer"
+          },
+          "last_failure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "calls",
+          "failures",
+          "consecutive_failures"
+        ],
+        "type": "object"
+      },
+      "RelayPluginModuleInput": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "integer",
+              "boolean"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "required",
+          "secret"
         ],
         "type": "object"
       },

@@ -31,6 +31,7 @@ import { EndpointContainment } from "@/pages/connectors/EndpointContainment";
 import { EndpointPurge } from "@/pages/connectors/EndpointPurge";
 import { VerificationAddressSuggestions } from "@/pages/connectors/VerificationAddressSuggestions";
 import { DestinationHostField } from "@/pages/connectors/DestinationHostField";
+import { ModuleSetupFields } from "@/pages/connectors/ModuleSetupFields";
 import { ApplianceKeyGenerationField } from "@/pages/connectors/ApplianceKeyGenerationField";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
@@ -255,7 +256,18 @@ export function Connectors() {
     // Initial route load is deliberately summary-only. Expert evidence is lazy.
   }, []);
 
-  const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
+  // A242: connector modules a relay runs are destinations too; one waiting for
+  // approval or unable to run there is not offered.
+  const loadedModules = useMemo(() => {
+    const modules = new Map<string, NonNullable<RelayPluginRuntime["plugins"][number]["module"]>>();
+    for (const runtime of relayPlugins ?? []) {
+      for (const plugin of runtime.plugins ?? []) {
+        if (plugin.module?.state === "loaded" && !modules.has(plugin.name)) modules.set(plugin.name, plugin.module);
+      }
+    }
+    return modules;
+  }, [relayPlugins]);
+  const connectorOptions = useMemo(() => [...new Set([...(catalog ?? []).map((item) => item.name), ...loadedModules.keys()])], [catalog, loadedModules]);
   const selectedTargetRecord = useMemo(() => (targets ?? []).find((target) => target.id === selectedTarget), [selectedTarget, targets]);
   useEffect(() => {
     let cancelled = false;
@@ -1084,6 +1096,7 @@ export function Connectors() {
                         <th scope="col">{translateNow("connectors.relayPlugins.plugin")}</th>
                         <th scope="col">{translateNow("connectors.relayPlugins.provenance")}</th>
                         <th scope="col">{translateNow("connectors.relayPlugins.execution")}</th>
+                        <th scope="col">{translateNow("connectors.relayPlugins.module")}</th>
                         <th scope="col">{translateNow("connectors.relayPlugins.grant")}</th>
                         <th scope="col">{translateNow("connectors.relayPlugins.reported")}</th>
                       </tr>
@@ -1120,6 +1133,64 @@ export function Connectors() {
                               ) : null}
                             </td>
                             <td className="font-mono text-xs">{plugin?.execution_context ?? "—"}</td>
+                            <td className="max-w-88 text-xs">
+                              {plugin?.module ? (
+                                <>
+                                  <span className="block font-mono font-semibold">{plugin.module.version}</span>
+                                  <span
+                                    className={`mt-1 block ${
+                                      plugin.module.state === "loaded"
+                                        ? "text-status-success"
+                                        : plugin.module.state === "incompatible"
+                                          ? "text-status-danger"
+                                          : "text-status-warning"
+                                    }`}
+                                  >
+                                    {translateNow(`connectors.module.state.${plugin.module.state}`)}
+                                  </span>
+                                  {plugin.module.state_reason ? <span className="mt-1 block text-muted-foreground">{plugin.module.state_reason}</span> : null}
+                                  {plugin.module.state === "awaiting-approval" ? (
+                                    <>
+                                      <span className="mt-1 block">
+                                        {translateNow("connectors.module.pending")}: {(plugin.module.pending_permissions ?? []).join("; ")}
+                                      </span>
+                                      <span className="mt-1 block text-muted-foreground">
+                                        {translateNow("connectors.module.approveHint", { name: plugin.name })}
+                                      </span>
+                                    </>
+                                  ) : null}
+                                  <span className="mt-1 block text-muted-foreground">
+                                    {translateNow("connectors.module.behavior", {
+                                      actions: (plugin.module.actions ?? []).join(", "),
+                                      idempotency: plugin.module.idempotency,
+                                      revocation: plugin.module.revocation,
+                                    })}
+                                  </span>
+                                  {plugin.module.state === "loaded" ? (
+                                    <span className="mt-1 block text-muted-foreground">
+                                      {translateNow("connectors.module.health", {
+                                        calls: plugin.module.health.calls,
+                                        failures: plugin.module.health.failures,
+                                      })}
+                                      {plugin.module.health.last_failure ? (
+                                        <span className="block">
+                                          {translateNow("connectors.module.lastFailure", { class: plugin.module.health.last_failure })}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  ) : null}
+                                  {(plugin.module.inputs ?? []).length > 0 ? (
+                                    <span className="mt-1 block text-muted-foreground">
+                                      {translateNow("connectors.module.inputs", {
+                                        inputs: (plugin.module.inputs ?? []).map((input) => (input.required ? `${input.name}*` : input.name)).join(", "),
+                                      })}
+                                    </span>
+                                  ) : null}
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
                             <td className="max-w-88">
                               {plugin?.grants.map((grant) => (
                                 <span key={grant.capability} className="block text-xs">
@@ -1471,6 +1542,9 @@ export function Connectors() {
           )}
           {catalog?.find((item) => item.name === connectorName)?.appliance_key_generation && (
             <ApplianceKeyGenerationField connector={connectorName} config={targetConfig} onChange={setTargetConfig} required={targetEnabled} />
+          )}
+          {(loadedModules.get(connectorName)?.inputs ?? []).length > 0 && (
+            <ModuleSetupFields inputs={loadedModules.get(connectorName)?.inputs ?? []} config={targetConfig} onChange={setTargetConfig} />
           )}
           <p className="text-sm text-muted-foreground">{t("connectors.design.configurationHelp")}</p>
           <div className="flex flex-wrap justify-end gap-2">

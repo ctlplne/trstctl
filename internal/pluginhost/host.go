@@ -317,6 +317,10 @@ func (s *sandbox) hostDial(ctx context.Context, m api.Module, addrPtr, addrLen u
 // "runs forever" must not be one of its options.
 const maxPluginCallDuration = 30 * time.Second
 
+// MaxCallDuration is the longest any call may run (maxPluginCallDuration): a
+// module's default when its manifest names no timeout.
+const MaxCallDuration = maxPluginCallDuration
+
 // Invoke calls an exported function of the plugin, on the host's bounded pool. If
 // the pool is saturated it returns a *bulkhead.Rejected (AN-7) without running
 // the plugin. A guest that does not return within maxPluginCallDuration (or the

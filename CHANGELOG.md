@@ -19,7 +19,14 @@
   the host observed: trap, timeout, rejected, grant-denied or the status it returned) while the
   job stays queued; a `create-new` module's retry asks its `readback` first and does not repeat a
   deploy that landed, and a module's readback feeds the deploy's verification like a native
-  connector's. `trstctl-agent --check-connector-modules` is the conformance kit.
+  connector's. `trstctl-agent --check-connector-modules` is the conformance kit. The relay's
+  signed census carries each module's version, state, actions, idempotency, revocation, setup
+  inputs, limits and health, and lists modules awaiting approval with what an approval would
+  add (only loaded modules count as carried for routing and destinations). The connector
+  catalog API returns it (`module` on each relay plugin), the Connectors console shows it,
+  offers loaded modules as destination types with a setup form built from their inputs, and
+  the API checks a module destination's configuration against those inputs (required, typed,
+  secret inputs only as references).
 
 - Integration catalogs say how far each entry is proven (A242): the connector catalog and the
   secret-sync target catalog carry `qualification` on one ladder (discovered, implemented,

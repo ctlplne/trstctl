@@ -114,8 +114,12 @@ func TestAModuleRunsOnlyUnderItsOperatorsApprovalA242(t *testing.T) {
 	switch {
 	case st.State != relay.ModuleAwaitingApproval || !reflect.DeepEqual(st.Diff, []string{"capability net.dial"}):
 		t.Fatalf("an unapproved module: %+v", st)
-	case !rt.Has("partner") || len(rt.Names()) != 0 || len(rt.Census()) != 0:
-		t.Fatal("an unapproved module is loaded or in the census")
+	case !rt.Has("partner") || len(rt.Names()) != 0:
+		t.Fatal("an unapproved module is loaded")
+	case len(rt.Census()) != 1 || len(rt.Census()[0].Grants) != 0 || rt.Census()[0].Module == nil ||
+		rt.Census()[0].Module.State != relay.ModuleAwaitingApproval ||
+		!reflect.DeepEqual(rt.Census()[0].Module.PendingPermissions, []string{"capability net.dial"}):
+		t.Fatalf("the census does not report the module as awaiting approval with no grants: %+v", rt.Census())
 	case !errors.As(rt.Ready("partner"), &failure) || failure.Class != relay.ModuleAwaitingApproval:
 		t.Fatalf("Ready = %v", rt.Ready("partner"))
 	}

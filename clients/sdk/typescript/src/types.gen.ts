@@ -19358,6 +19358,7 @@ export interface components {
             /** @enum {string} */
             execution_context: "network_relay_wasm";
             grants: components["schemas"]["RelayPluginGrant"][];
+            module?: components["schemas"]["RelayPluginModule"];
             name: string;
             publisher: string;
         };
@@ -19365,6 +19366,39 @@ export interface components {
             /** @enum {string} */
             capability: "fs.read" | "fs.write" | "net.dial" | "input.read" | "net.http";
             constraints: string[];
+        };
+        RelayPluginModule: {
+            actions: ("deploy" | "test" | "rollback" | "readback" | "revoke")[];
+            credentials: string[];
+            health: components["schemas"]["RelayPluginModuleHealth"];
+            host_api_max: number;
+            host_api_min: number;
+            /** @enum {string} */
+            idempotency: "replace-by-name" | "create-new" | "read-before-write";
+            inputs: components["schemas"]["RelayPluginModuleInput"][];
+            memory_pages: number;
+            pending_permissions: string[];
+            /** @enum {string} */
+            revocation: "delete" | "unbind" | "none";
+            /** @enum {string} */
+            state: "loaded" | "awaiting-approval" | "incompatible";
+            state_reason?: string;
+            timeout_ms: number;
+            version: string;
+        };
+        RelayPluginModuleHealth: {
+            calls: number;
+            consecutive_failures: number;
+            failures: number;
+            last_failure?: string;
+        };
+        RelayPluginModuleInput: {
+            description?: string;
+            name: string;
+            required: boolean;
+            secret: boolean;
+            /** @enum {string} */
+            type: "string" | "integer" | "boolean";
         };
         RelayPluginRuntime: {
             /** Format: uuid */

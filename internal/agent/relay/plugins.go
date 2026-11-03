@@ -215,7 +215,12 @@ func (r *PluginRuntime) loadDir(ctx context.Context, dir string, grant pluginhos
 		status := v.status(grant, approvals[name])
 		if status.State != ModuleLoaded {
 			log.Printf("trstctl-agent: connector module %s %s is %s: %s %v", name, v.manifest.Version, status.State, status.Reason, status.Diff)
+			census, err := moduleCensus(name, v.provenance, pluginhost.NewGrant())
+			if err != nil {
+				return err
+			}
 			r.status[name] = status
+			r.census[name] = census
 			continue
 		}
 		m, err := v.load(ctx, r.trust, grant)
@@ -415,7 +420,9 @@ func (r *PluginRuntime) Names() []string {
 
 // Census returns the normalized metadata captured by the successful verifier
 // and loader. It cannot expose module or signature bytes because neither is
-// retained in the census map.
+// retained in the census map. Each entry carries its module's manifest
+// metadata, state and current health (A242); a module that is not loaded is
+// listed with no grants.
 func (r *PluginRuntime) Census() []plugincensus.Entry {
 	if r == nil {
 		return []plugincensus.Entry{}
@@ -423,7 +430,13 @@ func (r *PluginRuntime) Census() []plugincensus.Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]plugincensus.Entry, 0, len(r.census))
-	for _, entry := range r.census {
+	for name, entry := range r.census {
+		st := r.status[name]
+		var health ModuleHealth
+		if m := r.modules[name]; m != nil {
+			health = m.health.snapshot()
+		}
+		entry.Module = censusModule(st, health)
 		out = append(out, entry)
 	}
 	normalized, err := plugincensus.Normalize(out)
@@ -598,4 +611,40 @@ func (r *PluginRuntime) Close(ctx context.Context) error {
 		delete(r.census, name)
 	}
 	return nil
+}
+
+// censusModule is a module's census metadata: its manifest's declarations,
+// its state and its health. Never an input's value or a credential.
+func censusModule(st ModuleStatus, health ModuleHealth) *plugincensus.Module {
+	m := st.Manifest
+	inputs := make([]plugincensus.ModuleInput, 0, len(m.Inputs))
+	for _, in := range m.Inputs {
+		inputs = append(inputs, plugincensus.ModuleInput{
+			Name: in.Name, Type: in.Type, Required: in.Required, Secret: in.Secret, Description: in.Description,
+		})
+	}
+	credentials := make([]string, 0, len(m.Permissions.Credentials))
+	for _, mode := range m.Permissions.Credentials {
+		if c, ok := pluginhost.CanonicalCredentialMode(mode); ok {
+			credentials = append(credentials, c)
+		}
+	}
+	limits := m.ResourceLimits()
+	pages := limits.MemoryPages
+	if pages == 0 {
+		pages = pluginhost.DefaultMemoryPages
+	}
+	timeoutMS := int(limits.Timeout.Milliseconds())
+	if timeoutMS == 0 {
+		timeoutMS = int(pluginhost.MaxCallDuration.Milliseconds())
+	}
+	return &plugincensus.Module{
+		Version: m.Version, State: st.State, HostAPIMin: m.HostAPI.Min, HostAPIMax: m.HostAPI.Max,
+		Actions: m.Actions, Idempotency: m.Idempotency, Revocation: m.Revocation, Credentials: credentials,
+		Inputs: inputs, MemoryPages: pages, TimeoutMS: timeoutMS, PendingPermissions: st.Diff, StateReason: st.Reason,
+		Health: plugincensus.ModuleHealth{
+			Calls: health.Calls, Failures: health.Failures, ConsecutiveFailures: health.ConsecutiveFailures,
+			LastFailure: health.LastFailure,
+		},
+	}
 }

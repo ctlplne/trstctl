@@ -597,6 +597,11 @@
           "go_type": "[]plugincensus.Grant",
           "name": "grants",
           "presence": "required"
+        },
+        {
+          "go_type": "*plugincensus.Module",
+          "name": "module",
+          "presence": "optional"
         }
       ]
     },

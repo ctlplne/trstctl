@@ -1114,6 +1114,42 @@ never live in the API process. What you can do end to end against the running bi
   operator trust keys. Third-party connectors also never receive redeemed
   credential material; a module that could read an appliance password would make
   the sandbox decorative.
+  Connector library (A242) — served. A third-party connector is a signed, versioned
+  module: beside `<name>.wasm` it ships `<name>.manifest.json`, signed by the key that
+  signed the module and naming the module's SHA-256, its version, the host ABI range,
+  its permissions (capabilities, host:port and path resources, and how the relay may
+  add the target's credential: basic, bearer or header:<Name>), its actions (deploy,
+  test, readback, rollback, revoke), how a retried deploy converges (replace-by-name,
+  create-new, read-before-write), what revoke does, its setup inputs and its limits. A
+  module runs under exactly the grant its manifest asks for, which must fit the
+  operator's grant (`--connector-plugin-capability`, `--connector-plugin-credential`);
+  its memory (64 MiB unless it asks for less or up to 256 MiB) and each call (at most
+  30 s) are bounded by the runtime, and each module runs on its own worker pool, so one
+  that spins or floods cannot occupy another's. It runs only once its operator approves
+  it: `trstctl-agent --approve-connector-module <name>` prints its version, digest,
+  publisher, permissions and what they add over the current approval, and records the
+  approval beside the agent's key, never in the plugin directory. A later version that
+  asks for no more loads under the same approval; one that asks for more, is older or
+  comes from another publisher waits as awaiting-approval, and one beyond the relay's
+  grant or host ABI is incompatible; neither runs, and a deploy to it is refused before
+  anything is redeemed. A failed call reaches the control plane as exact evidence — the
+  module's name, version and digest, the entry point and the class the host observed
+  (trap, timeout, rejected, grant-denied, or the status it returned), never the
+  module's words — and the job stays queued for its retry; a create-new or
+  read-before-write module's retry asks its readback first and does not repeat a deploy
+  that landed, and its readback feeds verification like a native connector's. The
+  signed census now carries each module's version, state, actions, setup inputs and
+  health; only loaded modules count as carried. The Connectors console shows them,
+  offers loaded modules as destinations with a setup form built from their inputs, and
+  the API checks a module target's configuration against those inputs (required,
+  typed, and a secret input only as a reference). `trstctl-agent
+  --check-connector-modules` is the conformance kit. Catalog rows say how far each
+  entry is qualified (discovered, implemented, served, locally proven,
+  vendor-qualified) and the generic webhook is never counted as native. What comes next:
+  a module library of the catalog's own targets (today the native families stay
+  compiled into the relay, and the published library holds the reference module), and
+  revoke and rollback actions driven from the control plane's revocation and rollback
+  flows (a module declares them; the relay runs deploy, test and readback).
   Live appliance readback (E2): after every appliance mutation the relay now asks
   the device what it actually has, alongside D2's TLS handshake against the served
   listener. The two are not redundant and only together locate a fault: a handshake
