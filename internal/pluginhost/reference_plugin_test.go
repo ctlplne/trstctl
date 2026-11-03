@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/pluginhost/wasmgen"
 )
@@ -194,5 +195,29 @@ func TestReferenceHTTPConnectorRunsThroughTheHost(t *testing.T) {
 	if len(sent) != 2 || sent[0].Method != "PUT" || sent[0].Auth != "basic" || !strings.Contains(string(sent[0].JSON), `"$input":"private_key_pem"`) ||
 		sent[1].Method != "GET" {
 		t.Fatalf("the host was asked for %+v", sent)
+	}
+}
+
+// TestReferenceConnectorManifestIsAValidModuleManifest (A242) keeps the
+// README's manifest example load-bearing: with the build's digest filled in,
+// it parses strictly and fits the grant the README tells an operator to give.
+func TestReferenceConnectorManifestIsAValidModuleManifest(t *testing.T) {
+	readme, err := os.ReadFile("../../plugins/connectors/reference/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile("(?s)```json\n(.*?)```").FindSubmatch(readme)
+	if block == nil {
+		t.Fatal("the reference README no longer shows a module manifest")
+	}
+	example := strings.Replace(string(block[1]), "<lowercase hex SHA-256 of reference-http-connector.wasm>",
+		crypto.SHA256Hex([]byte("reference build")), 1)
+	m, err := pluginhost.ParseManifest([]byte(example))
+	if err != nil {
+		t.Fatalf("the README's manifest does not parse: %v", err)
+	}
+	grant := pluginhost.NewGrant(pluginhost.CapHTTP).WithPathPrefix(pluginhost.CapHTTP, "appliance.example:443")
+	if _, err := pluginhost.EffectiveGrant(grant, m); err != nil || !m.SupportsHost() {
+		t.Fatalf("the README's manifest does not fit the grant it documents: %v", err)
 	}
 }

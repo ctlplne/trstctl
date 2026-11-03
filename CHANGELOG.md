@@ -2,6 +2,25 @@
 
 ### Added
 
+- Connector modules on the relay (A242): a third-party WASM connector now ships a signed
+  manifest (`<name>.manifest.json` + `.sig`, signed by the key that signed the module) naming
+  its version, the module's SHA-256, the host ABI range, its permissions (capabilities,
+  host:port and path resources, and how the relay may add the target's credential: `basic`,
+  `bearer` or `header:<Name>`), actions, idempotency and revocation behavior, setup inputs and
+  limits. A module runs under exactly the grant its manifest asks for, which must fit the
+  operator's `--connector-plugin-capability` grant (and `--connector-plugin-credential`
+  ceiling); its memory and per-call time are bounded, and each module has its own worker pool
+  so one that spins or floods cannot occupy another's. A module runs only once its operator
+  approves it (`trstctl-agent --approve-connector-module <name>` prints the review and what it
+  adds over the current approval, recorded in `--connector-plugin-approvals`); a later version
+  that asks for no more loads under the same approval, one that asks for more, is older or comes
+  from another publisher waits and is reported as awaiting approval. A failed module call
+  reaches the control plane as exact evidence (name, version, digest, entry point and the class
+  the host observed: trap, timeout, rejected, grant-denied or the status it returned) while the
+  job stays queued; a `create-new` module's retry asks its `readback` first and does not repeat a
+  deploy that landed, and a module's readback feeds the deploy's verification like a native
+  connector's. `trstctl-agent --check-connector-modules` is the conformance kit.
+
 - Integration catalogs say how far each entry is proven (A242): the connector catalog and the
   secret-sync target catalog carry `qualification` on one ladder (discovered, implemented,
   served, locally-proven, vendor-qualified). The sync catalog flags the signed webhook and

@@ -104,6 +104,27 @@ type Export struct {
 	Name  string
 	Args  []int32
 	Const int32
+	// Raw, when set, is the body's own instructions (the closing end is
+	// added): the failure fixtures below, nothing else.
+	Raw []byte
+}
+
+// Failure fixtures (A242), for proving what the host does when a module
+// misbehaves. Each is a complete body returning i32.
+var (
+	// Trap executes unreachable.
+	Trap = []byte{0x00}
+	// Spin never returns: loop { br 0 }.
+	Spin = []byte{0x03, 0x40, 0x0c, 0x00, 0x0b, opI32Const, 0x00}
+)
+
+// Grow asks for pages more pages of memory and returns 1 when the host
+// refused (memory.grow gave -1), 0 when the memory grew.
+func Grow(pages int32) []byte {
+	body := append([]byte{opI32Const}, SLEB(pages)...)
+	body = append(body, 0x40, 0x00)       // memory.grow, memory 0
+	body = append(body, opI32Const, 0x7f) // i32.const -1
+	return append(body, 0x46)             // i32.eq
 }
 
 // Module builds a guest module that imports env.<fn> taking nParams i32
@@ -148,7 +169,9 @@ func Module(fn string, nParams int, data []byte, exports []Export) []byte {
 	var bodies []byte
 	for _, e := range exports {
 		body := vec(0, nil) // no locals
-		if len(e.Args) == 0 {
+		if len(e.Raw) > 0 {
+			body = append(body, e.Raw...)
+		} else if len(e.Args) == 0 {
 			body = append(body, opI32Const)
 			body = append(body, SLEB(e.Const)...)
 		} else {

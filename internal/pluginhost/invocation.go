@@ -146,6 +146,11 @@ func (s *sandbox) hostHTTP(ctx context.Context, m api.Module, reqPtr, reqLen, ou
 	if !s.grant.Allows(CapHTTP, authority) {
 		return s.refuse(errDenied)
 	}
+	// The credential is part of the grant too (A242): a module that declared
+	// bearer auth cannot have the host add the target's password instead.
+	if req.Auth != "" && !s.grant.AllowsCredential(req.Auth, req.AuthHeader) {
+		return s.refuse(errDenied)
+	}
 	inv := invocationFrom(ctx)
 	if inv == nil || inv.HTTP == nil {
 		return s.refuse(errors.New("pluginhost: this call cannot make HTTP requests"))

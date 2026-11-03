@@ -444,6 +444,14 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		failDeploy(ctx, ch, job, intent, DeployStepExecutor, "connector is not executable by this agent", nil, nil)
 		return false
 	}
+	if pluginJob {
+		// A module awaiting its operator's approval, or one this relay cannot
+		// run, is refused before anything is redeemed, naming its state (A242).
+		if err := plugins.Ready(intent.Connector); err != nil {
+			failDeploy(ctx, ch, job, intent, DeployStepExecutor, err.Error(), nil, nil)
+			return false
+		}
+	}
 	if RequiresHostExecProfile(intent.Connector) && len(hostProfile.AllowedRoots) == 0 {
 		// The connector is host-executable but this agent has no operator
 		// profile, so it has no authorized command set. Saying so is the point:
@@ -498,11 +506,22 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// and splices the key into the body by reference (A193), because a
 		// third-party module that could read the appliance password would make
 		// the sandbox a formality.
-		execErr = plugins.Deploy(ctx, intent.Connector, PluginCall{Intent: intent, Material: material, Client: client})
+		execErr = deployPlugin(ctx, plugins, job, PluginCall{Intent: intent, Material: material, Client: client})
 	} else if hostJob {
 		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material, client)
 	} else {
 		stats, execErr = Execute(ctx, client, intent, material)
+	}
+	var moduleFailure *ModuleFailure
+	if errors.As(execErr, &moduleFailure) {
+		// A module's failure is what the host observed — its identity, entry
+		// point and class — which the control plane may carry exactly (A242).
+		step := DeployStepConnector
+		if moduleFailure.Class == FailureGrantDenied {
+			step = DeployStepSandbox
+		}
+		failDeploy(ctx, ch, job, intent, step, moduleFailure.Error(), nil, nil)
+		return false
 	}
 	if execErr != nil {
 		// The connector's own error text can contain whatever the appliance
@@ -558,7 +577,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// did not" — which look identical from the client side and send an operator
 	// to different places.
 	if !hostJob {
-		if verdict, readback := applianceReadback(ctx, client, intent, material); readback != "" {
+		verdict, readback := applianceReadback(ctx, client, intent, material)
+		if pluginJob {
+			// A module's readback entry point answers the same question, read-only.
+			verdict, readback = plugins.Readback(ctx, intent.Connector, PluginCall{Intent: intent, Material: material, Client: client})
+		}
+		if readback != "" {
 			detail = withApplianceReadback(detail, verdict, readback)
 			// A readback that contradicts a passing handshake downgrades the
 			// outcome. The handshake can pass against a cached session or a

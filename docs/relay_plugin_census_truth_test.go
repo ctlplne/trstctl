@@ -55,7 +55,9 @@ func TestRelayPluginCensusClaimsRemainLoadBearing(t *testing.T) {
 		file   string
 		tokens []string
 	}{
-		{"../internal/agent/relay/plugins.go", []string{"LoadVerifiedWithProvenance", "func (r *PluginRuntime) Census()"}},
+		// LoadVerifiedModule is LoadVerifiedWithProvenance under the module's
+		// own limits (A242); the census entry comes from the same verification.
+		{"../internal/agent/relay/plugins.go", []string{"LoadVerifiedModule", "VerifyProvenance", "func (r *PluginRuntime) Census()"}},
 		{"../internal/plugincensus/census.go", []string{"ExecutionContextNetworkRelayWASM", "func Normalize", "func (s Statement) Canonical"}},
 		{"../internal/agent/transport/plugin_census.go", []string{"func SignedPluginCensus", "id.SignStatement"}},
 		{"../internal/server/agentchannel.go", []string{"validatedRelayPluginCensus", "VerifyStatement", "AgentHeartbeatPluginCensusSchemaVersion"}},

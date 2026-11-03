@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2390 annotated sites across 29 rules. Each row is
+2393 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -677,7 +677,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:581` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:606` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1565,7 +1565,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:705` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:734` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1613,7 +1613,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (622 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (625 sites)
 
 | Location | Reason |
 |---|---|
@@ -1648,12 +1648,12 @@ not this file.
 | `cmd/trstctl-agent/edgerenew_test.go:133` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1322` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1983` | operator-named key file (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:350` | operator-supplied runtime configuration path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:377` | operator-supplied public issuer certificate (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:407` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/main.go:1351` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2012` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:534` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/relayloop.go:212` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/role_grant_renewal_test.go:149` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/secretrender.go:23` | the operator's --secret-render-config (CWE-22) |
@@ -1793,8 +1793,11 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
 | `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
-| `internal/agent/relay/plugins.go:142` | operator-configured plugin directory (CWE-22) |
-| `internal/agent/relay/plugins.go:146` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugin_modules.go:43` | the operator's own approval record beside the agent key (CWE-22) |
+| `internal/agent/relay/plugins.go:250` | operator-configured plugin directory (CWE-22) |
+| `internal/agent/relay/plugins.go:254` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugins.go:266` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugins.go:271` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/recovery_check.go:273` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:675` | certPath is created beneath this test's private t.TempDir, |
@@ -1978,8 +1981,8 @@ not this file.
 | `internal/pluginhost/provenance_start_test.go:96` | owned canary under t.TempDir (CWE-22). |
 | `internal/pluginhost/raw_api_boundary_test.go:30` | fixed repository checksum manifest, no external path input (CWE-22). |
 | `internal/pluginhost/raw_architecture_test.go:72` | enumerated Go source in this package only (CWE-22). |
-| `internal/pluginhost/reference_plugin_test.go:54` | fixed in-repo reference plugin path (CWE-22) |
-| `internal/pluginhost/reference_plugin_test.go:134` | test reads the path it granted (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:55` | fixed in-repo reference plugin path (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:135` | test reads the path it granted (CWE-22) |
 | `internal/pluginhost/sandbox_test.go:95` | test reads the fixture path it just granted (CWE-22) |
 | `internal/pluginhost/sandbox_test.go:171` | test reads the fixture it created (CWE-22) |
 | `internal/pqc/prepared_leaf_openssl_test.go:58` | fixed server.log filename in this test's private TempDir; no user path. |
@@ -2419,7 +2422,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:885` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:914` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

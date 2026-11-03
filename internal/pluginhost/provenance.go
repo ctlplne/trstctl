@@ -144,6 +144,45 @@ func (h *Host) LoadVerifiedWithProvenance(ctx context.Context, wasm, signature [
 	return p, provenance, nil
 }
 
+// LoadVerifiedModule is LoadVerifiedWithProvenance under resource limits
+// (A242): the module's memory cannot grow past limits.MemoryPages and each
+// call is interrupted after limits.Timeout.
+func (h *Host) LoadVerifiedModule(ctx context.Context, wasm, signature []byte, tp *TrustPolicy, grant Grant, limits Limits) (*Plugin, Provenance, error) {
+	bounded, err := limits.normalize()
+	if err != nil {
+		return nil, Provenance{}, err
+	}
+	provenance, err := tp.VerifyProvenance(wasm, signature)
+	if err != nil {
+		return nil, Provenance{}, err
+	}
+	p, err := h.instantiate(ctx, wasm, grant, &bounded)
+	if err != nil {
+		return nil, Provenance{}, err
+	}
+	return p, provenance, nil
+}
+
+// VerifyPublisher reports whether signature over data verifies under the
+// trusted key whose fingerprint is publisher ("sha256:<hex>", as Provenance
+// names it). A module's manifest must be signed by the key that signed the
+// module, so one publisher's manifest can never speak for another's module.
+func (tp *TrustPolicy) VerifyPublisher(publisher string, data, signature []byte) error {
+	if tp == nil || len(signature) == 0 {
+		return fmt.Errorf("pluginhost: no signature to verify (fail closed)")
+	}
+	for _, der := range tp.trustedKeys {
+		if "sha256:"+crypto.SHA256Hex(der) != publisher {
+			continue
+		}
+		if err := crypto.VerifyEd25519(der, data, signature); err != nil {
+			return fmt.Errorf("pluginhost: signature does not verify under the module's publisher key")
+		}
+		return nil
+	}
+	return fmt.Errorf("pluginhost: the module's publisher is not a trusted key")
+}
+
 // normalizeHex lowercases a hex digest so pin comparison does not depend on the
 // casing an operator wrote the digest in.
 func normalizeHex(s string) string {

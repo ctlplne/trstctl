@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
@@ -28,9 +29,11 @@ import (
 //
 // So these re-prove each property here rather than citing the brain-side suite.
 
-// signedPluginDir writes a signed module to a directory and returns the trust
-// material for it.
-func signedPluginDir(t *testing.T, name string, module []byte) (dir string, keyPEM []byte, sign func([]byte) []byte) {
+// signedPluginDir writes a signed module to a directory, with a signed
+// manifest asking for caps (and, with net.http, basic and bearer credentials),
+// and records the operator's approval of it at approvalsPath(dir) (A242). It
+// returns the trust material for it.
+func signedPluginDir(t *testing.T, name string, module []byte, caps ...pluginhost.Capability) (dir string, keyPEM []byte, sign func([]byte) []byte) {
 	t.Helper()
 	pubDER, signer, err := crypto.GenerateEd25519KeyPair()
 	if err != nil {
@@ -38,7 +41,58 @@ func signedPluginDir(t *testing.T, name string, module []byte) (dir string, keyP
 	}
 	dir = t.TempDir()
 	writeModule(t, dir, name, module, signer(module))
+	perms := pluginhost.Permissions{}
+	for _, c := range caps {
+		perms.Capabilities = append(perms.Capabilities, string(c))
+		if c == pluginhost.CapHTTP {
+			perms.Credentials = []string{"basic", "bearer"}
+		}
+	}
+	writeManifest(t, dir, name, module, "1.0.0", perms, signer)
+	approve(t, dir, name, "1.0.0", module, crypto.MarshalPublicKeyPEM(pubDER), perms)
 	return dir, crypto.MarshalPublicKeyPEM(pubDER), signer
+}
+
+// approvalsPath is where signedPluginDir records approvals for dir: beside it,
+// never inside the plugin directory.
+func approvalsPath(dir string) string { return dir + "-approvals.json" }
+
+// writeManifest writes and signs <name>.manifest.json for module.
+func writeManifest(t *testing.T, dir, name string, module []byte, version string, perms pluginhost.Permissions, sign func([]byte) []byte) []byte {
+	t.Helper()
+	manifest := map[string]any{
+		"name": name, "version": version, "module_sha256": crypto.SHA256Hex(module),
+		"host_api": map[string]int{"min": 1, "max": 1}, "permissions": perms,
+		"actions": []string{"deploy", "test", "readback"}, "idempotency": "replace-by-name", "revocation": "delete",
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".manifest.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".manifest.json.sig"), sign(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// approve records an operator approval of name at version with perms.
+func approve(t *testing.T, dir, name, version string, module, keyPEM []byte, perms pluginhost.Permissions) {
+	t.Helper()
+	pubDER, err := crypto.ParseEd25519PublicKeyPEM(keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := relay.ModuleStatus{
+		Name: name, State: relay.ModuleAwaitingApproval,
+		Digest: "sha256:" + crypto.SHA256Hex(module), Publisher: "sha256:" + crypto.SHA256Hex(pubDER),
+		Manifest: pluginhost.Manifest{Name: name, Version: version, ModuleSHA256: crypto.SHA256Hex(module), Permissions: perms},
+	}
+	if err := relay.ApproveModule(approvalsPath(dir), st, time.Now()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeModule(t *testing.T, dir, name string, module, sig []byte) {
@@ -77,10 +131,10 @@ func netDialModule(addr string) []byte { return wasmgen.DialGuest(addr) }
 func TestASignedThirdPartyConnectorDeploysFromTheRelay(t *testing.T) {
 	ctx := context.Background()
 	module, readable := benignModule(t)
-	dir, keyPEM, _ := signedPluginDir(t, "partner", module)
+	dir, keyPEM, _ := signedPluginDir(t, "partner", module, pluginhost.CapFSRead)
 
 	rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{
-		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM},
+		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, ApprovalsPath: approvalsPath(dir),
 		Grant: pluginhost.NewGrant(pluginhost.CapFSRead).
 			WithPathPrefix(pluginhost.CapFSRead, readable),
 	})
@@ -104,10 +158,10 @@ func TestASignedThirdPartyConnectorDeploysFromTheRelay(t *testing.T) {
 func TestPluginCensusComesFromVerifiedLoadedModules(t *testing.T) {
 	ctx := context.Background()
 	module, readable := benignModule(t)
-	dir, keyPEM, _ := signedPluginDir(t, "partner", module)
+	dir, keyPEM, _ := signedPluginDir(t, "partner", module, pluginhost.CapFSRead, pluginhost.CapNetDial)
 
 	rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{
-		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM},
+		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, ApprovalsPath: approvalsPath(dir),
 		Grant: pluginhost.NewGrant(pluginhost.CapNetDial, pluginhost.CapFSRead).
 			WithPathPrefix(pluginhost.CapFSRead, readable).
 			WithPathPrefix(pluginhost.CapNetDial, "appliance.internal:443"),
@@ -240,10 +294,10 @@ func TestAModuleSignedByAnUntrustedKeyIsRefused(t *testing.T) {
 // somewhere it does not.
 func TestAnOutOfGrantOperationDeniesTheDeploy(t *testing.T) {
 	ctx := context.Background()
-	dir, keyPEM, _ := signedPluginDir(t, "partner", netDialModule("evil.example:443"))
+	dir, keyPEM, _ := signedPluginDir(t, "partner", netDialModule("evil.example:443"), pluginhost.CapNetDial)
 
 	rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{
-		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM},
+		Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, ApprovalsPath: approvalsPath(dir),
 		Grant: pluginhost.NewGrant(pluginhost.CapNetDial).
 			WithPathPrefix(pluginhost.CapNetDial, "appliance.internal:443"),
 	})

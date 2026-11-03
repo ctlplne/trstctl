@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -49,13 +52,63 @@ import (
 // plane into the agent binary, which the import-boundary test refuses. What is
 // shared is internal/pluginhost, which is where the actual guarantees live.
 type PluginRuntime struct {
-	host  *pluginhost.Host
 	trust *pluginhost.TrustPolicy
 
 	mu      sync.RWMutex
-	plugins map[string]*pluginhost.Plugin
-	grants  map[string]pluginhost.Grant
+	modules map[string]*pluginModule
+	status  map[string]ModuleStatus
 	census  map[string]plugincensus.Entry
+}
+
+// pluginModule is one admitted connector module (A242).
+type pluginModule struct {
+	// host is the module's own: its bounded pool serves this module only, so
+	// a module that floods or spins occupies its own workers and never
+	// another module's (AN-7).
+	host       *pluginhost.Host
+	plugin     *pluginhost.Plugin
+	manifest   pluginhost.Manifest
+	provenance pluginhost.Provenance
+	grant      pluginhost.Grant
+	health     moduleHealth
+}
+
+// Each module's pool. The relay runs one job at a time, so two workers leave
+// room for a test beside a deploy, and the queue stays small: work a module
+// cannot take is refused at once rather than parked behind a stuck call.
+const (
+	moduleWorkers = 2
+	moduleQueue   = 8
+)
+
+// Module states (A242).
+const (
+	// ModuleLoaded runs: signed, its manifest signed by the same publisher,
+	// within this relay's grant and approved by its operator.
+	ModuleLoaded = "loaded"
+	// ModuleAwaitingApproval is verified but asks for something no approval
+	// covers: a first install, more permissions than the approved version, a
+	// different publisher or an older version. It does not run until the
+	// operator reviews it (trstctl-agent --approve-connector-module).
+	ModuleAwaitingApproval = "awaiting-approval"
+	// ModuleIncompatible is verified but cannot run here: it needs another
+	// host ABI, or more than this relay's grant gives. No approval changes
+	// that; a new build or a wider operator grant does.
+	ModuleIncompatible = "incompatible"
+)
+
+// ModuleStatus is what the relay knows about one module in its directory.
+type ModuleStatus struct {
+	Name     string
+	State    string
+	Reason   string
+	Manifest pluginhost.Manifest
+	// Digest and Publisher are the verified module's ("sha256:<hex>").
+	Digest    string
+	Publisher string
+	// Diff is what an approval would add over the current one.
+	Diff   []string
+	Health ModuleHealth
 }
 
 // PluginConfig is what an operator gives the relay to run third-party connectors.
@@ -76,6 +129,15 @@ type PluginConfig struct {
 	// which is the whole thing a capability system exists to prevent. The
 	// operator sets this, on their own machine, for code they did not write.
 	Grant pluginhost.Grant
+	// ApprovalsPath is the operator's approval record (A242): for each module,
+	// the version, build and permissions the operator reviewed. It lives with
+	// the agent's own state rather than in Dir, so dropping files into the
+	// plugin directory can never approve anything. A module no approval covers
+	// is verified and reported, and does not run.
+	//
+	// Grant is the ceiling, not what each module gets: a module runs under
+	// exactly what its signed manifest asks for, which must fit inside it.
+	ApprovalsPath string
 }
 
 // ErrPluginsNotConfigured is returned when a relay is asked for a plugin
@@ -111,22 +173,32 @@ func NewPluginRuntime(ctx context.Context, cfg PluginConfig) (*PluginRuntime, er
 			"an unset grant is refused rather than defaulted")
 	}
 
+	approvals, err := ReadModuleApprovals(cfg.ApprovalsPath)
+	if err != nil {
+		return nil, err
+	}
 	rt := &PluginRuntime{
-		host:    pluginhost.New(),
 		trust:   trust,
-		plugins: map[string]*pluginhost.Plugin{},
-		grants:  map[string]pluginhost.Grant{},
+		modules: map[string]*pluginModule{},
+		status:  map[string]ModuleStatus{},
 		census:  map[string]plugincensus.Entry{},
 	}
-	if err := rt.loadDir(ctx, dir, cfg.Grant); err != nil {
+	if err := rt.loadDir(ctx, dir, cfg.Grant, approvals); err != nil {
 		_ = rt.Close(ctx)
 		return nil, err
 	}
 	return rt, nil
 }
 
-// loadDir verifies and loads every signed module in dir.
-func (r *PluginRuntime) loadDir(ctx context.Context, dir string, grant pluginhost.Grant) error {
+// loadDir verifies every module in dir and loads the ones that may run.
+//
+// A module that fails verification (no signature, a tampered or untrusted
+// one, no manifest, a manifest another key signed or that describes another
+// build) fails the whole load: that is a supply-chain signal. A verified
+// module that needs approval, or cannot run under this relay's grant or host
+// ABI, is recorded with its state and reason and does not run; the relay
+// serves the rest, and every deploy routed to it fails naming that state.
+func (r *PluginRuntime) loadDir(ctx context.Context, dir string, grant pluginhost.Grant, approvals map[string]ModuleApproval) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("relay: read plugin directory: %w", err)
@@ -136,54 +208,194 @@ func (r *PluginRuntime) loadDir(ctx context.Context, dir string, grant pluginhos
 			continue
 		}
 		name := strings.TrimSuffix(entry.Name(), ".wasm")
-		modulePath := filepath.Join(dir, entry.Name())
-		sigPath := modulePath + ".sig"
-
-		wasm, err := os.ReadFile(modulePath) // #nosec G304 -- operator-configured plugin directory (CWE-22)
+		v, err := verifyModule(r.trust, dir, name)
 		if err != nil {
-			return fmt.Errorf("relay: read plugin %q: %w", name, err)
+			return err
 		}
-		sig, err := os.ReadFile(sigPath) // #nosec G304 -- sibling of an operator-configured module (CWE-22)
+		status := v.status(grant, approvals[name])
+		if status.State != ModuleLoaded {
+			log.Printf("trstctl-agent: connector module %s %s is %s: %s %v", name, v.manifest.Version, status.State, status.Reason, status.Diff)
+			r.status[name] = status
+			continue
+		}
+		m, err := v.load(ctx, r.trust, grant)
 		if err != nil {
-			// An unsigned module is refused, not skipped. Dropping a file into
-			// the directory must never be a way to get code loaded.
-			return fmt.Errorf("relay: plugin %q has no signature at %s; unsigned third-party code "+
-				"is refused: %w", name, filepath.Base(sigPath), err)
+			return err
 		}
-		p, provenance, err := r.host.LoadVerifiedWithProvenance(ctx, wasm, sig, r.trust, grant)
+		census, err := moduleCensus(name, v.provenance, m.grant)
 		if err != nil {
-			return fmt.Errorf("relay: plugin %q failed verification: %w", name, err)
+			m.close(ctx)
+			return err
 		}
-		grants := make([]plugincensus.Grant, 0, len(grant.Capabilities()))
-		for _, capability := range grant.Capabilities() {
-			grants = append(grants, plugincensus.Grant{
-				Capability: string(capability), Constraints: grant.PathPrefixes(capability),
-			})
-		}
-		entry, err := plugincensus.Normalize([]plugincensus.Entry{{
-			Name: name, Digest: provenance.Digest, Publisher: provenance.Publisher,
-			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM, Grants: grants,
-		}})
-		if err != nil {
-			_ = p.Close(ctx)
-			return fmt.Errorf("relay: plugin %q census metadata: %w", name, err)
-		}
-		r.plugins[name] = p
-		r.grants[name] = grant
-		r.census[name] = entry[0]
+		r.modules[name] = m
+		r.status[name] = status
+		r.census[name] = census
 	}
 	return nil
 }
 
-// Has reports whether this relay carries a verified plugin for a connector.
+// verifiedModule is a module whose signature and manifest checked out.
+type verifiedModule struct {
+	name       string
+	wasm, sig  []byte
+	manifest   pluginhost.Manifest
+	provenance pluginhost.Provenance
+}
+
+// verifyModule reads and verifies <name>.wasm, its signature and its signed
+// manifest.
+func verifyModule(trust *pluginhost.TrustPolicy, dir, name string) (verifiedModule, error) {
+	modulePath := filepath.Join(dir, name+".wasm")
+	sigPath := modulePath + ".sig"
+	wasm, err := os.ReadFile(modulePath) // #nosec G304 -- operator-configured plugin directory (CWE-22)
+	if err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: read plugin %q: %w", name, err)
+	}
+	sig, err := os.ReadFile(sigPath) // #nosec G304 -- sibling of an operator-configured module (CWE-22)
+	if err != nil {
+		// An unsigned module is refused, not skipped. Dropping a file into
+		// the directory must never be a way to get code loaded.
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q has no signature at %s; unsigned third-party code "+
+			"is refused: %w", name, filepath.Base(sigPath), err)
+	}
+	provenance, err := trust.VerifyProvenance(wasm, sig)
+	if err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q failed verification: %w", name, err)
+	}
+	manifestPath := filepath.Join(dir, name+".manifest.json")
+	raw, err := os.ReadFile(manifestPath) // #nosec G304 -- sibling of an operator-configured module (CWE-22)
+	if err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q has no manifest at %s; a connector module ships a "+
+			"signed manifest naming its version and permissions: %w", name, filepath.Base(manifestPath), err)
+	}
+	manifestSig, err := os.ReadFile(manifestPath + ".sig") // #nosec G304 -- sibling of an operator-configured module (CWE-22)
+	if err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q manifest has no signature: %w", name, err)
+	}
+	if err := trust.VerifyPublisher(provenance.Publisher, raw, manifestSig); err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q manifest: %w", name, err)
+	}
+	manifest, err := pluginhost.ParseManifest(raw)
+	if err != nil {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q: %w", name, err)
+	}
+	if manifest.Name != name || "sha256:"+manifest.ModuleSHA256 != provenance.Digest {
+		return verifiedModule{}, fmt.Errorf("relay: plugin %q manifest describes %s (sha256:%s), not this module (%s)",
+			name, manifest.Name, manifest.ModuleSHA256, provenance.Digest)
+	}
+	return verifiedModule{name: name, wasm: wasm, sig: sig, manifest: manifest, provenance: provenance}, nil
+}
+
+// status decides whether a verified module runs under this relay's grant
+// and its operator's approval.
+func (v verifiedModule) status(grant pluginhost.Grant, approval ModuleApproval) ModuleStatus {
+	st := ModuleStatus{Name: v.name, Manifest: v.manifest, Digest: v.provenance.Digest, Publisher: v.provenance.Publisher}
+	if !v.manifest.SupportsHost() {
+		st.State, st.Reason = ModuleIncompatible, fmt.Sprintf("it supports host ABI %d to %d; this relay implements %d",
+			v.manifest.HostAPI.Min, v.manifest.HostAPI.Max, pluginhost.HostAPIVersion)
+		return st
+	}
+	if _, err := pluginhost.EffectiveGrant(grant, v.manifest); err != nil {
+		st.State, st.Reason = ModuleIncompatible, err.Error()
+		return st
+	}
+	everything := pluginhost.PermissionDiff(pluginhost.Permissions{}, v.manifest.Permissions)
+	st.State, st.Diff = ModuleAwaitingApproval, pluginhost.PermissionDiff(approval.Permissions, v.manifest.Permissions)
+	switch {
+	case approval.Version == "":
+		st.Reason, st.Diff = "no approval on this relay", everything
+	case approval.Publisher != v.provenance.Publisher:
+		st.Reason, st.Diff = "signed by a different publisher than the approved version", everything
+	case pluginhost.CompareVersions(v.manifest.Version, approval.Version) < 0:
+		st.Reason = "older than the approved version " + approval.Version
+	case len(st.Diff) > 0:
+		st.Reason = "asks for more than the approved version " + approval.Version
+	default:
+		st.State, st.Reason = ModuleLoaded, ""
+	}
+	return st
+}
+
+// load instantiates a verified module under its effective grant and its own
+// limits, on its own bounded pool.
+func (v verifiedModule) load(ctx context.Context, trust *pluginhost.TrustPolicy, grant pluginhost.Grant) (*pluginModule, error) {
+	effective, err := pluginhost.EffectiveGrant(grant, v.manifest)
+	if err != nil {
+		return nil, fmt.Errorf("relay: plugin %q: %w", v.name, err)
+	}
+	host := pluginhost.New(pluginhost.WithPool(bulkhead.New(bulkhead.Config{
+		Name: "relay-module-" + v.name, Workers: moduleWorkers, Queue: moduleQueue,
+	})))
+	p, _, err := host.LoadVerifiedModule(ctx, v.wasm, v.sig, trust, effective, v.manifest.ResourceLimits())
+	if err != nil {
+		_ = host.Close(ctx)
+		return nil, fmt.Errorf("relay: plugin %q does not load under its own limits: %w", v.name, err)
+	}
+	return &pluginModule{host: host, plugin: p, manifest: v.manifest, provenance: v.provenance, grant: effective}, nil
+}
+
+// close releases the module and its pool.
+func (m *pluginModule) close(ctx context.Context) {
+	_ = m.plugin.Close(ctx)
+	_ = m.host.Close(ctx)
+}
+
+// moduleCensus is the census entry for a loaded module: its identity and the
+// grant it actually runs under.
+func moduleCensus(name string, provenance pluginhost.Provenance, grant pluginhost.Grant) (plugincensus.Entry, error) {
+	grants := make([]plugincensus.Grant, 0, len(grant.Capabilities()))
+	for _, capability := range grant.Capabilities() {
+		grants = append(grants, plugincensus.Grant{
+			Capability: string(capability), Constraints: grant.PathPrefixes(capability),
+		})
+	}
+	entry, err := plugincensus.Normalize([]plugincensus.Entry{{
+		Name: name, Digest: provenance.Digest, Publisher: provenance.Publisher,
+		ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM, Grants: grants,
+	}})
+	if err != nil {
+		return plugincensus.Entry{}, fmt.Errorf("relay: plugin %q census metadata: %w", name, err)
+	}
+	return entry[0], nil
+}
+
+// Modules reports every module in the directory with its state, sorted by
+// name.
+func (r *PluginRuntime) Modules() []ModuleStatus {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]ModuleStatus, 0, len(r.status))
+	for name, st := range r.status {
+		if m := r.modules[name]; m != nil {
+			st.Health = m.health.snapshot()
+		}
+		out = append(out, st)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// Has reports whether this relay carries a module for a connector, loaded or
+// not. A deploy routed to one that is not loaded fails with its state (Ready)
+// before anything is redeemed, rather than reading as an unknown connector.
 func (r *PluginRuntime) Has(name string) bool {
 	if r == nil {
 		return false
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	_, ok := r.plugins[name]
+	_, ok := r.status[name]
 	return ok
+}
+
+// Ready reports whether the connector's module runs on this relay: nil when
+// it is loaded, otherwise a *ModuleFailure naming its state.
+func (r *PluginRuntime) Ready(name string) error {
+	_, err := r.module(name)
+	return err
 }
 
 // Names reports the loaded connector names, sorted.
@@ -193,8 +405,8 @@ func (r *PluginRuntime) Names() []string {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]string, 0, len(r.plugins))
-	for name := range r.plugins {
+	out := make([]string, 0, len(r.modules))
+	for name := range r.modules {
 		out = append(out, name)
 	}
 	sort.Strings(out)
@@ -234,17 +446,17 @@ type PluginCall struct {
 
 // Deploy runs a third-party connector's deploy entrypoint.
 //
-// The three failure modes are kept apart because they mean different things to
-// whoever reads the receipt: the module misbehaved, the module reached outside
-// its grant, or the module reported failure. Collapsing them would lose the one
-// that matters most — a grant denial is a supply-chain signal, not a bad day on
-// an appliance.
+// Its failure is a *ModuleFailure: the module trapped, timed out, reached
+// outside its grant or reported a status. They are kept apart because they mean
+// different things to whoever reads the receipt — a grant denial is a
+// supply-chain signal, not a bad day on an appliance.
 func (r *PluginRuntime) Deploy(ctx context.Context, name string, call PluginCall) error {
-	p, err := r.plugin(name)
+	m, err := r.module(name)
 	if err != nil {
 		return err
 	}
-	return r.invoke(ctx, p, name, pluginEntrypoint(p), call, false)
+	_, err = r.invoke(ctx, m, name, pluginEntrypoint(m.plugin), call, false)
+	return err
 }
 
 // Test runs a third-party connector's test entry point under the read-only
@@ -252,58 +464,113 @@ func (r *PluginRuntime) Deploy(ctx context.Context, name string, call PluginCall
 // HEAD. A request that would change the target is refused before it is sent,
 // and fails the test as an operation outside the grant.
 func (r *PluginRuntime) Test(ctx context.Context, name string, call PluginCall) error {
-	p, err := r.plugin(name)
+	m, err := r.module(name)
 	if err != nil {
 		return err
 	}
-	if !p.HasExport("test") {
+	if !m.plugin.HasExport("test") {
 		return fmt.Errorf("relay: plugin %q has no test entry point", name)
 	}
-	return r.invoke(ctx, p, name, "test", call, true)
+	_, err = r.invoke(ctx, m, name, "test", call, true)
+	return err
 }
 
 // HasTest reports whether the loaded plugin for a connector exports a test
 // entry point.
 func (r *PluginRuntime) HasTest(name string) bool {
-	p, err := r.plugin(name)
-	return err == nil && p.HasExport("test")
+	m, err := r.module(name)
+	return err == nil && m.plugin.HasExport("test")
 }
 
-func (r *PluginRuntime) plugin(name string) (*pluginhost.Plugin, error) {
+// HasReadback reports whether the connector's loaded module declares and
+// exports a readback entry point.
+func (r *PluginRuntime) HasReadback(name string) bool {
+	m, err := r.module(name)
+	return err == nil && m.manifest.Has("readback") && m.plugin.HasExport("readback")
+}
+
+// moduleReadbackVerdicts maps a readback entry point's status to the verdict
+// native connectors report (A242): 0 this deploy's certificate is serving,
+// 1 another one is bound, 2 nothing is installed, 3 installed but not bound.
+var moduleReadbackVerdicts = map[uint64]connector.ReadbackVerdict{
+	0: connector.ReadbackServing,
+	1: connector.ReadbackDiverged,
+	2: connector.ReadbackAbsent,
+	3: connector.ReadbackInstalledNotBound,
+}
+
+// Readback asks the module, read-only, what the target holds for call's
+// deploy, as a verdict and the operator-facing sentence. A module without a
+// readback entry point answers "", "".
+func (r *PluginRuntime) Readback(ctx context.Context, name string, call PluginCall) (connector.ReadbackVerdict, string) {
+	if !r.HasReadback(name) {
+		return "", ""
+	}
+	m, err := r.module(name)
+	if err != nil {
+		return "", ""
+	}
+	rc, err := r.invoke(ctx, m, name, "readback", call, true)
+	var failure *ModuleFailure
+	if err != nil && (!errors.As(err, &failure) || failure.Class != FailureStatus) {
+		return connector.ReadbackUnknown, "the connector module could not read the target back"
+	}
+	verdict, ok := moduleReadbackVerdicts[rc]
+	if !ok {
+		return connector.ReadbackUnknown, fmt.Sprintf("the connector module's readback answered status %d", rc)
+	}
+	return verdict, "the connector module reads back: " + string(verdict)
+}
+
+// RetriesBlindly reports whether a retried deploy may simply run again: true
+// for a replace-by-name module, false for one whose deploy creates objects or
+// reads the target first (its readback is asked before a retry).
+func (r *PluginRuntime) RetriesBlindly(name string) bool {
+	m, err := r.module(name)
+	return err != nil || m.manifest.Idempotency == "replace-by-name"
+}
+
+func (r *PluginRuntime) module(name string) (*pluginModule, error) {
 	if r == nil {
 		return nil, ErrPluginsNotConfigured
 	}
 	r.mu.RLock()
-	p := r.plugins[name]
+	m, st := r.modules[name], r.status[name]
 	r.mu.RUnlock()
-	if p == nil {
+	switch {
+	case m != nil:
+		return m, nil
+	case st.State != "":
+		return nil, &ModuleFailure{Module: name, Version: st.Manifest.Version, Digest: st.Digest, Class: st.State}
+	default:
 		return nil, fmt.Errorf("relay: no verified plugin for connector %q", name)
 	}
-	return p, nil
 }
 
-func (r *PluginRuntime) invoke(ctx context.Context, p *pluginhost.Plugin, name, fn string, call PluginCall, readOnly bool) error {
-	before := p.Stats()
-	rc, invErr := r.host.InvokeWith(ctx, p, fn, pluginInvocation(call.Client, call.Intent, call.Material, readOnly))
-	denied := p.Stats().Denied - before.Denied
+func (r *PluginRuntime) invoke(ctx context.Context, m *pluginModule, name, fn string, call PluginCall, readOnly bool) (uint64, error) {
+	before := m.plugin.Stats()
+	rc, invErr := m.host.InvokeWith(ctx, m.plugin, fn, pluginInvocation(call.Client, call.Intent, call.Material, readOnly))
+	denied := m.plugin.Stats().Denied - before.Denied
 
+	failure := &ModuleFailure{Module: name, Version: m.manifest.Version, Digest: m.provenance.Digest, Entry: fn}
 	switch {
 	case invErr != nil:
-		// The error can carry text the module chose. It is not forwarded to the
-		// control plane: the relay reports a closed phrase, exactly as it does
-		// for a native connector's error.
-		return fmt.Errorf("relay: plugin %q %s failed", name, fn)
+		// The error can carry text the module chose. It is not forwarded: the
+		// failure names only what the host observed.
+		failure.Class = pluginhost.FailureClass(invErr)
 	case denied > 0:
 		// The sandbox refused something the module tried. A deploy that
 		// continued past this would be reporting success for a connector that
 		// was reaching outside what its operator authorized.
-		return fmt.Errorf("relay: plugin %q attempted %d operation(s) outside its capability grant",
-			name, denied)
+		failure.Class, failure.Denied = FailureGrantDenied, denied
 	case rc != 0:
-		return fmt.Errorf("relay: plugin %q %s returned non-zero status %d", name, fn, rc)
+		failure.Class, failure.Status = FailureStatus, rc
 	default:
-		return nil
+		m.health.record("")
+		return rc, nil
 	}
+	m.health.record(failure.Class)
+	return rc, failure
 }
 
 // pluginEntrypoint picks the exported function to invoke.
@@ -325,16 +592,10 @@ func (r *PluginRuntime) Close(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var firstErr error
-	for name, p := range r.plugins {
-		if err := p.Close(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		delete(r.plugins, name)
+	for name, m := range r.modules {
+		m.close(ctx)
+		delete(r.modules, name)
 		delete(r.census, name)
 	}
-	if err := r.host.Close(ctx); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	return firstErr
+	return nil
 }

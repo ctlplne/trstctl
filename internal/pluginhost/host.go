@@ -78,6 +78,34 @@ type Plugin struct {
 	stats    *Stats
 	sb       *sandbox
 	nameSeq  atomic.Uint64
+	// timeout bounds every call when the module was loaded under Limits.
+	timeout time.Duration
+}
+
+// Limits bound one module's resources (A242): its linear memory can never
+// grow past MemoryPages (64 KiB each) and each call is interrupted after
+// Timeout. Zero fields take DefaultMemoryPages and maxPluginCallDuration.
+type Limits struct {
+	MemoryPages uint32
+	Timeout     time.Duration
+}
+
+// DefaultMemoryPages (64 MiB) is a module's memory ceiling when its manifest
+// names none.
+const DefaultMemoryPages = 1024
+
+// normalize applies the defaults and refuses limits beyond the host's.
+func (l Limits) normalize() (Limits, error) {
+	if l.MemoryPages == 0 {
+		l.MemoryPages = DefaultMemoryPages
+	}
+	if l.Timeout == 0 {
+		l.Timeout = maxPluginCallDuration
+	}
+	if l.MemoryPages > MaxMemoryPages || l.Timeout < 0 || l.Timeout > maxPluginCallDuration {
+		return Limits{}, fmt.Errorf("pluginhost: limits are at most %d memory pages and %s per call", MaxMemoryPages, maxPluginCallDuration)
+	}
+	return l, nil
 }
 
 // Stats returns a snapshot of the plugin's gated host-call activity.
@@ -117,13 +145,26 @@ func (p *Plugin) Close(ctx context.Context) error {
 // That is a stronger property than a runtime deny, because the plugin's reach is
 // closed before its first instruction executes.
 func (h *Host) instantiateUnverified(ctx context.Context, wasm []byte, grant Grant) (*Plugin, error) {
+	return h.instantiate(ctx, wasm, grant, nil)
+}
+
+// instantiate is instantiateUnverified, under limits when they are given.
+func (h *Host) instantiate(ctx context.Context, wasm []byte, grant Grant, limits *Limits) (*Plugin, error) {
 	// WithCloseOnContextDone is what makes a guest INTERRUPTIBLE. wazero's default
 	// runtime runs guest code to completion regardless of the context, so a plugin
 	// containing `loop { }` — a bug or a hostile plugin — occupied its bounded-pool
 	// worker forever and could not be canceled, shed, or drained at shutdown.
 	// Capability grants close the plugin's reach; they do nothing about its
 	// runtime, which is what this bounds (AN-7).
-	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCloseOnContextDone(true))
+	config := wazero.NewRuntimeConfig().WithCloseOnContextDone(true)
+	var timeout time.Duration
+	if limits != nil {
+		// The memory ceiling is the runtime's, so a module that declares more
+		// than it fails to compile, and memory.grow past it returns -1.
+		config = config.WithMemoryLimitPages(limits.MemoryPages)
+		timeout = limits.Timeout
+	}
+	rt := wazero.NewRuntimeWithConfig(ctx, config)
 	stats := &Stats{}
 	sb := newSandbox(grant, stats)
 	if err := h.registerEnv(ctx, rt, sb); err != nil {
@@ -147,7 +188,7 @@ func (h *Host) instantiateUnverified(ctx context.Context, wasm []byte, grant Gra
 		return nil, fmt.Errorf("pluginhost: instantiate: %w", err)
 	}
 	_ = probe.Close(ctx)
-	return &Plugin{runtime: rt, compiled: compiled, grant: grant, stats: stats, sb: sb}, nil
+	return &Plugin{runtime: rt, compiled: compiled, grant: grant, stats: stats, sb: sb, timeout: timeout}, nil
 }
 
 // registerEnv installs the host ("env") module, exporting one function per
@@ -305,7 +346,13 @@ func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error)
 		// Paired with WithCloseOnContextDone above, this is what actually stops a
 		// looping guest rather than merely asking it to stop.
 		callCtx := ctx
-		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		if p.timeout > 0 {
+			// A module loaded under Limits: its own bound, or the caller's
+			// deadline when that is sooner.
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, p.timeout)
+			defer cancel()
+		} else if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 			var cancel context.CancelFunc
 			callCtx, cancel = context.WithTimeout(ctx, maxPluginCallDuration)
 			defer cancel()
@@ -317,13 +364,13 @@ func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error)
 		name := fmt.Sprintf("call-%d", p.nameSeq.Add(1))
 		mod, err := p.runtime.InstantiateModule(callCtx, p.compiled, wazero.NewModuleConfig().WithName(name))
 		if err != nil {
-			ch <- result{err: fmt.Errorf("pluginhost: instantiate call module: %w", err)}
+			ch <- result{err: fmt.Errorf("%w: %w", errCallInstance, err)}
 			return
 		}
 		defer func() { _ = mod.Close(context.WithoutCancel(callCtx)) }()
 		f := mod.ExportedFunction(fn)
 		if f == nil {
-			ch <- result{err: fmt.Errorf("pluginhost: plugin has no exported function %q", fn)}
+			ch <- result{err: fmt.Errorf("%w %q", ErrNoEntrypoint, fn)}
 			return
 		}
 		out, err := f.Call(callCtx)

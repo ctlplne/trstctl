@@ -4,7 +4,9 @@ package pluginhost
 
 import (
 	"net"
+	"net/textproto"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -25,6 +27,13 @@ const (
 type Grant struct {
 	caps     map[Capability]bool
 	prefixes map[Capability][]string
+	// credentials are the ways the host may add the target's credential to a
+	// guest's HTTP request (A242): "basic", "bearer" or "header:<Name>".
+	// credentialsSet distinguishes a grant that names none (no credential at
+	// all) from one built before modules declared theirs, which keeps A193's
+	// behaviour: any mode the caller's HTTP doer supports.
+	credentials    []string
+	credentialsSet bool
 }
 
 // NewGrant returns a grant of the given capabilities (no resource constraints).
@@ -62,6 +71,77 @@ func (g Grant) WithPathPrefix(cap Capability, prefix string) Grant {
 	// like, and the failure direction of a misconfiguration must be refusal.
 	g.prefixes[cap] = append(g.prefixes[cap], prefix)
 	return g
+}
+
+// WithCredentials limits the credential modes the host adds to a guest's HTTP
+// requests to modes ("basic", "bearer", "header:<Name>"); called with none, the
+// guest's requests carry no credential. It returns the grant for chaining.
+func (g Grant) WithCredentials(modes ...string) Grant {
+	out := make([]string, 0, len(modes))
+	for _, m := range modes {
+		if c, ok := CanonicalCredentialMode(m); ok && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	sort.Strings(out)
+	g.credentials, g.credentialsSet = out, true
+	return g
+}
+
+// CredentialModes returns the credential modes the grant allows and whether it
+// limits them at all.
+func (g Grant) CredentialModes() ([]string, bool) {
+	return append([]string(nil), g.credentials...), g.credentialsSet
+}
+
+// AllowsCredential reports whether the host may add the target's credential
+// to a request the way auth and header ask (HTTPRequest.Auth, AuthHeader).
+func (g Grant) AllowsCredential(auth, header string) bool {
+	if !g.credentialsSet {
+		return true
+	}
+	mode := strings.ToLower(strings.TrimSpace(auth))
+	if mode == "header" {
+		mode = "header:" + header
+	}
+	c, ok := CanonicalCredentialMode(mode)
+	return ok && slices.Contains(g.credentials, c)
+}
+
+// CanonicalCredentialMode reads a credential mode: "basic", "bearer", or
+// "header:<Name>" with an HTTP header name, canonicalized ("header:X-Api-Key").
+func CanonicalCredentialMode(mode string) (string, bool) {
+	mode = strings.TrimSpace(mode)
+	switch strings.ToLower(mode) {
+	case "basic", "bearer":
+		return strings.ToLower(mode), true
+	}
+	kind, name, ok := strings.Cut(mode, ":")
+	if !ok || !strings.EqualFold(kind, "header") || !headerToken(name) {
+		return "", false
+	}
+	return "header:" + textproto.CanonicalMIMEHeaderKey(name), true
+}
+
+// headerToken reports whether name is an HTTP header field name (RFC 9110
+// token) the target's credential may travel in.
+func headerToken(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for _, r := range name {
+		alnum := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+		if !alnum && !strings.ContainsRune("!#$%&'*+-.^_`|~", r) {
+			return false
+		}
+	}
+	// The framing headers, and the proxy's credential, never carry the
+	// target's: a proxy is not the target the credential belongs to.
+	switch textproto.CanonicalMIMEHeaderKey(name) {
+	case "Host", "Content-Length", "Transfer-Encoding", "Connection", "Proxy-Authorization":
+		return false
+	}
+	return true
 }
 
 // Has reports whether the capability is granted at all, ignoring resource

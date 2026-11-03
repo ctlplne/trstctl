@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,24 +50,17 @@ import (
 // connectors an operator configured, and the missing one is exactly the one
 // whose signature did not check out.
 func buildPluginRuntime(ctx context.Context, o agentOptions) (*relay.PluginRuntime, error) {
-	dir := strings.TrimSpace(o.pluginDir)
-	if dir == "" {
+	if strings.TrimSpace(o.pluginDir) == "" {
 		return nil, nil
 	}
-	keys, err := readPluginKeys(o.pluginKeys)
-	if err != nil {
-		return nil, err
-	}
-	grant, err := buildPluginGrant(o.pluginCaps, o.pluginCapPrefix)
-	if err != nil {
-		return nil, err
-	}
-	rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{
-		Dir:              dir,
-		TrustedKeyPEMs:   keys,
-		PinnedDigestsHex: splitList(o.pluginPins),
-		Grant:            grant,
+	cfg, err := pluginRuntimeConfig(pluginFlags{
+		dir: o.pluginDir, keys: o.pluginKeys, pins: o.pluginPins, caps: o.pluginCaps, prefixes: o.pluginCapPrefix,
+		credentials: o.pluginCredentials, approvals: o.pluginApprovals,
 	})
+	if err != nil {
+		return nil, err
+	}
+	rt, err := relay.NewPluginRuntime(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +68,141 @@ func buildPluginRuntime(ctx context.Context, o agentOptions) (*relay.PluginRunti
 		names := rt.Names()
 		pluginConnectorCount.Store(int64(len(names)))
 		fmt.Printf("trstctl-agent: third-party connectors loaded and verified: %v\n", names)
+		for _, st := range rt.Modules() {
+			if st.State != relay.ModuleLoaded {
+				fmt.Printf("trstctl-agent: connector module %s %s is %s: %s; review it with --approve-connector-module %s\n",
+					st.Name, st.Manifest.Version, st.State, st.Reason, st.Name)
+			}
+		}
 	}
 	return rt, nil
+}
+
+// pluginFlags are the operator's connector module flags.
+type pluginFlags struct {
+	dir, keys, pins, caps, prefixes, credentials, approvals string
+}
+
+// pluginApprovalsFile is the approval record's name beside --key when
+// --connector-plugin-approvals is not set (A242).
+const pluginApprovalsFile = "connector-module-approvals.json"
+
+// pluginApprovalsPath is where this relay keeps its operator's connector
+// module approvals.
+func pluginApprovalsPath(flagValue, keyPath string) string {
+	if path := strings.TrimSpace(flagValue); path != "" {
+		return path
+	}
+	return filepath.Join(filepath.Dir(keyPath), pluginApprovalsFile)
+}
+
+// pluginRuntimeConfig assembles the relay's connector module configuration
+// from the operator's flags.
+func pluginRuntimeConfig(f pluginFlags) (relay.PluginConfig, error) {
+	dir := strings.TrimSpace(f.dir)
+	if dir == "" {
+		return relay.PluginConfig{}, errors.New("trstctl-agent: --connector-plugin-dir is not set")
+	}
+	keys, err := readPluginKeys(f.keys)
+	if err != nil {
+		return relay.PluginConfig{}, err
+	}
+	grant, err := buildPluginGrant(f.caps, f.prefixes)
+	if err != nil {
+		return relay.PluginConfig{}, err
+	}
+	if modes := splitList(f.credentials); len(modes) > 0 {
+		for _, mode := range modes {
+			if _, ok := pluginhost.CanonicalCredentialMode(mode); !ok {
+				return relay.PluginConfig{}, fmt.Errorf("trstctl-agent: --connector-plugin-credential %q is not basic, bearer or header:<Name>", mode)
+			}
+		}
+		grant = grant.WithCredentials(modes...)
+	}
+	return relay.PluginConfig{
+		Dir: dir, TrustedKeyPEMs: keys, PinnedDigestsHex: splitList(f.pins), Grant: grant,
+		ApprovalsPath: strings.TrimSpace(f.approvals),
+	}, nil
+}
+
+// approveConnectorModuleCommand prints a module's review and records the
+// operator's approval of it (A242): the version, publisher and digest, the
+// permissions it asks for, and what they add over the current approval.
+func approveConnectorModuleCommand(ctx context.Context, w io.Writer, cfg relay.PluginConfig, name string, now time.Time) error {
+	rt, err := relay.NewPluginRuntime(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rt.Close(ctx) }()
+	out := &printer{w: w}
+	for _, st := range rt.Modules() {
+		if st.Name != name {
+			continue
+		}
+		perms, err := json.Marshal(st.Manifest.Permissions)
+		if err != nil {
+			return err
+		}
+		out.f("connector module %s %s\n  digest     %s\n  publisher  %s\n  permissions %s\n  actions    %s (idempotency %s, revocation %s)\n",
+			st.Name, st.Manifest.Version, st.Digest, st.Publisher, perms,
+			strings.Join(st.Manifest.Actions, ", "), st.Manifest.Idempotency, st.Manifest.Revocation)
+		if st.State == relay.ModuleIncompatible {
+			return fmt.Errorf("connector module %s cannot run on this relay: %s", name, st.Reason)
+		}
+		if len(st.Diff) > 0 {
+			out.f("  adds       %s\n", strings.Join(st.Diff, "; "))
+		} else {
+			out.f("  adds       nothing over the current approval\n")
+		}
+		if err := relay.ApproveModule(cfg.ApprovalsPath, st, now); err != nil {
+			return err
+		}
+		out.f("approved in %s; restart the agent to load it\n", cfg.ApprovalsPath)
+		return out.err
+	}
+	return fmt.Errorf("no connector module %q in %s", name, cfg.Dir)
+}
+
+// checkConnectorModulesCommand runs the conformance kit and prints each
+// module's checks; it fails when any check fails.
+func checkConnectorModulesCommand(ctx context.Context, w io.Writer, cfg relay.PluginConfig) error {
+	checks, err := relay.CheckModules(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if len(checks) == 0 {
+		return fmt.Errorf("no connector modules in %s", cfg.Dir)
+	}
+	failed := 0
+	out := &printer{w: w}
+	for _, c := range checks {
+		out.f("%s %s %s: %s", c.Name, c.Version, c.Digest, c.State)
+		if c.Reason != "" {
+			out.f(" (%s)", c.Reason)
+		}
+		out.f("\n")
+		for _, check := range c.Checks {
+			mark := "ok  "
+			if !check.Passed {
+				mark = "FAIL"
+			}
+			out.f("  %s %s", mark, check.Name)
+			if check.Detail != "" {
+				out.f(": %s", check.Detail)
+			}
+			out.f("\n")
+		}
+		if !c.OK() {
+			failed++
+		}
+	}
+	if out.err != nil {
+		return out.err
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d connector module(s) failed the conformance kit", failed, len(checks))
+	}
+	return nil
 }
 
 // readPluginKeys loads the publisher public keys from disk.
@@ -417,4 +544,17 @@ func loadRevocationCacheConfig(o agentOptions) (string, time.Duration, revcache.
 		Issuers: []revcache.IssuerConfig{{ID: "default", IssuerDER: issuerDER,
 			CRL: &revcache.CRLConfig{UpstreamURL: strings.TrimSpace(o.revCacheUpstream), LocalPath: "/crl/default", Grace: o.revCacheGrace}}},
 	}, nil
+}
+
+// printer writes to w and keeps the first error, so a report's many lines
+// need one check.
+type printer struct {
+	w   io.Writer
+	err error
+}
+
+func (p *printer) f(format string, args ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintf(p.w, format, args...)
+	}
 }

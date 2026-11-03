@@ -54,8 +54,8 @@ func TestAReferencePluginDeploysWithHostInjectedAuthAndTestsReadOnly(t *testing.
 
 	load := func(module []byte) *relay.PluginRuntime {
 		t.Helper()
-		dir, keyPEM, _ := signedPluginDir(t, "partner-lb", module)
-		rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, Grant: grant})
+		dir, keyPEM, _ := signedPluginDir(t, "partner-lb", module, pluginhost.CapHTTP)
+		rt, err := relay.NewPluginRuntime(ctx, relay.PluginConfig{Dir: dir, TrustedKeyPEMs: [][]byte{keyPEM}, Grant: grant, ApprovalsPath: approvalsPath(dir)})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -102,7 +102,11 @@ func main() {
 	revCacheGrace := flag.Duration("crl-cache-grace", 0, "how long past nextUpdate a cached CRL may still be served. Zero — the default — serves nothing past nextUpdate; any other value is a decision to serve a list the CA said had expired, which only the operator can weigh")
 	revCacheSegment := flag.String("revocation-cache-segment", "", "stable operator name for the dark segment served by the legacy single-CRL flags; required with --crl-cache-listen")
 	revCacheConfig := flag.String("revocation-cache-config", "", "JSON file defining one segment listener and multiple issuer CRL/OCSP caches. The file holds public issuer paths and upstream URLs, never private keys or credentials")
-	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key. Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
+	pluginDir := flag.String("connector-plugin-dir", "", "directory of signature-verified third-party WASM connectors this relay may execute (epic E4). Each <name>.wasm needs a sibling <name>.wasm.sig from a key named by --connector-plugin-key, and a <name>.manifest.json (with its .sig, from the same key) naming its version, the module's SHA-256, host ABI, permissions, actions and limits (A242). A module runs only once its operator approves it (--approve-connector-module). Empty disables third-party connectors; a directory with no trust keys is refused rather than loaded")
+	pluginApprovals := flag.String("connector-plugin-approvals", "", "file recording which connector module versions and permissions this relay's operator approved (A242). Empty keeps it beside --key as connector-module-approvals.json; it never lives in --connector-plugin-dir, so dropping files there cannot approve anything")
+	pluginCredentials := flag.String("connector-plugin-credential", "", "comma-separated ceiling on how the relay may add a target's credential to third-party connector requests: basic, bearer, header:<Name>. A module's manifest names the modes it uses, which must fit inside this. Empty leaves the ceiling at every mode")
+	approveConnectorModule := flag.String("approve-connector-module", "", "review a connector module in --connector-plugin-dir (its version, publisher, digest, permissions and what it adds over the current approval), record it as approved in --connector-plugin-approvals, and exit (A242)")
+	checkConnectorModules := flag.Bool("check-connector-modules", false, "run the connector module conformance kit against every module in --connector-plugin-dir under --connector-plugin-key and the capability grant: signatures, manifest, host ABI, grant fit, limits, declared actions exported, and a read-only test against a stand-in target. Prints each check and exits non-zero when one fails (A242)")
 	pluginKeys := flag.String("connector-plugin-key", "", "comma-separated PEM files holding the publisher public keys whose signatures this relay accepts for third-party connectors. Required whenever --connector-plugin-dir is set: loading unverified partner code inside a customer network is refused, not warned about")
 	pluginPins := flag.String("connector-plugin-pin", "", "comma-separated hex SHA-256 digests restricting third-party connectors to exactly these builds. A signature says who built a module; a pin says which build, which is what stops a compromised publisher key from shipping a new one")
 	pluginCaps := flag.String("connector-plugin-capability", "", "comma-separated capability grant every third-party connector runs under (fs.read, fs.write, net.dial, input.read: read the deploy's certificate and target; net.http: HTTP requests the relay makes with the target's credential added). Required with --connector-plugin-dir: an unset grant is refused rather than defaulted, because a grant nobody set and a grant that permits nothing are indistinguishable here")
@@ -286,6 +290,25 @@ func main() {
 	}
 	if *showDeployFailures {
 		if err := printDeployFailures(os.Stdout, deployFailureLogPath(*deployFailureLog, *keyPath)); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *approveConnectorModule != "" || *checkConnectorModules {
+		// The connector library's operator commands (A242) read the same
+		// flags the relay loads its modules with, so what they check is what
+		// it would run.
+		cfg, err := pluginRuntimeConfig(pluginFlags{
+			dir: *pluginDir, keys: *pluginKeys, pins: *pluginPins, caps: *pluginCaps, prefixes: *pluginCapPrefix,
+			credentials: *pluginCredentials, approvals: pluginApprovalsPath(*pluginApprovals, *keyPath),
+		})
+		if err == nil && *checkConnectorModules {
+			err = checkConnectorModulesCommand(context.Background(), os.Stdout, cfg)
+		} else if err == nil {
+			err = approveConnectorModuleCommand(context.Background(), os.Stdout, cfg, *approveConnectorModule, time.Now())
+		}
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
 		}
@@ -505,6 +528,8 @@ func main() {
 		pluginPins:                        *pluginPins,
 		pluginCaps:                        *pluginCaps,
 		pluginCapPrefix:                   *pluginCapPrefix,
+		pluginCredentials:                 *pluginCredentials,
+		pluginApprovals:                   pluginApprovalsPath(*pluginApprovals, *keyPath),
 		relayPollEvery:                    *relayPollEvery,
 		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
 		hostRollbackDir:                   strings.TrimSpace(*hostRollbackDir),
@@ -672,7 +697,11 @@ type agentOptions struct {
 	pluginPins      string
 	pluginCaps      string
 	pluginCapPrefix string
-	relayPollEvery  time.Duration
+	// pluginCredentials and pluginApprovals are the credential ceiling and the
+	// operator's approval record for connector modules (A242).
+	pluginCredentials string
+	pluginApprovals   string
+	relayPollEvery    time.Duration
 	// hostExecProfile is the path to this host's operator-owned exec allowlist
 	// (epic D1). Empty means this agent executes no file/reload connectors:
 	// without an authorized command set there is nothing safe to default to.

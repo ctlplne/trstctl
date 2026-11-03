@@ -15,6 +15,7 @@ import (
 	"net/textproto"
 	"strings"
 
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -247,6 +248,15 @@ func addPluginAuth(r *http.Request, req pluginhost.HTTPRequest, intent DeployInt
 // with one runs read-only with the attempt's credentials added to its requests.
 func runPluginTest(ctx context.Context, ch Channel, client *http.Client, plugins *PluginRuntime, job Job, intent DeployIntent) bool {
 	plan := Plan{Connector: intent.Connector, Target: intent.Target}
+	if err := plugins.Ready(intent.Connector); err != nil {
+		// A module awaiting approval, or one this relay cannot run, is not
+		// invoked for a test either (A242).
+		plan.Steps = []PlanStep{{
+			Name: "connector", Status: StepFailed,
+			Detail: err.Error() + "; no credential was redeemed and the module was not invoked",
+		}}
+		return reportConnectorTestPlan(ctx, ch, job, plan)
+	}
 	if !plugins.HasTest(intent.Connector) {
 		plan.Steps = []PlanStep{{
 			Name: "connector", Status: StepFailed,
@@ -268,13 +278,32 @@ func runPluginTest(ctx context.Context, ch Channel, client *http.Client, plugins
 	if err := plugins.Test(ctx, intent.Connector, PluginCall{Intent: intent, Material: material, Client: client}); err != nil {
 		// The module's own words stay on this host, as a deploy's do.
 		log.Printf("trstctl-agent: job %d: plugin %s test failed: %s", job.JobID, intent.Connector, scrubFailure(err.Error(), material))
-		plan.Steps = []PlanStep{{
-			Name: "connector", Status: StepFailed,
-			Detail: "the plugin's read-only test failed or tried to change the target; nothing was written",
-		}}
+		detail := "the plugin's read-only test failed or tried to change the target; nothing was written"
+		var failure *ModuleFailure
+		if errors.As(err, &failure) {
+			// What the host observed, never the module's words (A242).
+			detail = failure.Error() + "; nothing was written"
+		}
+		plan.Steps = []PlanStep{{Name: "connector", Status: StepFailed, Detail: detail}}
 		return reportConnectorTestPlan(ctx, ch, job, plan)
 	}
 	plan.Steps = []PlanStep{{Name: "connector", Status: StepOK, Detail: "the plugin's read-only test passed; nothing was written"}}
 	plan.Ready = true
 	return reportConnectorTestPlan(ctx, ch, job, plan)
+}
+
+// deployPlugin runs a module's deploy for one attempt. A retry of a module
+// whose deploy creates objects or reads the target first asks its readback
+// before running again (A242): when the earlier attempt already landed, the
+// deploy is not repeated, so a crash between the target's write and the report
+// cannot make a duplicate.
+func deployPlugin(ctx context.Context, plugins *PluginRuntime, job Job, call PluginCall) error {
+	if job.Attempt > 1 && !plugins.RetriesBlindly(call.Intent.Connector) {
+		if verdict, _ := plugins.Readback(ctx, call.Intent.Connector, call); verdict == connector.ReadbackServing {
+			log.Printf("trstctl-agent: job %d attempt %d: %s already holds this deploy; not repeating it",
+				job.JobID, job.Attempt, call.Intent.Target)
+			return nil
+		}
+	}
+	return plugins.Deploy(ctx, call.Intent.Connector, call)
 }
