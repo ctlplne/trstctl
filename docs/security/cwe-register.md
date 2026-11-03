@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2393 annotated sites across 29 rules. Each row is
+2394 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -673,7 +673,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (356 sites)
+### G115 — CWE-190 Integer overflow or wraparound (357 sites)
 
 | Location | Reason |
 |---|---|
@@ -829,6 +829,7 @@ not this file.
 | `internal/protocols/ssh/ssh.go:519` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
 | `internal/query/adversarial_test.go:51` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/reconcile/stepcasource_test.go:50` | a TCP port from the kernel (CWE-190) |
+| `internal/secretmigrate/assess.go:354` | bounded by MaxValueBytes (CWE-190) |
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/audit_archive_download_served_test.go:55` | a test fixture count (CWE-190) |
