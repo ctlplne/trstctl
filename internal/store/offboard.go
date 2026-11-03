@@ -22,8 +22,7 @@ const TenantOffboardReceiverKeyPrefix = "trstctl.internal.tenant-offboard.v1/"
 // caller's transaction/RLS context. Unknown receiver states also fail closed.
 func TenantOffboardReceiverExistsTx(ctx context.Context, tx pgx.Tx, tenantID string) (bool, error) {
 	var exists bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM idempotency_keys
-		WHERE tenant_id=$1 AND key LIKE $2)`, tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&exists); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT `+tenantOffboardReceiverExistsSQL, tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&exists); err != nil {
 		return false, fmt.Errorf("store: inspect tenant offboard receiver: %w", err)
 	}
 	return exists, nil
@@ -49,42 +48,39 @@ func (s *Store) TenantOffboardPending(ctx context.Context, tenantID string) (boo
 // replace the operation lifetime that excludes concurrent lifecycle changes.
 func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1)`, tenantID).Scan(&exists); err != nil {
+		// The four conditions are read in one statement and refused in the
+		// order they always were, each naming its own reason.
+		//
+		// The provider_tenants registry is retained during core-only rebuild
+		// and in PostgreSQL backups. Removing an edition must not restore a
+		// suspended or legacy offboarded customer's access. Ordinary core
+		// tenants have no row there; only an explicit active row is
+		// unrestricted when a row does exist.
+		var registered, restricted, suspended, erasing bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1),
+			EXISTS (SELECT 1 FROM provider_tenants WHERE tenant_id=$1 AND status IS DISTINCT FROM 'active'),
+			`+providerSuspendCommandActiveSQL+`,
+			`+tenantOffboardReceiverExistsSQL,
+			tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&registered, &restricted, &suspended, &erasing); err != nil {
 			return fmt.Errorf("store: inspect live tenant service: %w", err)
 		}
-		if !exists {
-			return tenancy.ErrServiceUnavailable
-		}
-		// This registry is retained during core-only rebuild and in PostgreSQL
-		// backups. Removing an edition must not restore a suspended or legacy
-		// offboarded customer's access. Ordinary core tenants have no row here;
-		// only an explicit active row is unrestricted when a row does exist.
-		var restricted bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM provider_tenants
-			WHERE tenant_id=$1 AND status IS DISTINCT FROM 'active')`, tenantID).Scan(&restricted); err != nil {
-			return fmt.Errorf("store: inspect persisted tenant restriction: %w", err)
-		}
-		if restricted {
-			return tenancy.ErrServiceUnavailable
-		}
-		suspended, err := ProviderSuspendCommandActiveTx(ctx, tx, tenantID)
-		if err != nil {
-			return fmt.Errorf("store: inspect pending Provider suspension: %w", err)
-		}
-		if suspended {
-			return tenancy.ErrServiceUnavailable
-		}
-		pending, err := TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
-		if err != nil {
-			return err
-		}
-		if pending {
-			return tenancy.ErrServiceUnavailable
+		switch {
+		case !registered:
+			return fmt.Errorf("%w: the tenant is not registered", tenancy.ErrServiceUnavailable)
+		case restricted:
+			return fmt.Errorf("%w: the tenant's provider record is not active", tenancy.ErrServiceUnavailable)
+		case suspended:
+			return fmt.Errorf("%w: a provider suspension is pending or in force", tenancy.ErrServiceUnavailable)
+		case erasing:
+			return fmt.Errorf("%w: the tenant's erasure is pending", tenancy.ErrServiceUnavailable)
 		}
 		return nil
 	})
 }
+
+// tenantOffboardReceiverExistsSQL is true while a core erasure receiver for
+// the tenant ($1) is recorded ($2 is TenantOffboardReceiverKeyPrefix + "%").
+const tenantOffboardReceiverExistsSQL = `EXISTS (SELECT 1 FROM idempotency_keys WHERE tenant_id=$1 AND key LIKE $2)`
 
 // TenantScopedTables is the authoritative, ordered list of every tenant-scoped
 // table OffboardTenant erases (TENANT-002). Order matters: a child that holds a

@@ -187,10 +187,13 @@ func (s *Store) ReleaseProviderSuspendCommandTx(ctx context.Context, tx pgx.Tx, 
 
 func ProviderSuspendCommandActiveTx(ctx context.Context, tx pgx.Tx, tenantID string) (bool, error) {
 	var active bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM provider_suspend_commands
-		WHERE tenant_id=$1 AND status IN ('pending','completed'))`, tenantID).Scan(&active)
+	err := tx.QueryRow(ctx, `SELECT `+providerSuspendCommandActiveSQL, tenantID).Scan(&active)
 	return active, err
 }
+
+// providerSuspendCommandActiveSQL is true while a Provider suspension of the
+// tenant ($1) is pending or in force.
+const providerSuspendCommandActiveSQL = `EXISTS (SELECT 1 FROM provider_suspend_commands WHERE tenant_id=$1 AND status IN ('pending','completed'))`
 
 // ProviderSuspendPending refuses a later destructive status command until the
 // earlier suspension has a durable projected result in source order.
