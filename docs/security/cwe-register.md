@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2338 annotated sites across 29 rules. Each row is
+2342 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -587,12 +587,16 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (2 sites)
+### G103 — CWE-? (unmapped rule) (6 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
+| `internal/crypto/secret/mem_windows.go:40` | VirtualAlloc's committed region, outside the Go heap, released only by free (CWE-242) |
+| `internal/crypto/secret/mem_windows.go:84` | the address VirtualAlloc returned for this region (CWE-242) |
+| `internal/crypto/secret/mem_windows_test.go:38` | reads the address of the region alloc returned, to check its alignment (CWE-242) |
+| `internal/crypto/secret/mem_windows_test.go:45` | the region's address, to query its lock and release state (CWE-242) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (13 sites)
 
