@@ -780,6 +780,13 @@ jobs:
           TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
         run: scripts/ci/install-openssl-pqc.sh
 
+      # Owner 2d: the managed-key proofs need the runtime runner to be a bridge
+      # container (its hostname is its container ID and it joins the proof's
+      # private PostgreSQL network). Route the bridge gateway to host loopback,
+      # as Docker Desktop does, and run the runner on the bridge.
+      - name: Route host.docker.internal to host loopback for a bridge runner
+        run: scripts/ci/route-docker-host-to-loopback.sh
+
       - name: Run this shard of the shipped-binary Definition-of-Done census
         run: make dod-census-shard DOD_SHARD=${{ matrix.shard }} DOD_SHARDS=3
 
@@ -930,6 +937,13 @@ jobs:
 
       - name: Prefetch dependencies for the offline census
         run: scripts/ci/go-mod-download.sh
+
+      # Owner 2d: the managed-key proofs need the runtime runner to be a bridge
+      # container (its hostname is its container ID and it joins the proof's
+      # private PostgreSQL network). Route the bridge gateway to host loopback,
+      # as Docker Desktop does, and run the runner on the bridge.
+      - name: Route host.docker.internal to host loopback for a bridge runner
+        run: scripts/ci/route-docker-host-to-loopback.sh
 
       - name: Run the arm64 managed-key proof profile
         run: make dod-gate-arm64

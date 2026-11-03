@@ -487,7 +487,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 			return commandResult{Err: fmt.Errorf("runtime runner mount path %q is unsafe", path), ExitCode: -1}
 		}
 	}
-	hostArgs, err := runtimeRunnerDockerHostArgs(runtime.GOOS, linuxDockerBridgeIPv4())
+	hostArgs, err := runtimeRunnerDockerHostArgs(runtime.GOOS, linuxDockerBridgeIPv4(), os.Getenv(runtimeRunnerNetworkEnv))
 	if err != nil {
 		return commandResult{Err: err, ExitCode: -1}
 	}
@@ -718,7 +718,19 @@ func runtimeRunnerNSSFiles(receiptDir string, uid, gid uint32) (string, string, 
 	return passwdFile, groupFile, nil
 }
 
-func runtimeRunnerDockerHostArgs(hostOS, bridgeIPv4 string) ([]string, error) {
+// runtimeRunnerNetworkEnv selects the Linux runner's network. "bridge" runs it
+// on Docker's bridge as Docker Desktop does on macOS: its hostname is its
+// container ID and it can join networks a proof creates (the managed-key
+// proof's private PostgreSQL network). It needs a host that routes the bridge
+// gateway to loopback, as Desktop does (scripts/ci/route-docker-host-to-
+// loopback.sh), so the parent's loopback-only broker and substrates stay
+// unpublished. Unset or "host", the runner shares the host network.
+const runtimeRunnerNetworkEnv = "TRSTCTL_DOD_RUNNER_NETWORK"
+
+func runtimeRunnerDockerHostArgs(hostOS, bridgeIPv4, network string) ([]string, error) {
+	if network != "" && network != "host" && network != "bridge" {
+		return nil, fmt.Errorf("%s must be host or bridge, not %q", runtimeRunnerNetworkEnv, network)
+	}
 	switch hostOS {
 	case "darwin":
 		// Docker Desktop owns the host.docker.internal DNS record. Overriding it
@@ -726,6 +738,9 @@ func runtimeRunnerDockerHostArgs(hostOS, bridgeIPv4 string) ([]string, error) {
 		// back to the macOS parent broker.
 		return []string{"--network", "bridge"}, nil
 	case "linux":
+		if network == "bridge" {
+			return []string{"--network", "bridge", "--add-host", "host.docker.internal:host-gateway"}, nil
+		}
 		// Native Linux has no Desktop proxy from the bridge gateway to host
 		// loopback. Host networking plus an exact hosts entry preserves the
 		// broker/emulator loopback boundary while making the container use the
