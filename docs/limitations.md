@@ -5409,10 +5409,31 @@ when off, requiring a KEK when on):
   not built.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs and for durable static-provider
-  commands: a configured PostgreSQL, MySQL or AWS IAM dynamic-secret provider with
+  commands: a configured dynamic-secret provider of a static-rotation type with
   `allow_static_rotation` runs stage, cutover, verify and retire as outbox-driven
   phases recorded by immutable events, with rollback to the sealed predecessor on
   a failed verification; `GET /api/v1/secrets/rotations/{id}` follows a command.
+  A240 (rotation provider library with consumer cutover) is served: two-user
+  rotation, where both accounts keep their grants, for PostgreSQL, LDAP, MongoDB,
+  Oracle, SQL Server and Azure SQL contained users, Unix/Linux local accounts and
+  Windows local accounts; hosted API keys and client secrets for Auth0, Datadog,
+  OpenAI, OpenRouter, Fireworks AI, LiteLLM, Supabase, Convex, dbt platform,
+  Cloudflare API tokens and R2, Azure Entra, Okta, Databricks, Google Cloud
+  service accounts and Snowflake key pairs, each declaring two-phase or single
+  phase; `consumers` and `retire_after_seconds` hold retirement until the named
+  consumers report the new version or an approved deadline passes, and the
+  command view keeps `credential_valid` apart from `consumer_adoption`;
+  single-phase providers run only with `acknowledge_single_phase`. Proven: three
+  unattended cycles with an application against PostgreSQL, MongoDB, Oracle,
+  SQL Server (x86 CI lab) and an OpenSSH host; a paused database or host times a
+  retirement out with the predecessor still working; Windows local accounts on a
+  windows-latest runner; the hosted services against stand-ins of their APIs.
+  What comes next: live proofs at the hosted vendors (their accounts) and HP iLO
+  local accounts (a server), Track B; Salesforce consumer secrets (the staged
+  rotation's effect on the old primary is not documented in the reference we
+  could read) and Stripe API keys (keys are created and rotated in the
+  Dashboard; the key-management API is a preview for approved Stripe Apps), not
+  built.
   Boundaries: the secret name must equal the provider role; verification is a
   connection test for databases and `not_available` for AWS IAM access keys; a
   `rollback_failed` or `retire_pending` command needs an operator to retire the
