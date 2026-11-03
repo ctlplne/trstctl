@@ -30,6 +30,7 @@ import (
 type composeTLSFixture struct {
 	base, trust  string
 	requests     atomic.Int32
+	busy         atomic.Int32
 	partialReady atomic.Bool
 }
 
@@ -73,6 +74,16 @@ func startComposeTLSFixture(t *testing.T, localhostOnly, plaintext bool) *compos
 			}
 			if r.URL.Path == "/unauthorized" {
 				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if r.URL.Path == "/bad-request" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if r.URL.Path == "/busy-always" || (r.URL.Path == "/busy-once" && f.busy.Add(1) == 1) {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = io.WriteString(w, `{"status":503,"detail":"datastore is busy"}`)
 				return
 			}
 			if r.URL.Path == "/stall" {
@@ -326,6 +337,36 @@ func TestComposeE2EStockCurlRejectsPartialSuccess(t *testing.T) {
 	}
 	f.partialReady.Store(false)
 	requireComposePositive(t, f, f.base)
+}
+
+// Owner note 2026-11-02, item 4: a busy store answers every route with 503 and
+// Retry-After. The lifecycle gate waits as told and resends the same
+// Idempotency-Key (the fixture refuses any other key), a bounded number of
+// times, and retries no other status: never a 400 (CI 41571974614's compose
+// gate stopped on the first busy 503 of POST /api/v1/identities).
+func TestComposeE2EPostRetriesOnlyTheBusyStore503(t *testing.T) {
+	f := startComposeTLSFixture(t, false, false)
+	before := f.requests.Load()
+	if r := runComposeCurl(t, "post", f.base, f.trust, "/busy-once", ""); r.exit != 0 || r.stdout != `{"ok":true}` || !strings.Contains(r.stderr, "same Idempotency-Key") {
+		t.Fatalf("a busy 503 then success: %+v", r)
+	}
+	if got := f.requests.Load() - before; got != 2 {
+		t.Fatalf("a busy 503 then success took %d requests, want 2", got)
+	}
+	before = f.requests.Load()
+	if r := runComposeCurl(t, "post", f.base, f.trust, "/bad-request", ""); r.exit == 0 || !strings.Contains(r.stderr, "returned HTTP 400") {
+		t.Fatalf("a 400 was not reported: %+v", r)
+	}
+	if got := f.requests.Load() - before; got != 1 {
+		t.Fatalf("a 400 was retried: %d requests", got)
+	}
+	before = f.requests.Load()
+	if r := runComposeCurl(t, "post", f.base, f.trust, "/busy-always", ""); r.exit == 0 || !strings.Contains(r.stderr, "HTTP 503 on all 6 attempts") || !strings.Contains(r.stderr, "datastore is busy") {
+		t.Fatalf("a store busy past the bound did not fail: %+v", r)
+	}
+	if got := f.requests.Load() - before; got != 6 {
+		t.Fatalf("a store busy past the bound took %d requests, want 6", got)
+	}
 }
 
 func TestComposeE2EStockCurlPreservesUnauthorizedStatus(t *testing.T) {

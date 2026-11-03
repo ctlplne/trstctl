@@ -36,27 +36,53 @@ compose_e2e_tls_init() {
 # BASE_URL, tmpdir and AUTH are the lifecycle caller's existing values. Keep
 # curl's native result separate from HTTP status, including for a partial 2xx.
 compose_e2e_post() {
-  local key="$1" path="$2" body="$3" out code native
-  out="$(mktemp "$tmpdir/post.XXXXXX")" || return 1
-  if code=$("${CURL_TLS[@]}" -sS "${AUTH[@]}" -H "Idempotency-Key: $key" -H 'Content-Type: application/json' \
-    -XPOST "$BASE_URL$path" -d "$body" -w '%{http_code}' -o "$out"); then
-    case "$code" in
-      2[0-9][0-9])
-        if cat "$out"; then native=0; else native=$?; fi
-        rm -f "$out"
-        return "$native"
-        ;;
-      *) printf '::error::compose-e2e: POST %s returned HTTP %s\n' "$path" "$code" >&2 ;;
-    esac
-  else
-    native=$?
-    printf '::error::compose-e2e: POST %s failed in curl (exit %s, HTTP %s)\n' "$path" "$native" "$code" >&2
+  local key="$1" path="$2" body="$3" out headers code native attempt wait
+  # A busy store answers every route with the documented backpressure, 503
+  # and Retry-After (364): wait as told (1 to 10 s) and resend the same
+  # Idempotency-Key, which makes the retry the same operation (AN-5), at most
+  # COMPOSE_E2E_BUSY_ATTEMPTS times in all. No other status is retried, never
+  # a 4xx.
+  for (( attempt = 1; ; attempt++ )); do
+    out="$(mktemp "$tmpdir/post.XXXXXX")" || return 1
+    headers="$(mktemp "$tmpdir/headers.XXXXXX")" || { rm -f "$out"; return 1; }
+    if code=$("${CURL_TLS[@]}" -sS "${AUTH[@]}" -H "Idempotency-Key: $key" -H 'Content-Type: application/json' \
+      -XPOST "$BASE_URL$path" -d "$body" -w '%{http_code}' -o "$out" -D "$headers"); then
+      case "$code" in
+        2[0-9][0-9])
+          rm -f "$headers"
+          if cat "$out"; then native=0; else native=$?; fi
+          rm -f "$out"
+          return "$native"
+          ;;
+        503)
+          wait="$(tr -d '\r' < "$headers" | awk 'tolower($1) == "retry-after:" && $2 ~ /^[0-9]+$/ { print $2; exit }')"
+          rm -f "$headers"
+          if (( attempt < ${COMPOSE_E2E_BUSY_ATTEMPTS:-6} )); then
+            [[ -n "$wait" ]] || wait=1
+            (( wait < 1 )) && wait=1
+            (( wait > 10 )) && wait=10
+            printf 'compose-e2e: POST %s answered 503 (busy store); retrying in %ss with the same Idempotency-Key\n' "$path" "$wait" >&2
+            rm -f "$out"
+            sleep "$wait"
+            continue
+          fi
+          printf '::error::compose-e2e: POST %s returned HTTP 503 on all %s attempts\n' "$path" "$attempt" >&2
+          ;;
+        *)
+          rm -f "$headers"
+          printf '::error::compose-e2e: POST %s returned HTTP %s\n' "$path" "$code" >&2
+          ;;
+      esac
+    else
+      native=$?
+      printf '::error::compose-e2e: POST %s failed in curl (exit %s, HTTP %s)\n' "$path" "$native" "$code" >&2
+      rm -f "$out" "$headers"
+      return "$native"
+    fi
+    sed 's/^/response: /' "$out" >&2
     rm -f "$out"
-    return "$native"
-  fi
-  sed 's/^/response: /' "$out" >&2
-  rm -f "$out"
-  return 1
+    return 1
+  done
 }
 
 # An absolute Bash SECONDS deadline lets CI include public-file acquisition in

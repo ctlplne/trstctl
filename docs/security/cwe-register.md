@@ -1332,7 +1332,7 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/codesign_stock_tools_served_test.go:245` | test builds the in-repo plugin (CWE-78) |
 | `internal/server/codesign_stock_tools_served_test.go:262` | test runs the plugin it just built (CWE-78) |
-| `internal/server/compose_e2e_tls_test.go:234` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
+| `internal/server/compose_e2e_tls_test.go:245` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_served_test.go:327` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2526,9 +2526,9 @@ not this file.
 | `internal/server/codesign_notation_lab_p9_test.go:66` | the lab trust policy in the test's own temp directory (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
-| `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
-| `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
-| `internal/server/compose_e2e_tls_test.go:357` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |
+| `internal/server/compose_e2e_tls_test.go:160` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
+| `internal/server/compose_e2e_tls_test.go:240` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
+| `internal/server/compose_e2e_tls_test.go:398` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |
 | `internal/server/enrollment_relay_served_test.go:54` | the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22). |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:692` | test path inside its own tempdir/checkout (CWE-22) |
