@@ -132,6 +132,7 @@ type API struct {
 	sshWorkflow              SSHWorkflowService
 	sshTrustFleet            SSHTrustFleetService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
+	managedCALeafRecovery    ManagedCALeafRecoveryService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
 	// commandMAC produces server-keyed, domain-separated review evidence for
@@ -299,6 +300,7 @@ type config struct {
 	sshWorkflow                 SSHWorkflowService
 	sshTrustFleet               SSHTrustFleetService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
+	managedCALeafRecovery       ManagedCALeafRecoveryService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
 	commandMAC                  func(domain, material []byte) ([]byte, error)
@@ -628,6 +630,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		sshWorkflow:                 cfg.sshWorkflow,
 		sshTrustFleet:               cfg.sshTrustFleet,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
+		managedCALeafRecovery:       cfg.managedCALeafRecovery,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
 		commandMAC:                  cfg.commandMAC,

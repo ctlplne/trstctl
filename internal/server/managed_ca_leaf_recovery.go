@@ -43,11 +43,11 @@ func (s *Server) RecoverManagedCALeaf(ctx context.Context, tenantID string, cert
 	}
 	der, err := certinfo.LeafDER(certificatePEM)
 	if err != nil {
-		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the body is not one PEM certificate: %v", api.ErrPKISecretLeafNotRecoverable, err)
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the body is not one PEM certificate: %v", api.ErrManagedCALeafNotRecoverable, err)
 	}
 	info, err := certinfo.Inspect(der)
 	if err != nil || info.IsCA {
-		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the certificate is not an end-entity leaf", api.ErrPKISecretLeafNotRecoverable)
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the certificate is not an end-entity leaf", api.ErrManagedCALeafNotRecoverable)
 	}
 	authority, authorityDER, err := s.managedCAThatSigned(ctx, tenantID, der)
 	if err != nil {
@@ -58,7 +58,7 @@ func (s *Server) RecoverManagedCALeaf(ctx context.Context, tenantID string, cert
 		return api.PKISecretLeafRecovery{}, err
 	}
 	if !found {
-		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: no managed CA mint of %s recorded serial %s", api.ErrPKISecretLeafNotRecoverable,
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: no managed CA mint of %s recorded serial %s", api.ErrManagedCALeafNotRecoverable,
 			authority.CommonName, info.SerialNumber)
 	}
 	if mint.SchemaVersion != 1 {
@@ -107,7 +107,7 @@ func (s *Server) managedCAThatSigned(ctx context.Context, tenantID string, leafD
 			return authority, bytes.Clone(caDER), nil
 		}
 	}
-	return store.CAAuthority{}, nil, fmt.Errorf("%w: none of this tenant's managed CAs signed the certificate", api.ErrPKISecretLeafNotRecoverable)
+	return store.CAAuthority{}, nil, fmt.Errorf("%w: none of this tenant's managed CAs signed the certificate", api.ErrManagedCALeafNotRecoverable)
 }
 
 // managedCAMintForSerial finds the ca.endentity.issued mint of serial under

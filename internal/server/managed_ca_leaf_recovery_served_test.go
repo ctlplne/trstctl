@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -184,7 +185,10 @@ func TestServedManagedCASerialOnlyLeafRecoversFromItsCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, body := postManagedCALeaf(t, h, operator, "a209-foreign", certPEM(foreignLeaf)); status != http.StatusUnprocessableEntity {
+	// The refusal names this route's own subject, not the PKI-secret
+	// recovery it once borrowed its error from.
+	if status, body := postManagedCALeaf(t, h, operator, "a209-foreign", certPEM(foreignLeaf)); status != http.StatusUnprocessableEntity ||
+		!strings.Contains(string(body), "not a recoverable managed CA leaf") || strings.Contains(string(body), "PKI secret") {
 		t.Fatalf("a leaf another CA signed = %d %s", status, body)
 	}
 	// The projector itself refuses a recovery event that names an issuer other
