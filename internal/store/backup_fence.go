@@ -22,30 +22,33 @@ const BackupWriteFenceAdvisoryLockKey int64 = 0x63746C626B70 // "ctlbkp"
 
 type backupWriteFenceContextKey struct{}
 
-// pooledPostgresStateSnapshotTx keeps the one pooled connection that performed
-// the session-lock -> transaction-lock handoff checked out until the export
-// transaction ends. pgxpool.Pool.BeginTx normally owns that release step, but
-// both the standalone shared handoff and the full-backup exclusive-to-shared
-// downgrade must begin on their already locked *pgxpool.Conn so there is no
-// second-slot deadlock and no cutover gap.
-type pooledPostgresStateSnapshotTx struct {
+// pooledConnTx is a transaction begun on an already acquired *pgxpool.Conn: it
+// returns that connection to the pool when the transaction ends, the release
+// step pgxpool.Pool.BeginTx normally owns. The postgres-state snapshot keeps the
+// one connection that performed the session-lock -> transaction-lock handoff
+// checked out until the export transaction ends (both the standalone shared
+// handoff and the full-backup exclusive-to-shared downgrade must begin on their
+// already locked connection, so there is no second-slot deadlock and no cutover
+// gap), and a tenant transaction is begun on a connection acquired inside the
+// store's acquire window.
+type pooledConnTx struct {
 	pgx.Tx
 	conn *pgxpool.Conn
 }
 
-func (tx *pooledPostgresStateSnapshotTx) Commit(ctx context.Context) error {
+func (tx *pooledConnTx) Commit(ctx context.Context) error {
 	err := tx.Tx.Commit(ctx)
 	tx.release()
 	return err
 }
 
-func (tx *pooledPostgresStateSnapshotTx) Rollback(ctx context.Context) error {
+func (tx *pooledConnTx) Rollback(ctx context.Context) error {
 	err := tx.Tx.Rollback(ctx)
 	tx.release()
 	return err
 }
 
-func (tx *pooledPostgresStateSnapshotTx) release() {
+func (tx *pooledConnTx) release() {
 	if tx.conn == nil {
 		return
 	}
@@ -285,7 +288,7 @@ func (s *Store) BeginPostgresStateSnapshotTx(ctx context.Context) (pgx.Tx, error
 			return nil, errors.New("store: full-backup session did not own its exclusive fence")
 		}
 		lease.handedOff.Store(true)
-		return &pooledPostgresStateSnapshotTx{Tx: tx, conn: lease.conn}, nil
+		return &pooledConnTx{Tx: tx, conn: lease.conn}, nil
 	}
 
 	conn, err := s.pool.Acquire(ctx)
@@ -353,7 +356,7 @@ func (s *Store) BeginPostgresStateSnapshotTx(ctx context.Context) (pgx.Tx, error
 		return nil, errors.New("store: postgres-state snapshot session did not own its shared fence")
 	}
 
-	return &pooledPostgresStateSnapshotTx{Tx: tx, conn: conn}, nil
+	return &pooledConnTx{Tx: tx, conn: conn}, nil
 }
 
 func pinPostgresStateSnapshot(ctx context.Context, tx pgx.Tx) error {

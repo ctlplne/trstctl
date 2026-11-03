@@ -124,6 +124,13 @@ type openOptions struct {
 	statementTimeout time.Duration
 	acquireTimeout   time.Duration
 	pools            PoolSizes
+	tracer           pgx.QueryTracer
+}
+
+// WithQueryTracer observes every statement and batch the store's pools send
+// (pgx's tracer interface; a pgx.BatchTracer also sees batches).
+func WithQueryTracer(tracer pgx.QueryTracer) OpenOption {
+	return func(o *openOptions) { o.tracer = tracer }
 }
 
 // WithStatementTimeout bounds every statement server-side (0 keeps the default).
@@ -193,6 +200,9 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	// caller forgot a context deadline. Long system operations (read-model
 	// rebuild/restore) explicitly widen it inside their own transactions.
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = strconv.FormatInt(options.statementTimeout.Milliseconds(), 10)
+	if options.tracer != nil {
+		cfg.ConnConfig.Tracer = options.tracer
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("store: connect: %w", err)
@@ -493,20 +503,28 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 		defer fenceLease.releaseUse()
 	}
 
-	var (
-		tx  pgx.Tx
-		err error
-	)
-	if ownsExclusiveFence {
+	schema, err := tenancy.PostgresSchema(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("store: resolve tenant route: %w", err)
+	}
+	var tx pgx.Tx
+	setUp := false
+	switch {
+	case ownsExclusiveFence:
 		tx, err = fenceLease.conn.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("store: begin tenant transaction under backup write fence: %w", err)
 		}
-	} else {
-		tx, err = s.begin(ctx)
-	}
-	if err != nil {
-		return err
+	default:
+		if setup, ok := tenantTxSetup(tenantID, schema); ok {
+			tx, err = s.beginTenantTx(ctx, setup)
+			setUp = true
+		} else {
+			tx, err = s.begin(ctx)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	defer func() {
 		// Rollback must still reach PostgreSQL after the request context is
@@ -518,26 +536,24 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 		cancel()
 	}()
 
-	if !ownsExclusiveFence {
-		if err := prepareTenantRoleTx(ctx, tx); err != nil {
-			return err
+	if !setUp {
+		if !ownsExclusiveFence {
+			if err := prepareTenantRoleTx(ctx, tx); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
+				return fmt.Errorf("store: set role: %w", err)
+			}
 		}
-	} else {
-		if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
-			return fmt.Errorf("store: set role: %w", err)
+		if schema != "" {
+			if _, err := tx.Exec(ctx, "SET LOCAL search_path TO "+pgx.Identifier{schema}.Sanitize()+", public"); err != nil {
+				return fmt.Errorf("store: set tenant search_path: %w", err)
+			}
 		}
-	}
-	schema, err := tenancy.PostgresSchema(ctx, tenantID)
-	if err != nil {
-		return fmt.Errorf("store: resolve tenant route: %w", err)
-	}
-	if schema != "" {
-		if _, err := tx.Exec(ctx, "SET LOCAL search_path TO "+pgx.Identifier{schema}.Sanitize()+", public"); err != nil {
-			return fmt.Errorf("store: set tenant search_path: %w", err)
+		if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
+			return fmt.Errorf("store: set tenant: %w", err)
 		}
-	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
-		return fmt.Errorf("store: set tenant: %w", err)
 	}
 	if err := fn(tx); err != nil {
 		return err
