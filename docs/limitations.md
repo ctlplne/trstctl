@@ -7550,6 +7550,40 @@ decides from, and what comes next:
 - **Bounded reads.** Approvals list the newest ten and alerts the newest ten among
   the latest two hundred notifications.
 
+## Operations dashboard, upgrade preflight and rollback (A246) — served
+
+`GET /api/v1/operations/dashboard`, `trstctl operations dashboard` and **Deployment
+health** on the Operations page show backup freshness, restore proof, queue lag,
+signer readiness, data freshness and dependency health, each with an independent
+read to check it against ([Deployment health](operations.md#deployment-health-a246)).
+`trstctl --upgrade-preflight` reads what a binary would apply to the database, what
+blocks it (an edited applied migration, another run holding the lock, a destructive
+migration with no verified backup from the last 26 hours) and how the upgrade is
+rolled back, changing nothing; it exits 1 when blocked. With
+`TRSTCTL_MIGRATE_AUTO=false` the boot gate counts every migration source, the
+extension families' included. A failed migration leaves the ones before it applied
+and itself rolled back, and a failed concurrent index build drops its invalid
+index, so the previous binary runs and the fixed one continues
+([A failed upgrade](migrations.md#a-failed-upgrade)). The scheduled restore drill
+restores the newest backup into an isolated deployment and reads it back: events
+record for record, the key behind every CA certificate in use, and every stored
+application-secret value opened under the restored keys; the signed attestation
+carries the counts. Install, upgrade and rollback, disaster recovery drill and
+failover have runbooks under `docs/runbooks/`. What comes next:
+
+- **A machine-readable preflight.** The report is text plus an exit status; a JSON
+  form for pipelines and a console panel come next.
+- **Destructive is a statement pattern.** A migration counts as destructive when
+  its SQL drops, renames, truncates or deletes data, changes a column's type or adds
+  NOT NULL; 0160's TRUNCATE of disposable snapshots counts. Reading the effect
+  rather than the statement comes next.
+- **The drill opens application secrets.** The other sealed families (credentials,
+  secret shares, the cubbyhole, dynamic-secret leases, rotation and code-signing
+  commands, idempotency results, outbox payloads, transit keyrings) are opened when
+  they are used; opening them in the drill comes next.
+- **One host.** Multi-host qualification of install, upgrade and failover is A176,
+  on the x86 machine.
+
 ## Cryptographic risk report
 
 `GET /api/v1/reports/crypto-risk` (and the `crypto_risk` scheduled report,

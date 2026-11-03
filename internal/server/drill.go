@@ -288,6 +288,10 @@ func runRestoreDrillWithMigrations(
 				EventLogHealthy:         restored.EventLogHealthy,
 				SignerHealthy:           restored.SignerHealthy,
 				ServerHealthy:           restored.ServerHealthy,
+				EventsVerified:          restored.EventsVerified,
+				KeysVerified:            restored.KeysVerified,
+				SecretsVerified:         restored.SecretsVerified,
+				SealedTenantsNotOpened:  restored.SealedTenantsNotOpened,
 			}, err
 		}
 		return backup.RestoreResult{
@@ -302,6 +306,10 @@ func runRestoreDrillWithMigrations(
 			EventLogHealthy:         restored.EventLogHealthy,
 			SignerHealthy:           restored.SignerHealthy,
 			ServerHealthy:           restored.ServerHealthy,
+			EventsVerified:          restored.EventsVerified,
+			KeysVerified:            restored.KeysVerified,
+			SecretsVerified:         restored.SecretsVerified,
+			SealedTenantsNotOpened:  restored.SealedTenantsNotOpened,
 		}, nil
 	}, nil)
 }

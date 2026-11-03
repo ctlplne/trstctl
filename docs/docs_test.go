@@ -44,6 +44,9 @@ var requiredPages = []string{
 	"runbooks/fleet-rollback.md",
 	"runbooks/signer-recovery.md",
 	"runbooks/upgrade-rollback.md",
+	"runbooks/install.md",
+	"runbooks/failover.md",
+	"runbooks/disaster-recovery-drill.md",
 	"security/threat-model.md",
 	"security/vulnerability-management.md",
 	"security-exceptions.md",
@@ -1054,6 +1057,27 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 	for _, script := range []string{"../scripts/dr/full-backup.sh", "../scripts/dr/full-restore.sh"} {
 		if _, err := os.Stat(filepath.FromSlash(script)); err != nil {
 			t.Errorf("DR runbook script missing: %s: %v", script, err)
+		}
+	}
+}
+
+// TestOperationsRunbooksAreLinkedAndReal (A246): the install, upgrade, restore
+// and failover runbooks are reachable from the operations page, and every
+// trstctl flag they tell an operator to run is one the binary defines.
+func TestOperationsRunbooksAreLinkedAndReal(t *testing.T) {
+	ops := read(t, "operations.md")
+	main := read(t, "../cmd/trstctl/main.go")
+	// The binary at the start of a command line or of inline code; "helm
+	// rollback trstctl --wait" names the release, not the binary.
+	flag := regexp.MustCompile("(?m)(?:^\\s*|`)trstctl (--[a-z][a-z-]+)")
+	for _, runbook := range []string{"install.md", "upgrade-rollback.md", "disaster-recovery-drill.md", "failover.md"} {
+		if !strings.Contains(ops, "(runbooks/"+runbook+")") {
+			t.Errorf("operations.md does not link runbooks/%s", runbook)
+		}
+		for _, m := range flag.FindAllStringSubmatch(read(t, "runbooks/"+runbook), -1) {
+			if !strings.Contains(main, `"`+strings.TrimPrefix(m[1], "--")+`"`) {
+				t.Errorf("runbooks/%s tells the operator to run %s, which cmd/trstctl does not define", runbook, m[1])
+			}
 		}
 	}
 }

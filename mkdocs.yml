@@ -100,8 +100,10 @@ nav:
           - Outbox dead letters: runbooks/outbox-dead-letters.md
           - Outbox reconciliation conflicts: runbooks/outbox-reconciliation-conflicts.md
           - Signer recovery: runbooks/signer-recovery.md
+          - Failover: runbooks/failover.md
           - PCAS operations: runbooks/pcas-operations.md
       - Backup, upgrade, and fleet:
+          - Production install: runbooks/install.md
           - Backup and disaster recovery: disaster-recovery.md
           - Disaster recovery drill: runbooks/disaster-recovery-drill.md
           - Migrations and upgrades: migrations.md

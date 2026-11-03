@@ -40,10 +40,27 @@ It creates an isolated PostgreSQL database and private file-backed JetStream,
 redirects every mutable signer/key/certificate path to a temporary directory,
 restores `manifest.json` through the production full-restore function, compares a
 re-export of every independent PostgreSQL table, starts the recovered signer and
-control-plane assembly, and calls the real `/readyz` handler. Its signed
-attestation cannot say `restored` unless all of those checks pass. The separate
-event-log-only restore remains useful for projection recovery, but it is never a
-full DR verdict.
+control-plane assembly, and calls the real `/readyz` handler. Before the recovered
+assembly starts, it reads the restored state back against the backup (A246):
+
+- **events** — the restored log is compared with `events.jsonl` record for record
+  (a log whose legacy scheduler history was sanitized on restore matches through
+  its signed rewrite receipts);
+- **keys** — the issuing CA and every active tenant CA authority with a signer
+  handle: the key the restored signer holds under the handle must be the key the
+  certificate certifies (read with `GetPublicKey`; nothing is signed);
+- **secrets** — every stored application-secret value, current and retained, must
+  open under the restored deployment KEK and tenant key domains, composed as the
+  server composes them. Plaintext is wiped as it opens. A tenant that sealed its
+  own key domain keeps its secrets closed by design; it is counted, not opened.
+
+The attestation carries `events_verified`, `keys_verified`, `secrets_verified` and
+`sealed_tenants_not_opened`. A check that fails makes the drill `failed` with a
+sentence naming the check (event log, CA keys or stored secrets); the tenant,
+secret or key it stopped at goes to the control plane's log, not the signed
+evidence. Its signed attestation cannot say `restored` unless all of those checks
+pass. The separate event-log-only restore remains useful for projection recovery,
+but it is never a full DR verdict.
 
 The scheduled result is not a volatile health flag. The control plane signs a
 versioned JSON statement through the isolated `audit-export` signer handle. The
@@ -261,6 +278,7 @@ verified row.
 ## Passing result
 
 The drill passes when the restored environment reaches `/readyz`, signer health
-is `1`, inventory is present, and the smoke test completes without weakening the
+is `1`, inventory is present, the restored events, keys and secrets read back
+consistently with the backup, and the smoke test completes without weakening the
 runtime checks. If any manual step was needed, keep the drill marked failed until
 the runbook or automation is corrected and the drill is repeated.

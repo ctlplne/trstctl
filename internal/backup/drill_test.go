@@ -242,6 +242,76 @@ func healthyRestoreResult(events int) backup.RestoreResult {
 		PostgresTablesRestored: map[string]int{"provider_tenants": 1},
 		ArtifactsRestored:      []string{"event-log", "postgres-state", "signer-keystore"},
 		FullSetRestored:        true, StoreHealthy: true, EventLogHealthy: true,
-		SignerHealthy: true, ServerHealthy: true,
+		SignerHealthy: true, ServerHealthy: true, EventsVerified: events,
+	}
+}
+
+// A246: a restored verdict says what was read back against the backup, and the
+// signed attestation carries the counts.
+func TestADrillAttestsWhatTheRestoredTargetReadBack(t *testing.T) {
+	t.Parallel()
+	result := healthyRestoreResult(5)
+	result.KeysVerified, result.SecretsVerified, result.SealedTenantsNotOpened = 2, 7, 1
+	att, err := backup.RunDrill(context.Background(), drillableBackup(t, time.Hour),
+		func(context.Context) (backup.RestoreResult, error) { return result, nil }, nil)
+	if err != nil || att.Outcome != backup.DrillRestored {
+		t.Fatalf("drill = %q, %v: %s", att.Outcome, err, att.Detail)
+	}
+	if att.EventsVerified != 5 || att.KeysVerified != 2 || att.SecretsVerified != 7 || att.SealedTenantsNotOpened != 1 {
+		t.Fatalf("attested counts: %+v", att)
+	}
+	for _, want := range []string{"5 events matched record for record", "2 CA keys matched their certificates", "7 stored secret values opened", "1 tenants keep their secrets"} {
+		if !strings.Contains(att.Detail, want) {
+			t.Errorf("detail %q does not say %q", att.Detail, want)
+		}
+	}
+}
+
+// A restored target whose state does not read back as the backup's is a failed
+// drill; the attestation names the check in a closed sentence and the caller
+// gets the specific error.
+func TestAnInconsistentRestoreIsAFailedDrill(t *testing.T) {
+	t.Parallel()
+	for check, subject := range map[string]string{
+		backup.ConsistencyEvents: "event log", backup.ConsistencyKeys: "CA keys", backup.ConsistencySecrets: "stored secrets",
+	} {
+		inconsistent := &backup.RestoreInconsistency{Check: check, Err: errors.New("tenant t-1 secret \"db\" version 3 does not open")}
+		att, err := backup.RunDrill(context.Background(), drillableBackup(t, time.Hour),
+			func(context.Context) (backup.RestoreResult, error) { return healthyRestoreResult(4), inconsistent }, nil)
+		var got *backup.RestoreInconsistency
+		if att.Outcome != backup.DrillFailed || !errors.As(err, &got) || got.Check != check {
+			t.Fatalf("%s: outcome %q, error %v", check, att.Outcome, err)
+		}
+		if !strings.Contains(att.Detail, subject) || strings.Contains(att.Detail, "t-1") {
+			t.Errorf("%s: detail %q; want it to name the %s and nothing it stopped at", check, att.Detail, subject)
+		}
+	}
+}
+
+// A restore that did not read every restored event back against the backup
+// proves nothing about the log it restored.
+func TestARestoreThatDidNotReadBackEveryEventIsAFailedDrill(t *testing.T) {
+	t.Parallel()
+	result := healthyRestoreResult(4)
+	result.EventsVerified = 3
+	att, err := backup.RunDrill(context.Background(), drillableBackup(t, time.Hour),
+		func(context.Context) (backup.RestoreResult, error) { return result, nil }, nil)
+	if err != nil || att.Outcome != backup.DrillFailed || !strings.Contains(att.Detail, "not every restored event") {
+		t.Fatalf("drill = %q, %v: %s", att.Outcome, err, att.Detail)
+	}
+}
+
+// Evidence signed before the counts existed carries none of them; zero counts
+// stay out of the JSON so that evidence still verifies byte for byte.
+func TestZeroConsistencyCountsStayOutOfTheAttestation(t *testing.T) {
+	t.Parallel()
+	raw, err := json.Marshal(backup.DrillAttestation{Outcome: backup.DrillRestored})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"events_verified", "keys_verified", "secrets_verified", "sealed_tenants_not_opened"} {
+		if strings.Contains(string(raw), field) {
+			t.Errorf("a zero %s is in the attestation: %s", field, raw)
+		}
 	}
 }

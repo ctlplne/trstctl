@@ -742,6 +742,11 @@ type fullRestoreResult struct {
 	EventLogHealthy        bool
 	SignerHealthy          bool
 	ServerHealthy          bool
+	// What the restored target read back consistently with the backup (A246).
+	EventsVerified         int
+	KeysVerified           int
+	SecretsVerified        int
+	SealedTenantsNotOpened int
 }
 
 func runFullRestore(
@@ -878,7 +883,7 @@ func runFullRestore(
 	}
 	sort.Strings(result.ArtifactsRestored)
 	if proveRecoveredRuntime {
-		if err := proveFullRestoreRuntime(ctx, cfg, st, log, signerRuntime, auditKey, options, &result); err != nil {
+		if err := proveFullRestoreRuntime(ctx, cfg, dir, st, log, signerRuntime, auditKey, options, &result); err != nil {
 			return result, err
 		}
 	}
@@ -956,9 +961,12 @@ func verifyFullRestoreArtifactFiles(dir string, id backup.PostgresStateIdentity)
 // artifacts and asks its real readiness handler for a verdict. This is
 // intentionally after the final projection rebuild: a signer socket that is
 // reachable while the restored read model cannot boot is not a recovery.
+// Before the assembly starts (it may append events of its own), the restored
+// events, keys and secrets are read back against the backup in dir (A246).
 func proveFullRestoreRuntime(
 	ctx context.Context,
 	cfg *config.Config,
+	dir string,
 	st *store.Store,
 	log *events.Log,
 	signerRuntime runSigner,
@@ -995,6 +1003,9 @@ func proveFullRestoreRuntime(
 		return errors.New("recovered signer health: signer is unreachable")
 	}
 	result.SignerHealthy = true
+	if err := verifyRestoredConsistency(ctx, cfg, dir, st, log, signerRuntime.signer, auditKey, result); err != nil {
+		return err
+	}
 
 	recovered, err := Build(ctx, Deps{
 		Store:                     st,

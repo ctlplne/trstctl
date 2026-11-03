@@ -133,6 +133,19 @@ read to check it against: the outbox table for the queues,
 `GET /api/v1/platform/dr-posture` for backup and restore, `/readyz` for the
 signer and dependencies, and the event log's head for freshness.
 
+Restore proof is the scheduled drill's verdict: it restores the newest backup
+into an isolated deployment and reads its events, CA keys and stored secrets back
+against the backup ([Disaster recovery drill](runbooks/disaster-recovery-drill.md)).
+Before an upgrade, `trstctl --upgrade-preflight` checks it against the database
+without changing anything ([Database migrations & upgrades](migrations.md)).
+
+| Runbook | Covers |
+| --- | --- |
+| [Install](runbooks/install.md) | a production install, proven before it takes traffic |
+| [Upgrade and rollback](runbooks/upgrade-rollback.md) | the chart upgrade, the database preflight, both rollback methods |
+| [Disaster recovery drill](runbooks/disaster-recovery-drill.md) | backup, restore into an isolated target, the read-back checks |
+| [Failover](runbooks/failover.md) | replica, leader, datastore and signer failover |
+
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the

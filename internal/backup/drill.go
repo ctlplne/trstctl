@@ -104,6 +104,17 @@ type DrillAttestation struct {
 	// runs whose report was already missing when the backup ran (A206).
 	ReportsRestored        int `json:"reports_restored,omitempty"`
 	ReportsMissingAtBackup int `json:"reports_missing_at_backup,omitempty"`
+	// EventsVerified, KeysVerified and SecretsVerified are the restored target
+	// read back against the backup (A246): events that matched the backup
+	// record for record, CA keys the restored signer holds for the
+	// certificates that name them, and stored secret values, current and
+	// retained, that opened under the restored keys. SealedTenantsNotOpened
+	// counts tenants whose own sealed key domain keeps their secrets closed.
+	// Omitted when zero, so evidence signed before they existed verifies.
+	EventsVerified         int `json:"events_verified,omitempty"`
+	KeysVerified           int `json:"keys_verified,omitempty"`
+	SecretsVerified        int `json:"secrets_verified,omitempty"`
+	SealedTenantsNotOpened int `json:"sealed_tenants_not_opened,omitempty"`
 	// Health is evidence collected from the recovered target, not the source
 	// deployment. A restored verdict requires every check to be true.
 	StoreHealthy    bool `json:"store_healthy"`
@@ -139,6 +150,44 @@ type RestoreResult struct {
 	EventLogHealthy         bool
 	SignerHealthy           bool
 	ServerHealthy           bool
+	// What the restored target read back consistently with the backup (A246).
+	EventsVerified         int
+	KeysVerified           int
+	SecretsVerified        int
+	SealedTenantsNotOpened int
+}
+
+// The consistency checks a restored target answers to (A246).
+const (
+	ConsistencyEvents  = "events"
+	ConsistencyKeys    = "keys"
+	ConsistencySecrets = "secrets"
+)
+
+// RestoreInconsistency is a restored target whose state did not read back
+// consistently with the backup; Check names the check that failed.
+type RestoreInconsistency struct {
+	Check string
+	Err   error
+}
+
+func (e *RestoreInconsistency) Error() string {
+	return "backup: the restored " + e.Check + " are not consistent with the backup: " + e.Err.Error()
+}
+
+func (e *RestoreInconsistency) Unwrap() error { return e.Err }
+
+// consistencySubject names a check in the words an attestation uses.
+func consistencySubject(check string) string {
+	switch check {
+	case ConsistencyEvents:
+		return "event log"
+	case ConsistencyKeys:
+		return "CA keys"
+	case ConsistencySecrets:
+		return "stored secrets"
+	}
+	return "state"
 }
 
 // Healthy reports whether the isolated recovery target proved all four runtime
@@ -209,8 +258,20 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 	att.EventLogHealthy = result.EventLogHealthy
 	att.SignerHealthy = result.SignerHealthy
 	att.ServerHealthy = result.ServerHealthy
+	att.EventsVerified = result.EventsVerified
+	att.KeysVerified = result.KeysVerified
+	att.SecretsVerified = result.SecretsVerified
+	att.SealedTenantsNotOpened = result.SealedTenantsNotOpened
 
+	var inconsistent *RestoreInconsistency
 	switch {
+	case errors.As(err, &inconsistent):
+		att.Outcome = DrillFailed
+		// A closed sentence naming the check; the tenant, secret or key it
+		// stopped at stays in the returned error for the scheduler's log.
+		att.Detail = "The full backup set restored, but the isolated target's " + consistencySubject(inconsistent.Check) +
+			" did not read back consistently with the backup. Restored state that differs from what was " +
+			"backed up is not a recovery, so this drill failed closed."
 	case err != nil:
 		att.Outcome = DrillFailed
 		// The restore error can carry paths and internal detail. The attestation
@@ -237,12 +298,24 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 		att.Detail = "The full backup set restored, but the isolated target did not pass every " +
 			"PostgreSQL, event-log, signer, and recovered-server health check. Restored bytes are " +
 			"not a working recovery, so this drill failed closed."
+	case result.EventsVerified != result.EventsRestored:
+		att.Outcome = DrillFailed
+		att.Detail = "The isolated target came up, but not every restored event was read back against the " +
+			"backup. A verdict needs the restored log compared with the backup record for record, so this " +
+			"drill failed closed."
 	default:
 		att.Outcome = DrillRestored
 		att.Detail = fmt.Sprintf("The complete backup set restored into an isolated ephemeral target, replaying %d "+
 			"events and importing %d independent PostgreSQL records. PostgreSQL, the event log, "+
 			"the signer, and the recovered server all passed health checks. The state it holds is %s old.",
 			result.EventsRestored, result.PostgresRecordsRestored, humaniseAge(att.RPOSeconds))
+		att.Detail += fmt.Sprintf(" Read back against the backup: %d events matched record for record, %d CA keys "+
+			"matched their certificates in the restored signer, and %d stored secret values opened under the "+
+			"restored keys.", result.EventsVerified, result.KeysVerified, result.SecretsVerified)
+		if result.SealedTenantsNotOpened > 0 {
+			att.Detail += fmt.Sprintf(" %d tenants keep their secrets under their own sealed key domains; those "+
+				"were not opened.", result.SealedTenantsNotOpened)
+		}
 		if result.ReportsRestored > 0 || result.ReportsMissingAtBackup > 0 {
 			att.Detail += fmt.Sprintf(" %d compliance reports restored and matched their digests", result.ReportsRestored)
 			if result.ReportsMissingAtBackup > 0 {

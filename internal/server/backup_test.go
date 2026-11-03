@@ -810,6 +810,23 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Fatalf("close source event log with drill history: %v", err)
 	}
 
+	// A246: a stored secret, sealed as the server seals it, that the drill must
+	// open under the restored keys.
+	sealKEK, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, sourceCrypto, _, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, sealKEK, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drillSecret, err := sealTenantValue(ctx, sourceCrypto, nil, tenantID, []byte("drill secret value"), []byte(tenantID+"/secret-store/drill-db-password"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedApplicationSecretFixture(t, st, tenantID, "drill-db-password", drillSecret)
+	sealKEK.Destroy()
+
 	// A206: a completed compliance report run whose signed report lives in the
 	// archive outside the replay log; the drill must restore and check it.
 	report := []byte(`{"signed_export":{"report":"drill","signature":"AQ=="}}`)
@@ -860,11 +877,42 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	if att.ReportsRestored != 1 || !strings.Contains(att.Detail, "1 compliance reports restored") {
 		t.Errorf("drill reports restored = %d (%s), want the source report", att.ReportsRestored, att.Detail)
 	}
+	// A246: what the restored target read back against the backup.
+	if att.EventsVerified != 2 || att.KeysVerified != 1 || att.SecretsVerified != 2 {
+		t.Errorf("read back against the backup: events %d, keys %d, secrets %d; want 2, 1 (the issuing CA) and 2 (the secret's current value and its version)",
+			att.EventsVerified, att.KeysVerified, att.SecretsVerified)
+	}
 	for _, name := range []string{"event-log", "postgres-state", "signer-auth-secret", "signer-keystore", "ca-certificate", "report-archive"} {
 		if !backupContainsString(att.ArtifactsRestored, name) {
 			t.Errorf("restored artifacts %v do not include %s", att.ArtifactsRestored, name)
 		}
 	}
+
+	// A246: a stored secret that no longer opens under the deployment's keys
+	// restores byte for byte; reading it back must fail the drill, naming only
+	// the check in the signed attestation.
+	flipLastByte := func() {
+		t.Helper()
+		if _, err := st.SystemPool().Exec(ctx, `UPDATE secret_store_versions
+			SET sealed = set_byte(sealed, length(sealed)-1, get_byte(sealed, length(sealed)-1) # 1)
+			WHERE tenant_id = $1 AND name = 'drill-db-password'`, tenantID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	flipLastByte()
+	tamperedDir := filepath.Join(dir, "tampered-secret-backup")
+	if _, err := RunFullBackup(ctx, cfg, tamperedDir); err != nil {
+		t.Fatalf("RunFullBackup with a secret that does not open: %v", err)
+	}
+	tampered, err := RunRestoreDrill(ctx, cfg, tamperedDir)
+	var inconsistent *backup.RestoreInconsistency
+	if tampered.Outcome != backup.DrillFailed || !errors.As(err, &inconsistent) || inconsistent.Check != backup.ConsistencySecrets {
+		t.Fatalf("a secret that does not open: outcome %q, error %v: %s", tampered.Outcome, err, tampered.Detail)
+	}
+	if !strings.Contains(tampered.Detail, "stored secrets") || strings.Contains(tampered.Detail, "drill-db-password") {
+		t.Fatalf("tampered-secret drill detail: %s", tampered.Detail)
+	}
+	flipLastByte()
 
 	// The isolated drill may copy production inputs but must not rewrite them.
 	var sourceProviderTenants int
