@@ -516,7 +516,23 @@ func validateADCSRevocationRelay(c ExternalCAConfig, where string) []error {
 // fall back to.
 func validateADCSKerberos(c ExternalCAConfig, where string) []error {
 	if strings.TrimSpace(c.KerberosKeytabRef) == "" {
-		return nil
+		// Without a keytab the CA authenticates with Basic, so a Kerberos
+		// setting here would be ignored without a word.
+		var errs []error
+		for _, field := range []struct {
+			name string
+			set  bool
+		}{
+			{"kerberos_realm", strings.TrimSpace(c.KerberosRealm) != ""},
+			{"kerberos_principal", strings.TrimSpace(c.KerberosPrincipal) != ""},
+			{"kerberos_kdcs", len(c.KerberosKDCs) > 0},
+			{"kerberos_spn", strings.TrimSpace(c.KerberosSPN) != ""},
+		} {
+			if field.set {
+				errs = append(errs, fmt.Errorf("%s.%s is set without kerberos_keytab_ref; Kerberos takes effect only with a keytab", where, field.name))
+			}
+		}
+		return errs
 	}
 	var errs []error
 	if strings.TrimSpace(c.PasswordRef) != "" {
