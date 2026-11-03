@@ -320,6 +320,10 @@ func operationLedgerRoutes(a *API) []route {
 		{method: "GET", path: "/api/v1/operations/ledger", opID: "listOperationLedger",
 			summary: "List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
 			handler: a.listOperationLedger, query: operationLedgerQuery(), resSchema: "OperationLedgerPage", successCode: "200", perm: authz.LifecycleRead},
+		{method: "GET", path: "/api/v1/operations/ledger/{id}", opID: "getOperationLedgerItem",
+			summary: "Show one operation's causal chain (request, authority, external action, receipt, consumer observation, revocation) and the retry and rollback that apply to exactly it",
+			handler: a.getOperationLedgerItem, pathParams: []param{pathString("id", "operation ID: <source>:<id>")}, resSchema: "OperationLedgerDetail",
+			successCode: "200", perm: authz.LifecycleRead},
 	}
 }
 
@@ -332,19 +336,35 @@ func operationLedgerQuery() []param {
 	}
 }
 
-func operationLedgerSchemas() map[string]*Schema {
+func operationLedgerItemProperties() map[string]*Schema {
 	return map[string]*Schema{
-		"OperationLedgerItem": object(map[string]*Schema{
-			"id": str(), "source": {Type: "string", Enum: operationSources}, "credential_type": str(),
-			"subject":          object(map[string]*Schema{"id": str(), "name": str()}, "name"),
-			"state":            {Type: "string", Enum: operationStates},
-			"state_reason":     str(),
-			"source_status":    str(),
-			"fingerprint":      str(),
-			"outbox":           object(map[string]*Schema{"id": {Type: "integer"}, "status": str(), "attempts": {Type: "integer"}}, "id", "status", "attempts"),
-			"observed_vantage": str(),
-			"created_at":       timestamp(), "updated_at": timestamp(),
-		}, "id", "source", "credential_type", "subject", "state", "state_reason", "source_status", "created_at", "updated_at"),
+		"id": str(), "source": {Type: "string", Enum: operationSources}, "credential_type": str(),
+		"subject":          object(map[string]*Schema{"id": str(), "name": str()}, "name"),
+		"state":            {Type: "string", Enum: operationStates},
+		"state_reason":     str(),
+		"source_status":    str(),
+		"fingerprint":      str(),
+		"outbox":           object(map[string]*Schema{"id": {Type: "integer"}, "status": str(), "attempts": {Type: "integer"}}, "id", "status", "attempts"),
+		"observed_vantage": str(),
+		"created_at":       timestamp(), "updated_at": timestamp(),
+	}
+}
+
+var operationLedgerItemRequired = []string{"id", "source", "credential_type", "subject", "state", "state_reason", "source_status", "created_at", "updated_at"}
+
+func operationLedgerSchemas() map[string]*Schema {
+	detail := operationLedgerItemProperties()
+	detail["chain"] = &Schema{Type: "array", Items: object(map[string]*Schema{
+		"step":  {Type: "string", Enum: []string{"request", "authority", "external_action", "receipt", "observation", "revocation"}},
+		"state": {Type: "string", Enum: operationLinkStates}, "detail": str(), "at": timestamp(), "path": str(),
+	}, "step", "state", "detail")}
+	detail["actions"] = &Schema{Type: "array", Items: object(map[string]*Schema{
+		"action": {Type: "string", Enum: []string{"retry", "rollback"}}, "available": {Type: "boolean"}, "scope": str(),
+		"reason": str(), "method": str(), "path": str(),
+	}, "action", "available", "scope")}
+	return map[string]*Schema{
+		"OperationLedgerItem":   object(operationLedgerItemProperties(), operationLedgerItemRequired...),
+		"OperationLedgerDetail": object(detail, append(append([]string{}, operationLedgerItemRequired...), "chain", "actions")...),
 		"OperationLedgerPage": object(map[string]*Schema{
 			"items": {Type: "array", Items: ref("OperationLedgerItem")}, "next_cursor": str(),
 		}, "items"),

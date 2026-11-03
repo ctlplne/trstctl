@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,8 +172,48 @@ func TestServedOperationsLedgerNeedsConsumerEvidenceA245(t *testing.T) {
 	if states["verified"] != 1 || states["delivered"] != 1 {
 		t.Fatalf("after the renewal the deliveries read %v, want the old one verified and the new one delivered", states)
 	}
+	// One operation's causal chain and its exactly scoped actions.
+	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/operations/ledger/"+rotation.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("rotation detail: %d %s", status, raw)
+	}
+	var detail struct {
+		ID    string `json:"id"`
+		State string `json:"state"`
+		Chain []struct {
+			Step, State, Detail string
+		} `json:"chain"`
+		Actions []struct {
+			Action    string `json:"action"`
+			Available bool   `json:"available"`
+			Scope     string `json:"scope"`
+			Path      string `json:"path"`
+		} `json:"actions"`
+	}
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		t.Fatal(err)
+	}
+	steps := map[string]string{}
+	for _, link := range detail.Chain {
+		steps[link.Step] = link.State
+	}
+	if detail.ID != rotation.ID || detail.State != "delivered" || steps["request"] != "done" || steps["authority"] != "done" ||
+		steps["external_action"] != "done" || steps["receipt"] != "done" || steps["observation"] != "not_observed" {
+		t.Fatalf("the renewal's chain = %s", raw)
+	}
+	if len(detail.Actions) != 2 || detail.Actions[0].Action != "retry" || detail.Actions[0].Available ||
+		!strings.Contains(detail.Actions[0].Scope, hostname) {
+		t.Fatalf("a renewal that did not fail offers no retry, scoped to the identity: %s", raw)
+	}
+	for _, path := range []string{"/api/v1/operations/ledger/certificate_rotation:00000000-0000-0000-0000-000000000000",
+		"/api/v1/operations/ledger/not-an-operation"} {
+		if status, raw := secretsReq(t, h, http.MethodGet, path, tok, nil); status != http.StatusNotFound {
+			t.Fatalf("GET %s: %d %s", path, status, raw)
+		}
+	}
+
 	// A filter by state applies to the normalized state.
-	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/operations/ledger?state=verified&limit=100", tok, nil)
+	status, raw = secretsReq(t, h, http.MethodGet, "/api/v1/operations/ledger?state=verified&limit=100", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("filtered ledger: %d %s", status, raw)
 	}

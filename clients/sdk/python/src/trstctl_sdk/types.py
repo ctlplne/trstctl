@@ -10531,6 +10531,27 @@ OffboardMemberResponse = TypedDict(
     total=False,
 )
 
+OperationLedgerDetail = TypedDict(
+    'OperationLedgerDetail',
+    {
+        'actions': list[dict[str, Any]],
+        'chain': list[dict[str, Any]],
+        'created_at': str,
+        'credential_type': str,
+        'fingerprint': str,
+        'id': str,
+        'observed_vantage': str,
+        'outbox': dict[str, Any],
+        'source': str,
+        'source_status': str,
+        'state': str,
+        'state_reason': str,
+        'subject': dict[str, Any],
+        'updated_at': str,
+    },
+    total=False,
+)
+
 OperationLedgerItem = TypedDict(
     'OperationLedgerItem',
     {

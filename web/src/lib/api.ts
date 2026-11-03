@@ -84,6 +84,7 @@ import type {
   RenewalSLO,
   OperationLedgerItem,
   OperationLedgerPage,
+  OperationLedgerDetail,
   IdentityRevocationReport,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
@@ -1160,6 +1161,7 @@ export type {
   RenewalSLO,
   OperationLedgerItem,
   OperationLedgerPage,
+  OperationLedgerDetail,
   IdentityRevocationReport,
   IssuerCapabilityMatrix,
   ACMEDNS01Preflight,
@@ -2506,6 +2508,7 @@ export interface Api {
   renewalSLO(): Promise<RenewalSLO>;
   operationLedger(params?: { limit?: number; cursor?: string; state?: string; credential_type?: string }): Promise<OperationLedgerPage>;
   identityRevocationReport(id: string): Promise<IdentityRevocationReport>;
+  operationLedgerItem(id: string): Promise<OperationLedgerDetail>;
   connectorDelivery(id: string): Promise<ConnectorDelivery>;
   previewEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredentialPreview>;
   requestEphemeralCredential(input: EphemeralCredentialRequest): Promise<EphemeralCredential>;
@@ -3385,6 +3388,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   agentJobPosture: () => req<AgentJobPosture>("/api/v1/operations/jobs"),
   bulkheadStats: () => req<BulkheadStats>("/api/v1/operations/bulkheads"),
   renewalSLO: () => req<RenewalSLO>("/api/v1/operations/renewal-slo"),
+  operationLedgerItem: (id) => req<OperationLedgerDetail>(`/api/v1/operations/ledger/${encodeURIComponent(id)}`),
   identityRevocationReport: (id) => req<IdentityRevocationReport>(`/api/v1/identities/${encodeURIComponent(id)}/revocation-report`),
   operationLedger: (params = {}) => {
     const query = new URLSearchParams();

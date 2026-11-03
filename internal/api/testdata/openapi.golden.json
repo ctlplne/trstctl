@@ -32925,6 +32925,185 @@
         ],
         "type": "object"
       },
+      "OperationLedgerDetail": {
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "retry",
+                    "rollback"
+                  ],
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action",
+                "available",
+                "scope"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "chain": {
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "done",
+                    "pending",
+                    "failed",
+                    "uncertain",
+                    "not_observed"
+                  ],
+                  "type": "string"
+                },
+                "step": {
+                  "enum": [
+                    "request",
+                    "authority",
+                    "external_action",
+                    "receipt",
+                    "observation",
+                    "revocation"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "state",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_type": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "observed_vantage": {
+            "type": "string"
+          },
+          "outbox": {
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "attempts"
+            ],
+            "type": "object"
+          },
+          "source": {
+            "enum": [
+              "certificate_rotation",
+              "connector_delivery",
+              "secret_rotation",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "source_status": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "reviewed",
+              "awaiting_approval",
+              "queued",
+              "executing",
+              "delivered",
+              "verified",
+              "failed",
+              "uncertain",
+              "recovered"
+            ],
+            "type": "string"
+          },
+          "state_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "credential_type",
+          "subject",
+          "state",
+          "state_reason",
+          "source_status",
+          "created_at",
+          "updated_at",
+          "chain",
+          "actions"
+        ],
+        "type": "object"
+      },
       "OperationLedgerItem": {
         "properties": {
           "created_at": {
@@ -74200,6 +74379,64 @@
           }
         ],
         "summary": "List rotations, deliveries, secret rotations and approvals in one normalized state, newest first: verified only on consumer evidence, never on an HTTP 200 or an outbox receipt alone",
+        "x-trstctl-permission": "lifecycle:read"
+      }
+    },
+    "/api/v1/operations/ledger/{id}": {
+      "get": {
+        "operationId": "getOperationLedgerItem",
+        "parameters": [
+          {
+            "description": "operation ID: \u003csource\u003e:\u003cid\u003e",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationLedgerDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show one operation's causal chain (request, authority, external action, receipt, consumer observation, revocation) and the retry and rollback that apply to exactly it",
         "x-trstctl-permission": "lifecycle:read"
       }
     },

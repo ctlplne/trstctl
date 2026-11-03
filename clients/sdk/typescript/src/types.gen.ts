@@ -6072,6 +6072,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/ledger/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show one operation's causal chain (request, authority, external action, receipt, consumer observation, revocation) and the retry and rollback that apply to exactly it */
+        get: operations["getOperationLedgerItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/renewal-slo": {
         parameters: {
             query?: never;
@@ -18583,6 +18600,50 @@ export interface components {
             member: components["schemas"]["Member"];
             revoked_token_count: number;
             rotation_evidence: string;
+        };
+        OperationLedgerDetail: {
+            actions: {
+                /** @enum {string} */
+                action: "retry" | "rollback";
+                available: boolean;
+                method?: string;
+                path?: string;
+                reason?: string;
+                scope: string;
+            }[];
+            chain: {
+                /** Format: date-time */
+                at?: string;
+                detail: string;
+                path?: string;
+                /** @enum {string} */
+                state: "done" | "pending" | "failed" | "uncertain" | "not_observed";
+                /** @enum {string} */
+                step: "request" | "authority" | "external_action" | "receipt" | "observation" | "revocation";
+            }[];
+            /** Format: date-time */
+            created_at: string;
+            credential_type: string;
+            fingerprint?: string;
+            id: string;
+            observed_vantage?: string;
+            outbox?: {
+                attempts: number;
+                id: number;
+                status: string;
+            };
+            /** @enum {string} */
+            source: "certificate_rotation" | "connector_delivery" | "secret_rotation" | "approval";
+            source_status: string;
+            /** @enum {string} */
+            state: "reviewed" | "awaiting_approval" | "queued" | "executing" | "delivered" | "verified" | "failed" | "uncertain" | "recovered";
+            state_reason: string;
+            subject: {
+                id?: string;
+                name: string;
+            };
+            /** Format: date-time */
+            updated_at: string;
         };
         OperationLedgerItem: {
             /** Format: date-time */
@@ -40172,6 +40233,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationLedgerPage"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getOperationLedgerItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description operation ID: <source>:<id> */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationLedgerDetail"];
                 };
             };
             /** @description client error */
