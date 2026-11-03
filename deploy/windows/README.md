@@ -67,6 +67,13 @@ msiexec /i trstctl-agent.msi /qn `
   BOOTSTRAPTOKENFILE=C:\ProgramData\trstctl\bootstrap-token.txt
 ```
 
+The installer remembers these settings under `HKLM\Software\trstctl\agent` (the
+token file's path, never the token), because a repair (`msiexec /f`) takes no
+properties from its command line: a repair or a later upgrade re-registers the
+service with the same arguments, and a value given on an upgrade's command line
+replaces the remembered one. Only a first install requires `ENROLLURL`, `SERVER` and
+`SERVERNAME`.
+
 The agent can also manage the service directly:
 
 ```bat

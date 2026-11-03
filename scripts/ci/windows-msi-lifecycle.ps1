@@ -86,6 +86,12 @@ function Assert-ServiceContract {
     if ($service.PathName -match 'qa-bootstrap-token-file-only') {
         throw "${Stage}: bootstrap token value leaked into the service command line"
     }
+    # A repair takes no properties from its command line; the remembered
+    # settings must keep the enrollment URL and server in the arguments.
+    if ($service.PathName -notmatch [regex]::Escape('--enroll-url https://127.0.0.1:18443') -or
+        $service.PathName -notmatch [regex]::Escape('--server 127.0.0.1:19443')) {
+        throw "${Stage}: service command line lost its first-boot settings: $($service.PathName)"
+    }
     Wait-AgentRunning
 
     $failureActions = (sc.exe qfailure $serviceName 2>&1 | Out-String)

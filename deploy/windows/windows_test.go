@@ -27,6 +27,14 @@ func TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties(t *testing.T) {
 		`--server [SERVER]`,
 		`--server-name [SERVERNAME]`,
 		`FailureActionsWhen="failedToStopOrReturnedError"`,
+		// A repair (msiexec /f) ignores command-line properties: the
+		// settings are remembered at install and read back, and the launch
+		// conditions bind only a first install, so maintenance proceeds.
+		`<RegistrySearch Id="RememberedEnrollUrl" Root="HKLM" Key="Software\trstctl\agent" Name="EnrollUrl"`,
+		`<RegistryValue Name="BootstrapTokenFile" Type="string" Value="[BOOTSTRAPTOKENFILE]"`,
+		`<Custom Action="RestoreEnrollUrl" After="AppSearch">CMDLINE_ENROLLURL</Custom>`,
+		`>Installed OR ENROLLURL</Condition>`,
+		`<ComponentRef Id="AgentSettings" />`,
 	} {
 		if !strings.Contains(wxs, want) {
 			t.Errorf("trstctl-agent.wxs missing %q", want)
