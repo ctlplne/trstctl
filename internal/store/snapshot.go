@@ -228,8 +228,10 @@ import (
 // queued deletes) while its covered offset skipped the applies.
 // Version 75 carries A238's secret delivery reports; an older snapshot has none,
 // so a restore would show every consumer as never having received a version
-// while its covered offset skipped the reports.
-const SnapshotFormatVersion = 75
+// while its covered offset skipped the reports. Version 76 carries A243's
+// secret migrations: without them a restored store would forget which secrets
+// an export's system still writes.
+const SnapshotFormatVersion = 76
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -304,6 +306,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"secret_scoped_syncs", "secret_scoped_sync_keys", "secret_scoped_sync_deletes",
 	// Format 75: A238's secret delivery reports.
 	"secret_deliveries",
+	// Format 76: A243's secret migrations.
+	"secret_migrations", "secret_migration_objects", "secret_migration_consumer_reads",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -637,6 +641,9 @@ SELECT jsonb_build_object(
   'secret_scoped_sync_keys', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_scoped_sync_keys t),
   'secret_scoped_sync_deletes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_scoped_sync_deletes t),
   'secret_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_deliveries t),
+  'secret_migrations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_migrations t),
+  'secret_migration_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_migration_objects t),
+  'secret_migration_consumer_reads', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_migration_consumer_reads t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

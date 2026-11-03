@@ -361,9 +361,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A236 adds previewing and applying an environment promotion (629) and a
 	// folder restore (631). A237 adds scoped syncs: define, list, show, remove,
 	// preview and apply (637), and switching one to auto (638). A238 adds
-	// reporting and listing secret deliveries (640).
-	if len(out) != 640 {
-		t.Fatalf("OpenAPI operationIds = %d, want 640", len(out))
+	// reporting and listing secret deliveries (640). A243 adds migration runs:
+	// assess, list, show, stage, permissions, cutover, reissue, rollback (648).
+	if len(out) != 648 {
+		t.Fatalf("OpenAPI operationIds = %d, want 648", len(out))
 	}
 	return out
 }

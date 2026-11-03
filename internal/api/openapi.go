@@ -189,6 +189,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range secretDeliverySchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range secretMigrationSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}

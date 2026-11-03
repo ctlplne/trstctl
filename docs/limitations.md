@@ -5584,6 +5584,22 @@ every 30 seconds) or its 15-minute drift check is due, and applied when nothing 
 blocked; a blocked or failed plan is recorded on the definition and writes nothing. The
 console's Secrets → Sync page defines, previews, applies and switches scoped syncs.
 Approval-gated convergence is not served.
+Migration and coexistence kit (A243) — served. A migration run reads an export in
+common formats — dotenv, JSON and YAML, per environment and folder — into project
+names, translating its references into the store's `${secret.<name>}` so chains stay
+chains, and keeping multiline values and metadata (description, tags, owner). It
+assesses first with no values (import, reissue or blocked per secret, unsupported
+entries with their location), translates the export's permissions only where nothing
+widens and holds the rest for review (an environment the export restricted that is
+open here blocks its secrets unless accepted), stages by the assessment's digest with
+the export's system as each secret's one writer until cutover, records each
+consumer's first read, cuts over only when every consumer has read, reissues the
+credentials the export could not carry (never counted as migrated), and rolls back
+from its manifest. API, CLI (`trstctl secrets migrate …`) and the project page in the
+console; the served journey proves a three-source, two-environment export end to end
+with no value in the logs. What comes next: a stage writes at most 100 secrets (a
+larger export is assessed per environment or folder), and the old system's
+credentials are revoked by the operator, not by the run.
 Hosted sync targets (A241) — served. Thirty-four destinations run on one engine
 (`secretsync.HostedSyncPusher`), each bound by one `binding` string in its type's
 grammar: Heroku, Render, Railway, Fly.io, DigitalOcean App Platform, Northflank, Qovery,

@@ -13539,6 +13539,66 @@ SecretMetaList = TypedDict(
     total=False,
 )
 
+SecretMigration = TypedDict(
+    'SecretMigration',
+    {
+        'accepted_open': list[str],
+        'consumers': list[dict[str, Any]],
+        'created_at': str,
+        'created_by': str,
+        'cut_over_at': str,
+        'cut_over_by': str,
+        'digest': str,
+        'id': str,
+        'objects': list[dict[str, Any]],
+        'permissions_applied': list[dict[str, Any]],
+        'plan': dict[str, Any],
+        'project': str,
+        'rolled_back_at': str,
+        'staged_at': str,
+        'state': str,
+    },
+    total=False,
+)
+
+SecretMigrationCutOverRequest = TypedDict(
+    'SecretMigrationCutOverRequest',
+    {
+        'no_consumers': bool,
+    },
+    total=False,
+)
+
+SecretMigrationList = TypedDict(
+    'SecretMigrationList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SecretMigrationReissueRequest = TypedDict(
+    'SecretMigrationReissueRequest',
+    {
+        'names': list[str],
+    },
+    total=False,
+)
+
+SecretMigrationRequest = TypedDict(
+    'SecretMigrationRequest',
+    {
+        'accept_open_environments': list[str],
+        'consumers': list[dict[str, Any]],
+        'migration_id': str,
+        'permissions': list[dict[str, Any]],
+        'plan_digest': str,
+        'project': str,
+        'sources': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 SecretProject = TypedDict(
     'SecretProject',
     {

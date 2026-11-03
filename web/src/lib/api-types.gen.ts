@@ -9793,6 +9793,46 @@ export interface SecretMetaList {
   next_cursor?: string;
 }
 
+export interface SecretMigration {
+  accepted_open: string[];
+  consumers: { name: string; pending: string[]; problem?: string; read: string[]; secrets: string[]; subject: string }[];
+  created_at: string;
+  created_by?: string;
+  cut_over_at?: string;
+  cut_over_by?: string;
+  digest: string;
+  id: string;
+  objects: ({ name: string; outcome: "migrated" | "reissued"; prior_version: number; rollback?: "restored" | "deleted" | "kept"; rollback_version?: number; version: number; writer: "source" | "store" })[];
+  permissions_applied: Record<string, unknown>[];
+  plan: Record<string, unknown>;
+  project: string;
+  rolled_back_at?: string;
+  staged_at?: string;
+  state: "assessed" | "staged" | "cut-over" | "rolled-back";
+}
+
+export interface SecretMigrationCutOverRequest {
+  no_consumers?: boolean;
+}
+
+export interface SecretMigrationList {
+  items: SecretMigration[];
+}
+
+export interface SecretMigrationReissueRequest {
+  names: string[];
+}
+
+export interface SecretMigrationRequest {
+  accept_open_environments?: string[];
+  consumers?: { environment: string; name: string; secrets?: string[]; subject: string }[];
+  migration_id?: string;
+  permissions?: ({ access: "read" | "write" | "admin"; environment: string; folder?: string; subject: string })[];
+  plan_digest?: string;
+  project: string;
+  sources: ({ content: string; environment: string; folder?: string; format: "dotenv" | "json" | "yaml" })[];
+}
+
 export interface SecretProject {
   created_at: string;
   created_by?: string;

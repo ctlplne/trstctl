@@ -27,6 +27,9 @@ const (
 	ApplicationSecretBatchImport    = "import"
 	ApplicationSecretBatchPromotion = "promotion"
 	ApplicationSecretBatchRestore   = "restore"
+	// ApplicationSecretBatchMigration writes a migration's staged, reissued or
+	// rolled-back versions (A243).
+	ApplicationSecretBatchMigration = "migration"
 )
 
 // ErrApplicationSecretBatchStale is a versioned batch whose plan no longer
@@ -51,7 +54,8 @@ type ApplicationSecretVersionItem struct {
 }
 
 func validApplicationSecretBatchOperation(operation string) bool {
-	return operation == ApplicationSecretBatchPromotion || operation == ApplicationSecretBatchRestore
+	return operation == ApplicationSecretBatchPromotion || operation == ApplicationSecretBatchRestore ||
+		operation == ApplicationSecretBatchMigration
 }
 
 // RunApplicationSecretVersionBatchCommand reserves every name of a versioned

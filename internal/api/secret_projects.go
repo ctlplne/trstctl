@@ -159,7 +159,9 @@ func (a *API) requireSecretWrite(ctx context.Context, tenantID, name string) err
 	if !ok {
 		return errStatus(http.StatusForbidden, "this secret is in a restricted environment you are not a member of with write access")
 	}
-	return nil
+	// A243: until its migration cuts over, the export's system is the
+	// secret's one writer.
+	return a.requireSecretWriterIsStore(ctx, tenantID, name)
 }
 
 // hiddenSecretPrefixes is every restricted environment the caller is not

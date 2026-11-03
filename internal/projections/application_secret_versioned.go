@@ -123,7 +123,8 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 		len(payload.RequestBinding) != 64 || len(payload.IdempotencyKeyDigest) != 64 ||
 		len(payload.CommandEvidence) != 64 || len(payload.PlanDigest) != 64 || payload.Surface != "native" ||
 		payload.TenantEpoch == "" ||
-		(payload.Operation != store.ApplicationSecretBatchPromotion && payload.Operation != store.ApplicationSecretBatchRestore) {
+		(payload.Operation != store.ApplicationSecretBatchPromotion && payload.Operation != store.ApplicationSecretBatchRestore &&
+			payload.Operation != store.ApplicationSecretBatchMigration) {
 		return true, errors.New("projections: incomplete versioned secret batch")
 	}
 	if privacyPruned && len(payload.Items) == 0 {

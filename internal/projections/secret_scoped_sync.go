@@ -207,6 +207,7 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 		privacyRule("/id", opaque), privacyRule("/status", opaque), privacyRule("/reason", opaque),
 		privacyRule("/plan_digest", opaque), privacyRule("/source_digest", opaque))
 	addSecretDeliveryPrivacyPolicies(policies)
+	addSecretMigrationPrivacyPolicies(policies)
 	policies[privacyEventPolicyKey{EventSecretScopedSyncRemoved, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/removed_by", exact))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyRules(
@@ -231,4 +232,5 @@ func addSecretScopedSyncPrivacyShapes(shapes map[privacyEventPolicyKey]events.Pr
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyPayloadShape[SecretScopedSyncModeSet]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyPayloadShape[SecretScopedSyncReconciled]()
 	addSecretDeliveryPrivacyShapes(shapes)
+	addSecretMigrationPrivacyShapes(shapes)
 }

@@ -16355,7 +16355,15 @@
                 "importSecrets",
                 "getSecret",
                 "rotateSecret",
-                "deleteSecret"
+                "deleteSecret",
+                "assessSecretMigration",
+                "listSecretMigrations",
+                "getSecretMigration",
+                "stageSecretMigration",
+                "applySecretMigrationPermissions",
+                "cutOverSecretMigration",
+                "reissueSecretMigrationCredentials",
+                "rollBackSecretMigration"
             ],
             "api_na": "",
             "cli_surface": [
@@ -16366,6 +16374,14 @@
                 "secrets store get",
                 "secrets store update",
                 "secrets store delete",
+                "secrets migrate assess",
+                "secrets migrate list",
+                "secrets migrate show",
+                "secrets migrate stage",
+                "secrets migrate permissions",
+                "secrets migrate cutover",
+                "secrets migrate reissue",
+                "secrets migrate rollback",
                 "run"
             ],
             "cli_na": "",

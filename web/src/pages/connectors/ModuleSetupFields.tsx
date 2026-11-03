@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { RelayPluginModuleInput } from "@/lib/api";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 const configSchema = z.record(z.string(), z.unknown());
@@ -34,13 +36,7 @@ export function ModuleSetupFields({ inputs, config, onChange }: { inputs: RelayP
         if (input.type === "boolean") {
           return (
             <label key={input.name} className="flex items-start gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1 size-4"
-                disabled={!parsed}
-                checked={value === true}
-                onChange={(event) => set(input.name, event.target.checked)}
-              />
+              <Checkbox className="mt-1 size-4" disabled={!parsed} checked={value === true} onChange={(event) => set(input.name, event.target.checked)} />
               <span>
                 <span className="font-mono font-semibold">{input.name}</span>
                 {description ? <span className="mt-1 block text-muted-foreground">{description}</span> : null}
@@ -51,9 +47,9 @@ export function ModuleSetupFields({ inputs, config, onChange }: { inputs: RelayP
         return (
           <Field key={input.name} label={input.name} description={description} required={input.required}>
             {(control) => (
-              <input
+              <Input
                 {...control}
-                className="ui-input font-mono text-xs font-normal"
+                className="font-mono text-xs font-normal"
                 type={input.type === "integer" ? "number" : "text"}
                 step={input.type === "integer" ? 1 : undefined}
                 autoComplete="off"

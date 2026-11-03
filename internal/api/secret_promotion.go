@@ -629,6 +629,15 @@ func (a *API) executeSecretVersionBatch(
 		if len(items) == 0 {
 			return out, nil
 		}
+		if operation != store.ApplicationSecretBatchMigration {
+			// A243: a promotion or restore does not write a secret that a
+			// migration's export system still writes.
+			for _, item := range items {
+				if err := a.requireSecretWriterIsStore(ctx, tenantID, item.Name); err != nil {
+					return out, err
+				}
+			}
+		}
 		if creates > 0 {
 			if err := usage.AllowCreateCount(ctx, tenantID, usage.MeterSecretsStored, creates); err != nil {
 				return out, err

@@ -710,6 +710,7 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.observeMovedSecretRead(r, tenantID, name, version)
+		a.observeMigratedSecretRead(r, tenantID, name, version)
 		resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
 		a.writeJSON(w, http.StatusOK, resp)
 		secret.Wipe(value)
@@ -742,6 +743,7 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.observeMovedSecretRead(r, tenantID, name, version)
+	a.observeMigratedSecretRead(r, tenantID, name, version)
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
 	a.writeJSON(w, http.StatusOK, resp)
 	secret.Wipe(value)
@@ -789,6 +791,7 @@ func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.observeMovedSecretRead(r, tenantID, name, rec.Version)
+	a.observeMigratedSecretRead(r, tenantID, name, rec.Version)
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: rec.Version}
 	a.writeJSON(w, http.StatusOK, resp)
 	secret.Wipe(value)
@@ -1486,66 +1489,75 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
-		tenantEpoch, epochErr := a.applicationSecretTenantEpoch(ctx, tenantID)
-		if epochErr != nil {
-			return 0, nil, epochErr
-		}
-		eventID := applicationSecretMutationEventID(tenantID, tenantEpoch, name, "delete", keyDigest)
-		if _, ok, receiptErr := a.applicationSecretMaterializedResult(
-			ctx, tenantID, eventID, requestBinding, name, "delete"); receiptErr != nil {
-			return 0, nil, applicationSecretMutationError(receiptErr)
-		} else if ok {
-			return http.StatusNoContent, nil, nil
-		}
-		fence, payload, prepared, err := a.applicationSecretMutationFence(
-			ctx, tenantID, name, "delete", eventID, requestBinding)
-		if err != nil {
-			return 0, nil, applicationSecretMutationError(err)
-		}
-		current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
-		if err != nil {
-			if errors.Is(err, store.ErrSecretNotFound) {
-				return 0, nil, errStatus(http.StatusNotFound, "no such secret")
-			}
-			return 0, nil, err
-		}
-		if !prepared {
-			commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
-				Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: "delete",
-				Name: name, Surface: "native", ExpectedVersion: current.Version,
-			})
-			if commandErr != nil {
-				return 0, nil, commandErr
-			}
-			if commandKeyDigest != keyDigest {
-				return 0, nil, errors.New("api: application-secret idempotency digest changed")
-			}
-			payload = projections.ApplicationSecretMutation{
-				TenantEpoch: tenantEpoch, Action: "delete", Name: name, ExpectedVersion: current.Version,
-				IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
-				CommandEvidence: commandEvidence, Surface: "native",
-			}
-			fence, payload, err = a.claimApplicationSecretMutationFence(ctx, tenantID, name,
-				"delete", eventID, projections.EventApplicationSecretDeleted, requestBinding, payload)
-			if err != nil {
-				return 0, nil, applicationSecretMutationError(err)
-			}
-		}
-		fence, payload, err = a.finalizeApplicationSecretMutationFence(ctx, tenantID, fence, payload)
-		if err != nil {
-			return 0, nil, applicationSecretMutationError(err)
-		}
-		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); err != nil {
-			if _, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
-				ctx, tenantID, eventID, requestBinding, name, "delete", err); retiredErr != nil {
-				return 0, nil, retiredErr
-			} else if ok {
-				return http.StatusNoContent, nil, nil
-			}
-			return 0, nil, applicationSecretMutationError(err)
-		}
-		return http.StatusNoContent, nil, nil
+		status, err := a.executeSecretDelete(ctx, tenantID, name, idempotencyKey, keyDigest, requestBinding)
+		return status, nil, err
 	})
+}
+
+// executeSecretDelete deletes name as one event-sourced command bound to its
+// idempotency key: the delete handler's command, and a migration rollback's
+// for each secret it created (A243). A replay answers from the command's
+// receipt; a missing secret is 404.
+func (a *API) executeSecretDelete(ctx context.Context, tenantID, name, idempotencyKey, keyDigest, requestBinding string) (int, error) {
+	tenantEpoch, epochErr := a.applicationSecretTenantEpoch(ctx, tenantID)
+	if epochErr != nil {
+		return 0, epochErr
+	}
+	eventID := applicationSecretMutationEventID(tenantID, tenantEpoch, name, "delete", keyDigest)
+	if _, ok, receiptErr := a.applicationSecretMaterializedResult(
+		ctx, tenantID, eventID, requestBinding, name, "delete"); receiptErr != nil {
+		return 0, applicationSecretMutationError(receiptErr)
+	} else if ok {
+		return http.StatusNoContent, nil
+	}
+	fence, payload, prepared, err := a.applicationSecretMutationFence(
+		ctx, tenantID, name, "delete", eventID, requestBinding)
+	if err != nil {
+		return 0, applicationSecretMutationError(err)
+	}
+	current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretNotFound) {
+			return 0, errStatus(http.StatusNotFound, "no such secret")
+		}
+		return 0, err
+	}
+	if !prepared {
+		commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
+			Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: "delete",
+			Name: name, Surface: "native", ExpectedVersion: current.Version,
+		})
+		if commandErr != nil {
+			return 0, commandErr
+		}
+		if commandKeyDigest != keyDigest {
+			return 0, errors.New("api: application-secret idempotency digest changed")
+		}
+		payload = projections.ApplicationSecretMutation{
+			TenantEpoch: tenantEpoch, Action: "delete", Name: name, ExpectedVersion: current.Version,
+			IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
+			CommandEvidence: commandEvidence, Surface: "native",
+		}
+		fence, payload, err = a.claimApplicationSecretMutationFence(ctx, tenantID, name,
+			"delete", eventID, projections.EventApplicationSecretDeleted, requestBinding, payload)
+		if err != nil {
+			return 0, applicationSecretMutationError(err)
+		}
+	}
+	fence, payload, err = a.finalizeApplicationSecretMutationFence(ctx, tenantID, fence, payload)
+	if err != nil {
+		return 0, applicationSecretMutationError(err)
+	}
+	if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); err != nil {
+		if _, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+			ctx, tenantID, eventID, requestBinding, name, "delete", err); retiredErr != nil {
+			return 0, retiredErr
+		} else if ok {
+			return http.StatusNoContent, nil
+		}
+		return 0, applicationSecretMutationError(err)
+	}
+	return http.StatusNoContent, nil
 }
 
 // listSecrets returns the tenant's secret NAMES + versions (no values, AN-8).

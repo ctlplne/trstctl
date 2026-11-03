@@ -9,6 +9,7 @@ import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type SecretProject } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { SecretProjectMigrations } from "./SecretProjectMigrations";
 import { SecretProjectTransfers } from "./SecretProjectTransfers";
 
 // A235: the secrets workspace. A project groups an application's secrets by
@@ -264,6 +265,7 @@ export function SecretProjectsWorkflow() {
             ) : null}
           </div>
           {canWrite ? <SecretProjectTransfers project={selected} onApplied={() => void open(selected.slug)} /> : null}
+          {canWrite ? <SecretProjectMigrations project={selected} /> : null}
         </article>
       ) : null}
 

@@ -216,6 +216,66 @@ Every restored value's references must still resolve, as for a promotion. A dele
 secret can't be restored, because deleting a secret removes its history. The console
 offers both on a project's page (**Promote or restore**) for `secrets:write` holders.
 
+### Migrating from another system (A243)
+
+A migration run moves an export into a project and lets the old system keep
+writing those secrets until their consumers have moved. It reads common formats,
+not products: dotenv, JSON and YAML, one file per environment (and, optionally,
+folder).
+
+- **dotenv**: `KEY=VALUE` and `export KEY=VALUE`; a double-quoted value may span
+  lines and takes `\n`, `\t`, `\"` and `\\`; a single-quoted one is literal.
+  Comment lines above a key are its metadata: plain text is the description,
+  `@tags: a, b`, `@owner: team`, and `@exportable: false` for a value the export
+  could not carry.
+- **JSON and YAML**: a map of folders down to values; a record with `$value`,
+  `$description`, `$tags`, `$owner` and `$exportable`; or a top-level list of
+  records (`key`, `value`, `folder`, …). A null value is a credential the export
+  could not carry. YAML block scalars carry multiline values.
+
+Each secret becomes `<project>/<environment>/<folder…>/<key>`. References become
+the store's own: `${NAME}` (same folder), `${folder/NAME}` (same environment) and
+`${environment:folder/NAME}` turn into `${secret.<name>}`, so a chain stays a
+chain and resolves on read.
+
+1. **Assess** (`trstctl-cli secrets migrate assess -f bundle.json`, or Secrets →
+   Projects → *Migrate an export*). The bundle names the project, the sources,
+   and optionally the export's permissions and the consumers expected to read
+   the result. The answer is a plan with no values: per secret, import, reissue
+   (the export could not carry it) or blocked (a missing environment, an
+   unresolved reference — its name is not echoed — or a cycle, an environment
+   you may not write, or a secret another run's export still writes), plus what
+   could not be read, and a digest over the plan and every value.
+2. **Permissions** translate only where nothing widens: an environment-wide read
+   becomes a viewer and write a developer, for those environments. A folder
+   grant, admin, a wildcard, one subject with different access in different
+   environments, or a subject that already has a different membership is held
+   for review. An environment the export restricted that is open in the project
+   blocks its secrets unless you accept that explicitly
+   (`accept_open_environments`). `secrets migrate permissions <id>` applies the
+   translated grants and needs `access:write`.
+3. **Stage** (`secrets migrate stage <id> -f bundle.json` with `plan_digest`)
+   imports by the digest as new versions; a stale digest is refused. From now
+   until cutover the export's system is each secret's one writer: a write,
+   promotion or restore through the store answers 409 `migration_source_writer`.
+   Re-assess and stage again to bring its later changes over.
+4. **Verify consumers.** Each consumer's first read of each of its secrets, as its
+   own subject, is recorded on the run.
+5. **Cut over** (`secrets migrate cutover <id>`) once every consumer has read its
+   secrets (or with `no_consumers` when the export named none). Writing moves to
+   the store.
+6. **Reissue** (`secrets migrate reissue <id>`) issues new random values for the
+   credentials the export could not carry; the run records them as reissued,
+   never as migrated, and the old system's credential is yours to revoke.
+7. **Roll back** (`secrets migrate rollback <id>`) uses the manifest: each secret
+   gets back the version the run found, each one the run created is deleted, and
+   one written since the run wrote it is kept. A retried rollback returns the
+   same evidence.
+
+`secrets migrate show <id>` lists every object with its version before and
+after, its writer, its rollback outcome, and each consumer's read and pending
+secrets. No value appears in a plan, an event, a log or a receipt.
+
 ### Vault/OpenBao-compatible common API
 
 Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a

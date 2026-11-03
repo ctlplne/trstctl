@@ -28,6 +28,7 @@ import * as estate from "./estateApi";
 import * as decoy from "./decoyApi";
 import * as secretProjects from "./secretProjectsApi";
 import * as scopedSyncs from "./scopedSyncsApi";
+import * as secretMigrations from "./secretMigrationsApi";
 import * as agentIdentity from "./agentIdentityApi";
 import * as accessReview from "./accessReviewApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
@@ -375,6 +376,9 @@ import type {
   SecretRestorePlan,
   SecretRestoreRequest,
   SecretVersionBatchReceipt,
+  SecretMigration,
+  SecretMigrationList,
+  SecretMigrationRequest,
   SecretScopedSync,
   SecretScopedSyncApplyRequest,
   SecretScopedSyncList,
@@ -806,6 +810,9 @@ export type {
   SecretRestorePlan,
   SecretRestoreRequest,
   SecretVersionBatchReceipt,
+  SecretMigration,
+  SecretMigrationList,
+  SecretMigrationRequest,
   SecretScopedSync,
   SecretScopedSyncApplyRequest,
   SecretScopedSyncList,
@@ -2650,6 +2657,14 @@ export interface Api {
   applySecretPromotion(project: string, input: SecretPromotionRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
   previewSecretRestore(project: string, input: SecretRestoreRequest): Promise<SecretRestorePlan>;
   applySecretRestore(project: string, input: SecretRestoreRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
+  listSecretMigrations(): Promise<SecretMigrationList>;
+  getSecretMigration(id: string): Promise<SecretMigration>;
+  assessSecretMigration(input: SecretMigrationRequest, idempotencyKey?: string): Promise<SecretMigration>;
+  stageSecretMigration(id: string, input: SecretMigrationRequest, idempotencyKey?: string): Promise<SecretMigration>;
+  applySecretMigrationPermissions(id: string, idempotencyKey?: string): Promise<SecretMigration>;
+  cutOverSecretMigration(id: string, noConsumers: boolean, idempotencyKey?: string): Promise<SecretMigration>;
+  reissueSecretMigrationCredentials(id: string, names: string[], idempotencyKey?: string): Promise<SecretMigration>;
+  rollBackSecretMigration(id: string, idempotencyKey?: string): Promise<SecretMigration>;
   listSecretScopedSyncs(): Promise<SecretScopedSyncList>;
   getSecretScopedSync(id: string): Promise<SecretScopedSync>;
   defineSecretScopedSync(input: SecretScopedSyncRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
@@ -3538,6 +3553,14 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   applySecretPromotion: secretProjects.applySecretPromotion,
   previewSecretRestore: (project, input) => postRead<SecretRestorePlan>(`/api/v1/secrets/projects/${encodeURIComponent(project)}/restores/preview`, input),
   applySecretRestore: secretProjects.applySecretRestore,
+  listSecretMigrations: secretMigrations.listSecretMigrations,
+  getSecretMigration: secretMigrations.getSecretMigration,
+  assessSecretMigration: secretMigrations.assessSecretMigration,
+  stageSecretMigration: secretMigrations.stageSecretMigration,
+  applySecretMigrationPermissions: secretMigrations.applySecretMigrationPermissions,
+  cutOverSecretMigration: secretMigrations.cutOverSecretMigration,
+  reissueSecretMigrationCredentials: secretMigrations.reissueSecretMigrationCredentials,
+  rollBackSecretMigration: secretMigrations.rollBackSecretMigration,
   listSecretScopedSyncs: scopedSyncs.listSecretScopedSyncs,
   getSecretScopedSync: scopedSyncs.getSecretScopedSync,
   defineSecretScopedSync: scopedSyncs.defineSecretScopedSync,

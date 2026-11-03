@@ -35,7 +35,8 @@ func init() {
 
 func (p *Projector) applySecretDeliveryTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
 	if e.Type != EventSecretDeliveryReported {
-		return false, nil
+		// A243's migrations join the same secrets workspace family.
+		return p.applySecretMigrationTx(ctx, tx, e)
 	}
 	var pl SecretDeliveryReported
 	if err := decode(e, &pl); err != nil {

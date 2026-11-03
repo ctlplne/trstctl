@@ -2,6 +2,26 @@
 
 ### Added
 
+- Secret migration runs (A243): `POST /api/v1/secrets/migrations/assess` reads an export in common
+  formats — dotenv, JSON or YAML, per environment and folder — into native names
+  (`<project>/<environment>/<folder>/<key>`), translates its references (`${NAME}`,
+  `${folder/NAME}`, `${environment:folder/NAME}`) into `${secret.<name>}` so chains stay chains,
+  keeps multiline values and metadata (description, tags, owner), and records a value-free plan
+  bound by digest to the values it was made from: per object import, reissue (a credential the
+  export could not carry) or blocked (a missing environment, an unresolved reference or a cycle,
+  an environment the caller may not write, a secret another run's export still writes). Permissions
+  translate only where nothing widens: an environment-wide read becomes viewer and write developer;
+  folder grants, admin, wildcards, mixed access or an existing different membership are held for
+  review, and an environment the export restricted that is open here blocks its objects unless
+  accepted explicitly. `stage` imports by the digest as new versions (a stale digest is refused)
+  while the export's system stays each secret's one writer — native writes, promotions and restores
+  to those secrets answer 409 until cutover; `permissions` (access:write) applies only translated
+  grants; each consumer's first read of its secrets, as its own subject, is recorded; `cutover`
+  needs every consumer to have read; `reissue` issues new values for credentials the export could
+  not carry, recorded as reissued and never as migrated; `rollback` restores the versions the run
+  found, deletes what it created and keeps what changed since, converging when retried. CLI:
+  `trstctl secrets migrate assess|list|show|stage|permissions|cutover|reissue|rollback`.
+
 - Connector modules on the relay (A242): a third-party WASM connector now ships a signed
   manifest (`<name>.manifest.json` + `.sig`, signed by the key that signed the module) naming
   its version, the module's SHA-256, the host ABI range, its permissions (capabilities,

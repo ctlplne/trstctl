@@ -41438,6 +41438,318 @@
         ],
         "type": "object"
       },
+      "SecretMigration": {
+        "properties": {
+          "accepted_open": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "consumers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "pending": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "problem": {
+                  "type": "string"
+                },
+                "read": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "secrets": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "subject",
+                "secrets",
+                "read",
+                "pending"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "cut_over_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cut_over_by": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "migrated",
+                    "reissued"
+                  ],
+                  "type": "string"
+                },
+                "prior_version": {
+                  "type": "integer"
+                },
+                "rollback": {
+                  "enum": [
+                    "restored",
+                    "deleted",
+                    "kept"
+                  ],
+                  "type": "string"
+                },
+                "rollback_version": {
+                  "type": "integer"
+                },
+                "version": {
+                  "type": "integer"
+                },
+                "writer": {
+                  "enum": [
+                    "source",
+                    "store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "outcome",
+                "prior_version",
+                "version",
+                "writer"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "permissions_applied": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "plan": {
+            "description": "the value-free assessment",
+            "type": "object"
+          },
+          "project": {
+            "type": "string"
+          },
+          "rolled_back_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "staged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "assessed",
+              "staged",
+              "cut-over",
+              "rolled-back"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project",
+          "state",
+          "digest",
+          "plan",
+          "accepted_open",
+          "created_at",
+          "permissions_applied",
+          "objects",
+          "consumers"
+        ],
+        "type": "object"
+      },
+      "SecretMigrationCutOverRequest": {
+        "properties": {
+          "no_consumers": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SecretMigrationList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretMigration"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SecretMigrationReissueRequest": {
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "type": "object"
+      },
+      "SecretMigrationRequest": {
+        "properties": {
+          "accept_open_environments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "consumers": {
+            "items": {
+              "properties": {
+                "environment": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "secrets": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "subject",
+                "environment"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "migration_id": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "properties": {
+                "access": {
+                  "enum": [
+                    "read",
+                    "write",
+                    "admin"
+                  ],
+                  "type": "string"
+                },
+                "environment": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subject",
+                "environment",
+                "access"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "environment": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "format": {
+                  "enum": [
+                    "dotenv",
+                    "json",
+                    "yaml"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "environment",
+                "format",
+                "content"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "sources"
+        ],
+        "type": "object"
+      },
       "SecretProject": {
         "properties": {
           "created_at": {
@@ -80846,6 +81158,544 @@
         ],
         "summary": "Preview one exact machine-login method, lifetime, effects, recovery, and verification without receiving a credential",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/migrations": {
+      "get": {
+        "operationId": "listSecretMigrations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigrationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List secret migration runs, newest first",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/migrations/assess": {
+      "post": {
+        "operationId": "assessSecretMigration",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretMigrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Assess an export (dotenv, JSON or YAML per environment and folder) as a migration run: a value-free plan and its digest",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}": {
+      "get": {
+        "operationId": "getSecretMigration",
+        "parameters": [
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show a migration run: its plan, the rollback manifest, each secret's writer and the consumers' reads",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}/cutover": {
+      "post": {
+        "operationId": "cutOverSecretMigration",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretMigrationCutOverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Hand the staged secrets' writing to the store once every consumer has read them from it",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}/permissions": {
+      "post": {
+        "operationId": "applySecretMigrationPermissions",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply the run's translated permissions as project memberships; held ones stay for review",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}/reissue": {
+      "post": {
+        "operationId": "reissueSecretMigrationCredentials",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretMigrationReissueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue new values for credentials the export could not carry; they are reissued, never counted as migrated",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}/rollback": {
+      "post": {
+        "operationId": "rollBackSecretMigration",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Undo a run from its manifest: restore the versions it found, delete what it created, keep what changed since",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/migrations/{id}/stage": {
+      "post": {
+        "operationId": "stageSecretMigration",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secret migration ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretMigrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMigration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import the assessed export by its plan digest as new versions; the export's system stays each secret's writer until cutover",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/pki": {
