@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1431,10 +1432,20 @@ func (b *GCPIAMBackend) findUploadedKey(ctx context.Context, certificatePEM []by
 	return "", nil
 }
 
-// Revoke implements Backend.
+// gcpKeyID is a service-account key's ID, the last segment of its name.
+var gcpKeyID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// Revoke implements Backend: only a key of the bound service account is
+// deleted, since the reference becomes a request path and a static
+// rotation's old_ref is operator input (A240); a key already gone counts as
+// revoked.
 func (b *GCPIAMBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
+	}
+	keyID, ok := strings.CutPrefix(ref, "projects/"+b.project+"/serviceAccounts/"+b.serviceAccountEmail+"/keys/")
+	if !ok || !gcpKeyID.MatchString(keyID) {
+		return fmt.Errorf("dynsecret gcp-iam: refusing %q, which names no key of the bound service account", ref)
 	}
 	if err := gcpJSON(ctx, b.doer, b.endpoint, b.tokenBytes(), http.MethodDelete, "/v1/"+ref, nil, nil); err != nil && !statusIs(err, http.StatusNotFound) {
 		return fmt.Errorf("dynsecret gcp-iam: delete key: %w", err)

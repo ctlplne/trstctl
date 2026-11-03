@@ -174,11 +174,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
 		)},
-		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity.", Requirements: dynamicSecretProviderRequirements(
+		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity. A static rotation is two-phase: the successor is a new key of the service account beside the predecessor (an account holds ten), and retirement deletes the predecessor; only keys of the bound service account are ever deleted. A new key can take a minute to work and has no side-effect-free check, so verification reports not available and retirement waits for consumer evidence or the approved deadline.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),
 			value("project", "Project", "Google Cloud project that owns the service account.", true),
 			value("service_account", "Service account", "Email of the narrowly scoped service account.", true),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Google access-token reference.", true),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 		)},
 		{Type: "azure-entra", Label: "Azure Entra", Purpose: "Adds a client secret to the application through Microsoft Graph, named for the lease or rotation, and removes it at revocation after checking the provider named it. A static rotation is two-phase: the successor is a second secret beside the predecessor, which keeps working until the rotation retires it. Secrets are proven with a client-credentials token request. Rotation is built against a stand-in of Graph and the identity platform; no Entra proof yet.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Graph endpoint", "HTTPS Microsoft Graph endpoint.", true),

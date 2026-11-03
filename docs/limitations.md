@@ -5348,7 +5348,9 @@ when off, requiring a KEK when on):
   Azure Entra client-secret rotation (A240) is built the same way, against stand-ins
   of Graph and the identity platform; a live proof needs an Entra tenant. So are the
   Okta and Databricks client secret rotators (rotation only); a live proof needs an
-  Okta org and a Databricks account. Windows local accounts (A240) are proven on a
+  Okta org and a Databricks account. Google Cloud service-account key rotation
+  (A240) is built against a stand-in of the IAM API; a live proof needs a project.
+  Windows local accounts (A240) are proven on a
   windows-latest CI runner serving OpenSSH to itself, at the provider (two-user
   cycles and an in-place change); the served rotation around them is the Unix
   proof's, since the runner has no embedded PostgreSQL for the served harness.

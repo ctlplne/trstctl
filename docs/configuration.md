@@ -2081,6 +2081,11 @@ An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`
 ID (`proj_...`) its service accounts are created in. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+A `gcp-iam` provider with `allow_static_rotation: true` also rotates a stored
+service-account key in two phases (A240): a new key beside the predecessor, which
+retirement deletes; verification reports `not_available`, so give a rotation its
+`consumers` or an approved `retire_after_seconds`.
+
 An `azure-entra` provider sets `endpoint` to Microsoft Graph, `application_object_id`,
 `application_client_id` and `azure_tenant_id` to the application whose client secrets it
 adds, and `bearer_token_ref` to a Graph token allowed to add and remove that

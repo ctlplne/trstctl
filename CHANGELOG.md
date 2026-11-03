@@ -2,6 +2,9 @@
 
 ### Added
 
+- Google Cloud service-account key rotation (A240): `gcp-iam` providers with `allow_static_rotation` rotate a stored key
+  in two phases (a new key beside the predecessor, deleted at retirement); verification reports `not_available`.
+
 - Windows local account rotation (A240): `windows` providers rotate local account passwords on a Windows host serving
   OpenSSH, as an Administrators member authenticating with a key, the host key pinned; the only command is
   `Set-LocalUser`, its encoded script naming the account and the password on stdin. Two-user pairs and acknowledged
@@ -1136,6 +1139,9 @@
   or `not_proven`) in its response and its creation event.
 
 ### Fixed
+
+- `gcp-iam` revocation deletes only keys of the bound service account: a reference naming any other resource, or
+  another account's key, is refused instead of becoming a DELETE path (A240).
 
 - Repository secret scans of a `clone_url` now run with the real scanner: the clone lands in a temporary directory
   outside the configured scan roots, which the scanner refused, so every cloned repository scan failed; that one

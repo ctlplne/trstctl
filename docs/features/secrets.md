@@ -912,6 +912,14 @@ secret by authenticating the app at the org's introspection endpoint, Databricks
 an account-level OAuth token with it (`verify_mode: authenticated`). Both rotate only and
 are built against stand-ins of their APIs, with no live proof yet.
 
+`gcp-iam` also rotates a stored service-account key (A240): the successor is a new key
+of the bound service account (an account holds ten), and retirement deletes the
+predecessor. Revocation deletes only keys of the bound service account: the reference
+names the key and becomes the request path, so any other is refused. A new key can take a
+minute to work and Google offers no side-effect-free check of one, so verification
+reports `not_available` and retirement waits for consumer evidence or the approved
+deadline. It is built against a stand-in of the IAM API, with no Google Cloud proof yet.
+
 The hosted API key providers (A240) share one engine: a lease, or a rotation's
 successor, is a new key created with the administrator's credential under the target
 the role is bound to, named for the lease or command, and revocation (or retirement)
