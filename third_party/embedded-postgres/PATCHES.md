@@ -52,7 +52,9 @@ The served wrapper additionally holds an `OpenVerifiedCache` namespace through a
 
 Archive downloads retry what the server asks to retry: HTTP 429 and 500/502/503/504
 get up to five more attempts, each after the server's `Retry-After` (capped at one
-minute) or a 2/4/8/16/30-second backoff. Other statuses, oversized responses and
-transport errors (a refused or unreachable network) fail at once, so an offline
-host still fails fast. Many hosts starting together, such as a CI run's parallel
+minute) or a 2/4/8/16/30-second backoff. HTTP 404 is retried the same way: the
+archive is pinned by version and checksum, so its URL names a published artifact,
+and Maven Central has answered 404 for one and 200 minutes later. Other statuses,
+oversized responses and transport errors (a refused or unreachable network) fail at
+once, so an offline host still fails fast. Many hosts starting together, such as a CI run's parallel
 jobs, otherwise turned one rate-limited response from the mirror into a failed start.

@@ -283,7 +283,7 @@ func TestVerifiedDownloadClosesBodiesAndBoundsResponses(t *testing.T) {
 		status     int
 		closeErr   error
 		want       string
-	}{{"oversized", "12345", 200, nil, "byte limit"}, {"status", "", 404, nil, "HTTP 404"}, {"close", "ok", 200, errors.New("close sentinel"), "close sentinel"}} {
+	}{{"oversized", "12345", 200, nil, "byte limit"}, {"status", "", 403, nil, "HTTP 403"}, {"close", "ok", 200, errors.New("close sentinel"), "close sentinel"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			closed := 0
 			client := &http.Client{Transport: verifiedRoundTripper(func(*http.Request) (*http.Response, error) {

@@ -32,6 +32,11 @@ func (r checksumRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 }
 
 func TestRemoteFetchRequiresValidChecksumSidecar(t *testing.T) {
+	// A missing sidecar is a 404, which is retried; the backoff is not what
+	// this test measures.
+	restoreSleep := fetchSleep
+	fetchSleep = func(time.Duration) {}
+	t.Cleanup(func() { fetchSleep = restoreSleep })
 	for _, tc := range []struct {
 		name       string
 		statusCode int
@@ -90,9 +95,20 @@ func TestFetchRetriesRateLimitedMirrorWithBoundedBackoff(t *testing.T) {
 	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || !strings.Contains(err.Error(), "HTTP 429") || requests != 4 {
 		t.Fatalf("persistent 429: err %v after %d requests", err, requests)
 	}
+	// A transient 404 for a pinned, published archive is retried (CI
+	// 41695565837); a persistent one fails after the backoff; other statuses
+	// fail at once.
+	statuses, requests = []int{http.StatusNotFound, http.StatusOK}, 0
+	if data, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err != nil || string(data) != "archive" || requests != 2 {
+		t.Fatalf("transient 404: data %q err %v after %d requests", data, err, requests)
+	}
 	statuses, requests = []int{http.StatusNotFound}, 0
+	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || !strings.Contains(err.Error(), "HTTP 404") || requests != 4 {
+		t.Fatalf("persistent 404: err %v after %d requests", err, requests)
+	}
+	statuses, requests = []int{http.StatusForbidden}, 0
 	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || requests != 1 {
-		t.Fatalf("404: err %v after %d requests", err, requests)
+		t.Fatalf("403: err %v after %d requests", err, requests)
 	}
 	server.Close()
 	requests = 0

@@ -84,7 +84,11 @@ func fetchBoundedOnce(client *http.Client, url string, maximum int64) (data []by
 	}()
 	switch response.StatusCode {
 	case http.StatusOK:
-	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+	// A 404 is retried too: the archive is pinned by version and checksum, so
+	// its URL names a published artifact, and Maven Central answered 404 for
+	// the published 16.15.0 archive on CI 41695565837 and 200 minutes later. A
+	// pin naming an unpublished version still fails, after the bounded backoff.
+	case http.StatusNotFound, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		retryAfter = 0
 		if seconds, convErr := strconv.Atoi(strings.TrimSpace(response.Header.Get("Retry-After"))); convErr == nil && seconds > 0 {
 			retryAfter = time.Duration(seconds) * time.Second
