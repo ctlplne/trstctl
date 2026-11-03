@@ -1791,7 +1791,7 @@ func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Optio
 
 // baseAPIOptions is the always-on half of the served API surface: the options
 // that do not depend on a license, a flag, or a constructor that can fail.
-// Named stage of configureAPI (startup-hotspot ratchet).
+// Named stage of configureAPI.
 func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 	return []api.Option{
 		api.WithTenantServiceCheck(d.TenantServiceCheck),
@@ -1857,7 +1857,7 @@ func apiTokenMaxLifetime(d Deps) time.Duration {
 // appendOperationalReadModels attaches the read-only operator views (the B-1…B-6
 // endpoints). Each is wired only when its provider exists, so an unwired
 // subsystem answers "not served" rather than 404 — and none of them can mutate
-// state. Named stage of configureAPI (startup-hotspot ratchet).
+// state. Named stage of configureAPI.
 func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	if s.outbox != nil {
 		*defaults = append(*defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))

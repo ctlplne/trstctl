@@ -35,9 +35,7 @@ func (a *API) auditVerificationKeys(w http.ResponseWriter, r *http.Request) {
 //
 // It lives beside the audit handlers rather than in the route table, because it
 // describes THIS workflow's inputs and the handlers are what have to honor
-// them. Keeping the two together is also what stops the served surface file
-// growing without bound as workflows are added — the served-file budget is a
-// guard against exactly that.
+// them.
 func auditQueryParams() []param {
 	return []param{
 		{name: "tool", typ: "string", desc: "canonical tool: discover, certificates, workloads_machines, secrets, software_trust, operations, or platform_integrations; intersects other filters before the result limit"},

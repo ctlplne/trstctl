@@ -7,8 +7,8 @@ import "trstctl.com/trstctl/internal/authz"
 // acmeRoutes is the served ACME operator surface: the admin console
 // (accounts, orders, deactivation; A52), the readiness plan, the external
 // account binding credentials with their policy and rotation verbs
-// (B4, A50/A53/A54), and the ARI posture. Split out of the core table by
-// workflow so the served-file budget keeps api.go readable.
+// (B4, A50/A53/A54), and the ARI posture: one workflow's routes, kept
+// together.
 func (a *API) acmeRoutes(acmeEABKeyPath, acmeAccountPath, page []param) []route {
 	return []route{
 		{method: "GET", path: "/api/v1/acme/eab-credentials", opID: "listACMEEABCredentials", summary: "List served ACME external account binding credentials with their scope and usage", handler: a.listACMEEABCredentials, resSchema: "ACMEEABPosture", successCode: "200", perm: authz.IssuersRead},

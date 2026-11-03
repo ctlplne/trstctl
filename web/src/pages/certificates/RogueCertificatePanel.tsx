@@ -10,8 +10,7 @@ import { newIdempotencyKey } from "@/lib/apiTransport";
 import { ROGUE_REVOCATION_REASONS, RogueIssuerRevocationCell, type RogueRevocationReason } from "./RogueIssuerRevocation";
 
 // The rogue-certificate panel of the Certificates page (A43 takedown lives
-// here). Split out of Certificates.tsx by workflow so the served-file budget
-// keeps the page readable.
+// here), its own component because it is its own workflow.
 
 export function formatCount(value: number): string {
   return formatNumberPolicy(value);

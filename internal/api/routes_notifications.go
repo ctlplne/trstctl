@@ -5,8 +5,7 @@ package api
 import "trstctl.com/trstctl/internal/authz"
 
 // notificationRoutes is the notification channel, routing policy and inbox
-// surface, split out of the core table by workflow so the served-file budget
-// keeps api.go readable.
+// surface: one workflow's routes, kept together.
 func (a *API) notificationRoutes(notificationChannelPath, notificationIDPath, notificationQuery, notificationRoutingPolicyPath []param) []route {
 	return []route{
 		{method: "POST", path: "/api/v1/notification-channels", opID: "createNotificationChannel", summary: "Create a tenant-authored notification channel using secret references", handler: a.createNotificationChannel, reqSchema: "NotificationChannelRequest", resSchema: "NotificationChannel", successCode: "201", mutation: true, perm: authz.NotificationsWrite},

@@ -28,10 +28,8 @@ import type {
 
 // Estate-shape reads: trust, migration, ownership and retirement (H1/H2/H4/I1).
 //
-// Split out of the main client because these four answer one class of question —
-// what does the estate look like, and what is blocking a change to it — and
-// because the served-file budget is a real guard against one module accreting
-// every operation the product has. The split is by workflow, not by size.
+// Split out of the main client because these four answer one class of question:
+// what does the estate look like, and what is blocking a change to it.
 
 /** A212: addresses trstctl's own sources saw outside every declared segment. */
 export const coverageCandidates = () => req<CoverageCandidates>("/api/v1/discovery/coverage/candidates");

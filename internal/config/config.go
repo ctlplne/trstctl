@@ -3529,10 +3529,9 @@ func applyProviderEnv(getenv func(string) string, provider *Provider) {
 // applyAgentChannelEnv resolves the served agent steady-state mTLS gRPC channel
 // (WIRE-004 / OPS-005).
 //
-// Its own named stage because applyEnv is at the startup-hotspot line budget,
-// and that budget is not bookkeeping: applyEnv is where every subsystem's
-// environment is resolved, and a function nobody can hold in their head is
-// where a precedence bug hides.
+// Its own named stage so the agent channel's environment reads in one place;
+// applyEnv resolves every subsystem's environment, and a precedence bug hides
+// most easily in one long list.
 func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &a.Enabled)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &a.Addr)
@@ -3748,9 +3747,8 @@ func applyAuthEnv(getenv func(string) string, a *Auth) {
 }
 
 // applyProtocolsEnv overlays the served issuance-protocol environment knobs
-// (EXC-WIRE-02). It is split out of applyEnv as a named stage so applyEnv stays
-// within the control-plane startup hotspot budget (CODE-102); behavior is
-// identical to the previous inline block.
+// (EXC-WIRE-02). It is a named stage of applyEnv so the protocol knobs read
+// together.
 func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_PROFILE", &p.Profile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_EVAL_TENANT_ID", &p.EvalTenantID)

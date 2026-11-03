@@ -506,10 +506,8 @@ func appendSignerLicenseArgs(args []string, lic config.License) []string {
 // runRestoreDrill resolves the J2 restore drill from configuration: the closure
 // that performs one, and how often the scheduler should.
 //
-// A named stage rather than eight lines inside buildRunDeps, which is at the
-// startup-hotspot line budget. That budget is not bookkeeping — buildRunDeps is
-// where every subsystem's configuration is resolved, and a function nobody can
-// hold in their head is where a startup ordering bug hides.
+// A named stage so the drill's settings and the rule for a bad one read in one
+// place.
 //
 // An unparseable interval fails startup rather than falling back to the default.
 // Silently defaulting would give an operator who typed "24hours" a daily drill
@@ -532,10 +530,10 @@ func runRestoreDrill(cfg *config.Config, extraMigrations []fs.FS) (func(context.
 // startup on its own terms: leaf validity, the plugin host, the AI model, and
 // the secrets machine-auth methods.
 //
-// Grouped as one named stage for the startup-hotspot budget. They are genuinely
-// unrelated, and that is worth saying rather than implying a cohesion that does
-// not exist — what they share is only that each must be resolved before Deps is
-// assembled and each returns a wrapped error naming its own config section.
+// Grouped as one named stage. They are unrelated, and that is worth saying
+// rather than implying a cohesion that does not exist — what they share is only
+// that each must be resolved before Deps is assembled and each returns a wrapped
+// error naming its own config section.
 func runLeafPluginAndModelConfig(cfg *config.Config, egressGuard *egress.Guard) (
 	time.Duration, PluginConfig, *aimodel.Adapter, api.AIModelStatus, func(string) []authmethod.Method, error,
 ) {
@@ -856,10 +854,8 @@ type runOutboundDeps struct {
 	otlpExporter           *otlp.Exporter
 }
 
-// buildRunOutboundDeps constructs the outbound-integration stage. Split out of
-// buildRunDeps so that function stays under the startup-hotspot limit and so this
-// stage — the one where every external effect originates — is named and readable
-// on its own.
+// buildRunOutboundDeps constructs the outbound-integration stage: the one where
+// every external effect originates, named and readable on its own.
 //
 // The caller owns closing cloudTokenMinter on a later failure: this returns it
 // live, exactly as the inline code did.

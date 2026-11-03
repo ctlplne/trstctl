@@ -12,9 +12,8 @@ import type { StatusTone } from "@/lib/statusVocab";
 
 // J2: backup and disaster-recovery posture.
 //
-// Its own component rather than another section inside Platform.tsx, which was
-// already at the served-file line budget — the budget exists so a page that
-// accumulates panels gets split instead of growing until nobody reads it whole.
+// Its own component rather than another section inside Platform.tsx: it is
+// one workflow, with its own reads and states.
 //
 // The panel leads with when the backup was last VERIFIED rather than when one
 // was last taken, because a nightly job that writes a corrupt artifact runs

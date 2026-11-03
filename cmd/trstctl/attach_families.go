@@ -118,7 +118,7 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 }
 
 // attachAgentDelegation is the AGID stage of the core attach seam, a named
-// stage so the seam stays readable (the startup-hotspot ratchet).
+// stage so the seam reads one family at a time.
 func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
 		projections.WithEventProjection(agentstore.NewRootAnchorProjection(deps.Store)),

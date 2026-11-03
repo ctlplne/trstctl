@@ -7,11 +7,9 @@ import (
 	"trstctl.com/trstctl/internal/issuancerequest"
 )
 
-// The ownership data-quality routes (I1/I2), split out of the main route table.
+// The ownership data-quality routes (I1/I2), kept apart from the owners CRUD.
 //
-// Not an arbitrary split: the served-file line budget objected, and this is the
-// seam it asked for. These five answer one question the rest of the owners CRUD
-// does not — is the ownership we hold actually TRUE — and they share a single
+// These five answer one question the rest of the owners CRUD does not — is the ownership we hold actually TRUE — and they share a single
 // rule: an external source may fill in what nobody recorded and may never
 // overwrite what a human attested.
 //
