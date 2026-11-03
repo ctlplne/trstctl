@@ -145,6 +145,11 @@ type DynamicSecretProviderConfig struct {
 	// ApplicationKeyRef is a datadog provider's administrator application key,
 	// sent with api_key_ref on every key-management call (A240).
 	ApplicationKeyRef string `json:"application_key_ref,omitempty"`
+	// HostKeyFingerprint pins a unix provider's SSH host key
+	// ("SHA256:..."); Sudo runs its chpasswd through `sudo -n` for an
+	// admin_user that is not root (A240).
+	HostKeyFingerprint string `json:"host_key_fingerprint,omitempty"`
+	Sudo               bool   `json:"sudo,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -185,7 +190,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -194,7 +199,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -288,11 +293,11 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
-	"datadog": {}, "openai": {},
+	"datadog": {}, "openai": {}, "unix": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -474,6 +479,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider,
 	"auth0":           validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
+	"unix": validateUnixProvider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -512,7 +518,9 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 			case c.Type == "ldap" && (!strings.Contains(account, "=") ||
 				!strings.HasSuffix(strings.ToLower(account), ","+strings.ToLower(strings.TrimSpace(c.UsersDN)))):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an entry under users_dn", where, account))
-			case c.Type != "ldap" && (len(account) > 63 || strings.ContainsRune(account, 0)):
+			case c.Type == "unix" && !unixAccountName.MatchString(account):
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a local account name", where, account))
+			case c.Type != "ldap" && c.Type != "unix" && (len(account) > 63 || strings.ContainsRune(account, 0)):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
 			}
 			if other, taken := owner[account]; taken {
@@ -952,8 +960,11 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
 	}
-	if c.Type != "github-app" && c.Type != "snowflake" && c.PrivateKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app and snowflake", where))
+	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake and unix", where))
+	}
+	if c.Type != "unix" && (c.HostKeyFingerprint != "" || c.Sudo) {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint and sudo are only valid for unix", where))
 	}
 	if c.Type != "snowflake" && c.Account != "" {
 		errs = append(errs, fmt.Errorf("%s account is only valid for snowflake", where))
@@ -1164,6 +1175,43 @@ func validateDatadogBinding(binding string) error {
 }
 
 var openAIProjectID = regexp.MustCompile(`^proj_[A-Za-z0-9]{1,64}$`)
+
+// unixAccountName is crypto.ValidSSHAccountName's grammar; config stays free
+// of the crypto boundary.
+var unixAccountName = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+
+// validateUnixProvider checks a local-account rotator (A240): addr is the
+// host's SSH endpoint, admin_user and private_key_ref an administrator that
+// may run chpasswd (through sudo -n when sudo is set), host_key_fingerprint
+// pins the host key, and each allowed role names its account in
+// role_bindings, or two in rotation_accounts. It rotates only.
+func validateUnixProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
+		errs = append(errs, fmt.Errorf("%s addr must be the host's SSH host:port for unix", where))
+	}
+	if !unixAccountName.MatchString(c.AdminUser) {
+		errs = append(errs, fmt.Errorf("%s admin_user must be a local account allowed to run chpasswd for unix", where))
+	}
+	if err := validateCredentialRef(c.PrivateKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s private_key_ref: %w", where, err))
+	}
+	if !strings.HasPrefix(c.HostKeyFingerprint, "SHA256:") || len(c.HostKeyFingerprint) < 20 {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the host key (SHA256:...) for unix", where))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s unix rotates local account passwords and issues no leases: set allow_static_rotation", where))
+	}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if _, paired := c.RotationAccounts[role]; paired {
+			continue
+		}
+		if account := strings.TrimSpace(c.RoleBindings[role]); !unixAccountName.MatchString(account) {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name the local account it rotates, or rotation_accounts two", where, role))
+		}
+	}
+	return errs
+}
 
 // validateOpenAIProvider checks an OpenAI service-account key provider
 // (A240): endpoint is the API, api_key_ref an organization admin key, and each

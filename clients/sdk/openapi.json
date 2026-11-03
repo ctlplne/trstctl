@@ -18678,7 +18678,8 @@
               "azure-sql",
               "auth0",
               "datadog",
-              "openai"
+              "openai",
+              "unix"
             ],
             "type": "string"
           }

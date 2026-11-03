@@ -746,6 +746,23 @@ cycles while an application binds with the credential it last read and reports e
 version it used, then a retirement against a paused directory that times out and
 leaves the predecessor binding until the directory resumes.
 
+`unix` (A240) rotates local account passwords on a Unix/Linux host over SSH: the
+control plane authenticates as an administrator with a key (`admin_user`,
+`private_key_ref`), pins the host key (`host_key_fingerprint`, any of the host's keys:
+the client tries one host-key algorithm at a time until the pinned key is presented,
+before sending any credential), and runs only `chpasswd` with the change on stdin
+(`sudo -n` when `sudo` is set). A role with `rotation_accounts` alternates between two
+local accounts its owner provisioned (two-phase: the predecessor works until
+retirement sets a password nobody holds; its groups and files stay; sessions already
+open last until they end). A role bound to one account changes that password in
+place, so it is single-phase and runs only with `acknowledge_single_phase: true`.
+The new password is verified by logging in (`verify_mode: authenticated`). It rotates
+only; it issues no leases. The served proof runs on a Debian OpenSSH host: three
+unattended two-user cycles while an application logs in with the credential it last
+read and reports each version it used, a retirement against a paused host that times
+out and leaves the predecessor working until the host resumes, and an acknowledged
+in-place rotation after which only the new password logs in.
+
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports
 (`POST /api/v1/secrets/deliveries` with `state: verified`, the version the consumer's

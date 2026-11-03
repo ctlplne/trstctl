@@ -351,6 +351,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 			roles(`Each allowed role maps to the project ID ("proj_...") its service accounts are created in; the project's permissions are the key's authority.`),
 		)},
+		{Type: "unix", Label: "Unix/Linux local accounts", Purpose: "Rotates local account passwords on a host over SSH as an administrator authenticating with a key, the host key pinned; the only command run is chpasswd with the change on stdin. A role with rotation_accounts alternates between two accounts its owner provisioned (two-phase: the predecessor keeps working until retirement sets a password nobody holds; groups and files stay). A role bound to one account changes its password in place (single phase: a rotation runs only when acknowledged). Verified by logging in with the new password. It rotates only; it issues no leases.", Requirements: dynamicSecretProviderRequirements(
+			value("addr", "SSH endpoint", "The host's SSH host:port.", true),
+			value("admin_user", "Administrator", "root, or an account allowed `sudo -n /usr/sbin/chpasswd` (set sudo).", true),
+			credential("private_key_ref", "Administrator key reference", "The administrator's private key, PKCS#8 PEM.", true),
+			value("host_key_fingerprint", "Host key pin", "The host key's SHA256 fingerprint, as ssh-keygen -lf prints it.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the local account it rotates, or names two accounts in rotation_accounts."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -427,6 +435,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "an organization API key, or a service account's application key restricted to the role's scopes, until the key is deleted", "confirmed"
 	case "openai":
 		return "a member service account of the bound project, through its API key, until the service account is deleted", "confirmed"
+	case "unix":
+		return "the local account's own rights on the host (its groups, files and sudo rules), through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

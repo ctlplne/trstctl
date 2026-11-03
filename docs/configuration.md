@@ -2053,7 +2053,7 @@ the connection value and creating a workload credential.
 }
 ```
 
-`rotation_accounts` (PostgreSQL or LDAP, with `allow_static_rotation: true`) maps an
+`rotation_accounts` (PostgreSQL, LDAP or unix, with `allow_static_rotation: true`) maps an
 allowed role to the two existing accounts its static rotation alternates between,
 for example `{"reader": ["orders_app_a", "orders_app_b"]}`, or for LDAP two entry DNs
 under `users_dn`; the owner provisions both with the role's grants (for LDAP, as
@@ -2077,12 +2077,19 @@ An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`
 ID (`proj_...`) its service accounts are created in. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+A `unix` provider (A240) sets `addr` to the host's SSH `host:port`, `admin_user` and
+`private_key_ref` (PKCS#8 PEM) to an administrator that may run `/usr/sbin/chpasswd`
+(through `sudo -n` when `sudo: true`), `host_key_fingerprint` to one of the host's key
+fingerprints (`SHA256:...`, as `ssh-keygen -lf` prints it), and `allow_static_rotation:
+true`; each allowed role names its account in `role_bindings` (rotated in place,
+single-phase) or two in `rotation_accounts` (two-user).
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
-`datadog` and `openai`. Sync `type` values are
+`datadog`, `openai` and `unix`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and

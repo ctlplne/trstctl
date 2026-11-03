@@ -398,6 +398,25 @@ func openConfiguredAuth0Backend(o *configuredDynamicBackendOpener) (requestDynam
 	return backend, o.closeWith(backend, nil), nil
 }
 
+// openConfiguredUnixBackend reads the administrator's private key into a
+// backend that keeps its own sealed copy and runs only chpasswd on the pinned
+// host (A240).
+func openConfiguredUnixBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	adminKey, err := o.resolve(cfg.PrivateKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewUnixAccountsBackend(dynsecret.UnixAccountsConfig{
+		Address: cfg.Addr, AdminUser: cfg.AdminUser, AdminKey: adminKey, HostKeyFingerprint: cfg.HostKeyFingerprint,
+		Sudo: cfg.Sudo, RoleAccounts: cfg.RoleBindings, RotationAccounts: o.provider.rotationAccountPairs(),
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
 // openConfiguredOpenAIBackend reads the organization admin key into a backend
 // that keeps its own sealed copy and calls the API through the SSRF-guarded
 // client (A240).

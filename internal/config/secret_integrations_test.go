@@ -461,6 +461,51 @@ func TestValidateLDAPRotationAccountsA240(t *testing.T) {
 	}
 }
 
+func TestValidateUnixProviderA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders-host", Type: "unix",
+		Addr: "10.0.0.20:22", AdminUser: "root", PrivateKeyRef: "file:/run/secrets/host-admin-key",
+		HostKeyFingerprint: "SHA256:" + strings.Repeat("A", 43), AllowedRoles: []string{"host/orders", "host/single"},
+		MaxTTL: "1h", AllowStaticRotation: true}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	valid := func() DynamicSecretProviderConfig {
+		c := base
+		c.RoleBindings = map[string]string{"host/single": "orders-single"}
+		c.RotationAccounts = map[string][]string{"host/orders": {"orders-svc-a", "orders-svc-b"}}
+		return c
+	}
+	if err := check(valid()); err != nil {
+		t.Fatal(err)
+	}
+	if !StaticRotationProviderTypes["unix"] || !TwoUserRotationProviderTypes["unix"] || SinglePhaseRotationProviderTypes["unix"] {
+		t.Fatal("unix rotates statically, two-user per role; its single phase is per role, not per type")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no addr":      {func(c *DynamicSecretProviderConfig) { c.Addr = "" }, "addr must be the host's SSH host:port"},
+		"bad admin":    {func(c *DynamicSecretProviderConfig) { c.AdminUser = "Root User" }, "admin_user must be a local account"},
+		"no key":       {func(c *DynamicSecretProviderConfig) { c.PrivateKeyRef = "" }, "private_key_ref"},
+		"no pin":       {func(c *DynamicSecretProviderConfig) { c.HostKeyFingerprint = "" }, "host_key_fingerprint must pin the host key"},
+		"leases":       {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "issues no leases"},
+		"unbound role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["host/single"] must name the local account`},
+		"bad account":  {func(c *DynamicSecretProviderConfig) { c.RoleBindings["host/single"] = "root:0:0" }, `role_bindings["host/single"] must name the local account`},
+		"bad pair": {func(c *DynamicSecretProviderConfig) {
+			c.RotationAccounts["host/orders"] = []string{"orders-svc-a", "Orders B"}
+		}, "is not a local account name"},
+		"sudo elsewhere": {func(c *DynamicSecretProviderConfig) { c.Type, c.Sudo = "ldap", true }, "host_key_fingerprint and sudo are only valid for unix"},
+	} {
+		c := valid()
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateRotationAccountsA240(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders", Type: "postgresql",
 		AdminDSNRef: "file:/run/secrets/orders-admin-dsn", AllowedRoles: []string{"db/orders", "db/reports"}, MaxTTL: "1h",
@@ -481,8 +526,8 @@ func TestValidateRotationAccountsA240(t *testing.T) {
 		mutate func(*DynamicSecretProviderConfig)
 		want   string
 	}{
-		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql"},
-		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql"},
+		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql or unix"},
+		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql or unix"},
 		"unknown role":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/other"] = []string{"x_a", "x_b"} }, `role "db/other" is not in allowed_roles`},
 		"one account":    {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"orders_app_a"} }, "needs two distinct account names"},
 		"same account":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"a", "a"} }, "needs two distinct account names"},

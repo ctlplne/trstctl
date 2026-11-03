@@ -474,6 +474,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredDatadogBackend(opener)
 	case "openai":
 		return openConfiguredOpenAIBackend(opener)
+	case "unix":
+		return openConfiguredUnixBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -1655,8 +1657,11 @@ func (p *configuredDynamicProvider) RotationAccounts(role string) ([2]string, bo
 // TwoUserRetirement implements dynsecret.TwoUserRetirer: what retiring one
 // account of a pair does at this provider type (A240).
 func (p *configuredDynamicProvider) TwoUserRetirement() string {
-	if strings.TrimSpace(p.cfg.Type) == "ldap" {
+	switch strings.TrimSpace(p.cfg.Type) {
+	case "ldap":
 		return "replacing its password; binds already open last until they bind again"
+	case "unix":
+		return "replacing its password; sessions already open last until they end"
 	}
 	return "replacing its password and ending its sessions"
 }
@@ -1664,9 +1669,15 @@ func (p *configuredDynamicProvider) TwoUserRetirement() string {
 // RotationPhase implements dynsecret.RotationPhaser: a provider type whose
 // rotation invalidates the current credential when it issues the next is
 // single-phase (A240).
-func (p *configuredDynamicProvider) RotationPhase(string) string {
+func (p *configuredDynamicProvider) RotationPhase(role string) string {
 	if config.SinglePhaseRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] {
 		return dynsecret.RotationSinglePhase
+	}
+	// A unix role without a pair changes its one account's password in place.
+	if strings.TrimSpace(p.cfg.Type) == "unix" {
+		if _, paired := p.RotationAccounts(role); !paired {
+			return dynsecret.RotationSinglePhase
+		}
 	}
 	return dynsecret.RotationTwoPhase
 }
@@ -1710,7 +1721,7 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "auth0", "datadog", "openai", "ldap":
+	case "auth0", "datadog", "openai", "ldap", "unix":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key
 		// lists models, and a directory entry binds (A240).
