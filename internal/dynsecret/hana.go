@@ -83,6 +83,11 @@ END`
 END`
 )
 
+// HANAProbeUpsertUser is the user upsert block, for the lab's diagnostic
+// probe (A239): the probe runs it with a fabricated user and password, so
+// SAP HANA's whole answer, which can quote the statement, may be logged.
+const HANAProbeUpsertUser = hanaUpsertUser
+
 // HANAConfig configures the SAP HANA provider (A239).
 type HANAConfig struct {
 	// AdminDSN is the administrator's go-hdb URL (hdb://user:password@host:port),

@@ -190,7 +190,11 @@ func hanaLabProbeSQLScript(ctx context.Context, t *testing.T, db *sql.DB) {
 		{"EXEC concatenation", `DO BEGIN EXEC 'SELECT 1 ' || 'FROM DUMMY'; END`, nil},
 		{"EXEC :variable", `DO BEGIN DECLARE stmt NVARCHAR(100); stmt = 'SELECT 1 FROM DUMMY'; EXEC :stmt; END`, nil},
 		{"EXECUTE IMMEDIATE :variable", `DO BEGIN DECLARE stmt NVARCHAR(100); stmt = 'SELECT 1 FROM DUMMY'; EXECUTE IMMEDIATE :stmt; END`, nil},
-		{"EXEC DDL", `DO BEGIN DECLARE stmt NVARCHAR(200); stmt = 'CREATE ROLE TRSTCTL_PROBE_ROLE'; EXEC :stmt; stmt = 'DROP ROLE TRSTCTL_PROBE_ROLE'; EXEC :stmt; END`, nil},
+		{"EXEC DDL", `DO BEGIN DECLARE stmt NVARCHAR(200); stmt = 'CREATE USER TRSTCTL_PROBE_DDL PASSWORD "Probe0DDL0Only" NO FORCE_FIRST_PASSWORD_CHANGE'; EXEC :stmt; stmt = 'DROP USER TRSTCTL_PROBE_DDL'; EXEC :stmt; END`, nil},
+		// The provider's own upsert block with a fabricated user and
+		// password: SAP HANA's answer may quote the statement it ran.
+		{"provider upsert block", dynsecret.HANAProbeUpsertUser, []any{"TRSTCTL_PROBE_UPSERT", []byte("Probe0Upsert0Only")}},
+		{"provider upsert block, cleanup", `DROP USER TRSTCTL_PROBE_UPSERT CASCADE`, nil},
 	} {
 		_, err := db.ExecContext(ctx, probe.statement, probe.args...)
 		var hanaErr hdb.Error
