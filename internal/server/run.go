@@ -272,16 +272,20 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 			if stopPG != nil {
 				_ = stopPG()
 			}
-			return nil, nil, fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): take a backup (trstctl --backup), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
+			return nil, nil, fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): check them with 'trstctl --upgrade-preflight', take a backup (trstctl --full-backup-dir), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
 		}
-		logger.Info("applying pending database migrations", "count", len(pending))
+		attrs := []any{"count", len(pending)}
+		if plan, err := st.UpgradePlan(ctx); err == nil {
+			attrs = startupUpgradeAttrs(plan)
+		}
+		logger.Info("applying pending database migrations", attrs...)
 	}
 	if err := st.Migrate(ctx); err != nil {
 		st.Close()
 		if stopPG != nil {
 			_ = stopPG()
 		}
-		return nil, nil, fmt.Errorf("migrate: %w", err)
+		return nil, nil, fmt.Errorf("migrate: %w; %s", err, failedUpgradeHint)
 	}
 	return st, stopPG, nil
 }

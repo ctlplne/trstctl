@@ -1064,8 +1064,9 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 func TestMigrationsDocIsReal(t *testing.T) {
 	body := read(t, "migrations.md")
 	for _, want := range []string{
-		"--migrate-status", "--migrate", "TRSTCTL_MIGRATE_AUTO",
+		"--migrate-status", "--migrate", "--upgrade-preflight", "TRSTCTL_MIGRATE_AUTO",
 		"advisory lock", "forward-only", "pg_advisory_lock", "rollback",
+		"backup_required", "checksum_mismatch", "migration_running", "A failed upgrade",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("migrations.md should cover %q", want)
@@ -1073,7 +1074,7 @@ func TestMigrationsDocIsReal(t *testing.T) {
 	}
 	// The documented flags exist in the binary.
 	main := read(t, "../cmd/trstctl/main.go")
-	for _, flag := range []string{`"migrate-status"`, `"migrate"`} {
+	for _, flag := range []string{`"migrate-status"`, `"migrate"`, `"upgrade-preflight"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("migrations.md documents a flag the binary does not define: %s", flag)
 		}
@@ -1082,6 +1083,13 @@ func TestMigrationsDocIsReal(t *testing.T) {
 	migrate := read(t, "../internal/store/migrate.go")
 	if !strings.Contains(migrate, "pg_try_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
 		t.Error("Migrate should serialize the run on a PostgreSQL advisory lock")
+	}
+	// Every blocker the doc names is one the preflight raises.
+	preflight := read(t, "../internal/server/upgrade_preflight.go")
+	for _, code := range []string{"backup_required", "checksum_mismatch", "migration_running"} {
+		if !strings.Contains(preflight, `block("`+code+`"`) {
+			t.Errorf("migrations.md names blocker %s, which the preflight does not raise", code)
+		}
 	}
 	// The gate (TRSTCTL_MIGRATE_AUTO) is honored by config.
 	if !strings.Contains(read(t, "../internal/config/config.go"), "TRSTCTL_MIGRATE_AUTO") {

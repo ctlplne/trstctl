@@ -27,3 +27,12 @@ func TestRun_MigrateRequiresExternalDatastore(t *testing.T) {
 		t.Fatal("trstctl --migrate with bundled Postgres should fail fast (external datastore required)")
 	}
 }
+
+// TestRun_UpgradePreflightRequiresExternalDatastore: the preflight reads the
+// external datastore an operator manages, so the bundled path is rejected.
+func TestRun_UpgradePreflightRequiresExternalDatastore(t *testing.T) {
+	err := run(context.Background(), []string{"--upgrade-preflight"}, emptyEnv, io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("trstctl --upgrade-preflight with bundled Postgres should fail fast (external datastore required)")
+	}
+}

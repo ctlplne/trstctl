@@ -8,7 +8,8 @@
 // mode (AN-4). It reports its version via --version, resolves and validates its
 // configuration — including the bundled-vs-external Postgres/NATS switches used by
 // the container image and Compose stack (S7.4) — prints it with --check-config,
-// exposes the operational flags (--migrate / --migrate-status, --backup /
+// exposes the operational flags (--migrate / --migrate-status /
+// --upgrade-preflight, --backup /
 // --restore, --full-backup-dir / --full-restore-dir, --health-check,
 // --ready-check), and shuts down cleanly on SIGINT/SIGTERM.
 package main
@@ -134,6 +135,7 @@ type rootFlags struct {
 	allowPlainFullBackup bool
 	rebuild              bool
 	migrateStatus        bool
+	upgradePreflight     bool
 	migrate              bool
 	fipsRequired         bool
 	demo                 bool
@@ -162,6 +164,7 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	fs.BoolVar(&flags.allowPlainFullBackup, "allow-unencrypted-full-backup", false, "explicit lab override: allow sensitive full-backup artifacts to remain plaintext")
 	fs.BoolVar(&flags.rebuild, "rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	fs.BoolVar(&flags.migrateStatus, "migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
+	fs.BoolVar(&flags.upgradePreflight, "upgrade-preflight", false, "check an upgrade of the database to this binary without changing anything: what it applies, what blocks it, how to roll it back; exit 1 when not ready")
 	fs.BoolVar(&flags.migrate, "migrate", false, "apply pending database migrations under an advisory lock, then exit")
 	// --fips asserts the FIPS 140-3 cryptographic module must be active for this
 	// process (PKIGOV-007 / EXC-CRYPTO-01). When set (or TRSTCTL_FIPS=1), the
@@ -246,6 +249,17 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 			return true, fmt.Errorf("rebuild: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "rebuilt the read model from %d events in the log\n", n)
+		return true, nil
+	}
+	if flags.upgradePreflight {
+		verdict, err := server.RunUpgradePreflight(ctx, cfg, extraMigrationSources(), time.Now())
+		if err != nil {
+			return true, fmt.Errorf("upgrade-preflight: %w", err)
+		}
+		verdict.WriteText(stdout)
+		if !verdict.Ready {
+			return true, fmt.Errorf("upgrade-preflight: not ready: %d blocker(s)", len(verdict.Blockers))
+		}
 		return true, nil
 	}
 	if flags.migrateStatus {

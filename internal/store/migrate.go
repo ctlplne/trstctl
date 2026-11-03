@@ -497,12 +497,13 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, led *migrationLe
 			continue
 		}
 		if migrationNoTransaction(body) {
-			for _, stmt := range splitMigrationStatements(string(body)) {
-				if _, err := conn.Exec(ctx, stmt); err != nil {
-					return fmt.Errorf("store: apply no-transaction migration %s: %w", name, err)
-				}
+			// An index an earlier run's concurrent build left invalid (it
+			// failed, or the process died partway) would be skipped forever by
+			// IF NOT EXISTS: drop it so this run builds it again.
+			if err := dropInvalidConcurrentIndexes(ctx, conn, body); err != nil {
+				return fmt.Errorf("store: drop invalid indexes before migration %s: %w", name, err)
 			}
-			if err := assertConcurrentIndexesValid(ctx, conn, name, body); err != nil {
+			if err := applyNoTransactionMigration(ctx, conn, name, body); err != nil {
 				return err
 			}
 			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version, name, checksum) VALUES ($1, $2, $3)", version, name, checksum); err != nil {
@@ -579,11 +580,13 @@ var createIndexConcurrentlyNames = regexp.MustCompile(
 //
 // A concurrent build that fails partway — a deadlock, a unique violation in live
 // data, an operator canceling it — does not raise here. PostgreSQL leaves the
-// index in place with indisvalid = false: it enforces nothing and the planner
-// ignores it. The trap is IF NOT EXISTS, which every one of these migrations
+// index in place with indisvalid = false: the planner ignores it and nothing
+// can rely on it. The trap is IF NOT EXISTS, which every one of these migrations
 // uses: the next run finds the name already present and skips it, so the broken
 // index is never rebuilt. Without this check the ledger would then record the
-// migration as applied and the failure would be permanent and silent.
+// migration as applied and the failure would be permanent and silent. The
+// runner drops such an index when the build fails and again before any later
+// run (dropInvalidConcurrentIndexes), so the next run builds it.
 //
 // That matters most for the UNIQUE ones. An invalid unique index on, say,
 // provider_operator_delegations (tenant_id, operator_id, customer_tenant_id,
@@ -617,9 +620,63 @@ func assertConcurrentIndexesValid(ctx context.Context, conn *pgxpool.Conn, name 
 			return fmt.Errorf("store: verify index %q from migration %s: %w", index, name, err)
 		}
 		if !valid || !ready {
-			return fmt.Errorf("store: migration %s left index %q invalid (indisvalid=%t indisready=%t); "+
-				"the concurrent build failed partway and IF NOT EXISTS would skip rebuilding it forever. "+
-				"DROP INDEX CONCURRENTLY %s and re-run", name, index, valid, ready, index)
+			return fmt.Errorf("store: migration %s left index %q invalid (indisvalid=%t indisready=%t): "+
+				"the concurrent build failed partway; the runner drops it, and the next run builds it again",
+				name, index, valid, ready)
+		}
+	}
+	return nil
+}
+
+// applyNoTransactionMigration runs a no-transaction migration's statements and
+// confirms every index it builds concurrently came out valid. When it fails,
+// it drops the invalid index a failed concurrent build leaves behind, so the
+// schema is the one the previous binary ran on until the migration runs again
+// (an invalid index can still be maintained on writes, and a unique one can
+// refuse them, depending on where its build stopped).
+func applyNoTransactionMigration(ctx context.Context, conn *pgxpool.Conn, name string, body []byte) error {
+	err := func() error {
+		for _, stmt := range splitMigrationStatements(string(body)) {
+			if _, err := conn.Exec(ctx, stmt); err != nil {
+				return fmt.Errorf("store: apply no-transaction migration %s: %w", name, err)
+			}
+		}
+		return assertConcurrentIndexesValid(ctx, conn, name, body)
+	}()
+	if err == nil {
+		return nil
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	if dropErr := dropInvalidConcurrentIndexes(cleanup, conn, body); dropErr != nil {
+		return errors.Join(err, fmt.Errorf("store: drop the invalid index migration %s left (the next run drops it): %w", name, dropErr))
+	}
+	return err
+}
+
+// concurrentIndexHealthQuery reads whether the index a name resolves to on the
+// search path, as an unqualified DROP INDEX resolves it, is valid and ready.
+//
+//trstctl:system-query — cross-tenant system migration step reads only PostgreSQL catalog rows (pg_index) for one index the migration builds; catalog rows carry no tenant_id and no tenant data, and only one boolean leaves PostgreSQL (AN-1 exemption).
+const concurrentIndexHealthQuery = `SELECT i.indisvalid AND i.indisready FROM pg_index i WHERE i.indexrelid = to_regclass($1)`
+
+// dropInvalidConcurrentIndexes drops each index the migration builds
+// concurrently that exists and is invalid. A valid index, or one that does not
+// exist, is left alone.
+func dropInvalidConcurrentIndexes(ctx context.Context, conn *pgxpool.Conn, body []byte) error {
+	for _, m := range createIndexConcurrentlyNames.FindAllStringSubmatch(stripSQLLineComments(string(body)), -1) {
+		index := m[1]
+		var healthy bool
+		err := conn.QueryRow(ctx, concurrentIndexHealthQuery, index).Scan(&healthy)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && healthy) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("read index %q: %w", index, err)
+		}
+		// The name is the migration's own, matched by [a-z0-9_]+ and quoted.
+		if _, err := conn.Exec(ctx, "DROP INDEX CONCURRENTLY IF EXISTS "+pgx.Identifier{index}.Sanitize()); err != nil { // #nosec G202 -- a quoted identifier from the migration file, never input (CWE-89)
+			return fmt.Errorf("drop invalid index %q: %w", index, err)
 		}
 	}
 	return nil
@@ -679,39 +736,17 @@ func splitMigrationStatements(body string) []string {
 }
 
 // PendingMigrations reports, in order, the migrations that Migrate would apply —
-// a read-only dry run that mutates nothing (it does not create the ledger or take
-// the lock). It backs the pre-migration check (`trstctl --migrate-status`) so an
-// operator can see exactly what an upgrade will change and take a backup first.
+// core and every registered extension source — as a read-only dry run that
+// mutates nothing (it does not create the ledger or take the lock). It backs
+// the pre-migration check (`trstctl --migrate-status`) and the boot gate under
+// TRSTCTL_MIGRATE_AUTO=false, so an operator sees exactly what an upgrade will
+// change, an edition's own migrations included, and takes a backup first.
 func (s *Store) PendingMigrations(ctx context.Context) ([]string, error) {
-	applied := make(map[int64]bool)
-	var hasLedger bool
-	if err := s.pool.QueryRow(ctx,
-		"SELECT to_regclass('public.schema_migrations') IS NOT NULL").Scan(&hasLedger); err != nil {
-		return nil, err
-	}
-	if hasLedger {
-		got, err := s.appliedVersions(ctx)
-		if err != nil {
-			return nil, err
-		}
-		applied = got
-	}
-
-	names, err := migrationNames()
+	position, err := s.migrationPosition(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var pending []string
-	for _, name := range names {
-		version, err := versionOf(name)
-		if err != nil {
-			return nil, fmt.Errorf("store: bad migration name %q: %w", name, err)
-		}
-		if !applied[version] {
-			pending = append(pending, name)
-		}
-	}
-	return pending, nil
+	return position.PendingNames(), nil
 }
 
 // migrationNames returns the embedded migration filenames sorted by version.
@@ -726,23 +761,6 @@ func migrationNames() ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
-}
-
-func (s *Store) appliedVersions(ctx context.Context) (map[int64]bool, error) {
-	rows, err := s.pool.Query(ctx, "SELECT version FROM schema_migrations")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	applied := make(map[int64]bool)
-	for rows.Next() {
-		var v int64
-		if err := rows.Scan(&v); err != nil {
-			return nil, err
-		}
-		applied[v] = true
-	}
-	return applied, rows.Err()
 }
 
 // versionOf parses the leading integer of a migration filename ("0001_init.sql"

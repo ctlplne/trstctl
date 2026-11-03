@@ -72,7 +72,7 @@ func RunMigrateWithExtraMigrations(ctx context.Context, cfg *config.Config, extr
 		return 0, fmt.Errorf("inspect migrations: %w", err)
 	}
 	if err := st.Migrate(ctx); err != nil {
-		return 0, fmt.Errorf("migrate: %w", err)
+		return 0, fmt.Errorf("migrate: %w; %s", err, failedUpgradeHint)
 	}
 	return len(pending), nil
 }

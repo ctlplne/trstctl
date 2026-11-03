@@ -97,6 +97,22 @@ If the upgrade changes signer mode, verify the signer key store, KEK, signer aut
 Secret, and mTLS Secret are present before applying. The signer must keep the same
 key material unless a key ceremony explicitly says otherwise.
 
+Run the new image's database preflight against the deployment's PostgreSQL. It
+changes nothing, and it exits 1 when the upgrade is blocked:
+
+```sh
+docker run --rm \
+  -e TRSTCTL_POSTGRES_MODE=external -e TRSTCTL_POSTGRES_DSN \
+  -e TRSTCTL_BACKUP_DIRECTORY=/backups -v /backups:/backups:ro \
+  <new image> --upgrade-preflight
+```
+
+Record its `rollback:` line in the change ticket. `redeploy_previous_binary`
+means the rollback below is enough; `restore_backup` means a pending migration is
+destructive, so take a full backup first (the preflight blocks until a verified
+one from the last 26 hours is visible) and roll back by restoring it. See
+[Database migrations & upgrades](../migrations.md#upgrade-runbook).
+
 ## Commands: upgrade
 
 ```sh
@@ -161,6 +177,13 @@ kubectl -n trstctl rollout status deployment/trstctl --timeout=10m
 kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
 kubectl -n trstctl rollout status deployment/trstctl-signer --timeout=10m
 ```
+
+`helm rollback` runs the previous binary against the database as the upgrade
+left it. That is safe when the preflight's rollback method was
+`redeploy_previous_binary`, including after a migration failed partway (see
+[A failed upgrade](../migrations.md#a-failed-upgrade)). When it was
+`restore_backup` and the destructive migration ran, restore the pre-upgrade
+backup first ([Restoring](../disaster-recovery.md#restoring)).
 
 If the rollback itself cannot reach readiness, stop fleet churn first, then use
 the signer or DR runbook depending on the failing dependency:

@@ -62,6 +62,11 @@ type VerifyReport struct {
 	Unverifiable int `json:"unverifiable"`
 }
 
+// FreshFor is how old a verified backup may be and still be the restore point
+// for today's change: a daily backup, with two hours' slack. The operations
+// dashboard and the upgrade preflight both hold a deployment to it.
+const FreshFor = 26 * time.Hour
+
 // VerifyFullBackup re-hashes every artifact in a backup directory.
 //
 // dir is the directory holding the manifest. Nothing is restored and nothing is

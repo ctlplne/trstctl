@@ -202,7 +202,13 @@ migrations **fails fast with guidance** instead of migrating — it will not cha
 the schema until an operator has taken a backup and applied the migration
 deliberately. With the default `TRSTCTL_MIGRATE_AUTO=true` (convenient for
 single-node eval and first boot), pending migrations are applied automatically on
-startup, still under the advisory lock.
+startup, still under the advisory lock, and the start logs how many, which are
+destructive or run outside a transaction, and the rollback method.
+
+The gate counts every migration the binary carries: the core set and each
+extension family's (succession, agent delegation, remediation,
+decommissioning). Until A246 it counted the core set only, so a family's new
+migration was applied at boot even with automatic migration off.
 
 ### Migration 0153 requires a stopped control-plane fleet
 
@@ -345,13 +351,37 @@ custody and retention policy; do not claim that this cutover erased them.
 ## Upgrade runbook
 
 1. **Read the release notes** for the new version and note any migration callouts.
-2. **Inspect the plan** — see exactly what the upgrade will apply, changing
-   nothing:
+2. **Run the preflight** with the new binary, against the database, before
+   anything changes:
 
     ```bash
-    trstctl --migrate-status
-    # -> "no pending migrations"  OR  "N pending migration(s): ..."
+    trstctl --upgrade-preflight
+    # upgrade preflight: ready
+    # schema version 375, this binary 377, 2 migration(s) to apply
+    #   0376_example.sql
+    #   0377_example_index.sql (outside a transaction)
+    # backup: verified, taken 2026-11-03T02:00:00Z
+    # rollback: redeploy_previous_binary — every pending migration is additive: ...
+    # warning outside_transaction: 0377_example_index.sql run outside a transaction: ...
     ```
+
+   It reads the migration ledger, this binary's migrations (core and every
+   extension family), the database's indexes, the migration lock and the newest
+   backup in `TRSTCTL_BACKUP_DIRECTORY` (re-hashed against its manifest), and
+   changes nothing. The report carries names, versions and times only — never
+   SQL, a connection string or a row — so it can go into a ticket. It exits 1
+   when the upgrade is blocked:
+
+    | Blocker | Meaning |
+    | --- | --- |
+    | `checksum_mismatch` | an applied migration's file changed since it ran; the runner will not start (see "If a node refuses to start") |
+    | `migration_running` | another run holds the migration lock; wait, then run the preflight again |
+    | `backup_required` | a pending migration drops, renames, truncates or deletes data, changes a column's type or adds NOT NULL, and no verified backup from the last 26 hours is visible |
+
+   Warnings do not block: `no_fresh_backup` (additive upgrade, no recent
+   verified backup), `outside_transaction`, `invalid_index` (a failed concurrent
+   build's leftover) and `schema_newer_than_binary` (this binary is older than
+   the database). `trstctl --migrate-status` still lists the pending names alone.
 
 3. **Back up** before applying anything (the gate). Use the full DR artifact so
    the event log, independent PostgreSQL state, signer key store (including the
@@ -379,17 +409,46 @@ custody and retention policy; do not claim that this cutover erased them.
 
 ## Rolling back
 
-Because migrations are forward-only, rollback is **restore from the pre-migration
-backup**, not a down-migration:
+Migrations are forward-only, so there is no down-migration. The preflight names
+the rollback method before the upgrade starts:
 
-1. Stop the control plane.
-2. Restore the KEK from its separate custody backup, then run
-   `trstctl --full-restore-dir=<pre-migration artifact>` from step 3.
-3. Redeploy the **previous** binary version.
-4. Confirm `/readyz` and the inventory.
+- **`redeploy_previous_binary`** — every pending migration is additive. The
+  previous binary runs against the newer schema: it skips versions it has no
+  file for, and its own preflight lists them under `schema_newer_than_binary`.
+  Roll back by deploying the previous version.
+- **`restore_backup`** — a pending migration is destructive, so once it is
+  applied the previous binary may not find what it needs. Roll back from the
+  pre-upgrade backup:
 
-This is why the backup gate exists: the backup taken before an upgrade **is** the
-rollback path.
+  1. Stop the control plane.
+  2. Restore the KEK from its separate custody backup, then run
+     `trstctl --full-restore-dir=<pre-migration artifact>` from step 3.
+  3. Redeploy the **previous** binary version.
+  4. Confirm `/readyz` and the inventory.
+
+This is why the backup gate exists: before a destructive upgrade, the backup
+**is** the rollback path.
+
+## A failed upgrade
+
+A migration that fails stops the run, and the server does not start. The error
+names the migration and says what state the database is in, which is
+recoverable and compatible:
+
+- Every migration before the failed one is applied and recorded. They are
+  additive, so the previous binary runs against them.
+- A migration in a transaction (the default) is rolled back whole: nothing of
+  it remains, and the ledger does not record it.
+- A migration outside a transaction (`-- migrate: no-transaction`, for online
+  index builds) keeps what it did so far; it is written to be safe to retry,
+  and the next run completes it. An index a failed concurrent build leaves
+  invalid is dropped as soon as the build fails, and again before any later
+  run, so the previous binary writes as it did and the next run builds it.
+- The migration lock is released.
+
+Then either fix the cause (for example the duplicate rows a unique index
+refused) and start the new binary again, or run the previous binary.
+`trstctl --upgrade-preflight` shows where the database stands either way.
 
 ## Online-safe migrations on populated tables (expand–contract)
 

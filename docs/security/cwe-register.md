@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2408 annotated sites across 29 rules. Each row is
+2409 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1116,7 +1116,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:278` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2591` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2599` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1196,6 +1196,12 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/store/migration_content_test.go:4190` | closed test table list above |
+
+### G202 — CWE-? (unmapped rule) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/store/migrate.go:678` | a quoted identifier from the migration file, never input (CWE-89) |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 
@@ -1707,7 +1713,7 @@ not this file.
 | `cmd/trstctl/ee_attach.go:376` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:386` | operator-configured client secret file (CWE-22) |
 | `cmd/trstctl/ee_attach.go:452` | operator-pinned local IdP metadata, validated as configuration. |
-| `cmd/trstctl/main.go:446` | the configured public certificate of this process's own listener (CWE-22) |
+| `cmd/trstctl/main.go:460` | the configured public certificate of this process's own listener (CWE-22) |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2118,10 +2124,10 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/run.go:583` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1199` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1383` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1828` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:587` | operator-configured public recovery kit (CWE-22) |
+| `internal/server/run.go:1203` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1387` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1832` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:43` | test fixture under t.TempDir (CWE-22) |
@@ -2598,7 +2604,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/run.go:1199` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1203` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_dynamic_lease_rotation_served_test.go:58` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:146` | the test's own temp file or the lab directory the runner created (CWE-22) |

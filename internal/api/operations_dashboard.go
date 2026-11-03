@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/backup"
 )
 
 // The operations dashboard (A246): backup freshness, restore proof, queue lag,
@@ -112,7 +113,7 @@ type operationsDashboard struct {
 // command waiting past a quarter hour, a projection within a thousand events
 // of the log.
 const (
-	backupFreshFor       = 26 * time.Hour
+	backupFreshFor       = backup.FreshFor
 	backupStaleAfter     = 72 * time.Hour
 	queueWaitWarning     = 15 * time.Minute
 	queueWaitCritical    = time.Hour
