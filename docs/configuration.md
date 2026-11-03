@@ -2213,7 +2213,8 @@ and authenticates with `token_ref` (and `username` where the table says so).
 `endpoint` is optional: empty means the vendor's API base shown below; set it for a
 regional or self-hosted API. Every hosted target takes a scoped sync: it lists its
 keys, reads back what the vendor returns, and deletes. **Reads back** is what a scoped
-sync compares: `value` (the stored value, hashed and wiped at once) or `receipt-only`
+sync compares: `value` (the stored value, hashed and wiped at once), `digest` (the
+vendor's digest of the stored value), or `receipt-only`
 (the vendor never returns a secret's value; the delivery receipt is the evidence, and
 a change made outside the sync can't be seen). Keys are variable names: a scoped sync's
 `destination_prefix` is a name prefix (`APP_`), and `key_transform: env` turns secret
@@ -2244,6 +2245,15 @@ paths into names. Values are text (UTF-8). Keys are variable names except where 
 | `daytona` | empty, or `organization <ID>` | `https://app.daytona.io/api` | receipt-only | Organization secrets. |
 | `ona` | `organization`, `project` or `user`, and its ID | `https://app.ona.com/api` | receipt-only | Environment-variable secrets at that scope (names of 3 to 127 letters, digits and `_`). |
 | `trigger-dev` | `project <proj_…> env <dev, staging or prod>` | `https://api.trigger.dev` | value | Environment variables of one environment. |
+| `cloudflare-workers` | `account <ID> script <name>` | `https://api.cloudflare.com/client/v4` | receipt-only | A Worker's secrets; each change is a new Worker version. |
+| `cloudflare-pages` | `account <ID> project <name> [environment production\|preview]` | `https://api.cloudflare.com/client/v4` | receipt-only | Secret project variables (production by default); applied on the next deployment. |
+| `cloudflare-secrets-store` | `account <ID> store <ID>` | `https://api.cloudflare.com/client/v4` | receipt-only | Account Secrets Store entries (scope `workers`). |
+| `azure-app-configuration` | `[label <label>]` | none (set `endpoint` to `https://<store>.azconfig.io`) | value | Key-values under the label (no label when unset); `username` is the access key ID and `token_ref` its secret (HMAC-SHA256 request signing). |
+| `oci-vault` | `compartment <OCID> vault <OCID> key <OCID>` | none (set `endpoint` to `https://vaults.<region>.oci.oraclecloud.com/20180608`) | receipt-only | Vault secrets (a change is a new version); `username` is the API key ID (`<tenancy>/<user>/<fingerprint>`) and `token_ref` its PEM private key. A delete schedules deletion a day out; a new value for a name pending deletion cancels it first. |
+| `ovh-secret-manager` | `okms <ID>` | none (set `endpoint` to the region's `https://<region>.okms.ovh.net`) | value | Secrets at paths (keys are paths), each holding `{"value": …}`; a delete removes every version. |
+| `databricks-secrets` | `scope <name>` | none (set `endpoint` to the workspace URL) | receipt-only | Secrets in an existing scope (names up to 128 characters, matched case-insensitively). |
+| `supabase-secrets` | `project <ref>` | `https://api.supabase.com` | digest | Edge Function secrets; the list's SHA-256 digests are compared. `SUPABASE_` names are refused. |
+| `camunda` | `cluster <ID>` | `https://api.cloud.camunda.io` | value | Cluster (connector) secrets; `username` is the API client ID and `token_ref` its secret, exchanged for a token per operation. |
 | `laravel-forge` | `org <slug> server <ID> site <ID>` | `https://forge.laravel.com/api` | value | One `KEY='value'` line in the site's `.env` (written whole, asynchronously); lines the sync doesn't own are kept. A value with a line break, or with both `'` and `${`, is refused. |
 
 ```json

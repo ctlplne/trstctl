@@ -4,7 +4,9 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/synctarget"
 )
@@ -1953,4 +1956,652 @@ func TestServedTriggerDevScopedSyncA241(t *testing.T) {
 		}
 	})
 	hostedSyncProof(t, hostedSyncCase{typ: "trigger-dev", endpoint: standIn.server.URL, binding: "project proj_a241payments env prod", token: token, standIn: standIn})
+}
+
+// cloudflareEnvelope answers in Cloudflare's v4 envelope.
+func cloudflareEnvelope(w http.ResponseWriter, status int, result any) {
+	jsonStandIn(w, status, map[string]any{"success": status/100 == 2, "errors": []any{}, "messages": []any{}, "result": result})
+}
+
+const a241CloudflareAccount = "0123456789abcdef0123456789abcdef"
+
+// TestServedCloudflareWorkersScopedSyncA241: Workers secrets — PUT
+// .../workers/scripts/{s}/secrets {name,text,type:secret_text}, DELETE
+// .../secrets/{name}, and the list of names (values never returned).
+func TestServedCloudflareWorkersScopedSyncA241(t *testing.T) {
+	const token = "cloudflare-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/accounts/"+a241CloudflareAccount+"/workers/scripts/payments-worker/secrets")
+		if !ok {
+			cloudflareEnvelope(w, http.StatusNotFound, nil)
+			return
+		}
+		name := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case name == "" && r.Method == http.MethodGet:
+			list := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]string{"name": k, "type": "secret_text"})
+			}
+			cloudflareEnvelope(w, http.StatusOK, list)
+		case name == "" && r.Method == http.MethodPut:
+			var body struct{ Name, Text, Type string }
+			if !decodeStandIn(w, r, &body) || body.Type != "secret_text" {
+				return
+			}
+			s.vars[body.Name] = body.Text
+			cloudflareEnvelope(w, http.StatusOK, map[string]string{"name": body.Name, "type": "secret_text"})
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[name]; !exists {
+				cloudflareEnvelope(w, http.StatusNotFound, nil)
+				return
+			}
+			delete(s.vars, name)
+			cloudflareEnvelope(w, http.StatusOK, nil)
+		default:
+			cloudflareEnvelope(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "cloudflare-workers", endpoint: standIn.server.URL, binding: "account " + a241CloudflareAccount + " script payments-worker",
+		token: token, standIn: standIn})
+}
+
+// TestServedCloudflarePagesScopedSyncA241: Pages projects — PATCH with
+// deployment_configs.<env>.env_vars sets a secret_text variable (a null
+// removes it); GET shows the variables with secret values withheld.
+func TestServedCloudflarePagesScopedSyncA241(t *testing.T) {
+	const token = "cloudflare-pages-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	plain := map[string]string{"NODE_VERSION": "22"}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		if r.URL.Path != "/accounts/"+a241CloudflareAccount+"/pages/projects/payments-site" {
+			cloudflareEnvelope(w, http.StatusNotFound, nil)
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+			vars := map[string]any{}
+			for k, v := range plain {
+				vars[k] = map[string]string{"type": "plain_text", "value": v}
+			}
+			for k := range s.vars {
+				vars[k] = map[string]string{"type": "secret_text"}
+			}
+			cloudflareEnvelope(w, http.StatusOK, map[string]any{"name": "payments-site", "deployment_configs": map[string]any{
+				"production": map[string]any{"env_vars": vars}, "preview": map[string]any{"env_vars": map[string]any{}},
+			}})
+		case http.MethodPatch:
+			var body struct {
+				DeploymentConfigs map[string]struct {
+					EnvVars map[string]*struct{ Type, Value string } `json:"env_vars"`
+				} `json:"deployment_configs"`
+			}
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			for env, cfg := range body.DeploymentConfigs {
+				if env != "production" {
+					cloudflareEnvelope(w, http.StatusBadRequest, nil)
+					return
+				}
+				for k, v := range cfg.EnvVars {
+					switch {
+					case v == nil:
+						delete(s.vars, k)
+					case v.Type == "secret_text":
+						s.vars[k] = v.Value
+					default:
+						cloudflareEnvelope(w, http.StatusBadRequest, nil)
+						return
+					}
+				}
+			}
+			cloudflareEnvelope(w, http.StatusOK, map[string]string{"name": "payments-site"})
+		default:
+			cloudflareEnvelope(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "cloudflare-pages", endpoint: standIn.server.URL, binding: "account " + a241CloudflareAccount + " project payments-site",
+		token: token, standIn: standIn})
+}
+
+// TestServedCloudflareSecretsStoreScopedSyncA241: Secrets Store — POST an
+// array of secrets, PATCH and DELETE by ID, and a paged list of metadata.
+func TestServedCloudflareSecretsStoreScopedSyncA241(t *testing.T) {
+	const token = "cloudflare-store-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const store = "fedcba9876543210fedcba9876543210"
+	ids := map[string]string{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/accounts/"+a241CloudflareAccount+"/secrets_store/stores/"+store+"/secrets")
+		if !ok {
+			cloudflareEnvelope(w, http.StatusNotFound, nil)
+			return
+		}
+		id := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		keyOf := func(id string) string {
+			for k, v := range ids {
+				if _, live := s.vars[k]; live && v == id {
+					return k
+				}
+			}
+			return ""
+		}
+		switch {
+		case id == "" && r.Method == http.MethodGet:
+			list := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]any{"id": ids[k], "name": k, "status": "active", "scopes": []string{"workers"}})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"success": true, "result": list, "result_info": map[string]int{"page": 1, "total_pages": 1}})
+		case id == "" && r.Method == http.MethodPost:
+			var body []struct {
+				Name, Value string
+				Scopes      []string
+			}
+			if !decodeStandIn(w, r, &body) || len(body) != 1 {
+				return
+			}
+			ids[body[0].Name] = "id" + strings.ToLower(body[0].Name)
+			s.vars[body[0].Name] = body[0].Value
+			cloudflareEnvelope(w, http.StatusOK, []map[string]string{{"id": ids[body[0].Name], "status": "pending"}})
+		default:
+			key := keyOf(id)
+			if key == "" {
+				cloudflareEnvelope(w, http.StatusNotFound, nil)
+				return
+			}
+			switch r.Method {
+			case http.MethodPatch:
+				var body struct{ Value string }
+				if !decodeStandIn(w, r, &body) {
+					return
+				}
+				s.vars[key] = body.Value
+				cloudflareEnvelope(w, http.StatusOK, map[string]string{"id": id})
+			case http.MethodDelete:
+				delete(s.vars, key)
+				cloudflareEnvelope(w, http.StatusOK, nil)
+			}
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "cloudflare-secrets-store", endpoint: standIn.server.URL, binding: "account " + a241CloudflareAccount + " store " + store,
+		token: token, standIn: standIn})
+}
+
+// TestServedAzureAppConfigurationScopedSyncA241: App Configuration's data
+// plane — PUT /kv/{key}?label= (kv+json), GET one, DELETE, GET /kv list;
+// every request carries the HMAC-SHA256 signature, checked here with the
+// access key.
+func TestServedAzureAppConfigurationScopedSyncA241(t *testing.T) {
+	const keyName = "a241-credential-id"
+	accessKey := base64.StdEncoding.EncodeToString([]byte("app-configuration-a241-access-key")) // #nosec G101 -- fabricated fixture access key; no value is real (CWE-798)
+	keyBytes, _ := base64.StdEncoding.DecodeString(accessKey)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		date, hash := r.Header.Get("x-ms-date"), r.Header.Get("x-ms-content-sha256")
+		toSign := r.Method + "\n" + r.URL.RequestURI() + "\n" + date + ";" + r.Host + ";" + hash
+		want := "HMAC-SHA256 Credential=" + keyName + "&SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=" +
+			base64.StdEncoding.EncodeToString(crypto.HMACSHA256(keyBytes, []byte(toSign)))
+		if r.Header.Get("Authorization") != want || hash != base64.StdEncoding.EncodeToString(crypto.SHA256Sum(body)) {
+			jsonStandIn(w, http.StatusUnauthorized, map[string]string{"error": "signature"})
+			return
+		}
+		if r.URL.Query().Get("api-version") != "1.0" || r.URL.Query().Get("label") != "prod" {
+			jsonStandIn(w, http.StatusBadRequest, map[string]string{"error": "query"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		key, isKV := strings.CutPrefix(r.URL.Path, "/kv/")
+		switch {
+		case r.URL.Path == "/kv" && r.Method == http.MethodGet:
+			items := []map[string]string{}
+			for _, k := range sortedKeys(s.vars) {
+				items = append(items, map[string]string{"key": k})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"items": items})
+		case isKV && r.Method == http.MethodPut:
+			var kv struct {
+				Value string `json:"value"`
+			}
+			if r.Header.Get("Content-Type") != "application/vnd.microsoft.appconfig.kv+json" || json.Unmarshal(body, &kv) != nil {
+				jsonStandIn(w, http.StatusUnsupportedMediaType, nil)
+				return
+			}
+			s.vars[key] = kv.Value
+			jsonStandIn(w, http.StatusOK, map[string]string{"key": key, "label": "prod", "value": kv.Value})
+		case isKV && r.Method == http.MethodGet:
+			v, exists := s.vars[key]
+			if !exists {
+				jsonStandIn(w, http.StatusNotFound, nil)
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]string{"key": key, "label": "prod", "value": v})
+		case isKV && r.Method == http.MethodDelete:
+			if _, exists := s.vars[key]; !exists {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			delete(s.vars, key)
+			jsonStandIn(w, http.StatusOK, map[string]string{"key": key})
+		default:
+			jsonStandIn(w, http.StatusNotFound, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "azure-app-configuration", endpoint: standIn.server.URL, binding: "label prod",
+		username: keyName, token: accessKey, standIn: standIn})
+}
+
+// TestServedOCIVaultScopedSyncA241: OCI Vault's management API — POST
+// /secrets, PUT /secrets/{id} (a new version), scheduleDeletion and
+// cancelDeletion actions, and the list; every request is verified against
+// the API key's public half (version 1, rsa-sha256).
+func TestServedOCIVaultScopedSyncA241(t *testing.T) {
+	key, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	der, err := key.PKCS8()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	const keyID = "ocid1.tenancy.oc1..aaaaaaaatenancy/ocid1.user.oc1..aaaaaaaauser/aa:bb:cc"
+	const compartment, vault, kms = "ocid1.compartment.oc1..aaaaaaaacompart", "ocid1.vault.oc1.iad.aaaaaaaavault", "ocid1.key.oc1.iad.aaaaaaaakey00001"
+	type ociState struct{ id, state string }
+	secrets := map[string]*ociState{}
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		auth := r.Header.Get("Authorization")
+		headers := between(auth, `headers="`, `"`)
+		var lines []string
+		for _, h := range strings.Fields(headers) {
+			switch h {
+			case "(request-target)":
+				lines = append(lines, "(request-target): "+strings.ToLower(r.Method)+" "+r.URL.RequestURI())
+			case "host":
+				lines = append(lines, "host: "+r.Host)
+			default:
+				lines = append(lines, h+": "+r.Header.Get(h))
+			}
+		}
+		signature, _ := base64.StdEncoding.DecodeString(between(auth, `signature="`, `"`))
+		signed := crypto.Verify(key.Public(), []byte(strings.Join(lines, "\n")), signature, crypto.SignOptions{Hash: crypto.SHA256, RSAPadding: crypto.RSAPKCS1v15}) == nil
+		bodyBound := r.Method == http.MethodGet || r.Method == http.MethodDelete ||
+			(strings.Contains(headers, "x-content-sha256") && r.Header.Get("x-content-sha256") == base64.StdEncoding.EncodeToString(crypto.SHA256Sum(body)))
+		if !strings.Contains(auth, `keyId="`+keyID+`"`) || !signed || !bodyBound {
+			jsonStandIn(w, http.StatusUnauthorized, map[string]string{"code": "NotAuthenticated"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		// A key put at the destination outside the sync (seeded) is an
+		// active secret of its own.
+		for name := range s.vars {
+			if secrets[name] == nil {
+				secrets[name] = &ociState{id: "ocid1.vaultsecret.oc1.iad." + strings.ToLower(name), state: "ACTIVE"}
+			}
+		}
+		find := func(id string) string {
+			for name, sec := range secrets {
+				if sec.id == id {
+					return name
+				}
+			}
+			return ""
+		}
+		decodeContent := func() (string, bool) {
+			var req struct {
+				SecretContent struct{ ContentType, Content string } `json:"secretContent"`
+			}
+			if json.Unmarshal(body, &req) != nil || req.SecretContent.ContentType != "BASE64" {
+				return "", false
+			}
+			raw, err := base64.StdEncoding.DecodeString(req.SecretContent.Content)
+			return string(raw), err == nil
+		}
+		switch {
+		case r.URL.Path == "/secrets" && r.Method == http.MethodGet:
+			if r.URL.Query().Get("compartmentId") != compartment || r.URL.Query().Get("vaultId") != vault {
+				jsonStandIn(w, http.StatusOK, []any{})
+				return
+			}
+			list := []map[string]string{}
+			for _, name := range sortedKeys(s.vars) {
+				list = append(list, map[string]string{"id": secrets[name].id, "secretName": name, "lifecycleState": secrets[name].state})
+			}
+			for name, sec := range secrets {
+				if _, live := s.vars[name]; !live {
+					list = append(list, map[string]string{"id": sec.id, "secretName": name, "lifecycleState": sec.state})
+				}
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case r.URL.Path == "/secrets" && r.Method == http.MethodPost:
+			var req struct {
+				CompartmentID string `json:"compartmentId"`
+				VaultID       string `json:"vaultId"`
+				KeyID         string `json:"keyId"`
+				SecretName    string `json:"secretName"`
+			}
+			value, ok := decodeContent()
+			if json.Unmarshal(body, &req) != nil || !ok || req.CompartmentID != compartment || req.VaultID != vault || req.KeyID != kms {
+				jsonStandIn(w, http.StatusBadRequest, map[string]string{"code": "InvalidParameter"})
+				return
+			}
+			if secrets[req.SecretName] != nil {
+				jsonStandIn(w, http.StatusConflict, map[string]string{"code": "Conflict"})
+				return
+			}
+			secrets[req.SecretName] = &ociState{id: "ocid1.vaultsecret.oc1.iad." + strings.ToLower(req.SecretName), state: "ACTIVE"}
+			s.vars[req.SecretName] = value
+			jsonStandIn(w, http.StatusOK, map[string]string{"id": secrets[req.SecretName].id, "lifecycleState": "CREATING"})
+		default:
+			id, action, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/secrets/"), "/actions/")
+			name := find(id)
+			if name == "" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "NotAuthorizedOrNotFound"})
+				return
+			}
+			switch {
+			case action == "" && r.Method == http.MethodPut:
+				value, ok := decodeContent()
+				if !ok || secrets[name].state != "ACTIVE" {
+					jsonStandIn(w, http.StatusConflict, map[string]string{"code": "IncorrectState"})
+					return
+				}
+				s.vars[name] = value
+				jsonStandIn(w, http.StatusOK, map[string]string{"id": id})
+			case action == "scheduleDeletion" && r.Method == http.MethodPost:
+				var req struct {
+					TimeOfDeletion time.Time `json:"timeOfDeletion"`
+				}
+				if json.Unmarshal(body, &req) != nil || req.TimeOfDeletion.Before(time.Now().Add(24*time.Hour)) {
+					jsonStandIn(w, http.StatusBadRequest, map[string]string{"code": "InvalidParameter"})
+					return
+				}
+				secrets[name].state = "PENDING_DELETION"
+				delete(s.vars, name)
+				w.WriteHeader(http.StatusOK)
+			case action == "cancelDeletion" && r.Method == http.MethodPost:
+				secrets[name].state = "ACTIVE"
+				w.WriteHeader(http.StatusOK)
+			default:
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"code": "NotFound"})
+			}
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "oci-vault", endpoint: standIn.server.URL, binding: "compartment " + compartment + " vault " + vault + " key " + kms,
+		username: keyID, token: keyPEM, standIn: standIn})
+}
+
+func between(s, start, end string) string {
+	_, rest, ok := strings.Cut(s, start)
+	if !ok {
+		return ""
+	}
+	value, _, _ := strings.Cut(rest, end)
+	return value
+}
+
+// TestServedOVHSecretManagerScopedSyncA241: OKMS v2 — POST /v2/secret
+// creates a path, POST .../version adds one, GET ?includeData reads
+// version.data, DELETE removes every version, and the list pages through
+// X-Pagination-Cursor headers. Keys are paths.
+func TestServedOVHSecretManagerScopedSyncA241(t *testing.T) {
+	const token = "ovh-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const okms = "aaaaaaaa-1111-4222-8333-444444444444"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/api/"+okms+"/v2/secret")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, nil)
+			return
+		}
+		path := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case path == "" && r.Method == http.MethodGet:
+			keys := sortedKeys(s.vars)
+			start := 0
+			if c := r.Header.Get("X-Pagination-Cursor"); c != "" {
+				start, _ = strconv.Atoi(c)
+			}
+			end := start + 1 // one a page, so the engine follows the cursor
+			if end < len(keys) {
+				w.Header().Set("X-Pagination-Cursor-Next", strconv.Itoa(end))
+			}
+			list := []map[string]string{}
+			for _, k := range keys[min(start, len(keys)):min(end, len(keys))] {
+				list = append(list, map[string]string{"path": k})
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case path == "" && r.Method == http.MethodPost:
+			var body struct {
+				Path    string `json:"path"`
+				Version struct {
+					Data map[string]string `json:"data"`
+				} `json:"version"`
+			}
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[body.Path]; exists {
+				jsonStandIn(w, http.StatusConflict, nil)
+				return
+			}
+			s.vars[body.Path] = body.Version.Data["value"]
+			jsonStandIn(w, http.StatusCreated, map[string]string{"path": body.Path})
+		case strings.HasSuffix(path, "/version") && r.Method == http.MethodPost:
+			name := strings.TrimSuffix(path, "/version")
+			var body struct {
+				Data map[string]string `json:"data"`
+			}
+			if _, exists := s.vars[name]; !exists || !decodeStandIn(w, r, &body) {
+				jsonStandIn(w, http.StatusNotFound, nil)
+				return
+			}
+			s.vars[name] = body.Data["value"]
+			jsonStandIn(w, http.StatusCreated, map[string]int{"id": 2})
+		case r.Method == http.MethodGet:
+			v, exists := s.vars[path]
+			if !exists {
+				jsonStandIn(w, http.StatusNotFound, nil)
+				return
+			}
+			out := map[string]any{"path": path, "version": map[string]any{"id": 1}}
+			if r.URL.Query().Get("includeData") == "true" {
+				out["version"] = map[string]any{"id": 1, "data": map[string]string{"value": v}}
+			}
+			jsonStandIn(w, http.StatusOK, out)
+		case r.Method == http.MethodDelete:
+			if _, exists := s.vars[path]; !exists {
+				jsonStandIn(w, http.StatusNotFound, nil)
+				return
+			}
+			delete(s.vars, path)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "ovh-secret-manager", endpoint: standIn.server.URL, binding: "okms " + okms, token: token, standIn: standIn, path: true})
+}
+
+// TestServedDatabricksSecretsScopedSyncA241: Databricks secrets API 2.0 —
+// put (overwrites), list in a scope, delete; values are not read back.
+func TestServedDatabricksSecretsScopedSyncA241(t *testing.T) {
+	const token = "dapi-a241-token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case r.URL.Path == "/api/2.0/secrets/list" && r.Method == http.MethodGet:
+			if r.URL.Query().Get("scope") != "payments" {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error_code": "RESOURCE_DOES_NOT_EXIST"})
+				return
+			}
+			list := []map[string]any{}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]any{"key": k, "last_updated_timestamp": 1})
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"secrets": list})
+		case r.URL.Path == "/api/2.0/secrets/put" && r.Method == http.MethodPost:
+			var body struct {
+				Scope       string `json:"scope"`
+				Key         string `json:"key"`
+				StringValue string `json:"string_value"`
+			}
+			if !decodeStandIn(w, r, &body) || body.Scope != "payments" {
+				return
+			}
+			s.vars[body.Key] = body.StringValue
+			jsonStandIn(w, http.StatusOK, map[string]any{})
+		case r.URL.Path == "/api/2.0/secrets/delete" && r.Method == http.MethodPost:
+			var body struct{ Scope, Key string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[body.Key]; !exists {
+				jsonStandIn(w, http.StatusNotFound, map[string]string{"error_code": "RESOURCE_DOES_NOT_EXIST"})
+				return
+			}
+			delete(s.vars, body.Key)
+			jsonStandIn(w, http.StatusOK, map[string]any{})
+		default:
+			jsonStandIn(w, http.StatusNotFound, map[string]string{"error_code": "ENDPOINT_NOT_FOUND"})
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "databricks-secrets", endpoint: standIn.server.URL, binding: "scope payments", token: token, standIn: standIn})
+}
+
+// TestServedSupabaseSecretsScopedSyncA241: Supabase's Management API —
+// POST /v1/projects/{ref}/secrets [{name,value}] upserts, DELETE with the
+// names removes, GET lists each secret's SHA-256 digest (hex), which the
+// scoped sync compares (readback digest).
+func TestServedSupabaseSecretsScopedSyncA241(t *testing.T) {
+	const token = "sbp_a241_token" // #nosec G101 -- fabricated fixture credential; no value is real (CWE-798)
+	const ref = "abcdefghijklmnopqrst"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if !standInAuth(w, r, "Authorization", "Bearer "+token) {
+			return
+		}
+		if r.URL.Path != "/v1/projects/"+ref+"/secrets" {
+			jsonStandIn(w, http.StatusNotFound, nil)
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+			list := []map[string]string{{"name": "SUPABASE_URL", "value": crypto.SHA256Hex([]byte("https://" + ref + ".supabase.co"))}}
+			for _, k := range sortedKeys(s.vars) {
+				list = append(list, map[string]string{"name": k, "value": crypto.SHA256Hex([]byte(s.vars[k]))})
+			}
+			jsonStandIn(w, http.StatusOK, list)
+		case http.MethodPost:
+			var body []struct{ Name, Value string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			for _, item := range body {
+				if strings.HasPrefix(item.Name, "SUPABASE_") {
+					jsonStandIn(w, http.StatusBadRequest, nil)
+					return
+				}
+				s.vars[item.Name] = item.Value
+			}
+			w.WriteHeader(http.StatusCreated)
+		case http.MethodDelete:
+			var names []string
+			if !decodeStandIn(w, r, &names) {
+				return
+			}
+			for _, name := range names {
+				delete(s.vars, name)
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{})
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "supabase-secrets", endpoint: standIn.server.URL, binding: "project " + ref, token: token, standIn: standIn})
+}
+
+// TestServedCamundaScopedSyncA241: Camunda's Administration API — client
+// credentials exchanged at /oauth/token, then POST (409 if present), PUT
+// and DELETE /clusters/{id}/secrets[/{name}], and GET returning each value.
+func TestServedCamundaScopedSyncA241(t *testing.T) {
+	const clientID, clientSecret, access = "a241-client", "camunda-a241-secret", "camunda-a241-access" // #nosec G101 -- fabricated fixture credentials; no value is real (CWE-798)
+	const cluster = "bbbbbbbb-2222-4333-8444-555555555555"
+	standIn := newSyncStandIn(t, func(s *syncStandIn, w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth/token" {
+			if r.ParseForm() != nil || r.PostForm.Get("grant_type") != "client_credentials" || r.PostForm.Get("audience") != "api.cloud.camunda.io" ||
+				r.PostForm.Get("client_id") != clientID || r.PostForm.Get("client_secret") != clientSecret {
+				jsonStandIn(w, http.StatusUnauthorized, map[string]string{"error": "access_denied"})
+				return
+			}
+			jsonStandIn(w, http.StatusOK, map[string]any{"access_token": access, "token_type": "Bearer", "expires_in": 300})
+			return
+		}
+		if !standInAuth(w, r, "Authorization", "Bearer "+access) {
+			return
+		}
+		rest, ok := strings.CutPrefix(r.URL.Path, "/clusters/"+cluster+"/secrets")
+		if !ok {
+			jsonStandIn(w, http.StatusNotFound, nil)
+			return
+		}
+		name := strings.TrimPrefix(rest, "/")
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		switch {
+		case name == "" && r.Method == http.MethodGet:
+			jsonStandIn(w, http.StatusOK, s.vars)
+		case name == "" && r.Method == http.MethodPost:
+			var body struct{ SecretName, SecretValue string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			if _, exists := s.vars[body.SecretName]; exists {
+				jsonStandIn(w, http.StatusConflict, nil)
+				return
+			}
+			s.vars[body.SecretName] = body.SecretValue
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPut:
+			var body struct{ SecretValue string }
+			if !decodeStandIn(w, r, &body) {
+				return
+			}
+			s.vars[name] = body.SecretValue
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete:
+			delete(s.vars, name)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			jsonStandIn(w, http.StatusMethodNotAllowed, nil)
+		}
+	})
+	hostedSyncProof(t, hostedSyncCase{typ: "camunda", endpoint: standIn.server.URL, binding: "cluster " + cluster, username: clientID, token: clientSecret, standIn: standIn})
 }

@@ -5,6 +5,7 @@ package secretsync
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
@@ -63,8 +65,11 @@ type hostedVendor struct {
 	proof        string
 	// headers sets authentication and any fixed headers on every request.
 	headers func(p *HostedSyncPusher, req *http.Request)
-	put     func(ctx context.Context, p *HostedSyncPusher, key string, value []byte) error
-	list    func(ctx context.Context, p *HostedSyncPusher) ([]string, error)
+	// sign, when set, signs each request over its headers and body (an API
+	// that authenticates requests rather than bearers).
+	sign func(p *HostedSyncPusher, req *http.Request, body []byte) error
+	put  func(ctx context.Context, p *HostedSyncPusher, key string, value []byte) error
+	list func(ctx context.Context, p *HostedSyncPusher) ([]string, error)
 	// read returns whether the key exists and, for ReadBackValue, the value
 	// (the engine wipes it) or, for ReadBackDigest, the digest bytes.
 	read   func(ctx context.Context, p *HostedSyncPusher, key string) (bool, []byte, error)
@@ -100,6 +105,15 @@ var hostedVendors = map[string]*hostedVendor{
 	"daytona":                   daytonaVendor,
 	"ona":                       onaVendor,
 	"trigger-dev":               triggerVendor,
+	"cloudflare-workers":        cloudflareWorkersVendor,
+	"cloudflare-pages":          cloudflarePagesVendor,
+	"cloudflare-secrets-store":  cloudflareSecretsStoreVendor,
+	"azure-app-configuration":   azureAppConfigVendor,
+	"oci-vault":                 ociVaultVendor,
+	"ovh-secret-manager":        ovhVendor,
+	"databricks-secrets":        databricksVendor,
+	"supabase-secrets":          supabaseVendor,
+	"camunda":                   camundaVendor,
 }
 
 // HostedSyncConfig configures one hosted destination.
@@ -148,7 +162,7 @@ func NewHostedSyncPusher(cfg HostedSyncConfig) (*HostedSyncPusher, error) {
 		endpoint = target.Endpoint
 	}
 	if endpoint == "" {
-		return nil, fmt.Errorf("secretsync: %s is self-hosted; its endpoint is required", target.Name)
+		return nil, fmt.Errorf("secretsync: %s has no fixed API base; its endpoint is required", target.Name)
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
@@ -288,7 +302,36 @@ func (p *HostedSyncPusher) request(ctx context.Context, method, path string, bod
 	}
 	req.Header.Set("Accept", "application/json")
 	p.vendor.headers(p, req)
+	if p.vendor.sign != nil {
+		if err := p.vendor.sign(p, req, body); err != nil {
+			return nil, fmt.Errorf("secretsync: %s request signature: %w", p.target.Name, err)
+		}
+	}
 	return req, nil
+}
+
+// sendForHeader is send for an API that pages through a response header:
+// it decodes the 2xx JSON answer into out and returns that header's value.
+func (p *HostedSyncPusher) sendForHeader(ctx context.Context, req *http.Request, out any, header string) (string, error) {
+	resp, err := p.doer.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := secret.ReadBounded(resp.Body, cloudhttp.MaxBodyBytes)
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(raw)
+	if resp.StatusCode/100 != 2 {
+		return "", &responseStatusError{code: resp.StatusCode}
+	}
+	if out != nil && len(raw) > 0 {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return "", fmt.Errorf("secretsync: decode %s %s response: %w", req.Method, req.URL.Path, err)
+		}
+	}
+	return resp.Header.Get(header), nil
 }
 
 // notFound reports a 404 answer.

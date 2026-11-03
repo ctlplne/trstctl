@@ -44,6 +44,21 @@ var (
 	triggerEnv        = regexp.MustCompile(`^(dev|staging|prod)$`)
 )
 
+var (
+	cloudflareAccount = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	cloudflareScript  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
+	pagesEnvironment  = regexp.MustCompile(`^(production|preview)$`)
+	secretsStoreName  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+	appConfigLabel    = regexp.MustCompile(`^[A-Za-z0-9_.:/-]{1,64}$`)
+	appConfigKey      = regexp.MustCompile(`^[A-Za-z0-9_.:/-]+$`)
+	ociID             = regexp.MustCompile(`^ocid1\.[a-z0-9]+\.[a-z0-9-]+\.[a-z0-9-]*\.[a-z0-9]{8,}$`)
+	ociName           = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	ovhPath           = regexp.MustCompile(`^[a-zA-Z0-9_.:=@-]+(/[a-zA-Z0-9_.:=@-]+)*$`)
+	databricksName    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+	supabaseProject   = regexp.MustCompile(`^[a-z]{20}$`)
+	camundaName       = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
 // zabbixBinding is "global" (global macros) or "host <ID>" (one host's).
 func zabbixBinding(f []string) (Binding, error) {
 	switch {
@@ -184,6 +199,35 @@ func all() []Target {
 		{Type: "trigger-dev", Name: "Trigger.dev", Platform: "trigger-dev", Grammar: "project <proj_...> env <dev|staging|prod>",
 			Endpoint: "https://api.trigger.dev", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "project", rule: triggerProject, what: "a project ref (proj_...)"}, pair{word: "env", rule: triggerEnv, what: "dev, staging or prod"})},
+		{Type: "cloudflare-workers", Name: "Cloudflare Workers", Platform: "cloudflare", Grammar: "account <ID> script <name>",
+			Endpoint: "https://api.cloudflare.com/client/v4", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
+			parse: pairs(pair{word: "account", rule: cloudflareAccount, what: "a 32-character account ID"}, pair{word: "script", rule: cloudflareScript, what: "a Worker script name"})},
+		{Type: "cloudflare-pages", Name: "Cloudflare Pages", Platform: "cloudflare", Grammar: "account <ID> project <name> [environment production|preview]",
+			Endpoint: "https://api.cloudflare.com/client/v4", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
+			parse: pairs(pair{word: "account", rule: cloudflareAccount, what: "a 32-character account ID"}, pair{word: "project", rule: cloudflareScript, what: "a Pages project name"},
+				pair{word: "environment", rule: pagesEnvironment, what: "production or preview", optional: true})},
+		{Type: "cloudflare-secrets-store", Name: "Cloudflare Secrets Store", Platform: "cloudflare", Grammar: "account <ID> store <ID>",
+			Endpoint: "https://api.cloudflare.com/client/v4", Keys: FlatKeys, keyRule: secretsStoreName, keyHelp: "letters, digits, underscores, dots and hyphens", maxKey: 255,
+			parse: pairs(pair{word: "account", rule: cloudflareAccount, what: "a 32-character account ID"}, pair{word: "store", rule: cloudflareAccount, what: "a 32-character store ID"})},
+		{Type: "azure-app-configuration", Name: "Azure App Configuration", Platform: "azure", Grammar: "[label <label>]", Credential: UserAndToken,
+			Keys: FlatKeys, keyRule: appConfigKey, keyHelp: "letters, digits, underscores, dots, colons, slashes and hyphens", maxKey: 1024,
+			parse: pairs(pair{word: "label", rule: appConfigLabel, what: "a label", optional: true})},
+		{Type: "oci-vault", Name: "OCI Vault", Platform: "oci", Grammar: "compartment <OCID> vault <OCID> key <OCID>", Credential: UserAndToken,
+			Keys: FlatKeys, keyRule: ociName, keyHelp: "letters, digits, dots, underscores and hyphens", maxKey: 255,
+			parse: pairs(pair{word: "compartment", rule: ociID, what: "a compartment OCID"}, pair{word: "vault", rule: ociID, what: "a vault OCID"},
+				pair{word: "key", rule: ociID, what: "a key OCID in that vault"})},
+		{Type: "ovh-secret-manager", Name: "OVHcloud Secret Manager", Platform: "ovhcloud", Grammar: "okms <ID>",
+			Keys: PathKeys, keyRule: ovhPath, keyHelp: "a path of letters, digits and _ . : = @ -", maxKey: 255,
+			parse: pairs(pair{word: "okms", rule: uuidRule, what: "the OKMS domain UUID"})},
+		{Type: "databricks-secrets", Name: "Databricks secrets", Platform: "databricks", Grammar: "scope <name>",
+			Keys: FlatKeys, keyRule: databricksName, keyHelp: "up to 128 letters, digits, dots, underscores and hyphens", maxKey: 128,
+			parse: pairs(pair{word: "scope", rule: databricksName, what: "a secret scope name"})},
+		{Type: "supabase-secrets", Name: "Supabase Edge Function secrets", Platform: "supabase", Grammar: "project <ref>",
+			Endpoint: "https://api.supabase.com", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 256, denyPrefix: []string{"SUPABASE_"},
+			parse: pairs(pair{word: "project", rule: supabaseProject, what: "a 20-letter project ref"})},
+		{Type: "camunda", Name: "Camunda", Platform: "camunda", Grammar: "cluster <ID>", Credential: UserAndToken,
+			Endpoint: "https://api.cloud.camunda.io", Keys: FlatKeys, keyRule: camundaName, keyHelp: "letters, digits, underscores and hyphens", maxKey: 49,
+			parse: pairs(pair{word: "cluster", rule: uuidRule, what: "a cluster UUID"})},
 		{Type: "laravel-forge", Name: "Laravel Forge", Platform: "laravel-forge", Grammar: "org <slug> server <ID> site <ID>",
 			Endpoint: "https://forge.laravel.com/api", Keys: FlatKeys, keyRule: envName, keyHelp: envNameHelp, maxKey: 255,
 			parse: pairs(pair{word: "org", rule: forgeOrg, what: "an organization slug"}, pair{word: "server", rule: numeric, what: "a server ID"},

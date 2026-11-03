@@ -62,6 +62,35 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 		hosted("daytona", ""),
 		hosted("ona", "project eeeeeeee-ffff-4000-8111-222222222222"),
 		hosted("trigger-dev", "project proj_a241payments env staging"),
+		hosted("cloudflare-workers", "account 0123456789abcdef0123456789abcdef script payments-worker"),
+		hosted("cloudflare-pages", "account 0123456789abcdef0123456789abcdef project payments-site environment preview"),
+		hosted("cloudflare-secrets-store", "account 0123456789abcdef0123456789abcdef store fedcba9876543210fedcba9876543210"),
+		func() SecretSyncTargetConfig {
+			c := hosted("azure-app-configuration", "label prod")
+			c.Endpoint, c.Username = "https://payments.azconfig.io", "a241-credential"
+			return c
+		}(),
+		func() SecretSyncTargetConfig {
+			c := hosted("oci-vault", "compartment ocid1.compartment.oc1..aaaaaaaacompart vault ocid1.vault.oc1.iad.aaaaaaaavault key ocid1.key.oc1.iad.aaaaaaaakey00001")
+			c.Endpoint, c.Username = "https://vaults.us-ashburn-1.oci.oraclecloud.com/20180608", "ocid1.tenancy.oc1..x/ocid1.user.oc1..y/aa:bb"
+			return c
+		}(),
+		func() SecretSyncTargetConfig {
+			c := hosted("ovh-secret-manager", "okms aaaaaaaa-1111-4222-8333-444444444444")
+			c.Endpoint = "https://eu-west-rbx.okms.ovh.net"
+			return c
+		}(),
+		func() SecretSyncTargetConfig {
+			c := hosted("databricks-secrets", "scope payments")
+			c.Endpoint = "https://dbc-a241.cloud.databricks.com"
+			return c
+		}(),
+		hosted("supabase-secrets", "project abcdefghijklmnopqrst"),
+		func() SecretSyncTargetConfig {
+			c := hosted("camunda", "cluster bbbbbbbb-2222-4333-8444-555555555555")
+			c.Username = "a241-client"
+			return c
+		}(),
 	} {
 		if err := ValidateSecretIntegrations(SecretIntegrationsConfig{SyncTargets: []SecretSyncTargetConfig{target}}, true); err != nil {
 			t.Fatalf("%s: %v", target.Type, err)
@@ -78,7 +107,7 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 		{hosted("qovery", "service aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"), "a scope (application"},
 		{hosted("laravel-forge", "org acme server web site 202"), "server must be a server ID"},
 		{func() SecretSyncTargetConfig { c := hosted("fly", "payments"); c.TokenRef = ""; return c }(), "token_ref"},
-		{hosted("teamcity", "project Payments"), "teamcity is self-hosted: endpoint is required"},
+		{hosted("teamcity", "project Payments"), "teamcity has no fixed API base: endpoint is required"},
 		{func() SecretSyncTargetConfig {
 			c := hosted("spacelift", "context payments-env")
 			c.Endpoint = "https://acme.app.spacelift.io/graphql"
@@ -86,9 +115,13 @@ func TestSecretSyncTargetsHostedA241(t *testing.T) {
 		}(), "username is required for spacelift"},
 		{hosted("circleci", "project acme/payments"), "project must be a project slug"},
 		{hosted("rundeck", "folder project/payments"), "a Key Storage folder under keys/"},
-		{hosted("zabbix", "global"), "zabbix is self-hosted: endpoint is required"},
+		{hosted("zabbix", "global"), "zabbix has no fixed API base: endpoint is required"},
 		{hosted("trigger-dev", "project proj_a241payments env preview"), "env must be dev, staging or prod"},
 		{hosted("ona", "team eeeeeeee-ffff-4000-8111-222222222222"), "organization, project or user"},
+		{hosted("cloudflare-pages", "account 0123456789abcdef0123456789abcdef project payments-site environment staging"), "production or preview"},
+		{hosted("oci-vault", "compartment c vault v key k"), "compartment must be a compartment OCID"},
+		{hosted("supabase-secrets", "project ABC"), "a 20-letter project ref"},
+		{hosted("databricks-secrets", "scope payments"), "databricks-secrets has no fixed API base: endpoint is required"},
 		{func() SecretSyncTargetConfig { c := hosted("fly", "payments"); c.Username = "ops"; return c }(), "username is not used by fly"},
 		{func() SecretSyncTargetConfig {
 			return SecretSyncTargetConfig{TenantID: tenant, ID: "gh", Type: "github-actions", Owner: "o", Repo: "r", TokenRef: "secret://gh", Binding: "x"}

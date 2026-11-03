@@ -89,6 +89,9 @@ func TestValidKeyA241(t *testing.T) {
 		{"zabbix", "DB.PASSWORD", true},
 		{"zabbix", "db_password", false},
 		{"ona", "DB", false},
+		{"supabase-secrets", "SUPABASE_URL", false},
+		{"ovh-secret-manager", "inv241/db_password", true},
+		{"camunda", strings.Repeat("A", 50), false},
 	} {
 		target, _ := Lookup(c.typ)
 		if err := target.ValidKey(c.key); (err == nil) != c.ok {

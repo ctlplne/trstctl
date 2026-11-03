@@ -871,7 +871,7 @@ func validateHostedSyncTarget(where string, t synctarget.Target, c SecretSyncTar
 		errs = append(errs, fmt.Errorf("%s username is not used by %s", where, c.Type))
 	}
 	if t.Endpoint == "" && strings.TrimSpace(c.Endpoint) == "" {
-		errs = append(errs, fmt.Errorf("%s %s is self-hosted: endpoint is required", where, c.Type))
+		errs = append(errs, fmt.Errorf("%s %s has no fixed API base: endpoint is required (the instance, account, workspace or regional URL)", where, c.Type))
 	}
 	return errs
 }
