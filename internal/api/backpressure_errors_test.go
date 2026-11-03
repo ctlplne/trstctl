@@ -4,12 +4,15 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestTransactionRollbackResponseDoesNotClaimEntireCommandWasUndone(t *testing.T) {
@@ -33,5 +36,28 @@ func TestTransactionRollbackResponseDoesNotClaimEntireCommandWasUndone(t *testin
 		!strings.Contains(strings.ToLower(problem.Detail), "inspect the resource") ||
 		strings.Contains(problem.Detail, "request's transaction back") {
 		t.Fatalf("unsafe rollback response: %+v", problem)
+	}
+}
+
+// A busy datastore stays retryable under a handler's own status: the restore
+// rehearsal's owner create came back 400 for "tenant event protection is in
+// use" (CI 41548425634), which told the caller to change a valid request.
+func TestBusyDatastoreUnderAHandlerStatusAnswersRetryable(t *testing.T) {
+	api := &API{}
+	busy := fmt.Errorf("%w: tenant event protection is in use", store.ErrDatastoreBusy)
+	for name, err := range map[string]error{
+		"wrapped as 400": errWithStatus(http.StatusBadRequest, busy),
+		"bare":           busy,
+	} {
+		response := httptest.NewRecorder()
+		api.writeError(response, err)
+		if response.Code != http.StatusServiceUnavailable || response.Header().Get("Retry-After") != "1" {
+			t.Errorf("%s: status=%d retry-after=%q, want 503 with Retry-After", name, response.Code, response.Header().Get("Retry-After"))
+		}
+	}
+	response := httptest.NewRecorder()
+	api.writeError(response, errWithStatus(http.StatusBadRequest, fmt.Errorf("owner name is required")))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("a real request error: status=%d, want 400", response.Code)
 	}
 }

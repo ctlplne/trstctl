@@ -33,6 +33,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// and names its check (owner decision, batch 11).
 		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, crypto.SubjectKeyRefusalDetail(err)).
 			WithExtension("code", "subject_key_refused"))
+	case store.IsBusy(err):
+		// A busy datastore answers as retryable even under a handler's own
+		// status: wrapping it as 400 told the caller to change a request that
+		// was fine (the restore rehearsal's owner create, CI 41548425634).
+		writeDatastoreBusy(a, w)
 	case errors.As(err, &ae):
 		p := problem.New(ae.status, ae.detail)
 		for k, v := range ae.ext {
@@ -49,12 +54,6 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writeSSHWorkflowError(w, err):
 	case writeTenantCryptoError(a, w, err):
 	case a.writeBackpressureError(w, err):
-	case store.IsBusy(err):
-		w.Header().Set("Retry-After", "1")
-		// Bounded-latency datastore failure (pool saturation or server-side
-		// statement deadline): a structured 503 tells the caller to retry
-		// rather than hanging or mislabeling it a 500 (OPS-TIMEOUTS-001).
-		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "datastore is busy; the request was bounded by its acquire/statement deadline — retry"))
 	case errors.Is(err, store.ErrResourceAdmissionBusy):
 		w.Header().Set("Retry-After", "1")
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "resource creation is in progress; retry the same request"))
@@ -144,10 +143,20 @@ func (a *API) notFound(w http.ResponseWriter, _ *http.Request) {
 	a.writeProblem(w, problem.New(http.StatusNotFound, "no such resource"))
 }
 
+// writeDatastoreBusy answers a bounded-latency datastore failure (pool
+// saturation or a server-side statement deadline) with a structured 503, so
+// the caller retries rather than hanging or reading a 500 (OPS-TIMEOUTS-001).
+func writeDatastoreBusy(a *API, w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "1")
+	a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "datastore is busy; the request was bounded by its acquire/statement deadline — retry"))
+}
+
 func errWithStatus(status int, err error) *apiError {
 	var ae *apiError
 	if errors.As(err, &ae) {
 		return ae
 	}
-	return errStatus(status, err.Error())
+	out := errStatus(status, err.Error())
+	out.cause = err
+	return out
 }

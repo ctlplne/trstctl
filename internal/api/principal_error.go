@@ -23,9 +23,15 @@ type apiError struct {
 	status int
 	detail string
 	ext    map[string]any
+	// cause is the error a handler classified, kept so a transient datastore
+	// condition under it still answers as retryable.
+	cause error
 }
 
 func (e *apiError) Error() string { return e.detail }
+
+// Unwrap exposes the classified cause.
+func (e *apiError) Unwrap() error { return e.cause }
 
 func errStatus(status int, detail string) *apiError {
 	return &apiError{status: status, detail: detail}
