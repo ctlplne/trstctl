@@ -19,6 +19,26 @@ import (
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
+// authorizeAuditFeedRequest sets the collector's credential header. A provider
+// it does not name is refused before anything is sent: posting the batch
+// without credentials would fail at the collector, or reach one that accepts
+// anonymous writes.
+func authorizeAuditFeedRequest(req *http.Request, provider, batchID string, token []byte) error {
+	switch provider {
+	case auditsink.ProviderSplunkHEC:
+		req.Header.Set("Authorization", secrettext.Prefixed("Splunk ", token))
+		req.Header.Set("X-Splunk-Request-Channel", batchID)
+	case auditsink.ProviderSentinel:
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		req.Header.Set("x-ms-client-request-id", batchID)
+	case auditsink.ProviderElastic:
+		req.Header.Set("Authorization", secrettext.Prefixed("ApiKey ", token))
+	default:
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: audit feed provider %q has no credential scheme", provider))
+	}
+	return nil
+}
+
 func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message orchestrator.Message) error {
 	if d.orch == nil {
 		return fmt.Errorf("server: audit feed orchestrator is unavailable")
@@ -32,7 +52,8 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 		batch.DestinationID == "" || batch.EndpointURL == "" || (batch.TokenRef == "" && batch.Provider != auditsink.ProviderSyslog) ||
 		len(batch.Records) == 0 || batch.StartSequence != batch.Records[0].Sequence ||
 		batch.EndSequence != batch.Records[len(batch.Records)-1].Sequence || batch.ChainHead == "" {
-		return fmt.Errorf("server: audit feed batch authority is incomplete or mismatched")
+		// Retrying cannot repair the batch's own authority; nothing was sent.
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: audit feed batch authority is incomplete or mismatched"))
 	}
 	if d.audit == nil {
 		return fmt.Errorf("server: collector source reader is unavailable")
@@ -85,15 +106,8 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	}
 	req.Header.Set("X-Trstctl-Idempotency-Key", message.IdempotencyKey)
 	req.Header.Set("Idempotency-Key", message.IdempotencyKey)
-	switch batch.Provider {
-	case auditsink.ProviderSplunkHEC:
-		req.Header.Set("Authorization", secrettext.Prefixed("Splunk ", tokenBytes))
-		req.Header.Set("X-Splunk-Request-Channel", batch.BatchID)
-	case auditsink.ProviderSentinel:
-		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", tokenBytes))
-		req.Header.Set("x-ms-client-request-id", batch.BatchID)
-	case auditsink.ProviderElastic:
-		req.Header.Set("Authorization", secrettext.Prefixed("ApiKey ", tokenBytes))
+	if err := authorizeAuditFeedRequest(req, batch.Provider, batch.BatchID, tokenBytes); err != nil {
+		return err
 	}
 	response, err := client.Do(req)
 	if err != nil {
