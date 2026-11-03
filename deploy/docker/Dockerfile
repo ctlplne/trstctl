@@ -58,9 +58,12 @@ RUN npm --prefix web run build
 FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS build
 WORKDIR /src
 
-# Resolve modules first so they cache independently of source changes.
+# Resolve modules first so they cache independently of source changes. A
+# transient module-proxy failure (an HTTP/2 stream reset failed the restore
+# rehearsal's image build on CI 41661778120) retries twice, 10 s and then 30 s
+# later; a missing module or a go.sum mismatch fails all three the same way.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }
 
 COPY . .
 # Vite writes the verified production bundle here; assets.go embeds this exact

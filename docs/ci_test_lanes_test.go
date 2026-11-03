@@ -4,6 +4,7 @@ package docs
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -361,6 +362,31 @@ func TestCIModuleDownloadsRetryTransientProxyFailures(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("go-mod-download.sh lost %q", want)
 		}
+	}
+}
+
+// TestImageBuildsRetryTransientProxyFailures holds the image builds to the same
+// rule: a bare `RUN go mod download` failed the restore rehearsal's image build
+// on one HTTP/2 stream reset from the module proxy (CI 41661778120).
+func TestImageBuildsRetryTransientProxyFailures(t *testing.T) {
+	retry := "RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }"
+	files, err := filepath.Glob("../deploy/*/Dockerfile*")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no Dockerfiles found: %v", err)
+	}
+	retried := 0
+	for _, path := range files {
+		for _, line := range strings.Split(read(t, path), "\n") {
+			switch strings.TrimSpace(line) {
+			case "RUN go mod download":
+				t.Errorf("%s runs a bare `go mod download`; use %q", path, retry)
+			case retry:
+				retried++
+			}
+		}
+	}
+	if retried == 0 {
+		t.Error("no image build downloads modules with the retry")
 	}
 }
 

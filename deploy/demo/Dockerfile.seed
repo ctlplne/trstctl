@@ -15,7 +15,8 @@ FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+# Retries a transient module-proxy failure (see deploy/docker/Dockerfile).
+RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }
 
 COPY . .
 COPY --from=web-build /src/internal/webui/dist ./internal/webui/dist

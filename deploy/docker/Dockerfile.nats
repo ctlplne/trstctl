@@ -7,7 +7,8 @@
 FROM --platform=$BUILDPLATFORM golang:1.26.10-bookworm@sha256:5b1f78db1f54cc8cb46e652c51d3f854441c4310a449161b6fe9fb553edab505 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+# Retries a transient module-proxy failure (see deploy/docker/Dockerfile).
+RUN go mod download || { sleep 10; go mod download; } || { sleep 30; go mod download; }
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
