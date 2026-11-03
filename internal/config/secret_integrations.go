@@ -185,7 +185,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -194,7 +194,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -485,7 +485,7 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 	}
 	var errs []error
 	if !TwoUserRotationProviderTypes[c.Type] || !c.AllowStaticRotation {
-		errs = append(errs, fmt.Errorf("%s rotation_accounts needs allow_static_rotation on a postgresql provider", where))
+		errs = append(errs, fmt.Errorf("%s rotation_accounts needs allow_static_rotation on a provider of type %s", where, strings.Join(sortedTrueKeys(TwoUserRotationProviderTypes), " or ")))
 	}
 	allowed := map[string]bool{}
 	for _, role := range normalizedStrings(c.AllowedRoles) {
@@ -508,7 +508,11 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 			continue
 		}
 		for _, account := range accounts {
-			if len(account) > 63 || strings.ContainsRune(account, 0) {
+			switch {
+			case c.Type == "ldap" && (!strings.Contains(account, "=") ||
+				!strings.HasSuffix(strings.ToLower(account), ","+strings.ToLower(strings.TrimSpace(c.UsersDN)))):
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an entry under users_dn", where, account))
+			case c.Type != "ldap" && (len(account) > 63 || strings.ContainsRune(account, 0)):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
 			}
 			if other, taken := owner[account]; taken {

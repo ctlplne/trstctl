@@ -735,6 +735,17 @@ against a real PostgreSQL target while an application keeps writing with the
 credential it last read, through a target that blocks retirement past the delivery
 deadline, a server restart mid-cycle and a successor the target refuses.
 
+An LDAP role rotates the same way between two existing entries under `users_dn` that
+the directory's owner placed in the role's group (A240): `rotation_accounts` names
+their DNs, **stage** sets a new password on the entry `old_ref` does not name (the
+directory hashes it, RFC 3062) and verifies it by binding, and **retire** sets a
+password nobody holds on the other; group memberships never change, and nothing is
+created or removed. LDAP has no session to end, so a bind already open lasts until it
+binds again. The served proof runs on OpenLDAP over verified LDAPS: three unattended
+cycles while an application binds with the credential it last read and reports each
+version it used, then a retirement against a paused directory that times out and
+leaves the predecessor binding until the directory resumes.
+
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports
 (`POST /api/v1/secrets/deliveries` with `state: verified`, the version the consumer's

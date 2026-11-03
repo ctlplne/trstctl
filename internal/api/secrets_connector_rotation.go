@@ -154,10 +154,14 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 			if req.OldRef == pair[0] {
 				next = pair[1]
 			}
+			retirement := "replacing its password and ending its sessions"
+			if retirer, ok := provider.(dynsecret.TwoUserRetirer); ok {
+				retirement = retirer.TwoUserRetirement()
+			}
 			plan.ExecuteExternalEffects = []string{
 				"set a new password on account " + next + " of role " + req.Key + " at provider " + req.Provider + "; its grants stay",
 				"verify the staged credential at provider " + req.Provider + " before retiring anything",
-				"retire account " + req.OldRef + " at provider " + req.Provider + " after verification by replacing its password and ending its sessions; its grants stay",
+				"retire account " + req.OldRef + " at provider " + req.Provider + " after verification by " + retirement + "; its grants stay",
 			}
 			if err := checkStaticRotationPredecessor(provider, req.Key, req.OldRef); err != nil {
 				plan.Blockers = append(plan.Blockers, fmt.Sprintf(staticRotationTwoUserOldRefDetail, pair[0], pair[1]))

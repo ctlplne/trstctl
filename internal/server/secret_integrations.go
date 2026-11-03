@@ -633,7 +633,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		backend, err := dynsecret.NewLDAPBackend(dynsecret.LDAPConfig{
 			Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
 			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
-			UsernamePrefix: cfg.UsernamePrefix,
+			UsernamePrefix: cfg.UsernamePrefix, RotationAccounts: o.provider.rotationAccountPairs(),
 		})
 		if err != nil {
 			return o.fail(err)
@@ -1652,6 +1652,15 @@ func (p *configuredDynamicProvider) RotationAccounts(role string) ([2]string, bo
 	return [2]string{accounts[0], accounts[1]}, true
 }
 
+// TwoUserRetirement implements dynsecret.TwoUserRetirer: what retiring one
+// account of a pair does at this provider type (A240).
+func (p *configuredDynamicProvider) TwoUserRetirement() string {
+	if strings.TrimSpace(p.cfg.Type) == "ldap" {
+		return "replacing its password; binds already open last until they bind again"
+	}
+	return "replacing its password and ending its sessions"
+}
+
 // RotationPhase implements dynsecret.RotationPhaser: a provider type whose
 // rotation invalidates the current credential when it issues the next is
 // single-phase (A240).
@@ -1701,10 +1710,10 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "auth0", "datadog", "openai":
+	case "auth0", "datadog", "openai", "ldap":
 		// The rotated secret authenticates its application at the token
-		// endpoint; a Datadog API key validates at the site, and an OpenAI
-		// key lists models (A240).
+		// endpoint; a Datadog API key validates at the site, an OpenAI key
+		// lists models, and a directory entry binds (A240).
 		return p.verifyWithBackend(ctx, credential)
 	default:
 		return "not_available", nil

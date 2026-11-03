@@ -436,6 +436,31 @@ func TestValidateMilvusProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateLDAPRotationAccountsA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "directory", Type: "ldap",
+		Addr: "ldap.lab.test:636", BindDN: "cn=admin,dc=lab,dc=test", PasswordRef: "file:/run/secrets/ldap-admin",
+		UsersDN: "ou=services,dc=lab,dc=test", AllowedRoles: []string{"directory/orders"},
+		RoleBindings: map[string]string{"directory/orders": "cn=orders-readers,ou=groups,dc=lab,dc=test"},
+		MaxTTL:       "1h", AllowStaticRotation: true}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	ok := base
+	ok.RotationAccounts = map[string][]string{"directory/orders": {"uid=orders-svc-a,ou=services,dc=lab,dc=test", "uid=orders-svc-b,ou=services,dc=lab,dc=test"}}
+	if err := check(ok); err != nil {
+		t.Fatal(err)
+	}
+	outside := base
+	outside.RotationAccounts = map[string][]string{"directory/orders": {"uid=orders-svc-a,ou=services,dc=lab,dc=test", "uid=root,ou=admins,dc=lab,dc=test"}}
+	if err := check(outside); err == nil || !strings.Contains(err.Error(), "is not an entry under users_dn") {
+		t.Fatalf("an entry outside users_dn: %v", err)
+	}
+	if !StaticRotationProviderTypes["ldap"] || !TwoUserRotationProviderTypes["ldap"] {
+		t.Fatal("ldap must rotate statically between two entries")
+	}
+}
+
 func TestValidateRotationAccountsA240(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders", Type: "postgresql",
 		AdminDSNRef: "file:/run/secrets/orders-admin-dsn", AllowedRoles: []string{"db/orders", "db/reports"}, MaxTTL: "1h",
@@ -456,8 +481,8 @@ func TestValidateRotationAccountsA240(t *testing.T) {
 		mutate func(*DynamicSecretProviderConfig)
 		want   string
 	}{
-		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a postgresql provider"},
-		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a postgresql provider"},
+		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql"},
+		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a provider of type ldap or postgresql"},
 		"unknown role":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/other"] = []string{"x_a", "x_b"} }, `role "db/other" is not in allowed_roles`},
 		"one account":    {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"orders_app_a"} }, "needs two distinct account names"},
 		"same account":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"a", "a"} }, "needs two distinct account names"},

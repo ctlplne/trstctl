@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2316 annotated sites across 29 rules. Each row is
+2320 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (511 sites)
+### G101 — CWE-798 Use of hardcoded credentials (512 sites)
 
 | Location | Reason |
 |---|---|
@@ -260,10 +260,10 @@ not this file.
 | `internal/config/scim_writeback_test.go:20` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:28` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/secret_integrations_test.go:52` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:1063` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1067` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1071` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:1075` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1088` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1092` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1096` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:1100` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -519,6 +519,7 @@ not this file.
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secret_static_rotation_ldap_two_user_container_test.go:245` | fabricated lab password the first rotation retires (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:104` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:106` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:107` | credential references to fabricated fixture values (CWE-798) |
@@ -993,7 +994,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (29 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (30 sites)
 
 | Location | Reason |
 |---|---|
@@ -1011,7 +1012,8 @@ not this file.
 | `internal/dynsecret/ibm_api_connect.go:152` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ibm_api_connect.go:202` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/kafka.go:339` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/ldap.go:214` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:257` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:286` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/milvus.go:126` | the new user's password goes to the Milvus API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mongodb_atlas.go:155` | the new user's password goes to the Atlas Admin API over the guarded client and is not kept (CWE-200) |
@@ -1132,7 +1134,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (289 sites)
+### G204 — CWE-78 OS command injection (291 sites)
 
 | Location | Reason |
 |---|---|
@@ -1319,13 +1321,6 @@ not this file.
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_served_test.go:327` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:76` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:84` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:94` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:97` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/dynamic_secret_ldap_container_test.go:133` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_totp_lab_test.go:82` | fixed lab image, arguments built by the test (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
@@ -1335,6 +1330,13 @@ not this file.
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:91` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:37` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:74` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:88` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:92` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:95` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/lab_openldap_test.go:123` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:111` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:343` | test builds the in-repo reference module (CWE-78) |
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
@@ -1369,6 +1371,8 @@ not this file.
 | `internal/server/secret_scan_hooks_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:63` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_static_rotation_ldap_two_user_container_test.go:415` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_static_rotation_ldap_two_user_container_test.go:443` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_sync_signed_targets_served_test.go:135` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1988,7 +1992,6 @@ not this file.
 | `internal/server/distrust_removal_served_test.go:184` | the test's own temporary file (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
-| `internal/server/dynamic_secret_ldap_container_test.go:57` | the test's own temp file (CWE-22) |
 | `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:23` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:33` | exact artifact in this test's owned fixture (CWE-22) |
@@ -2004,6 +2007,7 @@ not this file.
 | `internal/server/host_keystore_credentials_served_test.go:166` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/kmip_client_registration_served_test.go:163` | test-generated TLS material in the test's temp dir (CWE-22) |
+| `internal/server/lab_openldap_test.go:55` | the test's own temp file (CWE-22) |
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_served_test.go:902` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
@@ -2257,9 +2261,9 @@ not this file.
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
-| `internal/server/dynamic_secret_ldap_container_test.go:87` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:616` | public CA fixture (CWE-276) |
+| `internal/server/lab_openldap_test.go:85` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |
 | `internal/server/pam_served_test.go:826` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

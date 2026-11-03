@@ -58,6 +58,12 @@ type TwoUserRotationProvider interface {
 	RotationAccounts(role string) ([2]string, bool)
 }
 
+// TwoUserRetirer is a TwoUserRotationProvider that says what retiring one
+// account of a pair does there, for the preview (A240).
+type TwoUserRetirer interface {
+	TwoUserRetirement() string
+}
+
 // Rotation phases (A240). Two-phase: the predecessor keeps working until the
 // rotation retires it. Single-phase: issuing the successor invalidates the
 // predecessor at once, so consumers fail until they read the new version.

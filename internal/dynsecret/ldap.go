@@ -39,6 +39,11 @@ type LDAPConfig struct {
 	// (groupOfNames) whose members get that role's authority.
 	RoleGroups     map[string]string
 	UsernamePrefix string
+	// RotationAccounts maps a two-user role to two existing entries under
+	// UsersDN (A240): a static rotation sets a new password on the one its
+	// consumers are not using and retires the other by setting one nobody
+	// holds; both keep their group memberships.
+	RotationAccounts map[string][2]string
 }
 
 // ldapConn is the part of a directory connection the backend uses.
@@ -53,17 +58,18 @@ type ldapConn interface {
 
 // LDAPBackend creates and deletes leased directory accounts.
 type LDAPBackend struct {
-	url            string
-	addr           string
-	tls            bool
-	serverName     string
-	caPEM          []byte
-	bindDN         string
-	bindPassword   *secret.Buffer
-	usersDN        string
-	roleGroups     map[string]string
-	usernamePrefix string
-	dial           func(ctx context.Context) (ldapConn, error)
+	url              string
+	addr             string
+	tls              bool
+	serverName       string
+	caPEM            []byte
+	bindDN           string
+	bindPassword     *secret.Buffer
+	usersDN          string
+	roleGroups       map[string]string
+	usernamePrefix   string
+	rotationAccounts map[string][2]string
+	dial             func(ctx context.Context) (ldapConn, error)
 }
 
 // NewLDAPBackend validates cfg and builds the backend.
@@ -109,6 +115,23 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 	if len(b.roleGroups) == 0 {
 		return nil, errors.New("dynsecret ldap: every allowed role needs a group in role_bindings")
 	}
+	b.rotationAccounts = map[string][2]string{}
+	owner := map[string]string{}
+	for role, pair := range cfg.RotationAccounts {
+		for _, dn := range pair {
+			if !b.underUsersDN(dn) {
+				return nil, fmt.Errorf("dynsecret ldap: rotation account %q of role %q is not an entry under users_dn", dn, role)
+			}
+			if other, taken := owner[strings.ToLower(dn)]; taken {
+				return nil, fmt.Errorf("dynsecret ldap: rotation account %q serves roles %q and %q", dn, other, role)
+			}
+			owner[strings.ToLower(dn)] = role
+		}
+		if strings.EqualFold(pair[0], pair[1]) {
+			return nil, fmt.Errorf("dynsecret ldap: role %q needs two distinct rotation accounts", role)
+		}
+		b.rotationAccounts[role] = pair
+	}
 	password, err := secret.NewFrom(cfg.BindPassword)
 	if err != nil {
 		return nil, err
@@ -116,6 +139,22 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 	b.bindPassword = password
 	b.dial = b.dialDirectory
 	return b, nil
+}
+
+// underUsersDN reports whether dn is a distinguished name inside users_dn.
+func (b *LDAPBackend) underUsersDN(dn string) bool {
+	_, err := ldap.ParseDN(dn)
+	return err == nil && strings.HasSuffix(strings.ToLower(dn), ","+strings.ToLower(b.usersDN))
+}
+
+// isRotationAccount reports whether dn is one entry of a two-user pair.
+func (b *LDAPBackend) isRotationAccount(dn string) bool {
+	for _, pair := range b.rotationAccounts {
+		if strings.EqualFold(dn, pair[0]) || strings.EqualFold(dn, pair[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // dialDirectory connects (verified TLS through the crypto boundary, or the
@@ -161,7 +200,11 @@ func (b *LDAPBackend) Create(ctx context.Context, role string) (string, []byte, 
 // name stable, so a retry after an uncertain issue replaces that one entry.
 func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
 	if req.Static {
-		return "", nil, errors.New("dynsecret ldap: static credentials are not served")
+		account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor)
+		if !ok {
+			return "", nil, fmt.Errorf("dynsecret ldap: role %q rotates only between two rotation_accounts", req.Role)
+		}
+		return b.stageTwoUser(ctx, account)
 	}
 	group, ok := b.roleGroups[req.Role]
 	if !ok {
@@ -224,8 +267,88 @@ func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest)
 	return dn, credential, nil
 }
 
-// Revoke implements Backend: removing a gone entry succeeds.
+// stageTwoUser sets a new password on the role's inactive entry and returns
+// its credential (A240). A retry sets the same entry's password again, so an
+// uncertain attempt leaves no second credential; the predecessor is untouched.
+func (b *LDAPBackend) stageTwoUser(ctx context.Context, dn string) (string, []byte, error) {
+	password, err := randomSecretHex(24)
+	if err != nil {
+		return "", nil, err
+	}
+	defer secret.Wipe(password)
+	if err := b.setPassword(ctx, dn, password); err != nil {
+		return "", nil, err
+	}
+	username := dn
+	if parsed, err := ldap.ParseDN(dn); err == nil && len(parsed.RDNs) > 0 && len(parsed.RDNs[0].Attributes) > 0 {
+		username = parsed.RDNs[0].Attributes[0].Value
+	}
+	credential, err := json.Marshal(struct { // #nosec G117 -- the staged two-user credential; the rotation seals it before storage (CWE-200)
+		URL      string           `json:"url"`
+		BindDN   string           `json:"bind_dn"`
+		Username string           `json:"username"`
+		Password secret.JSONBytes `json:"password"`
+	}{URL: b.url, BindDN: dn, Username: username, Password: password})
+	if err != nil {
+		return "", nil, err
+	}
+	return dn, credential, nil
+}
+
+// retireTwoUser retires one entry of a pair without touching its group
+// memberships: its password becomes one nobody holds, so the next bind with
+// the old one is refused, and the next rotation that stages it sets one again.
+func (b *LDAPBackend) retireTwoUser(ctx context.Context, dn string) error {
+	scrambled, err := randomSecretHex(32)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(scrambled)
+	return b.setPassword(ctx, dn, scrambled)
+}
+
+// setPassword has the directory hash and store a new password for dn (RFC 3062).
+func (b *LDAPBackend) setPassword(ctx context.Context, dn string, password []byte) error {
+	conn, err := b.connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	// go-ldap takes the password as a string, converted at the call.
+	if _, err := conn.PasswordModify(ldap.NewPasswordModifyRequest(dn, "", secrettext.String(password))); err != nil {
+		return fmt.Errorf("dynsecret ldap: set the password of %s failed", dn)
+	}
+	return nil
+}
+
+// VerifyCredential proves a credential binds: a fresh connection binds as its
+// entry with its password.
+func (b *LDAPBackend) VerifyCredential(ctx context.Context, credential []byte) error {
+	var parsed struct {
+		BindDN   string           `json:"bind_dn"`
+		Password secret.JSONBytes `json:"password"`
+	}
+	if err := json.Unmarshal(credential, &parsed); err != nil || parsed.BindDN == "" || len(parsed.Password) == 0 {
+		return errors.New("dynsecret ldap: the credential carries no bind DN and password")
+	}
+	defer secret.Wipe(parsed.Password)
+	conn, err := b.dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	if err := conn.Bind(parsed.BindDN, secrettext.String(parsed.Password)); err != nil {
+		return errors.New("dynsecret ldap: the credential does not bind")
+	}
+	return nil
+}
+
+// Revoke implements Backend: removing a gone entry succeeds; a two-user entry
+// is retired, never removed.
 func (b *LDAPBackend) Revoke(ctx context.Context, ref string) error {
+	if b.isRotationAccount(ref) {
+		return b.retireTwoUser(ctx, ref)
+	}
 	if _, err := ldap.ParseDN(ref); err != nil || !strings.HasSuffix(strings.ToLower(ref), ","+strings.ToLower(b.usersDN)) {
 		return errors.New("dynsecret ldap: the lease reference is not an entry this provider created")
 	}
