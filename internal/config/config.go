@@ -3271,6 +3271,7 @@ func Parse(data []byte) (*Config, error) {
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+	cfg.normalizeExternalCATypes()
 	return cfg, nil
 }
 
@@ -3300,6 +3301,7 @@ func Load(getenv func(string) string) (*Config, error) {
 		cfg = parsed
 	}
 	cfg.applyEnv(getenv)
+	cfg.normalizeExternalCATypes()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

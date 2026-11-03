@@ -243,6 +243,16 @@ func (c ExternalCAConfig) DefaultTTLDuration() (time.Duration, error) {
 	return d, nil
 }
 
+// normalizeExternalCATypes canonicalizes each external CA's type once, as the
+// configuration loads, so validation and the issuance factory read the same
+// value: "LetsEncrypt" in a config file is the letsencrypt type, not a type
+// validation accepts and issuance then refuses.
+func (c *Config) normalizeExternalCATypes() {
+	for i := range c.ExternalCAs {
+		c.ExternalCAs[i].Type = strings.ToLower(strings.TrimSpace(c.ExternalCAs[i].Type))
+	}
+}
+
 // ValidateExternalCAs is exported for config-focused tests and embedders.
 // Config.Validate calls the package-local twin after Config grows ExternalCAs.
 func ValidateExternalCAs(items []ExternalCAConfig) error {
@@ -259,7 +269,6 @@ func validateExternalCAs(items []ExternalCAConfig) []error {
 	for i, item := range items {
 		where := fmt.Sprintf("external_cas[%d]", i)
 		item.ID = strings.TrimSpace(item.ID)
-		item.Type = strings.ToLower(strings.TrimSpace(item.Type))
 		if item.ID == "" {
 			errs = append(errs, fmt.Errorf("%s.id is required", where))
 		} else if seen[item.ID] {
