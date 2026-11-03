@@ -238,6 +238,7 @@ test-selftests: ## The test lanes' own self-tests (server slices, package shards
 	@set -euo pipefail; $(TEST_PACKAGE_LIST) | \
 		python3 scripts/ci/go-test-shard.py --shard 0 --shards $(TEST_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/fuzz-shard_selftest.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/fuzz-outcome_selftest.py
 	@set -euo pipefail; grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal ee | while read -r f; do \
 		pkg="./$$(dirname "$$f")"; \
 		grep -oE '^func (Fuzz[A-Za-z0-9_]+)\(' "$$f" | sed -E 's/^func //; s/\(//' | while read -r fn; do echo "$$pkg $$fn"; done; \
@@ -428,7 +429,10 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 	fail=0; \
 	while read -r pkg fn; do \
 		echo ">> $$pkg $$fn"; \
-		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL) || fail=1; \
+		out="$$(mktemp)"; status=0; \
+		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) -parallel=$(FUZZ_SMOKE_PARALLEL) 2>&1 | tee "$$out" || status=$$?; \
+		python3 scripts/ci/fuzz-outcome.py --target "$$fn" --status "$$status" --budget "$(FUZZ_SMOKE_TIME)" < "$$out" || fail=1; \
+		rm -f "$$out"; \
 	done < <( \
 		grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal ee | while read -r f; do \
 			pkg="./$$(dirname "$$f")"; \
