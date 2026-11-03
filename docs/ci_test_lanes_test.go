@@ -357,6 +357,26 @@ func TestCIModuleDownloadsRetryTransientProxyFailures(t *testing.T) {
 	if uses == 0 {
 		t.Error("no CI job downloads modules through scripts/ci/go-mod-download.sh")
 	}
+	// Every job that sets up Go prefetches through the script before anything
+	// compiles: vault compat compiled straight after setup and failed on one
+	// stream error from the proxy (CI 41695565837), as fourteen other jobs could.
+	compiles := regexp.MustCompile(`(^|\s)(go (build|test|run|vet|install|generate)|make )`)
+	for id, job := range wf.Jobs {
+		setup, prefetch, build := -1, -1, -1
+		for i, step := range job.Steps {
+			switch {
+			case strings.HasPrefix(step.Uses, "actions/setup-go@") && setup < 0:
+				setup = i
+			case setup >= 0 && prefetch < 0 && strings.TrimSpace(step.Run) == "scripts/ci/go-mod-download.sh":
+				prefetch = i
+			case setup >= 0 && build < 0 && compiles.MatchString(step.Run):
+				build = i
+			}
+		}
+		if setup >= 0 && (prefetch < 0 || (build >= 0 && build < prefetch)) {
+			t.Errorf("job %s sets up Go and compiles before prefetching through scripts/ci/go-mod-download.sh", id)
+		}
+	}
 	script := read(t, "../scripts/ci/go-mod-download.sh")
 	for _, want := range []string{"for delay in 10 30; do", "go mod download && exit 0", "exit 1"} {
 		if !strings.Contains(script, want) {

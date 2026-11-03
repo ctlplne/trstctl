@@ -326,6 +326,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Set up Node for SDK generators
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -494,6 +496,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
@@ -725,6 +729,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        shell: bash
+        run: scripts/ci/go-mod-download.sh
 
       - name: Windows local accounts over OpenSSH (A240)
         shell: pwsh
@@ -758,6 +765,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
@@ -1054,6 +1063,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Capture real sustained-load series
         env:
@@ -1105,6 +1116,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Capture CAP-SMALL spine burst
         run: scripts/perf/run-spine-burst.sh --profile cap-small --out "${RUNNER_TEMP}/spine-burst-cap-small.json"
@@ -1170,6 +1183,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
@@ -1273,6 +1288,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
@@ -1308,6 +1325,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # make reproducible-check exports OCI layouts. The runner's legacy Docker
       # driver cannot perform that export; a pinned Buildx builder can.
@@ -1337,6 +1356,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # The pinned embedded PostgreSQL archive (checksum-verified on use) is
       # restored instead of fetched: each Go test job downloading it from the
@@ -1766,6 +1787,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
@@ -1800,6 +1823,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # Reachability-aware vulnerability scan: fails only on vulnerabilities the
       # code can actually reach (call-graph), not every advisory in the graph.
@@ -1848,6 +1873,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -1985,6 +2012,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # Schema-validate the rendered manifests against the Kubernetes API schemas.
       - name: Install kubeconform
@@ -2629,6 +2658,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
 
       # Cross-compile and vet the whole module for Windows so the CryptoAPI
       # certificate store and the Service Control Manager integration are kept
