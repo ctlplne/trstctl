@@ -1687,6 +1687,9 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
 	}
 	if edgeSvc := s.buildEdgeDelegationService(d, orch); edgeSvc != nil {
+		// A219: a host's edge journal from the agent channel reconciles
+		// through the same service.
+		s.edgeDelegations = edgeSvc
 		defaults = append(defaults, api.WithEdgeDelegations(edgeSvc))
 	}
 	if externalCAs, err := s.buildExternalCAService(d, idem); err != nil {
