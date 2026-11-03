@@ -45,8 +45,11 @@ var (
 	errPostgresRolePassword = errors.New("dynsecret postgres: set the account password failed")
 	errMySQLUserCreate      = errors.New("dynsecret mysql: create user failed")
 	errMongoUserCreate      = errors.New("dynsecret mongodb: create user failed")
-	errRedisRejected        = errors.New("dynsecret redis: server rejected command")
-	errRedisProtocol        = errors.New("dynsecret redis: invalid server response")
+	// errMongoUserPassword is closed for the same reason: the updateUser
+	// command carries the password (A240).
+	errMongoUserPassword = errors.New("dynsecret mongodb: set the user's password failed")
+	errRedisRejected     = errors.New("dynsecret redis: server rejected command")
+	errRedisProtocol     = errors.New("dynsecret redis: invalid server response")
 )
 
 // HTTPDoer is the minimal HTTP client seam used by cloud dynamic-secret backends.
@@ -70,6 +73,9 @@ type MongoRole struct {
 type MongoAdmin interface {
 	CreateUser(ctx context.Context, db, user string, password []byte, roles []MongoRole) error
 	DropUser(ctx context.Context, db, user string) error
+	// SetUserPassword replaces an existing user's password; its roles stay
+	// (two-user rotation, A240).
+	SetUserPassword(ctx context.Context, db, user string, password []byte) error
 }
 
 // PostgresConfig configures a PostgreSQL dynamic-secret backend.
@@ -437,14 +443,20 @@ type MongoConfig struct {
 	Database       string
 	URI            []byte
 	UsernamePrefix string
+	// RotationAccounts maps a two-user role to two existing users of Database
+	// (A240): a static rotation sets a new password on the one its consumers
+	// are not using and retires the other by setting one nobody holds; both
+	// keep their roles.
+	RotationAccounts map[string][2]string
 }
 
 // MongoBackend creates scoped MongoDB database users through MongoAdmin.
 type MongoBackend struct {
-	admin          MongoAdmin
-	database       string
-	uri            *secret.Buffer
-	usernamePrefix string
+	admin            MongoAdmin
+	database         string
+	uri              *secret.Buffer
+	usernamePrefix   string
+	rotationAccounts map[string][2]string
 }
 
 // NewMongoBackend builds a MongoDB dynamic-secret backend.
@@ -469,7 +481,13 @@ func NewMongoBackend(admin MongoAdmin, cfg MongoConfig) (*MongoBackend, error) {
 			return nil, fmt.Errorf("dynsecret mongodb: lock URI: %w", err)
 		}
 	}
-	return &MongoBackend{admin: admin, database: cfg.Database, uri: uri, usernamePrefix: cfg.UsernamePrefix}, nil
+	for role, pair := range cfg.RotationAccounts {
+		if pair[0] == "" || pair[1] == "" || pair[0] == pair[1] {
+			return nil, fmt.Errorf("dynsecret mongodb: role %q needs two distinct rotation accounts", role)
+		}
+	}
+	return &MongoBackend{admin: admin, database: cfg.Database, uri: uri, usernamePrefix: cfg.UsernamePrefix,
+		rotationAccounts: cfg.RotationAccounts}, nil
 }
 
 // Create implements Backend.
@@ -478,6 +496,24 @@ func (b *MongoBackend) Create(ctx context.Context, role string) (string, []byte,
 }
 
 func (b *MongoBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	if account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor); ok && req.Static {
+		// A240: the role's inactive user gets a new password; a retry sets the
+		// same user's password again, so an uncertain attempt leaves no second
+		// credential, and the predecessor is untouched.
+		password, err := randomSecretHex(24)
+		if err != nil {
+			return "", nil, err
+		}
+		defer secret.Wipe(password)
+		if err := b.admin.SetUserPassword(ctx, b.database, account, password); err != nil {
+			return "", nil, errMongoUserPassword
+		}
+		var uri []byte
+		if b.uri != nil {
+			uri = b.uri.Bytes()
+		}
+		return account, mongoCredential(uri, b.database, account, password), nil
+	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 128, "_")
 	if err != nil {
 		return "", nil, err
@@ -518,6 +554,20 @@ func (b *MongoBackend) Close() {
 // Revoke implements Backend.
 func (b *MongoBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
+		return nil
+	}
+	if isRotationAccount(b.rotationAccounts, ref) {
+		// A two-user account is retired, never dropped: its roles persist. Its
+		// password becomes one nobody holds, so the next login with the old one
+		// is refused.
+		scrambled, err := randomSecretHex(32)
+		if err != nil {
+			return err
+		}
+		defer secret.Wipe(scrambled)
+		if err := b.admin.SetUserPassword(ctx, b.database, ref, scrambled); err != nil {
+			return errMongoUserPassword
+		}
 		return nil
 	}
 	if !issuedPrincipalName(b.usernamePrefix, ref) {

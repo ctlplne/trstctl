@@ -596,6 +596,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewMongoBackend(admin, dynsecret.MongoConfig{
 			Database: cfg.Database, URI: uri, UsernamePrefix: cfg.UsernamePrefix,
+			RotationAccounts: o.provider.rotationAccountPairs(),
 		})
 		if err != nil {
 			_ = admin.Close(context.Background())
@@ -1662,6 +1663,8 @@ func (p *configuredDynamicProvider) TwoUserRetirement() string {
 		return "replacing its password; binds already open last until they bind again"
 	case "unix":
 		return "replacing its password; sessions already open last until they end"
+	case "mongodb":
+		return "replacing its password; connections already authenticated last until they reconnect"
 	}
 	return "replacing its password and ending its sessions"
 }
@@ -1721,6 +1724,9 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
+	case "mongodb":
+		// A MongoDB credential is a URI: connect with it and ping (A240).
+		return "connected", dynsecret.VerifyMongoCredential(ctx, credential)
 	case "auth0", "datadog", "openai", "ldap", "unix":
 		// The rotated secret authenticates its application at the token
 		// endpoint; a Datadog API key validates at the site, an OpenAI key

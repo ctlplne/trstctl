@@ -750,8 +750,9 @@ func (r *recordingSQLExec) requireContains(t *testing.T, want string) {
 }
 
 type recordingMongoAdmin struct {
-	created map[string]bool
-	dropped map[string]bool
+	created   map[string]bool
+	dropped   map[string]bool
+	passwords map[string]string
 }
 
 type echoingMongoAdmin struct{ password []byte }
@@ -762,6 +763,11 @@ func (e *echoingMongoAdmin) CreateUser(_ context.Context, _, _ string, password 
 }
 
 func (*echoingMongoAdmin) DropUser(context.Context, string, string) error { return nil }
+
+func (e *echoingMongoAdmin) SetUserPassword(_ context.Context, _, _ string, password []byte) error {
+	e.password = bytes.Clone(password)
+	return fmt.Errorf("adapter echoed %s", password)
+}
 
 func (m *recordingMongoAdmin) CreateUser(_ context.Context, db, user string, password []byte, roles []MongoRole) error {
 	if m.created == nil {
@@ -780,6 +786,17 @@ func (m *recordingMongoAdmin) DropUser(_ context.Context, db, user string) error
 		return fmt.Errorf("bad mongo drop db=%s", db)
 	}
 	m.dropped[user] = true
+	return nil
+}
+
+func (m *recordingMongoAdmin) SetUserPassword(_ context.Context, db, user string, password []byte) error {
+	if db != "app" || len(password) == 0 {
+		return fmt.Errorf("bad mongo password change db=%s secret=%d", db, len(password))
+	}
+	if m.passwords == nil {
+		m.passwords = map[string]string{}
+	}
+	m.passwords[user] = string(password)
 	return nil
 }
 
@@ -1308,5 +1325,45 @@ func TestKubernetesLegacyRevokeLeavesReusedNameToItsNewOwner(t *testing.T) {
 	}
 	if len(deleted) != 1 {
 		t.Fatalf("deletes = %v; want exactly the unlabelled legacy object", deleted)
+	}
+}
+
+// A240: a MongoDB two-user role alternates between its two existing users:
+// the static rotation sets a new password on the one its consumers are not
+// using, retirement sets one nobody holds on the other, and nothing is
+// created or dropped; a failing adapter cannot echo the password.
+func TestMongoTwoUserRotationSetsPasswordsAndDropsNothing(t *testing.T) {
+	admin := &recordingMongoAdmin{}
+	backend, err := NewMongoBackend(admin, MongoConfig{Database: "app", URI: []byte("mongodb://admin:pw@db.lab.test:27017/app"),
+		RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	ctx := context.Background()
+	ref, credential, err := backend.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true, Predecessor: "orders_app_a", LeaseID: "cmd-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != "orders_app_b" || !bytes.Contains(credential, []byte("orders_app_b:"+admin.passwords["orders_app_b"]+"@db.lab.test:27017/app")) {
+		t.Fatalf("staged %q %s", ref, credential)
+	}
+	staged := admin.passwords["orders_app_b"]
+	if err := backend.Revoke(ctx, "orders_app_a"); err != nil {
+		t.Fatal(err)
+	}
+	if admin.passwords["orders_app_a"] == "" || admin.passwords["orders_app_b"] != staged || len(admin.created) != 0 || len(admin.dropped) != 0 {
+		t.Fatalf("retirement changed more than the predecessor's password: passwords=%d created=%v dropped=%v", len(admin.passwords), admin.created, admin.dropped)
+	}
+	echo := &echoingMongoAdmin{}
+	echoing, err := NewMongoBackend(echo, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"orders_app_a", "orders_app_b"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := echoing.CreateCredential(ctx, GenerateRequest{Role: "orders", Static: true}); err == nil || bytes.Contains([]byte(err.Error()), echo.password) {
+		t.Fatalf("a failing adapter's error carried the password: %v", err)
+	}
+	if _, err := NewMongoBackend(admin, MongoConfig{Database: "app", RotationAccounts: map[string][2]string{"orders": {"same", "same"}}}); err == nil {
+		t.Fatal("a pair of one user was accepted")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
@@ -217,6 +218,49 @@ func (a *MongoDriverAdmin) CreateUser(ctx context.Context, db, user string, pass
 		// Driver/server errors may include the command document. Keep the generated
 		// password out of the returned immutable error string.
 		return errors.New("createUser failed")
+	}
+	return nil
+}
+
+// SetUserPassword implements MongoAdmin with MongoDB's native updateUser
+// command; the user's roles are not touched (A240).
+func (a *MongoDriverAdmin) SetUserPassword(ctx context.Context, db, user string, password []byte) error {
+	if a == nil || a.client == nil {
+		return errors.New("dynsecret mongodb: disconnected admin")
+	}
+	cmd := mongoUpdateUserPasswordCommand(user, password)
+	defer secret.Wipe(cmd)
+	if err := a.client.Database(db).RunCommand(ctx, bson.Raw(cmd)).Err(); err != nil {
+		// As for createUser, keep the generated password out of the error.
+		return errors.New("updateUser failed")
+	}
+	return nil
+}
+
+// mongoUpdateUserPasswordCommand encodes {updateUser: user, pwd: password}
+// directly as BSON with its capacity reserved up front, so the password is
+// written once into an array the caller wipes (see mongoCreateUserCommand).
+func mongoUpdateUserPasswordCommand(user string, password []byte) []byte {
+	cmd, start := beginBSONDocument(make([]byte, 0, mongoCommandCapacity(user, password, nil)))
+	cmd = appendBSONString(cmd, "updateUser", []byte(user))
+	cmd = appendBSONString(cmd, "pwd", password)
+	return finishBSONDocument(cmd, start)
+}
+
+// VerifyMongoCredential proves a credential URI opens a session: the driver
+// connects with it and pings its database (A240).
+func VerifyMongoCredential(ctx context.Context, credential []byte) error {
+	uri := bytes.TrimRight(credential, "\r\n")
+	if len(uri) == 0 {
+		return errors.New("dynsecret mongodb: the credential is not a URI")
+	}
+	client, err := mongo.Connect(options.Client().ApplyURI(secrettext.String(uri)).SetServerSelectionTimeout(5 * time.Second))
+	if err != nil {
+		return errors.New("dynsecret mongodb: connect with the credential failed")
+	}
+	defer func() { _ = client.Disconnect(context.Background()) }()
+	if err := client.Ping(ctx, nil); err != nil {
+		return errors.New("dynsecret mongodb: the credential does not authenticate")
 	}
 	return nil
 }

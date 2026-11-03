@@ -746,6 +746,17 @@ cycles while an application binds with the credential it last read and reports e
 version it used, then a retirement against a paused directory that times out and
 leaves the predecessor binding until the directory resumes.
 
+A MongoDB role rotates the same way between two existing users of the provider's
+`database` that hold the role's roles (A240): `rotation_accounts` names them,
+**stage** sets a new password on the user `old_ref` does not name (`updateUser`) and
+verifies it by connecting, and **retire** sets a password nobody holds on the other;
+roles never change, and nothing is created or dropped. A connection that already
+authenticated lasts until it reconnects. The served proof runs on MongoDB 7.0 with
+authorization on: three unattended scheduled cycles while an application connects with
+the credential it last read and reports each version it used, then a retirement against
+a paused database that times out and leaves the predecessor connecting until the
+database resumes.
+
 `unix` (A240) rotates local account passwords on a Unix/Linux host over SSH: the
 control plane authenticates as an administrator with a key (`admin_user`,
 `private_key_ref`), pins the host key (`host_key_fingerprint`, any of the host's keys:

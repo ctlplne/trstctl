@@ -190,7 +190,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -199,7 +199,7 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
-var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true}
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true, "ldap": true, "unix": true, "mongodb": true}
 
 // sortedTrueKeys lists a type set's members in order, for messages.
 func sortedTrueKeys(set map[string]bool) []string {
@@ -518,9 +518,11 @@ func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []err
 			case c.Type == "ldap" && (!strings.Contains(account, "=") ||
 				!strings.HasSuffix(strings.ToLower(account), ","+strings.ToLower(strings.TrimSpace(c.UsersDN)))):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not an entry under users_dn", where, account))
+			case c.Type == "mongodb" && !mongoUserName.MatchString(account):
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a MongoDB user name", where, account))
 			case c.Type == "unix" && !unixAccountName.MatchString(account):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a local account name", where, account))
-			case c.Type != "ldap" && c.Type != "unix" && (len(account) > 63 || strings.ContainsRune(account, 0)):
+			case c.Type != "ldap" && c.Type != "unix" && c.Type != "mongodb" && (len(account) > 63 || strings.ContainsRune(account, 0)):
 				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
 			}
 			if other, taken := owner[account]; taken {
@@ -1175,6 +1177,10 @@ func validateDatadogBinding(binding string) error {
 }
 
 var openAIProjectID = regexp.MustCompile(`^proj_[A-Za-z0-9]{1,64}$`)
+
+// mongoUserName is a MongoDB database user a two-user role alternates between
+// (A240): letters, digits and . _ - only.
+var mongoUserName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // unixAccountName is crypto.ValidSSHAccountName's grammar; config stays free
 // of the crypto boundary.

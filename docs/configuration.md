@@ -2053,11 +2053,12 @@ the connection value and creating a workload credential.
 }
 ```
 
-`rotation_accounts` (PostgreSQL, LDAP or unix, with `allow_static_rotation: true`) maps an
-allowed role to the two existing accounts its static rotation alternates between,
-for example `{"reader": ["orders_app_a", "orders_app_b"]}`, or for LDAP two entry DNs
-under `users_dn`; the owner provisions both with the role's grants (for LDAP, as
-members of the role's group), and rotation only ever changes their passwords.
+`rotation_accounts` (PostgreSQL, MongoDB, LDAP or unix, with `allow_static_rotation: true`)
+maps an allowed role to the two existing accounts its static rotation alternates between,
+for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for MongoDB, two users of
+`database`), or for LDAP two entry DNs under `users_dn`; the owner provisions both with the
+role's grants (for MongoDB, its roles; for LDAP, as members of the role's group), and
+rotation only ever changes their passwords.
 
 An `auth0` provider (A240) only rotates: set `endpoint` to the tenant domain,
 `client_id` and `client_secret_ref` to a machine-to-machine application granted the
