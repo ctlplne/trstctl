@@ -66,6 +66,9 @@ type liveEvalStack struct {
 	signerDigest []byte
 	seq          atomic.Uint64
 	serveErr     chan error
+	// stopLife ends the stack's lifetime context: the signer and the server
+	// live until Close, not until the caller's startup deadline.
+	stopLife context.CancelFunc
 }
 
 func RunLiveLoad(profile string, samples int) (Report, error) {
@@ -193,6 +196,12 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 			stack.Close()
 		}
 	}()
+	// ctx bounds startup only. The signer child and the server get a lifetime
+	// that ends at Close: tied to the startup deadline, the supervisor
+	// interrupted the signer 90 s in and every later issuance failed closed,
+	// which ended each nightly captured soak at its first minute and a half.
+	life, stopLife := context.WithCancel(context.WithoutCancel(ctx))
+	stack.stopLife = stopLife
 
 	cfg := config.Default()
 	pgPort := freeLiveTCPPort()
@@ -248,12 +257,12 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 		signerArgs = append(signerArgs, "--allow-insecure-dev-nonlinux")
 	}
 	signerSocket := filepath.Join(dir, "signer.sock")
-	stack.signer, err = signing.Supervise(ctx, signerBin, signerSocket, signerArgs...)
+	stack.signer, err = signing.Supervise(life, signerBin, signerSocket, signerArgs...)
 	if err != nil {
 		return nil, err
 	}
 
-	stack.srv, err = server.Build(ctx, server.Deps{
+	stack.srv, err = server.Build(life, server.Deps{
 		Store:             stack.store,
 		Log:               stack.log,
 		Signer:            stack.signer,
@@ -737,6 +746,9 @@ func (s *liveEvalStack) Close() {
 	}
 	if s.stopPG != nil {
 		_ = s.stopPG()
+	}
+	if s.stopLife != nil {
+		s.stopLife()
 	}
 	if s.tempDir != "" {
 		_ = os.RemoveAll(s.tempDir)
