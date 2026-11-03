@@ -2,6 +2,14 @@
 
 ### Added
 
+- Hosted API key rotation (A240): `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and
+  `cloudflare-r2` providers issue
+  leases and rotate in two phases with one shared engine. Each key is created with the administrator's credential
+  under the target the role is bound to (a credit limit, a user, a model list, a project, a deployment and its
+  actions, a permission set, a template token's policies), named for the lease or command, and deleted at revocation only after the provider's
+  naming is checked; a retried creation replaces its earlier attempt's key. Keys are verified with the vendor's own
+  read where one exists (Supabase, Convex and R2 report `not_available`). Built against stand-ins of each vendor's API.
+
 - SAP HANA dynamic secrets (`type: hana`): each lease is a user with a generated password and no password lifetime,
   granted only the existing HANA roles its role is bound to; the password and names travel only as parameters of an
   anonymous SQLScript block. Revocation deactivates the user, disconnects its sessions and drops it. Its lab test runs on

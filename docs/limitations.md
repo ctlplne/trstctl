@@ -5243,8 +5243,8 @@ when off, requiring a KEK when on):
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
-  `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog` and `openai`
-  (A240). Issuance is
+  `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog`, `openai`,
+  `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5338,7 +5338,14 @@ when off, requiring a KEK when on):
   revoked); a live proof needs an API Connect instance. What comes next in
   A239's library: Vertica (its freely available image runs Community Edition
   under an evaluation-only license, which doesn't cover continuous CI testing)
-  and SAP ASE (no freely available image). The provider catalog states each
+  and SAP ASE (no freely available image). The A240 hosted API key providers
+  (OpenRouter, Fireworks AI, LiteLLM proxy, Supabase, Convex, dbt platform, Cloudflare
+  API tokens and Cloudflare R2) are
+  built against stand-ins of their APIs only: a leased key works until revocation
+  deletes it and the vendor then refuses it, and a rotation keeps both keys working
+  until retirement deletes the predecessor; a live proof needs each vendor's account.
+  Supabase, Convex and R2 keys have no side-effect-free check, so their rotations verify
+  as `not_available` and retire on consumer evidence or the approved deadline. The provider catalog states each
   adapter's authority and whether its revocation is confirmed or TTL-only. A239
   is served for every provider in the integration catalog except those two, and
   SSH user certificates are served by the SSH CA rather than as leases.

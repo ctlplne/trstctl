@@ -355,7 +355,7 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Thirty-one backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Thirty-nine backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
@@ -363,8 +363,9 @@ users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atla
 database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
 tokens, Snowflake service users, ElastiCache and MemoryDB RBAC users, IBM API Connect app
 credentials, SQL Server logins, Azure SQL contained database users, Cassandra login
-roles, Oracle Database users and SAP HANA users (A239), and Datadog and OpenAI keys
-(A240). SSH user
+roles, Oracle Database users and SAP HANA users (A239), and Datadog and OpenAI keys,
+OpenRouter, Fireworks AI and LiteLLM proxy keys, Supabase secret API keys, Convex deploy
+keys, dbt platform service tokens, Cloudflare API tokens and R2 access keys (A240). SSH user
 certificates are issued natively by the SSH CA (`/api/v1/ssh/certificates`, revoked
 through the served KRL), not as dynamic-secret leases.
 
@@ -574,7 +575,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns thirty-four safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns forty-two safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0` and `unix`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
@@ -877,6 +878,30 @@ the service account and its key with it, after checking the provider named it. T
 rotation is two-phase, and a key is verified by listing models with it
 (`verify_mode: authenticated`). It is built against a stand-in of the admin API, with
 no OpenAI proof yet.
+
+The hosted API key providers (A240) share one engine: a lease, or a rotation's
+successor, is a new key created with the administrator's credential under the target
+the role is bound to, named for the lease or command, and revocation (or retirement)
+deletes it after checking the provider named it, so a key someone else created is never
+deleted. A retried creation first deletes the key its earlier attempt named. Every
+rotation is two-phase: both keys work until the predecessor is retired.
+
+| `type` | A lease is | Scoped by | Verified by |
+|---|---|---|---|
+| `openrouter` | an API key | the role's credit limit | reading its own details (`authenticated`) |
+| `fireworks` | an API key of the bound user | that user's permissions | listing accounts (`authenticated`) |
+| `litellm` | a proxy virtual key | the role's models | reading its own details (`authenticated`) |
+| `supabase` | a secret API key of the bound project | the project (secret keys bypass row-level security) | nothing: Supabase documents no key check (`not_available`) |
+| `convex` | a deploy key of the bound deployment | the role's actions, when listed | nothing: only the deployment checks a deploy key (`not_available`) |
+| `dbt` | a service token | one permission set, on one project or all | listing the accounts it reaches (`authenticated`) |
+| `cloudflare` | an API token copying a template token | the template's policies and condition | Cloudflare's token verification route (`authenticated`) |
+| `cloudflare-r2` | an S3 key pair: the new token's ID and the SHA-256 of its value | the template's R2 policies | nothing: the pair carries no token and S3 is the account's host (`not_available`) |
+
+Where verification is `not_available`, retirement waits for the named consumers'
+adoption reports or the approved deadline. Cloudflare keys are new tokens beside the
+predecessor, not Cloudflare's roll, which would end the old value at once. All eight are
+built against stand-ins of their
+vendors' APIs, made from the vendors' API references, with no live vendor proof yet.
 
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the

@@ -372,6 +372,62 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 			roles(`Each allowed role maps to the project ID ("proj_...") its service accounts are created in; the project's permissions are the key's authority.`),
 		)},
+		{Type: "openrouter", Label: "OpenRouter API keys", Purpose: "Creates an OpenRouter API key with a management key, named for the lease or rotation and held to the role's credit limit, and deletes it at revocation; OpenRouter then refuses it. A static rotation is two-phase: both keys work until the rotation retires the predecessor. Keys are proven by reading their own details with them. Built against a stand-in of the key management API; no OpenRouter proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "HTTPS URL of the API, https://openrouter.ai/api/v1.", true),
+			credential("api_key_ref", "Management key reference", "A management key allowed to create, list and delete the account's API keys.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "unlimited" or "limit <USD>", the credit limit its keys are created with.`),
+		)},
+		{Type: "fireworks", Label: "Fireworks AI API keys", Purpose: "Creates an API key for the user the role is bound to with an account administrator's key, named for the lease or rotation, and deletes it at revocation; Fireworks returns a key's value only at creation. A static rotation is two-phase. Keys are proven by listing accounts with them. Built against a stand-in of the API; no Fireworks proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "HTTPS URL of the API, https://api.fireworks.ai.", true),
+			credential("api_key_ref", "Administrator key reference", "An account administrator's API key, allowed to create, list and delete the bound users' API keys.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "<account-id>/<user-id>", the user its keys are created for; the user's permissions are the key's authority.`),
+		)},
+		{Type: "litellm", Label: "LiteLLM proxy virtual keys", Purpose: "Generates a virtual key on a LiteLLM proxy with its master key, aliased for the lease or rotation and limited to the role's models, and deletes it at revocation; the proxy then refuses it. A static rotation is two-phase. Keys are proven by reading their own details with them. Built against a stand-in of the proxy API; no LiteLLM proxy proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Proxy URL", "HTTPS URL of the LiteLLM proxy.", true),
+			credential("api_key_ref", "Master key reference", "The proxy's master key.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "all-models" or "models <name>,<name>", the models its keys may call.`),
+		)},
+		{Type: "supabase", Label: "Supabase secret API keys", Purpose: "Creates a secret API key in the project the role is bound to through the Management API, named for the lease or rotation, and deletes it at revocation. A static rotation is two-phase. Supabase documents no side-effect-free check of a secret key, so verification reports not available and retirement waits for consumer evidence or the approved deadline. Built against a stand-in of the Management API; no Supabase proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Management API", "HTTPS URL of the Management API, https://api.supabase.com.", true),
+			credential("api_key_ref", "Access token reference", "An access token allowed to create, read and delete the bound projects' API keys.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to a project reference (twenty lower-case letters), the project its secret keys are created in.`),
+		)},
+		{Type: "convex", Label: "Convex deploy keys", Purpose: "Creates a deploy key for the deployment the role is bound to through the Platform API, named for the lease or rotation and optionally limited to some actions, and deletes it by name at revocation. A static rotation is two-phase. Only the deployment checks a deploy key, so verification reports not available and retirement waits for consumer evidence or the approved deadline. Built against a stand-in of the Platform API; no Convex proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Platform API", "HTTPS URL of the Platform API, https://api.convex.dev/v1.", true),
+			credential("api_key_ref", "Access token reference", "A team or personal access token allowed to manage the bound deployments' deploy keys.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "<deployment>" or "<deployment> <action>,<action>" (deployment:deploy, say), the deployment its keys are for and the actions they are limited to.`),
+		)},
+		{Type: "dbt", Label: "dbt platform service tokens", Purpose: "Creates a service token with one permission grant through the v3 API, named for the lease or rotation, and deletes it at revocation; dbt then refuses it. A static rotation is two-phase. Tokens are proven by listing the accounts they reach. Built against a stand-in of the v3 API; no dbt platform proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Access URL", "HTTPS access URL of the account (https://cloud.getdbt.com, or a regional or cell host).", true),
+			credential("api_key_ref", "Service token reference", "An administrator's service token (dbt refuses to create service tokens with a personal access token).", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "<account-id> <permission-set>" or "<account-id> <permission-set> project <project-id>", the one grant its tokens get (job_runner, say).`),
+		)},
+		{Type: "cloudflare", Label: "Cloudflare API tokens", Purpose: "Creates a Cloudflare API token that copies the policies and condition of a template token the operator made in the dashboard, named for the lease or rotation, and deletes it at revocation; Cloudflare then refuses it. A static rotation is two-phase: a new token beside the predecessor, unlike Cloudflare's roll, which ends the old value at once. Tokens are proven by Cloudflare's token verification route. Built against a stand-in of the API; no Cloudflare proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "HTTPS URL of the API, https://api.cloudflare.com/client/v4.", true),
+			credential("api_key_ref", "Token reference", "A token allowed to read the template token and create, list and delete tokens (API Tokens Write; Account API Tokens Write for account tokens).", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "template <token-id>" (user tokens) or "account <account-id> template <token-id>" (account tokens); keys copy that template token's policies and condition.`),
+		)},
+		{Type: "cloudflare-r2", Label: "Cloudflare R2 access keys", Purpose: "Creates an account API token that copies a template token's R2 policies and returns its S3 pair: the token ID is the access key ID and the SHA-256 of its value the secret access key. Revocation deletes the token, which ends the pair. A static rotation is two-phase. The pair carries no token to check and R2's S3 endpoint is the account's own host, so verification reports not available. Built against a stand-in of the API; no Cloudflare proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "HTTPS URL of the API, https://api.cloudflare.com/client/v4.", true),
+			credential("api_key_ref", "Token reference", "A token allowed to read the template token and create, list and delete the account's tokens (Account API Tokens Write).", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of leased key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "account <account-id> template <token-id>"; key pairs copy that template token's R2 policies.`),
+		)},
 		{Type: "unix", Label: "Unix/Linux local accounts", Purpose: "Rotates local account passwords on a host over SSH as an administrator authenticating with a key, the host key pinned; the only command run is chpasswd with the change on stdin. A role with rotation_accounts alternates between two accounts its owner provisioned (two-phase: the predecessor keeps working until retirement sets a password nobody holds; groups and files stay). A role bound to one account changes its password in place (single phase: a rotation runs only when acknowledged). Verified by logging in with the new password. It rotates only; it issues no leases.", Requirements: dynamicSecretProviderRequirements(
 			value("addr", "SSH endpoint", "The host's SSH host:port.", true),
 			value("admin_user", "Administrator", "root, or an account allowed `sudo -n /usr/sbin/chpasswd` (set sudo).", true),
@@ -462,6 +518,22 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "an organization API key, or a service account's application key restricted to the role's scopes, until the key is deleted", "confirmed"
 	case "openai":
 		return "a member service account of the bound project, through its API key, until the service account is deleted", "confirmed"
+	case "openrouter":
+		return "model usage on the account up to the role's credit limit, through an API key, until the key is deleted", "confirmed"
+	case "fireworks":
+		return "the bound user's own permissions on the account, through an API key, until the key is deleted", "confirmed"
+	case "litellm":
+		return "calls to the role's models through the proxy, through a virtual key, until the key is deleted", "confirmed"
+	case "supabase":
+		return "the project's secret-key access (it bypasses row-level security), through a secret API key, until the key is deleted", "confirmed"
+	case "convex":
+		return "the bound deployment's deploy-key actions, through a deploy key, until the key is deleted", "confirmed"
+	case "dbt":
+		return "the role's one permission set (on its project, or every project), through a service token, until the token is deleted", "confirmed"
+	case "cloudflare":
+		return "the template token's policies and condition, through a copy of it, until the copy is deleted", "confirmed"
+	case "cloudflare-r2":
+		return "the template token's R2 policies on the account's buckets, through an S3 key pair, until its token is deleted", "confirmed"
 	case "unix":
 		return "the local account's own rights on the host (its groups, files and sudo rules), through its password", "confirmed"
 	case "mssql":

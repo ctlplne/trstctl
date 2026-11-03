@@ -18682,7 +18682,15 @@
               "unix",
               "cassandra",
               "oracle",
-              "hana"
+              "hana",
+              "openrouter",
+              "fireworks",
+              "litellm",
+              "supabase",
+              "convex",
+              "dbt",
+              "cloudflare",
+              "cloudflare-r2"
             ],
             "type": "string"
           }

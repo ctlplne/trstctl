@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
 )
@@ -191,7 +192,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -295,6 +296,14 @@ var dynamicSecretTypes = map[string]struct{}{
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
+	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
+}
+
+// apiKeyProviderTypes take api_key_ref, an administrator's key or token
+// (A239, A240).
+var apiKeyProviderTypes = map[string]bool{
+	"ibm-api-connect": true, "datadog": true, "openai": true,
+	"openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true,
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -481,6 +490,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"ibm-api-connect": validateAPIConnectProvider, "cassandra": validateCassandraProvider, "oracle": validateOracleProvider,
 	"hana":  validateHANAProvider,
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
+	"openrouter": validateHostedKeyProvider, "fireworks": validateHostedKeyProvider, "litellm": validateHostedKeyProvider, "supabase": validateHostedKeyProvider, "convex": validateHostedKeyProvider, "dbt": validateHostedKeyProvider, "cloudflare": validateHostedKeyProvider, "cloudflare-r2": validateHostedKeyProvider,
 	"unix": validateUnixProvider,
 }
 
@@ -959,8 +969,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientID != "" {
 		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app, ibm-api-connect and auth0", where))
 	}
-	if c.Type != "ibm-api-connect" && c.Type != "datadog" && c.Type != "openai" && c.APIKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect, datadog and openai", where))
+	if !apiKeyProviderTypes[c.Type] && c.APIKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for %s", where, strings.Join(sortedTrueKeys(apiKeyProviderTypes), ", ")))
 	}
 	if c.Type != "datadog" && c.ApplicationKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s application_key_ref is only valid for datadog", where))
@@ -1240,6 +1250,29 @@ func validateOpenAIProvider(where string, c DynamicSecretProviderConfig) []error
 	for _, role := range normalizedStrings(c.AllowedRoles) {
 		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" && !openAIProjectID.MatchString(binding) {
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be the project ID (proj_...) its service accounts are created in", where, role))
+		}
+	}
+	return errs
+}
+
+// validateHostedKeyProvider checks a hosted API key provider (A240): endpoint
+// is the vendor's API, api_key_ref the administrator's key or token, and each
+// allowed role is bound in the grammar internal/hostedkey gives the vendor.
+func validateHostedKeyProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	spec := hostedkey.Providers[c.Type]
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (%s) is required for %s", where, spec.Endpoint, c.Type))
+	}
+	if err := validateCredentialRef(c.APIKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s api_key_ref (%s): %w", where, spec.AdminKey, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" {
+			if _, err := hostedkey.ParseBinding(c.Type, binding); err != nil {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+			}
 		}
 	}
 	return errs

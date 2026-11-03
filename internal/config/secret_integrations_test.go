@@ -677,6 +677,52 @@ func TestValidateOpenAIProviderA240(t *testing.T) {
 	}
 }
 
+// A240: every hosted API key provider validates its endpoint, its
+// administrator's credential and its roles' bindings in the vendor's grammar
+// (internal/hostedkey), and rotates statically in two phases.
+func TestValidateHostedKeyProvidersA240(t *testing.T) {
+	bindings := map[string]string{
+		"openrouter": "limit 25", "fireworks": "acme/ci-bot", "litellm": "models gpt-4o", "supabase": "abcdefghijklmnopqrst",
+		"convex": "happy-animal-123", "dbt": "70403 job_runner", "cloudflare": "template 0123456789abcdef0123456789abcdef",
+		"cloudflare-r2": "account fedcba9876543210fedcba9876543210 template 0123456789abcdef0123456789abcdef",
+	}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	for provider, binding := range bindings {
+		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: provider + "-account", Type: provider,
+			Endpoint: "https://api.example.com", APIKeyRef: "file:/run/secrets/" + provider, AllowedRoles: []string{"ci"},
+			RoleBindings: map[string]string{"ci": binding}, MaxTTL: "1h", AllowStaticRotation: true}
+		if err := check(base); err != nil {
+			t.Fatalf("%s: %v", provider, err)
+		}
+		if !StaticRotationProviderTypes[provider] || SinglePhaseRotationProviderTypes[provider] {
+			t.Fatalf("%s must rotate statically, in two phases", provider)
+		}
+		for name, tc := range map[string]struct {
+			mutate func(*DynamicSecretProviderConfig)
+			want   string
+		}{
+			"no endpoint":   {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint ("},
+			"no admin key":  {func(c *DynamicSecretProviderConfig) { c.APIKeyRef = "" }, "api_key_ref ("},
+			"unbound role":  {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["ci"] is required`},
+			"a bad binding": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"ci": "every key there is"} }, `role_bindings["ci"]: expected`},
+		} {
+			c := base
+			tc.mutate(&c)
+			if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("%s %s: %v, want %q", provider, name, err, tc.want)
+			}
+		}
+	}
+	other := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "pg", Type: "postgresql",
+		AdminDSNRef: "file:/run/secrets/pg", APIKeyRef: "file:/run/secrets/key", AllowedRoles: []string{"ci"}, MaxTTL: "1h"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "api_key_ref is only valid for cloudflare, cloudflare-r2, convex, datadog, dbt, fireworks") {
+		t.Fatalf("api_key_ref on a type without it: %v", err)
+	}
+}
+
 func TestValidateMSSQLProvidersA239(t *testing.T) {
 	for _, providerType := range []string{"mssql", "azure-sql"} {
 		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,

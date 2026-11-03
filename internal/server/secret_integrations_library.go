@@ -529,6 +529,29 @@ func openConfiguredOpenAIBackend(o *configuredDynamicBackendOpener) (requestDyna
 	return backend, o.closeWith(backend, nil), nil
 }
 
+// openConfiguredHostedKeyBackend reads the administrator's key or token into a
+// hosted API key backend that keeps its own sealed copy and calls the vendor
+// through the SSRF-guarded client (A240).
+func openConfiguredHostedKeyBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	adminKey, err := o.resolve(cfg.APIKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewHostedKeyBackend(cfg.Type, dynsecret.HostedKeyConfig{
+		Endpoint: cfg.Endpoint, AdminKey: adminKey, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
 // openConfiguredDatadogBackend reads the administrator's API and application
 // keys into a backend that keeps its own sealed copies and calls the site's
 // API through the SSRF-guarded client (A240).

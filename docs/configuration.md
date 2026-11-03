@@ -2081,6 +2081,25 @@ An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`
 ID (`proj_...`) its service accounts are created in. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+The hosted API key providers (A240) each set `endpoint` to the vendor's API,
+`api_key_ref` to the credential that creates, lists and deletes keys, and bind each
+allowed role to what its keys are created under. All issue leases, and with
+`allow_static_rotation: true` also rotate in two phases:
+
+| `type` | `endpoint` | `api_key_ref` | Role binding |
+|---|---|---|---|
+| `openrouter` | `https://openrouter.ai/api/v1` | a management key | `unlimited` or `limit <USD>` (each key's credit limit) |
+| `fireworks` | `https://api.fireworks.ai` | an account administrator's API key | `<account-id>/<user-id>` (the user its keys are created for) |
+| `litellm` | the LiteLLM proxy's URL | the proxy's master key | `all-models` or `models <name>,<name>` |
+| `supabase` | `https://api.supabase.com` | an access token for the projects' API keys | a project reference (twenty lower-case letters) |
+| `convex` | `https://api.convex.dev/v1` | a team or personal access token | `<deployment>` or `<deployment> <action>,<action>` (`deployment:deploy`, say) |
+| `dbt` | the account's access URL (`https://cloud.getdbt.com`, or a regional or cell host) | an administrator's service token | `<account-id> <permission-set>` or `<account-id> <permission-set> project <project-id>` |
+| `cloudflare` | `https://api.cloudflare.com/client/v4` | a token with API Tokens Write (Account API Tokens Write for account tokens) | `template <token-id>` or `account <account-id> template <token-id>` (keys copy the template token's policies and condition) |
+| `cloudflare-r2` | `https://api.cloudflare.com/client/v4` | a token with Account API Tokens Write | `account <account-id> template <token-id>` (the template's R2 policies) |
+
+Supabase key names must start with a letter, so a `supabase` provider's
+`username_prefix` must too.
+
 A `unix` provider (A240) sets `addr` to the host's SSH `host:port`, `admin_user` and
 `private_key_ref` (PKCS#8 PEM) to an administrator that may run `/usr/sbin/chpasswd`
 (through `sudo -n` when `sudo: true`), `host_key_fingerprint` to one of the host's key
@@ -2093,7 +2112,8 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
-`datadog`, `openai`, `unix`, `cassandra`, `oracle` and `hana`. Sync `type` values are
+`datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
+`litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
