@@ -4248,6 +4248,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/revocation-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report, per revoked certificate, the CA status, the deployed material, new-connection rejection and existing-session termination, each confirmed, pending, failed or not observed */
+        get: operations["getIdentityRevocationReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/transitions": {
         parameters: {
             query?: never;
@@ -16085,6 +16102,63 @@ export interface components {
             name: string;
             /** Format: uuid */
             owner_id: string;
+        };
+        IdentityRevocationReport: {
+            certificates: {
+                ca_status: {
+                    /** Format: date-time */
+                    at?: string;
+                    detail: string;
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                };
+                certificate_id: string;
+                deployed_material: {
+                    /** Format: date-time */
+                    at?: string;
+                    detail: string;
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                };
+                destinations: {
+                    /** Format: date-time */
+                    at: string;
+                    /** @enum {string} */
+                    now: "replaced" | "removed" | "still_deployed" | "failed";
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                    target: string;
+                }[];
+                endpoints: {
+                    /** Format: date-time */
+                    checked_at: string;
+                    detail: string;
+                    endpoint_id: string;
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                    vantage: string;
+                }[];
+                existing_sessions: {
+                    /** Format: date-time */
+                    at?: string;
+                    detail: string;
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                };
+                fingerprint: string;
+                new_connections: {
+                    /** Format: date-time */
+                    at?: string;
+                    detail: string;
+                    /** @enum {string} */
+                    state: "confirmed" | "pending" | "failed" | "not_observed";
+                };
+                reason?: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                serial: string;
+            }[];
+            identity_id: string;
         };
         IdentityStatusSummary: {
             by_status: {
@@ -34598,6 +34672,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getIdentityRevocationReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityRevocationReport"];
                 };
             };
             /** @description client error */

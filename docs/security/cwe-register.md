@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2404 annotated sites across 29 rules. Each row is
+2405 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (558 sites)
+### G101 — CWE-798 Use of hardcoded credentials (559 sites)
 
 | Location | Reason |
 |---|---|
@@ -175,7 +175,7 @@ not this file.
 | `internal/api/notifications.go:901` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:218` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:221` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1103` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1251` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
@@ -503,6 +503,7 @@ not this file.
 | `internal/server/notification_tenant_channel_families_served_test.go:88` | fabricated fixture credential (CWE-798) |
 | `internal/server/oauth_provider_action_served_test.go:34` | fabricated fixture credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:41` | fabricated test-only credential (CWE-798) |
+| `internal/server/operations_ledger_served_test.go:202` | fabricated test-only credential (CWE-798) |
 | `internal/server/protocols_certbot_aud73_test.go:18` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:59` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:188` | fabricated secret reference, never raw credential material (CWE-798) |
@@ -1557,7 +1558,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2564` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2912` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2913` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2128,8 +2129,8 @@ not this file.
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:1564` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2839` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2916` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2840` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2917` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/server/tsa_certificates_served_test.go:87` | the test's own temp file (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |
@@ -2355,7 +2356,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2922` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2923` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

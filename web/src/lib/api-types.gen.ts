@@ -5452,6 +5452,11 @@ export interface IdentityRequest {
   owner_id: string;
 }
 
+export interface IdentityRevocationReport {
+  certificates: ({ ca_status: { at?: string; detail: string; state: "confirmed" | "pending" | "failed" | "not_observed" }; certificate_id: string; deployed_material: { at?: string; detail: string; state: "confirmed" | "pending" | "failed" | "not_observed" }; destinations: ({ at: string; now: "replaced" | "removed" | "still_deployed" | "failed"; state: "confirmed" | "pending" | "failed" | "not_observed"; target: string })[]; endpoints: ({ checked_at: string; detail: string; endpoint_id: string; state: "confirmed" | "pending" | "failed" | "not_observed"; vantage: string })[]; existing_sessions: { at?: string; detail: string; state: "confirmed" | "pending" | "failed" | "not_observed" }; fingerprint: string; new_connections: { at?: string; detail: string; state: "confirmed" | "pending" | "failed" | "not_observed" }; reason?: string; revoked_at?: string; serial: string })[];
+  identity_id: string;
+}
+
 export interface IdentityStatusSummary {
   by_status: Record<string, unknown>;
   total: number;

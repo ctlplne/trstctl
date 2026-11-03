@@ -191,3 +191,121 @@ func TestServedOperationsLedgerNeedsConsumerEvidenceA245(t *testing.T) {
 		t.Fatalf("an unknown state filter: %d %s", status, raw)
 	}
 }
+
+// A245: a revocation report keeps the CA status, the deployed material, new
+// connections and existing sessions apart. Revoking a certificate a cloud store
+// still holds, that an endpoint still presents, reads exactly that; a CRL
+// generation then confirms the CA status alone.
+func TestServedRevocationReportSeparatesTheFourFacetsA245(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDA245R"
+		awsSecretKey = "A245RevokeKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/a245r"
+		hostname     = "a245-revoked.served.test"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewHTTPOps(provider.Client()) })
+	registry.Register(acm.New("us-east-1", acm.Credentials{AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey)},
+		acm.WithEndpoint(provider.URL())))
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:read", "identities:write", "certs:read",
+		"certs:write", "certs:issue", "certs:revoke", "connectors:read", "connectors:write", "lifecycle:read")
+	post := func(path, key string, body any) map[string]any {
+		t.Helper()
+		status, raw := secretsReqKey(t, h, http.MethodPost, path, tok, key, body)
+		if status != http.StatusCreated && status != http.StatusOK {
+			t.Fatalf("POST %s: %d %s", path, status, raw)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return out
+	}
+	owner := post("/api/v1/owners", "a245r-owner", map[string]any{"kind": "workload", "name": "a245-revoked-app"})
+	target := post("/api/v1/connectors/targets", "a245r-target", map[string]any{
+		"name": acmARN, "connector": "aws-acm", "enabled": true,
+		"config": map[string]any{"region": "us-east-1", "access_key_id": awsAccessKey, "secret_access_key_ref": "secret://connectors/aws-acm/a245r"},
+	})
+	request := map[string]any{"owner_id": owner["id"], "identity_name": hostname, "target_id": target["id"], "reason": "A245 revocation",
+		"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"}}
+	preview := post("/api/v1/lifecycle/endpoint-bindings/preview", "", request)
+	request["preview_fingerprint"] = preview["request_fingerprint"]
+	identityID := post("/api/v1/lifecycle/endpoint-bindings", "a245r-bind", request)["identity"].(map[string]any)["id"].(string)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain issue and deploy: %v", err)
+	}
+	active, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner["id"].(string), hostname)
+	if err != nil || len(active) != 1 || active[0].NotBefore == nil || active[0].NotAfter == nil {
+		t.Fatalf("active certificate = %+v %v", active, err)
+	}
+	observe := func(stage string, at time.Time) {
+		t.Helper()
+		tr := transport.ProbeTranscript{Address: "127.0.0.1:443", ServerName: hostname, Vantage: transport.VantageRelay, Reached: true,
+			ExpectedFingerprint: active[0].Fingerprint, ObservedFingerprint: active[0].Fingerprint,
+			NotBeforeUnix: active[0].NotBefore.Unix(), NotAfterUnix: active[0].NotAfter.Unix(), ObservedAtUnix: at.Unix()}
+		if err := h.srv.appendEndpointVerification(t.Context(), h.tenant, "a245r-relay", "a245r-endpoint", tr, ""); err != nil {
+			t.Fatalf("%s: %v", stage, err)
+		}
+	}
+	observe("before the revocation", time.Now().Add(-time.Minute))
+	post("/api/v1/identities/"+identityID+"/transitions", "a245r-revoke", map[string]any{"to": "revoked", "reason": "cessationOfOperation"})
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain revoke: %v", err)
+	}
+	type facet struct {
+		State  string `json:"state"`
+		Detail string `json:"detail"`
+	}
+	type certReport struct {
+		Fingerprint      string `json:"fingerprint"`
+		Reason           string `json:"reason"`
+		CAStatus         facet  `json:"ca_status"`
+		DeployedMaterial facet  `json:"deployed_material"`
+		NewConnections   facet  `json:"new_connections"`
+		ExistingSessions facet  `json:"existing_sessions"`
+		Destinations     []struct {
+			Now string `json:"now"`
+		} `json:"destinations"`
+	}
+	report := func(stage string) certReport {
+		t.Helper()
+		status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+identityID+"/revocation-report", tok, nil)
+		if status != http.StatusOK {
+			t.Fatalf("%s: report %d %s", stage, status, raw)
+		}
+		var out struct {
+			Certificates []certReport `json:"certificates"`
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		if len(out.Certificates) != 1 || out.Certificates[0].Fingerprint != active[0].Fingerprint || out.Certificates[0].Reason != "cessationOfOperation" {
+			t.Fatalf("%s: report = %s", stage, raw)
+		}
+		return out.Certificates[0]
+	}
+	r := report("after the revocation")
+	if r.CAStatus.State != "pending" && r.CAStatus.State != "confirmed" {
+		t.Fatalf("the CA status after a revocation reads %+v", r.CAStatus)
+	}
+	if r.DeployedMaterial.State != "pending" || len(r.Destinations) != 1 || r.Destinations[0].Now != "still_deployed" {
+		t.Fatalf("the cloud store still holds it, but the report reads %+v %+v", r.DeployedMaterial, r.Destinations)
+	}
+	if r.NewConnections.State != "not_observed" || r.ExistingSessions.State != "not_observed" {
+		t.Fatalf("an endpoint checked only before the revocation proves nothing: %+v / %+v", r.NewConnections, r.ExistingSessions)
+	}
+	// The endpoint still presents it after the revocation: new connections failed.
+	observe("after the revocation", time.Now().Add(time.Second))
+	if r := report("seen after the revocation"); r.NewConnections.State != "failed" || r.DeployedMaterial.State != "pending" {
+		t.Fatalf("an endpoint still presenting it must read failed: %+v", r.NewConnections)
+	}
+	// A CRL generation confirms the CA status alone.
+	if _, err := h.srv.GenerateCRL(t.Context(), h.tenant); err != nil {
+		t.Fatalf("generate CRL: %v", err)
+	}
+	if r := report("after a CRL"); r.CAStatus.State != "confirmed" || r.NewConnections.State != "failed" || r.DeployedMaterial.State != "pending" {
+		t.Fatalf("after a CRL: %+v / %+v / %+v", r.CAStatus, r.NewConnections, r.DeployedMaterial)
+	}
+}

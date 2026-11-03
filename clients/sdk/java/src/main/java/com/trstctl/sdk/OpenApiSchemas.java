@@ -542,6 +542,7 @@ public final class OpenApiSchemas {
       "IdentityRenewalPause",
       "IdentityRenewalResumeRequest",
       "IdentityRequest",
+      "IdentityRevocationReport",
       "IdentityStatusSummary",
       "IdentityTransitionPreview",
       "IncidentExecution",

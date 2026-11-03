@@ -7570,6 +7570,15 @@ IdentityRequest = TypedDict(
     total=False,
 )
 
+IdentityRevocationReport = TypedDict(
+    'IdentityRevocationReport',
+    {
+        'certificates': list[dict[str, Any]],
+        'identity_id': str,
+    },
+    total=False,
+)
+
 IdentityStatusSummary = TypedDict(
     'IdentityStatusSummary',
     {

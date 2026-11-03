@@ -1835,6 +1835,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithACMEDNS01TXTResolver(net.DefaultResolver),
 		api.WithACMEARIPosture(s.ACMEARIPosture),
 		api.WithLifecycleAutomationPlan(s),
+		api.WithPlatformIssuingCAID(IssuingCAID()),
 		api.WithValidityReadiness(s),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
 		api.WithDeploymentKEK(s.deploymentKEKAPI(d)),

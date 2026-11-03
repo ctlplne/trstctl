@@ -11419,6 +11419,8 @@
                 "internal/api/identity_application.go",
                 "internal/api/operations_ledger.go",
                 "internal/store/operations_ledger.go",
+                "internal/api/revocation_report.go",
+                "internal/store/revocation_report.go",
                 "internal/store/identity_inventory.go",
                 "internal/api/notifications.go",
                 "internal/lifecycle/lifecycle.go",
@@ -11429,7 +11431,8 @@
                 "/api/v1/notifications",
                 "/api/v1/identities/{id}/transitions",
                 "/api/v1/identities/{id}/application",
-                "/api/v1/operations/ledger"
+                "/api/v1/operations/ledger",
+                "/api/v1/identities/{id}/revocation-report"
             ],
             "source_frontend": [
                 "web/src/pages/Identities.tsx",
@@ -11456,7 +11459,8 @@
                 "listRotationRuns",
                 "getRotationRun",
                 "getRenewalSLO",
-                "listOperationLedger"
+                "listOperationLedger",
+                "getIdentityRevocationReport"
             ],
             "api_na": "",
             "cli_surface": [
@@ -11475,7 +11479,8 @@
                 "lifecycle rotation-runs list",
                 "lifecycle rotation-runs get",
                 "operations renewal-slo",
-                "operations ledger"
+                "operations ledger",
+                "identities revocation-report"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -365,9 +365,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// assess, list, show, stage, permissions, cutover, reissue, rollback (648).
 	// A244 adds the change impact of a target and of a profile (650) and the
 	// application view of a certificate (651). A245 adds the operations ledger
-	// (652).
-	if len(out) != 652 {
-		t.Fatalf("OpenAPI operationIds = %d, want 652", len(out))
+	// (652) and the revocation report (653).
+	if len(out) != 653 {
+		t.Fatalf("OpenAPI operationIds = %d, want 653", len(out))
 	}
 	return out
 }

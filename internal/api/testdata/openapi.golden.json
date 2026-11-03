@@ -23776,6 +23776,229 @@
         ],
         "type": "object"
       },
+      "IdentityRevocationReport": {
+        "properties": {
+          "certificates": {
+            "items": {
+              "properties": {
+                "ca_status": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "confirmed",
+                        "pending",
+                        "failed",
+                        "not_observed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "detail"
+                  ],
+                  "type": "object"
+                },
+                "certificate_id": {
+                  "type": "string"
+                },
+                "deployed_material": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "confirmed",
+                        "pending",
+                        "failed",
+                        "not_observed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "detail"
+                  ],
+                  "type": "object"
+                },
+                "destinations": {
+                  "items": {
+                    "properties": {
+                      "at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "now": {
+                        "enum": [
+                          "replaced",
+                          "removed",
+                          "still_deployed",
+                          "failed"
+                        ],
+                        "type": "string"
+                      },
+                      "state": {
+                        "enum": [
+                          "confirmed",
+                          "pending",
+                          "failed",
+                          "not_observed"
+                        ],
+                        "type": "string"
+                      },
+                      "target": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "target",
+                      "state",
+                      "now",
+                      "at"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "endpoints": {
+                  "items": {
+                    "properties": {
+                      "checked_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "endpoint_id": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "enum": [
+                          "confirmed",
+                          "pending",
+                          "failed",
+                          "not_observed"
+                        ],
+                        "type": "string"
+                      },
+                      "vantage": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "endpoint_id",
+                      "vantage",
+                      "state",
+                      "detail",
+                      "checked_at"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "existing_sessions": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "confirmed",
+                        "pending",
+                        "failed",
+                        "not_observed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "detail"
+                  ],
+                  "type": "object"
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "new_connections": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "confirmed",
+                        "pending",
+                        "failed",
+                        "not_observed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "detail"
+                  ],
+                  "type": "object"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "serial": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "certificate_id",
+                "serial",
+                "fingerprint",
+                "ca_status",
+                "deployed_material",
+                "destinations",
+                "new_connections",
+                "endpoints",
+                "existing_sessions"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "identity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "certificates"
+        ],
+        "type": "object"
+      },
       "IdentityStatusSummary": {
         "properties": {
           "by_status": {
@@ -66008,6 +66231,64 @@
         ],
         "summary": "Lift an operator rollback's renewal pause on one target; the resume is recorded in the audit log",
         "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/identities/{id}/revocation-report": {
+      "get": {
+        "operationId": "getIdentityRevocationReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityRevocationReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report, per revoked certificate, the CA status, the deployed material, new-connection rejection and existing-session termination, each confirmed, pending, failed or not observed",
+        "x-trstctl-permission": "identities:read"
       }
     },
     "/api/v1/identities/{id}/transitions": {
