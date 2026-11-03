@@ -319,7 +319,7 @@
   "trstctl.com/trstctl/internal/events": 39.813,
   "trstctl.com/trstctl/internal/eventspec": 0.0,
   "trstctl.com/trstctl/internal/featureparity": 16.273,
-  "trstctl.com/trstctl/internal/fsatomic": 0.0,
+  "trstctl.com/trstctl/internal/crypto/fsatomic": 0.0,
   "trstctl.com/trstctl/internal/graph": 12.432,
   "trstctl.com/trstctl/internal/historycontinuity": 1.433,
   "trstctl.com/trstctl/internal/idem": 1.958,

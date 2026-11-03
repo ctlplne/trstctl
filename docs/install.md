@@ -424,6 +424,14 @@ persists its certificate, rotate or delete the file. See
 `deploy/windows/README.md` for Authenticode signing, direct service install, and
 the WiX/msitools build details.
 
+On Windows, a host profile's local action commands and the native TLS probe's
+OpenSSL must be drive-letter paths to a regular `.exe`: scripts (`.bat`, `.cmd`,
+`.ps1`, `.com`) and UNC or device paths (`\\server\share\…`, `\\?\…`, `\\.\…`) are
+refused, and PowerShell runs only with a pinned argv. What comes next on Windows:
+applying SSH KRLs to Windows OpenSSH hosts (the agent refuses `apply` there today),
+the CSI trust driver on Windows nodes, and running `trstctl-trustbundle` outside
+Linux image builds.
+
 ### Verify the agent download
 
 Before installing a downloaded agent, authenticate it. On Windows, confirm the

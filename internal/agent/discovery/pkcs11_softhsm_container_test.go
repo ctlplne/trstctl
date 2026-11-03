@@ -14,7 +14,10 @@ import (
 )
 
 const (
-	agentSoftHSMDockerProbeTimeout = 15 * time.Second
+	// The engine query waits up to a minute: windows-latest's engine took more
+	// than 15 s to answer it on run 41558210954 (owner decision 2026-11-02,
+	// item 2g j); the skip message records how long it took.
+	agentSoftHSMDockerProbeTimeout = 60 * time.Second
 	agentSoftHSMDockerBuildTimeout = 10 * time.Minute
 	agentSoftHSMDockerRunTimeout   = 10 * time.Minute
 	agentSoftHSMImage              = "trstctl-softhsm-go:aud-26-edge-custody"
@@ -166,6 +169,7 @@ func requireDockerForAgentSoftHSM(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker is required for the PKCS#11 container tests: %v", err)
 	}
+	started := time.Now()
 	out, err := agentSoftHSMDockerOutput(t, agentSoftHSMDockerProbeTimeout, "version", "--format", "{{.Server.Os}}")
 	if err != nil {
 		t.Skipf("docker daemon is required for the PKCS#11 container tests: %v\n%s", err, out)
@@ -173,7 +177,8 @@ func requireDockerForAgentSoftHSM(t *testing.T) {
 	// These tests build Linux images. A Windows runner's engine runs Windows
 	// containers and can't; the Linux jobs run them.
 	if engine := strings.TrimSpace(string(out)); engine != "linux" {
-		t.Skipf("the PKCS#11 container tests build Linux images; this Docker engine runs %s containers", engine)
+		t.Skipf("the PKCS#11 container tests build Linux images; this Docker engine runs %s containers, not Linux ones (it answered in %s)",
+			engine, time.Since(started).Round(time.Second))
 	}
 }
 

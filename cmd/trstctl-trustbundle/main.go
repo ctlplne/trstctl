@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -31,6 +32,11 @@ func main() {
 }
 
 func run(args []string) error {
+	if runtime.GOOS == "windows" {
+		// It reads Linux image filesystems and runs inside Linux image builds
+		// (owner decision 2026-11-02, item 2g i).
+		return errors.New("trstctl-trustbundle builds and checks Linux images; running it on Windows is what comes next")
+	}
 	if len(args) == 0 {
 		return errors.New("usage: trstctl-trustbundle filter|probe|list|audit")
 	}

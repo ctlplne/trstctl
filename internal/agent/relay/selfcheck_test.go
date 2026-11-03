@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
@@ -29,7 +28,7 @@ func TestSelfCheckExercisesTheBuildAndItsExecProfile(t *testing.T) {
 	root := t.TempDir()
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{root},
-		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: time.Second}},
+		Actions:      []connector.LocalAction{trueAction("nginx", false)},
 	}
 	ch := &fakeChannel{jobs: []relay.Job{selfCheckJob(t, relay.SelfCheckIntent{CampaignID: "c1", TargetVersion: "2.0.0"})}}
 	if _, err := relay.RunOnceWithSelfUpgrade(t.Context(), ch, nil, profile, nil, &relay.SelfUpgrade{CurrentVersion: "2.0.0"}, 4, 30); err != nil {

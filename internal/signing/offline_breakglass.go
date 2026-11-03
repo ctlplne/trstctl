@@ -12,9 +12,9 @@ import (
 
 	"trstctl.com/trstctl/internal/breakglass/offline"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/fsatomic"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/fsatomic"
 )
 
 const offlineBreakglassHandle = "offline-breakglass-authority"

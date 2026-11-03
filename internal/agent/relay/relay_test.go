@@ -477,9 +477,7 @@ func TestHostDryRunFinishesWithoutDeployIdentityOrMutation(t *testing.T) {
 	}
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{root},
-		Actions: []connector.LocalAction{{
-			LogicalName: "apachectl", Command: trueCommand(), PassArgs: true,
-		}},
+		Actions:      []connector.LocalAction{trueAction("apachectl", true)},
 	}
 
 	executed, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, profile, 1, 60)
@@ -526,9 +524,7 @@ func TestHostDryRunWithoutVerifyAddressPlansButDoesNotClaimLive(t *testing.T) {
 	plan, err := relay.DryRunOnHost(context.Background(), http.DefaultClient,
 		connector.LocalOpsConfig{
 			AllowedRoots: []string{root},
-			Actions: []connector.LocalAction{{
-				LogicalName: "apachectl", Command: trueCommand(), PassArgs: true,
-			}},
+			Actions:      []connector.LocalAction{trueAction("apachectl", true)},
 		}, relay.DeployIntent{
 			Connector: "apache", Target: "first Apache deployment",
 			TargetConfig: mustJSON(t, map[string]string{
@@ -663,9 +659,7 @@ func TestHostExecutorInstallsIssuerChainWithLeaf(t *testing.T) {
 	}
 	profile := connector.LocalOpsConfig{
 		AllowedRoots: []string{dir},
-		Actions: []connector.LocalAction{{
-			LogicalName: "apachectl", Command: "/usr/bin/true", PassArgs: true,
-		}},
+		Actions:      []connector.LocalAction{trueAction("apachectl", true)},
 	}
 	leaf := []byte(testCertPEM + "\n")
 	issuer := []byte(testCertPEM + "\n")
@@ -1128,15 +1122,23 @@ func hostProfileForNginx(t *testing.T, root string) connector.LocalOpsConfig {
 	return connector.LocalOpsConfig{
 		AllowedRoots: []string{root},
 		Actions: []connector.LocalAction{
-			{LogicalName: "nginx", Command: trueCommand(), PassArgs: false},
+			trueAction("nginx", false),
 		},
 	}
 }
 
-// trueCommand is a command that exits 0 and does nothing.
-func trueCommand() string {
-	if runtime.GOOS == "windows" {
-		return "cmd"
+// trueAction is a local action whose command exits 0 and does nothing:
+// /usr/bin/true on Unix. Windows ships no such .exe, so there it is this test
+// binary running no test, "--" ending its flags so the arguments a connector
+// passes are ignored (owner decision 2026-11-02, item 2g b: OS-appropriate
+// absolute paths).
+func trueAction(logicalName string, passArgs bool) connector.LocalAction {
+	if runtime.GOOS != "windows" {
+		return connector.LocalAction{LogicalName: logicalName, Command: "/usr/bin/true", PassArgs: passArgs}
 	}
-	return "/usr/bin/true"
+	exe, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	return connector.LocalAction{LogicalName: logicalName, Command: exe, Args: []string{"-test.run=^$", "--"}, PassArgs: passArgs}
 }

@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"trstctl.com/trstctl/internal/crypto/localexec"
 )
 
 // ValidateOpenSSLExecutable checks the operator-owned native probe path without
 // running it. The binary and its ancestors must be managed by the local operator;
 // no tenant-controlled command or PATH lookup is accepted here.
 func ValidateOpenSSLExecutable(path string) error {
-	if !filepath.IsAbs(path) {
+	if !localexec.IsAbsolute(path) {
 		return errors.New("tlsprobe: native executable must be an absolute local path")
 	}
 	info, err := os.Lstat(path)
@@ -30,7 +32,7 @@ func ValidateOpenSSLExecutable(path string) error {
 		}
 		return errors.New("tlsprobe: native executable must be a regular executable file, not a symbolic link")
 	}
-	if !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+	if !localexec.IsProgram(path, info) {
 		return errors.New("tlsprobe: native executable must be a regular executable file")
 	}
 	return nil

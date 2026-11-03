@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto/localexec"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -200,7 +201,9 @@ func NewLocalOps(cfg LocalOpsConfig) (Ops, error) {
 			copyAction.LogicalArgs = append(make([]string, 0, len(copyAction.LogicalArgs)), copyAction.LogicalArgs...)
 		}
 		copyAction.Args = append([]string(nil), copyAction.Args...)
-		if copyAction.LogicalName == "" || copyAction.Command == "" || !filepath.IsAbs(copyAction.Command) {
+		// On Windows only a drive-letter path is local: a UNC or device path is
+		// not (owner decision 2026-11-02, item 2g b).
+		if copyAction.LogicalName == "" || copyAction.Command == "" || !localexec.IsAbsolute(copyAction.Command) {
 			return nil, errors.New("connector: local action requires a logical name and absolute command")
 		}
 		base := strings.TrimSuffix(strings.ToLower(filepath.Base(copyAction.Command)), ".exe")
@@ -217,8 +220,10 @@ func NewLocalOps(cfg LocalOpsConfig) (Ops, error) {
 				return nil, fmt.Errorf("connector: local action command %q is an unpinned shell interpreter", copyAction.Command)
 			}
 		}
+		// Windows reports no execute bits: there a program is a regular .exe,
+		// never a .bat, .cmd, .ps1 or .com (owner decision 2026-11-02, item 2g a).
 		info, err := os.Lstat(copyAction.Command)
-		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode()&0o111 == 0 {
+		if err != nil || !localexec.IsProgram(copyAction.Command, info) {
 			return nil, fmt.Errorf("connector: local action command %q is not an executable regular non-symlink file", copyAction.Command)
 		}
 		if copyAction.Timeout <= 0 {

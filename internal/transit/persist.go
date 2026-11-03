@@ -13,9 +13,9 @@ import (
 	"sync"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/fsatomic"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/fsatomic"
 )
 
 // The transit keyring used to live only in memory, so every key vanished on

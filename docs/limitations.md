@@ -6046,7 +6046,8 @@ This is a deliberate, documented trust boundary, not an accident.
     in each target namespace and a ClusterTrustBundle that pods mount through
     a projected `clusterTrustBundle` volume, and the opt-in CSI node plugin
     (`deploy/kubernetes/csi-trust.yaml`, driver `trust.csi.trstctl.com`)
-    serves a TrustBundle to a pod as an inline volume; focused kind tests
+    serves a TrustBundle to a pod as an inline volume on Linux nodes (Windows
+    nodes are what comes next; the agent refuses to serve it there); focused kind tests
     prove each target end to end, including a changed bundle reaching a
     running pod. Their limits: Secret targets outside the agent's namespace
     need the opt-in grant in `deploy/kubernetes/rbac-trust-secrets.yaml`,

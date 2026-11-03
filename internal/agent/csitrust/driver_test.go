@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+// The kubelet socket is a Unix socket on Linux nodes; on Windows the agent
+// refuses to serve the driver (cmd/trstctl-agent/csitrust_windows_test.go;
+// owner decision 2026-11-02, item 2g h).
+
+//go:build !windows
+
 package csitrust_test
 
 import (

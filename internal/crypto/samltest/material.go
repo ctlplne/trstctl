@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/fsatomic"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
@@ -139,12 +140,7 @@ func createIdentityProviderMaterial(path, commonName string) error {
 	if err := os.Link(tmp.Name(), path); err != nil && !errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("samltest: publish identity: %w", err)
 	}
-	directory, err := os.Open(dir) // #nosec G304 -- operator-selected private identity directory, secured above
-	if err != nil {
-		return err
-	}
-	defer func() { _ = directory.Close() }()
-	if err := directory.Sync(); err != nil {
+	if err := fsatomic.SyncDirectory(dir); err != nil {
 		return fmt.Errorf("samltest: sync identity directory: %w", err)
 	}
 	return nil

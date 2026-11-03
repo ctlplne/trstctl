@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/fsatomic"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
@@ -257,15 +258,6 @@ func (s *HostRollbackStore) ClearRolledBackHostRenewPending(connectorName, targe
 	return syncHostRenewDirectory(s.root)
 }
 
-func syncHostRenewDirectory(root string) error {
-	dir, err := os.Open(root) // #nosec G304 -- validated agent-local state directory
-	if err != nil {
-		return err
-	}
-	syncErr := dir.Sync()
-	closeErr := dir.Close()
-	if syncErr != nil {
-		return syncErr
-	}
-	return closeErr
-}
+// syncHostRenewDirectory makes a pending record's create, replace or removal
+// durable (a no-op on Windows; the record file is flushed before its rename).
+func syncHostRenewDirectory(root string) error { return fsatomic.SyncDirectory(root) }

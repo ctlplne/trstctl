@@ -104,7 +104,14 @@ func TestJavaAliasStockKeytoolImportsPrivateKeyAndChain(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer secret.Wipe(blob)
-			dir := t.TempDir()
+			// Not t.TempDir: its path carries this subtest's Unicode name,
+			// which keytool on Windows cannot open (owner decision
+			// 2026-11-02, item 2g e). The alias inside stays Unicode.
+			dir, err := os.MkdirTemp("", "pfx-keytool-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(dir) })
 			source, dest, pass := filepath.Join(dir, "source.p12"), filepath.Join(dir, "imported.p12"), filepath.Join(dir, "password")
 			if err := os.WriteFile(source, blob, 0600); err != nil {
 				t.Fatal(err)

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -46,6 +47,9 @@ func TestNativeFallbackPreservesClassicalListenersAndUpgradeRefusals(t *testing.
 func TestValidateOpenSSLExecutableNamesASymlinkTarget(t *testing.T) {
 	dir := t.TempDir()
 	real := filepath.Join(dir, "openssl-real")
+	if runtime.GOOS == "windows" {
+		real += ".exe" // a program there is a .exe (owner decision 2026-11-02, item 2g a)
+	}
 	if err := os.WriteFile(real, []byte("#!/bin/sh\n"), 0o755); err != nil { // #nosec G306 -- fixture executable written by this test (CWE-276)
 		t.Fatal(err)
 	}

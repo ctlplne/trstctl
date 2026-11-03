@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +22,11 @@ const (
 
 func writeRecoveryExecutable(t *testing.T, dir, name, content string) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// A program there is a .exe (owner decision 2026-11-02, item 2g a);
+		// these fixtures are pinned by digest and never run.
+		name += ".exe"
+	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil { // #nosec G306 -- the fixture IS an executable; 0755 is its required mode (CWE-276)
 		t.Fatal(err)

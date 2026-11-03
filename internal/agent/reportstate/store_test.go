@@ -9,9 +9,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/custody"
 )
 
@@ -277,7 +279,14 @@ func TestSetAsideMovesOnlyAReportThisRegistrationCannotOpen(t *testing.T) {
 				if afterBytes, err := root.ReadFile(filepath.Base(moved)); err != nil || !bytes.Equal(beforeBytes, afterBytes) {
 					t.Fatalf("set-aside changed the retained bytes: %v", err)
 				}
-				if info, err := root.Stat(filepath.Base(moved)); err != nil || info.Mode().Perm() != 0o600 {
+				if runtime.GOOS == "windows" {
+					// Windows reports no Unix modes: the set-aside file keeps
+					// pending.state's owner-only DACL from SecurePrivateFile
+					// (owner decision 2026-11-02, item 2g d).
+					if private, err := secretfile.IsPrivate(filepath.Join(dir, filepath.Base(moved))); err != nil || !private {
+						t.Fatalf("set-aside file is not owner-only (%v)", err)
+					}
+				} else if info, err := root.Stat(filepath.Base(moved)); err != nil || info.Mode().Perm() != 0o600 {
 					t.Fatalf("set-aside file mode = %v (%v), want 0600", info.Mode().Perm(), err)
 				}
 			}

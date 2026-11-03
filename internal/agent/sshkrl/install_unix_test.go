@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+//go:build !windows
+
+// Apply's atomic KRL update needs Unix file locking; on Windows it refuses
+// (install_windows.go, proven by install_windows_test.go), and Windows KRL
+// apply is what comes next (owner decision 2026-11-02, item 2g g).
+
+package sshkrl
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"trstctl.com/trstctl/internal/crypto"
+)
+
+func installerWith(t *testing.T, installed []byte) Config {
+	t.Helper()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "revoked_keys")
+	if err := os.WriteFile(target, installed, 0o644); err != nil { // #nosec G306 G703 -- a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable
+		t.Fatal(err)
+	}
+	return Config{TargetPath: target, SSHDConfigPath: filepath.Join(dir, "sshd_config"), RollbackDir: filepath.Join(dir, "rollbacks"), Checks: &fakeChecks{activePath: target}}
+}
+
+func applyList(t *testing.T, cfg Config, next []byte) error {
+	t.Helper()
+	before, err := os.ReadFile(cfg.TargetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Apply(context.Background(), cfg, next, crypto.SHA256Hex(next))
+	after, readErr := os.ReadFile(cfg.TargetPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if err != nil && !bytes.Equal(after, before) {
+		t.Fatalf("refused list still changed the target: %v", err)
+	}
+	if err == nil && !bytes.Equal(after, next) {
+		t.Fatal("accepted list is not the installed one")
+	}
+	return err
+}
+
+// B12-R1: a host prepared with the empty list stock `ssh-keygen -k` writes
+// (version 0) takes the control plane's list while that plane has revoked
+// nothing (also version 0, other header bytes), so a new host reports current
+// before the first revocation. A same-version list over one that revokes
+// something is still refused.
+func TestApplyReplacesTheEmptyBootstrapListAtTheSameVersion(t *testing.T) {
+	stock, err := os.ReadFile(filepath.Join("testdata", "ssh-keygen-empty.krl")) // #nosec G304 -- committed test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := krlFixture(0)
+	if version, err := Version(stock); err != nil || version != 0 || bytes.Equal(stock, served) {
+		t.Fatalf("fixture: version %d, err %v, same bytes %v", version, err, bytes.Equal(stock, served))
+	}
+	if err := applyList(t, installerWith(t, stock), served); err != nil {
+		t.Fatalf("the empty bootstrap list refused the control plane's empty list: %v", err)
+	}
+	if err := applyList(t, installerWith(t, krlFixture(0, 5)), served); !errors.Is(err, ErrNotNewer) {
+		t.Fatalf("a same-version list replaced one that revokes serial 5: %v", err)
+	}
+}
+
+// A110: a newer list that stops revoking something this host revokes is
+// refused, and the installed list stays in force.
+func TestApplyRefusesNewerListThatDropsInstalledRevocations(t *testing.T) {
+	cfg := installerWith(t, krlFixture(1, 101))
+	err := applyList(t, cfg, krlFixture(2, 202))
+	var drop *DropError
+	if !errors.Is(err, ErrDropsRevocations) || !errors.As(err, &drop) || drop.Serials != 1 || drop.KeyIDs != 0 {
+		t.Fatalf("Apply = %v; want one dropped serial", err)
+	}
+}
+
+// A110: a host moves from one control plane's KRL lineage to another's only
+// when the new list is newer than the installed one and still revokes all of
+// it. Each lineage counts its own versions, so neither alone is enough.
+func TestApplyMigratesToAnotherLineageOnlyWhenNewerAndComplete(t *testing.T) {
+	cfg := installerWith(t, trstctlList(5, []uint64{101, 102}, "pam:a"))
+	if err := applyList(t, cfg, trstctlList(3, []uint64{101, 102, 303}, "pam:a")); !errors.Is(err, ErrNotNewer) {
+		t.Fatalf("lower-version replacement list = %v; want refused as not newer", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 303}, "pam:a")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("replacement list without serial 102 = %v; want refused as dropping revocations", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 303}, "pam:b")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("replacement list without key ID pam:a = %v; want refused as dropping revocations", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 102, 303}, "pam:a")); err != nil {
+		t.Fatalf("complete newer replacement list refused: %v", err)
+	}
+}
+
+// A host whose RevokedKeys file starts as the operator's own CA-scoped list
+// takes a trstctl list only if it revokes the same serials and key IDs.
+func TestApplyKeepsAnOperatorListsCARevocations(t *testing.T) {
+	cfg := installerWith(t, readFixture(t, "ssh-keygen-ca-scoped.krl"))
+	if err := applyList(t, cfg, trstctlList(8, []uint64{5, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20}, "alice@corp")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("list without serial 15 = %v; want refused", err)
+	}
+	if err := applyList(t, cfg, trstctlList(8, []uint64{5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, "alice@corp")); err != nil {
+		t.Fatalf("covering list refused: %v", err)
+	}
+}
+
+func TestApplyUpdatesVersionAndKeepsDurablePredecessor(t *testing.T) {
+	cfg, checks, old, next := setupInstaller(t)
+	result, err := Apply(context.Background(), cfg, next, crypto.SHA256Hex(next))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Changed || result.PreviousVersion != 1 || result.Version != 2 || result.RollbackPath == "" {
+		t.Fatalf("result = %+v", result)
+	}
+	installed, err := os.ReadFile(cfg.TargetPath)
+	if err != nil || !bytes.Equal(installed, next) {
+		t.Fatalf("installed KRL mismatch: %v", err)
+	}
+	backup, err := os.ReadFile(result.RollbackPath)
+	if err != nil || !bytes.Equal(backup, old) {
+		t.Fatalf("rollback predecessor mismatch: %v", err)
+	}
+	if checks.validate != 2 || checks.reload != 1 || checks.health != 1 {
+		t.Fatalf("checks = %+v", checks)
+	}
+}
+
+func TestApplyHealthFailureRestoresPredecessorAndReloads(t *testing.T) {
+	cfg, checks, old, next := setupInstaller(t)
+	checks.healthErr = errors.New("listener refused connection")
+	result, err := Apply(context.Background(), cfg, next, crypto.SHA256Hex(next))
+	if err == nil || !strings.Contains(err.Error(), "rolled back") {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	current, err := os.ReadFile(cfg.TargetPath)
+	if err != nil || !bytes.Equal(current, old) {
+		t.Fatalf("target not restored: %v", err)
+	}
+	if checks.reload != 2 || checks.health != 2 {
+		t.Fatalf("rollback checks = %+v", checks)
+	}
+}
