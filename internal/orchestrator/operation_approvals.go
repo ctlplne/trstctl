@@ -328,6 +328,20 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 				if useErr != nil {
 					return fmt.Errorf("%w: approval issuance evidence is invalid", store.ErrApprovalDrifted)
 				}
+				if use.Issuance != nil && use.Issuance.BindsDestinationOrIssuer() {
+					// A244: a changed destination or issuer supersedes the approval.
+					if destinationErr := o.store.ValidateIdentityDestinationApprovalBindingTx(ctx, tx, tenantID, request.ResourceID, *use.Issuance); destinationErr != nil {
+						if errors.Is(destinationErr, store.ErrApprovalDrifted) {
+							if statusErr := o.changeOperationApprovalStatusTx(ctx, tx, tenantID, request,
+								store.ApprovalStatusSuperseded, "", now); statusErr != nil {
+								return statusErr
+							}
+							terminalErr = store.ErrApprovalDrifted
+							return nil
+						}
+						return destinationErr
+					}
+				}
 				if use.Issuance != nil && use.Issuance.ProfileID != "" {
 					if profileErr := o.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, tenantID, *use.Issuance); profileErr != nil {
 						if errors.Is(profileErr, store.ErrApprovalDrifted) {

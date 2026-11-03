@@ -100,6 +100,13 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	if len(reviewed) > 0 && (!reflect.DeepEqual(issuanceBinding, reviewed[0].Issuance) || gate.RequireApproval != reviewed[0].ApprovalRequired) {
 		return 0, nil, errStatus(http.StatusConflict, "endpoint certificate profile or approval policy changed after review; build a fresh preview with a new request key")
 	}
+	if issuanceBinding != nil {
+		// A244: an issuance approval also binds where the certificate goes and
+		// which authority issues it.
+		if err := a.bindApprovalDestination(ctx, tenantID, identity, issuanceBinding); err != nil {
+			return 0, nil, err
+		}
+	}
 	evidenceRefs, err := identityTransitionApprovalEvidence(idempotencyKeyDigest, subjectCSRDigest, gate.Profile, issuanceBinding)
 	if err != nil {
 		return 0, nil, err

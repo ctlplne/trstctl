@@ -379,6 +379,7 @@ import type {
   SecretMigration,
   SecretMigrationList,
   SecretMigrationRequest,
+  ChangeImpact,
   SecretScopedSync,
   SecretScopedSyncApplyRequest,
   SecretScopedSyncList,
@@ -813,6 +814,7 @@ export type {
   SecretMigration,
   SecretMigrationList,
   SecretMigrationRequest,
+  ChangeImpact,
   SecretScopedSync,
   SecretScopedSyncApplyRequest,
   SecretScopedSyncList,
@@ -2485,6 +2487,8 @@ export interface Api {
   bulkRevokeCertificates(input: BulkRevokeRequest): Promise<BulkRevokeResult>;
   bulkRevokeIdentities(input: BulkRevokeRequest): Promise<BulkRevokeResult>;
   connectorTarget(id: string): Promise<DeploymentTarget>;
+  connectorTargetImpact(id: string): Promise<ChangeImpact>;
+  profileImpact(name: string): Promise<ChangeImpact>;
   updateConnectorTarget(id: string, input: DeploymentTargetRequest): Promise<DeploymentTarget>;
   deleteConnectorTarget(id: string): Promise<void>;
   outboxCircuits(): Promise<OutboxCircuitList>;
@@ -3361,6 +3365,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   bulkRevokeCertificates: (input) => mutate<BulkRevokeResult>("POST", "/api/v1/certificates/bulk-revoke", input),
   bulkRevokeIdentities: (input) => mutate<BulkRevokeResult>("POST", "/api/v1/identities/bulk-revoke", input),
   connectorTarget: (id) => req<DeploymentTarget>(`/api/v1/connectors/targets/${encodeURIComponent(id)}`),
+  connectorTargetImpact: (id) => req<ChangeImpact>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/impact`),
+  profileImpact: (name) => req<ChangeImpact>(`/api/v1/profiles/impact/${encodeURIComponent(name)}`),
   updateConnectorTarget: (id, input) => mutate<DeploymentTarget>("PUT", `/api/v1/connectors/targets/${encodeURIComponent(id)}`, input),
   deleteConnectorTarget: (id) => mutate<void>("DELETE", `/api/v1/connectors/targets/${encodeURIComponent(id)}`),
   outboxCircuits: () => req<OutboxCircuitList>("/api/v1/connectors/outbox-circuits"),

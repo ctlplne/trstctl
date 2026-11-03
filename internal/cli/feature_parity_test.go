@@ -402,9 +402,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `secrets projects restore preview|apply`. A237 adds `secrets scoped-syncs
 	// define|list|show|remove|preview|apply|mode`. A238 adds `secrets deliveries
 	// report|list`. A243 adds `secrets migrate assess|list|show|stage|permissions|
-	// cutover|reissue|rollback`.
-	if len(out) != 713 {
-		t.Fatalf("CLI commands = %d, want 713", len(out))
+	// cutover|reissue|rollback`. A244 adds `connector target impact` and
+	// `profiles impact`.
+	if len(out) != 715 {
+		t.Fatalf("CLI commands = %d, want 715", len(out))
 	}
 	return out
 }

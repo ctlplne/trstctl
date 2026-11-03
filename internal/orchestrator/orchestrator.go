@@ -834,6 +834,21 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					if to != StateIssued || approval.Action != "issue" {
 						return store.ErrApprovalDrifted
 					}
+					// A244: the destination and issuer the approval was asked for,
+					// read from its evidence refs, must still be the identity's.
+					if bound, boundErr := store.OperationApprovalUseFromRequest(authority); boundErr == nil && bound.Issuance != nil {
+						if err := o.store.ValidateIdentityDestinationApprovalBindingTx(ctx, tx, tenantID, identityID, *bound.Issuance); err != nil {
+							if errors.Is(err, store.ErrApprovalDrifted) {
+								if statusErr := o.changeOperationApprovalStatusTx(ctx, tx, tenantID, authority,
+									store.ApprovalStatusSuperseded, "", eventTime); statusErr != nil {
+									return statusErr
+								}
+								terminalApprovalErr = store.ErrApprovalDrifted
+								return nil
+							}
+							return err
+						}
+					}
 					if approval.Issuance.ProfileID != "" {
 						if err := o.store.ValidateActiveProfileApprovalBindingTx(ctx, tx, tenantID, *approval.Issuance); err != nil {
 							if errors.Is(err, store.ErrApprovalDrifted) {

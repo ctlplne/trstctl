@@ -2862,6 +2862,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connectors/targets/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show what a change to a deployment target reaches: the certificates that deploy to it and the open approvals a change supersedes */
+        get: operations["getConnectorTargetChangeImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/targets/{id}/purge": {
         parameters: {
             query?: never;
@@ -6878,6 +6895,23 @@ export interface paths {
         put?: never;
         /** Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec */
         post: operations["approveProfileEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/impact/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show what a change to a certificate profile reaches: the certificates that use it and the open approvals a change supersedes */
+        get: operations["getProfileChangeImpact"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13017,6 +13051,25 @@ export interface components {
             submission_id: string;
             /** Format: int64 */
             tree_size?: number;
+        };
+        ChangeImpact: {
+            approvals: {
+                action: string;
+                /** Format: uuid */
+                id: string;
+                identity_id: string;
+                status: string;
+            }[];
+            identities: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                owner_id?: string;
+                status: string;
+            }[];
+            /** @enum {string} */
+            kind: "deployment_target" | "profile";
+            name: string;
         };
         CloudSecretManagerIntegration: {
             architecture_controls: string[];
@@ -30483,6 +30536,47 @@ export interface operations {
             };
         };
     };
+    getConnectorTargetChangeImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description deployment target ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeImpact"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     purgeEndpoint: {
         parameters: {
             query?: never;
@@ -42414,6 +42508,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileEditApprovalRecord"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProfileChangeImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description certificate profile name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeImpact"];
                 };
             };
             /** @description client error */

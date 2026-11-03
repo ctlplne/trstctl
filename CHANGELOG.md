@@ -2,6 +2,15 @@
 
 ### Added
 
+- Issuance approvals bind the destination and the issuer (A244): an approval asked for an identity
+  that deploys to a target now records that target and its configuration revision, and the
+  identity's issuing authority, in its evidence (covered by the intent digest). Editing the
+  target, rebinding the identity, or a different issuer supersedes the approval when it is decided
+  or used, as a changed profile already did. `GET /api/v1/connectors/targets/{id}/impact` and
+  `GET /api/v1/profiles/impact/{name}` (CLI `connector target impact`, `profiles impact`) show what
+  a change would reach: the certificates that use the target or profile, and the open approvals it
+  would supersede.
+
 - Secret migration runs (A243): `POST /api/v1/secrets/migrations/assess` reads an export in common
   formats — dotenv, JSON or YAML, per environment and folder — into native names
   (`<project>/<environment>/<folder>/<key>`), translates its references (`${NAME}`,

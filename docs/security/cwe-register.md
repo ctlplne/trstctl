@@ -175,7 +175,7 @@ not this file.
 | `internal/api/notifications.go:901` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:209` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:212` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1103` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1251` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
@@ -801,7 +801,7 @@ not this file.
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/orchestrator/operation_approvals.go:389` | a negative stored version is classified as drift before conversion (CWE-190). |
+| `internal/orchestrator/operation_approvals.go:403` | a negative stored version is classified as drift before conversion (CWE-190). |
 | `internal/orchestrator/secret_rotation.go:565` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
@@ -960,7 +960,7 @@ not this file.
 | `internal/store/migration_run.go:245` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/migration_run.go:278` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/offboard_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/store/operation_approvals.go:254` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
+| `internal/store/operation_approvals.go:285` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/outbox_reconciliation_conflicts.go:76` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190). |
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |

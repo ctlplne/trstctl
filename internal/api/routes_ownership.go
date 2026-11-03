@@ -132,5 +132,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.secretScopedSyncRoutes()...) // see secret_scoped_sync.go
 	out = append(out, a.secretDeliveryRoutes()...)   // see secret_deliveries.go
 	out = append(out, a.secretMigrationRoutes()...)  // see secret_migrations.go
+	out = append(out, a.changeImpactRoutes()...)     // see approval_destination.go
 	return out
 }

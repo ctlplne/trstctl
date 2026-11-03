@@ -126,6 +126,11 @@ const (
 	operationApprovalEvidenceProfileSpecDigestPrefix = "profile-spec-digest:"
 	operationApprovalEvidenceRequestedTTLPrefix      = "issuance-requested-ttl-seconds:"
 	operationApprovalEvidenceEffectiveTTLPrefix      = "issuance-effective-ttl-seconds:"
+	// A244: what the approval saw the certificate going to and coming from.
+	operationApprovalEvidenceDestinationTargetPrefix   = "issuance-destination-target:"
+	operationApprovalEvidenceDestinationRevisionPrefix = "issuance-destination-revision:"
+	operationApprovalEvidenceIssuerSourcePrefix        = "issuance-issuer-source:"
+	operationApprovalEvidenceIssuerIDPrefix            = "issuance-issuer-id:"
 )
 
 // OperationApprovalIssuanceBinding is the exact certificate-policy revision and
@@ -140,6 +145,15 @@ type OperationApprovalIssuanceBinding struct {
 	ProfileSpecDigest   string `json:"profile_spec_digest,omitempty"`
 	RequestedTTLSeconds int64  `json:"requested_ttl_seconds"`
 	EffectiveTTLSeconds int64  `json:"effective_ttl_seconds"`
+	// The destination (the deployment target and its configuration revision)
+	// and the issuing authority the identity had when the approval was asked
+	// for (A244). They travel only in the approval's evidence refs, which its
+	// intent digest covers, so a changed destination or issuer supersedes the
+	// approval; lifecycle event payloads keep their shape.
+	DestinationTargetID string `json:"-"`
+	DestinationRevision string `json:"-"`
+	IssuerSource        string `json:"-"`
+	IssuerID            string `json:"-"`
 }
 
 // EvidenceRefs returns the non-secret canonical approval evidence for this
@@ -162,7 +176,24 @@ func (b OperationApprovalIssuanceBinding) EvidenceRefs() ([]string, error) {
 			operationApprovalEvidenceProfileSpecDigestPrefix+b.ProfileSpecDigest,
 		)
 	}
+	if b.DestinationTargetID != "" {
+		refs = append(refs,
+			operationApprovalEvidenceDestinationTargetPrefix+b.DestinationTargetID,
+			operationApprovalEvidenceDestinationRevisionPrefix+b.DestinationRevision)
+	}
+	if b.IssuerSource != "" {
+		refs = append(refs, operationApprovalEvidenceIssuerSourcePrefix+b.IssuerSource)
+		if b.IssuerID != "" {
+			refs = append(refs, operationApprovalEvidenceIssuerIDPrefix+b.IssuerID)
+		}
+	}
 	return refs, nil
+}
+
+// BindsDestinationOrIssuer reports whether the binding names the identity's
+// destination or issuing authority (A244).
+func (b OperationApprovalIssuanceBinding) BindsDestinationOrIssuer() bool {
+	return b.DestinationTargetID != "" || b.IssuerSource != ""
 }
 
 // OperationApprovalUse is embedded in the immutable event that performs the
@@ -946,6 +977,8 @@ func operationApprovalIssuanceBindingFromEvidence(refs []string) (*OperationAppr
 		profileNameSeen, profileIDSeen        bool
 		profileVersionSeen, profileDigestSeen bool
 		requestedTTLSeen, effectiveTTLSeen    bool
+		targetSeen, revisionSeen              bool
+		issuerSourceSeen, issuerIDSeen        bool
 	)
 	setString := func(ref, prefix string, seen *bool, dest *string) error {
 		if !strings.HasPrefix(ref, prefix) {
@@ -1002,7 +1035,26 @@ func operationApprovalIssuanceBindingFromEvidence(refs []string) (*OperationAppr
 			if err := setString(ref, operationApprovalEvidenceProfileNamePrefix, &profileNameSeen, &binding.ProfileName); err != nil {
 				return nil, err
 			}
+		case strings.HasPrefix(ref, operationApprovalEvidenceDestinationTargetPrefix):
+			if err := setString(ref, operationApprovalEvidenceDestinationTargetPrefix, &targetSeen, &binding.DestinationTargetID); err != nil {
+				return nil, err
+			}
+		case strings.HasPrefix(ref, operationApprovalEvidenceDestinationRevisionPrefix):
+			if err := setString(ref, operationApprovalEvidenceDestinationRevisionPrefix, &revisionSeen, &binding.DestinationRevision); err != nil {
+				return nil, err
+			}
+		case strings.HasPrefix(ref, operationApprovalEvidenceIssuerSourcePrefix):
+			if err := setString(ref, operationApprovalEvidenceIssuerSourcePrefix, &issuerSourceSeen, &binding.IssuerSource); err != nil {
+				return nil, err
+			}
+		case strings.HasPrefix(ref, operationApprovalEvidenceIssuerIDPrefix):
+			if err := setString(ref, operationApprovalEvidenceIssuerIDPrefix, &issuerIDSeen, &binding.IssuerID); err != nil {
+				return nil, err
+			}
 		}
+	}
+	if targetSeen != revisionSeen || (issuerIDSeen && !issuerSourceSeen) {
+		return nil, errors.New("store: approval evidence has an incomplete destination or issuer binding")
 	}
 	hasRevision := profileIDSeen || profileVersionSeen || profileDigestSeen
 	hasTTL := requestedTTLSeen || effectiveTTLSeen
@@ -1039,6 +1091,60 @@ func validateOperationApprovalIssuanceBinding(b OperationApprovalIssuanceBinding
 		len(b.ProfileSpecDigest) != len("sha256:")+64 || !strings.HasPrefix(b.ProfileSpecDigest, "sha256:")) {
 		return errors.New("store: approval profile revision binding is incomplete")
 	}
+	if (b.DestinationTargetID == "") != (b.DestinationRevision == "") ||
+		strings.ContainsAny(b.DestinationTargetID+b.DestinationRevision+b.IssuerID, " \t\r\n") {
+		return errors.New("store: approval destination binding is incomplete")
+	}
+	switch b.IssuerSource {
+	case "", "platform", "private", "external":
+	default:
+		return errors.New("store: approval issuer binding names an unknown source")
+	}
+	if b.IssuerID != "" && b.IssuerSource == "" {
+		return errors.New("store: approval issuer binding has an ID without a source")
+	}
+	return nil
+}
+
+// ValidateIdentityDestinationApprovalBindingTx checks, under the identity's
+// lock, that the identity still goes to the destination and comes from the
+// issuer the approval was granted for (A244): the same deployment target at
+// the same configuration revision, and the same issuing authority. A change
+// is ErrApprovalDrifted, which supersedes the approval. A binding that names
+// neither (approvals asked for before A244) passes.
+func (s *Store) ValidateIdentityDestinationApprovalBindingTx(ctx context.Context, tx pgx.Tx, tenantID, identityID string, b OperationApprovalIssuanceBinding) error {
+	if !b.BindsDestinationOrIssuer() {
+		return nil
+	}
+	var target, source, issuer string
+	if err := tx.QueryRow(ctx, `
+		SELECT coalesce(attributes->>'deployment_target_id', ''), coalesce(attributes->>'issuing_authority_source', ''),
+		       coalesce(attributes->>'issuing_authority_id', '')
+		  FROM identities WHERE tenant_id = $1 AND id = $2 FOR SHARE`, tenantID, identityID).Scan(&target, &source, &issuer); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrApprovalDrifted
+		}
+		return err
+	}
+	if b.DestinationTargetID != "" {
+		if target != b.DestinationTargetID {
+			return ErrApprovalDrifted
+		}
+		var revision string
+		if err := tx.QueryRow(ctx, `SELECT revision_id FROM deployment_targets WHERE tenant_id = $1 AND id = $2 FOR SHARE`,
+			tenantID, target).Scan(&revision); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrApprovalDrifted
+			}
+			return err
+		}
+		if revision != b.DestinationRevision {
+			return ErrApprovalDrifted
+		}
+	}
+	if b.IssuerSource != "" && (source != b.IssuerSource || issuer != b.IssuerID) {
+		return ErrApprovalDrifted
+	}
 	return nil
 }
 
@@ -1046,5 +1152,12 @@ func sameOperationApprovalIssuanceBinding(a, b *OperationApprovalIssuanceBinding
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	return *a == *b
+	// The destination and issuer bind through the evidence refs alone (the
+	// intent digest covers them) and are checked against the identity when
+	// the approval is decided or used; an event's decoded binding never
+	// carries them.
+	x, y := *a, *b
+	x.DestinationTargetID, x.DestinationRevision, x.IssuerSource, x.IssuerID = "", "", "", ""
+	y.DestinationTargetID, y.DestinationRevision, y.IssuerSource, y.IssuerID = "", "", "", ""
+	return x == y
 }

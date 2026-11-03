@@ -4245,6 +4245,17 @@ CertificateTransparencyEntry = TypedDict(
     total=False,
 )
 
+ChangeImpact = TypedDict(
+    'ChangeImpact',
+    {
+        'approvals': list[dict[str, Any]],
+        'identities': list[dict[str, Any]],
+        'kind': str,
+        'name': str,
+    },
+    total=False,
+)
+
 CloudSecretManagerIntegration = TypedDict(
     'CloudSecretManagerIntegration',
     {

@@ -12511,6 +12511,80 @@
         ],
         "type": "object"
       },
+      "ChangeImpact": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "identity_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "identity_id",
+                "action",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "identities": {
+            "items": {
+              "properties": {
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "deployment_target",
+              "profile"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "identities",
+          "approvals"
+        ],
+        "type": "object"
+      },
       "CloudSecretManagerIntegration": {
         "properties": {
           "architecture_controls": {
@@ -59525,6 +59599,64 @@
         "x-trstctl-permission": "connectors:write"
       }
     },
+    "/api/v1/connectors/targets/{id}/impact": {
+      "get": {
+        "operationId": "getConnectorTargetChangeImpact",
+        "parameters": [
+          {
+            "description": "deployment target ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeImpact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show what a change to a deployment target reaches: the certificates that deploy to it and the open approvals a change supersedes",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
     "/api/v1/connectors/targets/{id}/purge": {
       "post": {
         "operationId": "purgeEndpoint",
@@ -77015,6 +77147,64 @@
         ],
         "summary": "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec",
         "x-trstctl-permission": "profiles:write"
+      }
+    },
+    "/api/v1/profiles/impact/{name}": {
+      "get": {
+        "operationId": "getProfileChangeImpact",
+        "parameters": [
+          {
+            "description": "certificate profile name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeImpact"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show what a change to a certificate profile reaches: the certificates that use it and the open approvals a change supersedes",
+        "x-trstctl-permission": "profiles:read"
       }
     },
     "/api/v1/profiles/{name}/versions/{version}": {

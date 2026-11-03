@@ -3031,6 +3031,13 @@ export interface CertificateTransparencyEntry {
   tree_size?: number;
 }
 
+export interface ChangeImpact {
+  approvals: { action: string; id: string; identity_id: string; status: string }[];
+  identities: { id: string; name: string; owner_id?: string; status: string }[];
+  kind: "deployment_target" | "profile";
+  name: string;
+}
+
 export interface CloudSecretManagerIntegration {
   architecture_controls: string[];
   capability: string;
