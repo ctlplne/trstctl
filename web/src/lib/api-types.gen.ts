@@ -5319,6 +5319,71 @@ export interface FIPSStatus {
   validated_module_path?: boolean;
 }
 
+export interface FactoryBatch {
+  birth_ttl_seconds: number;
+  created_at: string;
+  created_by: string;
+  delegation_id: string;
+  enrolled: number;
+  id: string;
+  label: string;
+  operational_profile?: string;
+  over_quota: number;
+  quota: number;
+  recorded: number;
+}
+
+export interface FactoryBatchDetail {
+  birth_ttl_seconds: number;
+  births: { device_name: string; enrolled: boolean; enrolled_at?: string; fingerprint: string; not_after: string; operational_serial?: string; over_quota: boolean; renewals: number; serial: string }[];
+  created_at: string;
+  created_by: string;
+  delegation_id: string;
+  enrolled: number;
+  id: string;
+  label: string;
+  operational_profile?: string;
+  over_quota: number;
+  quota: number;
+  recorded: number;
+}
+
+export interface FactoryBatchList {
+  items: { birth_ttl_seconds: number; created_at: string; created_by: string; delegation_id: string; enrolled: number; id: string; label: string; operational_profile?: string; over_quota: number; quota: number; recorded: number }[];
+}
+
+export interface FactoryBatchRequest {
+  birth_ttl_seconds: number;
+  delegation_id: string;
+  label: string;
+  operational_profile?: string;
+  quota: number;
+}
+
+export interface FactoryManifest {
+  batch_id: string;
+  birth_ttl_seconds: number;
+  delegation_fingerprint: string;
+  delegation_id: string;
+  est_path: string;
+  label: string;
+  quota: number;
+  tenant_id: string;
+}
+
+export interface FactoryReconcileRequest {
+  batch_id?: string;
+  certificates_pem: string[];
+  host?: string;
+}
+
+export interface FactoryReconcileResult {
+  already: number;
+  over_quota: number;
+  recorded: number;
+  rejected: number;
+}
+
 export interface FindingAnnotationRequest {
   reason?: string;
 }

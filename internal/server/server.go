@@ -1710,6 +1710,8 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 		// through the same service.
 		s.edgeDelegations = edgeSvc
 		defaults = append(defaults, api.WithEdgeDelegations(edgeSvc))
+		// P12: factory batches stand on the edge delegations.
+		defaults = append(defaults, api.WithFactoryBatches(&factoryBatchService{edge: edgeSvc, store: d.Store, orch: orch}))
 	}
 	if externalCAs, err := s.buildExternalCAService(d, idem); err != nil {
 		return nil, nil, err

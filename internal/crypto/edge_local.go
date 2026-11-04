@@ -167,6 +167,13 @@ type EdgeLeafRequest struct {
 	CommonName string
 	DNSNames   []string
 	TTL        time.Duration
+	// CSRDER, when set, is a device's own certificate request (P12 factory
+	// birth certificates): the leaf certifies the CSR's verified public key,
+	// which must name the same device, and no key is generated here.
+	CSRDER []byte
+	// ClientAuthOnly limits the leaf to client authentication, as a birth
+	// certificate that only ever proves the device to trstctl.
+	ClientAuthOnly bool
 }
 
 // EdgeIssuedLeaf is the locally issued certificate and its key. The
@@ -290,6 +297,10 @@ func issueEdgeLeafWithSigner(delegationCertPEM []byte, caSigner DigestSigner, re
 	if err != nil {
 		return EdgeIssuedLeaf{}, err
 	}
+	extKeyUsage := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+	if req.ClientAuthOnly {
+		extKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	}
 	leafKeyless := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: strings.TrimSpace(req.CommonName)},
@@ -297,20 +308,32 @@ func issueEdgeLeafWithSigner(delegationCertPEM []byte, caSigner DigestSigner, re
 		NotBefore:    IssuanceNotBefore(now),
 		NotAfter:     notAfter,
 		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		ExtKeyUsage:  extKeyUsage,
 	}
-	// The leaf's key is generated here too: the edge issues complete identity
-	// material for the workload beside it.
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return EdgeIssuedLeaf{}, fmt.Errorf("crypto: generate leaf key: %w", err)
+	var leafPublic any
+	var leafKeyDER []byte
+	if len(req.CSRDER) > 0 {
+		// P12: the device made its key (in its own TPM or secure element) and
+		// the station certifies only what the request proves it holds.
+		leafPublic, err = edgeDeviceCSRPublicKey(req.CSRDER, req.CommonName)
+		if err != nil {
+			return EdgeIssuedLeaf{}, err
+		}
+	} else {
+		// The leaf's key is generated here too: the edge issues complete identity
+		// material for the workload beside it.
+		leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return EdgeIssuedLeaf{}, fmt.Errorf("crypto: generate leaf key: %w", err)
+		}
+		leafKeyDER, err = x509.MarshalPKCS8PrivateKey(leafKey)
+		if err != nil {
+			return EdgeIssuedLeaf{}, fmt.Errorf("crypto: marshal leaf key: %w", err)
+		}
+		defer secret.Wipe(leafKeyDER)
+		leafPublic = &leafKey.PublicKey
 	}
-	leafKeyDER, err := x509.MarshalPKCS8PrivateKey(leafKey)
-	if err != nil {
-		return EdgeIssuedLeaf{}, fmt.Errorf("crypto: marshal leaf key: %w", err)
-	}
-	defer secret.Wipe(leafKeyDER)
-	der, err := x509.CreateCertificate(rand.Reader, leafKeyless, caCert, &leafKey.PublicKey, adapter)
+	der, err := x509.CreateCertificate(rand.Reader, leafKeyless, caCert, leafPublic, adapter)
 	if err != nil {
 		return EdgeIssuedLeaf{}, fmt.Errorf("crypto: sign edge leaf: %w", err)
 	}
@@ -329,7 +352,46 @@ func issueEdgeLeafWithSigner(delegationCertPEM []byte, caSigner DigestSigner, re
 		SerialHex:      leaf.SerialNumber.Text(16),
 		CertificateDER: der,
 		CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
-		LeafKeyPEM:     pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: leafKeyDER}),
+		LeafKeyPEM:     edgeLeafKeyPEM(leafKeyDER),
 		NotAfter:       leaf.NotAfter,
 	}, nil
+}
+
+// edgeLeafKeyPEM encodes a key the edge generated; a device's own key never
+// passes through the station, so there is nothing to encode.
+func edgeLeafKeyPEM(keyDER []byte) []byte {
+	if len(keyDER) == 0 {
+		return nil
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+}
+
+// edgeDeviceCSRPublicKey returns the public key a device's certificate request
+// proves it holds: the request's signature must verify, it must name the
+// device being certified, and its key must be ECDSA P-256 or larger, or RSA of
+// at least 2048 bits.
+func edgeDeviceCSRPublicKey(csrDER []byte, commonName string) (any, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse device CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("crypto: device CSR signature does not verify: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(csr.Subject.CommonName), strings.TrimSpace(commonName)) {
+		return nil, fmt.Errorf("crypto: the device CSR names %q, not %q", csr.Subject.CommonName, commonName)
+	}
+	switch key := csr.PublicKey.(type) {
+	case *ecdsa.PublicKey:
+		if key.Curve.Params().BitSize < 256 {
+			return nil, fmt.Errorf("crypto: device CSR key is too small")
+		}
+	case *rsa.PublicKey:
+		if key.N.BitLen() < 2048 {
+			return nil, fmt.Errorf("crypto: device CSR key is too small")
+		}
+	default:
+		return nil, fmt.Errorf("crypto: device CSR key type is not ECDSA or RSA")
+	}
+	return csr.PublicKey, nil
 }

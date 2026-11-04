@@ -876,6 +876,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"adcs_request_decisions",
 	// N9: projected from mdm.device.check_in_queued and mdm.device.checked_in.
 	"mdm_device_check_ins",
+	// P12: projected from edge.factory_batch.created, edge.factory_birth.recorded
+	// and edge.factory_device.enrolled.
+	"factory_batches", "factory_birth_certificates",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

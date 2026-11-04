@@ -7858,6 +7858,21 @@ Encrypt's staging environment) is a Track B row. What comes next: findings at a 
 issued certificate in another log, or revoking the precertificate where a CA accepts that), and certificates with IP
 identifiers.
 
+## Factory provisioning for devices (P12) — served
+
+A factory batch is a quota of birth certificates a station on a production line issues offline under one edge
+delegation. `trstctl-agent --factory-issue` certifies a device's own CSR with the station's TPM-held (or PKCS#11)
+delegation key, refuses past the quota and appends to the batch journal; it holds no network listener. The journal
+reconciles with `trstctl edge factory-batches reconcile` when the station reconnects, where a birth certificate past the
+quota is recorded as over-production and cannot enroll. On first boot a device gets its operational certificate over
+EST at `/.well-known/est/factory` with a proof signed by its birth key, through the relay enrollment proxy where it
+has no route, and renews in the field with a proof signed by its operational key. Proven with a TPM-attested station
+delegation (the TPM fixture the edge tests use) and the relay enrollment proxy in front of the control plane; the
+station's quota, journal and lock with a software key by explicit exception; and the station's key-handle path with
+a software TPM in the swtpm container harness. A real device's TPM or secure element is a Track B row. What comes
+next: device attestation of the device's own key at birth (the station certifies the CSR's key today), ACME as a
+first-boot path, and a console page for batches.
+
 ## Edition and qualification ledger (A253) — served
 
 `go run ./tools/editionledger` writes `docs/editions-ledger.md` and `docs/editions-ledger.json` from

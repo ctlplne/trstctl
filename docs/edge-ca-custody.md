@@ -314,3 +314,59 @@ whose attestation keeps failing sees its delegation expire. An expired,
 revoked or already renewed delegation does not renew. Renewal attests with
 TPM2_Certify, so it serves the TPM2 lane; PKCS#11 and software delegations ask
 again through the attested mint.
+
+## Factory provisioning (P12)
+
+A factory batch lets a station on a production line give each device a birth
+certificate while the line is offline, under an edge delegation like the ones
+above, and lets each device turn that birth certificate into an operational
+certificate on its first boot.
+
+1. Create the batch on an active delegation: `POST /api/v1/edge/factory-batches`
+   (`trstctl edge factory-batches create -f batch.json`) with `delegation_id`,
+   `label`, `quota` (how many birth certificates the line may make) and
+   `birth_ttl_seconds`, and optionally the `operational_profile` first boot
+   issues under. Fetch the batch's manifest for the station:
+   `trstctl edge factory-batches manifest <batch>` (it names the batch, the
+   delegation's fingerprint, the quota and the birth lifetime).
+2. On the line, the device makes its own key (in its TPM or secure element) and
+   a CSR naming the device, inside the delegation's name constraints. The line's
+   tooling then runs the station once for that device:
+
+   ```sh
+   trstctl-agent --factory-issue --factory-manifest manifest.json \
+     --factory-device sn-0001.devices.example.com --factory-csr sn-0001.csr \
+     --edge-ca-cert delegation.pem --edge-ca-key-handle edge-ca.keyref.json \
+     --edge-cert-out sn-0001-birth.crt --factory-journal factory-journal.json
+   ```
+
+   The station signs only the CSR's key, as a client-authentication birth
+   certificate, with the delegation's TPM-held (or PKCS#11) key. It refuses when
+   the journal already holds the batch's quota, refuses a delegation that is not
+   the manifest's, and takes a lock file so two runs never both fit under the
+   quota. It holds no network listener and makes no network call.
+3. When the station reconnects, reconcile the journal:
+   `trstctl edge factory-batches reconcile <batch> -f factory-journal.json`. Each
+   birth certificate must chain to the batch's delegation; it goes into the edge
+   ledger with its constraint check and is counted against the quota once. A
+   birth certificate past the quota (a station whose journal or lock was
+   tampered with) is recorded as over-production and can never enroll. A replayed
+   journal records nothing new.
+4. On first boot the device enrolls over EST at `/.well-known/est/factory/simpleenroll`
+   with a new CSR naming itself and an `Authorization: Bearer` proof: a JWT
+   signed by its birth key whose `kid` is the birth certificate's SHA-256 and
+   whose claims are `sub` (the device), `purpose` `trstctl-factory-first-boot`,
+   `csr_sha256` (of the CSR it sends) and `iat` (within five minutes). The proof
+   travels in a header, so a device with no route enrolls through the relay
+   enrollment proxy unchanged. trstctl refuses a birth certificate that was never
+   reconciled, is over the quota, has expired, or whose station delegation is
+   revoked, and a second first boot with another CSR (a retry of the same CSR is
+   answered with the same certificate).
+5. The device renews in the field the same way at `.../simplereenroll`, with a
+   proof signed by its current operational key (`kid` = that certificate's
+   SHA-256, `purpose` `trstctl-factory-renewal`). A superseded operational
+   certificate cannot renew again.
+
+`trstctl edge factory-batches show <batch>` lists each birth certificate with
+whether it is over the quota, enrolled, its current operational serial and its
+renewals.

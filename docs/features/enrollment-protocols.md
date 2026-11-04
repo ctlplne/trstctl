@@ -257,6 +257,16 @@ offboard it from **Agents** before enrolling a replacement. Headless operators u
 `trstctl agents enroll-token-preview` before `trstctl agents enroll-token`; the same
 server-owned blockers protect both console and direct API mutation.
 
+### Factory first boot (P12)
+
+Devices given a birth certificate on a production line (see
+[factory provisioning](../edge-ca-custody.md#factory-provisioning-p12)) enroll on
+first boot at `/.well-known/est/factory/simpleenroll` and renew at
+`/.well-known/est/factory/simplereenroll`, each with an `Authorization: Bearer`
+proof signed by the device's birth key or its current operational key and bound
+to the exact CSR. The proof rides in a header, so it crosses the relay
+enrollment proxy where a TLS client certificate would not.
+
 ### Intune / MDM enrollment (F56)
 
 When a mobile-device-management platform pushes a SCEP profile to a managed

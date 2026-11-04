@@ -276,6 +276,8 @@ var TenantScopedTables = []string{
 	"adcs_request_decisions",
 	// N9: MDM device check-ins; no foreign keys.
 	"mdm_device_check_ins",
+	// P12: factory birth certificates, then their batches; no foreign keys.
+	"factory_birth_certificates", "factory_batches",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

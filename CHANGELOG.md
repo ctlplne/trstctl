@@ -2,6 +2,12 @@
 
 ### Added
 
+- Factory provisioning for devices (P12 is served): factory batches (`POST /api/v1/edge/factory-batches`,
+  `trstctl edge factory-batches create|list|show|manifest|reconcile`) give a production-line station a quota of birth
+  certificates under one edge delegation. `trstctl-agent --factory-issue` certifies each device's own CSR offline with
+  no listener and refuses past the quota; the journal reconciles when the station reconnects, recording any birth
+  certificate past the quota as over-production. Devices enroll on first boot and renew over EST at
+  `/.well-known/est/factory` with a proof signed by their birth or operational key, through the relay enrollment proxy.
 - ACME revocation of a certificate trstctl doesn't hold (N10 is served): a Certificate Transparency finding can be
   revoked at an ACME external CA. trstctl reads the certificate back from the log that recorded it, checks it against
   the finding, gets its own ACME account authorized for every DNS name in it through the issuer's DNS-01 provider,

@@ -7377,6 +7377,99 @@ FIPSStatus = TypedDict(
     total=False,
 )
 
+FactoryBatch = TypedDict(
+    'FactoryBatch',
+    {
+        'birth_ttl_seconds': int,
+        'created_at': str,
+        'created_by': str,
+        'delegation_id': str,
+        'enrolled': int,
+        'id': str,
+        'label': str,
+        'operational_profile': str,
+        'over_quota': int,
+        'quota': int,
+        'recorded': int,
+    },
+    total=False,
+)
+
+FactoryBatchDetail = TypedDict(
+    'FactoryBatchDetail',
+    {
+        'birth_ttl_seconds': int,
+        'births': list[dict[str, Any]],
+        'created_at': str,
+        'created_by': str,
+        'delegation_id': str,
+        'enrolled': int,
+        'id': str,
+        'label': str,
+        'operational_profile': str,
+        'over_quota': int,
+        'quota': int,
+        'recorded': int,
+    },
+    total=False,
+)
+
+FactoryBatchList = TypedDict(
+    'FactoryBatchList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+FactoryBatchRequest = TypedDict(
+    'FactoryBatchRequest',
+    {
+        'birth_ttl_seconds': int,
+        'delegation_id': str,
+        'label': str,
+        'operational_profile': str,
+        'quota': int,
+    },
+    total=False,
+)
+
+FactoryManifest = TypedDict(
+    'FactoryManifest',
+    {
+        'batch_id': str,
+        'birth_ttl_seconds': int,
+        'delegation_fingerprint': str,
+        'delegation_id': str,
+        'est_path': str,
+        'label': str,
+        'quota': int,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+FactoryReconcileRequest = TypedDict(
+    'FactoryReconcileRequest',
+    {
+        'batch_id': str,
+        'certificates_pem': list[str],
+        'host': str,
+    },
+    total=False,
+)
+
+FactoryReconcileResult = TypedDict(
+    'FactoryReconcileResult',
+    {
+        'already': int,
+        'over_quota': int,
+        'recorded': int,
+        'rejected': int,
+    },
+    total=False,
+)
+
 FindingAnnotationRequest = TypedDict(
     'FindingAnnotationRequest',
     {

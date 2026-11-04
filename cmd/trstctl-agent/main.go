@@ -241,6 +241,11 @@ func main() {
 	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
 	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
 	edgeJournalUpload := flag.Bool("edge-journal-upload", false, "send the edge issuance journal (--edge-journal) over the agent channel when the agent connects or reconnects, for the control plane to reconcile")
+	factoryIssueMode := flag.Bool("factory-issue", false, "one-shot factory station (P12): certify one device's own CSR as a birth certificate for a factory batch under the delegated edge CA, refusing past the batch's quota, and append it to the batch journal; no listener, no network")
+	factoryManifest := flag.String("factory-manifest", "", "factory-issue: the batch manifest (trstctl edge factory-batches manifest <batch>)")
+	factoryCSR := flag.String("factory-csr", "", "factory-issue: the device's certificate request (DER or PEM), made with the device's own key")
+	factoryDevice := flag.String("factory-device", "", "factory-issue: the device's name, inside the delegation's name constraints; the CSR must name it")
+	factoryJournal := flag.String("factory-journal", "factory-journal.json", "factory-issue: the batch journal, in the shape `trstctl edge factory-batches reconcile -f` posts")
 	edgeRenew := flag.Bool("edge-renew", false, "renew the delegated edge CA in --edge-ca-cert over the agent channel with a fresh TPM attestation when it nears expiry; uses the --edge-* TPM handle, AIK, tenant and segment flags")
 	edgeRenewBefore := flag.Duration("edge-renew-before", 7*24*time.Hour, "with --edge-renew, how long before the delegation expires the agent asks to renew it")
 	flag.Parse()
@@ -275,6 +280,8 @@ func main() {
 		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey, caKeyHandle: *edgeCAKeyHandle,
 		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
 		certOut: *edgeCertOut, leafKeyOut: *edgeLeafKeyOut, journal: *edgeJournalPath,
+		factoryMode: *factoryIssueMode, factoryManifest: *factoryManifest, factoryCSR: *factoryCSR,
+		factoryDevice: *factoryDevice, factoryJournal: *factoryJournal,
 	}
 	if handled, err := runEdgeCAOps(edgeOpts, *commonName); handled {
 		if err != nil {

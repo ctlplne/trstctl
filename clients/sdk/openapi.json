@@ -24996,6 +24996,325 @@
         ],
         "type": "object"
       },
+      "FactoryBatch": {
+        "properties": {
+          "birth_ttl_seconds": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "delegation_id": {
+            "type": "string"
+          },
+          "enrolled": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "operational_profile": {
+            "type": "string"
+          },
+          "over_quota": {
+            "type": "integer"
+          },
+          "quota": {
+            "type": "integer"
+          },
+          "recorded": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "delegation_id",
+          "label",
+          "quota",
+          "birth_ttl_seconds",
+          "created_by",
+          "created_at",
+          "recorded",
+          "over_quota",
+          "enrolled"
+        ],
+        "type": "object"
+      },
+      "FactoryBatchDetail": {
+        "properties": {
+          "birth_ttl_seconds": {
+            "type": "integer"
+          },
+          "births": {
+            "items": {
+              "properties": {
+                "device_name": {
+                  "type": "string"
+                },
+                "enrolled": {
+                  "type": "boolean"
+                },
+                "enrolled_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "fingerprint": {
+                  "type": "string"
+                },
+                "not_after": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "operational_serial": {
+                  "type": "string"
+                },
+                "over_quota": {
+                  "type": "boolean"
+                },
+                "renewals": {
+                  "type": "integer"
+                },
+                "serial": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "serial",
+                "device_name",
+                "fingerprint",
+                "not_after",
+                "over_quota",
+                "enrolled",
+                "renewals"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "delegation_id": {
+            "type": "string"
+          },
+          "enrolled": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "operational_profile": {
+            "type": "string"
+          },
+          "over_quota": {
+            "type": "integer"
+          },
+          "quota": {
+            "type": "integer"
+          },
+          "recorded": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "delegation_id",
+          "label",
+          "quota",
+          "birth_ttl_seconds",
+          "created_by",
+          "created_at",
+          "recorded",
+          "over_quota",
+          "enrolled",
+          "births"
+        ],
+        "type": "object"
+      },
+      "FactoryBatchList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "birth_ttl_seconds": {
+                  "type": "integer"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "delegation_id": {
+                  "type": "string"
+                },
+                "enrolled": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "operational_profile": {
+                  "type": "string"
+                },
+                "over_quota": {
+                  "type": "integer"
+                },
+                "quota": {
+                  "type": "integer"
+                },
+                "recorded": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "delegation_id",
+                "label",
+                "quota",
+                "birth_ttl_seconds",
+                "created_by",
+                "created_at",
+                "recorded",
+                "over_quota",
+                "enrolled"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "FactoryBatchRequest": {
+        "properties": {
+          "birth_ttl_seconds": {
+            "type": "integer"
+          },
+          "delegation_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "operational_profile": {
+            "type": "string"
+          },
+          "quota": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "delegation_id",
+          "label",
+          "quota",
+          "birth_ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "FactoryManifest": {
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "birth_ttl_seconds": {
+            "type": "integer"
+          },
+          "delegation_fingerprint": {
+            "type": "string"
+          },
+          "delegation_id": {
+            "type": "string"
+          },
+          "est_path": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "quota": {
+            "type": "integer"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "tenant_id",
+          "delegation_id",
+          "delegation_fingerprint",
+          "label",
+          "quota",
+          "birth_ttl_seconds",
+          "est_path"
+        ],
+        "type": "object"
+      },
+      "FactoryReconcileRequest": {
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "certificates_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificates_pem"
+        ],
+        "type": "object"
+      },
+      "FactoryReconcileResult": {
+        "properties": {
+          "already": {
+            "type": "integer"
+          },
+          "over_quota": {
+            "type": "integer"
+          },
+          "recorded": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recorded",
+          "over_quota",
+          "already",
+          "rejected"
+        ],
+        "type": "object"
+      },
       "FindingAnnotationRequest": {
         "properties": {
           "reason": {
@@ -70457,6 +70776,312 @@
           }
         ],
         "summary": "Revoke a delegated edge CA from the brain",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/edge/factory-batches": {
+      "get": {
+        "operationId": "listFactoryBatches",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactoryBatchList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List factory batches with what their stations' journals have reconciled",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "createFactoryBatch",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactoryBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactoryBatch"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a factory batch: a quota of device birth certificates a station issues offline under one edge delegation",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/edge/factory-batches/{id}": {
+      "get": {
+        "operationId": "getFactoryBatch",
+        "parameters": [
+          {
+            "description": "factory batch id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactoryBatchDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a factory batch with its birth certificates and each device's enrollment",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/edge/factory-batches/{id}/manifest": {
+      "get": {
+        "operationId": "getFactoryBatchManifest",
+        "parameters": [
+          {
+            "description": "factory batch id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactoryManifest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the manifest a factory station issues the batch from",
+        "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/edge/factory-batches/{id}/reconcile": {
+      "post": {
+        "operationId": "reconcileFactoryBatch",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "factory batch id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactoryReconcileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactoryReconcileResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Reconcile a factory station's batch journal: each birth certificate is recorded once, and those past the quota as over-production",
         "x-trstctl-permission": "issuers:write"
       }
     },

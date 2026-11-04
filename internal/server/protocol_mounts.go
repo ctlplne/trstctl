@@ -156,11 +156,14 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 				}
 			},
 		})
-		dispatcher, err := est.NewDispatcher([]est.ProfileRoute{{Server: estSrv}})
+		// P12: factory-provisioned devices enroll on first boot and renew at
+		// /.well-known/est/factory with a proof the gate verifies.
+		dispatcher, err := est.NewDispatcher([]est.ProfileRoute{{Server: estSrv},
+			{PathID: "factory", Server: s.buildFactoryEST(sp.estTenant, issuer, pool)}})
 		if err != nil {
 			return nil, fmt.Errorf("server: build served EST dispatcher: %w", err)
 		}
-		sp.est = dispatcher
+		sp.est = s.factoryESTGate(sp.estTenant, dispatcher)
 		sp.estServer = estSrv
 		sp.names = append(sp.names, "est")
 	}

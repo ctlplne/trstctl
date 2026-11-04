@@ -133,6 +133,7 @@ type API struct {
 	sshTrustFleet            SSHTrustFleetService
 	adcsDecisions            ADCSDecisionService
 	mdmCheckIns              MDMCheckInService
+	factoryBatches           FactoryBatchService
 	keyVaultDisable          KeyVaultDisableService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
 	oidcIssuer               OIDCIssuerSource
@@ -306,6 +307,7 @@ type config struct {
 	sshTrustFleet               SSHTrustFleetService
 	adcsDecisions               ADCSDecisionService
 	mdmCheckIns                 MDMCheckInService
+	factoryBatches              FactoryBatchService
 	keyVaultDisable             KeyVaultDisableService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
 	oidcIssuer                  OIDCIssuerSource
@@ -642,6 +644,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		slackApp:                    cfg.slackApp,
 		adcsDecisions:               cfg.adcsDecisions,
 		mdmCheckIns:                 cfg.mdmCheckIns,
+		factoryBatches:              cfg.factoryBatches,
 		keyVaultDisable:             cfg.keyVaultDisable,
 		oidcIssuer:                  cfg.oidcIssuer,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
@@ -1710,6 +1713,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.switchingWaveRoutes()...)   // see switching_waves.go
 	routes = append(routes, a.adcsDecisionRoutes()...)    // see adcs_decisions.go
 	routes = append(routes, a.mdmCheckInRoutes()...)      // see mdm_check_ins.go
+	routes = append(routes, a.factoryBatchRoutes()...)    // see factory_batches.go
 	routes = append(routes, a.keyVaultDisableRoutes()...) // see key_vault_disable.go
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)

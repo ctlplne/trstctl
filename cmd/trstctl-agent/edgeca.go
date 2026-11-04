@@ -79,6 +79,13 @@ type edgeCAOptions struct {
 	certOut    string
 	leafKeyOut string
 	journal    string
+
+	// P12: --factory-issue certifies one device's CSR for a factory batch.
+	factoryMode     bool
+	factoryManifest string
+	factoryCSR      string
+	factoryDevice   string
+	factoryJournal  string
 }
 
 // edgeJournal is the reconcile request body, maintained on disk in exactly the
@@ -90,8 +97,8 @@ type edgeJournal struct {
 
 // runEdgeCAOps handles the one-shot edge modes; reports whether one ran.
 func runEdgeCAOps(opts edgeCAOptions, host string) (bool, error) {
-	if modes := boolCount(opts.csrMode, opts.attestMode, opts.issueMode); modes > 1 {
-		return true, fmt.Errorf("use exactly one of --edge-csr, --edge-attest or --edge-issue")
+	if modes := boolCount(opts.csrMode, opts.attestMode, opts.issueMode, opts.factoryMode); modes > 1 {
+		return true, fmt.Errorf("use exactly one of --edge-csr, --edge-attest, --edge-issue or --factory-issue")
 	}
 	switch {
 	case opts.csrMode:
@@ -100,6 +107,8 @@ func runEdgeCAOps(opts edgeCAOptions, host string) (bool, error) {
 		return true, runEdgeAttest(opts)
 	case opts.issueMode:
 		return true, runEdgeIssue(opts, host)
+	case opts.factoryMode:
+		return true, runFactoryIssue(opts, host)
 	}
 	return false, nil
 }
@@ -262,7 +271,6 @@ func runEdgeCSR(opts edgeCAOptions) error {
 }
 
 func runEdgeIssue(opts edgeCAOptions, host string) error {
-	providerName := normalizedEdgeKeyProvider(opts.keyProvider)
 	if opts.caCert == "" {
 		return fmt.Errorf("edge-issue requires --edge-ca-cert")
 	}
@@ -284,44 +292,7 @@ func runEdgeIssue(opts edgeCAOptions, host string) error {
 		DNSNames:   dns,
 		TTL:        opts.leafTTL,
 	}
-	var leaf crypto.EdgeIssuedLeaf
-	switch providerName {
-	case "software":
-		if !opts.allowSoftwareKey {
-			return fmt.Errorf("software edge CA custody is exportable and requires --edge-allow-software-key")
-		}
-		if opts.caKey == "" {
-			return fmt.Errorf("software edge-issue requires --edge-ca-key")
-		}
-		keyPEM, readErr := os.ReadFile(opts.caKey) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
-		if readErr != nil {
-			return readErr
-		}
-		defer secret.Wipe(keyPEM)
-		leaf, err = crypto.IssueEdgeLeaf(certPEM, keyPEM, request, time.Now().UTC())
-	case "tpm2", "pkcs11":
-		if opts.caKeyHandle == "" {
-			return fmt.Errorf("%s edge-issue requires --edge-ca-key-handle", providerName)
-		}
-		raw, readErr := os.ReadFile(opts.caKeyHandle) // #nosec G304 -- operator-configured local handle path from the agent's own flags (CWE-22)
-		if readErr != nil {
-			return readErr
-		}
-		var handle crypto.EdgeCAKeyHandle
-		if decodeErr := json.Unmarshal(raw, &handle); decodeErr != nil {
-			return fmt.Errorf("decode edge CA public key handle: %w", decodeErr)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		provider, closeProvider, openErr := openEdgeCAKeyProvider(opts)
-		if openErr != nil {
-			return fmt.Errorf("open %s edge CA key provider: %w", providerName, openErr)
-		}
-		defer func() { _ = closeProvider() }()
-		leaf, err = crypto.IssueEdgeLeafWithKeyHandle(ctx, certPEM, handle, provider, request, time.Now().UTC())
-	default:
-		return fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
-	}
+	leaf, err := issueEdgeLeafFromOptions(opts, certPEM, request)
 	if err != nil {
 		return err
 	}
@@ -435,4 +406,48 @@ func writeEdgePrivateFile(path string, data []byte) error {
 		}
 	}
 	return nil
+}
+
+// issueEdgeLeafFromOptions issues one leaf under the delegated CA with the
+// station key the flags name: an exportable software key (by explicit
+// exception), or a TPM 2.0 or PKCS#11 key reopened through its public handle.
+func issueEdgeLeafFromOptions(opts edgeCAOptions, certPEM []byte, request crypto.EdgeLeafRequest) (crypto.EdgeIssuedLeaf, error) {
+	providerName := normalizedEdgeKeyProvider(opts.keyProvider)
+	switch providerName {
+	case "software":
+		if !opts.allowSoftwareKey {
+			return crypto.EdgeIssuedLeaf{}, fmt.Errorf("software edge CA custody is exportable and requires --edge-allow-software-key")
+		}
+		if opts.caKey == "" {
+			return crypto.EdgeIssuedLeaf{}, fmt.Errorf("software edge issuance requires --edge-ca-key")
+		}
+		keyPEM, err := os.ReadFile(opts.caKey) // #nosec G304 -- operator-configured local path from the agent's own flags (CWE-22)
+		if err != nil {
+			return crypto.EdgeIssuedLeaf{}, err
+		}
+		defer secret.Wipe(keyPEM)
+		return crypto.IssueEdgeLeaf(certPEM, keyPEM, request, time.Now().UTC())
+	case "tpm2", "pkcs11":
+		if opts.caKeyHandle == "" {
+			return crypto.EdgeIssuedLeaf{}, fmt.Errorf("%s edge issuance requires --edge-ca-key-handle", providerName)
+		}
+		raw, err := os.ReadFile(opts.caKeyHandle) // #nosec G304 -- operator-configured local handle path from the agent's own flags (CWE-22)
+		if err != nil {
+			return crypto.EdgeIssuedLeaf{}, err
+		}
+		var handle crypto.EdgeCAKeyHandle
+		if err := json.Unmarshal(raw, &handle); err != nil {
+			return crypto.EdgeIssuedLeaf{}, fmt.Errorf("decode edge CA public key handle: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		provider, closeProvider, err := openEdgeCAKeyProvider(opts)
+		if err != nil {
+			return crypto.EdgeIssuedLeaf{}, fmt.Errorf("open %s edge CA key provider: %w", providerName, err)
+		}
+		defer func() { _ = closeProvider() }()
+		return crypto.IssueEdgeLeafWithKeyHandle(ctx, certPEM, handle, provider, request, time.Now().UTC())
+	default:
+		return crypto.EdgeIssuedLeaf{}, fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
+	}
 }

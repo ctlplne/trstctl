@@ -3790,6 +3790,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/edge/factory-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List factory batches with what their stations' journals have reconciled */
+        get: operations["listFactoryBatches"];
+        put?: never;
+        /** Create a factory batch: a quota of device birth certificates a station issues offline under one edge delegation */
+        post: operations["createFactoryBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/edge/factory-batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a factory batch with its birth certificates and each device's enrollment */
+        get: operations["getFactoryBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/edge/factory-batches/{id}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the manifest a factory station issues the batch from */
+        get: operations["getFactoryBatchManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/edge/factory-batches/{id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconcile a factory station's batch journal: each birth certificate is recorded once, and those past the quota as over-production */
+        post: operations["reconcileFactoryBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/edge/segments": {
         parameters: {
             query?: never;
@@ -17105,6 +17174,91 @@ export interface components {
             self_test_passed: boolean;
             standard?: string;
             validated_module_path?: boolean;
+        };
+        FactoryBatch: {
+            birth_ttl_seconds: number;
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            delegation_id: string;
+            enrolled: number;
+            id: string;
+            label: string;
+            operational_profile?: string;
+            over_quota: number;
+            quota: number;
+            recorded: number;
+        };
+        FactoryBatchDetail: {
+            birth_ttl_seconds: number;
+            births: {
+                device_name: string;
+                enrolled: boolean;
+                /** Format: date-time */
+                enrolled_at?: string;
+                fingerprint: string;
+                /** Format: date-time */
+                not_after: string;
+                operational_serial?: string;
+                over_quota: boolean;
+                renewals: number;
+                serial: string;
+            }[];
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            delegation_id: string;
+            enrolled: number;
+            id: string;
+            label: string;
+            operational_profile?: string;
+            over_quota: number;
+            quota: number;
+            recorded: number;
+        };
+        FactoryBatchList: {
+            items: {
+                birth_ttl_seconds: number;
+                /** Format: date-time */
+                created_at: string;
+                created_by: string;
+                delegation_id: string;
+                enrolled: number;
+                id: string;
+                label: string;
+                operational_profile?: string;
+                over_quota: number;
+                quota: number;
+                recorded: number;
+            }[];
+        };
+        FactoryBatchRequest: {
+            birth_ttl_seconds: number;
+            delegation_id: string;
+            label: string;
+            operational_profile?: string;
+            quota: number;
+        };
+        FactoryManifest: {
+            batch_id: string;
+            birth_ttl_seconds: number;
+            delegation_fingerprint: string;
+            delegation_id: string;
+            est_path: string;
+            label: string;
+            quota: number;
+            tenant_id: string;
+        };
+        FactoryReconcileRequest: {
+            batch_id?: string;
+            certificates_pem: string[];
+            host?: string;
+        };
+        FactoryReconcileResult: {
+            already: number;
+            over_quota: number;
+            recorded: number;
+            rejected: number;
         };
         FindingAnnotationRequest: {
             reason?: string;
@@ -35801,6 +35955,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EdgeDelegation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFactoryBatches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactoryBatchList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createFactoryBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactoryBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactoryBatch"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFactoryBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description factory batch id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactoryBatchDetail"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFactoryBatchManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description factory batch id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactoryManifest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reconcileFactoryBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description factory batch id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactoryReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactoryReconcileResult"];
                 };
             };
             /** @description client error */
