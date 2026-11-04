@@ -28,6 +28,28 @@ type AWSHoneyAccount struct {
 	Regions             []string `json:"regions"`
 	MaxTTLSeconds       int64    `json:"max_ttl_seconds"`
 	PollIntervalSeconds int64    `json:"poll_interval_seconds"`
+	// Trail is the CloudTrail trail whose log files the account's decoys are
+	// also looked for in (N4).
+	Trail *AWSHoneyTrail `json:"trail,omitempty"`
+}
+
+// AWSHoneyTrail is an account attachment's trail: its bucket, organization
+// and the accounts read (empty: every account the bucket holds). Read is what
+// the monitor has read from it in the retained window, on the catalog only.
+type AWSHoneyTrail struct {
+	Bucket         string                      `json:"bucket"`
+	OrganizationID string                      `json:"organization_id,omitempty"`
+	Accounts       []string                    `json:"accounts"`
+	Read           *store.AWSHoneyTrailSummary `json:"read,omitempty"`
+}
+
+// awsHoneyDetectionScope says what the monitor reads for one account.
+func awsHoneyDetectionScope(account AWSHoneyAccount) string {
+	if account.Trail == nil {
+		return "CloudTrail LookupEvents management events in the configured account and Regions; delivery is delayed and data events are not covered"
+	}
+	return "CloudTrail LookupEvents management events in the configured account and Regions, and the log files of trail bucket " + account.Trail.Bucket +
+		" — every account it holds, with data events when the trail logs them; delivery is delayed"
 }
 
 type awsHoneyCreateRequest struct {
@@ -65,9 +87,9 @@ func (r *awsHoneyCreateResponse) wipeSecrets() { r.SecretAccessKey.wipe() }
 
 type awsHoneyDetail struct {
 	store.HoneyToken
-	Lease      dynamicLeaseResponse `json:"lease"`
-	Monitoring []store.AWSHoneyScan `json:"monitoring"`
-	Uses       []store.AWSHoneyUse  `json:"uses"`
+	Lease      dynamicLeaseResponse    `json:"lease"`
+	Monitoring []store.AWSHoneyScan    `json:"monitoring"`
+	Uses       []store.AWSHoneyUseView `json:"uses"`
 }
 
 func (a *API) tenantAWSHoneyAccounts(tenantID string) []AWSHoneyAccount {
@@ -96,9 +118,22 @@ func (a *API) listAWSHoneyAccounts(w http.ResponseWriter, r *http.Request) {
 	if accounts == nil {
 		accounts = []AWSHoneyAccount{}
 	}
+	for i := range accounts {
+		if accounts[i].Trail == nil {
+			continue
+		}
+		read, err := a.store.AWSHoneyTrailSummaryFor(r.Context(), tenantID, accounts[i].ID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		trail := *accounts[i].Trail
+		trail.Read = &read
+		accounts[i].Trail = &trail
+	}
 	a.writeJSON(w, http.StatusOK, map[string]any{
 		"accounts":        accounts,
-		"detection_scope": "CloudTrail LookupEvents management events in the configured account and Regions; AWS delivery is delayed and data events are not covered",
+		"detection_scope": "CloudTrail LookupEvents management events in each configured account and Regions; an account with a trail also has that trail's log files read — every account of an organization trail, and data events when the trail logs them. AWS delivery is delayed",
 	})
 }
 
@@ -176,7 +211,7 @@ func (a *API) previewAWSHoneyToken(w http.ResponseWriter, r *http.Request) {
 		AWSAccountID: account.AccountID, Name: req.Name, Placement: req.Placement,
 		TTLSeconds: req.TTLSeconds, Regions: account.Regions,
 		IAMActions:         []string{"iam.create_tagged_user", "iam.install_and_verify_deny_all", "iam.create_access_key", "cloudtrail.queue_monitor"},
-		DetectionScope:     "CloudTrail LookupEvents management events in the configured account and Regions; delivery is delayed and data events are not covered",
+		DetectionScope:     awsHoneyDetectionScope(account),
 		Recovery:           "If creation fails, retry with the same Idempotency-Key; retire deletes the exact owned IAM user and verifies absence",
 		Verification:       "Sign a request with the bait key; verify AccessDenied, a CloudTrail incident and critical alert, then confirm IAM NoSuchEntity after retirement",
 		PreviewFingerprint: binding,

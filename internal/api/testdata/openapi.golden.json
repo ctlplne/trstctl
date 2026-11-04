@@ -3673,6 +3673,58 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "trail": {
+            "description": "N4: the CloudTrail trail whose S3 log files the account's decoys are also looked for in — every account of an organization trail, and data events when the trail logs them. accounts empty means every account the bucket holds; read is on the catalog only.",
+            "properties": {
+              "accounts": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "bucket": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "read": {
+                "properties": {
+                  "last_object_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "objects": {
+                    "description": "log files read in the retained window (four days)",
+                    "type": "integer"
+                  },
+                  "records": {
+                    "type": "integer"
+                  },
+                  "refused": {
+                    "description": "files recorded unread: larger than the bound, or not a CloudTrail log file",
+                    "type": "integer"
+                  },
+                  "uses": {
+                    "description": "decoy-key records found in them",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "objects",
+                  "records",
+                  "uses",
+                  "refused"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "bucket",
+              "accounts"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -4112,11 +4164,19 @@
       },
       "AWSHoneyUse": {
         "properties": {
+          "account_id": {
+            "description": "the account whose credentials made the call (the decoy's own); empty on uses recorded before N4",
+            "type": "string"
+          },
           "detected_at": {
             "format": "date-time",
             "type": "string"
           },
           "error_code": {
+            "type": "string"
+          },
+          "event_category": {
+            "description": "CloudTrail's Management or Data; LookupEvents finds Management only; empty on uses recorded before N4",
             "type": "string"
           },
           "event_id": {
@@ -4130,6 +4190,18 @@
           },
           "event_time": {
             "format": "date-time",
+            "type": "string"
+          },
+          "found_in": {
+            "description": "lookup: LookupEvents in the decoy's own account; trail: a trail's log file (N4)",
+            "enum": [
+              "lookup",
+              "trail"
+            ],
+            "type": "string"
+          },
+          "recipient_account_id": {
+            "description": "the account whose trail logged the event: the decoy's own, or another whose resource the key reached; empty on uses recorded before N4",
             "type": "string"
           },
           "region": {
@@ -4150,7 +4222,8 @@
           "source_ip_address",
           "user_agent",
           "event_time",
-          "detected_at"
+          "detected_at",
+          "found_in"
         ],
         "type": "object"
       },

@@ -890,8 +890,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// AUD-52: standing collector configuration and exact immutable delivery
 	// receipts rebuild from the audit.feed.* event family.
 	"audit_feed_destinations", "audit_feed_deliveries",
-	// Decoy metadata and one-way bearer hashes rebuild from honeytoken events.
-	"honey_tokens", "aws_honey_scans", "aws_honey_uses"}
+	// Decoy metadata and one-way bearer hashes rebuild from honeytoken events;
+	// N4's read trail files from honeytoken.aws.trail_object_scanned.
+	"honey_tokens", "aws_honey_scans", "aws_honey_uses", "aws_honey_trail_objects"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

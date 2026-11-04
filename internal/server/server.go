@@ -742,6 +742,10 @@ type Server struct {
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
 	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler          orchestrator.Handler
+	// awsHoneyAccounts are the AWS decoy account attachments; the leader
+	// reads the trails they name (N4), and awsHoneyTrailClock paces that.
+	awsHoneyAccounts   AWSHoneyAccountRegistry
+	awsHoneyTrailClock awsHoneyTrailClock
 	scimWriteback      api.SCIMWritebackHandler
 	ldapWriteback      api.LDAPWritebackHandler
 	// secretIntegrations is the secret.sync/dynsecret outbox receiver; the
@@ -2274,6 +2278,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			return err
 		}
 	}
+	s.awsHoneyAccounts = d.TenantAWSHoneyAccounts
 	secretIntegrations := &secretIntegrationOutboxDispatcher{
 		dynamicProviders:         d.TenantDynamicSecretProviders,
 		awsHoneyAccounts:         d.TenantAWSHoneyAccounts,

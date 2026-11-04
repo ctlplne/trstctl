@@ -45,6 +45,18 @@ type AWSHoneyUse struct {
 	DetectedAt      time.Time `json:"detected_at"`
 }
 
+// AWSHoneyUseView is a recorded use as read back: AccountID made the call,
+// RecipientAccountID's trail logged it, EventCategory is CloudTrail's
+// Management or Data, and FoundIn is lookup (LookupEvents in the decoy's own
+// account) or trail (a trail's log file, N4).
+type AWSHoneyUseView struct {
+	AWSHoneyUse
+	AccountID          string `json:"account_id"`
+	RecipientAccountID string `json:"recipient_account_id"`
+	EventCategory      string `json:"event_category"`
+	FoundIn            string `json:"found_in"`
+}
+
 type AWSHoneyScanPage struct {
 	HoneyID      string        `json:"honey_id"`
 	Region       string        `json:"region"`
@@ -180,11 +192,12 @@ func (s *Store) ListAWSHoneyScans(ctx context.Context, tenantID, honeyID string)
 	return out, err
 }
 
-func (s *Store) ListAWSHoneyUses(ctx context.Context, tenantID, honeyID string, limit int) ([]AWSHoneyUse, error) {
-	out := []AWSHoneyUse{}
+func (s *Store) ListAWSHoneyUses(ctx context.Context, tenantID, honeyID string, limit int) ([]AWSHoneyUseView, error) {
+	out := []AWSHoneyUseView{}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT event_id, region, event_source, event_name,
-			source_ip_address, user_agent, error_code, event_time, detected_at
+			source_ip_address, user_agent, error_code, event_time, detected_at,
+			account_id, recipient_account_id, event_category, found_in
 			FROM aws_honey_uses WHERE tenant_id = $1 AND honey_id = $2
 			ORDER BY event_time DESC, event_id LIMIT $3`, tenantID, honeyID, limit)
 		if err != nil {
@@ -192,10 +205,11 @@ func (s *Store) ListAWSHoneyUses(ctx context.Context, tenantID, honeyID string, 
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var item AWSHoneyUse
+			var item AWSHoneyUseView
 			if err := rows.Scan(&item.EventID, &item.Region, &item.EventSource,
 				&item.EventName, &item.SourceIPAddress, &item.UserAgent, &item.ErrorCode,
-				&item.EventTime, &item.DetectedAt); err != nil {
+				&item.EventTime, &item.DetectedAt, &item.AccountID, &item.RecipientAccountID,
+				&item.EventCategory, &item.FoundIn); err != nil {
 				return err
 			}
 			out = append(out, item)
@@ -261,10 +275,10 @@ func (s *Store) ApplyAWSHoneyScanPageTx(ctx context.Context, tx pgx.Tx, tenantID
 		return errors.New("store: AWS honeytoken scan page does not match projected cursor")
 	}
 	var pollSeconds int
-	var name, placement, state string
-	if err := tx.QueryRow(ctx, `SELECT aws_poll_interval_seconds, name, placement, state
+	var name, placement, state, accountID string
+	if err := tx.QueryRow(ctx, `SELECT aws_poll_interval_seconds, name, placement, state, coalesce(aws_account_id, '')
 		FROM honey_tokens WHERE tenant_id = $1 AND id = $2 AND kind = 'aws'`, tenantID, page.HoneyID).
-		Scan(&pollSeconds, &name, &placement, &state); err != nil {
+		Scan(&pollSeconds, &name, &placement, &state, &accountID); err != nil {
 		return err
 	}
 	for _, use := range page.Uses {
@@ -272,13 +286,15 @@ func (s *Store) ApplyAWSHoneyScanPageTx(ctx context.Context, tx pgx.Tx, tenantID
 			use.EventTime.Before(page.WindowStart.Add(-time.Second)) || use.EventTime.After(page.WindowEnd.Add(time.Second)) {
 			return errors.New("store: AWS honeytoken observed use lies outside its scan")
 		}
+		// LookupEvents reads the decoy's own account, where the call was made
+		// and logged; it returns management events only.
 		tag, err := tx.Exec(ctx, `INSERT INTO aws_honey_uses
 			(tenant_id, honey_id, event_id, region, event_source, event_name, source_ip_address,
-			 user_agent, error_code, event_time, detected_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			 user_agent, error_code, event_time, detected_at, account_id, recipient_account_id, event_category, found_in)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, 'Management', 'lookup')
 			ON CONFLICT DO NOTHING`, tenantID, page.HoneyID, use.EventID, use.Region,
 			use.EventSource, use.EventName, use.SourceIPAddress, use.UserAgent,
-			use.ErrorCode, use.EventTime, at)
+			use.ErrorCode, use.EventTime, at, accountID)
 		if err != nil {
 			return err
 		}

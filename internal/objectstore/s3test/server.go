@@ -250,14 +250,19 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, key string) {
 }
 
 type listResult struct {
-	XMLName               xml.Name      `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult"`
-	Name                  string        `xml:"Name"`
-	Prefix                string        `xml:"Prefix"`
-	KeyCount              int           `xml:"KeyCount"`
-	MaxKeys               int           `xml:"MaxKeys"`
-	IsTruncated           bool          `xml:"IsTruncated"`
-	NextContinuationToken string        `xml:"NextContinuationToken,omitempty"`
-	Contents              []listContent `xml:"Contents"`
+	XMLName               xml.Name           `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult"`
+	Name                  string             `xml:"Name"`
+	Prefix                string             `xml:"Prefix"`
+	KeyCount              int                `xml:"KeyCount"`
+	MaxKeys               int                `xml:"MaxKeys"`
+	IsTruncated           bool               `xml:"IsTruncated"`
+	NextContinuationToken string             `xml:"NextContinuationToken,omitempty"`
+	Contents              []listContent      `xml:"Contents"`
+	CommonPrefixes        []listCommonPrefix `xml:"CommonPrefixes"`
+}
+
+type listCommonPrefix struct {
+	Prefix string `xml:"Prefix"`
 }
 
 type listContent struct {
@@ -277,10 +282,25 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	after := query.Get("continuation-token")
+	if after == "" {
+		after = query.Get("start-after")
+	}
+	delimiter := query.Get("delimiter")
 	result := listResult{Name: s.Bucket, Prefix: prefix, MaxKeys: maxKeys}
+	seen := map[string]bool{}
 	for _, key := range s.Keys() {
 		if !strings.HasPrefix(key, prefix) || (after != "" && key <= after) {
 			continue
+		}
+		if delimiter != "" {
+			if i := strings.Index(key[len(prefix):], delimiter); i >= 0 {
+				common := key[:len(prefix)+i+len(delimiter)]
+				if !seen[common] {
+					seen[common] = true
+					result.CommonPrefixes = append(result.CommonPrefixes, listCommonPrefix{Prefix: common})
+				}
+				continue
+			}
 		}
 		if len(result.Contents) == maxKeys {
 			result.IsTruncated = true

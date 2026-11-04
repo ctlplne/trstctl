@@ -426,6 +426,94 @@ func (s *S3) List(ctx context.Context, prefix string, limit int) ([]Object, erro
 	}
 }
 
+// ListDirs returns the distinct next path segments under prefix, the
+// "directories" a "/"-delimited ListObjectsV2 reports as common prefixes, each
+// without its trailing slash; more than limit of them is an error (N4: a
+// CloudTrail bucket's accounts, Regions and day folders).
+func (s *S3) ListDirs(ctx context.Context, prefix string, limit int) ([]string, error) {
+	if err := ValidName(prefix, true); err != nil {
+		return nil, err
+	}
+	if !strings.HasSuffix(prefix, "/") || limit <= 0 {
+		return nil, errors.New("objectstore: list dirs needs a prefix ending in / and a positive limit")
+	}
+	var (
+		out   []string
+		token *string
+	)
+	for {
+		var listed *s3.ListObjectsV2Output
+		err := s.call(ctx, 0, func(ctx context.Context) error {
+			var err error
+			listed, err = s.client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+				Bucket: awssdk.String(s.bucket), Prefix: awssdk.String(s.root + prefix), Delimiter: awssdk.String("/"),
+				MaxKeys: awssdk.Int32(listPageSize), ContinuationToken: token,
+			})
+			return classify(err, prefix)
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, common := range listed.CommonPrefixes {
+			name, ok := strings.CutPrefix(awssdk.ToString(common.Prefix), s.root+prefix)
+			name = strings.TrimSuffix(name, "/")
+			if !ok || name == "" || strings.Contains(name, "/") {
+				return nil, fmt.Errorf("objectstore: list dirs %s returned %q outside the prefix", prefix, awssdk.ToString(common.Prefix))
+			}
+			out = append(out, name)
+		}
+		if len(out) > limit {
+			return nil, fmt.Errorf("objectstore: more than %d folders under %s", limit, prefix)
+		}
+		if !awssdk.ToBool(listed.IsTruncated) || listed.NextContinuationToken == nil {
+			return out, nil
+		}
+		token = listed.NextContinuationToken
+	}
+}
+
+// ListAfter lists at most limit objects under prefix whose names sort after
+// startAfter (empty: from the start), in name order; more reports whether
+// further objects follow (N4: a CloudTrail day folder read from a watermark).
+func (s *S3) ListAfter(ctx context.Context, prefix, startAfter string, limit int) (objects []Object, more bool, err error) {
+	if err := ValidName(prefix, true); err != nil {
+		return nil, false, err
+	}
+	if limit <= 0 || limit > listPageSize {
+		return nil, false, fmt.Errorf("objectstore: list after needs a limit from 1 to %d", listPageSize)
+	}
+	input := &s3.ListObjectsV2Input{
+		Bucket: awssdk.String(s.bucket), Prefix: awssdk.String(s.root + prefix),
+		MaxKeys: awssdk.Int32(int32(limit)), // #nosec G115 -- limit is at most listPageSize (CWE-190)
+	}
+	if startAfter != "" {
+		if !strings.HasPrefix(startAfter, prefix) {
+			return nil, false, fmt.Errorf("objectstore: list after %q is outside %s", startAfter, prefix)
+		}
+		input.StartAfter = awssdk.String(s.root + startAfter)
+	}
+	var listed *s3.ListObjectsV2Output
+	err = s.call(ctx, 0, func(ctx context.Context) error {
+		var err error
+		listed, err = s.client.ListObjectsV2(ctx, input)
+		return classify(err, prefix)
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	for _, item := range listed.Contents {
+		name, ok := strings.CutPrefix(awssdk.ToString(item.Key), s.root)
+		if !ok || !strings.HasPrefix(name, prefix) || (startAfter != "" && name <= startAfter) {
+			return nil, false, fmt.Errorf("objectstore: list %s returned %q outside the prefix", prefix, awssdk.ToString(item.Key))
+		}
+		objects = append(objects, Object{Name: name, Size: awssdk.ToInt64(item.Size)})
+	}
+	if len(objects) > limit {
+		return nil, false, fmt.Errorf("objectstore: list %s returned more than %d objects", prefix, limit)
+	}
+	return objects, awssdk.ToBool(listed.IsTruncated), nil
+}
+
 // Delete implements Store.
 func (s *S3) Delete(ctx context.Context, name string) error {
 	key, err := s.key(name)

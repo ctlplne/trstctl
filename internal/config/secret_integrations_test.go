@@ -1467,3 +1467,40 @@ func TestValidateRevokeWithDenyPolicyIsAWSSTSOnlyN3(t *testing.T) {
 		}
 	}
 }
+
+// N4: a decoy account may name the trail whose S3 delivery the monitor reads;
+// the bucket, Region, organization, accounts and credential reference are
+// checked before the server starts.
+func TestValidateAWSHoneyTrailN4(t *testing.T) {
+	base := AWSHoneyAccountConfig{ // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+		TenantID: "11111111-1111-4111-8111-111111111111", ID: "security-account",
+		AccountID: "123456789012", Regions: []string{"us-east-1"},
+		IAMCredentialsRef:        "file:/var/lib/trstctl/iam-session.json",
+		CloudTrailCredentialsRef: "file:/var/lib/trstctl/cloudtrail-session.json",
+		MaxTTL:                   "720h", PollInterval: "5m",
+		Trail: &AWSHoneyTrailConfig{Bucket: "org-trail-logs", BucketRegion: "us-east-1", KeyPrefix: "security/trail", // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+			OrganizationID: "o-a1b2c3d4e5", Accounts: []string{"123456789012", "210987654321"},
+			CredentialsRef: "file:/var/lib/trstctl/trail-session.json"},
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{HoneyAWSAccounts: []AWSHoneyAccountConfig{base}}, true); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*AWSHoneyTrailConfig){
+		"bucket":       func(c *AWSHoneyTrailConfig) { c.Bucket = "Org_Trail" },
+		"region":       func(c *AWSHoneyTrailConfig) { c.BucketRegion = "everywhere" },
+		"prefix":       func(c *AWSHoneyTrailConfig) { c.KeyPrefix = "../other/" },
+		"organization": func(c *AWSHoneyTrailConfig) { c.OrganizationID = "org-1" },
+		"account":      func(c *AWSHoneyTrailConfig) { c.Accounts = []string{"1234"} },
+		"duplicate":    func(c *AWSHoneyTrailConfig) { c.Accounts = []string{"123456789012", "123456789012"} },
+		"credentials":  func(c *AWSHoneyTrailConfig) { c.CredentialsRef = "AKIAINLINESECRET" },
+		"endpoint":     func(c *AWSHoneyTrailConfig) { c.S3Endpoint = "http://s3.example.test" },
+	} {
+		trail := *base.Trail
+		mutate(&trail)
+		item := base
+		item.Trail = &trail
+		if err := ValidateSecretIntegrations(SecretIntegrationsConfig{HoneyAWSAccounts: []AWSHoneyAccountConfig{item}}, true); err == nil {
+			t.Fatalf("a trail with a bad %s was accepted", name)
+		}
+	}
+}

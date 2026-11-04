@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -44,12 +45,17 @@ func (r AWSHoneyAccountRegistry) Account(tenantID, id string) *awsHoneyProvider 
 func (r AWSHoneyAccountRegistry) PublicForTenant(tenantID string) []api.AWSHoneyAccount {
 	out := make([]api.AWSHoneyAccount, 0, len(r[tenantID]))
 	for _, provider := range r[tenantID] {
-		out = append(out, api.AWSHoneyAccount{
+		account := api.AWSHoneyAccount{
 			ID: provider.cfg.ID, AccountID: provider.cfg.AccountID,
 			Regions:             append([]string(nil), provider.cfg.Regions...),
 			MaxTTLSeconds:       int64(provider.maxTTL / time.Second),
 			PollIntervalSeconds: int64(provider.interval / time.Second),
-		})
+		}
+		if trail := provider.cfg.Trail; trail != nil {
+			account.Trail = &api.AWSHoneyTrail{Bucket: trail.Bucket, OrganizationID: trail.OrganizationID,
+				Accounts: append([]string{}, trail.Accounts...)}
+		}
+		out = append(out, account)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
@@ -159,6 +165,63 @@ func (p *awsHoneyProvider) openCloudTrail(ctx context.Context, region string) (*
 		AccountID: p.cfg.AccountID, AccessKeyID: caller.AccessKeyID,
 		SecretAccessKey: caller.SecretAccessKey, SessionToken: caller.SessionToken,
 	})
+}
+
+// openTrail opens the bucket the account attachment's trail delivers to, with
+// the trail's own read-only credentials (N4).
+func (p *awsHoneyProvider) openTrail(ctx context.Context) (*objectstore.S3, error) {
+	trail := p.cfg.Trail
+	if trail == nil {
+		return nil, errors.New("aws honeytoken: the account attachment names no trail")
+	}
+	caller, err := p.loadCaller(ctx, trail.CredentialsRef)
+	if err != nil {
+		return nil, err
+	}
+	defer caller.wipe()
+	endpoint := trail.S3Endpoint
+	if endpoint == "" {
+		endpoint = "https://s3." + trail.BucketRegion + ".amazonaws.com"
+	}
+	return objectstore.Open(objectstore.Options{
+		Endpoint: endpoint, Region: trail.BucketRegion, Bucket: trail.Bucket, Prefix: trail.KeyPrefix,
+		PathStyle: trail.PathStyle, AccessKeyID: caller.AccessKeyID, SecretAccessKey: caller.SecretAccessKey,
+		SessionToken: caller.SessionToken, AllowInsecureLoopback: p.cfg.AllowInsecureLoopback,
+	})
+}
+
+// hasTrails reports whether any account attachment names a trail.
+func (r AWSHoneyAccountRegistry) hasTrails() bool {
+	for _, accounts := range r {
+		for _, account := range accounts {
+			if account.cfg.Trail != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// tenants lists the registry's tenants in a stable order.
+func (r AWSHoneyAccountRegistry) tenants() []string {
+	out := make([]string, 0, len(r))
+	for tenantID := range r {
+		out = append(out, tenantID)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// trailAccounts lists one tenant's account attachments that name a trail.
+func (r AWSHoneyAccountRegistry) trailAccounts(tenantID string) []*awsHoneyProvider {
+	var out []*awsHoneyProvider
+	for _, account := range r[tenantID] {
+		if account.cfg.Trail != nil {
+			out = append(out, account)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].cfg.ID < out[j].cfg.ID })
+	return out
 }
 
 func (p *awsHoneyProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {

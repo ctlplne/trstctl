@@ -5430,7 +5430,9 @@ when off, requiring a KEK when on):
   in this local-only campaign. AWS-native use detection, live-account IAM
   deletion, and a stock AWS client rejection after deletion remain unverified.
   CloudTrail `LookupEvents` covers only management events in configured Regions
-  for the configured account, with delayed delivery and a 90-day lookup limit.
+  for the configured account, with delayed delivery and a 90-day lookup limit;
+  an attachment that names its trail adds data events and every account the
+  trail holds (N4, below).
   An outbox retry/dead-letter or an expired CloudTrail reader session is a
   monitoring outage; it must be investigated and requeued before asserting
   coverage. The AWS key is deliberately longer lived bait with explicit deny,
@@ -8433,3 +8435,31 @@ What comes next:
   `aws:TokenIssueTime` fallback is a lead.
 - Sessions the revoked session started by assuming another role (role chaining)
   carry the other role's `aws:userid` and are not denied.
+
+## Decoy key detection over an organization trail (N4) — served
+
+Status: served. An AWS decoy account attachment may name the CloudTrail trail
+whose S3 log files its decoys are also looked for in; an organization trail holds
+every account in the organization and a trail that logs data events holds them,
+so a decoy key used against an S3 object in another account, or logged by an
+account other than its own, triggers the decoy. The leader reads today's and
+yesterday's day folders of every account and Region at the attachment's poll
+interval, records each file once by its key, and records each decoy use with the
+calling and logging accounts, CloudTrail's category and where it was found.
+Proven against LocalStack S3 with log files written in CloudTrail's layout and
+schema (`TestServedAWSHoneyTrailFindsDataEventsInEveryAccountN4`): the decoy
+key's management call in its own account and its data event in another account
+are both found and trigger the decoy, another key's records are dropped, a file
+that is not a log file is recorded as refused, a second pass reads nothing again,
+and a new delivery is read.
+
+What comes next:
+- Community LocalStack does not deliver trails, so the proof writes the files;
+  AWS writing an organization trail's files, with real data-event selectors, is a
+  live proof with an AWS account (Track B).
+- Push instead of polling: EventBridge rules or S3 event notifications, so a use
+  is seen when the file lands rather than at the next pass; a large organization
+  (hundreds of accounts in every Region) makes each pass list every account's
+  day folders.
+- A file delivered for a day older than yesterday (UTC) is not read.
+

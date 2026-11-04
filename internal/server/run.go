@@ -1533,6 +1533,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// applied in bounded batches; without this line an import would
 			// stay recorded and never reach the inventory.
 			startRuntimeWorker(workCtx, srv.RunSwitchingImports),
+			// N4: AWS decoy keys are also looked for in the trails their
+			// account attachments name: every account of an organization
+			// trail, and data events.
+			startRuntimeWorker(workCtx, srv.RunAWSHoneyTrails),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
 			// X3: migration waves that require observed traffic advance on wire evidence or pause.

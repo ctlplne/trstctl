@@ -324,6 +324,7 @@ const (
 	EventHoneyTokenRevoked                        = "honeytoken.revoked"
 	EventAWSHoneyTokenCreated                     = "honeytoken.aws.created"
 	EventAWSHoneyScanPage                         = "honeytoken.aws.scan_page"
+	EventAWSHoneyTrailObjectScanned               = "honeytoken.aws.trail_object_scanned"
 	EventAWSHoneyTokenRearmed                     = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                        = "pam.session.started"
 	EventPAMTargetRegistered                      = "pam.target.registered"
@@ -4933,6 +4934,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventHoneyTokenRevoked:                        {1: true},
 	EventAWSHoneyTokenCreated:                     {1: true},
 	EventAWSHoneyScanPage:                         {1: true},
+	EventAWSHoneyTrailObjectScanned:               {1: true},
 	EventAWSHoneyTokenRearmed:                     {1: true},
 	EventPAMSessionStarted:                        {1: true},
 	EventPAMTargetRegistered:                      {1: true},
@@ -8161,6 +8163,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyAWSHoneyScanPageTx(ctx, tx, e.TenantID, pl, e.Time)
+	case EventAWSHoneyTrailObjectScanned:
+		var pl store.AWSHoneyTrailObjectScan
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAWSHoneyTrailObjectScannedTx(ctx, tx, e.TenantID, pl, e.Time, e.Sequence)
 	case EventAWSHoneyTokenRearmed:
 		var pl AWSHoneyTokenRearmed
 		if err := decode(e, &pl); err != nil {

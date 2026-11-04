@@ -4700,9 +4700,18 @@ func componentSchemas() map[string]*Schema {
 	honeyTokenCreateResp := object(map[string]*Schema{
 		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(), "created_at": timestamp(), "token": str(),
 	}, "id", "kind", "name", "placement", "state", "created_at", "token")
+	awsHoneyTrailRead := object(map[string]*Schema{
+		"objects": {Type: "integer", Description: "log files read in the retained window (four days)"},
+		"records": {Type: "integer"}, "uses": {Type: "integer", Description: "decoy-key records found in them"},
+		"refused":        {Type: "integer", Description: "files recorded unread: larger than the bound, or not a CloudTrail log file"},
+		"last_object_at": timestamp(),
+	}, "objects", "records", "uses", "refused")
 	awsHoneyAccount := object(map[string]*Schema{
 		"id": str(), "account_id": str(), "regions": {Type: "array", Items: str()},
 		"max_ttl_seconds": {Type: "integer"}, "poll_interval_seconds": {Type: "integer"},
+		"trail": {Type: "object", Description: "N4: the CloudTrail trail whose S3 log files the account's decoys are also looked for in — every account of an organization trail, and data events when the trail logs them. accounts empty means every account the bucket holds; read is on the catalog only.",
+			Properties: map[string]*Schema{"bucket": str(), "organization_id": str(), "accounts": {Type: "array", Items: str()}, "read": awsHoneyTrailRead},
+			Required:   []string{"bucket", "accounts"}},
 	}, "id", "account_id", "regions", "max_ttl_seconds", "poll_interval_seconds")
 	awsHoneyAccountCatalog := object(map[string]*Schema{
 		"accounts": {Type: "array", Items: ref("AWSHoneyAccount")}, "detection_scope": str(),
@@ -4745,7 +4754,11 @@ func componentSchemas() map[string]*Schema {
 		"event_id": str(), "region": str(), "event_source": str(), "event_name": str(),
 		"source_ip_address": str(), "user_agent": str(), "error_code": str(),
 		"event_time": timestamp(), "detected_at": timestamp(),
-	}, "event_id", "region", "event_source", "event_name", "source_ip_address", "user_agent", "event_time", "detected_at")
+		"account_id":           {Type: "string", Description: "the account whose credentials made the call (the decoy's own); empty on uses recorded before N4"},
+		"recipient_account_id": {Type: "string", Description: "the account whose trail logged the event: the decoy's own, or another whose resource the key reached; empty on uses recorded before N4"},
+		"event_category":       {Type: "string", Description: "CloudTrail's Management or Data; LookupEvents finds Management only; empty on uses recorded before N4"},
+		"found_in":             {Type: "string", Enum: []string{"lookup", "trail"}, Description: "lookup: LookupEvents in the decoy's own account; trail: a trail's log file (N4)"},
+	}, "event_id", "region", "event_source", "event_name", "source_ip_address", "user_agent", "event_time", "detected_at", "found_in")
 	awsHoneyTokenDetail := object(map[string]*Schema{
 		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(),
 		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),

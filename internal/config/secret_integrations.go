@@ -51,6 +51,32 @@ type AWSHoneyAccountConfig struct {
 	AllowPrivate             bool              `json:"allow_private_endpoint,omitempty"`
 	AllowInsecureLoopback    bool              `json:"allow_insecure_loopback,omitempty"`
 	PrivateEgressCIDRs       []string          `json:"private_egress_cidrs,omitempty"`
+	// Trail (N4) is a CloudTrail trail's S3 delivery the decoy monitor also
+	// reads: an organization trail covers every account in the organization,
+	// and a trail that logs data events adds them; LookupEvents returns
+	// neither.
+	Trail *AWSHoneyTrailConfig `json:"trail,omitempty"`
+}
+
+// AWSHoneyTrailConfig is the bucket a trail delivers its log files to. Its
+// credentials need only s3:ListBucket and s3:GetObject on the trail's prefix.
+type AWSHoneyTrailConfig struct {
+	Bucket       string `json:"bucket"`
+	BucketRegion string `json:"bucket_region"`
+	// KeyPrefix is the trail's S3 key prefix, if it has one.
+	KeyPrefix string `json:"key_prefix,omitempty"`
+	// OrganizationID (o-…) marks an organization trail, whose files sit under
+	// AWSLogs/<organization-id>/.
+	OrganizationID string `json:"organization_id,omitempty"`
+	// Accounts limits the accounts read; empty reads every account the
+	// bucket holds.
+	Accounts []string `json:"accounts,omitempty"`
+	// S3Endpoint is an S3-compatible endpoint (default
+	// https://s3.<bucket_region>.amazonaws.com); PathStyle addresses
+	// <endpoint>/<bucket>.
+	S3Endpoint     string `json:"s3_endpoint,omitempty"`
+	PathStyle      bool   `json:"path_style,omitempty"`
+	CredentialsRef string `json:"credentials_ref"`
 }
 
 func (c AWSHoneyAccountConfig) MaxTTLDuration() (time.Duration, error) {
@@ -497,6 +523,61 @@ func validateAWSHoneyAccount(where string, item AWSHoneyAccountConfig) []error {
 		}
 	}
 	errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
+	if item.Trail != nil {
+		errs = append(errs, validateAWSHoneyTrail(where+" trail", *item.Trail, item.AllowInsecureLoopback, item.AllowPrivate)...)
+	}
+	return errs
+}
+
+var (
+	awsHoneyBucket       = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	awsHoneyOrganization = regexp.MustCompile(`^o-[a-z0-9]{10,32}$`)
+	awsHoneyKeyPrefix    = regexp.MustCompile(`^[A-Za-z0-9!_.*'()-]+(/[A-Za-z0-9!_.*'()-]+)*$`)
+)
+
+// validateAWSHoneyTrail checks an N4 trail delivery: a real bucket and Region,
+// an organization ID when given, at most 1,000 explicit accounts, and an
+// S3 endpoint under the same rules as every secret-integration endpoint.
+func validateAWSHoneyTrail(where string, trail AWSHoneyTrailConfig, allowInsecureLoopback, allowPrivate bool) []error {
+	var errs []error
+	if !awsHoneyBucket.MatchString(trail.Bucket) || strings.Contains(trail.Bucket, "..") {
+		errs = append(errs, fmt.Errorf("%s bucket must be an S3 bucket name", where))
+	}
+	if !awsHoneyRegion.MatchString(trail.BucketRegion) {
+		errs = append(errs, fmt.Errorf("%s bucket_region must be an AWS region name", where))
+	}
+	if trail.KeyPrefix != "" && (!awsHoneyKeyPrefix.MatchString(trail.KeyPrefix) || strings.Contains(trail.KeyPrefix, "..")) {
+		errs = append(errs, fmt.Errorf("%s key_prefix must be a relative S3 key prefix without a trailing slash", where))
+	}
+	if trail.OrganizationID != "" && !awsHoneyOrganization.MatchString(trail.OrganizationID) {
+		errs = append(errs, fmt.Errorf("%s organization_id must be an AWS organization ID (o-…)", where))
+	}
+	if len(trail.Accounts) > 1000 {
+		errs = append(errs, fmt.Errorf("%s accounts lists more than 1,000 accounts", where))
+	}
+	seen := map[string]bool{}
+	for _, account := range trail.Accounts {
+		if !awsHoneyAccount.MatchString(account) || seen[account] {
+			errs = append(errs, fmt.Errorf("%s accounts must be unique 12-digit AWS accounts", where))
+			break
+		}
+		seen[account] = true
+	}
+	if err := validateCredentialRef(trail.CredentialsRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s credentials_ref: %w", where, err))
+	}
+	if trail.S3Endpoint != "" {
+		if err := validateSecretIntegrationEndpoint(trail.S3Endpoint, allowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s s3_endpoint: %w", where, err))
+		}
+		if parsed, err := url.Parse(trail.S3Endpoint); err == nil {
+			host := parsed.Hostname()
+			address := net.ParseIP(host)
+			if !allowPrivate && (netsec.IsLoopbackHost(host) || (address != nil && (address.IsPrivate() || address.IsLinkLocalUnicast()))) {
+				errs = append(errs, fmt.Errorf("%s private s3_endpoint requires allow_private_endpoint and a CIDR allowlist", where))
+			}
+		}
+	}
 	return errs
 }
 

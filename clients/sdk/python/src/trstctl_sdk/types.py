@@ -1213,6 +1213,7 @@ AWSHoneyAccount = TypedDict(
         'max_ttl_seconds': int,
         'poll_interval_seconds': int,
         'regions': list[str],
+        'trail': dict[str, Any],
     },
     total=False,
 )
@@ -1361,12 +1362,16 @@ AWSHoneyTokenPreview = TypedDict(
 AWSHoneyUse = TypedDict(
     'AWSHoneyUse',
     {
+        'account_id': str,
         'detected_at': str,
         'error_code': str,
+        'event_category': str,
         'event_id': str,
         'event_name': str,
         'event_source': str,
         'event_time': str,
+        'found_in': str,
+        'recipient_account_id': str,
         'region': str,
         'source_ip_address': str,
         'user_agent': str,

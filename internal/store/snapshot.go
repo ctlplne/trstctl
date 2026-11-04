@@ -247,7 +247,11 @@ import (
 // Version 83 carries N3's revocation_method on dynamic-secret leases: without
 // it a restored store would forget how each AWS STS revocation ended while its
 // covered offset skipped the completions.
-const SnapshotFormatVersion = 83
+// Version 84 carries N4's read trail files and the accounts, category and
+// source of each decoy use: without them a restored store would read a trail
+// file again as new and show every use as found by LookupEvents while its
+// covered offset skipped the reads.
+const SnapshotFormatVersion = 84
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -348,6 +352,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 32: parent before child for the delivery FK.
 	"audit_feed_destinations", "audit_feed_deliveries",
 	"honey_tokens", "aws_honey_scans", "aws_honey_uses",
+	// Format 84: N4's read trail files.
+	"aws_honey_trail_objects",
 	// Format 57 (A91): agent lifecycle receipts, the record the agents usage
 	// gauge is reconciled against; same pairing with ReadModelTables.
 	"agent_lifecycle_receipts",
@@ -683,6 +689,7 @@ SELECT jsonb_build_object(
   'switching_wave_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_wave_rows t),
   'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
   'certificate_key_vault_disables', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_key_vault_disables t),
+  'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

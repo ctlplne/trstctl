@@ -11197,6 +11197,23 @@ export interface components {
             max_ttl_seconds: number;
             poll_interval_seconds: number;
             regions: string[];
+            /** @description N4: the CloudTrail trail whose S3 log files the account's decoys are also looked for in — every account of an organization trail, and data events when the trail logs them. accounts empty means every account the bucket holds; read is on the catalog only. */
+            trail?: {
+                accounts: string[];
+                bucket: string;
+                organization_id?: string;
+                read?: {
+                    /** Format: date-time */
+                    last_object_at?: string;
+                    /** @description log files read in the retained window (four days) */
+                    objects: number;
+                    records: number;
+                    /** @description files recorded unread: larger than the bound, or not a CloudTrail log file */
+                    refused: number;
+                    /** @description decoy-key records found in them */
+                    uses: number;
+                };
+            };
         };
         AWSHoneyAccountCatalog: {
             accounts: components["schemas"]["AWSHoneyAccount"][];
@@ -11318,14 +11335,25 @@ export interface components {
             verification: string;
         };
         AWSHoneyUse: {
+            /** @description the account whose credentials made the call (the decoy's own); empty on uses recorded before N4 */
+            account_id?: string;
             /** Format: date-time */
             detected_at: string;
             error_code?: string;
+            /** @description CloudTrail's Management or Data; LookupEvents finds Management only; empty on uses recorded before N4 */
+            event_category?: string;
             event_id: string;
             event_name: string;
             event_source: string;
             /** Format: date-time */
             event_time: string;
+            /**
+             * @description lookup: LookupEvents in the decoy's own account; trail: a trail's log file (N4)
+             * @enum {string}
+             */
+            found_in: "lookup" | "trail";
+            /** @description the account whose trail logged the event: the decoy's own, or another whose resource the key reached; empty on uses recorded before N4 */
+            recipient_account_id?: string;
             region: string;
             source_ip_address: string;
             user_agent: string;

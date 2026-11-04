@@ -2001,11 +2001,35 @@ operation names, source addresses, and detection times. Coverage is limited to
 management events in the configured account and Regions. CloudTrail delivery can
 lag; after triage, `rearm` makes the same live bait alert on its next
 distinct observed use while preserving earlier incident records. An already seen
-CloudTrail event does not trigger another alert. Data events, other accounts/Regions,
-and gaps older than CloudTrail's 90-day
+CloudTrail event does not trigger another alert. Without a trail, data events,
+other accounts/Regions, and gaps older than CloudTrail's 90-day
 lookup window are not covered. A failed/dead-lettered scan is a monitoring outage,
 not evidence that the bait was untouched. No real AWS account was available for
 the local QA campaign, so the AWS adapter has local contract evidence only.
+
+**Trail log files: data events and every account (N4).** An attachment may also
+name the CloudTrail trail whose log files its decoys are looked for in, with a
+`trail` object: `bucket`, `bucket_region`, the trail's `key_prefix` if it has one,
+`organization_id` (`o-…`) for an organization trail, optional `accounts` (empty
+reads every account the bucket holds), optional `s3_endpoint` and `path_style` for
+an S3-compatible store, and `credentials_ref` — a session file like the others,
+whose role needs only `s3:ListBucket` and `s3:GetObject` on the trail's prefix. An
+organization trail holds every account in the organization, and a trail that logs
+data events holds them too, so a decoy key used against an S3 object in another
+account, or logged by an account other than its own, is found; LookupEvents finds
+neither. The leader reads today's and yesterday's day folders (UTC) of every
+account and Region at the attachment's poll interval, records each log file once
+by its key as an immutable event (`honeytoken.aws.trail_object_scanned`, with the
+decoy records in it), and the first new use triggers the decoy through the same
+alert route. A use shows the account whose key made the call, the account whose
+trail logged it, CloudTrail's `event_category` (`Management` or `Data`) and
+`found_in` (`lookup` or `trail`); the same event found both ways is recorded once.
+A file larger than 64 MiB compressed, or one that is not a CloudTrail log file,
+is recorded as refused with the reason and never read in part; a file the store
+cannot return is left for the next pass. The account catalog's `trail.read`
+shows the files read, decoy records found and files refused in the last four days.
+Records of keys that are not decoys are read and dropped; nothing from them is
+kept.
 
 The scanning bridge runs the pinned Gitleaks scanner from the served control plane,
 recording redacted findings into [discovery](discovery-and-inventory.md), the

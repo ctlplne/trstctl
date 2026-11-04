@@ -869,6 +869,7 @@ export interface AWSHoneyAccount {
   max_ttl_seconds: number;
   poll_interval_seconds: number;
   regions: string[];
+  trail?: { accounts: string[]; bucket: string; organization_id?: string; read?: { last_object_at?: string; objects: number; records: number; refused: number; uses: number } };
 }
 
 export interface AWSHoneyAccountCatalog {
@@ -981,12 +982,16 @@ export interface AWSHoneyTokenPreview {
 }
 
 export interface AWSHoneyUse {
+  account_id?: string;
   detected_at: string;
   error_code?: string;
+  event_category?: string;
   event_id: string;
   event_name: string;
   event_source: string;
   event_time: string;
+  found_in: "lookup" | "trail";
+  recipient_account_id?: string;
   region: string;
   source_ip_address: string;
   user_agent: string;

@@ -2,6 +2,12 @@
 
 ### Added
 
+- AWS decoy keys are also looked for in a CloudTrail trail's log files (N4): an account attachment may name
+  its trail (`trail`: bucket, Region, key prefix, organization ID, accounts), and the leader reads the trail's
+  log files from S3 — every account of an organization trail, and data events when the trail logs them, which
+  LookupEvents never returns. Each file is recorded once; each decoy use shows the calling and logging
+  accounts, `event_category` and `found_in`; the account catalog shows what the trail read. Proven against
+  LocalStack S3 with files in CloudTrail's layout.
 - Secrets: an AWS STS provider with `revoke_with_deny_policy` ends a revoked lease's
   session before it expires through an inline policy on its role that denies that one
   session (`aws:userid`), read back before the revocation completes; denials of expired

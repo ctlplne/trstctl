@@ -123,6 +123,53 @@ func TestListFollowsPagesAndRefusesTruncation(t *testing.T) {
 	}
 }
 
+// N4: a CloudTrail bucket is read by folder — its accounts, Regions and day
+// folders are "/"-delimited common prefixes — and a day folder from a
+// watermark, in name order, under the store's deployment prefix.
+func TestListDirsAndListAfterReadFoldersInOrder(t *testing.T) {
+	srv := s3test.NewServer(t)
+	store := srv.Open(t, func(o *objectstore.Options) { o.Prefix = "trail/" })
+	for _, key := range []string{
+		"AWSLogs/o-abc/111111111111/CloudTrail/us-east-1/2026/11/04/a_0830Z.json.gz",
+		"AWSLogs/o-abc/111111111111/CloudTrail/us-east-1/2026/11/04/a_0835Z.json.gz",
+		"AWSLogs/o-abc/111111111111/CloudTrail/eu-west-1/2026/11/04/b_0830Z.json.gz",
+		"AWSLogs/o-abc/222222222222/CloudTrail/us-east-1/2026/11/04/c_0830Z.json.gz",
+	} {
+		srv.Seed("trail/"+key, []byte("x"))
+	}
+	srv.Seed("elsewhere/AWSLogs/o-abc/333333333333/x", []byte("x"))
+	accounts, err := store.ListDirs(t.Context(), "AWSLogs/o-abc/", 10)
+	if err != nil || strings.Join(accounts, ",") != "111111111111,222222222222" {
+		t.Fatalf("accounts = %v %v", accounts, err)
+	}
+	regions, err := store.ListDirs(t.Context(), "AWSLogs/o-abc/111111111111/CloudTrail/", 10)
+	if err != nil || strings.Join(regions, ",") != "eu-west-1,us-east-1" {
+		t.Fatalf("regions = %v %v", regions, err)
+	}
+	if _, err := store.ListDirs(t.Context(), "AWSLogs/o-abc/", 1); err == nil {
+		t.Fatal("more folders than the limit were accepted")
+	}
+	if _, err := store.ListDirs(t.Context(), "AWSLogs/o-abc", 10); err == nil {
+		t.Fatal("a folder listing without a trailing slash was accepted")
+	}
+	day := "AWSLogs/o-abc/111111111111/CloudTrail/us-east-1/2026/11/04/"
+	all, more, err := store.ListAfter(t.Context(), day, "", 10)
+	if err != nil || more || len(all) != 2 || all[0].Name != day+"a_0830Z.json.gz" {
+		t.Fatalf("day folder = %+v more=%v %v", all, more, err)
+	}
+	after, more, err := store.ListAfter(t.Context(), day, day+"a_0830Z.json.gz", 10)
+	if err != nil || more || len(after) != 1 || after[0].Name != day+"a_0835Z.json.gz" {
+		t.Fatalf("after the watermark = %+v more=%v %v", after, more, err)
+	}
+	first, more, err := store.ListAfter(t.Context(), day, "", 1)
+	if err != nil || !more || len(first) != 1 {
+		t.Fatalf("one page = %+v more=%v %v", first, more, err)
+	}
+	if _, _, err := store.ListAfter(t.Context(), day, "AWSLogs/other", 10); err == nil {
+		t.Fatal("a start key outside the prefix was accepted")
+	}
+}
+
 // A tenant view addresses only names inside its tenant's prefix: one tenant's
 // listing never shows another's object, and a name that would climb out of
 // the prefix is refused before any request is made.

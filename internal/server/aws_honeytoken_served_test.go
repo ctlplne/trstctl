@@ -33,6 +33,11 @@ type servedAWSHoneyFixture struct {
 	issuedKeyID string
 	uses        int
 	actions     []string
+	// nextKeyID and nextSecret, when set, are the decoy key CreateAccessKey
+	// hands out, so a test sharing the database with another decoy test does
+	// not mint the same key twice.
+	nextKeyID  string
+	nextSecret string
 }
 
 func newServedAWSHoneyFixture(t *testing.T) *servedAWSHoneyFixture {
@@ -132,7 +137,11 @@ func newServedAWSHoneyFixture(t *testing.T) *servedAWSHoneyFixture {
 				return
 			}
 			f.keyID, f.issuedKeyID = "AKIADECOY00000001", "AKIADECOY00000001"
-			write("<CreateAccessKeyResponse><CreateAccessKeyResult><AccessKey><AccessKeyId>" + f.keyID + "</AccessKeyId><SecretAccessKey>fake-honey-secret-value</SecretAccessKey></AccessKey></CreateAccessKeyResult></CreateAccessKeyResponse>")
+			secretValue := "fake-honey-secret-value"
+			if f.nextKeyID != "" {
+				f.keyID, f.issuedKeyID, secretValue = f.nextKeyID, f.nextKeyID, f.nextSecret
+			}
+			write("<CreateAccessKeyResponse><CreateAccessKeyResult><AccessKey><AccessKeyId>" + f.keyID + "</AccessKeyId><SecretAccessKey>" + secretValue + "</SecretAccessKey></AccessKey></CreateAccessKeyResult></CreateAccessKeyResponse>")
 		case "ListAccessKeys":
 			if f.user != user {
 				missing()
