@@ -39,6 +39,11 @@ export type Certificate = Schemas["Certificate"];
 export type CertificateHealthDashboard = Schemas["CertificateHealthDashboard"];
 export type CertificateList = Schemas["CertificateList"];
 export type Problem = Schemas["Problem"];
+export type SecretMeta = Schemas["SecretMeta"];
+export type SecretValue = Schemas["SecretValue"];
+export type PKISecret = Schemas["PKISecret"];
+export type BulkRevokeResult = Schemas["BulkRevokeResult"];
+export type RevocationReason = NonNullable<Schemas["BulkRevokeRequest"]["reason"]>;
 
 /** TransitionTo is the set of lifecycle targets the contract accepts. */
 export type TransitionTo = TransitionRequest["to"];
@@ -338,6 +343,41 @@ export class TrstctlClient {
     return this.request<CertificateHealthDashboard>("/api/v1/certificates/health");
   }
 
+  /** revokeCertificates revokes certificates by inventory ID with an RFC 5280 reason. */
+  revokeCertificates(certificateIds: string[], reason: RevocationReason, idempotencyKey?: string): Promise<BulkRevokeResult> {
+    if (certificateIds.length === 0) {
+      return Promise.reject(new Error("trstctl: no certificate IDs to revoke"));
+    }
+    return this.request<BulkRevokeResult>("/api/v1/certificates/bulk-revoke", {
+      method: "POST", body: { certificate_ids: certificateIds, reason }, idempotencyKey,
+    });
+  }
+
+  // ---- Secrets store and PKI secrets ----------------------------------------
+
+  createSecret(name: string, value: string, idempotencyKey?: string): Promise<SecretMeta> {
+    return this.request<SecretMeta>("/api/v1/secrets/store", { method: "POST", body: { name, value }, idempotencyKey });
+  }
+  getSecret(name: string): Promise<SecretValue> {
+    return this.request<SecretValue>(secretPath(name));
+  }
+  rotateSecret(name: string, value: string, idempotencyKey?: string): Promise<SecretMeta> {
+    return this.request<SecretMeta>(secretPath(name), { method: "PUT", body: { value }, idempotencyKey });
+  }
+  async deleteSecret(name: string, idempotencyKey?: string): Promise<void> {
+    await this.request<unknown>(secretPath(name), { method: "DELETE", idempotencyKey });
+  }
+  /**
+   * issuePkiSecret has the PKI secrets engine issue a short-lived certificate
+   * for commonName. In this mode the server generates the key and returns it;
+   * a tenant may refuse server-side key generation.
+   */
+  issuePkiSecret(commonName: string, ttlSeconds = 3600, idempotencyKey?: string): Promise<PKISecret> {
+    return this.request<PKISecret>("/api/v1/secrets/pki", {
+      method: "POST", body: { common_name: commonName, ttl_seconds: ttlSeconds }, idempotencyKey,
+    });
+  }
+
   // ---- Getting-started convenience -----------------------------------------
 
   /**
@@ -375,4 +415,11 @@ export class TrstctlClient {
 /** isProblem narrows an unknown error to a TrstctlProblem. */
 export function isProblem(err: unknown): err is TrstctlProblem {
   return err instanceof TrstctlProblem;
+}
+
+/** secretPath is a stored secret's route; each segment of a nested name is escaped. */
+function secretPath(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("trstctl: secret name is empty");
+  return "/api/v1/secrets/store/" + trimmed.split("/").map(encodeURIComponent).join("/");
 }

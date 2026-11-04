@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -11,6 +12,8 @@ from trstctl_sdk import ProblemError, TrstctlClient
 
 class Handler(BaseHTTPRequestHandler):
     calls: list[dict[str, Any]] = []
+    # When set, the next secret create is turned away once with Retry-After: 1.
+    busy_once = False
     secret_value = "initial-fixture-value"
     version = 1
     workload_response: dict[str, Any] = {}
@@ -82,6 +85,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/v1/secrets/pki":
             self._send(201, {"serial": "01", "common_name": body["common_name"], "certificate": "-----BEGIN CERTIFICATE-----", "private_key": "-----BEGIN PRIVATE KEY-----"})
             return
+        if self.path == "/api/v1/certificates/bulk-revoke":
+            ok = body == {"certificate_ids": ["c-1"], "reason": "superseded"}
+            self._send(200 if ok else 400, {"total_matched": 1, "total_revoked": 1, "total_skipped": 0, "total_failed": 0,
+                                            "items": [{"id": "c-1", "status": "revoked"}]} if ok else {"title": "bad body"})
+            return
+        if self.path == "/api/v1/secrets/store" and Handler.busy_once:
+            Handler.busy_once = False
+            self._send(503, {"title": "busy"}, {"Retry-After": "1"})
+            return
         if self.path == "/api/v1/secrets/store":
             Handler.secret_value = body["value"]
             Handler.version = 1
@@ -116,6 +128,7 @@ class Handler(BaseHTTPRequestHandler):
 class ClientTests(unittest.TestCase):
     def setUp(self) -> None:
         Handler.calls = []
+        Handler.busy_once = False
         Handler.secret_value = "initial-fixture-value"
         Handler.version = 1
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -143,6 +156,24 @@ class ClientTests(unittest.TestCase):
         self.assertTrue(all(c["authorization"] == "Bearer test-token" for c in Handler.calls))
         self.assertTrue(all(c["tenant"] == "tenant-1" for c in Handler.calls))
         self.assertTrue(all(c["user_agent"] == "trstctl-python-sdk/1" for c in Handler.calls))
+
+    def test_revoke_certificates_and_a_retry_that_honors_retry_after(self) -> None:
+        client = TrstctlClient(base_url=self.base_url, token="test-token", retry={"max_attempts": 3, "base_delay_seconds": 0.01, "max_delay_seconds": 5})
+        revoked = client.revoke_certificates(["c-1"], "superseded", idempotency_key="revoke-key")
+        self.assertEqual(revoked["total_revoked"], 1)
+        with self.assertRaises(ValueError):
+            client.revoke_certificates([], "superseded")
+
+        Handler.calls = []
+        Handler.busy_once = True
+        started = time.monotonic()
+        client.create_secret("sdk/python/password", "v1")
+        waited = time.monotonic() - started
+        creates = [c for c in Handler.calls if c["method"] == "POST" and c["path"] == "/api/v1/secrets/store"]
+        self.assertEqual(len(creates), 2)
+        self.assertTrue(creates[0]["idempotency"])
+        self.assertEqual(creates[0]["idempotency"], creates[1]["idempotency"])
+        self.assertGreaterEqual(waited, 1.0)
 
     def test_problem_error_parses_retry_after(self) -> None:
         client = TrstctlClient(base_url=self.base_url, retry={"max_attempts": 1})

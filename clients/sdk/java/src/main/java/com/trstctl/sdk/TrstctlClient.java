@@ -169,6 +169,18 @@ public final class TrstctlClient {
         null, Map.of("request_key", requestKey), null));
   }
 
+  /** Revoke certificates by inventory ID with an RFC 5280 reason such as "superseded". */
+  public Map<String, Object> revokeCertificates(List<String> certificateIds, String reason, String idempotencyKey)
+      throws IOException, InterruptedException, ProblemException {
+    if (certificateIds == null || certificateIds.isEmpty()) {
+      throw new IllegalArgumentException("no certificate IDs to revoke");
+    }
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("certificate_ids", List.copyOf(certificateIds));
+    body.put("reason", reason);
+    return Json.asObject(request("POST", "/api/v1/certificates/bulk-revoke", body, Map.of(), idempotencyKey));
+  }
+
   public PkiSecret issuePkiSecret(String commonName, int ttlSeconds, String idempotencyKey)
       throws IOException, InterruptedException, ProblemException {
     Map<String, Object> body = new LinkedHashMap<>();

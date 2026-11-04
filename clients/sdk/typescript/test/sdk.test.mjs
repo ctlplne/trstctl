@@ -182,3 +182,66 @@ test("retry preserves mutation idempotency and parses problem+json", async () =>
     },
   );
 });
+
+test("A250: secrets, PKI and revocation use the served routes, hold the key across a Retry-After retry", async () => {
+  const { TrstctlClient } = await loadSdk();
+  const keys = {};
+  const stored = {};
+  let firstCreate = 0;
+  let retriedAfter = 0;
+  const fetch = async (url, init = {}) => {
+    const method = init.method ?? "GET";
+    const route = `${method} ${new URL(String(url)).pathname}`;
+    (keys[route] ??= []).push(init.headers["Idempotency-Key"]);
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (route === "POST /api/v1/secrets/store") {
+      if (keys[route].length === 1) {
+        firstCreate = Date.now();
+        return problem(503, { title: "busy" }, { "Retry-After": "1" });
+      }
+      retriedAfter = Date.now() - firstCreate;
+      stored[body.name] = { value: body.value, version: 1 };
+      return json(201, { name: body.name, version: 1 });
+    }
+    if (route === "GET /api/v1/secrets/store/app/db%20password") {
+      return json(200, { name: "app/db password", ...stored["app/db password"] });
+    }
+    if (route === "PUT /api/v1/secrets/store/app/db%20password") {
+      const next = stored["app/db password"].version + 1;
+      stored["app/db password"] = { value: body.value, version: next };
+      return json(200, { name: "app/db password", version: next });
+    }
+    if (route === "DELETE /api/v1/secrets/store/app/db%20password") {
+      return new Response(null, { status: 204 });
+    }
+    if (route === "POST /api/v1/secrets/pki") {
+      assert.deepEqual(body, { common_name: "sdk.lab.test", ttl_seconds: 300 });
+      return json(201, { certificate_id: "c-1", serial: "0a", common_name: "sdk.lab.test", certificate: "PEM", private_key: "KEY" });
+    }
+    if (route === "POST /api/v1/certificates/bulk-revoke") {
+      assert.deepEqual(body, { certificate_ids: ["c-1"], reason: "superseded" });
+      return json(200, { total_matched: 1, total_revoked: 1, total_skipped: 0, total_failed: 0, items: [{ id: "c-1", status: "revoked" }] });
+    }
+    return problem(404, { title: `no route ${route}` });
+  };
+  const client = new TrstctlClient({ baseUrl: "https://served.test", token: "fixture-token", fetch, retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 5000 } });
+
+  const created = await client.createSecret("app/db password", "v1");
+  assert.equal(created.version, 1);
+  assert.ok(retriedAfter >= 1000, `the retry came ${retriedAfter} ms after Retry-After: 1`);
+  const createKeys = keys["POST /api/v1/secrets/store"];
+  assert.equal(createKeys.length, 2);
+  assert.ok(createKeys[0]);
+  assert.equal(createKeys[0], createKeys[1]);
+  assert.deepEqual(await client.getSecret("app/db password"), { name: "app/db password", value: "v1", version: 1 });
+  assert.equal((await client.rotateSecret("app/db password", "v2", "rotate-1")).version, 2);
+  assert.equal(keys["PUT /api/v1/secrets/store/app/db%20password"][0], "rotate-1");
+  assert.equal(await client.deleteSecret("app/db password"), undefined);
+  const pki = await client.issuePkiSecret("sdk.lab.test", 300);
+  const revoked = await client.revokeCertificates([pki.certificate_id], "superseded");
+  assert.equal(revoked.total_revoked, 1);
+  for (const [route, sent] of Object.entries(keys)) {
+    if (!route.startsWith("GET ")) for (const key of sent) assert.ok(key, `${route} carried no Idempotency-Key`);
+  }
+  await assert.rejects(client.revokeCertificates([], "superseded"), /no certificate IDs/);
+});

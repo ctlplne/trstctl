@@ -238,6 +238,23 @@ with a fresh logical-operation key. Preview POSTs are effect-free and send no
 `Idempotency-Key`; proof-bearing requests refuse redirects rather than replaying
 evidence at another location.
 
+### Secrets, PKI and revocation
+
+The same calls the Python and Java SDKs make. Secret values are caller-owned
+`[]byte` going in and returned as `[]byte`; the SDK wipes its own copies, and you
+wipe what it hands you.
+
+```go
+meta, err := client.CreateSecretKeyed(ctx, "apps/payments/api-token", value, "payments-secret-create")
+current, err := client.GetSecret(ctx, "apps/payments/api-token") // current.Value is []byte
+meta, err = client.RotateSecret(ctx, "apps/payments/api-token", next)
+pki, err := client.IssuePKISecret(ctx, "payments.internal", 5*time.Minute)
+res, err := client.RevokeCertificates(ctx, []string{pki.CertificateID}, "superseded")
+```
+
+`IssuePKISecret` uses the server-generated-key mode; a tenant that has turned
+control-plane key generation off refuses it.
+
 ### Errors
 
 Every non-2xx response is a `*trstctl.Problem` (also an `error`):
@@ -278,8 +295,10 @@ npm test
 
 The test suite compiles the real SDK source, injects a deterministic `fetch`,
 and covers bearer auth, optional tenant headers, core owner/identity/certificate
-resources, cursor pagination, stable mutation `Idempotency-Key` retry behavior,
-and `problem+json` parsing.
+resources, the secrets store, PKI secrets and certificate revocation
+(`createSecret`, `getSecret`, `rotateSecret`, `deleteSecret`, `issuePkiSecret`,
+`revokeCertificates`), cursor pagination, stable mutation `Idempotency-Key` retry
+behavior that waits out `Retry-After`, and `problem+json` parsing.
 
 See [`typescript/README.md`](typescript/README.md) for the full reference,
 a quickstart example, and a copy-paste-without-installing option.
@@ -291,8 +310,9 @@ a quickstart example, and a copy-paste-without-installing option.
 Package: `trstctl-sdk`. The runtime is dependency-free and the Python TypedDict
 resource aliases in `trstctl_sdk.types` are generated from the pinned OpenAPI schemas. It supports
 the same bearer auth, optional tenant hint, mutation idempotency, retries,
-`ProblemError`, and served secrets/PKI helpers as the other SDKs. The default
-User-Agent is `trstctl-python-sdk/1`.
+`ProblemError`, and served secrets/PKI helpers as the other SDKs, plus
+`revoke_certificates(ids, reason)`. The default User-Agent is
+`trstctl-python-sdk/1`.
 
 ```python
 from trstctl_sdk import ProblemError, TrstctlClient
@@ -339,7 +359,8 @@ Package: `com.trstctl:trstctl-sdk`. The runtime is JDK-only: it uses
 `Authorization`, optional `X-Tenant-ID`, and stable `Idempotency-Key` headers, and
 retries `429`/`502`/`503`/`504` while honoring `Retry-After`. `OpenApiSchemas.java`
 is generated from the pinned OpenAPI schema names so Java builds get the same drift
-signal as the other SDKs without pulling in a codegen runtime. The default
+signal as the other SDKs without pulling in a codegen runtime. Besides the
+secrets and PKI helpers it has `revokeCertificates(ids, reason, key)`. The default
 User-Agent is `trstctl-java-sdk/1`.
 
 ```java

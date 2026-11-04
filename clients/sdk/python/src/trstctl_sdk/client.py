@@ -15,7 +15,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
-from typing import Any, Mapping, MutableMapping, Optional, Union
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 from urllib import error, parse, request
 
 DEFAULT_USER_AGENT = "trstctl-python-sdk/1"
@@ -214,6 +214,18 @@ class TrstctlClient:
             "POST",
             "/api/v1/secrets/pki",
             body={"common_name": common_name, "ttl_seconds": ttl_seconds},
+            idempotency_key=idempotency_key,
+        )
+
+    def revoke_certificates(self, certificate_ids: Sequence[str], reason: str, *, idempotency_key: Optional[str] = None) -> Any:
+        """Revoke certificates by inventory ID with an RFC 5280 reason such as "superseded"."""
+        ids = list(certificate_ids)
+        if not ids:
+            raise ValueError("no certificate IDs to revoke")
+        return self.request(
+            "POST",
+            "/api/v1/certificates/bulk-revoke",
+            body={"certificate_ids": ids, "reason": reason},
             idempotency_key=idempotency_key,
         )
 

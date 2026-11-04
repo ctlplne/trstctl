@@ -2,6 +2,12 @@
 
 ### Added
 
+- One SDK surface for secrets, PKI and revocation (A250, first part): the Go and TypeScript SDKs
+  gain the secrets-store calls (create, get, rotate, delete) and PKI-secret issuance the Python
+  and Java SDKs had, and all four gain certificate revocation (`RevokeCertificates`,
+  `revokeCertificates`, `revoke_certificates`). The Go SDK takes and returns secret values as
+  `[]byte` and wipes its own copies. Each SDK's tests show a retried mutation keeps its
+  Idempotency-Key and waits out `Retry-After`.
 - Unattended evaluation cycles (A249, third part; A249 is served): `trstctl evaluate --cycles n
   --interval d` repeats the chosen journeys with nobody watching, into one pack
   (`trstctl.evaluation-pack/v3`) that keeps every cycle. A cycle cut short because the control

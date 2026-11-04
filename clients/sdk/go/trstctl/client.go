@@ -493,7 +493,7 @@ func (c *Client) doStatus(ctx context.Context, method, path string, opts request
 
 		// Non-2xx: build a typed Problem from the (problem+json) body.
 		prob := decodeProblem(resp)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = prob
 
 		if retrySafe && isRetryableStatus(status) && attempt < policy.MaxAttempts && ctx.Err() == nil {

@@ -19,6 +19,54 @@ public final class TrstctlClientTest {
     testProblemErrorParsesRetryAfterAndRetries();
     testRetryPreservesGeneratedMutationIdempotency();
     testWorkloadHandoffPreservesExactSignedIDAndAbsentLegacyField();
+    testRevokeCertificatesHonorsRetryAfterAndKeepsItsKey();
+  }
+
+  // A250: revocation goes to the bulk-revoke route with the reason, and a 503
+  // with Retry-After: 1 is waited out and retried with the same key.
+  private static void testRevokeCertificatesHonorsRetryAfterAndKeepsItsKey() throws Exception {
+    AtomicInteger calls = new AtomicInteger();
+    AtomicReference<String> firstKey = new AtomicReference<>();
+    AtomicReference<String> secondKey = new AtomicReference<>();
+    AtomicReference<String> body = new AtomicReference<>();
+    long[] firstAt = new long[1];
+    long[] secondAt = new long[1];
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/api/v1/certificates/bulk-revoke", exchange -> {
+      int n = calls.incrementAndGet();
+      String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
+      body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+      if (n == 1) {
+        firstKey.set(key);
+        firstAt[0] = System.nanoTime();
+        exchange.getResponseHeaders().set("Content-Type", "application/problem+json");
+        exchange.getResponseHeaders().set("Retry-After", "1");
+        write(exchange, 503, "{\"title\":\"temporarily unavailable\"}");
+        return;
+      }
+      secondKey.set(key);
+      secondAt[0] = System.nanoTime();
+      write(exchange, 200, "{\"total_matched\":1,\"total_revoked\":1,\"total_skipped\":0,\"total_failed\":0,\"items\":[{\"id\":\"c-1\",\"status\":\"revoked\"}]}");
+    });
+    server.start();
+    try {
+      String base = "http://127.0.0.1:" + server.getAddress().getPort();
+      TrstctlClient client = TrstctlClient.builder().baseUrl(base).token("fixture-token").maxAttempts(3).build();
+      Map<String, Object> revoked = client.revokeCertificates(List.of("c-1"), "superseded", null);
+      check(((Number) revoked.get("total_revoked")).intValue() == 1, "revocation result parsed");
+      check(calls.get() == 2, "revocation retried exactly once");
+      check(firstKey.get() != null && firstKey.get().equals(secondKey.get()), "retry reused the Idempotency-Key");
+      check(secondAt[0] - firstAt[0] >= 1_000_000_000L, "retry waited out Retry-After: 1");
+      check(body.get().contains("\"certificate_ids\":[\"c-1\"]") && body.get().contains("\"reason\":\"superseded\""), "revocation body");
+      try {
+        client.revokeCertificates(List.of(), "superseded", null);
+        throw new AssertionError("revoking nothing was sent");
+      } catch (IllegalArgumentException expected) {
+        // refused before any request
+      }
+    } finally {
+      server.stop(0);
+    }
   }
 
   private static void testGeneratedSchemaMetadataIsCommitted() {
