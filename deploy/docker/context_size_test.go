@@ -40,26 +40,26 @@ func sparseContext(t *testing.T, size int64) string {
 }
 
 func TestDockerContextSizeCountsSparseContentAndArchiveOverhead(t *testing.T) {
-	const contentBytes = 79 * 1024 * 1024
+	const contentBytes = 95 * 1024 * 1024
 	out, err := contextSize(t, sparseContext(t, contentBytes))
 	if err != nil {
 		t.Fatalf("below-limit context rejected: %v: %s", err, out)
 	}
 	kib, err := strconv.ParseInt(out, 10, 64)
-	if err != nil || kib*1024 <= contentBytes || kib > 80*1024 {
-		t.Fatalf("size %q must include sparse file data plus archive headers within 80MiB", out)
+	if err != nil || kib*1024 <= contentBytes || kib > 96*1024 {
+		t.Fatalf("size %q must include sparse file data plus archive headers within 96MiB", out)
 	}
 }
 
 func TestDockerContextSizeRejectsOversizedSparseContent(t *testing.T) {
-	out, err := contextSize(t, sparseContext(t, 80*1024*1024))
-	if err == nil || !strings.Contains(out, "limit is 83886080 bytes") {
-		t.Fatalf("80MiB data plus archive headers must exceed the ceiling: %v: %s", err, out)
+	out, err := contextSize(t, sparseContext(t, 96*1024*1024))
+	if err == nil || !strings.Contains(out, "limit is 100663296 bytes") {
+		t.Fatalf("96MiB data plus archive headers must exceed the ceiling: %v: %s", err, out)
 	}
 }
 
 func TestDockerContextSizeIgnoresInheritedTarOptions(t *testing.T) {
-	const contentBytes = 79 * 1024 * 1024
+	const contentBytes = 95 * 1024 * 1024
 	dir := sparseContext(t, contentBytes)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -70,7 +70,7 @@ func TestDockerContextSizeIgnoresInheritedTarOptions(t *testing.T) {
 		t.Fatalf("ambient tar options changed the fixed measurement: %v: %s", err, out)
 	}
 	kib, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	if err != nil || kib*1024 <= contentBytes || kib > 80*1024 {
+	if err != nil || kib*1024 <= contentBytes || kib > 96*1024 {
 		t.Fatalf("ambient options omitted or compressed context content: %q", out)
 	}
 }
