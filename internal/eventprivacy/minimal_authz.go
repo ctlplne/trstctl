@@ -27,6 +27,7 @@ type MinimalAuthzDecision struct {
 // Extend it deliberately; never delete a formerly admitted permission string.
 var minimalAuthzPermissions = map[string]bool{
 	"access:approve":       true,
+	"access:bundle.run":    true,
 	"access:read":          true,
 	"access:role.assign":   true,
 	"access:targets.write": true,

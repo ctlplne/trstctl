@@ -1309,6 +1309,93 @@ AWSHoneyUse = TypedDict(
     total=False,
 )
 
+AccessAuthority = TypedDict(
+    'AccessAuthority',
+    {
+        'bounds': dict[str, Any],
+        'computed_at': str,
+        'grants': list[dict[str, Any]],
+        'permissions': list[dict[str, Any]],
+        'principal': str,
+        'runs': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AccessBundle = TypedDict(
+    'AccessBundle',
+    {
+        'active_runs': int,
+        'audiences': list[str],
+        'created_at': str,
+        'created_by': str,
+        'description': str,
+        'grants': list[dict[str, Any]],
+        'id': str,
+        'live_grants': int,
+        'max_run_ttl_seconds': int,
+        'name': str,
+        'permissions': list[str],
+        'revision': int,
+        'runs': list[dict[str, Any]],
+        'updated_at': str,
+    },
+    total=False,
+)
+
+AccessBundleDeleted = TypedDict(
+    'AccessBundleDeleted',
+    {
+        'deleted': bool,
+        'deleted_at': str,
+        'grants_affected': int,
+        'id': str,
+        'name': str,
+        'runs_affected': int,
+    },
+    total=False,
+)
+
+AccessBundleGrantChange = TypedDict(
+    'AccessBundleGrantChange',
+    {
+        'authority': dict[str, Any],
+        'grant': dict[str, Any],
+    },
+    total=False,
+)
+
+AccessBundleGrantRequest = TypedDict(
+    'AccessBundleGrantRequest',
+    {
+        'expires_at': str,
+        'principal': str,
+        'principal_type': str,
+    },
+    total=False,
+)
+
+AccessBundleList = TypedDict(
+    'AccessBundleList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AccessBundleRequest = TypedDict(
+    'AccessBundleRequest',
+    {
+        'audiences': list[str],
+        'description': str,
+        'max_run_ttl_seconds': int,
+        'name': str,
+        'permissions': list[str],
+        'revision': int,
+    },
+    total=False,
+)
+
 AccessChangeDecision = TypedDict(
     'AccessChangeDecision',
     {
@@ -1391,6 +1478,59 @@ AccessChangeRequestList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+AccessRun = TypedDict(
+    'AccessRun',
+    {
+        'bundle_ids': list[str],
+        'bundle_names': list[str],
+        'chain': list[dict[str, Any]],
+        'effective': list[str],
+        'expires_at': str,
+        'grant_ids': list[str],
+        'id': str,
+        'issued_at': str,
+        'issued_by': str,
+        'label': str,
+        'permissions': list[str],
+        'principal': str,
+        'revoked_at': str,
+        'revoked_by': str,
+        'status': str,
+    },
+    total=False,
+)
+
+AccessRunIssued = TypedDict(
+    'AccessRunIssued',
+    {
+        'bounds': dict[str, Any],
+        'launch': dict[str, Any],
+        'run': dict[str, Any],
+        'token': str,
+    },
+    total=False,
+)
+
+AccessRunList = TypedDict(
+    'AccessRunList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AccessRunRequest = TypedDict(
+    'AccessRunRequest',
+    {
+        'bundle_ids': list[str],
+        'label': str,
+        'permissions': list[str],
+        'principal': str,
+        'ttl_seconds': int,
     },
     total=False,
 )

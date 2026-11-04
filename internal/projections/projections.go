@@ -5139,6 +5139,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	if handled, err := p.applyRehearsalTx(ctx, tx, e); handled {
 		return err
 	}
+	if handled, err := p.applyAccessBundleTx(ctx, tx, e); handled {
+		return err
+	}
 	if handled, err := p.applyManagedKeyTx(ctx, tx, e); handled {
 		return err
 	}

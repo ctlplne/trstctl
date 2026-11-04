@@ -76,6 +76,11 @@ const (
 	// A session requester must not acquire this authority via AccessWrite.
 	AccessTargetsWrite Permission = "access:targets.write"
 	AccessRoleAssign   Permission = "access:role.assign"
+	// AccessBundleRun mints a short-lived run credential under the caller's own
+	// live access bundle grants (A251). The run's authority is derived again
+	// from those grants at every request. Minting a run for another principal
+	// also needs AccessWrite and every permission the run carries.
+	AccessBundleRun Permission = "access:bundle.run"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -141,7 +146,7 @@ func allResourcePermissions() []Permission {
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead, ChangesWrite,
-		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign,
+		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign, AccessBundleRun,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite, KeysApprove,

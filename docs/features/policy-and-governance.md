@@ -177,6 +177,54 @@ the acting principal into the immutable event record for audit attribution.
 
 **Status:** enforced on every served route.
 
+### Agent access bundles (A251)
+
+An access bundle is a reusable set of permissions for something that is not a person: a
+custom agent, a CI job or a private MCP server. You give a bundle to a user or a machine
+(a *grant*, optionally until a time), and the holder mints a short-lived credential for one
+*run* under its live grants. The run's credential is an ordinary API token, but it holds only
+what its grants give at the moment of each request: trstctl derives the run's authority again
+from the grants on every call, with no cache, so removing a grant, deleting a bundle,
+offboarding a member or revoking the run takes effect on the run's next request.
+
+```bash
+trstctl-cli access bundles create -f deploy-bundle.json   # {"name":"deploy","permissions":["certs:read","owners:read"],"audiences":["ci"],"max_run_ttl_seconds":1800}
+trstctl-cli access bundles grant <bundle-id> -f grant.json  # {"principal_type":"machine","principal":"ci:deploy"}
+trstctl-cli access authority --principal ci:deploy          # each permission and the grants that give it
+TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.json
+                                                             # {"bundle_ids":["<bundle-id>"],"ttl_seconds":600,"label":"deploy #42"}
+```
+
+- **Attenuation.** Nobody hands an agent more than they hold: creating or editing a bundle,
+  granting it, and minting a run for someone else each need every permission involved. A
+  bundle never carries `*` or a permission over access itself (`access:write`,
+  `access:role.assign`, `access:targets.write`, `access:approve`, `access:bundle.run`,
+  `agents:relay.grant`), so a run can never mint a credential that outlives its grants, and a
+  run cannot mint another run.
+- **Who mints a run.** `POST /api/v1/access/runs` needs `access:bundle.run` and mints for the
+  caller's own live grants of the named bundles (one to ten); a CI job's long-lived token can
+  hold nothing but `access:bundle.run`. Minting for another principal also needs
+  `access:write`. A run lives at most as long as the shortest `max_run_ttl_seconds` among its
+  bundles (60 s to 24 h; 15 minutes by default) and never past the deployment's API token
+  lifetime. The response returns the token once, with launch lines for a custom agent, a CI
+  job and an MCP client that name only environment variables.
+- **Effective authority, after every change.** A grant or its removal returns the principal's
+  effective authority: each permission with the grants and bundles that give it. A permission
+  two grants give survives the removal of one. `GET /api/v1/access/authority?principal=` also
+  lists the live grants, the active runs and each run's delegation chain (who saved each
+  bundle, who granted it, who minted the run), with the bounds below.
+- **A deleted bundle stays deleted.** Its grants and runs give nothing from the next request
+  on; replaying the request that created it, or any later request, returns what was recorded
+  and changes nothing; editing it is refused; re-using its name makes a new bundle its old
+  grants never reach.
+- **Bounds.** Revocation: the next request. Outage: run credentials are checked online, so
+  while the control plane is unreachable they authorize nothing, and none outlives its
+  expiry. What a run already made (certificates, secrets, enrolled agents) follows its own
+  lifecycle.
+
+**Status:** bundles, grants, effective authority and runs are served (API, CLI). Searchable
+activity with a metadata-only export, and the console page, come next.
+
 ### Ownership attribution
 
 Every non-human identity needs an accountable owner, not a discovery note that

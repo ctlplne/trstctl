@@ -7750,6 +7750,25 @@ with SLSA provenance, and CI checks the CLI and agent archives on clean Linux an
 macOS runners (checksums, unpack, run). Nothing is published to a public registry:
 that is a release decision, and the release job first runs at the next tag.
 
+## Agent access bundles (A251)
+
+`POST /api/v1/access/bundles` (`trstctl access bundles create`) saves a reusable set of
+permissions for custom agents, CI jobs and private MCP endpoints; a grant gives it to a user or
+a machine, optionally until a time; `POST /api/v1/access/runs` mints a run's short-lived
+credential under the caller's own live grants. A run's authority is derived again from its
+grants at every request, so removing one of several grants leaves exactly what the others
+give, and deleting a bundle, offboarding a member or revoking the run stops it on the next
+request; a replayed request cannot bring a deleted bundle back. Nobody can hand an agent more
+than they hold, and a bundle never carries authority over access. What comes next:
+
+- **Searchable activity and a metadata-only export.** Every change is already recorded as
+  activity (no credential, no request body), and each run token's use is recorded by
+  credential usage; the search API and its export come in the next part.
+- **The console page.** Bundles, grants, effective authority after every change, activity and
+  revoke controls.
+- **OAuth re-authorization health.** For MCP endpoints that sign in with OAuth, with per-tool
+  authorization at the relying party; it waits for the P8 design's go-ahead.
+
 ## Customer assurance reports
 
 `GET /api/v1/reports/assurance` and the `customer_assurance` scheduled report put

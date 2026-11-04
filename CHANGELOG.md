@@ -2,6 +2,16 @@
 
 ### Added
 
+- Agent access bundles (A251, first part): `POST /api/v1/access/bundles` saves a reusable set of
+  permissions for custom agents, CI jobs and private MCP servers; a grant gives it to a user or
+  a machine; `POST /api/v1/access/runs` (the new `access:bundle.run` permission) mints a run's
+  short-lived credential under the caller's own live grants, returned once with launch lines.
+  A run's authority is derived again from its grants at every request: removing one of several
+  grants leaves exactly what the others give, and deleting a bundle, offboarding a member or
+  revoking the run stops it on the next request. Grant changes return the principal's effective
+  authority; `GET /api/v1/access/authority` adds active runs, delegation chains and the
+  revocation and outage bounds. Nobody hands an agent more than they hold, and a bundle never
+  carries authority over access.
 - Package readiness, third part (A250 is served): a registry directory holds several versions
   side by side (the Go `list`, the npm document's `latest`, the PyPI page and `maven-metadata.xml`),
   and `make sdk-install-check` now installs one version and upgrades each SDK to the next from the

@@ -1678,6 +1678,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.caHierarchyRoutes(idPath)...) // see routes_ca_hierarchy.go
 	routes = append(routes, a.kmipClientRoutes(idPath)...)  // see kmip_clients.go
 	routes = append(routes, a.codeSigningRoutes()...)
+	routes = append(routes, a.accessBundleRoutes()...) // see access_bundles.go
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)
 	return append(routes, a.licensedRouteRegistry()...)
@@ -1822,6 +1823,15 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 			}
 			if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
 				return authz.Principal{}, errors.New("api: expired api token")
+			}
+			// A251: a run token holds only what its live grants still give.
+			if _, isRun := orchestrator.BundleRunPrincipal(rec.Subject); isRun {
+				principal, err := a.bundleRunPrincipal(r.Context(), rec)
+				if err != nil {
+					return authz.Principal{}, err
+				}
+				a.noteAPITokenUse(r, rec)
+				return principal, nil
 			}
 			a.noteAPITokenUse(r, rec)
 			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes, Delegated: rec.Delegated}.Principal(), nil

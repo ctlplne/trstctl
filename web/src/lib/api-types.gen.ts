@@ -947,6 +947,65 @@ export interface AWSHoneyUse {
   user_agent: string;
 }
 
+export interface AccessAuthority {
+  bounds: { lasting: string; max_run_ttl_seconds: number; outage: string; revocation: string };
+  computed_at: string;
+  grants: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[];
+  permissions: { permission: string; via: { bundle_id: string; bundle_name: string; expires_at?: string; grant_id: string }[] }[];
+  principal: string;
+  runs: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[];
+}
+
+export interface AccessBundle {
+  active_runs: number;
+  audiences: ("custom_agent" | "ci" | "mcp_server")[];
+  created_at: string;
+  created_by: string;
+  description: string;
+  grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[];
+  id: string;
+  live_grants: number;
+  max_run_ttl_seconds: number;
+  name: string;
+  permissions: string[];
+  revision: number;
+  runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[];
+  updated_at: string;
+}
+
+export interface AccessBundleDeleted {
+  deleted: boolean;
+  deleted_at: string;
+  grants_affected: number;
+  id: string;
+  name: string;
+  runs_affected: number;
+}
+
+export interface AccessBundleGrantChange {
+  authority: { bounds: { lasting: string; max_run_ttl_seconds: number; outage: string; revocation: string }; computed_at: string; grants: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; permissions: { permission: string; via: { bundle_id: string; bundle_name: string; expires_at?: string; grant_id: string }[] }[]; principal: string; runs: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[] };
+  grant: { bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string };
+}
+
+export interface AccessBundleGrantRequest {
+  expires_at?: string;
+  principal: string;
+  principal_type: "user" | "machine";
+}
+
+export interface AccessBundleList {
+  items: ({ active_runs: number; audiences: ("custom_agent" | "ci" | "mcp_server")[]; created_at: string; created_by: string; description: string; grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; id: string; live_grants: number; max_run_ttl_seconds: number; name: string; permissions: string[]; revision: number; runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[]; updated_at: string })[];
+}
+
+export interface AccessBundleRequest {
+  audiences?: ("custom_agent" | "ci" | "mcp_server")[];
+  description?: string;
+  max_run_ttl_seconds?: number;
+  name: string;
+  permissions: string[];
+  revision?: number;
+}
+
 export interface AccessChangeDecision {
   approver_subject: string;
   decided_at: string;
@@ -1011,6 +1070,43 @@ export interface AccessChangeRequestCreateRequest {
 export interface AccessChangeRequestList {
   items: AccessChangeRequest[];
   next_cursor?: string;
+}
+
+export interface AccessRun {
+  bundle_ids: string[];
+  bundle_names: string[];
+  chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[];
+  effective: string[];
+  expires_at: string;
+  grant_ids: string[];
+  id: string;
+  issued_at: string;
+  issued_by: string;
+  label?: string;
+  permissions: string[];
+  principal: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  status: "active" | "no_authority" | "expired" | "revoked";
+}
+
+export interface AccessRunIssued {
+  bounds: { lasting: string; max_run_ttl_seconds: number; outage: string; revocation: string };
+  launch: { ci: string; custom_agent: string; mcp_server: string; server_env: string; token_env: string };
+  run: { bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" };
+  token: string;
+}
+
+export interface AccessRunList {
+  items: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[];
+}
+
+export interface AccessRunRequest {
+  bundle_ids: string[];
+  label?: string;
+  permissions?: string[];
+  principal?: string;
+  ttl_seconds?: number;
 }
 
 export interface ActiveActiveIssuancePlan {

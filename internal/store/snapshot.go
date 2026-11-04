@@ -233,7 +233,10 @@ import (
 // an export's system still writes. Version 77 carries A247's rehearsal
 // scenarios and runs: without them a restored store would forget what was
 // rehearsed and what each run observed while its covered offset skipped them.
-const SnapshotFormatVersion = 77
+// Version 78 carries A251's access bundles, grants, runs and their activity:
+// without them a restored store would forget who holds which bundle while its
+// covered offset skipped the grants.
+const SnapshotFormatVersion = 78
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -312,6 +315,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"secret_migrations", "secret_migration_objects", "secret_migration_consumer_reads",
 	// Format 77: A247's rehearsals.
 	"rehearsal_scenarios", "rehearsal_runs",
+	// Format 78: A251's access bundles; grants reference their bundle.
+	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -649,7 +654,13 @@ SELECT jsonb_build_object(
   'secret_migration_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_migration_objects t),
   'secret_migration_consumer_reads', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_migration_consumer_reads t),
   'rehearsal_scenarios', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rehearsal_scenarios t),
-  'rehearsal_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rehearsal_runs t),
+  'rehearsal_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rehearsal_runs t)
+) || jsonb_build_object(
+  -- The third object is full (50 tables, 100 arguments): A251 starts a fourth.
+  'access_bundles', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundles t),
+  'access_bundle_grants', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_grants t),
+  'access_bundle_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_runs t),
+  'access_bundle_activity', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM access_bundle_activity t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

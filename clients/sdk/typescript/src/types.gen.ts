@@ -39,6 +39,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/authority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show a principal's effective authority through access bundles: each permission with the grants that give it, its live grants, active runs with their delegation chain, and the revocation and outage bounds */
+        get: operations["getAccessAuthority"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List live access bundles with their live grant and active run counts */
+        get: operations["listAccessBundles"];
+        put?: never;
+        /** Create an access bundle: a reusable set of permissions for custom agents, CI jobs and private MCP servers, with a ceiling on each run's lifetime */
+        post: operations["createAccessBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/bundles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show an access bundle with its grants and recent runs; a deleted bundle is not found */
+        get: operations["getAccessBundle"];
+        /** Replace an access bundle at the revision you read; every grant and run sees the new permissions on its next request */
+        put: operations["updateAccessBundle"];
+        post?: never;
+        /** Delete an access bundle; its grants and runs give nothing from the next request on, and replaying an earlier request cannot bring it back */
+        delete: operations["deleteAccessBundle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/bundles/{id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give an access bundle to a user or a machine, optionally until a time, and return the principal's effective authority after the change */
+        post: operations["grantAccessBundle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/bundles/{id}/grants/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one grant of an access bundle and return the principal's effective authority after the change */
+        delete: operations["ungrantAccessBundle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/members": {
         parameters: {
             query?: never;
@@ -258,6 +346,41 @@ export interface paths {
         post?: never;
         /** Delete a tenant custom role no member holds */
         delete: operations["deleteTenantCustomRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List runs, newest first, with what each may do now */
+        get: operations["listAccessRuns"];
+        put?: never;
+        /** Mint a run's short-lived credential under your own live grants of one or more bundles (another principal's needs access:write and every permission the run carries); returned once with launch instructions */
+        post: operations["issueAccessRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/runs/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a run's credential (your own run, or anyone's with access:write); it is refused from the next request */
+        post: operations["revokeAccessRun"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -10850,6 +10973,305 @@ export interface components {
             source_ip_address: string;
             user_agent: string;
         };
+        AccessAuthority: {
+            bounds: {
+                lasting: string;
+                max_run_ttl_seconds: number;
+                outage: string;
+                revocation: string;
+            };
+            /** Format: date-time */
+            computed_at: string;
+            grants: {
+                bundle_id: string;
+                /** Format: date-time */
+                expires_at?: string;
+                /** Format: date-time */
+                granted_at: string;
+                granted_by: string;
+                id: string;
+                live: boolean;
+                principal: string;
+                /** @enum {string} */
+                principal_type: "user" | "machine";
+                /** Format: date-time */
+                removed_at?: string;
+                removed_by?: string;
+                removed_reason?: string;
+            }[];
+            permissions: {
+                permission: string;
+                via: {
+                    bundle_id: string;
+                    bundle_name: string;
+                    /** Format: date-time */
+                    expires_at?: string;
+                    grant_id: string;
+                }[];
+            }[];
+            principal: string;
+            runs: {
+                bundle_ids: string[];
+                bundle_names: string[];
+                chain: {
+                    actor: string;
+                    /** Format: date-time */
+                    at: string;
+                    detail: string;
+                    /** @enum {string} */
+                    step: "bundle_saved" | "granted" | "run_issued";
+                }[];
+                effective: string[];
+                /** Format: date-time */
+                expires_at: string;
+                grant_ids: string[];
+                id: string;
+                /** Format: date-time */
+                issued_at: string;
+                issued_by: string;
+                label?: string;
+                permissions: string[];
+                principal: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                /** @enum {string} */
+                status: "active" | "no_authority" | "expired" | "revoked";
+            }[];
+        };
+        AccessBundle: {
+            active_runs: number;
+            audiences: ("custom_agent" | "ci" | "mcp_server")[];
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            description: string;
+            grants?: {
+                bundle_id: string;
+                /** Format: date-time */
+                expires_at?: string;
+                /** Format: date-time */
+                granted_at: string;
+                granted_by: string;
+                id: string;
+                live: boolean;
+                principal: string;
+                /** @enum {string} */
+                principal_type: "user" | "machine";
+                /** Format: date-time */
+                removed_at?: string;
+                removed_by?: string;
+                removed_reason?: string;
+            }[];
+            id: string;
+            live_grants: number;
+            max_run_ttl_seconds: number;
+            name: string;
+            permissions: string[];
+            revision: number;
+            runs?: {
+                bundle_ids: string[];
+                bundle_names: string[];
+                chain: {
+                    actor: string;
+                    /** Format: date-time */
+                    at: string;
+                    detail: string;
+                    /** @enum {string} */
+                    step: "bundle_saved" | "granted" | "run_issued";
+                }[];
+                effective: string[];
+                /** Format: date-time */
+                expires_at: string;
+                grant_ids: string[];
+                id: string;
+                /** Format: date-time */
+                issued_at: string;
+                issued_by: string;
+                label?: string;
+                permissions: string[];
+                principal: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                /** @enum {string} */
+                status: "active" | "no_authority" | "expired" | "revoked";
+            }[];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AccessBundleDeleted: {
+            deleted: boolean;
+            /** Format: date-time */
+            deleted_at: string;
+            grants_affected: number;
+            id: string;
+            name: string;
+            runs_affected: number;
+        };
+        AccessBundleGrantChange: {
+            authority: {
+                bounds: {
+                    lasting: string;
+                    max_run_ttl_seconds: number;
+                    outage: string;
+                    revocation: string;
+                };
+                /** Format: date-time */
+                computed_at: string;
+                grants: {
+                    bundle_id: string;
+                    /** Format: date-time */
+                    expires_at?: string;
+                    /** Format: date-time */
+                    granted_at: string;
+                    granted_by: string;
+                    id: string;
+                    live: boolean;
+                    principal: string;
+                    /** @enum {string} */
+                    principal_type: "user" | "machine";
+                    /** Format: date-time */
+                    removed_at?: string;
+                    removed_by?: string;
+                    removed_reason?: string;
+                }[];
+                permissions: {
+                    permission: string;
+                    via: {
+                        bundle_id: string;
+                        bundle_name: string;
+                        /** Format: date-time */
+                        expires_at?: string;
+                        grant_id: string;
+                    }[];
+                }[];
+                principal: string;
+                runs: {
+                    bundle_ids: string[];
+                    bundle_names: string[];
+                    chain: {
+                        actor: string;
+                        /** Format: date-time */
+                        at: string;
+                        detail: string;
+                        /** @enum {string} */
+                        step: "bundle_saved" | "granted" | "run_issued";
+                    }[];
+                    effective: string[];
+                    /** Format: date-time */
+                    expires_at: string;
+                    grant_ids: string[];
+                    id: string;
+                    /** Format: date-time */
+                    issued_at: string;
+                    issued_by: string;
+                    label?: string;
+                    permissions: string[];
+                    principal: string;
+                    /** Format: date-time */
+                    revoked_at?: string;
+                    revoked_by?: string;
+                    /** @enum {string} */
+                    status: "active" | "no_authority" | "expired" | "revoked";
+                }[];
+            };
+            grant: {
+                bundle_id: string;
+                /** Format: date-time */
+                expires_at?: string;
+                /** Format: date-time */
+                granted_at: string;
+                granted_by: string;
+                id: string;
+                live: boolean;
+                principal: string;
+                /** @enum {string} */
+                principal_type: "user" | "machine";
+                /** Format: date-time */
+                removed_at?: string;
+                removed_by?: string;
+                removed_reason?: string;
+            };
+        };
+        AccessBundleGrantRequest: {
+            /** Format: date-time */
+            expires_at?: string;
+            principal: string;
+            /** @enum {string} */
+            principal_type: "user" | "machine";
+        };
+        AccessBundleList: {
+            items: {
+                active_runs: number;
+                audiences: ("custom_agent" | "ci" | "mcp_server")[];
+                /** Format: date-time */
+                created_at: string;
+                created_by: string;
+                description: string;
+                grants?: {
+                    bundle_id: string;
+                    /** Format: date-time */
+                    expires_at?: string;
+                    /** Format: date-time */
+                    granted_at: string;
+                    granted_by: string;
+                    id: string;
+                    live: boolean;
+                    principal: string;
+                    /** @enum {string} */
+                    principal_type: "user" | "machine";
+                    /** Format: date-time */
+                    removed_at?: string;
+                    removed_by?: string;
+                    removed_reason?: string;
+                }[];
+                id: string;
+                live_grants: number;
+                max_run_ttl_seconds: number;
+                name: string;
+                permissions: string[];
+                revision: number;
+                runs?: {
+                    bundle_ids: string[];
+                    bundle_names: string[];
+                    chain: {
+                        actor: string;
+                        /** Format: date-time */
+                        at: string;
+                        detail: string;
+                        /** @enum {string} */
+                        step: "bundle_saved" | "granted" | "run_issued";
+                    }[];
+                    effective: string[];
+                    /** Format: date-time */
+                    expires_at: string;
+                    grant_ids: string[];
+                    id: string;
+                    /** Format: date-time */
+                    issued_at: string;
+                    issued_by: string;
+                    label?: string;
+                    permissions: string[];
+                    principal: string;
+                    /** Format: date-time */
+                    revoked_at?: string;
+                    revoked_by?: string;
+                    /** @enum {string} */
+                    status: "active" | "no_authority" | "expired" | "revoked";
+                }[];
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
+        AccessBundleRequest: {
+            audiences?: ("custom_agent" | "ci" | "mcp_server")[];
+            description?: string;
+            max_run_ttl_seconds?: number;
+            name: string;
+            permissions: string[];
+            revision?: number;
+        };
         AccessChangeDecision: {
             approver_subject: string;
             /** Format: date-time */
@@ -10923,6 +11345,115 @@ export interface components {
         AccessChangeRequestList: {
             items: components["schemas"]["AccessChangeRequest"][];
             next_cursor?: string;
+        };
+        AccessRun: {
+            bundle_ids: string[];
+            bundle_names: string[];
+            chain: {
+                actor: string;
+                /** Format: date-time */
+                at: string;
+                detail: string;
+                /** @enum {string} */
+                step: "bundle_saved" | "granted" | "run_issued";
+            }[];
+            effective: string[];
+            /** Format: date-time */
+            expires_at: string;
+            grant_ids: string[];
+            id: string;
+            /** Format: date-time */
+            issued_at: string;
+            issued_by: string;
+            label?: string;
+            permissions: string[];
+            principal: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_by?: string;
+            /** @enum {string} */
+            status: "active" | "no_authority" | "expired" | "revoked";
+        };
+        AccessRunIssued: {
+            bounds: {
+                lasting: string;
+                max_run_ttl_seconds: number;
+                outage: string;
+                revocation: string;
+            };
+            launch: {
+                ci: string;
+                custom_agent: string;
+                mcp_server: string;
+                server_env: string;
+                token_env: string;
+            };
+            run: {
+                bundle_ids: string[];
+                bundle_names: string[];
+                chain: {
+                    actor: string;
+                    /** Format: date-time */
+                    at: string;
+                    detail: string;
+                    /** @enum {string} */
+                    step: "bundle_saved" | "granted" | "run_issued";
+                }[];
+                effective: string[];
+                /** Format: date-time */
+                expires_at: string;
+                grant_ids: string[];
+                id: string;
+                /** Format: date-time */
+                issued_at: string;
+                issued_by: string;
+                label?: string;
+                permissions: string[];
+                principal: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                /** @enum {string} */
+                status: "active" | "no_authority" | "expired" | "revoked";
+            };
+            token: string;
+        };
+        AccessRunList: {
+            items: {
+                bundle_ids: string[];
+                bundle_names: string[];
+                chain: {
+                    actor: string;
+                    /** Format: date-time */
+                    at: string;
+                    detail: string;
+                    /** @enum {string} */
+                    step: "bundle_saved" | "granted" | "run_issued";
+                }[];
+                effective: string[];
+                /** Format: date-time */
+                expires_at: string;
+                grant_ids: string[];
+                id: string;
+                /** Format: date-time */
+                issued_at: string;
+                issued_by: string;
+                label?: string;
+                permissions: string[];
+                principal: string;
+                /** Format: date-time */
+                revoked_at?: string;
+                revoked_by?: string;
+                /** @enum {string} */
+                status: "active" | "no_authority" | "expired" | "revoked";
+            }[];
+        };
+        AccessRunRequest: {
+            bundle_ids: string[];
+            label?: string;
+            permissions?: string[];
+            principal?: string;
+            ttl_seconds?: number;
         };
         ActiveActiveIssuancePlan: {
             architecture_invariants: string[];
@@ -23499,6 +24030,354 @@ export interface operations {
             };
         };
     };
+    getAccessAuthority: {
+        parameters: {
+            query: {
+                /** @description the user or machine principal */
+                principal: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAccessBundles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createAccessBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessBundleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAccessBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateAccessBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessBundleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteAccessBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleDeleted"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grantAccessBundle: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessBundleGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleGrantChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    ungrantAccessBundle: {
+        parameters: {
+            query?: {
+                /** @description why the grant is removed (at most 200 characters) */
+                reason?: string;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessBundleGrantChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listMembers: {
         parameters: {
             query?: {
@@ -24181,6 +25060,139 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAccessRuns: {
+        parameters: {
+            query?: {
+                /** @description only this principal's runs */
+                principal?: string;
+                /** @description only runs minted under this bundle */
+                bundle?: string;
+                /** @description maximum runs (1-100, default 20) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueAccessRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessRunRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRunIssued"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeAccessRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRun"];
+                };
             };
             /** @description client error */
             "4XX": {

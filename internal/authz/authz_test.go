@@ -332,6 +332,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			// The CLI can carry reviewer authority; PAM still rejects the
 			// requester's own approval for the exact session digest.
 			authz.AccessApprove,
+			authz.AccessBundleRun,
 			authz.ProfilesRead,
 			authz.ProfilesWrite,
 			authz.CertsRequest,

@@ -3913,6 +3913,1185 @@
         ],
         "type": "object"
       },
+      "AccessAuthority": {
+        "properties": {
+          "bounds": {
+            "properties": {
+              "lasting": {
+                "type": "string"
+              },
+              "max_run_ttl_seconds": {
+                "type": "integer"
+              },
+              "outage": {
+                "type": "string"
+              },
+              "revocation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "revocation",
+              "outage",
+              "lasting",
+              "max_run_ttl_seconds"
+            ],
+            "type": "object"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grants": {
+            "items": {
+              "properties": {
+                "bundle_id": {
+                  "type": "string"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "live": {
+                  "type": "boolean"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "principal_type": {
+                  "enum": [
+                    "user",
+                    "machine"
+                  ],
+                  "type": "string"
+                },
+                "removed_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "removed_by": {
+                  "type": "string"
+                },
+                "removed_reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "bundle_id",
+                "principal_type",
+                "principal",
+                "granted_by",
+                "granted_at",
+                "live"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "permissions": {
+            "items": {
+              "properties": {
+                "permission": {
+                  "type": "string"
+                },
+                "via": {
+                  "items": {
+                    "properties": {
+                      "bundle_id": {
+                        "type": "string"
+                      },
+                      "bundle_name": {
+                        "type": "string"
+                      },
+                      "expires_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "grant_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "grant_id",
+                      "bundle_id",
+                      "bundle_name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "permission",
+                "via"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "properties": {
+                "bundle_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "bundle_names": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "chain": {
+                  "items": {
+                    "properties": {
+                      "actor": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "step": {
+                        "enum": [
+                          "bundle_saved",
+                          "granted",
+                          "run_issued"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "actor",
+                      "at",
+                      "detail"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "effective": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "grant_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "issued_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "issued_by": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "revoked_by": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "no_authority",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "principal",
+                "bundle_ids",
+                "bundle_names",
+                "grant_ids",
+                "permissions",
+                "effective",
+                "status",
+                "expires_at",
+                "issued_by",
+                "issued_at",
+                "chain"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "principal",
+          "permissions",
+          "grants",
+          "runs",
+          "bounds",
+          "computed_at"
+        ],
+        "type": "object"
+      },
+      "AccessBundle": {
+        "properties": {
+          "active_runs": {
+            "type": "integer"
+          },
+          "audiences": {
+            "items": {
+              "enum": [
+                "custom_agent",
+                "ci",
+                "mcp_server"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "grants": {
+            "items": {
+              "properties": {
+                "bundle_id": {
+                  "type": "string"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "granted_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "live": {
+                  "type": "boolean"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "principal_type": {
+                  "enum": [
+                    "user",
+                    "machine"
+                  ],
+                  "type": "string"
+                },
+                "removed_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "removed_by": {
+                  "type": "string"
+                },
+                "removed_reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "bundle_id",
+                "principal_type",
+                "principal",
+                "granted_by",
+                "granted_at",
+                "live"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "live_grants": {
+            "type": "integer"
+          },
+          "max_run_ttl_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "properties": {
+                "bundle_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "bundle_names": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "chain": {
+                  "items": {
+                    "properties": {
+                      "actor": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "step": {
+                        "enum": [
+                          "bundle_saved",
+                          "granted",
+                          "run_issued"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "actor",
+                      "at",
+                      "detail"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "effective": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "grant_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "issued_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "issued_by": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "revoked_by": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "no_authority",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "principal",
+                "bundle_ids",
+                "bundle_names",
+                "grant_ids",
+                "permissions",
+                "effective",
+                "status",
+                "expires_at",
+                "issued_by",
+                "issued_at",
+                "chain"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "permissions",
+          "audiences",
+          "max_run_ttl_seconds",
+          "revision",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "live_grants",
+          "active_runs"
+        ],
+        "type": "object"
+      },
+      "AccessBundleDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grants_affected": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runs_affected": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "deleted",
+          "grants_affected",
+          "runs_affected",
+          "deleted_at"
+        ],
+        "type": "object"
+      },
+      "AccessBundleGrantChange": {
+        "properties": {
+          "authority": {
+            "properties": {
+              "bounds": {
+                "properties": {
+                  "lasting": {
+                    "type": "string"
+                  },
+                  "max_run_ttl_seconds": {
+                    "type": "integer"
+                  },
+                  "outage": {
+                    "type": "string"
+                  },
+                  "revocation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "revocation",
+                  "outage",
+                  "lasting",
+                  "max_run_ttl_seconds"
+                ],
+                "type": "object"
+              },
+              "computed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "grants": {
+                "items": {
+                  "properties": {
+                    "bundle_id": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "granted_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "granted_by": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "live": {
+                      "type": "boolean"
+                    },
+                    "principal": {
+                      "type": "string"
+                    },
+                    "principal_type": {
+                      "enum": [
+                        "user",
+                        "machine"
+                      ],
+                      "type": "string"
+                    },
+                    "removed_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "removed_by": {
+                      "type": "string"
+                    },
+                    "removed_reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bundle_id",
+                    "principal_type",
+                    "principal",
+                    "granted_by",
+                    "granted_at",
+                    "live"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "permissions": {
+                "items": {
+                  "properties": {
+                    "permission": {
+                      "type": "string"
+                    },
+                    "via": {
+                      "items": {
+                        "properties": {
+                          "bundle_id": {
+                            "type": "string"
+                          },
+                          "bundle_name": {
+                            "type": "string"
+                          },
+                          "expires_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "grant_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "grant_id",
+                          "bundle_id",
+                          "bundle_name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "permission",
+                    "via"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "principal": {
+                "type": "string"
+              },
+              "runs": {
+                "items": {
+                  "properties": {
+                    "bundle_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "bundle_names": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "chain": {
+                      "items": {
+                        "properties": {
+                          "actor": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "step": {
+                            "enum": [
+                              "bundle_saved",
+                              "granted",
+                              "run_issued"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "actor",
+                          "at",
+                          "detail"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "effective": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "expires_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "grant_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "issued_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "issued_by": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "permissions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "principal": {
+                      "type": "string"
+                    },
+                    "revoked_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "revoked_by": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active",
+                        "no_authority",
+                        "expired",
+                        "revoked"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "principal",
+                    "bundle_ids",
+                    "bundle_names",
+                    "grant_ids",
+                    "permissions",
+                    "effective",
+                    "status",
+                    "expires_at",
+                    "issued_by",
+                    "issued_at",
+                    "chain"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "principal",
+              "permissions",
+              "grants",
+              "runs",
+              "bounds",
+              "computed_at"
+            ],
+            "type": "object"
+          },
+          "grant": {
+            "properties": {
+              "bundle_id": {
+                "type": "string"
+              },
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "granted_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "granted_by": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "live": {
+                "type": "boolean"
+              },
+              "principal": {
+                "type": "string"
+              },
+              "principal_type": {
+                "enum": [
+                  "user",
+                  "machine"
+                ],
+                "type": "string"
+              },
+              "removed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "removed_by": {
+                "type": "string"
+              },
+              "removed_reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "bundle_id",
+              "principal_type",
+              "principal",
+              "granted_by",
+              "granted_at",
+              "live"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "grant",
+          "authority"
+        ],
+        "type": "object"
+      },
+      "AccessBundleGrantRequest": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "principal_type": {
+            "enum": [
+              "user",
+              "machine"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "principal_type",
+          "principal"
+        ],
+        "type": "object"
+      },
+      "AccessBundleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "active_runs": {
+                  "type": "integer"
+                },
+                "audiences": {
+                  "items": {
+                    "enum": [
+                      "custom_agent",
+                      "ci",
+                      "mcp_server"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "grants": {
+                  "items": {
+                    "properties": {
+                      "bundle_id": {
+                        "type": "string"
+                      },
+                      "expires_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "granted_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "granted_by": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "live": {
+                        "type": "boolean"
+                      },
+                      "principal": {
+                        "type": "string"
+                      },
+                      "principal_type": {
+                        "enum": [
+                          "user",
+                          "machine"
+                        ],
+                        "type": "string"
+                      },
+                      "removed_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "removed_by": {
+                        "type": "string"
+                      },
+                      "removed_reason": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "bundle_id",
+                      "principal_type",
+                      "principal",
+                      "granted_by",
+                      "granted_at",
+                      "live"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "live_grants": {
+                  "type": "integer"
+                },
+                "max_run_ttl_seconds": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "runs": {
+                  "items": {
+                    "properties": {
+                      "bundle_ids": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "bundle_names": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "chain": {
+                        "items": {
+                          "properties": {
+                            "actor": {
+                              "type": "string"
+                            },
+                            "at": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
+                            },
+                            "step": {
+                              "enum": [
+                                "bundle_saved",
+                                "granted",
+                                "run_issued"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "step",
+                            "actor",
+                            "at",
+                            "detail"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "effective": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "expires_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "grant_ids": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "issued_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "issued_by": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "permissions": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "principal": {
+                        "type": "string"
+                      },
+                      "revoked_at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "revoked_by": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active",
+                          "no_authority",
+                          "expired",
+                          "revoked"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "principal",
+                      "bundle_ids",
+                      "bundle_names",
+                      "grant_ids",
+                      "permissions",
+                      "effective",
+                      "status",
+                      "expires_at",
+                      "issued_by",
+                      "issued_at",
+                      "chain"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "description",
+                "permissions",
+                "audiences",
+                "max_run_ttl_seconds",
+                "revision",
+                "created_by",
+                "created_at",
+                "updated_at",
+                "live_grants",
+                "active_runs"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AccessBundleRequest": {
+        "properties": {
+          "audiences": {
+            "items": {
+              "enum": [
+                "custom_agent",
+                "ci",
+                "mcp_server"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "max_run_ttl_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "permissions"
+        ],
+        "type": "object"
+      },
       "AccessChangeDecision": {
         "properties": {
           "approver_subject": {
@@ -4186,6 +5365,461 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "AccessRun": {
+        "properties": {
+          "bundle_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bundle_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "chain": {
+            "items": {
+              "properties": {
+                "actor": {
+                  "type": "string"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "step": {
+                  "enum": [
+                    "bundle_saved",
+                    "granted",
+                    "run_issued"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "step",
+                "actor",
+                "at",
+                "detail"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "effective": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grant_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issued_by": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_by": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "no_authority",
+              "expired",
+              "revoked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "principal",
+          "bundle_ids",
+          "bundle_names",
+          "grant_ids",
+          "permissions",
+          "effective",
+          "status",
+          "expires_at",
+          "issued_by",
+          "issued_at",
+          "chain"
+        ],
+        "type": "object"
+      },
+      "AccessRunIssued": {
+        "properties": {
+          "bounds": {
+            "properties": {
+              "lasting": {
+                "type": "string"
+              },
+              "max_run_ttl_seconds": {
+                "type": "integer"
+              },
+              "outage": {
+                "type": "string"
+              },
+              "revocation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "revocation",
+              "outage",
+              "lasting",
+              "max_run_ttl_seconds"
+            ],
+            "type": "object"
+          },
+          "launch": {
+            "properties": {
+              "ci": {
+                "type": "string"
+              },
+              "custom_agent": {
+                "type": "string"
+              },
+              "mcp_server": {
+                "type": "string"
+              },
+              "server_env": {
+                "type": "string"
+              },
+              "token_env": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "token_env",
+              "server_env",
+              "custom_agent",
+              "ci",
+              "mcp_server"
+            ],
+            "type": "object"
+          },
+          "run": {
+            "properties": {
+              "bundle_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "bundle_names": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "chain": {
+                "items": {
+                  "properties": {
+                    "actor": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "step": {
+                      "enum": [
+                        "bundle_saved",
+                        "granted",
+                        "run_issued"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "step",
+                    "actor",
+                    "at",
+                    "detail"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "effective": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "grant_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "issued_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "issued_by": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "principal": {
+                "type": "string"
+              },
+              "revoked_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "revoked_by": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "no_authority",
+                  "expired",
+                  "revoked"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "principal",
+              "bundle_ids",
+              "bundle_names",
+              "grant_ids",
+              "permissions",
+              "effective",
+              "status",
+              "expires_at",
+              "issued_by",
+              "issued_at",
+              "chain"
+            ],
+            "type": "object"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run",
+          "token",
+          "launch",
+          "bounds"
+        ],
+        "type": "object"
+      },
+      "AccessRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "bundle_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "bundle_names": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "chain": {
+                  "items": {
+                    "properties": {
+                      "actor": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "step": {
+                        "enum": [
+                          "bundle_saved",
+                          "granted",
+                          "run_issued"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "actor",
+                      "at",
+                      "detail"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "effective": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "grant_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "issued_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "issued_by": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "revoked_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "revoked_by": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "no_authority",
+                    "expired",
+                    "revoked"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "principal",
+                "bundle_ids",
+                "bundle_names",
+                "grant_ids",
+                "permissions",
+                "effective",
+                "status",
+                "expires_at",
+                "issued_by",
+                "issued_at",
+                "chain"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AccessRunRequest": {
+        "properties": {
+          "bundle_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bundle_ids"
         ],
         "type": "object"
       },
@@ -50455,6 +52089,536 @@
         "x-trstctl-permission": "access:write"
       }
     },
+    "/api/v1/access/authority": {
+      "get": {
+        "operationId": "getAccessAuthority",
+        "parameters": [
+          {
+            "description": "the user or machine principal",
+            "in": "query",
+            "name": "principal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAuthority"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show a principal's effective authority through access bundles: each permission with the grants that give it, its live grants, active runs with their delegation chain, and the revocation and outage bounds",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/bundles": {
+      "get": {
+        "operationId": "listAccessBundles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List live access bundles with their live grant and active run counts",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "createAccessBundle",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessBundleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundle"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an access bundle: a reusable set of permissions for custom agents, CI jobs and private MCP servers, with a ceiling on each run's lifetime",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/bundles/{id}": {
+      "delete": {
+        "operationId": "deleteAccessBundle",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an access bundle; its grants and runs give nothing from the next request on, and replaying an earlier request cannot bring it back",
+        "x-trstctl-permission": "access:write"
+      },
+      "get": {
+        "operationId": "getAccessBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundle"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show an access bundle with its grants and recent runs; a deleted bundle is not found",
+        "x-trstctl-permission": "access:read"
+      },
+      "put": {
+        "operationId": "updateAccessBundle",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessBundleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundle"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an access bundle at the revision you read; every grant and run sees the new permissions on its next request",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/bundles/{id}/grants": {
+      "post": {
+        "operationId": "grantAccessBundle",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessBundleGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleGrantChange"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Give an access bundle to a user or a machine, optionally until a time, and return the principal's effective authority after the change",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/bundles/{id}/grants/{grant_id}": {
+      "delete": {
+        "operationId": "ungrantAccessBundle",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "why the grant is removed (at most 200 characters)",
+            "in": "query",
+            "name": "reason",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessBundleGrantChange"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Remove one grant of an access bundle and return the principal's effective authority after the change",
+        "x-trstctl-permission": "access:write"
+      }
+    },
     "/api/v1/access/members": {
       "get": {
         "operationId": "listMembers",
@@ -51518,6 +53682,214 @@
         ],
         "summary": "Define or redefine a tenant custom role from permissions you hold",
         "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/runs": {
+      "get": {
+        "operationId": "listAccessRuns",
+        "parameters": [
+          {
+            "description": "only this principal's runs",
+            "in": "query",
+            "name": "principal",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only runs minted under this bundle",
+            "in": "query",
+            "name": "bundle",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "maximum runs (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List runs, newest first, with what each may do now",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "issueAccessRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRunIssued"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Mint a run's short-lived credential under your own live grants of one or more bundles (another principal's needs access:write and every permission the run carries); returned once with launch instructions",
+        "x-trstctl-permission": "access:bundle.run",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/runs/{id}/revoke": {
+      "post": {
+        "operationId": "revokeAccessRun",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a run's credential (your own run, or anyone's with access:write); it is refused from the next request",
+        "x-trstctl-permission": "access:bundle.run"
       }
     },
     "/api/v1/access/session-requests": {

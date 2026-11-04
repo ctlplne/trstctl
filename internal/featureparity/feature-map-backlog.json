@@ -19863,7 +19863,18 @@
                 "listProviderAccessConsents",
                 "consentProviderAccess",
                 "offboardMember",
-                "listCapabilities"
+                "listCapabilities",
+                "createAccessBundle",
+                "listAccessBundles",
+                "getAccessBundle",
+                "updateAccessBundle",
+                "deleteAccessBundle",
+                "grantAccessBundle",
+                "ungrantAccessBundle",
+                "getAccessAuthority",
+                "issueAccessRun",
+                "listAccessRuns",
+                "revokeAccessRun"
             ],
             "api_na": "",
             "cli_surface": [
@@ -19913,7 +19924,18 @@
                 "provider-access consent",
                 "access members upsert",
                 "access members offboard",
-                "capabilities list"
+                "capabilities list",
+                "access bundles list",
+                "access bundles create",
+                "access bundles get",
+                "access bundles update",
+                "access bundles delete",
+                "access bundles grant",
+                "access bundles ungrant",
+                "access authority",
+                "access runs create",
+                "access runs list",
+                "access runs revoke"
             ],
             "cli_na": "",
             "facet_evidence": {
