@@ -407,9 +407,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// ledger`, `operations ledger get` and `identities revocation-report`. A246
 	// adds `operations dashboard`. A247 adds `rehearsals scenarios
 	// save|list|show|revise`, `rehearsals run` and `rehearsals runs list|show`.
-	// A248 adds `changes plan` and `changes apply`.
-	if len(out) != 729 {
-		t.Fatalf("CLI commands = %d, want 729", len(out))
+	// A248 adds `changes plan`, `changes apply` and `changes draft`.
+	if len(out) != 730 {
+		t.Fatalf("CLI commands = %d, want 730", len(out))
 	}
 	return out
 }

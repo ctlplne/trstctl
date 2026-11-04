@@ -277,6 +277,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"agent_id":"","credentials":1}`), true
 	case "ai.query.answered":
 		return shape(`{"subject":"","rows":1,"citations":1,"grounded":true}`), true
+	case "ai.change_set.drafted":
+		return shape(`{"model":"","request_sha256":"","change_set_digest":"","plan_digest":"","refused":true}`), true
 	case "attestation.bound":
 		return shape(`{"attestation_id":"","credential_id":"","method":""}`), true
 	case "attestation.rejected":

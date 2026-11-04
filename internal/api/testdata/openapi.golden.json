@@ -12743,6 +12743,303 @@
         ],
         "type": "object"
       },
+      "ChangeDraft": {
+        "properties": {
+          "change_set": {
+            "properties": {
+              "deployment_targets": {
+                "items": {
+                  "properties": {
+                    "config": {},
+                    "connector": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "connector",
+                    "config"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": "string"
+              },
+              "issuers": {
+                "items": {
+                  "properties": {
+                    "chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "public_key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "members": {
+                "items": {
+                  "properties": {
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "subject": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "owners": {
+                "items": {
+                  "properties": {
+                    "application_id": {
+                      "type": "string"
+                    },
+                    "business_unit": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "environment": {
+                      "type": "string"
+                    },
+                    "escalation_chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "profiles": {
+                "items": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "spec": {}
+                  },
+                  "required": [
+                    "name",
+                    "spec"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "model": {
+            "type": "string"
+          },
+          "plan": {
+            "properties": {
+              "change_set_digest": {
+                "type": "string"
+              },
+              "changes": {
+                "type": "integer"
+              },
+              "items": {
+                "items": {
+                  "properties": {
+                    "action": {
+                      "enum": [
+                        "create",
+                        "update",
+                        "unchanged"
+                      ],
+                      "type": "string"
+                    },
+                    "actual_digest": {
+                      "type": "string"
+                    },
+                    "approvals": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "credentials": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "destinations": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "effects": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "expected_digest": {
+                      "type": "string"
+                    },
+                    "grants": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "identities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "object_id": {
+                      "type": "string"
+                    },
+                    "verification": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key",
+                    "action",
+                    "expected_digest",
+                    "identities",
+                    "credentials",
+                    "grants",
+                    "destinations",
+                    "approvals",
+                    "effects",
+                    "verification"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "plan_digest": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "change_set_digest",
+              "plan_digest",
+              "changes",
+              "items"
+            ],
+            "type": "object"
+          },
+          "refused": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "change_set",
+          "model"
+        ],
+        "type": "object"
+      },
+      "ChangeDraftRequest": {
+        "properties": {
+          "request": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
       "ChangeImpact": {
         "properties": {
           "approvals": {
@@ -59869,6 +60166,64 @@
         ],
         "summary": "Apply a planned change set; a plan the tenant has moved past is refused",
         "x-trstctl-permission": "changes:write"
+      }
+    },
+    "/api/v1/changes/draft": {
+      "post": {
+        "operationId": "draftChangeSet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeDraft"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Draft a change set from a request with the configured AI model; the draft goes through the same plan and is never applied here",
+        "x-trstctl-permission": "changes:write",
+        "x-trstctl-read-only": true
       }
     },
     "/api/v1/changes/plan": {

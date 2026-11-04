@@ -424,8 +424,21 @@ trstctl-cli changes plan -f change-set.yaml            # review the items; note 
 trstctl-cli changes apply -f change-set.yaml sha256:…  # apply what you reviewed
 ```
 
+**An AI draft.** With a model configured ([the pluggable model adapter](graph-query-ai.md)),
+`POST /api/v1/changes/draft` (`trstctl-cli changes draft -f draft-request.json`, body
+`{"request": "..."}`) turns a request in words into the same typed change set and plans it like
+any other; it is never applied there — you review the plan and apply it yourself. The model is
+sent the request and the tenant's names (roles, profiles, CAs, connector targets, owners) —
+never a spec, a config, a certificate chain, an email or a member subject. A request that holds
+a private key, a token, a bearer credential or a password is refused before the model is called;
+the adapter's own redaction strips anything else secret-shaped, and its personal-data policy
+applies. Each draft records an `ai.change_set.drafted` audit event with the model, the request's
+digest and the draft's digests, never the request text. With no model, drafting answers `503`
+and the form, API and GitOps paths work exactly as before. A draft that asks for the same
+objects as an API call plans to the same `change_set_digest` and `plan_digest`.
+
 **Status:** served through the API and the CLI for profiles, CA bindings, connector targets,
-member role grants and owners. A console form, an AI-drafted change set, and the policy,
+member role grants and owners, with AI drafts. A console form and the policy,
 notification-channel, report-schedule, agent and secret-metadata kinds come next (see
 [limitations](../limitations.md#reviewed-configuration-change-sets-a248)).
 

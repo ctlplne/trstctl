@@ -195,6 +195,12 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("ai.query.answered",
 			catalogPrivacyRule("/subject", token), catalogPrivacyRule("/rows", opaque),
 			catalogPrivacyRule("/citations", opaque), catalogPrivacyRule("/grounded", opaque)),
+		// A248: a drafted change set records the model, the request's digest and
+		// the draft's digests — never the request text or the set's values.
+		entry("ai.change_set.drafted",
+			catalogPrivacyRule("/model", opaque), catalogPrivacyRule("/request_sha256", opaque),
+			catalogPrivacyRule("/change_set_digest", opaque), catalogPrivacyRule("/plan_digest", opaque),
+			catalogPrivacyRule("/refused", opaque)),
 		entry("attestation.bound",
 			catalogPrivacyRule("/attestation_id", opaque), catalogPrivacyRule("/credential_id", opaque),
 			catalogPrivacyRule("/method", opaque)),

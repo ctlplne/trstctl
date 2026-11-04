@@ -318,6 +318,8 @@ public final class OpenApiSchemas {
       "CertificateTransparencyEntry",
       "ChangeApplication",
       "ChangeApplyRequest",
+      "ChangeDraft",
+      "ChangeDraftRequest",
       "ChangeImpact",
       "ChangePlan",
       "ChangeSet",

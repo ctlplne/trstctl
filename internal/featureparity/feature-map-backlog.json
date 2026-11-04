@@ -18658,7 +18658,8 @@
                 "getAccessChangeRequest",
                 "decideAccessChangeRequest",
                 "planChangeSet",
-                "applyChangeSet"
+                "applyChangeSet",
+                "draftChangeSet"
             ],
             "api_na": "",
             "cli_surface": [
@@ -18691,7 +18692,8 @@
                 "access requests get",
                 "access requests decide",
                 "changes plan",
-                "changes apply"
+                "changes apply",
+                "changes draft"
             ],
             "cli_na": "",
             "facet_evidence": {

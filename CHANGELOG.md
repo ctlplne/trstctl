@@ -10,6 +10,13 @@
   pack, format `trstctl.evaluation-pack/v2` when more than the certificate journey runs.
   `--force-failure <journey>` makes one step expect what did not happen, so the pack shows
   that failure as one. `--deployment-target` is now needed only for the certificate journey.
+- AI drafts of reviewed change sets (A248, second part): `POST /api/v1/changes/draft` (CLI
+  `changes draft`) turns a request in words into a typed change set with the configured model and
+  plans it like any other, never applying it. The model gets the tenant's names only — no specs,
+  configs, chains, emails or member subjects — a request holding a key, token or password is
+  refused before the model call, and each draft records `ai.change_set.drafted` (digests, never
+  the request). Without a model it answers 503 and nothing else changes. Fixed: an owner without
+  an escalation chain now reads back as planned (its stored null chain is the empty chain).
 - Reviewed configuration change sets (A248, first part): one typed set of certificate profiles,
   CA bindings, connector targets, member role grants and owners, written as JSON or YAML.
   `POST /api/v1/changes/plan` (CLI `changes plan -f`) refuses a malformed or over-broad set, one

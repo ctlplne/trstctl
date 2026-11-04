@@ -7593,10 +7593,10 @@ beyond its author's permissions never runs; the plan lists each object's identit
 credentials, grants, destinations, approvals, events and verification; applying needs the
 reviewed plan digest and refuses a plan the tenant has moved past. What comes next:
 
-- **A console form and an AI draft.** Both will produce the same typed set and go through the
-  same plan; the draft will send the model names and metadata only, refuse a request carrying
-  secret material before the model call, and leave the form, API and GitOps paths working
-  when no model is configured.
+- **A console form.** It will produce the same typed set and go through the same plan. The AI
+  draft is served (`POST /api/v1/changes/draft`): it sends the model names and metadata only,
+  refuses a request carrying secret material before the model call, and leaves the API and
+  GitOps paths working when no model is configured.
 - **More kinds.** The lifecycle policy, notification channels, report schedules, agent role
   grants and enrollment tokens, and secret metadata (references, never values).
 

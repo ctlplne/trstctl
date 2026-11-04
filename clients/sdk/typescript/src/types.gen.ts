@@ -2364,6 +2364,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/changes/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft a change set from a request with the configured AI model; the draft goes through the same plan and is never applied here */
+        post: operations["draftChangeSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/changes/plan": {
         parameters: {
             query?: never;
@@ -13299,6 +13316,76 @@ export interface components {
                 }[];
             };
             plan_digest: string;
+        };
+        ChangeDraft: {
+            change_set: {
+                deployment_targets?: {
+                    config: unknown;
+                    connector: string;
+                    enabled?: boolean;
+                    key: string;
+                    name: string;
+                }[];
+                description?: string;
+                issuers?: {
+                    chain?: string[];
+                    internal?: boolean;
+                    key: string;
+                    kind: string;
+                    name: string;
+                    public_key?: string;
+                }[];
+                members?: {
+                    display_name?: string;
+                    email?: string;
+                    roles: string[];
+                    subject: string;
+                }[];
+                name: string;
+                owners?: {
+                    application_id?: string;
+                    business_unit?: string;
+                    email?: string;
+                    environment?: string;
+                    escalation_chain?: string[];
+                    key: string;
+                    kind: string;
+                    name: string;
+                    service?: string;
+                }[];
+                profiles?: {
+                    name: string;
+                    spec: unknown;
+                }[];
+            };
+            model: string;
+            plan?: {
+                change_set_digest: string;
+                changes: number;
+                items: {
+                    /** @enum {string} */
+                    action: "create" | "update" | "unchanged";
+                    actual_digest?: string;
+                    approvals: string[];
+                    credentials: string[];
+                    destinations: string[];
+                    detail?: string;
+                    effects: string[];
+                    expected_digest: string;
+                    grants: string[];
+                    identities: string[];
+                    key: string;
+                    kind: string;
+                    object_id?: string;
+                    verification: string;
+                }[];
+                name: string;
+                plan_digest: string;
+            };
+            refused?: string;
+        };
+        ChangeDraftRequest: {
+            request: string;
         };
         ChangeImpact: {
             approvals: {
@@ -29867,6 +29954,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeApplication"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    draftChangeSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDraft"];
                 };
             };
             /** @description client error */

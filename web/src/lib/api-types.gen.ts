@@ -3044,6 +3044,17 @@ export interface ChangeApplyRequest {
   plan_digest: string;
 }
 
+export interface ChangeDraft {
+  change_set: { deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; profiles?: { name: string; spec: unknown }[] };
+  model: string;
+  plan?: { change_set_digest: string; changes: number; items: ({ action: "create" | "update" | "unchanged"; actual_digest?: string; approvals: string[]; credentials: string[]; destinations: string[]; detail?: string; effects: string[]; expected_digest: string; grants: string[]; identities: string[]; key: string; kind: string; object_id?: string; verification: string })[]; name: string; plan_digest: string };
+  refused?: string;
+}
+
+export interface ChangeDraftRequest {
+  request: string;
+}
+
 export interface ChangeImpact {
   approvals: { action: string; id: string; identity_id: string; status: string }[];
   identities: { id: string; name: string; owner_id?: string; status: string }[];

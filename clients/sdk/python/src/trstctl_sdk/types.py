@@ -4266,6 +4266,25 @@ ChangeApplyRequest = TypedDict(
     total=False,
 )
 
+ChangeDraft = TypedDict(
+    'ChangeDraft',
+    {
+        'change_set': dict[str, Any],
+        'model': str,
+        'plan': dict[str, Any],
+        'refused': str,
+    },
+    total=False,
+)
+
+ChangeDraftRequest = TypedDict(
+    'ChangeDraftRequest',
+    {
+        'request': str,
+    },
+    total=False,
+)
+
 ChangeImpact = TypedDict(
     'ChangeImpact',
     {

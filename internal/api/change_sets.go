@@ -306,10 +306,16 @@ func changeOwnerRecord(x ChangeOwner, tenantID, id string) store.Owner {
 		ApplicationID: x.ApplicationID, Service: x.Service, BusinessUnit: x.BusinessUnit, Environment: x.Environment, EscalationChain: chain}
 }
 
+// ownerDigest is an owner's digest as a change set compares it. An owner
+// stored without an escalation chain reads back as JSON null; it is the same
+// empty chain a change set writes as [].
 func ownerDigest(o store.Owner) string {
-	var chain any = []any{}
+	chain := []any{}
 	if len(o.EscalationChain) > 0 {
-		_ = json.Unmarshal(o.EscalationChain, &chain)
+		var stored []any
+		if json.Unmarshal(o.EscalationChain, &stored) == nil && stored != nil {
+			chain = stored
+		}
 	}
 	return baselineDigest(struct {
 		Kind            string `json:"kind"`
@@ -685,6 +691,9 @@ func changeSetRoutes(a *API) []route {
 		{method: "POST", path: "/api/v1/changes/plan", opID: "planChangeSet",
 			summary: "Plan a reviewed configuration change set: validate it, check every object's permission, and list exactly what applying it would do",
 			handler: a.planChangeSetHandler, reqSchema: "ChangeSet", resSchema: "ChangePlan", successCode: "200", readOnly: true, perm: authz.ChangesWrite},
+		{method: "POST", path: "/api/v1/changes/draft", opID: "draftChangeSet",
+			summary: "Draft a change set from a request with the configured AI model; the draft goes through the same plan and is never applied here",
+			handler: a.draftChangeSetHandler, reqSchema: "ChangeDraftRequest", resSchema: "ChangeDraft", successCode: "200", readOnly: true, perm: authz.ChangesWrite},
 		{method: "POST", path: "/api/v1/changes/apply", opID: "applyChangeSet",
 			summary: "Apply a planned change set; a plan the tenant has moved past is refused",
 			handler: a.applyChangeSetHandler, reqSchema: "ChangeApplyRequest", resSchema: "ChangeApplication", successCode: "200", mutation: true, perm: authz.ChangesWrite},
@@ -714,9 +723,12 @@ func changeSetSchemas() map[string]*Schema {
 		"kind", "key", "action", "expected_digest", "identities", "credentials", "grants", "destinations", "approvals", "effects", "verification")
 	result := object(map[string]*Schema{"kind": str(), "key": str(), "object_id": str(), "outcome": str(), "approval_request_id": str(), "verified": boolean(), "error": str()},
 		"kind", "key", "outcome", "verified")
+	plan := object(map[string]*Schema{"name": str(), "change_set_digest": str(), "plan_digest": str(), "changes": integer(), "items": list(item)}, "name", "change_set_digest", "plan_digest", "changes", "items")
 	return map[string]*Schema{
+		"ChangeDraftRequest": object(map[string]*Schema{"request": str()}, "request"),
+		"ChangeDraft":        object(map[string]*Schema{"change_set": changeSet, "plan": plan, "refused": str(), "model": str()}, "change_set", "model"),
 		"ChangeSet":          changeSet,
-		"ChangePlan":         object(map[string]*Schema{"name": str(), "change_set_digest": str(), "plan_digest": str(), "changes": integer(), "items": list(item)}, "name", "change_set_digest", "plan_digest", "changes", "items"),
+		"ChangePlan":         plan,
 		"ChangeApplyRequest": object(map[string]*Schema{"change_set": changeSet, "plan_digest": str()}, "change_set", "plan_digest"),
 		"ChangeApplication":  object(map[string]*Schema{"name": str(), "change_set_digest": str(), "plan_digest": str(), "complete": boolean(), "results": list(result)}, "name", "change_set_digest", "plan_digest", "complete", "results"),
 	}
