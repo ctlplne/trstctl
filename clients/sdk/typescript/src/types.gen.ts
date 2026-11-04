@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/v1/access/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search access bundle activity, newest first: bundles saved and deleted, grants given and removed, runs issued and revoked, and each run's recorded uses (metadata only) */
+        get: operations["listAccessActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/activity/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export matching access bundle activity as one JSON document (at most 10,000 rows); it carries metadata only, never a credential, token hash or request body */
+        get: operations["exportAccessActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/api-tokens": {
         parameters: {
             query?: never;
@@ -10972,6 +11006,49 @@ export interface components {
             region: string;
             source_ip_address: string;
             user_agent: string;
+        };
+        AccessActivityExport: {
+            excludes: string[];
+            fields: string[];
+            filters: {
+                bundle?: string;
+                principal?: string;
+                q?: string;
+            };
+            /** Format: date-time */
+            generated_at: string;
+            items: {
+                /** @enum {string} */
+                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used";
+                actor?: string;
+                /** Format: date-time */
+                at: string;
+                bundle_ids: string[];
+                bundle_names: string[];
+                detail?: string;
+                grant_id?: string;
+                principal?: string;
+                run_id?: string;
+            }[];
+            kind: string;
+            rows: number;
+            truncated: boolean;
+        };
+        AccessActivityList: {
+            items: {
+                /** @enum {string} */
+                action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used";
+                actor?: string;
+                /** Format: date-time */
+                at: string;
+                bundle_ids: string[];
+                bundle_names: string[];
+                detail?: string;
+                grant_id?: string;
+                principal?: string;
+                run_id?: string;
+            }[];
+            next_cursor: string;
         };
         AccessAuthority: {
             bounds: {
@@ -23897,6 +23974,100 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAccessActivity: {
+        parameters: {
+            query?: {
+                /** @description only activity touching this bundle */
+                bundle?: string;
+                /** @description only activity of this principal */
+                principal?: string;
+                /** @description case-insensitive text in the action, bundle names, principal, actor or detail (at most 200 characters) */
+                q?: string;
+                /** @description maximum rows (1-100, default 20) */
+                limit?: number;
+                /** @description opaque cursor from the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessActivityList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportAccessActivity: {
+        parameters: {
+            query?: {
+                /** @description only activity touching this bundle */
+                bundle?: string;
+                /** @description only activity of this principal */
+                principal?: string;
+                /** @description case-insensitive text in the action, bundle names, principal, actor or detail (at most 200 characters) */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessActivityExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listAPITokens: {
         parameters: {
             query?: {

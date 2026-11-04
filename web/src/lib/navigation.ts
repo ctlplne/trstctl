@@ -265,6 +265,7 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.adminConsole",
         items: [
           { to: "/admin/access", labelKey: "platform.tabs.access", icon: "platform", mode: "real", featureIds: ["F8", "F13"] },
+          { to: "/admin/agent-access", labelKey: "nav.item.agentAccess", icon: "platform", mode: "real", featureIds: ["F8"] },
           {
             to: "/admin/system",
             labelKey: "platform.tabs.posture",
@@ -419,6 +420,7 @@ export const appRoutePaths = [
   "/assistant",
   "/wizard",
   "/admin/access",
+  "/admin/agent-access",
   "/admin/system",
   "/admin/editions",
   // C-A1: /platform stays registered as a readiness doorway; historical
@@ -449,6 +451,7 @@ const routePermissionAny: Record<string, string[]> = {
   "/operations": ["lifecycle:read"],
   "/owners": ["owners:read"],
   "/admin/access": ["access:read"],
+  "/admin/agent-access": ["access:read"],
   "/admin/system": ["access:read"],
   "/admin/editions": ["access:read"],
   "/platform": ["access:read"],
@@ -606,7 +609,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F8",
-    routes: ["/admin/access", "/identities", "/certificates"],
+    routes: ["/admin/access", "/admin/agent-access", "/identities", "/certificates"],
     component: "Platform access control",
     kind: "observe",
     evidence: "required-scope map and permission-denied states",

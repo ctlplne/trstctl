@@ -484,6 +484,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "runs", "create"}, Method: "POST", Path: "/api/v1/access/runs", Body: bodyFile, Summary: "Mint a run's short-lived credential under live bundle grants"},
 	{Name: []string{"access", "runs", "list"}, Method: "GET", Path: "/api/v1/access/runs", Query: []string{"principal", "bundle", "limit"}, Summary: "List runs with what each may do now"},
 	{Name: []string{"access", "runs", "revoke"}, Method: "POST", Path: "/api/v1/access/runs/{id}/revoke", Summary: "Revoke a run's credential"},
+	{Name: []string{"access", "activity"}, Method: "GET", Path: "/api/v1/access/activity", Query: []string{"bundle", "principal", "q", "limit", "cursor"}, Summary: "Search access bundle activity (metadata only)"},
+	{Name: []string{"access", "activity", "export"}, Method: "GET", Path: "/api/v1/access/activity/export", Query: []string{"bundle", "principal", "q"}, Summary: "Export matching access bundle activity as one JSON document"},
 	{Name: []string{"access", "sessions", "list"}, Method: "GET", Path: "/api/v1/access/sessions", Query: []string{"limit", "cursor"}, Summary: "List just-in-time privileged access sessions"},
 	{Name: []string{"access", "targets", "list"}, Method: "GET", Path: "/api/v1/access/targets", Summary: "List privileged access targets"},
 	{Name: []string{"access", "targets", "register"}, Method: "POST", Path: "/api/v1/access/targets", Body: bodyFile, Summary: "Register a tenant privileged access target"},
@@ -861,6 +863,7 @@ var coreCommandTable = []Command{
 var specialCommandTable = []Command{
 	{Name: []string{"audit", "verify"}, Summary: "Verify any saved audit export completely offline"},
 	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
+	{Name: []string{"access", "run"}, Summary: "Run a command with a short-lived access bundle run credential, revoked when it exits"},
 	{Name: []string{"secrets", "scans", "staged-diff"}, Summary: "Scan staged or CI-diff Git files with Gitleaks before commit or merge"},
 	{Name: []string{"secrets", "scans", "pre-commit", "install"}, Summary: "Install a Git pre-commit hook that blocks leaked secrets"},
 }

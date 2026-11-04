@@ -39,6 +39,7 @@ const Audit = lazyPage(() => import("@/pages/Audit"), "Audit");
 const Graph = lazyPage(() => import("@/pages/Graph"), "Graph");
 const Migration = lazyPage(() => import("@/pages/Migration"), "Migration");
 const AdminAccess = lazyPage(() => import("@/pages/AdminAccess"), "AdminAccess");
+const AgentAccess = lazyPage(() => import("@/pages/AgentAccess"), "AgentAccess");
 const AdminEditions = lazyPage(() => import("@/pages/Platform"), "AdminEditions");
 const AdminSystem = lazyPage(() => import("@/pages/Platform"), "AdminSystem");
 const PlatformRedirect = lazyPage(() => import("@/pages/Platform"), "PlatformRedirect");
@@ -165,6 +166,7 @@ export function AppRoutes() {
             <Route path="assistant" element={<Assistant />} />
             <Route path="wizard" element={<Wizard />} />
             <Route path="admin/access" element={<AdminAccess />} />
+            <Route path="admin/agent-access" element={<AgentAccess />} />
             <Route path="admin/system" element={<AdminSystem />} />
             <Route path="admin/editions" element={<AdminEditions />} />
             {/* C-A1: bare /platform is an API-free readiness doorway; its

@@ -409,9 +409,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// save|list|show|revise`, `rehearsals run` and `rehearsals runs list|show`.
 	// A248 adds `changes plan`, `changes apply` and `changes draft`. A251 adds
 	// `access bundles list|create|get|update|delete|grant|ungrant`, `access
-	// authority` and `access runs create|list|revoke`.
-	if len(out) != 741 {
-		t.Fatalf("CLI commands = %d, want 741", len(out))
+	// authority` and `access runs create|list|revoke`, then `access activity`,
+	// `access activity export` and the `access run` launcher.
+	if len(out) != 744 {
+		t.Fatalf("CLI commands = %d, want 744", len(out))
 	}
 	return out
 }

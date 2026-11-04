@@ -3913,6 +3913,186 @@
         ],
         "type": "object"
       },
+      "AccessActivityExport": {
+        "properties": {
+          "excludes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "filters": {
+            "properties": {
+              "bundle": {
+                "type": "string"
+              },
+              "principal": {
+                "type": "string"
+              },
+              "q": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "saved",
+                    "deleted",
+                    "granted",
+                    "ungranted",
+                    "run_issued",
+                    "run_revoked",
+                    "run_used"
+                  ],
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "bundle_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "bundle_names": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "grant_id": {
+                  "type": "string"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "run_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "at",
+                "action",
+                "bundle_ids",
+                "bundle_names"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "generated_at",
+          "filters",
+          "fields",
+          "excludes",
+          "rows",
+          "truncated",
+          "items"
+        ],
+        "type": "object"
+      },
+      "AccessActivityList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "saved",
+                    "deleted",
+                    "granted",
+                    "ungranted",
+                    "run_issued",
+                    "run_revoked",
+                    "run_used"
+                  ],
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "bundle_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "bundle_names": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "grant_id": {
+                  "type": "string"
+                },
+                "principal": {
+                  "type": "string"
+                },
+                "run_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "at",
+                "action",
+                "bundle_ids",
+                "bundle_names"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
       "AccessAuthority": {
         "properties": {
           "bounds": {
@@ -51881,6 +52061,170 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/access/activity": {
+      "get": {
+        "operationId": "listAccessActivity",
+        "parameters": [
+          {
+            "description": "only activity touching this bundle",
+            "in": "query",
+            "name": "bundle",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "only activity of this principal",
+            "in": "query",
+            "name": "principal",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "case-insensitive text in the action, bundle names, principal, actor or detail (at most 200 characters)",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "maximum rows (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque cursor from the previous page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessActivityList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Search access bundle activity, newest first: bundles saved and deleted, grants given and removed, runs issued and revoked, and each run's recorded uses (metadata only)",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/activity/export": {
+      "get": {
+        "operationId": "exportAccessActivity",
+        "parameters": [
+          {
+            "description": "only activity touching this bundle",
+            "in": "query",
+            "name": "bundle",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "only activity of this principal",
+            "in": "query",
+            "name": "principal",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "case-insensitive text in the action, bundle names, principal, actor or detail (at most 200 characters)",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessActivityExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export matching access bundle activity as one JSON document (at most 10,000 rows); it carries metadata only, never a credential, token hash or request body",
+        "x-trstctl-permission": "access:read"
+      }
+    },
     "/api/v1/access/api-tokens": {
       "get": {
         "operationId": "listAPITokens",

@@ -947,6 +947,22 @@ export interface AWSHoneyUse {
   user_agent: string;
 }
 
+export interface AccessActivityExport {
+  excludes: string[];
+  fields: string[];
+  filters: { bundle?: string; principal?: string; q?: string };
+  generated_at: string;
+  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
+  kind: string;
+  rows: number;
+  truncated: boolean;
+}
+
+export interface AccessActivityList {
+  items: ({ action: "saved" | "deleted" | "granted" | "ungranted" | "run_issued" | "run_revoked" | "run_used"; actor?: string; at: string; bundle_ids: string[]; bundle_names: string[]; detail?: string; grant_id?: string; principal?: string; run_id?: string })[];
+  next_cursor: string;
+}
+
 export interface AccessAuthority {
   bounds: { lasting: string; max_run_ttl_seconds: number; outage: string; revocation: string };
   computed_at: string;

@@ -1309,6 +1309,30 @@ AWSHoneyUse = TypedDict(
     total=False,
 )
 
+AccessActivityExport = TypedDict(
+    'AccessActivityExport',
+    {
+        'excludes': list[str],
+        'fields': list[str],
+        'filters': dict[str, Any],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'kind': str,
+        'rows': int,
+        'truncated': bool,
+    },
+    total=False,
+)
+
+AccessActivityList = TypedDict(
+    'AccessActivityList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 AccessAuthority = TypedDict(
     'AccessAuthority',
     {

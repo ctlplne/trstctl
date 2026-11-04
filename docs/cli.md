@@ -623,6 +623,34 @@ it against a metadata-only access endpoint, then revoke it and prove the same be
 receives `401`. Never place the raw bearer in a URL, log, screenshot, or committed
 file.
 
+## Agent access runs
+
+`trstctl-cli access run` gives a command a short-lived credential minted under your
+own live grants of one or more access bundles, and revokes it when the command exits.
+Your own token (it needs only `access:bundle.run`) authenticates the mint and the
+revoke and is never passed to the child; the child gets the run's token as
+`TRSTCTL_TOKEN`, with `TRSTCTL_SERVER` and `TRSTCTL_CA_FILE` set to what the CLI used.
+The run's token is never printed. The run's authority is derived again from your
+grants at every request, so removing a grant or deleting a bundle stops it at once.
+
+```bash
+# A CI job whose own token holds only access:bundle.run.
+trstctl-cli access run --bundle deploy --ttl 10m --label "job $CI_JOB_ID" -- ./deploy.sh
+trstctl-cli access run --bundle deploy --bundle owners --permission owners:read -- ./report.sh
+trstctl-cli access activity --principal ci:deploy --q "job 42"
+trstctl-cli access activity export --principal ci:deploy > access-activity.json
+```
+
+- `--bundle` takes a bundle's name or ID and repeats; `--permission` narrows the run
+  to some of what the bundles give; `--ttl` defaults to 15 minutes, or the bundles'
+  ceiling if that is shorter.
+- The command's exit code is the CLI's. `--keep` leaves the run active after the
+  command exits (it still expires); otherwise a failed revoke is reported with the
+  run's expiry, which bounds it.
+- The activity export is one JSON document of metadata (at most 10,000 rows): who
+  saved, granted, minted, used and revoked what, and when. It never carries a token,
+  a token hash, an `Authorization` value or a request body.
+
 ## Bootstrapping or recovering a local API token
 
 `trstctl-cli` authenticates with an API token, but a freshly deployed control

@@ -19874,7 +19874,9 @@
                 "getAccessAuthority",
                 "issueAccessRun",
                 "listAccessRuns",
-                "revokeAccessRun"
+                "revokeAccessRun",
+                "listAccessActivity",
+                "exportAccessActivity"
             ],
             "api_na": "",
             "cli_surface": [
@@ -19935,7 +19937,10 @@
                 "access authority",
                 "access runs create",
                 "access runs list",
-                "access runs revoke"
+                "access runs revoke",
+                "access activity",
+                "access activity export",
+                "access run"
             ],
             "cli_na": "",
             "facet_evidence": {

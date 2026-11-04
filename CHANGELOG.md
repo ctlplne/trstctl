@@ -2,6 +2,17 @@
 
 ### Added
 
+- The console's **Agent access** page (A251 is served): bundles, grants with the effective
+  authority after every change, authority lookup with delegation chains and bounds, a run for
+  yourself with its token shown once and launch lines, runs with revoke, and activity search and
+  export.
+- Agent access activity and the run launcher (A251, second part): `GET /api/v1/access/activity`
+  (`trstctl access activity`) searches bundle, grant and run changes and each run token's
+  recorded uses, newest first, by bundle, principal or text; `GET /api/v1/access/activity/export`
+  returns the matching rows as one metadata-only JSON document (no token, token hash,
+  Authorization value or request body). `trstctl access run --bundle <name> -- <command>` mints a
+  run under your own grants, gives the command its token as `TRSTCTL_TOKEN` (never your own), and
+  revokes the run when the command exits.
 - Agent access bundles (A251, first part): `POST /api/v1/access/bundles` saves a reusable set of
   permissions for custom agents, CI jobs and private MCP servers; a grant gives it to a user or
   a machine; `POST /api/v1/access/runs` (the new `access:bundle.run` permission) mints a run's

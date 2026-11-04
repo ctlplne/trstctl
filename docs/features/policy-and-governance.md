@@ -222,8 +222,26 @@ TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.js
   expiry. What a run already made (certificates, secrets, enrolled agents) follows its own
   lifecycle.
 
-**Status:** bundles, grants, effective authority and runs are served (API, CLI). Searchable
-activity with a metadata-only export, and the console page, come next.
+**Activity and the launcher.** `GET /api/v1/access/activity` (`trstctl-cli access activity`)
+searches every change (bundles saved and deleted, grants given and removed, runs issued and
+revoked) and each run token's recorded uses — one row per client network, action class and
+hour, from credential usage — newest first, filtered by bundle, principal or text, with an
+opaque cursor. `GET /api/v1/access/activity/export` returns the matching rows (at most 10,000)
+as one JSON document that names its fields and what it excludes: it never carries a token, a
+token hash, an `Authorization` value or a request body, because none is ever recorded.
+`trstctl-cli access run --bundle deploy -- ./deploy.sh` mints a run under your own grants, runs
+the command with the run's token as `TRSTCTL_TOKEN` (your own token is not passed on), and
+revokes the run when the command exits.
+
+**In the console.** **Admin console → Agent access** lists the bundles with their live grants and
+active runs, creates and deletes them (deleting asks first), gives and removes grants and shows
+the principal's effective authority after every change, looks up any principal's authority with
+its active runs, delegation chains and bounds, starts a run for yourself (its token shown once,
+with the launch lines), lists runs with what each may do now and revokes them, and searches and
+exports the activity.
+
+**Status:** served (API, CLI, console). OAuth re-authorization health for MCP servers waits for
+the P8 design's go-ahead.
 
 ### Ownership attribution
 

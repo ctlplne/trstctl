@@ -103,6 +103,8 @@ public final class OpenApiSchemas {
       "AWSHoneyTokenList",
       "AWSHoneyTokenPreview",
       "AWSHoneyUse",
+      "AccessActivityExport",
+      "AccessActivityList",
       "AccessAuthority",
       "AccessBundle",
       "AccessBundleDeleted",

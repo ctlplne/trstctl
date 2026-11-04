@@ -28,8 +28,9 @@ describe("UX-03 task-based navigation", () => {
     // rows remain task-specific. Ceiling: 42.
     // A248 spends one row on reviewed change sets: one plan-and-apply
     // workspace across profiles, issuers, targets, members and owners, which
-    // belongs to none of those pages alone. Ceiling: 43.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(43);
+    // belongs to none of those pages alone. Ceiling: 43. A251 spends one row
+    // on agent access (bundles, grants, runs, activity) beside Access. Ceiling: 44.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(44);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Overview",
       "Inventory",

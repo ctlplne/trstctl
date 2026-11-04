@@ -419,3 +419,99 @@ func TestServedAccessBundleAttenuationA251(t *testing.T) {
 		t.Fatalf("authority bounds = %+v", got.Bounds)
 	}
 }
+
+// A251 Done when, part 3: activity is searchable, pages without loss, and its
+// export carries metadata only — no token, no token hash, no Authorization
+// value and no request body, by default and by construction.
+func TestServedAccessActivityExportA251(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	x := a251Harness{t: t, h: h}
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "bundle-admin", "access:write", "access:read", "owners:read", "certs:read")
+	machine := seedScopedTokenSubject(t, h.store, h.tenant, "ci:export", "access:bundle.run")
+	bundleID := x.bundle(admin, "a251-export-bundle", "export-readers", "owners:read", "certs:read")
+	x.grant(admin, "a251-export-grant", bundleID, "machine", "ci:export")
+	issued := x.run(machine, "a251-export-run", map[string]any{"bundle_ids": []string{bundleID}, "label": "job 77"})
+	for _, path := range []string{"/api/v1/owners?limit=5", "/api/v1/owners?limit=5", "/api/v1/certificates"} {
+		if code := x.status(http.MethodGet, path, issued.Token); code != http.StatusOK {
+			t.Fatalf("run reads %s = %d", path, code)
+		}
+	}
+	const marker = "a251-request-body-marker"
+	if code, _ := doBearer(t, h.ts, http.MethodPost, "/api/v1/owners", issued.Token, "a251-export-write",
+		map[string]any{"name": marker, "kind": "team"}); code != http.StatusForbidden {
+		t.Fatalf("run writes an owner = %d, want 403", code)
+	}
+	if err := h.srv.DrainCredentialUsage(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	x.call(http.MethodPost, "/api/v1/access/runs/"+issued.Run.ID+"/revoke", machine, "a251-export-revoke", nil, http.StatusOK)
+
+	type row struct {
+		Action string `json:"action"`
+		RunID  string `json:"run_id"`
+		Detail string `json:"detail"`
+	}
+	var page struct {
+		Items      []row  `json:"items"`
+		NextCursor string `json:"next_cursor"`
+	}
+	var all []row
+	path := "/api/v1/access/activity?principal=ci%3Aexport&limit=2"
+	for pages := 0; ; pages++ {
+		if pages > 20 {
+			t.Fatal("activity paging does not end")
+		}
+		page.Items, page.NextCursor = nil, ""
+		if err := json.Unmarshal(x.call(http.MethodGet, path, admin, "", nil, http.StatusOK), &page); err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, page.Items...)
+		if page.NextCursor == "" {
+			break
+		}
+		path = "/api/v1/access/activity?principal=ci%3Aexport&limit=2&cursor=" + url.QueryEscape(page.NextCursor)
+	}
+	actions := map[string]int{}
+	for _, r := range all {
+		actions[r.Action]++
+	}
+	if actions["granted"] != 1 || actions["run_issued"] != 1 || actions["run_revoked"] != 1 || actions["run_used"] == 0 {
+		t.Fatalf("activity = %+v", all)
+	}
+	var found struct {
+		Items []row `json:"items"`
+	}
+	if err := json.Unmarshal(x.call(http.MethodGet, "/api/v1/access/activity?q=JOB%2077", admin, "", nil, http.StatusOK), &found); err != nil ||
+		len(found.Items) != 1 || found.Items[0].Action != "run_issued" || found.Items[0].RunID != issued.Run.ID {
+		t.Fatalf("search = %+v %v", found, err)
+	}
+
+	raw := x.call(http.MethodGet, "/api/v1/access/activity/export?principal=ci%3Aexport", admin, "", nil, http.StatusOK)
+	var export struct {
+		Kind     string           `json:"kind"`
+		Fields   []string         `json:"fields"`
+		Excludes []string         `json:"excludes"`
+		Rows     int              `json:"rows"`
+		Items    []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &export); err != nil || export.Kind != "trstctl.access-activity-export/v1" ||
+		export.Rows != len(all) || len(export.Items) != len(all) || !slices.Contains(export.Excludes, "credentials") {
+		t.Fatalf("export header = %+v %v (paged rows %d)", export, err, len(all))
+	}
+	for _, item := range export.Items {
+		for key := range item {
+			if !slices.Contains(export.Fields, key) {
+				t.Fatalf("export row carries undeclared field %q: %+v", key, item)
+			}
+		}
+	}
+	runHash, err := auth.HashAPIToken([]byte(issued.Token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{issued.Token, machine, admin, auth.TokenPrefix, "Bearer", "Authorization", marker, runHash} {
+		if bytes.Contains(raw, []byte(forbidden)) {
+			t.Fatalf("the export carries %q", forbidden[:min(len(forbidden), 12)])
+		}
+	}
+}

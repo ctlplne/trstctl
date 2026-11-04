@@ -369,9 +369,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// adds the operations dashboard (655). A247 adds rehearsals: save, list,
 	// show and revise a scenario, start and list its runs, show a run (662).
 	// A248 adds planning, applying and drafting a reviewed change set (665).
-	// A251 adds access bundles, their grants, effective authority and runs (676).
-	if len(out) != 676 {
-		t.Fatalf("OpenAPI operationIds = %d, want 676", len(out))
+	// A251 adds access bundles, their grants, effective authority and runs (676),
+	// then activity search and its export (678).
+	if len(out) != 678 {
+		t.Fatalf("OpenAPI operationIds = %d, want 678", len(out))
 	}
 	return out
 }

@@ -26,6 +26,7 @@ export {
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as changeSets from "./changeSetsApi";
+import * as agentAccess from "./agentAccessApi";
 import * as decoy from "./decoyApi";
 import * as secretProjects from "./secretProjectsApi";
 import * as scopedSyncs from "./scopedSyncsApi";
@@ -803,6 +804,17 @@ export interface DiscoveryFindingListOptions {
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { ChangeApplication, ChangeApplyRequest, ChangeDraft, ChangeDraftRequest, ChangePlan, ChangeSet } from "./api-types.gen";
+export type {
+  AccessActivityExport,
+  AccessActivityList,
+  AccessAuthority,
+  AccessBundle,
+  AccessBundleGrantChange,
+  AccessBundleRequest,
+  AccessRun,
+  AccessRunIssued,
+} from "./api-types.gen";
+export type { AccessActivityFilter } from "./agentAccessApi";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
@@ -2448,6 +2460,19 @@ export interface Api {
   planChangeSet(set: import("./api-types.gen").ChangeSet): Promise<import("./api-types.gen").ChangePlan>;
   applyChangeSet(request: import("./api-types.gen").ChangeApplyRequest, idempotencyKey?: string): Promise<import("./api-types.gen").ChangeApplication>;
   draftChangeSet(request: import("./api-types.gen").ChangeDraftRequest): Promise<import("./api-types.gen").ChangeDraft>;
+  accessBundles: typeof agentAccess.accessBundles;
+  accessBundle: typeof agentAccess.accessBundle;
+  createAccessBundle: typeof agentAccess.createAccessBundle;
+  updateAccessBundle: typeof agentAccess.updateAccessBundle;
+  deleteAccessBundle: typeof agentAccess.deleteAccessBundle;
+  grantAccessBundle: typeof agentAccess.grantAccessBundle;
+  ungrantAccessBundle: typeof agentAccess.ungrantAccessBundle;
+  accessAuthority: typeof agentAccess.accessAuthority;
+  issueAccessRun: typeof agentAccess.issueAccessRun;
+  accessRuns: typeof agentAccess.accessRuns;
+  revokeAccessRun: typeof agentAccess.revokeAccessRun;
+  accessActivity: typeof agentAccess.accessActivity;
+  exportAccessActivity: typeof agentAccess.exportAccessActivity;
   migrationRun(id: string): Promise<MigrationRun>;
   pauseMigrationRun(id: string, request?: MigrationRunActionRequest): Promise<MigrationRun>;
   resumeMigrationRun(id: string): Promise<MigrationRun>;
@@ -3341,6 +3366,19 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   planChangeSet: changeSets.planChangeSet,
   applyChangeSet: changeSets.applyChangeSet,
   draftChangeSet: changeSets.draftChangeSet,
+  accessBundles: agentAccess.accessBundles,
+  accessBundle: agentAccess.accessBundle,
+  createAccessBundle: agentAccess.createAccessBundle,
+  updateAccessBundle: agentAccess.updateAccessBundle,
+  deleteAccessBundle: agentAccess.deleteAccessBundle,
+  grantAccessBundle: agentAccess.grantAccessBundle,
+  ungrantAccessBundle: agentAccess.ungrantAccessBundle,
+  accessAuthority: agentAccess.accessAuthority,
+  issueAccessRun: agentAccess.issueAccessRun,
+  accessRuns: agentAccess.accessRuns,
+  revokeAccessRun: agentAccess.revokeAccessRun,
+  accessActivity: agentAccess.accessActivity,
+  exportAccessActivity: agentAccess.exportAccessActivity,
   migrationRun: estate.migrationRun,
   pauseMigrationRun: estate.pauseMigrationRun,
   resumeMigrationRun: estate.resumeMigrationRun,

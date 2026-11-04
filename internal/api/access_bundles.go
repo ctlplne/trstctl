@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -72,7 +73,22 @@ func (a *API) accessBundleRoutes() []route {
 		{method: "POST", path: "/api/v1/access/runs", opID: "issueAccessRun", summary: "Mint a run's short-lived credential under your own live grants of one or more bundles (another principal's needs access:write and every permission the run carries); returned once with launch instructions", handler: a.issueAccessRun, reqSchema: "AccessRunRequest", resSchema: "AccessRunIssued", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessBundleRun},
 		{method: "GET", path: "/api/v1/access/runs", opID: "listAccessRuns", summary: "List runs, newest first, with what each may do now", handler: a.listAccessRuns, query: []param{{name: "principal", typ: "string", desc: "only this principal's runs"}, {name: "bundle", typ: "string", format: "uuid", desc: "only runs minted under this bundle"}, {name: "limit", typ: "integer", desc: "maximum runs (1-100, default 20)"}}, resSchema: "AccessRunList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/runs/{id}/revoke", opID: "revokeAccessRun", summary: "Revoke a run's credential (your own run, or anyone's with access:write); it is refused from the next request", handler: a.revokeAccessRun, pathParams: idPath, resSchema: "AccessRun", successCode: "200", mutation: true, perm: authz.AccessBundleRun},
+		{method: "GET", path: "/api/v1/access/activity", opID: "listAccessActivity", summary: "Search access bundle activity, newest first: bundles saved and deleted, grants given and removed, runs issued and revoked, and each run's recorded uses (metadata only)", handler: a.listAccessActivity, query: accessActivityQuery(true), resSchema: "AccessActivityList", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/activity/export", opID: "exportAccessActivity", summary: "Export matching access bundle activity as one JSON document (at most 10,000 rows); it carries metadata only, never a credential, token hash or request body", handler: a.exportAccessActivity, query: accessActivityQuery(false), resSchema: "AccessActivityExport", successCode: "200", perm: authz.AccessRead},
 	}
+}
+
+func accessActivityQuery(paged bool) []param {
+	q := []param{
+		{name: "bundle", typ: "string", format: "uuid", desc: "only activity touching this bundle"},
+		{name: "principal", typ: "string", desc: "only activity of this principal"},
+		{name: "q", typ: "string", desc: "case-insensitive text in the action, bundle names, principal, actor or detail (at most 200 characters)"},
+	}
+	if paged {
+		q = append(q, param{name: "limit", typ: "integer", desc: "maximum rows (1-100, default 20)"},
+			param{name: "cursor", typ: "string", desc: "opaque cursor from the previous page"})
+	}
+	return q
 }
 
 type accessBundleRequest struct {
@@ -1014,6 +1030,152 @@ func (a *API) bundleRunPrincipal(ctx context.Context, rec store.APITokenRecord) 
 	return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: scopes, Delegated: rec.Delegated}.Principal(), nil
 }
 
+// accessActivityExportMax bounds one export; narrow the filters for more.
+const accessActivityExportMax = 10000
+
+// accessActivityExcludes is what an activity row never carries, stated in
+// every export.
+var accessActivityExcludes = []string{"credentials", "token values and token hashes", "request and response bodies", "secret values"}
+
+type accessActivityRow struct {
+	At          time.Time `json:"at"`
+	Action      string    `json:"action"`
+	BundleIDs   []string  `json:"bundle_ids"`
+	BundleNames []string  `json:"bundle_names"`
+	GrantID     string    `json:"grant_id,omitempty"`
+	RunID       string    `json:"run_id,omitempty"`
+	Principal   string    `json:"principal,omitempty"`
+	Actor       string    `json:"actor,omitempty"`
+	Detail      string    `json:"detail,omitempty"`
+}
+
+type accessActivityList struct {
+	Items      []accessActivityRow `json:"items"`
+	NextCursor string              `json:"next_cursor"`
+}
+
+type accessActivityFilters struct {
+	Bundle    string `json:"bundle,omitempty"`
+	Principal string `json:"principal,omitempty"`
+	Query     string `json:"q,omitempty"`
+}
+
+type accessActivityExport struct {
+	Kind        string                `json:"kind"`
+	GeneratedAt time.Time             `json:"generated_at"`
+	Filters     accessActivityFilters `json:"filters"`
+	Fields      []string              `json:"fields"`
+	Excludes    []string              `json:"excludes"`
+	Rows        int                   `json:"rows"`
+	Truncated   bool                  `json:"truncated"`
+	Items       []accessActivityRow   `json:"items"`
+}
+
+func toAccessActivityRow(a store.AccessBundleActivity) accessActivityRow {
+	return accessActivityRow{
+		At: a.At.UTC(), Action: a.Action, BundleIDs: nonNilStringSlice(a.BundleIDs), BundleNames: nonNilStringSlice(a.BundleNames),
+		GrantID: a.GrantID, RunID: a.RunID, Principal: a.Principal, Actor: a.Actor, Detail: a.Detail,
+	}
+}
+
+func accessActivityFilter(r *http.Request) (store.AccessBundleActivityFilter, error) {
+	q := r.URL.Query()
+	f := store.AccessBundleActivityFilter{BundleID: strings.TrimSpace(q.Get("bundle")), Principal: strings.TrimSpace(q.Get("principal"))}
+	if f.BundleID != "" {
+		if _, err := googleuuid.Parse(f.BundleID); err != nil {
+			return f, errStatus(http.StatusBadRequest, "bundle must be a bundle ID")
+		}
+	}
+	text, err := plainText(q.Get("q"), 200, "q")
+	if err != nil {
+		return f, err
+	}
+	f.Query = text
+	return f, nil
+}
+
+func (a *API) listAccessActivity(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	f, err := accessActivityFilter(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if f.Limit, err = pageLimit(r); err != nil {
+		a.writeError(w, errStatusFrom(http.StatusBadRequest, err))
+		return
+	}
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		raw, decodeErr := base64.RawURLEncoding.DecodeString(c)
+		at, seq, parseErr := store.ParseAccessBundleActivityCursor(string(raw))
+		if decodeErr != nil || parseErr != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+		f.BeforeAt, f.BeforeSequence = &at, seq
+	}
+	rows, err := a.store.ListAccessBundleActivity(r.Context(), tenantID, f)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	out := accessActivityList{Items: make([]accessActivityRow, 0, len(rows))}
+	for _, row := range rows {
+		out.Items = append(out.Items, toAccessActivityRow(row))
+	}
+	if len(rows) == f.Limit {
+		out.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(store.AccessBundleActivityCursor(rows[len(rows)-1])))
+	}
+	a.writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) exportAccessActivity(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	f, err := accessActivityFilter(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	out := accessActivityExport{
+		Kind: "trstctl.access-activity-export/v1", GeneratedAt: time.Now().UTC(),
+		Filters:  accessActivityFilters{Bundle: f.BundleID, Principal: f.Principal, Query: f.Query},
+		Fields:   []string{"at", "action", "bundle_ids", "bundle_names", "grant_id", "run_id", "principal", "actor", "detail"},
+		Excludes: accessActivityExcludes, Items: []accessActivityRow{},
+	}
+	f.Limit = 500
+	for len(out.Items) < accessActivityExportMax {
+		rows, err := a.store.ListAccessBundleActivity(r.Context(), tenantID, f)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		for _, row := range rows {
+			if len(out.Items) == accessActivityExportMax {
+				out.Truncated = true
+				break
+			}
+			out.Items = append(out.Items, toAccessActivityRow(row))
+		}
+		if len(rows) < f.Limit || out.Truncated {
+			break
+		}
+		last := rows[len(rows)-1]
+		at := last.At
+		f.BeforeAt, f.BeforeSequence = &at, last.Sequence
+	}
+	out.Rows = len(out.Items)
+	w.Header().Set("Content-Disposition", `attachment; filename="access-activity.json"`)
+	a.writeJSON(w, http.StatusOK, out)
+}
+
 func accessBundleSchemas() map[string]*Schema {
 	str := func() *Schema { return &Schema{Type: "string"} }
 	integer := func() *Schema { return &Schema{Type: "integer"} }
@@ -1046,7 +1208,15 @@ func accessBundleSchemas() map[string]*Schema {
 		"permissions": list(object(map[string]*Schema{"permission": str(), "via": list(via)}, "permission", "via")),
 		"grants":      list(grant), "runs": list(run), "bounds": bounds, "computed_at": ts()},
 		"principal", "permissions", "grants", "runs", "bounds", "computed_at")
+	activity := object(map[string]*Schema{"at": ts(), "action": {Type: "string", Enum: []string{"saved", "deleted", "granted", "ungranted",
+		"run_issued", "run_revoked", "run_used"}}, "bundle_ids": list(str()), "bundle_names": list(str()), "grant_id": str(), "run_id": str(),
+		"principal": str(), "actor": str(), "detail": str()}, "at", "action", "bundle_ids", "bundle_names")
 	return map[string]*Schema{
+		"AccessActivityList": object(map[string]*Schema{"items": list(activity), "next_cursor": str()}, "items", "next_cursor"),
+		"AccessActivityExport": object(map[string]*Schema{"kind": str(), "generated_at": ts(),
+			"filters": object(map[string]*Schema{"bundle": str(), "principal": str(), "q": str()}),
+			"fields":  list(str()), "excludes": list(str()), "rows": integer(), "truncated": boolean(), "items": list(activity)},
+			"kind", "generated_at", "filters", "fields", "excludes", "rows", "truncated", "items"),
 		"AccessBundleRequest": object(map[string]*Schema{"name": str(), "description": str(), "permissions": list(str()),
 			"audiences": list(audience), "max_run_ttl_seconds": integer(), "revision": integer()}, "name", "permissions"),
 		"AccessBundle":     bundle,
