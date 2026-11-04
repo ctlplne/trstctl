@@ -21,6 +21,11 @@ const reportTypeMessageKeys: Record<string, MessageKey> = {
   cbom_posture: "policy.reportType.cbomPosture",
   audit_summary: "policy.reportType.auditSummary",
   nhi_compliance_mapping: "policy.reportType.nhiComplianceMapping",
+  lifecycle_evidence: "policy.reportType.lifecycleEvidence",
+  access_evidence: "policy.reportType.accessEvidence",
+  rotation_evidence: "policy.reportType.rotationEvidence",
+  incident_response_evidence: "policy.reportType.incidentResponseEvidence",
+  qualification_evidence: "policy.reportType.qualificationEvidence",
 };
 
 export function ComplianceInventoryReportPanel({

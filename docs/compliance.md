@@ -223,7 +223,9 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 
 The response is intentionally mechanical: framework ids, report types
 (`framework_evidence_pack`, `inventory_snapshot`, `cbom_posture`,
-`audit_summary`, `nhi_compliance_mapping`, `crypto_risk`, `customer_assurance`), served routes, evidence
+`audit_summary`, `nhi_compliance_mapping`, `crypto_risk`, `customer_assurance`,
+`lifecycle_evidence`, `access_evidence`, `rotation_evidence`,
+`incident_response_evidence`, `qualification_evidence`), served routes, evidence
 references, inventory counts, and the first page of tenant report schedules.
 
 Before enabling a schedule, set `audit.archive_dir` (or
@@ -462,6 +464,42 @@ A Provider schedules a customer's report through a
 [tenant template](editions.md#provider-tenant-templates)'s report schedules,
 reads the customer's signed runs with the signing key, and downloads a run to
 share; see [Provider customer assurance reports](editions.md#provider-customer-assurance-reports).
+
+## Evidence report templates
+
+Five scheduled report types turn one window of the tenant's event log into
+signed evidence an auditor can check offline:
+
+| Report type | What it counts | Current state it reads |
+|---|---|---|
+| `lifecycle_evidence` | certificates issued, renewed, renewal problems, deployed and verified at the endpoint, revoked, retired or superseded, recorded from outside trstctl, key compromise | certificates, expiring within 30 days, without an owner; identities by status |
+| `access_evidence` | members, roles, API tokens, access-change requests, agent access bundles and runs, privileged sessions, provider access | members by status, active API tokens, privileged sessions by status |
+| `rotation_evidence` | certificate renewals, secret rotations and schedule runs, key rotations (tenant key domain, deployment KEK, CA, OCSP responder, break-glass, attester trust, SCEP challenge), lease renewals | rotation schedules enabled and overdue, last-run outcomes |
+| `incident_response_evidence` | incident executions, fleet reissuance, key compromise effects, CA revocations, decoys, rogue certificates, break-glass | incident executions by status |
+| `qualification_evidence` | rehearsals, restore drills, endpoint recovery checks, revocation health, CA ceremonies, post-quantum pilots, certificate transparency | rehearsal scenarios, runs and their verdicts |
+
+Each report names the event types it read (`scope`), counts each section's
+events by type, tallies outcomes, and lists up to 25 subject IDs per section,
+with `truncated` set when there were more. It never carries an event body: an
+outcome is kept only as one closed lowercase word (`completed`, `rolled_back`)
+and a subject only as a UUID, so a name, an email address, free text, a
+certificate, a token or a secret has no field to travel in. People appear as
+counts and IDs; the audit log names them.
+
+Every report says what it could not observe in `unobserved`: the window's
+edges, one line per section that recorded nothing in the window, and what the
+product cannot see — for example, certificates issued outside trstctl until
+discovery records them, credential use outside trstctl, a rotated secret's
+adoption where no consumer acknowledged it, incidents handled elsewhere, and
+read-only qualification checks, which record nothing.
+
+A scheduled run covers the period that ends at its due edge, is signed like
+every scheduled report, and verifies offline as above. To review a template
+before scheduling it, render it unsigned over any window of up to 92 days:
+
+```sh
+trstctl-cli reports evidence access_evidence --from 2026-10-01T00:00:00Z --through 2026-11-01T00:00:00Z
+```
 
 ## What the operator must still do
 

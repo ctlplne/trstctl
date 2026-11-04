@@ -74,6 +74,11 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
   { id: "crypto_risk", labelKey: "policy.reportType.cryptoRisk" },
   { id: "customer_assurance", labelKey: "policy.reportType.customerAssurance" },
+  { id: "lifecycle_evidence", labelKey: "policy.reportType.lifecycleEvidence" },
+  { id: "access_evidence", labelKey: "policy.reportType.accessEvidence" },
+  { id: "rotation_evidence", labelKey: "policy.reportType.rotationEvidence" },
+  { id: "incident_response_evidence", labelKey: "policy.reportType.incidentResponseEvidence" },
+  { id: "qualification_evidence", labelKey: "policy.reportType.qualificationEvidence" },
 ];
 
 function hasUnsafeHrefChar(href: string): boolean {

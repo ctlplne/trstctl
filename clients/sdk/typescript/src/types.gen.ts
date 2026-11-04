@@ -7641,6 +7641,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/evidence/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Render an evidence report (lifecycle, access, rotation, incident response or qualification) over a window, unsigned, for review before scheduling: counts by event type, outcomes, opaque subject IDs, current state and what it could not observe */
+        get: operations["getEvidenceReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/caches": {
         parameters: {
             query?: never;
@@ -14336,7 +14353,7 @@ export interface components {
             next_run_at: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance" | "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -14375,7 +14392,7 @@ export interface components {
             name: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance" | "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
         };
         ComplianceReportTicket: {
             instance_url: string;
@@ -16485,6 +16502,35 @@ export interface components {
             retention?: string;
             /** @enum {string} */
             state: "not_enabled" | "preparing" | "active";
+        };
+        EvidenceReport: {
+            current_state: {
+                [key: string]: number;
+            };
+            format: string;
+            /** @enum {string} */
+            kind: "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
+            scope: string[];
+            sections: {
+                by_type: {
+                    count: number;
+                    type: string;
+                }[];
+                events: number;
+                name: string;
+                outcomes: {
+                    [key: string]: number;
+                };
+                subject_ids: string[];
+                truncated: boolean;
+            }[];
+            source_head_sequence: number;
+            title: string;
+            unobserved: string[];
+            /** Format: date-time */
+            window_from: string;
+            /** Format: date-time */
+            window_through: string;
         };
         ExternalCA: {
             id: string;
@@ -46234,6 +46280,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CryptoRiskExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEvidenceReport: {
+        parameters: {
+            query?: {
+                /** @description window start (default: 7 days before through) */
+                from?: string;
+                /** @description window end (default: now); at most 92 days after from */
+                through?: string;
+            };
+            header?: never;
+            path: {
+                /** @description lifecycle_evidence, access_evidence, rotation_evidence, incident_response_evidence or qualification_evidence */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceReport"];
                 };
             };
             /** @description client error */

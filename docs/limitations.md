@@ -7768,6 +7768,23 @@ all of this and shows the effective authority after every grant change. What com
 - **OAuth re-authorization health.** For MCP endpoints that sign in with OAuth, with per-tool
   authorization at the relying party; it waits for the P8 design's go-ahead.
 
+
+## Evidence report templates (A252) — served
+
+Five scheduled report types — `lifecycle_evidence`, `access_evidence`, `rotation_evidence`,
+`incident_response_evidence` and `qualification_evidence` — replay one window of the tenant's event log
+and are signed like every scheduled report, so a saved run verifies offline with only the published key
+(`trstctl report verify`). Each names the event types it read, counts each section's events by type,
+tallies closed outcome words, lists up to 25 subject IDs per section, reads the current state as counts,
+and says what it could not observe (the window's edges, sections that recorded nothing, and what the
+product cannot see). No event body, certificate, secret, token or person's name has a field to travel in.
+`GET /api/v1/reports/evidence/{kind}` (`trstctl reports evidence`) renders one unsigned over up to 92 days
+for review, and the console's report schedule form offers all five. What it does not establish:
+
+- **Outside trstctl.** Certificates issued, credentials used, secrets rotated or incidents handled outside
+  trstctl appear only once trstctl records them (discovery, an import, a credential-usage record).
+- **Adoption.** A rotated secret's adoption is known only where its consumers acknowledged it or a
+  readback confirmed it; a receipt-only destination shows its run status.
 ## Customer assurance reports
 
 `GET /api/v1/reports/assurance` and the `customer_assurance` scheduled report put

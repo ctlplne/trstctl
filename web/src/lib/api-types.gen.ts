@@ -3419,7 +3419,7 @@ export interface ComplianceReportSchedule {
   name: string;
   next_run_at: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance" | "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
   tenant_id: string;
   updated_at: string;
 }
@@ -3456,7 +3456,7 @@ export interface ComplianceReportScheduleRequest {
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance" | "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
 }
 
 export interface ComplianceReportTicket {
@@ -5164,6 +5164,19 @@ export interface EventProtectionStatus {
   requested_at?: string;
   retention?: string;
   state: "not_enabled" | "preparing" | "active";
+}
+
+export interface EvidenceReport {
+  current_state: Record<string, unknown>;
+  format: string;
+  kind: "lifecycle_evidence" | "access_evidence" | "rotation_evidence" | "incident_response_evidence" | "qualification_evidence";
+  scope: string[];
+  sections: { by_type: { count: number; type: string }[]; events: number; name: string; outcomes: Record<string, unknown>; subject_ids: string[]; truncated: boolean }[];
+  source_head_sequence: number;
+  title: string;
+  unobserved: string[];
+  window_from: string;
+  window_through: string;
 }
 
 export interface ExternalCA {

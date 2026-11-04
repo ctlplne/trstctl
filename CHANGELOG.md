@@ -2,6 +2,12 @@
 
 ### Added
 
+- Evidence report templates (A252 is served): five scheduled report types — lifecycle, access, rotation,
+  incident response and qualification evidence — replay one window of the tenant's event log, sign like
+  every scheduled report and verify offline. Each counts its sections' events by type, tallies outcomes,
+  names up to 25 opaque subject IDs per section, reads the current state as counts, and says what it could
+  not observe; no event body, certificate, secret, token or name is carried. `GET
+  /api/v1/reports/evidence/{kind}` (`trstctl reports evidence`) renders one unsigned for review.
 - The console's **Agent access** page (A251 is served): bundles, grants with the effective
   authority after every change, authority lookup with delegation chains and bounds, a run for
   yourself with its token shown once and launch lines, runs with revoke, and activity search and

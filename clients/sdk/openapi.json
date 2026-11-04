@@ -16182,7 +16182,12 @@
               "audit_summary",
               "nhi_compliance_mapping",
               "crypto_risk",
-              "customer_assurance"
+              "customer_assurance",
+              "lifecycle_evidence",
+              "access_evidence",
+              "rotation_evidence",
+              "incident_response_evidence",
+              "qualification_evidence"
             ],
             "type": "string"
           },
@@ -16373,7 +16378,12 @@
               "audit_summary",
               "nhi_compliance_mapping",
               "crypto_risk",
-              "customer_assurance"
+              "customer_assurance",
+              "lifecycle_evidence",
+              "access_evidence",
+              "rotation_evidence",
+              "incident_response_evidence",
+              "qualification_evidence"
             ],
             "type": "string"
           }
@@ -24222,6 +24232,123 @@
           "custody_configured",
           "legacy_events_readable",
           "next_step"
+        ],
+        "type": "object"
+      },
+      "EvidenceReport": {
+        "properties": {
+          "current_state": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lifecycle_evidence",
+              "access_evidence",
+              "rotation_evidence",
+              "incident_response_evidence",
+              "qualification_evidence"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sections": {
+            "items": {
+              "properties": {
+                "by_type": {
+                  "items": {
+                    "properties": {
+                      "count": {
+                        "type": "integer"
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "count"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "events": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "outcomes": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object"
+                },
+                "subject_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "events",
+                "by_type",
+                "outcomes",
+                "subject_ids",
+                "truncated"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source_head_sequence": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "unobserved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "window_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_through": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "title",
+          "window_from",
+          "window_through",
+          "source_head_sequence",
+          "scope",
+          "sections",
+          "current_state",
+          "unobserved"
         ],
         "type": "object"
       },
@@ -84958,6 +85085,82 @@
         ],
         "summary": "Export the cryptographic risk report as CSV, one row per key in priority order",
         "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/reports/evidence/{kind}": {
+      "get": {
+        "operationId": "getEvidenceReport",
+        "parameters": [
+          {
+            "description": "lifecycle_evidence, access_evidence, rotation_evidence, incident_response_evidence or qualification_evidence",
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "window start (default: 7 days before through)",
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "window end (default: now); at most 92 days after from",
+            "in": "query",
+            "name": "through",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Render an evidence report (lifecycle, access, rotation, incident response or qualification) over a window, unsigned, for review before scheduling: counts by event type, outcomes, opaque subject IDs, current state and what it could not observe",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/revocation/caches": {

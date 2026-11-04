@@ -15490,6 +15490,31 @@ export const messages = {
     defaultMessage: "Customer assurance",
     description: "Compliance report type option for the plain-language report, in the tenant's brand, that a provider shares with a customer.",
   },
+  "policy.reportType.lifecycleEvidence": {
+    defaultMessage: "Lifecycle evidence",
+    description:
+      "Compliance report type option (A252): a signed evidence report of certificates issued, renewed, deployed, verified and revoked in the period, with what it could not observe.",
+  },
+  "policy.reportType.accessEvidence": {
+    defaultMessage: "Access evidence",
+    description:
+      "Compliance report type option (A252): a signed evidence report of members, roles, API tokens, agent access and privileged sessions in the period, with what it could not observe.",
+  },
+  "policy.reportType.rotationEvidence": {
+    defaultMessage: "Rotation evidence",
+    description:
+      "Compliance report type option (A252): a signed evidence report of certificate, secret and key rotations in the period, with what it could not observe.",
+  },
+  "policy.reportType.incidentResponseEvidence": {
+    defaultMessage: "Incident response evidence",
+    description:
+      "Compliance report type option (A252): a signed evidence report of incident executions, key compromise, revocations, decoys and break-glass in the period, with what it could not observe.",
+  },
+  "policy.reportType.qualificationEvidence": {
+    defaultMessage: "Qualification evidence",
+    description:
+      "Compliance report type option (A252): a signed evidence report of rehearsals, restore drills, recovery checks and ceremonies in the period, with what it could not observe.",
+  },
   "policy.reporting.loading": {
     defaultMessage: "Loading report coverage.",
     description: "Loading state for compliance inventory reporting coverage.",

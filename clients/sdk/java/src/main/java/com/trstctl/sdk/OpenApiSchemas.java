@@ -512,6 +512,7 @@ public final class OpenApiSchemas {
       "EventProtectionPlan",
       "EventProtectionRequest",
       "EventProtectionStatus",
+      "EvidenceReport",
       "ExternalCA",
       "ExternalCAIssueRequest",
       "ExternalCAIssuedCertificate",

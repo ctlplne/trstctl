@@ -19478,7 +19478,8 @@
                 "erasePrivacySubject",
                 "listPrivacySubjectErasures",
                 "exportPrivacySubject",
-                "getPrivacyCatalog"
+                "getPrivacyCatalog",
+                "getEvidenceReport"
             ],
             "api_na": "",
             "cli_surface": [
@@ -19510,7 +19511,8 @@
                 "privacy erasures erase",
                 "privacy erasures list",
                 "privacy export",
-                "privacy catalog"
+                "privacy catalog",
+                "reports evidence"
             ],
             "cli_na": "",
             "facet_evidence": {

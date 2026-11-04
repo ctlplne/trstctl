@@ -198,6 +198,8 @@ func (a *API) scheduledCompliancePayload(ctx context.Context, tenantID string, s
 		return a.scheduledCryptoRiskReport(ctx, tenantID, schedule)
 	case customerAssuranceReportType:
 		return a.scheduledCustomerAssuranceReport(ctx, tenantID, schedule)
+	case lifecycleEvidenceReportType, accessEvidenceReportType, rotationEvidenceReportType, incidentResponseEvidenceReportType, qualificationEvidenceReportType:
+		return a.scheduledEvidenceReport(ctx, tenantID, schedule.ReportType, schedule.NextRunAt, time.Duration(schedule.IntervalSeconds)*time.Second)
 	case "nhi_compliance_mapping":
 		report, err := a.buildNHIComplianceReport(ctx, tenantID)
 		if err != nil {

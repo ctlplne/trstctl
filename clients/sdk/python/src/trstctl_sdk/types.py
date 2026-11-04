@@ -7164,6 +7164,23 @@ EventProtectionStatus = TypedDict(
     total=False,
 )
 
+EvidenceReport = TypedDict(
+    'EvidenceReport',
+    {
+        'current_state': dict[str, Any],
+        'format': str,
+        'kind': str,
+        'scope': list[str],
+        'sections': list[dict[str, Any]],
+        'source_head_sequence': int,
+        'title': str,
+        'unobserved': list[str],
+        'window_from': str,
+        'window_through': str,
+    },
+    total=False,
+)
+
 ExternalCA = TypedDict(
     'ExternalCA',
     {

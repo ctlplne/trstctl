@@ -885,6 +885,16 @@ attestation is older than `older_than_days` (default: the attestation cadence) o
 was never made. A campaign holds at most 100 items; a larger answer asks for a
 narrower target.
 
+**Evidence report templates (A252).** Five more scheduled report types —
+`lifecycle_evidence`, `access_evidence`, `rotation_evidence`,
+`incident_response_evidence` and `qualification_evidence` — replay one window of
+the event log into signed evidence that verifies offline: counts by event type,
+closed outcome words, up to 25 opaque subject IDs per section, current-state
+counts, and what each could not observe, with no event body, secret, token or
+name. `GET /api/v1/reports/evidence/{kind}` renders one unsigned for review. See
+[Evidence report templates](../compliance.md#evidence-report-templates).
+**Status:** served.
+
 ### Credential assurance records (A179)
 
 `GET /api/v1/certificates/{id}/assurance-record` (`certs:read`; CLI `trstctl
