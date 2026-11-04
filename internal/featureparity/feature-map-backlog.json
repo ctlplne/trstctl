@@ -3604,7 +3604,10 @@
                 "getKubernetesTrustRollout",
                 "pauseKubernetesTrustRollout",
                 "resumeKubernetesTrustRollout",
-                "getADCSIssuerHealth"
+                "getADCSIssuerHealth",
+                "requestADCSDecisionApproval",
+                "executeADCSDecision",
+                "listADCSDecisions"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3622,6 +3625,9 @@
                 "identities approve",
                 "external-cas list",
                 "external-cas issue",
+                "external-cas adcs-requests ask",
+                "external-cas adcs-requests decide",
+                "external-cas adcs-decisions",
                 "kubernetes csr",
                 "kubernetes cert-manager-requests",
                 "kubernetes trust-bundles",

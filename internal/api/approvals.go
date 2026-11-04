@@ -410,6 +410,9 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.CertsIssue, action == "sign"
 	case "ssh_trust_rollout":
 		return authz.CertsIssue, action == "apply"
+	case "adcs_request":
+		// N1: a decision on a pending AD CS request is reviewed by those who may issue.
+		return authz.CertsIssue, action == "approve" || action == "deny"
 	case "migration_run", "pqc_migration_run":
 		return authz.CertsIssue, action == "start"
 	case "secret":

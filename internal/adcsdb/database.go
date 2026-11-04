@@ -133,6 +133,15 @@ func field(fields map[string]string, keys ...string) string {
 	return ""
 }
 
+// RequestIDOf returns a row's CA request id, or 0 when the row names none.
+func RequestIDOf(fields map[string]string) int {
+	id, err := strconv.Atoi(leadingDigits(field(fields, "RequestID", "Request ID", "RequestId", "Issued Request ID")))
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
 // SerialOf returns a row's serial in lower-case hex without separators.
 func SerialOf(fields map[string]string) string {
 	return strings.ToLower(strings.ReplaceAll(field(fields, "SerialNumber", "Serial Number"), " ", ""))

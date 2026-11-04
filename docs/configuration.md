@@ -390,7 +390,9 @@ common name of a domain-joined network relay (with `tenant_id`, because the rela
 is one tenant's agent): trstctl hands each revocation to that relay, which runs
 `certutil -config <ca_config> -revoke`, publishes a new CRL with `certutil -CRL`
 and reads the row back. The relay's account needs the CA's Issue and Manage
-Certificates and Manage CA rights, and `adcs.revoke` must be claimable.
+Certificates and Manage CA rights, and `adcs.revoke` must be claimable. The same
+relay approves (`certutil -resubmit`) or denies held requests after trstctl's own
+approval (N1); `adcs.request.decide` must be claimable for that.
 
 Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 `entrust`, `gcpcas`, `globalsign`, `letsencrypt`, `sectigo`, `shellca`,
@@ -3587,7 +3589,7 @@ lists the estate-touching job kinds enrolled agents may lease and execute:
 `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.purge`, `connector.takedown`,
 `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
-`adcs.ca_database`, `adcs.revoke`, `trust.distribute`, `cmdb.sync`, `mdm.sync`,
+`adcs.ca_database`, `adcs.revoke`, `adcs.request.decide`, `trust.distribute`, `cmdb.sync`, `mdm.sync`,
 `ticket.sync`, and `agent.upgrade`.
 Enabling `endpoint.contain` also enables `endpoint.recovery_check`, the
 read-only check of whether a stopped listener can come back that a replacement

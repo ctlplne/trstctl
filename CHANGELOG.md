@@ -22,6 +22,11 @@
   /api/v1/switching/imports/{id}/watch` matches every imported certificate to what its endpoints serve, under
   the control plane's egress rules with private ranges only by explicit grant, flagging serves_other,
   unreachable and no_endpoint, and repeats daily (`trstctl switching import|imports`).
+- AD CS approve and deny through the relay, behind approval (N1 is served): a request an AD CS template holds for a
+  CA manager is approved (`certutil -resubmit`) or denied at the CA by the issuer's domain-joined relay only after
+  another reviewer approves the exact decision, and only while the CA still holds it as pending; `GET
+  /api/v1/external-cas/{id}/adcs-decisions` shows each decision queued, decided with the CA's disposition, or failed
+  with the relay's reason.
 - The edition and qualification ledger (A253 is served): `go run ./tools/editionledger` generates
   `docs/editions-ledger.md` and `.json` from the license table and the feature map; the README and
   `docs/editions.md` carry its generated blocks, the Editions API and the console name the no-license

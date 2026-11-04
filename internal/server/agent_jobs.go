@@ -122,6 +122,8 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindADCSDatabase: true,
 	// A162: AD CS revocation through certutil on the issuer's relay.
 	relay.KindADCSRevoke: true,
+	// N1: an approved decision on a pending AD CS request, on the issuer's relay.
+	relay.KindADCSDecide: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -996,6 +998,13 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("AD CS revocation result needs a terminal executed report")
 		}
 		return validateADCSRevokeResult(info.TenantID, info.CommonName, claim.Payload, req.Detail)
+	case relay.KindADCSDecide:
+		// N1: the decision is recorded only from a report checked against its
+		// job: the exact relay, the same request, read back as decided.
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("AD CS decision result needs a terminal executed report")
+		}
+		return a.recordADCSDecisionResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -1309,6 +1318,12 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// A162: a failed AD CS revocation attempt is answered, not reclaimed; the
 	// revocation's own outbox delivery queues the next attempt on its backoff.
 	if claim.Destination == relay.KindADCSRevoke {
+		permanent = true
+	}
+	// N1: a failed AD CS decision ends with the relay's reason (the CA no longer
+	// holds the request as pending, certutil refused); it is never retried on
+	// its own, because the CA's state may have moved.
+	if claim.Destination == relay.KindADCSDecide {
 		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on

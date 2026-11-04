@@ -272,6 +272,8 @@ var TenantScopedTables = []string{
 	// A265: wave rows, then waves (which reference their import), then the
 	// import's rows, then imports.
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",
+	// N1: AD CS request decisions; no foreign keys.
+	"adcs_request_decisions",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.

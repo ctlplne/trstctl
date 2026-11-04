@@ -645,6 +645,71 @@ ADCSDatabaseSummary = TypedDict(
     total=False,
 )
 
+ADCSDecision = TypedDict(
+    'ADCSDecision',
+    {
+        'approval_request_id': str,
+        'ca_config': str,
+        'decided_at': str,
+        'decision': str,
+        'disposition': str,
+        'failure': str,
+        'id': str,
+        'issuer_id': str,
+        'queued_at': str,
+        'reason': str,
+        'request_id': int,
+        'requested_by': str,
+        'serial': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ADCSDecisionApproval = TypedDict(
+    'ADCSDecisionApproval',
+    {
+        'approval_count': int,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'ca_config': str,
+        'decision': str,
+        'expires_at': str,
+        'issuer_id': str,
+        'reason': str,
+        'request_id': int,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+ADCSDecisionList = TypedDict(
+    'ADCSDecisionList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ADCSDecisionRequest = TypedDict(
+    'ADCSDecisionRequest',
+    {
+        'decision': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+ADCSDecisionStart = TypedDict(
+    'ADCSDecisionStart',
+    {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+    },
+    total=False,
+)
+
 ADCSDriftHistory = TypedDict(
     'ADCSDriftHistory',
     {

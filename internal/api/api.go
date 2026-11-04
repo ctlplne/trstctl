@@ -131,6 +131,7 @@ type API struct {
 	cmdbRunNow               CMDBRunNow
 	sshWorkflow              SSHWorkflowService
 	sshTrustFleet            SSHTrustFleetService
+	adcsDecisions            ADCSDecisionService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
 	managedCALeafRecovery    ManagedCALeafRecoveryService
 	broker                   BrokerService
@@ -299,6 +300,7 @@ type config struct {
 	cmdbRunNow                  CMDBRunNow
 	sshWorkflow                 SSHWorkflowService
 	sshTrustFleet               SSHTrustFleetService
+	adcsDecisions               ADCSDecisionService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
 	managedCALeafRecovery       ManagedCALeafRecoveryService
 	broker                      BrokerService
@@ -629,6 +631,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		cmdbRunNow:                  cfg.cmdbRunNow,
 		sshWorkflow:                 cfg.sshWorkflow,
 		sshTrustFleet:               cfg.sshTrustFleet,
+		adcsDecisions:               cfg.adcsDecisions,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
 		managedCALeafRecovery:       cfg.managedCALeafRecovery,
 		broker:                      cfg.broker,
@@ -1681,6 +1684,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.accessBundleRoutes()...)    // see access_bundles.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
 	routes = append(routes, a.switchingWaveRoutes()...)   // see switching_waves.go
+	routes = append(routes, a.adcsDecisionRoutes()...)    // see adcs_decisions.go
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)
 	return append(routes, a.licensedRouteRegistry()...)

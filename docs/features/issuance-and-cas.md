@@ -573,7 +573,24 @@ when the relay reports the row revoked and the CRL published. A relay that has
 not answered yet leaves the revocation waiting (it does not count against its
 retries); a failed attempt is retried on the revocation's own backoff. AD CS
 takes the reasons unspecified, keyCompromise, cACompromise, affiliationChanged,
-superseded and cessationOfOperation.
+superseded and cessationOfOperation. With dual control on (`require_approval`), a
+revocation waits for its approvals before the relay is asked, like every other
+revocation.
+
+**Approving and denying held AD CS requests (N1).** A template that requires CA
+manager approval holds a request as pending. Through the same relay, trstctl
+approves or denies it at the CA — behind its own approval, never on one person's
+word. `POST /api/v1/external-cas/{id}/adcs-requests/{request_id}/approval-requests`
+asks for an exact decision (`approve` or `deny`, with a reason); reviewers who may
+issue approve it under `/api/v1/approval-requests` (the requester cannot approve their
+own); then the requester executes exactly what was approved with `POST
+.../decisions`, which spends the approval on one relay job. The relay reads the
+request's row first and acts only while the CA still holds it as pending — so an
+approval can never re-issue a request a manager already denied — then runs
+`certutil -resubmit` (approve) or `certutil -deny` and reads the row back.
+`GET /api/v1/external-cas/{id}/adcs-decisions` lists each decision as `queued`,
+`decided` with the CA's disposition (and, for an approval, the issued serial), or
+`failed` with the relay's reason. Status: served.
 
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in

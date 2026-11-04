@@ -471,6 +471,51 @@ export interface ADCSDatabaseSummary {
   unparsed: number;
 }
 
+export interface ADCSDecision {
+  approval_request_id: string;
+  ca_config: string;
+  decided_at?: string;
+  decision: "approve" | "deny";
+  disposition?: string;
+  failure?: string;
+  id: string;
+  issuer_id: string;
+  queued_at: string;
+  reason: string;
+  request_id: number;
+  requested_by: string;
+  serial?: string;
+  status: "queued" | "decided" | "failed";
+}
+
+export interface ADCSDecisionApproval {
+  approval_count: number;
+  approval_intent_digest: string;
+  approval_request_id: string;
+  ca_config: string;
+  decision: "approve" | "deny";
+  expires_at: string;
+  issuer_id: string;
+  reason: string;
+  request_id: number;
+  required_approvals: number;
+  status: string;
+}
+
+export interface ADCSDecisionList {
+  items: ({ approval_request_id: string; ca_config: string; decided_at?: string; decision: "approve" | "deny"; disposition?: string; failure?: string; id: string; issuer_id: string; queued_at: string; reason: string; request_id: number; requested_by: string; serial?: string; status: "queued" | "decided" | "failed" })[];
+}
+
+export interface ADCSDecisionRequest {
+  decision: "approve" | "deny";
+  reason: string;
+}
+
+export interface ADCSDecisionStart {
+  approval_intent_digest: string;
+  approval_request_id: string;
+}
+
 export interface ADCSDriftHistory {
   items: ADCSTemplateDrift[];
 }

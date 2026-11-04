@@ -238,7 +238,10 @@ import (
 // covered offset skipped the grants.
 // Version 79 carries A265's switching imports and their rows.
 // Version 80 carries A265's renewal waves and their rows.
-const SnapshotFormatVersion = 80
+// Version 81 carries N1's AD CS request decisions: without them a restored
+// store would forget each decision's outcome while its covered offset skipped
+// the decided events.
+const SnapshotFormatVersion = 81
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -320,6 +323,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 78: A251's access bundles; grants reference their bundle.
 	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity",
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
+	// Format 81: N1's AD CS request decisions.
+	"adcs_request_decisions",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -668,6 +673,7 @@ SELECT jsonb_build_object(
   'switching_import_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_import_rows t),
   'switching_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_waves t),
   'switching_wave_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_wave_rows t),
+  'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

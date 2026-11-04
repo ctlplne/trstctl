@@ -4011,6 +4011,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/external-cas/{id}/adcs-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an AD CS issuer's decisions, newest first: queued, decided with the CA's disposition, or failed with the relay's reason */
+        get: operations["listADCSDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-cas/{id}/adcs-requests/{request_id}/approval-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for approval to approve or deny one request an AD CS template holds for a CA manager; other reviewers decide it before anything reaches the CA */
+        post: operations["requestADCSDecisionApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-cas/{id}/adcs-requests/{request_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute an approved decision: the issuer's relay approves (certutil -resubmit) or denies the request at the CA only while the CA still holds it as pending, and reads its disposition back */
+        post: operations["executeADCSDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/external-cas/{id}/issue": {
         parameters: {
             query?: never;
@@ -10669,6 +10720,72 @@ export interface components {
             total: number;
             unknown: number;
             unparsed: number;
+        };
+        ADCSDecision: {
+            approval_request_id: string;
+            ca_config: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** @enum {string} */
+            decision: "approve" | "deny";
+            disposition?: string;
+            failure?: string;
+            id: string;
+            issuer_id: string;
+            /** Format: date-time */
+            queued_at: string;
+            reason: string;
+            request_id: number;
+            requested_by: string;
+            serial?: string;
+            /** @enum {string} */
+            status: "queued" | "decided" | "failed";
+        };
+        ADCSDecisionApproval: {
+            approval_count: number;
+            approval_intent_digest: string;
+            approval_request_id: string;
+            ca_config: string;
+            /** @enum {string} */
+            decision: "approve" | "deny";
+            /** Format: date-time */
+            expires_at: string;
+            issuer_id: string;
+            reason: string;
+            request_id: number;
+            required_approvals: number;
+            status: string;
+        };
+        ADCSDecisionList: {
+            items: {
+                approval_request_id: string;
+                ca_config: string;
+                /** Format: date-time */
+                decided_at?: string;
+                /** @enum {string} */
+                decision: "approve" | "deny";
+                disposition?: string;
+                failure?: string;
+                id: string;
+                issuer_id: string;
+                /** Format: date-time */
+                queued_at: string;
+                reason: string;
+                request_id: number;
+                requested_by: string;
+                serial?: string;
+                /** @enum {string} */
+                status: "queued" | "decided" | "failed";
+            }[];
+        };
+        ADCSDecisionRequest: {
+            /** @enum {string} */
+            decision: "approve" | "deny";
+            reason: string;
+        };
+        ADCSDecisionStart: {
+            approval_intent_digest: string;
+            approval_request_id: string;
         };
         ADCSDriftHistory: {
             items: components["schemas"]["ADCSTemplateDrift"][];
@@ -35835,6 +35952,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExternalCAList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listADCSDecisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDecisionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestADCSDecisionApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+                /** @description the AD CS request id */
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDecisionApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeADCSDecision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+                /** @description the AD CS request id */
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSDecisionStart"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDecision"];
                 };
             };
             /** @description client error */

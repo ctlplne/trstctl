@@ -216,6 +216,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range accessBundleSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range adcsDecisionSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range evidenceReportSchemas() {
 		schemas[name] = schema
 	}

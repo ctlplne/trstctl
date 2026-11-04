@@ -263,6 +263,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// N1: approve (-resubmit) or deny a pending request at the CA and
+			// read its row back, as the relay's own identity, after trstctl's
+			// approval.
+			Kind:  KindADCSDecide,
+			Flags: []string{"--relay-claim", "--adcs-certutil"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,

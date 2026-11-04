@@ -1961,6 +1961,247 @@
         ],
         "type": "object"
       },
+      "ADCSDecision": {
+        "properties": {
+          "approval_request_id": {
+            "type": "string"
+          },
+          "ca_config": {
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approve",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "integer"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "decided",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "issuer_id",
+          "ca_config",
+          "request_id",
+          "decision",
+          "reason",
+          "approval_request_id",
+          "requested_by",
+          "status",
+          "queued_at"
+        ],
+        "type": "object"
+      },
+      "ADCSDecisionApproval": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "type": "string"
+          },
+          "ca_config": {
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approve",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "integer"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_id",
+          "ca_config",
+          "request_id",
+          "decision",
+          "reason",
+          "approval_request_id",
+          "approval_intent_digest",
+          "status",
+          "required_approvals",
+          "approval_count",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "ADCSDecisionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "approval_request_id": {
+                  "type": "string"
+                },
+                "ca_config": {
+                  "type": "string"
+                },
+                "decided_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "decision": {
+                  "enum": [
+                    "approve",
+                    "deny"
+                  ],
+                  "type": "string"
+                },
+                "disposition": {
+                  "type": "string"
+                },
+                "failure": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "issuer_id": {
+                  "type": "string"
+                },
+                "queued_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "integer"
+                },
+                "requested_by": {
+                  "type": "string"
+                },
+                "serial": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "queued",
+                    "decided",
+                    "failed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "issuer_id",
+                "ca_config",
+                "request_id",
+                "decision",
+                "reason",
+                "approval_request_id",
+                "requested_by",
+                "status",
+                "queued_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ADCSDecisionRequest": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ADCSDecisionStart": {
+        "properties": {
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_request_id",
+          "approval_intent_digest"
+        ],
+        "type": "object"
+      },
       "ADCSDriftHistory": {
         "properties": {
           "items": {
@@ -70300,6 +70541,236 @@
         ],
         "summary": "List configured upstream CA integrations",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/external-cas/{id}/adcs-decisions": {
+      "get": {
+        "operationId": "listADCSDecisions",
+        "parameters": [
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDecisionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List an AD CS issuer's decisions, newest first: queued, decided with the CA's disposition, or failed with the relay's reason",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/external-cas/{id}/adcs-requests/{request_id}/approval-requests": {
+      "post": {
+        "operationId": "requestADCSDecisionApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the AD CS request id",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDecisionApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ask for approval to approve or deny one request an AD CS template holds for a CA manager; other reviewers decide it before anything reaches the CA",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/external-cas/{id}/adcs-requests/{request_id}/decisions": {
+      "post": {
+        "operationId": "executeADCSDecision",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "configured external CA registry id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the AD CS request id",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSDecisionStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDecision"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Execute an approved decision: the issuer's relay approves (certutil -resubmit) or denies the request at the CA only while the CA still holds it as pending, and reads its disposition back",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/external-cas/{id}/issue": {

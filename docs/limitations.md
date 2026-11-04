@@ -3237,6 +3237,7 @@ control plane's own worker stops doing it. The kinds the allowlist recognizes
 containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links), `adcs.inventory.endpoint_probe` (opt-in scoped LDAP hostname probes with retained pages),
 `adcs.ca_database` (a domain-joined relay's certutil read of one CA database),
 `adcs.revoke` (AD CS revocation through the issuer's `revocation_relay`),
+`adcs.request.decide` (N1: approve or deny a held AD CS request through the same relay, after trstctl's approval),
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `connector.right_size`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (the
 post-upgrade functional check every polling agent answers, A71) —
@@ -7798,6 +7799,19 @@ A wave's deploys and their verification are the target executor's, as for any id
 the executor's delivered and verified receipts where a host agent would. Rolling back pauses trstctl's renewals and
 withdraws queued deploys; a certificate trstctl already deployed stays until the other product renews it or the
 target's predecessor rollback restores the previous one.
+
+## AD CS approve and deny through the relay, behind approval (N1) — served
+
+A request an AD CS template holds for CA manager approval is approved (`certutil -resubmit`) or denied
+(`certutil -deny`) at the CA by the issuer's domain-joined relay, only after another reviewer approves the exact
+decision in trstctl and only while the CA still holds the request as pending; the decision is recorded from the
+relay's readback of the CA database row. Revocation at AD CS is A162's relay path, behind dual control when
+`require_approval` is on. Proven against a certutil stand-in that keeps the CA database rows; the live proof on
+a Windows CA is a Track B row (the AD CS forest). A trstctl issuance that timed out while its request was pending
+does not resume on its own after an approval: the request's certificate is retrieved by its requester, and
+re-running the identity's issuance submits a new request (what comes next: resume the timed-out issuance by its
+CA request id). The relay names request ids the operator reads from the CA; trstctl does not list pending requests
+itself (the CA database collection returns counts, not rows).
 
 ## Edition and qualification ledger (A253) — served
 

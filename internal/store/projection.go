@@ -872,6 +872,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A251: projected from the access.bundle.* events.
 	"access_bundles", "access_bundle_grants", "access_bundle_runs", "access_bundle_activity",
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
+	// N1: projected from adcs.request.decision_queued and adcs.request.decided.
+	"adcs_request_decisions",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
