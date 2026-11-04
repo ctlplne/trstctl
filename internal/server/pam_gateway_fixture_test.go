@@ -44,12 +44,12 @@ type gatewayFixture struct {
 	gatewayLog  *lockedBuffer
 	sshd        pamSSHD
 	objects     *s3test.Server
-	// redisID and mysqlID are the Redis and MySQL targets' containers, which
-	// also carry the stock clients the proofs use.
-	redisID, mysqlID string
-	auditKey         *jose.SigningKey
-	api              *httptest.Server
-	dir              string
+	// redisID, mysqlID and mongoID are the Redis, MySQL and MongoDB targets'
+	// containers, which also carry the stock clients the proofs use.
+	redisID, mysqlID, mongoID string
+	auditKey                  *jose.SigningKey
+	api                       *httptest.Server
+	dir                       string
 	// requester opens sessions; operator registers targets and terminates;
 	// auditor reads and exports recordings.
 	requester, reviewerOne, reviewerTwo, operator, auditor string
@@ -62,6 +62,9 @@ type gatewayFixtureOptions struct {
 	// mysqlNote adds the MySQL target "mysql-gw" (A256), bound to the
 	// gateway, its app.notes table holding this note.
 	mysqlNote string
+	// mongoNote adds the MongoDB target "mongo-gw" (A256), bound to the
+	// gateway, its orders.notes collection holding this note.
+	mongoNote string
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -79,12 +82,15 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
-	var redisProviders, mysqlProviders DynamicSecretProviderRegistry
+	var redisProviders, mysqlProviders, mongoProviders DynamicSecretProviderRegistry
 	if opts.redis {
 		f.redisID, redisProviders = startPAMRedis(t)
 	}
 	if opts.mysqlNote != "" {
 		f.mysqlID, mysqlProviders = startPAMMySQL(t, opts.mysqlNote)
+	}
+	if opts.mongoNote != "" {
+		f.mongoID, mongoProviders = startPAMMongo(t, opts.mongoNote)
 	}
 	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
@@ -109,6 +115,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], mysqlProviders.ForTenant(servedTestTenant)...)
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mysql", TenantID: servedTestTenant, ID: "mysql-gw", ProviderID: "pam-mysql-provider",
 				AllowedRoles: []string{"mysql-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
+		if opts.mongoNote != "" {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], mongoProviders.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mongodb", TenantID: servedTestTenant, ID: "mongo-gw", ProviderID: "pam-mongo-provider",
+				AllowedRoles: []string{"mongo-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
 			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},

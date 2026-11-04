@@ -426,9 +426,21 @@ mysql -h 127.0.0.1 -P 13306
 The gateway offers the client no TLS (the tunnel to it already is) and refuses
 `COM_CHANGE_USER`; revoking or terminating the session drops the account.
 
+A MongoDB target (`target_type: "mongodb"`) works the same way: the session's credential is
+a user the MongoDB provider creates on its database, and the gateway signs in as that user.
+Connect with no credential:
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:17017
+mongosh "mongodb://127.0.0.1:17017/?directConnection=true"
+```
+
+A client's own sign-in (`db.auth()`, credentials in the connection string) is refused with
+`Unauthorized`; revoking or terminating the session drops the user.
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
-(never file contents), PostgreSQL and MySQL statements and Redis commands with bounded results,
+(never file contents), PostgreSQL and MySQL statements and Redis and MongoDB commands with bounded results,
 masked at the gateway before anything leaves it, sealed for the tenant and closed with a
 manifest the audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with

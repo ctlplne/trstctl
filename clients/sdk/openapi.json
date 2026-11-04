@@ -38280,6 +38280,7 @@
           },
           "target_type": {
             "enum": [
+              "mongodb",
               "mysql",
               "postgres",
               "redis",
@@ -38724,6 +38725,7 @@
           },
           "target_type": {
             "enum": [
+              "mongodb",
               "mysql",
               "postgres",
               "redis",
@@ -38793,6 +38795,7 @@
           },
           "target_type": {
             "enum": [
+              "mongodb",
               "mysql",
               "postgres",
               "redis",
@@ -38892,6 +38895,7 @@
           },
           "target_type": {
             "enum": [
+              "mongodb",
               "mysql",
               "postgres",
               "redis",
@@ -38980,6 +38984,7 @@
           },
           "target_type": {
             "enum": [
+              "mongodb",
               "mysql",
               "postgres",
               "redis",

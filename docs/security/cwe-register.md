@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2559 annotated sites across 31 rules. Each row is
+2580 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -721,7 +721,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (393 sites)
+### G115 — CWE-190 Integer overflow or wraparound (410 sites)
 
 | Location | Reason |
 |---|---|
@@ -731,6 +731,11 @@ not this file.
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/misuse.go:130` | event sequences fit int64 (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
+| `internal/agent/accessgateway/mongo.go:94` | a request id is its two's-complement bits (CWE-190) |
+| `internal/agent/accessgateway/mongo.go:95` | a request id is its two's-complement bits (CWE-190) |
+| `internal/agent/accessgateway/mongo.go:96` | an op code is a small constant (CWE-190) |
+| `internal/agent/accessgateway/mongo.go:176` | bounded by the message it came from (CWE-190) |
+| `internal/agent/accessgateway/mongo.go:387` | a BSON datetime's two's-complement bits (CWE-190) |
 | `internal/agent/accessgateway/mysql.go:562` | bounded by mysqlMaxLenenc just above (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:44` | the 3-byte little-endian packet length (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:47` | test strings are under 251 bytes (CWE-190) |
@@ -786,6 +791,17 @@ not this file.
 | `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
 | `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
 | `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:53` | command strings are short (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:63` | SASL payloads are short (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:74` | a BSON int32 is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:77` | a BSON int64 is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:81` | a command document is short (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:194` | a BSON int32's two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/bson.go:196` | a BSON int64's two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:365` | a message length is bounded by its reader (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:366` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:367` | a request id is its two's-complement bits (CWE-190) |
+| `internal/crypto/mongosignin/mongosignin.go:368` | an op code is a small constant (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:135` | the 3-byte little-endian length of a payload checked above (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' lower half (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:200` | the capability flags' upper half (CWE-190) |
@@ -794,10 +810,10 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:140` | a startup message is a few hundred bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:329` | a SCRAM client-first message is under 100 bytes (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin.go:478` | sign-in messages are bounded and small (CWE-190) |
-| `internal/crypto/pgsignin/pgsignin_test.go:114` | a fake server's messages are a few bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:136` | a startup message is a few hundred bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:326` | a SCRAM client-first message is under 100 bytes (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin.go:384` | sign-in messages are bounded and small (CWE-190) |
+| `internal/crypto/pgsignin/pgsignin_test.go:90` | a fake server's messages are a few bytes (CWE-190) |
 | `internal/crypto/seal/generation.go:168` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/seal/seal.go:118` | slice lengths cannot exceed uint64. |
 | `internal/crypto/seal/seal.go:121` | slice lengths cannot exceed uint64. |
@@ -916,6 +932,7 @@ not this file.
 | `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:1026` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:1028` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
@@ -1265,7 +1282,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4197` | closed test table list above |
+| `internal/store/migration_content_test.go:4198` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (1 sites)
 
@@ -1281,7 +1298,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (323 sites)
+### G204 — CWE-78 OS command injection (326 sites)
 
 | Location | Reason |
 |---|---|
@@ -1491,9 +1508,12 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:244` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:255` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_gateway_mysql_served_test.go:131` | the stock mysql client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:28` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:259` | the stock ssh client against the test's own tunnel (CWE-78) |
@@ -1723,7 +1743,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (671 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (672 sites)
 
 | Location | Reason |
 |---|---|
@@ -2054,6 +2074,7 @@ not this file.
 | `internal/crypto/fsatomic/syncdir_other.go:10` | the caller's own state directory (CWE-22) |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
+| `internal/crypto/mongosignin/mongosignin.go:227` | the session's URI names the CA file on the gateway's host, as a driver's tlsCAFile does (CWE-22) |
 | `internal/crypto/mtls/agent.go:215` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:233` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/server.go:240` | operator-selected public certificate path, validated as a regular file (CWE-22) |
@@ -2070,7 +2091,7 @@ not this file.
 | `internal/crypto/pfx/alias_test.go:139` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/crypto/pgsignin/pgsignin.go:214` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
+| `internal/crypto/pgsignin/pgsignin.go:210` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:39` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
@@ -2540,9 +2561,9 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:381` | mysql_native_password (CWE-327) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:417` | the OAEP hash MySQL servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/pgsignin/pgsignin.go:289` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin.go:294` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
-| `internal/crypto/pgsignin/pgsignin_test.go:179` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:285` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:290` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin_test.go:155` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/thumbprint.go:15` | an identifier a CA API requires, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
@@ -2615,7 +2636,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/crypto/pgsignin/pgsignin.go:19` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
+| `internal/crypto/pgsignin/pgsignin.go:18` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:7` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 
 ### G505 — CWE-328 Weak hash import (SHA-1) (12 sites)
@@ -2645,7 +2666,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (25 sites)
+### G702 — CWE-78 OS command injection (taint) (26 sites)
 
 | Location | Reason |
 |---|---|
@@ -2662,7 +2683,8 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_gateway_mysql_served_test.go:131` | the stock mysql client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |

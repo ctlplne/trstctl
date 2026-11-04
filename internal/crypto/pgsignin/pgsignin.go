@@ -15,13 +15,9 @@ package pgsignin
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/md5" // #nosec G501 -- PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327)
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -29,10 +25,10 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/scram"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -318,13 +314,14 @@ func saslOffers(list []byte, mechanism string) bool {
 // PostgreSQL does: the user name in the exchange is empty (the startup named
 // the login) and channel binding is not used.
 func scramSHA256(conn net.Conn, password []byte) error {
-	nonce := make([]byte, 18)
-	if _, err := rand.Read(nonce); err != nil {
+	// PostgreSQL takes the user from the startup message; the SCRAM user
+	// name is empty.
+	client, err := scram.NewRandom("", password)
+	if err != nil {
 		return err
 	}
-	client := newSCRAMClient("", password, base64.StdEncoding.EncodeToString(nonce))
-	defer client.wipe()
-	first := client.firstMessage()
+	defer client.Wipe()
+	first := client.First()
 	initial := appendCString([]byte{'p', 0, 0, 0, 0}, "SCRAM-SHA-256")
 	initial = binary.BigEndian.AppendUint32(initial, uint32(len(first))) // #nosec G115 -- a SCRAM client-first message is under 100 bytes (CWE-190)
 	initial = append(initial, first...)
@@ -335,9 +332,9 @@ func scramSHA256(conn net.Conn, password []byte) error {
 	if err != nil {
 		return err
 	}
-	final, err := client.finalMessage(serverFirst)
+	final, err := client.Final(serverFirst)
 	if err != nil {
-		return err
+		return fmt.Errorf("pgsignin: %w", err)
 	}
 	if err := writeMessage(conn, append([]byte{'p', 0, 0, 0, 0}, final...)); err != nil {
 		return err
@@ -346,7 +343,10 @@ func scramSHA256(conn net.Conn, password []byte) error {
 	if err != nil {
 		return err
 	}
-	return client.verifyServer(serverFinal)
+	if err := client.Verify(serverFinal); err != nil {
+		return fmt.Errorf("pgsignin: %w", err)
+	}
+	return nil
 }
 
 func expectAuth(conn net.Conn, code uint32) ([]byte, error) {
@@ -361,100 +361,6 @@ func expectAuth(conn net.Conn, code uint32) ([]byte, error) {
 		return nil, errors.New("pgsignin: the SCRAM exchange went out of order")
 	}
 	return body[4:], nil
-}
-
-// scramClient holds one exchange's state; wipe clears its keys.
-type scramClient struct {
-	user, nonce       string
-	password          []byte
-	firstBare         string
-	salted, authBlock []byte
-}
-
-func newSCRAMClient(user string, password []byte, nonce string) *scramClient {
-	return &scramClient{user: user, password: password, nonce: nonce, firstBare: "n=" + user + ",r=" + nonce}
-}
-
-func (c *scramClient) firstMessage() []byte { return []byte("n,," + c.firstBare) }
-
-func (c *scramClient) finalMessage(serverFirst []byte) ([]byte, error) {
-	attrs := scramAttributes(string(serverFirst))
-	serverNonce, saltText, iterText := attrs["r"], attrs["s"], attrs["i"]
-	if !strings.HasPrefix(serverNonce, c.nonce) || len(serverNonce) == len(c.nonce) {
-		return nil, errors.New("pgsignin: the SCRAM server nonce does not extend the client's")
-	}
-	salt, err := base64.StdEncoding.DecodeString(saltText)
-	if err != nil || len(salt) == 0 {
-		return nil, errors.New("pgsignin: the SCRAM salt is malformed")
-	}
-	iterations, err := strconv.Atoi(iterText)
-	if err != nil || iterations < 1 || iterations > 10_000_000 {
-		return nil, errors.New("pgsignin: the SCRAM iteration count is out of range")
-	}
-	c.salted = pbkdf2SHA256(c.password, salt, iterations)
-	clientKey := hmacSHA256(c.salted, []byte("Client Key"))
-	defer secret.Wipe(clientKey)
-	storedKey := sha256.Sum256(clientKey)
-	withoutProof := "c=biws,r=" + serverNonce
-	c.authBlock = []byte(c.firstBare + "," + string(serverFirst) + "," + withoutProof)
-	signature := hmacSHA256(storedKey[:], c.authBlock)
-	proof := make([]byte, len(clientKey))
-	for i := range proof {
-		proof[i] = clientKey[i] ^ signature[i]
-	}
-	return []byte(withoutProof + ",p=" + base64.StdEncoding.EncodeToString(proof)), nil
-}
-
-func (c *scramClient) verifyServer(serverFinal []byte) error {
-	attrs := scramAttributes(string(serverFinal))
-	if attrs["e"] != "" {
-		return errors.New("pgsignin: the database rejected the SCRAM proof")
-	}
-	got, err := base64.StdEncoding.DecodeString(attrs["v"])
-	if err != nil || c.salted == nil {
-		return errors.New("pgsignin: the SCRAM server signature is malformed")
-	}
-	serverKey := hmacSHA256(c.salted, []byte("Server Key"))
-	defer secret.Wipe(serverKey)
-	if !hmac.Equal(got, hmacSHA256(serverKey, c.authBlock)) {
-		return errors.New("pgsignin: the database did not prove it knows the login")
-	}
-	return nil
-}
-
-func (c *scramClient) wipe() { secret.Wipe(c.salted) }
-
-func scramAttributes(message string) map[string]string {
-	out := map[string]string{}
-	for _, part := range strings.Split(message, ",") {
-		if len(part) >= 2 && part[1] == '=' {
-			out[part[:1]] = part[2:]
-		}
-	}
-	return out
-}
-
-func hmacSHA256(key, data []byte) []byte {
-	mac := hmac.New(sha256.New, key)
-	mac.Write(data)
-	return mac.Sum(nil)
-}
-
-// pbkdf2SHA256 is PBKDF2-HMAC-SHA-256 for one 32-byte block (RFC 8018), over
-// a byte-backed password the caller wipes.
-func pbkdf2SHA256(password, salt []byte, iterations int) []byte {
-	u := hmacSHA256(password, append(append([]byte(nil), salt...), 0, 0, 0, 1))
-	out := append([]byte(nil), u...)
-	for i := 1; i < iterations; i++ {
-		next := hmacSHA256(password, u)
-		secret.Wipe(u)
-		u = next
-		for j := range out {
-			out[j] ^= u[j]
-		}
-	}
-	secret.Wipe(u)
-	return out
 }
 
 func readMessage(conn net.Conn) (byte, []byte, error) {

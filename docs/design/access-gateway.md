@@ -181,6 +181,21 @@ are served only through a gateway; the target builder refuses one without a bind
   statement (queries, prepared statements, executions by statement and size, `USE`), the
   column names, the first ten text rows (values cut at 256 bytes, 4 KiB per result, binary
   rows by size) with a truncation marker, OK counts and error codes, masked.
+- **MongoDB.** The provider's user for the session (`read` or `readWrite` on the
+  provider's database). The gateway signs in with SCRAM-SHA-256 through `saslStart` and
+  `saslContinue` on the user's database, over plaintext or TLS verified against `tlsCAFile`
+  (a file on the gateway's host) or the system roots; with several hosts it asks each, on
+  a connection of its own, whether it is the writable primary. The session's connection
+  carries no hello of the gateway's: a server takes client metadata only in a
+  connection's first hello, which is the stock client's. `saslStart`, `saslContinue`,
+  `authenticate` and `logout` would change who the connection is signed in as, so the
+  gateway answers each with an `Unauthorized` error itself and never forwards it; a
+  handshake's `speculativeAuthenticate` and `compression` are removed (so nothing is ever
+  compressed); compressed and legacy operations end the connection, and OP_QUERY is
+  relayed only for a driver's first hello or isMaster. `mongodb+srv://` and mechanisms
+  other than SCRAM-SHA-256 are refused. Recordings render each command and reply
+  document (values cut at 256 bytes, binary by size, 4 KiB per document), masked; a
+  refused command is recorded by its name alone.
 
 ## Failure modes
 
@@ -208,7 +223,7 @@ deliberate grant.
 |---|---|
 | A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
 | A client connecting straight to the target | The client holds no credential the target accepts. |
-| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET; MySQL COM_CHANGE_USER) | Never forwarded: Redis gets a stand-in command the server refuses in its place, MySQL an error from the gateway; the connection keeps the session's login. |
+| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET; MySQL COM_CHANGE_USER; MongoDB saslStart, saslContinue, authenticate, logout, a handshake's speculativeAuthenticate) | Never forwarded: Redis gets a stand-in command the server refuses in its place, MySQL and MongoDB an error from the gateway, and a MongoDB handshake loses the field; the connection keeps the session's login. |
 | A host impersonating the SSH target | The gateway accepts only a host key the target registration pins. |
 | A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
@@ -224,6 +239,7 @@ and a straight connection at the target; and restart the control plane mid-sessi
 live connection continues, the gateway's lease extends against the new process, and the
 session keeps its one start, one job and deadline. A255 (recording, masking, live
 termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`, stock
-`redis-cli`) and MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`); MongoDB,
-ClickHouse and Kubernetes follow, then the agent launcher
+`redis-cli`), MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`) and MongoDB
+(`TestServedGatewayMongoSessionsA256`, stock `mongosh`); ClickHouse and Kubernetes follow,
+then the agent launcher
 (A257) and credential health and emergency access (A258).

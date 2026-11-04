@@ -5813,7 +5813,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	pamSessionReq := object(map[string]*Schema{
 		"request_id":     uuid(),
-		"target_type":    {Type: "string", Enum: []string{"mysql", "postgres", "redis", "ssh"}},
+		"target_type":    {Type: "string", Enum: []string{"mongodb", "mysql", "postgres", "redis", "ssh"}},
 		"target_id":      str(),
 		"role":           str(),
 		"reason":         str(),
@@ -5824,7 +5824,7 @@ func componentSchemas() map[string]*Schema {
 		"ssh_principal":  str(),
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"mysql", "postgres", "redis", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"mongodb", "mysql", "postgres", "redis", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
 		"principals":            {Type: "array", Items: str()},
@@ -5833,7 +5833,7 @@ func componentSchemas() map[string]*Schema {
 		"host_key_fingerprints": {Type: "array", Items: str(), Description: "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"mysql", "postgres", "redis", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"mongodb", "mysql", "postgres", "redis", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
@@ -5844,7 +5844,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
-		"target_type": {Type: "string", Enum: []string{"mysql", "postgres", "redis", "ssh"}},
+		"target_type": {Type: "string", Enum: []string{"mongodb", "mysql", "postgres", "redis", "ssh"}},
 		"target_id":   str(), "role": str(), "reason": str(), "method": str(),
 		"payload_base64": str(), "ttl_seconds": {Type: "integer"},
 		"ssh_public_key": str(), "ssh_principal": str(),
@@ -5852,7 +5852,7 @@ func componentSchemas() map[string]*Schema {
 	pamApprovalRequest := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
 		"status": {Type: "string", Enum: operationApprovalStatuses}, "subject": str(),
-		"target_type": {Type: "string", Enum: []string{"mysql", "postgres", "redis", "ssh"}},
+		"target_type": {Type: "string", Enum: []string{"mongodb", "mysql", "postgres", "redis", "ssh"}},
 		"target_id":   str(), "role": str(), "approval_count": {Type: "integer"},
 		"required_approvals": {Type: "integer"}, "expires_at": timestamp(),
 	}, "request_id", "approval_request_id", "intent_digest", "status", "subject", "target_type", "target_id", "role", "approval_count", "required_approvals", "expires_at")

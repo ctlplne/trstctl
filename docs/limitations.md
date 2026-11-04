@@ -8715,7 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- MongoDB, ClickHouse and Kubernetes sessions (A256; Redis and MySQL are served); the
+- ClickHouse and Kubernetes sessions (A256; Redis, MySQL and MongoDB are served); the
   agent launcher (A257); credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
@@ -8749,10 +8749,10 @@ What comes next:
   lengths; privacy erasure of PAM operator metadata (target disable reasons, legal hold
   reasons) alongside the session subject's.
 
-## More session types through the gateway (A256) — Redis and MySQL served
+## More session types through the gateway (A256) — Redis, MySQL and MongoDB served
 
-Status: Redis and MySQL are served; MongoDB, ClickHouse and Kubernetes sessions are the
-rest of A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
+Status: Redis, MySQL and MongoDB are served; ClickHouse and Kubernetes sessions are the rest
+of A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
 names a Redis dynamic-secret provider and a gateway, which is required: the broker refuses
 a Redis target without one. A session's credential is an ACL user the provider creates for
 it, scoped by the role's key prefixes and commands; the gateway redeems it, signs in with
@@ -8782,9 +8782,21 @@ termination closes a live connection, the gateway acknowledges it and the accoun
 dropped; the recording seals, verifies and holds each statement, the columns, the rows with
 the token masked, the denial and the refusal.
 
+A `target_type: "mongodb"` target names a MongoDB dynamic-secret provider and a gateway; its
+session's credential is a user the provider creates (`read` or `readWrite` on its
+database). The gateway signs in with SCRAM-SHA-256 and refuses a client's own sign-in
+(`saslStart`, `saslContinue`, `authenticate`, `logout`, a handshake's speculative sign-in).
+`TestServedGatewayMongoSessionsA256` proves it with stock `mongosh` in the pinned MongoDB
+7.0 image: the client holds no credential and nothing it reads carries the session's user;
+it reads the note and a write outside its role is `Unauthorized`; a `saslStart` on a live
+connection is refused and the connection is still the session's user; termination closes
+a live connection, the gateway acknowledges it and the user is dropped; the recording
+seals, verifies and holds each command and reply with the token masked.
+
 What comes next:
-- MongoDB, ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where their
-  images run on this Mac, otherwise in the x86 block.
+- ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where their images run on
+  this Mac, otherwise in the x86 block.
+- MongoDB through `mongodb+srv://` (DNS seed lists) and SCRAM-SHA-1 users.
 - MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
   RSA key the server sends (as a driver does without TLS); verified TLS with the
   provider's CA comes with the private-CA lead below.

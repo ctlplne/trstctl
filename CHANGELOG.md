@@ -44,6 +44,12 @@
   COM_CHANGE_USER. Recordings hold statements, column names, the first rows of each result, OK counts and error codes,
   bounded and masked. `trstctl-cli access sessions connect` prints the `mysql` command; migration 0393 admits MySQL
   targets.
+- MongoDB sessions through the access gateway (A256 part 3): `target_type: "mongodb"` names a MongoDB dynamic-secret
+  provider and a gateway. The gateway signs in as the session's user with SCRAM-SHA-256 (`internal/crypto/mongosignin`,
+  with the SCRAM client now shared with the PostgreSQL sign-in in `internal/crypto/scram`), refuses a client's own
+  sign-in (saslStart, saslContinue, authenticate, logout) with Unauthorized, removes a handshake's
+  speculativeAuthenticate and compression offer, and records commands and replies, bounded and masked.
+  `trstctl-cli access sessions connect` prints the `mongosh` command; migration 0394 admits MongoDB targets.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

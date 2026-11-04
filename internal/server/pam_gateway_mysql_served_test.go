@@ -26,11 +26,14 @@ func startPAMMySQL(t *testing.T, note string) (string, DynamicSecretProviderRegi
 		t.Skipf("the pinned image %s is not present locally: %v\n%s", a201MySQLImage, err, out)
 	}
 	id, addr := a201Container(t, "3306", "-e", "MYSQL_ROOT_PASSWORD=a256-admin", "-e", "MYSQL_DATABASE=app", a201MySQLImage)
+	// The image's init server answers on the socket and then stops; only
+	// the real server answers over TCP, after the init-done line.
+	a256AwaitLog(t, id, "MySQL init process done")
 	a201Await(t, "MySQL", func() bool {
-		_, err := a201Exec(id, "mysql", "-uroot", "-pa256-admin", "-e", "SELECT 1")
+		_, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "-e", "SELECT 1")
 		return err == nil
 	})
-	if out, err := a201Exec(id, "mysql", "-uroot", "-pa256-admin", "app", "-e",
+	if out, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "app", "-e",
 		"CREATE TABLE notes (id INT PRIMARY KEY, note TEXT); INSERT INTO notes VALUES (1, '"+note+"');"); err != nil {
 		t.Fatalf("seed MySQL: %v %s", err, out)
 	}
@@ -51,7 +54,7 @@ var fixtureMySQLCommand = regexp.MustCompile(`mysql -h 127\.0\.0\.1 -P (\d+)`)
 // mysqlSessionAccounts lists the per-session accounts the provider created.
 func mysqlSessionAccounts(t *testing.T, mysqlID string) []string {
 	t.Helper()
-	out, err := a201Exec(mysqlID, "mysql", "-uroot", "-pa256-admin", "-N", "-e", "SELECT user FROM mysql.user WHERE user LIKE 'a256_mysql%'")
+	out, err := a201Exec(mysqlID, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "-N", "-e", "SELECT user FROM mysql.user WHERE user LIKE 'a256_mysql%'")
 	if err != nil {
 		t.Fatalf("list accounts: %v %s", err, out)
 	}
