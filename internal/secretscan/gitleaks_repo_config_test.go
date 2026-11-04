@@ -153,6 +153,7 @@ func TestGitleaksBuildRunFixturePinsAreExact(t *testing.T) {
 		"b00aa6f36262c4b400ff6453ec1f8182d76b0cab:internal/server/external_ca_revoke_served_test.go:generic-api-key:159",
 		"bb27034c5c4db646fdaec42c705d7fe54522ee4f:docs/limitations.md:generic-api-key:654",
 		"c1102121a7988b098945ee11557e35c826b973fb:internal/protocols/acme/email_reply_test.go:generic-api-key:23",
+		"ce10b30e01a85ed2fcf31ff00e93ee6e708f9d0f:clients/sdk/go/trstctl/secrets_test.go:private-key:67",
 		"d660e567d75ff385aa15996daa8d92f849400fc4:internal/server/adcs_revoke_relay_served_test.go:generic-api-key:238",
 		"d660e567d75ff385aa15996daa8d92f849400fc4:internal/server/adcs_revoke_relay_served_test.go:generic-api-key:322",
 		"db4b127a3545f3e3cdaf67097e9bd02b847ee5e4:internal/discovery/cloudsecret/apikeys_test.go:private-key:45",

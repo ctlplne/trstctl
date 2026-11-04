@@ -64,7 +64,7 @@ func TestSecretsPKIAndRevocationCalls(t *testing.T) {
 				return
 			}
 			reply(http.StatusCreated, map[string]any{"certificate_id": "c-1", "serial": "0a", "common_name": "sdk.lab.test",
-				"certificate": "-----BEGIN CERTIFICATE-----", "private_key": "-----BEGIN PRIVATE KEY-----\nAA\n"})
+				"certificate": "-----BEGIN CERTIFICATE-----", "private_key": "fixture-key-pem\n"})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/certificates/bulk-revoke":
 			ids, _ := body["certificate_ids"].([]any)
 			if len(ids) != 1 || ids[0] != "c-1" || body["reason"] != "superseded" {
@@ -104,7 +104,7 @@ func TestSecretsPKIAndRevocationCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	pki, err := c.IssuePKISecret(ctx, "sdk.lab.test", 5*time.Minute)
-	if err != nil || pki.CertificateID != "c-1" || !strings.HasPrefix(string(pki.PrivateKey), "-----BEGIN PRIVATE KEY-----\n") {
+	if err != nil || pki.CertificateID != "c-1" || string(pki.PrivateKey) != "fixture-key-pem\n" {
 		t.Fatalf("pki = %+v, %v", pki, err)
 	}
 	revoked, err := c.RevokeCertificates(ctx, []string{pki.CertificateID}, "superseded")

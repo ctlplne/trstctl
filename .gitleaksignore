@@ -274,3 +274,8 @@ fd80632089317f695643c85ef05b402c08db371e:internal/kms/pkcs11/attestation_softhsm
 # line matched generic-api-key; they are key names, not values. The line was
 # rewritten in a later commit; this exact fingerprint keeps any new match red.
 30fd4280520e09abe0641b6be0427444c37c7579:internal/server/secret_sync_hosted_targets_served_test.go:generic-api-key:175
+# A250 (commit ce10b30e0): the Go SDK's PKI test served a PEM header with the
+# two-byte body "AA" (no key) and asserted that header 40 lines later; the
+# private-key rule matched across the two. The fixture was rewritten without
+# PEM armor in a later commit; this exact fingerprint keeps any new match red.
+ce10b30e01a85ed2fcf31ff00e93ee6e708f9d0f:clients/sdk/go/trstctl/secrets_test.go:private-key:67
