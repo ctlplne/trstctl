@@ -130,7 +130,8 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 	defer phase.Close()
 
 	var p95, p99 float64
-	var projectionLag int
+	var projectionLag, issuanceRequests int
+	var issuanceRate float64
 	for _, slo := range HotPaths() {
 		op, ok := ops[slo.HotPath]
 		if !ok {
@@ -142,6 +143,9 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 		}
 		p95 = math.Max(p95, result.P95MS)
 		p99 = math.Max(p99, result.P99MS)
+		if slo.HotPath == "api.issuance" {
+			issuanceRequests, issuanceRate = result.Samples, result.ThroughputPerSecond
+		}
 		if result.ProjectionLagEvents > projectionLag {
 			projectionLag = result.ProjectionLagEvents
 		}
@@ -179,6 +183,9 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 		StorageBytes:        metrics.StorageBytes,
 		P95MS:               p95,
 		P99MS:               p99,
+		// Recorded only; no soak threshold reads them.
+		IssuanceRequests:      issuanceRequests,
+		IssuanceRatePerSecond: issuanceRate,
 	}
 	if normalizer, ok := sampler.(SoakSampleNormalizer); ok {
 		sample = normalizer.NormalizeSoakSample(sample)

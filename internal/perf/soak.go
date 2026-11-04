@@ -45,6 +45,11 @@ type SoakSample struct {
 	StorageBytes        float64   `json:"storage_bytes"`         // gauge (monotonic growth expected)
 	P95MS               float64   `json:"p95_ms"`
 	P99MS               float64   `json:"p99_ms"`
+	// IssuanceRequests and IssuanceRatePerSecond are api.issuance's measured
+	// requests and throughput in this sample. They are recorded, never judged
+	// (owner note 2026-11-03, CI-L37): no threshold reads them.
+	IssuanceRequests      int     `json:"issuance_requests,omitempty"`
+	IssuanceRatePerSecond float64 `json:"issuance_rate_per_second,omitempty"`
 }
 
 // SoakThresholds is the committed soak contract: the ceiling each metric may not
@@ -186,6 +191,43 @@ type SoakReport struct {
 	DurationSec   float64            `json:"duration_sec"`
 	Trends        []MetricTrend      `json:"trends"`
 	Summary       SoakSummary        `json:"summary"`
+	// Issuance is api.issuance's rate across the samples that carry one. It is
+	// reported, never judged: it adds nothing to Summary.
+	Issuance *SoakIssuanceRate `json:"issuance,omitempty"`
+}
+
+// SoakIssuanceRate is the issuance rate across a captured soak — every
+// measured request over the time spent issuing them — with the lowest
+// sample beside it.
+type SoakIssuanceRate struct {
+	Samples               int     `json:"samples"`
+	Requests              int     `json:"requests"`
+	OverallPerSecond      float64 `json:"overall_per_second"`
+	LowestSamplePerSecond float64 `json:"lowest_sample_per_second"`
+	LowestSampleAt        string  `json:"lowest_sample_at"`
+}
+
+// soakIssuanceRate reads the issuance rate across the samples that recorded
+// one, or nil when none did (a series captured before they were recorded).
+func soakIssuanceRate(ordered []SoakSample) *SoakIssuanceRate {
+	var out SoakIssuanceRate
+	var seconds float64
+	for _, s := range ordered {
+		if s.IssuanceRequests <= 0 || s.IssuanceRatePerSecond <= 0 {
+			continue
+		}
+		out.Samples++
+		out.Requests += s.IssuanceRequests
+		seconds += float64(s.IssuanceRequests) / s.IssuanceRatePerSecond
+		if out.Samples == 1 || s.IssuanceRatePerSecond < out.LowestSamplePerSecond {
+			out.LowestSamplePerSecond, out.LowestSampleAt = s.IssuanceRatePerSecond, s.T.UTC().Format(time.RFC3339)
+		}
+	}
+	if out.Samples == 0 || seconds <= 0 {
+		return nil
+	}
+	out.OverallPerSecond = float64(out.Requests) / seconds
+	return &out
 }
 
 // SoakSummary is the pass/fail roll-up.
@@ -301,6 +343,7 @@ func AnalyzeSoakWithEvidence(profile string, series []SoakSample, th SoakThresho
 	counterRate("signer_restarts_rate", func(s SoakSample) float64 { return s.SignerRestarts }, th.MaxSignerRestartsPerMin)
 
 	report.Summary.OK = report.Summary.Breached == 0
+	report.Issuance = soakIssuanceRate(ordered)
 	return report, nil
 }
 

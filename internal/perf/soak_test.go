@@ -89,3 +89,36 @@ func TestSoakRequiresTwoSamples(t *testing.T) {
 		t.Fatal("expected an error for a single-sample series")
 	}
 }
+
+// CI-L37 (owner note 2026-11-03, bar item 2): each captured sample records
+// api.issuance's requests and throughput, and the report gives the overall
+// rate — every request over the time spent issuing them — with the lowest
+// sample beside it. It is reported, never judged: a series whose issuance
+// rate is under 25/s still passes on its gauges, and a series without the
+// fields reports no rate.
+func TestSoakReportCarriesIssuanceRateUnjudged(t *testing.T) {
+	series := SyntheticHealthySeries(4, time.Minute)
+	for i, rate := range []float64{30, 20, 30, 20} {
+		series[i].IssuanceRequests, series[i].IssuanceRatePerSecond = 10, rate
+	}
+	rep, err := AnalyzeSoak("issuance-rate", series, DefaultSoakThresholds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 40 requests in 4×(10/30) + ... = 2×0.333 s + 2×0.5 s = 1.667 s: 24/s.
+	if rep.Issuance == nil || rep.Issuance.Samples != 4 || rep.Issuance.Requests != 40 ||
+		rep.Issuance.OverallPerSecond < 23.999 || rep.Issuance.OverallPerSecond > 24.001 ||
+		rep.Issuance.LowestSamplePerSecond != 20 || rep.Issuance.LowestSampleAt != series[1].T.UTC().Format(time.RFC3339) {
+		t.Fatalf("issuance rate = %+v", rep.Issuance)
+	}
+	if !rep.Summary.OK {
+		t.Fatalf("an issuance rate under 25/s failed the soak; it must be reported, never judged: %+v", rep.Summary)
+	}
+	plain, err := AnalyzeSoak("no-rate", SyntheticHealthySeries(4, time.Minute), DefaultSoakThresholds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.Issuance != nil || plain.Summary != rep.Summary {
+		t.Fatalf("a series without issuance fields: rate %+v, summary %+v vs %+v", plain.Issuance, plain.Summary, rep.Summary)
+	}
+}
