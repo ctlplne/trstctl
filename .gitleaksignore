@@ -279,3 +279,10 @@ fd80632089317f695643c85ef05b402c08db371e:internal/kms/pkcs11/attestation_softhsm
 # private-key rule matched across the two. The fixture was rewritten without
 # PEM armor in a later commit; this exact fingerprint keeps any new match red.
 ce10b30e01a85ed2fcf31ff00e93ee6e708f9d0f:clients/sdk/go/trstctl/secrets_test.go:private-key:67
+# P7 (commit f5851b60f): the MCP client configuration tests plant the fixed fake
+# token tkn_1234567890abcdefghijklmnop in assistant configurations to prove no
+# credential value reaches a finding, event or API answer; detection needs a
+# token-shaped value. Pinned to the exact lines; any new match stays red.
+f5851b60f56f5d10c7a76d6a290875b68651c718:internal/agent/discovery/mcpconfig_test.go:generic-api-key:35
+f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_test.go:generic-api-key:73
+f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_test.go:generic-api-key:192
