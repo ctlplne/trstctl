@@ -176,6 +176,15 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 		Record: s.recordings != nil}
 	if rec.TargetType != pamTargetSSH {
 		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
+		if rec.TargetType == pamTargetCH {
+			// The ClickHouse credential is a user and password; where the
+			// server answers is its provider's endpoint.
+			endpoint, caPEM, serverName, err := s.databaseUpstream(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			intent.UpstreamURL, intent.UpstreamCAPEM, intent.UpstreamServerName = endpoint, string(caPEM), serverName
+		}
 		return intent, nil
 	}
 	target, err := s.sshTarget(ctx, rec.TenantID, rec.TargetID)
@@ -189,6 +198,30 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 	intent.SSHPrincipal = rec.SSHPrincipal
 	intent.SSHHostKeyFingerprints = append([]string(nil), target.HostKeyFingerprints...)
 	return intent, nil
+}
+
+// databaseUpstream is where a target's provider reaches its server — the
+// endpoint, its CA (none: the system roots) and server name — for a type
+// whose credential names no address.
+func (s *pamService) databaseUpstream(ctx context.Context, tenantID, targetType, targetID string) (string, []byte, string, error) {
+	target, err := s.databaseTarget(ctx, tenantID, targetType, targetID)
+	if err != nil {
+		return "", nil, "", err
+	}
+	for _, provider := range s.providers.ForTenant(tenantID) {
+		if provider == nil || provider.Name() != target.cfg.ProviderID {
+			continue
+		}
+		if p, ok := provider.(interface {
+			DynamicSecretGatewayUpstream(context.Context) (string, []byte, string, error)
+		}); ok {
+			endpoint, caPEM, serverName, err := p.DynamicSecretGatewayUpstream(ctx)
+			if err == nil && endpoint != "" {
+				return endpoint, caPEM, serverName, nil
+			}
+		}
+	}
+	return "", nil, "", fmt.Errorf("the %s target's provider names no endpoint", targetType)
 }
 
 // gatewaySessionCredential reopens an active gateway session's upstream

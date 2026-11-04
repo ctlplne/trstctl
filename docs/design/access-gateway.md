@@ -196,6 +196,18 @@ are served only through a gateway; the target builder refuses one without a bind
   other than SCRAM-SHA-256 are refused. Recordings render each command and reply
   document (values cut at 256 bytes, binary by size, 4 KiB per document), masked; a
   refused command is recorded by its name alone.
+- **ClickHouse.** The provider's user for the session (its role's ClickHouse role, valid
+  until the provider's maximum lifetime). Its credential is a user and password with no
+  address, so the session's job names the provider's endpoint (`upstream_url`, a public
+  fact like an SSH target's address). The gateway serves ClickHouse's HTTP interface on the
+  tunnel: every client credential is removed — basic auth, `X-ClickHouse-User` and
+  `X-ClickHouse-Key`, certificate-auth headers, `user` and `password` parameters — and each
+  request is signed in as the session's user, then forwarded (HTTPS verified against the
+  system roots). The stock client is curl or any HTTP-interface tool; `clickhouse-client`
+  speaks ClickHouse's native protocol, which the gateway does not serve. Recordings keep
+  each request (method, path, the `query` parameter and the body's first 4 KiB) and each
+  response (status, exception code, summary and the body's first 4 KiB), masked; bodies
+  stream, they are never held whole.
 
 ## Failure modes
 
@@ -240,6 +252,7 @@ live connection continues, the gateway's lease extends against the new process, 
 session keeps its one start, one job and deadline. A255 (recording, masking, live
 termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`, stock
 `redis-cli`), MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`) and MongoDB
-(`TestServedGatewayMongoSessionsA256`, stock `mongosh`); ClickHouse and Kubernetes follow,
-then the agent launcher
+(`TestServedGatewayMongoSessionsA256`, stock `mongosh`) and ClickHouse
+(`TestServedGatewayClickHouseSessionsA256`, curl); Kubernetes follows, then the agent
+launcher
 (A257) and credential health and emergency access (A258).

@@ -438,9 +438,19 @@ mongosh "mongodb://127.0.0.1:17017/?directConnection=true"
 A client's own sign-in (`db.auth()`, credentials in the connection string) is refused with
 `Unauthorized`; revoking or terminating the session drops the user.
 
+A ClickHouse target (`target_type: "clickhouse"`) is reached over ClickHouse's HTTP
+interface: the gateway signs every request in as the session's user and removes any
+credential the client sends. Use curl or any HTTP-interface tool (`clickhouse-client`, which
+speaks the native protocol, is not served):
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:18123
+curl http://127.0.0.1:18123/ --data-binary 'SELECT currentUser()'
+```
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
-(never file contents), PostgreSQL and MySQL statements and Redis and MongoDB commands with bounded results,
+(never file contents), PostgreSQL and MySQL statements, Redis and MongoDB commands and ClickHouse requests with bounded results,
 masked at the gateway before anything leaves it, sealed for the tenant and closed with a
 manifest the audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with

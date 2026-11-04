@@ -11,6 +11,7 @@ package accessgateway
 import (
 	"errors"
 	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,13 +22,14 @@ import (
 const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession = relay.KindAccessGatewaySession
-	// TargetPostgres, TargetMySQL, TargetMongo, TargetRedis and TargetSSH
-	// are the session types the gateway serves.
-	TargetPostgres = "postgres"
-	TargetMySQL    = "mysql"
-	TargetMongo    = "mongodb"
-	TargetRedis    = "redis"
-	TargetSSH      = "ssh"
+	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
+	// TargetRedis and TargetSSH are the session types the gateway serves.
+	TargetPostgres   = "postgres"
+	TargetMySQL      = "mysql"
+	TargetMongo      = "mongodb"
+	TargetClickHouse = "clickhouse"
+	TargetRedis      = "redis"
+	TargetSSH        = "ssh"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -38,7 +40,11 @@ const (
 // arrives by redemption: every database type does, and the gateway signs in
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
-	return targetType == TargetPostgres || targetType == TargetMySQL || targetType == TargetMongo || targetType == TargetRedis
+	switch targetType {
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis:
+		return true
+	}
+	return false
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -59,6 +65,14 @@ type SessionIntent struct {
 	SSHAddress             string   `json:"ssh_address,omitempty"`
 	SSHPrincipal           string   `json:"ssh_principal,omitempty"`
 	SSHHostKeyFingerprints []string `json:"ssh_host_key_fingerprints,omitempty"`
+	// UpstreamURL, UpstreamCAPEM and UpstreamServerName are where a target
+	// spoken to over HTTP (ClickHouse) is reached and how its certificate is
+	// verified — its provider's endpoint, CA and server name, public facts
+	// like SSHAddress; the credential names no address. No CA: the system
+	// roots.
+	UpstreamURL        string `json:"upstream_url,omitempty"`
+	UpstreamCAPEM      string `json:"upstream_ca_pem,omitempty"`
+	UpstreamServerName string `json:"upstream_server_name,omitempty"`
 	// Record asks the gateway to record the session (A255): masked, and
 	// uploaded over its agent channel as the session runs.
 	Record bool `json:"record,omitempty"`
@@ -97,7 +111,7 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.SessionID == "" || in.TargetID == "" || in.RequiredAgentID == "":
 		return errors.New("accessgateway: a session needs its id, target and gateway")
 	case !RedeemsCredential(in.TargetType) && in.TargetType != TargetSSH:
-		return errors.New("accessgateway: a session is postgres, mysql, mongodb, redis or ssh")
+		return errors.New("accessgateway: a session is postgres, mysql, mongodb, clickhouse, redis or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
@@ -110,7 +124,19 @@ func ValidateSessionIntent(in SessionIntent) error {
 		if in.SSHAddress != "" || in.SSHPrincipal != "" || len(in.SSHHostKeyFingerprints) != 0 {
 			return errors.New("accessgateway: a database session carries no SSH routing")
 		}
+		if in.TargetType != TargetClickHouse {
+			if in.UpstreamURL != "" || in.UpstreamCAPEM != "" || in.UpstreamServerName != "" {
+				return errors.New("accessgateway: only an HTTP session names an upstream")
+			}
+			return nil
+		}
+		if u, err := url.Parse(in.UpstreamURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return errors.New("accessgateway: a ClickHouse session names its upstream http(s) URL")
+		}
 		return nil
+	}
+	if in.UpstreamURL != "" || in.UpstreamCAPEM != "" || in.UpstreamServerName != "" {
+		return errors.New("accessgateway: an SSH session names no upstream")
 	}
 	host, port, err := net.SplitHostPort(in.SSHAddress)
 	switch {

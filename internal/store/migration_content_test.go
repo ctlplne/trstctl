@@ -1142,6 +1142,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	392: true, // TestMigration0392KeepsTargetsAndAdmitsRedis
 	393: true, // TestMigration0393KeepsTargetsAndAdmitsMySQL
 	394: true, // TestMigration0394KeepsTargetsAndAdmitsMongoDB
+	395: true, // TestMigration0395KeepsTargetsAndAdmitsClickHouse
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod

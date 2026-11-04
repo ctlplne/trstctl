@@ -38280,6 +38280,7 @@
           },
           "target_type": {
             "enum": [
+              "clickhouse",
               "mongodb",
               "mysql",
               "postgres",
@@ -38725,6 +38726,7 @@
           },
           "target_type": {
             "enum": [
+              "clickhouse",
               "mongodb",
               "mysql",
               "postgres",
@@ -38795,6 +38797,7 @@
           },
           "target_type": {
             "enum": [
+              "clickhouse",
               "mongodb",
               "mysql",
               "postgres",
@@ -38895,6 +38898,7 @@
           },
           "target_type": {
             "enum": [
+              "clickhouse",
               "mongodb",
               "mysql",
               "postgres",
@@ -38984,6 +38988,7 @@
           },
           "target_type": {
             "enum": [
+              "clickhouse",
               "mongodb",
               "mysql",
               "postgres",

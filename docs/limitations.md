@@ -8715,8 +8715,8 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- ClickHouse and Kubernetes sessions (A256; Redis, MySQL and MongoDB are served); the
-  agent launcher (A257); credential health checks and emergency access (A258).
+- Kubernetes sessions (A256; Redis, MySQL, MongoDB and ClickHouse are served); the agent
+  launcher (A257); credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8749,10 +8749,10 @@ What comes next:
   lengths; privacy erasure of PAM operator metadata (target disable reasons, legal hold
   reasons) alongside the session subject's.
 
-## More session types through the gateway (A256) — Redis, MySQL and MongoDB served
+## More session types through the gateway (A256) — Redis, MySQL, MongoDB and ClickHouse served
 
-Status: Redis, MySQL and MongoDB are served; ClickHouse and Kubernetes sessions are the rest
-of A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
+Status: Redis, MySQL, MongoDB and ClickHouse are served; Kubernetes sessions are the rest of
+A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
 names a Redis dynamic-secret provider and a gateway, which is required: the broker refuses
 a Redis target without one. A session's credential is an ACL user the provider creates for
 it, scoped by the role's key prefixes and commands; the gateway redeems it, signs in with
@@ -8793,9 +8793,21 @@ connection is refused and the connection is still the session's user; terminatio
 a live connection, the gateway acknowledges it and the user is dropped; the recording
 seals, verifies and holds each command and reply with the token masked.
 
+A `target_type: "clickhouse"` target names a ClickHouse dynamic-secret provider and a
+gateway; its session's credential is a user the provider creates with its role's
+ClickHouse role, and the session's job names the provider's endpoint. The gateway serves
+ClickHouse's HTTP interface, removes every credential a client sends and signs each request
+in as the session's user. `TestServedGatewayClickHouseSessionsA256` proves it with curl
+against the pinned ClickHouse 24.8: a query runs as the session's user and reads the note;
+basic auth, ClickHouse's user and key headers and user and password parameters each still
+run as the session's user; a write outside its role is refused (exception 497); termination
+closes a live keep-alive connection, the gateway acknowledges it and the user is dropped;
+the recording seals, verifies and holds each request and response with the token masked.
+
 What comes next:
-- ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where their images run on
-  this Mac, otherwise in the x86 block.
+- Kubernetes (kind) sessions; SQL Server and Oracle where their images run on this Mac,
+  otherwise in the x86 block.
+- ClickHouse's native protocol (`clickhouse-client`) through the gateway.
 - MongoDB through `mongodb+srv://` (DNS seed lists) and SCRAM-SHA-1 users.
 - MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
   RSA key the server sends (as a driver does without TLS); verified TLS with the

@@ -301,6 +301,17 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 	return p.configurationRevision
 }
 
+// DynamicSecretGatewayUpstream is where an access gateway reaches a
+// provider's server for a session whose credential names no address (A256):
+// ClickHouse's HTTP endpoint, verified against the system roots. Other types
+// answer an empty endpoint.
+func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(context.Context) (string, []byte, string, error) {
+	if p.cfg.Type == "clickhouse" {
+		return p.cfg.Endpoint, nil, "", nil
+	}
+	return "", nil, "", nil
+}
+
 // DynamicSecretKubernetesScope is the namespace a kubernetes provider creates
 // its ServiceAccounts in and the audience of their tokens, which the
 // Vault-compatible API reports and checks.

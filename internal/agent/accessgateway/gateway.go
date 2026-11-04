@@ -241,6 +241,11 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 			secrets = append(secrets, append([]byte(nil), target.Password...))
 			target.Wipe()
 		}
+	case TargetClickHouse:
+		if user, err := parseClickHouseCredential(material[intent.CredentialRef]); err == nil {
+			secrets = append(secrets, append([]byte(nil), user.Password...))
+			secret.Wipe(user.Password)
+		}
 	}
 	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy,
 		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
@@ -498,6 +503,13 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		uri := s.credential()
 		defer secret.Wipe(uri)
 		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
+	case TargetClickHouse:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetSSH:

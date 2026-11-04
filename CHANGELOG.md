@@ -50,6 +50,12 @@
   sign-in (saslStart, saslContinue, authenticate, logout) with Unauthorized, removes a handshake's
   speculativeAuthenticate and compression offer, and records commands and replies, bounded and masked.
   `trstctl-cli access sessions connect` prints the `mongosh` command; migration 0394 admits MongoDB targets.
+- ClickHouse sessions through the access gateway (A256 part 4): `target_type: "clickhouse"` names a ClickHouse
+  dynamic-secret provider and a gateway; the session's job names the provider's endpoint (`upstream_url`). The gateway
+  serves ClickHouse's HTTP interface, removes every credential a client sends (basic auth, X-ClickHouse-User/Key,
+  certificate-auth headers, user/password parameters) and signs each request in as the session's user; requests and
+  responses are recorded with bounded, masked bodies that stream. `trstctl-cli access sessions connect` prints the curl
+  command; migration 0395 admits ClickHouse targets.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

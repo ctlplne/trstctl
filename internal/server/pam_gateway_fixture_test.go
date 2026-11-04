@@ -45,8 +45,10 @@ type gatewayFixture struct {
 	sshd        pamSSHD
 	objects     *s3test.Server
 	// redisID, mysqlID and mongoID are the Redis, MySQL and MongoDB targets'
-	// containers, which also carry the stock clients the proofs use.
+	// containers, which also carry the stock clients the proofs use;
+	// clickhouse is the ClickHouse target (curl on this host is its client).
 	redisID, mysqlID, mongoID string
+	clickhouse                pamClickHouse
 	auditKey                  *jose.SigningKey
 	api                       *httptest.Server
 	dir                       string
@@ -65,6 +67,9 @@ type gatewayFixtureOptions struct {
 	// mongoNote adds the MongoDB target "mongo-gw" (A256), bound to the
 	// gateway, its orders.notes collection holding this note.
 	mongoNote string
+	// clickhouseNote adds the ClickHouse target "clickhouse-gw" (A256),
+	// bound to the gateway, its lab.notes table holding this note.
+	clickhouseNote string
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -82,7 +87,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
-	var redisProviders, mysqlProviders, mongoProviders DynamicSecretProviderRegistry
+	var redisProviders, mysqlProviders, mongoProviders, clickhouseProviders DynamicSecretProviderRegistry
 	if opts.redis {
 		f.redisID, redisProviders = startPAMRedis(t)
 	}
@@ -91,6 +96,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	}
 	if opts.mongoNote != "" {
 		f.mongoID, mongoProviders = startPAMMongo(t, opts.mongoNote)
+	}
+	if opts.clickhouseNote != "" {
+		f.clickhouse, clickhouseProviders = startPAMClickHouse(t, opts.clickhouseNote)
 	}
 	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
@@ -120,6 +128,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], mongoProviders.ForTenant(servedTestTenant)...)
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mongodb", TenantID: servedTestTenant, ID: "mongo-gw", ProviderID: "pam-mongo-provider",
 				AllowedRoles: []string{"mongo-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
+		if opts.clickhouseNote != "" {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], clickhouseProviders.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "clickhouse", TenantID: servedTestTenant, ID: "clickhouse-gw", ProviderID: "pam-clickhouse-provider",
+				AllowedRoles: []string{"reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
 			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},
