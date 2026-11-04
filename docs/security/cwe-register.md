@@ -815,7 +815,7 @@ not this file.
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/perf/live.go:887` | page size is positive and small (CWE-190) |
+| `internal/perf/live.go:924` | page size is positive and small (CWE-190) |
 | `internal/pqcmigration/cutover.go:198` | bounded above (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
@@ -1335,8 +1335,8 @@ not this file.
 | `internal/objectstore/minio_lock_test.go:48` | test removes the container it started (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:49` | test inspects the container it started (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:64` | test reads the container it started (CWE-78) |
-| `internal/perf/live.go:767` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
-| `internal/perf/live.go:931` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:804` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:968` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/pluginhost/raw_api_boundary_test.go:44` | fixed go build command, literal tag table, owned temp output; no shell or user arguments (CWE-78). |
 | `internal/pqc/native_probe_test.go:74` | pinned local stock executable and owned loopback fixture. |
 | `internal/pqc/prepared_leaf_openssl_test.go:63` | LookPath-resolved OpenSSL, fixed verbs, loopback and TempDir artifacts. |
@@ -2005,7 +2005,7 @@ not this file.
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/objectstore/config.go:38` | operator-configured CA bundle path (CWE-22) |
-| `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
+| `internal/perf/smoke.go:176` | perf harness reading its own artifact path (CWE-22) |
 | `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/pluginhost/provenance_start_test.go:96` | owned canary under t.TempDir (CWE-22). |
 | `internal/pluginhost/raw_api_boundary_test.go:30` | fixed repository checksum manifest, no external path input (CWE-22). |

@@ -99,9 +99,12 @@ func (e *EnvelopeDecodeError) Unwrap() error { return e.Err }
 // in external mode it connects to a NATS cluster by URL. Switching between them
 // is config-only.
 type Log struct {
-	srv *natsserver.Server // non-nil only in embedded mode
-	nc  *nats.Conn
-	js  jetstream.JetStream
+	// appendObserver, when set, hears how long each Append and Import took
+	// (measurement only: the perf harness's per-request breakdown, CI-L37).
+	appendObserver func(time.Duration)
+	srv            *natsserver.Server // non-nil only in embedded mode
+	nc             *nats.Conn
+	js             jetstream.JetStream
 	// stream is the currently resolved generation that owns events.>. It remains
 	// for package-local helpers, but production operations resolve by subject
 	// ownership instead of trusting this cached handle across a generation switch.
@@ -232,6 +235,13 @@ func WithDuplicateWindowForTesting(window time.Duration) OpenOption {
 			log.duplicateWindow = window
 		}
 	}
+}
+
+// WithAppendObserver has the log report each Append's and Import's wall time to
+// observe, after it returns. It measures and changes nothing; the perf harness
+// uses it to split an issuance's time (CI-L37).
+func WithAppendObserver(observe func(time.Duration)) OpenOption {
+	return func(log *Log) { log.appendObserver = observe }
 }
 
 // Open opens the event log according to cfg and ensures one active generation
@@ -433,8 +443,13 @@ func openEmbedded(cfg config.NATS) (*natsserver.Server, *nats.Conn, error) {
 // yet backed up is at most that interval. Production should run an external
 // replicated cluster, where the quorum ACK makes the loss window effectively zero.
 func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
+	if l.appendObserver != nil {
+		defer l.observeAppend(time.Now())
+	}
 	return l.append(ctx, e, false)
 }
+
+func (l *Log) observeAppend(start time.Time) { l.appendObserver(time.Since(start)) }
 
 // Import appends a source-cluster event into this log while preserving the source
 // event identity and timestamp. Federation uses it to make the target event log the
@@ -442,6 +457,9 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 // the event ID, so a retry after an import succeeds but before the peer checkpoint
 // advances is duplicate-suppressed by the stream.
 func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
+	if l.appendObserver != nil {
+		defer l.observeAppend(time.Now())
+	}
 	return l.append(ctx, e, true)
 }
 

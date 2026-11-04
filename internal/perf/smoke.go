@@ -109,8 +109,11 @@ type Report struct {
 	ResourceMetrics     *ResourceMetrics           `json:"resource_metrics,omitempty"`
 	ComponentResources  []ComponentResourceMetrics `json:"component_resource_metrics,omitempty"`
 	EventSpineBurst     *EventSpineBurstEvidence   `json:"event_spine_burst,omitempty"`
-	Results             []Result                   `json:"results"`
-	Summary             Summary                    `json:"summary"`
+	// IssuanceBreakdown is where api.issuance's time went in each live phase
+	// (measurement only; CI-L37).
+	IssuanceBreakdown *IssuanceBreakdown `json:"issuance_breakdown,omitempty"`
+	Results           []Result           `json:"results"`
+	Summary           Summary            `json:"summary"`
 }
 
 type Summary struct {

@@ -235,7 +235,7 @@ func applyEditionAttachers(ctx context.Context, cfg *config.Config, logger *slog
 	return nil
 }
 
-func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger, extraMigrations []fs.FS) (*store.Store, func() error, error) {
+func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger, extraMigrations []fs.FS, opts ...store.OpenOption) (*store.Store, func() error, error) {
 	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
 	if err != nil {
 		return nil, nil, err
@@ -249,8 +249,8 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 		return nil, nil, fmt.Errorf("postgres acquire timeout: %w", err)
 	}
 	reqConns, probeConns, reservedConns, bookkeepingConns, lockConns, _ := cfg.Postgres.ConnectionBudget()
-	st, err := store.Open(ctx, dsn, store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout),
-		store.WithPoolSizes(store.PoolSizes{Request: int32(reqConns), Probe: int32(probeConns), Reserved: int32(reservedConns), Bookkeeping: int32(bookkeepingConns), Lock: int32(lockConns)})) // #nosec G115 -- bounded small ints from config (CWE-190)
+	st, err := store.Open(ctx, dsn, append([]store.OpenOption{store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout),
+		store.WithPoolSizes(store.PoolSizes{Request: int32(reqConns), Probe: int32(probeConns), Reserved: int32(reservedConns), Bookkeeping: int32(bookkeepingConns), Lock: int32(lockConns)})}, opts...)...) // #nosec G115 -- bounded small ints from config (CWE-190)
 	if err != nil {
 		if stopPG != nil {
 			_ = stopPG()

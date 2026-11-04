@@ -69,6 +69,8 @@ type liveEvalStack struct {
 	// stopLife ends the stack's lifetime context: the signer and the server
 	// live until Close, not until the caller's startup deadline.
 	stopLife context.CancelFunc
+	// breakdown records where each measured issuance's time goes (CI-L37).
+	breakdown *issuanceRecorder
 }
 
 func RunLiveLoad(profile string, samples int) (Report, error) {
@@ -119,6 +121,14 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 		ComponentResources:  componentResources,
 		EventSpineBurst:     defaultEventSpineBurstEvidence(),
 	}
+	// Where api.issuance's time goes (CI-L37): measurement only, beside the gate.
+	breakdown := &IssuanceBreakdown{Method: breakdownMethod}
+	if d, n, err := timeWriteFsync(stack.tempDir); err != nil {
+		breakdown.DiskError = err.Error()
+	} else {
+		breakdown.DiskWriteFsyncMS, breakdown.DiskWriteBytes = ms(d), n
+	}
+	waits := map[string]WaitEventSample{}
 	for _, phase := range phases {
 		report.Summary.Phases = append(report.Summary.Phases, phase.Name)
 		for _, slo := range HotPaths() {
@@ -126,7 +136,16 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 			if !ok {
 				return Report{}, fmt.Errorf("perf: no live operation for hot path %s", slo.HotPath)
 			}
+			var sampler *waitEventSampler
+			if slo.HotPath == "api.issuance" {
+				stack.breakdown.startPhase(phase.Name)
+				sampler = startWaitEventSampler(ctx, stack.store.SystemPool().Config().ConnConfig, 20*time.Millisecond)
+			}
 			result := measure(slo, op, phase.Samples, observations[slo.HotPath])
+			if sampler != nil {
+				waits[phase.Name] = sampler.finish()
+				stack.breakdown.stopPhase()
+			}
 			result.Phase = phase.Name
 			result.TargetRatePerSecond = slo.MinThroughputPerSecond * phase.RateMultiplier
 			result.ServedStack = true
@@ -141,6 +160,11 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 			}
 		}
 	}
+	breakdown.Phases = stack.breakdown.phases()
+	for i := range breakdown.Phases {
+		breakdown.Phases[i].WaitEvents = waits[breakdown.Phases[i].Phase]
+	}
+	report.IssuanceBreakdown = breakdown
 	report.Summary.HotPaths = len(HotPaths())
 	report.Summary.Measurements = len(report.Results)
 	report.Summary.OK = report.Summary.Failed == 0 && report.Summary.Measurements == len(HotPaths())*len(phases)
@@ -190,7 +214,7 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 	if err != nil {
 		return nil, err
 	}
-	stack := &liveEvalStack{tempDir: dir, httpClient: netsec.InsecureLoopbackClient(10 * time.Second)}
+	stack := &liveEvalStack{tempDir: dir, httpClient: netsec.InsecureLoopbackClient(10 * time.Second), breakdown: newIssuanceRecorder()}
 	defer func() {
 		if err != nil {
 			stack.Close()
@@ -217,11 +241,11 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 	cfg.Protocols.ACME.TenantID = liveTenantID
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	stack.store, stack.stopPG, err = server.OpenMigratedStore(ctx, cfg, logger)
+	stack.store, stack.stopPG, err = server.OpenMigratedStore(ctx, cfg, logger, store.WithQueryTracer(&breakdownTracer{rec: stack.breakdown}))
 	if err != nil {
 		return nil, err
 	}
-	stack.log, err = events.Open(ctx, cfg.NATS)
+	stack.log, err = events.Open(ctx, cfg.NATS, events.WithAppendObserver(func(d time.Duration) { stack.breakdown.add(kindJetStreamAppend, d) }))
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +479,7 @@ func (s *liveEvalStack) prepareSignerRPC(ctx context.Context) error {
 
 func (s *liveEvalStack) servedHotPaths() (map[string]operation, map[string]string, error) {
 	ops := map[string]operation{
-		"api.issuance": s.issueOverServedAPI,
+		"api.issuance": s.measuredIssuance,
 		"api.inventory": func() error {
 			reqCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -488,6 +512,19 @@ func (s *liveEvalStack) servedHotPaths() (map[string]operation, map[string]strin
 		}
 	}
 	return ops, transports, nil
+}
+
+// measuredIssuance is one issuance with its time split by where it went
+// (recorded only while a live phase is being broken down).
+func (s *liveEvalStack) measuredIssuance() error {
+	if c := s.signer.Client(); c != nil {
+		c.ObserveRPCs(func(_ string, d time.Duration) { s.breakdown.add(kindSignerRPC, d) })
+	}
+	s.breakdown.begin()
+	start := time.Now()
+	err := s.issueOverServedAPI()
+	s.breakdown.end(time.Since(start))
+	return err
 }
 
 func (s *liveEvalStack) issueOverServedAPI() error {

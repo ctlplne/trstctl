@@ -26,6 +26,33 @@ type Client struct {
 	conn      *grpc.ClientConn
 	svc       signerpb.SignerServiceClient
 	admission atomic.Value // admissionHook; scoped to this signer connection
+	// rpcObserver, when set, hears each RPC's method and wall time — the
+	// signer's own work, its journal fsyncs included (measurement only: the
+	// perf harness's per-request breakdown, CI-L37).
+	rpcObserver atomic.Pointer[func(method string, d time.Duration)]
+}
+
+// ObserveRPCs has every later RPC on this connection report its method and wall
+// time to observe (nil stops it). It measures and changes nothing.
+func (c *Client) ObserveRPCs(observe func(method string, d time.Duration)) {
+	if observe == nil {
+		c.rpcObserver.Store(nil)
+		return
+	}
+	c.rpcObserver.Store(&observe)
+}
+
+// rpcTimer is the innermost interceptor: it times the RPC itself, after
+// admission, for an installed observer.
+func (c *Client) rpcTimer(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	observe := c.rpcObserver.Load()
+	if observe == nil {
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+	start := time.Now()
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	(*observe)(method, time.Since(start))
+	return err
 }
 
 // signerCallTimeoutNanos bounds every signer RPC that arrives without a
@@ -116,7 +143,7 @@ func Dial(socketPath string) (*Client, error) {
 	conn, err := grpc.NewClient(
 		"unix://"+socketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate),
+		grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate, client.rpcTimer),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial signer: %w", err)
@@ -140,7 +167,7 @@ func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Cl
 		return nil, fmt.Errorf("signer mTLS credentials: %w", err)
 	}
 	client := &Client{}
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithChainUnaryInterceptor(perCallDeadline, client.admissionGate, client.rpcTimer))
 	if err != nil {
 		return nil, fmt.Errorf("dial signer over mTLS: %w", err)
 	}

@@ -41,6 +41,15 @@ throughput, error count, queue saturation, projection lag, and resource metrics.
 The receipt also carries an `event_spine_burst` reference to the CAP-SMALL
 PostgreSQL/JetStream replay and bounded-outbox gate so live review does not lose
 the heavier spine evidence.
+It also carries `issuance_breakdown`, where `api.issuance` spends its time in each
+phase, measured from timestamps only (no profiler runs during the gate, and no
+threshold reads it): for every measured issuance, the wait for a pooled PostgreSQL
+connection, PostgreSQL round trips (a pipelined batch is one), commits, the
+idempotency claim and completion statements, event appends to JetStream, signer RPCs
+(the signer's journal fsyncs are inside them) and the rest (HTTP, JSON and handler
+work), reported as each field's median and the five slowest requests whole; the
+PostgreSQL wait events sampled while the phase's issuances ran; and one timed 8 KiB
+write+fsync on the work disk.
 The live profile is still a local eval-stack receipt, not a promise that one vendor
 SKU will satisfy every production tenant shape; customer capacity reviews should run
 the same profile against their chosen datastore, signer placement, and connector mix.
