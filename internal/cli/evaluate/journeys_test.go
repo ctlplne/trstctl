@@ -237,6 +237,14 @@ func TestJourneyListA249(t *testing.T) {
 	if _, err := Journeys("certificate,dns"); err == nil {
 		t.Fatal("an unknown journey was accepted")
 	}
+	if got, err := Journeys("incident,certificate,workload"); err != nil || strings.Join(got, ",") != "incident,certificate,workload" {
+		t.Fatalf("journeys = %v, %v", got, err)
+	}
+	// The incident journey responds for the certificate journey's identity.
+	if _, err := Evaluate(t.Context(), Options{Server: "https://cp.example.test", Token: "t", Journeys: []string{JourneyIncident}}); err == nil ||
+		!strings.Contains(err.Error(), "certificate journey") {
+		t.Fatalf("the incident journey alone = %v", err)
+	}
 	if _, err := Evaluate(t.Context(), Options{Server: "https://cp.example.test", Token: "t"}); err == nil ||
 		!strings.Contains(err.Error(), "deployment target") {
 		t.Fatalf("the certificate journey without a target = %v", err)

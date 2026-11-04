@@ -2,6 +2,19 @@
 
 ### Added
 
+- Incident journey for `trstctl evaluate` (A249, second part): `--journeys certificate,incident`
+  responds to a compromise of the key behind the certificate the certificate journey deployed —
+  the effect-free compromise preview, a revoked-credential game day (static preview and mocked
+  rehearsal), the reviewed command that revokes it at the CA and has the host agent stop the
+  listener, then OCSP and this machine's handshake to check both. `--force-failure incident`
+  reports the last check as a failure.
+- Workload identity journey for `trstctl evaluate` (A249, second part): `--journeys workload`
+  dials the Workload API socket (`--workload-socket` or `$SPIFFE_ENDPOINT_SOCKET`) as a workload,
+  checks the X.509-SVID it is handed against the trust bundle (one SPIFFE ID, the key is the
+  SVID's), verifies a JWT-SVID for a run-unique audience offline against the JWT bundle, and
+  requires the socket to validate the token for that audience and refuse it for another.
+  `--force-failure workload` reports that last check as a failure. The pack keeps the SPIFFE ID
+  and the token's digest only.
 - Reviewed change sets in the console (A248, third part): the **Change sets** page under Govern &
   administer writes the same typed set as the API and GitOps — from a template (onboard an
   application, grant a member roles, add a connector target), the form or JSON — plans it,

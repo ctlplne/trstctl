@@ -83,9 +83,10 @@ same keys. It never trusts the key set the pack carries.
 
 ## More journeys
 
-`--journeys certificate,secrets,ssh` runs the secrets and SSH journeys beside the
-certificate one, into the same pack (format `trstctl.evaluation-pack/v2`; a run of
-the certificate journey alone still writes `v1`). Each journey keeps its own
+`--journeys certificate,secrets,ssh,workload,incident` runs the secrets, SSH,
+workload identity and incident journeys beside the certificate one, into the same
+pack (format `trstctl.evaluation-pack/v2`; a run of the certificate journey alone
+still writes `v1`). Each journey keeps its own
 steps, verdict and limits under `journeys`, and the same rule: a step after a
 failure is skipped, never passed. The pack's verdict passes only when every
 journey does.
@@ -94,16 +95,28 @@ journey does.
 |---|---|---|
 | `secrets` | `secret_create` a synthetic value · `secret_read` it back (same version and digest) · `secret_rotate` and read the new version · `secret_run`: `trstctl run` puts it in a child process's environment and the child compares it, printing nothing · `secret_delete`, then a read answers 404 | `secrets:read`, `secrets:write`; a POSIX shell for the run step |
 | `ssh` | `ssh_issue` a user certificate for a key the command generates · `ssh_verify` it offline against the served CA key (`/ssh/ca`) · `ssh_revoke` it · `ssh_krl`: the served KRL (`/ssh/krl`) lists its serial | `certs:issue`, `certs:write`; the SSH CA served, with the principal in `protocols.ssh_user_principals` |
+| `workload` | `workload_x509`: fetch an X.509-SVID from the Workload API socket and check it as a workload does — it chains to the trust bundle the socket sends, carries exactly one SPIFFE ID, and the private key handed over is its own · `workload_jwt`: fetch a JWT-SVID for an audience unique to this run and verify it offline against the trust domain's JWT bundle (subject, audience, expiry) · `workload_validate`: the socket validates the token for that audience and refuses it for another | a Workload API socket on the machine that runs the command: `--workload-socket` or `$SPIFFE_ENDPOINT_SOCKET` (the control plane's own socket with `protocols.spiffe.serve_local_workloads`, or a host agent's) |
+| `incident` | runs after the certificate journey and responds to a compromise of the key behind the certificate it left deployed: `incident_preview` the effect-free key-compromise preview (every certificate to revoke at its CA, the deployed one among them, and the exact host stop) · `incident_rehearse` a revoked-credential game day — a static preview and a mocked rehearsal, labeled as such · `incident_contain` the reviewed command that revokes the certificate at its CA and has the host agent stop the listener, read back until both report (`containment_stopped`) · `incident_verify`: the certificate's OCSP answer says revoked, and the endpoint no longer serves it to this machine | the certificate journey's target, an agent whose host profile grants that target a containment (its listener and one pinned, argument-free stop action), and a token with `identities:write`, `connectors:write`, `incidents:write` and `incidents:game-day` |
 
 The pack keeps the synthetic secret's digest, never its value, and the journey
 deletes it. `--force-failure secrets` makes the read expect a value that was never
-written; `--force-failure ssh` makes the KRL check expect the revoked serial absent.
-Either journey then fails at that step, its later steps are skipped, the other
-journeys run as before, and the pack's verdict fails.
+written; `--force-failure ssh` makes the KRL check expect the revoked serial absent;
+`--force-failure workload` makes the validation expect the token to pass for another
+audience; `--force-failure incident` makes the last check expect the compromised
+certificate still good over OCSP. The pack records the SVID's SPIFFE ID and the
+token's digest, never the token or a key. A journey with a forced failure fails at
+that step, its later steps are skipped, the other journeys run as before, and the
+pack's verdict fails.
+
+The incident journey changes the lab: it revokes the certificate the certificate
+journey deployed and stops the listener serving it. Run it against a lab target,
+and bring the listener back with the containment grant's recovery action before
+evaluating that target again.
 
 ```bash
 trstctl evaluate --server https://trstctl.example.internal \
-  --journeys secrets,ssh --out evaluation-pack.json --sign
+  --journeys secrets,ssh,workload --workload-socket /run/trstctl/workload.sock \
+  --out evaluation-pack.json --sign
 ```
 
 ## What it does not show

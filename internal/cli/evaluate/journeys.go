@@ -75,9 +75,9 @@ func Journeys(list string) ([]string, error) {
 	for _, name := range strings.Split(list, ",") {
 		name = strings.TrimSpace(name)
 		switch name {
-		case JourneyCertificate, JourneySecrets, JourneySSH:
+		case JourneyCertificate, JourneySecrets, JourneySSH, JourneyWorkload, JourneyIncident:
 		default:
-			return nil, fmt.Errorf("evaluate: unknown journey %q (certificate, secrets, ssh)", name)
+			return nil, fmt.Errorf("evaluate: unknown journey %q (certificate, secrets, ssh, workload, incident)", name)
 		}
 		if !slices.Contains(out, name) {
 			out = append(out, name)

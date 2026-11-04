@@ -100,6 +100,9 @@ type Options struct {
 	ForceFailure string
 	// SSHPrincipal is the SSH journey's principal.
 	SSHPrincipal string
+	// WorkloadSocket is the Workload API socket the workload journey dials as
+	// a workload on this host.
+	WorkloadSocket string
 	// RunCLI replaces running `trstctl run` in the secrets journey; nil runs
 	// this binary.
 	RunCLI func(ctx context.Context, secretName, want string) error
@@ -213,6 +216,9 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 		opts.Journeys = []string{JourneyCertificate}
 	}
 	certificateJourney := slices.Contains(opts.Journeys, JourneyCertificate)
+	if slices.Contains(opts.Journeys, JourneyIncident) && !certificateJourney {
+		return Pack{}, errors.New("evaluate: the incident journey responds to a compromise of the identity the certificate journey deploys; run it with the certificate journey")
+	}
 	if opts.ForceFailure != "" && !slices.Contains(opts.Journeys, opts.ForceFailure) {
 		return Pack{}, fmt.Errorf("evaluate: --force-failure %s names a journey that is not run", opts.ForceFailure)
 	}
@@ -255,7 +261,14 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 			j.pack.Journeys = append(j.pack.Journeys, j.secretsJourney(ctx))
 		case JourneySSH:
 			j.pack.Journeys = append(j.pack.Journeys, j.sshJourney(ctx))
+		case JourneyWorkload:
+			j.pack.Journeys = append(j.pack.Journeys, j.workloadJourney(ctx))
 		}
+	}
+	// The incident journey runs last: it revokes the deployed certificate and
+	// stops the endpoint serving it.
+	if slices.Contains(opts.Journeys, JourneyIncident) {
+		j.pack.Journeys = append(j.pack.Journeys, j.incidentJourney(ctx))
 	}
 	if certificateJourney {
 		// The audit export runs even after a failure, last, so it records
@@ -719,17 +732,30 @@ func (j *journey) revoke(ctx context.Context, s *Step) error {
 	if len(j.issued.Chain) < 2 {
 		return errors.New("neither the issuance result nor the endpoint supplied the issuing CA certificate, so OCSP cannot be asked")
 	}
-	issuer := j.issued.Chain[1]
-	request, err := crypto.BuildOCSPRequest(j.issued.DER, issuer)
+	status, responder, err := j.awaitOCSP(ctx, j.issued.DER, j.issued.Chain[1], "revoked")
 	if err != nil {
 		return err
 	}
+	s.Basis = BasisObserved
+	s.Evidence["certificate_id"], s.Evidence["ocsp_responder"], s.Evidence["ocsp_status"] = j.issued.ID, responder, status.Status
+	s.Detail = fmt.Sprintf("The superseded certificate %s was revoked, and an OCSP request to %s returned a signed answer saying revoked.", short(j.issued.Fingerprint), responder)
+	return nil
+}
+
+// awaitOCSP asks the certificate's OCSP responder, the way a relying party
+// does, until its signed answer says want. It returns the last verified answer
+// and the responder asked.
+func (j *journey) awaitOCSP(ctx context.Context, leaf, issuer []byte, want string) (crypto.OCSPStatusInfo, string, error) {
 	responder := j.api.base + "/ocsp/" + url.PathEscape(j.tenant)
-	if info, err := certinfo.Inspect(j.issued.DER); err == nil && len(info.OCSPServers) > 0 {
+	if info, err := certinfo.Inspect(leaf); err == nil && len(info.OCSPServers) > 0 {
 		responder = info.OCSPServers[0]
 	}
+	request, err := crypto.BuildOCSPRequest(leaf, issuer)
+	if err != nil {
+		return crypto.OCSPStatusInfo{}, responder, err
+	}
 	var status crypto.OCSPStatusInfo
-	if err := j.poll(ctx, "OCSP did not report the certificate revoked", func(ctx context.Context) (bool, error) {
+	err = j.poll(ctx, "OCSP did not report the certificate "+want, func(ctx context.Context) (bool, error) {
 		raw, err := j.api.postRaw(ctx, responder, "application/ocsp-request", request)
 		if err != nil {
 			return false, err
@@ -737,14 +763,9 @@ func (j *journey) revoke(ctx context.Context, s *Step) error {
 		if status, err = crypto.ParseOCSPResponse(raw, issuer); err != nil {
 			return false, fmt.Errorf("the OCSP answer did not verify: %w", err)
 		}
-		return status.Status == "revoked", nil
-	}); err != nil {
-		return err
-	}
-	s.Basis = BasisObserved
-	s.Evidence["certificate_id"], s.Evidence["ocsp_responder"], s.Evidence["ocsp_status"] = j.issued.ID, responder, status.Status
-	s.Detail = fmt.Sprintf("The superseded certificate %s was revoked, and an OCSP request to %s returned a signed answer saying revoked.", short(j.issued.Fingerprint), responder)
-	return nil
+		return status.Status == want, nil
+	})
+	return status, responder, err
 }
 
 // exportAudit downloads the signed audit export of the journey and verifies

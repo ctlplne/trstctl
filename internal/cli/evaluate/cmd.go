@@ -31,7 +31,9 @@ func (e ExitError) Error() string { return fmt.Sprintf("evaluate: exit %d", e.Co
 func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: trstctl evaluate --server <url> --deployment-target <id> [--endpoint host:port] [--name dns-name]")
 	_, _ = fmt.Fprintln(w, "                        [--owner name] [--profile name] [--timeout 10m] [--out evaluation-pack.json]")
-	_, _ = fmt.Fprintln(w, "                        [--journeys certificate,secrets,ssh] [--force-failure journey] [--ssh-principal name]")
+	_, _ = fmt.Fprintln(w, "                        [--journeys certificate,secrets,ssh,workload,incident] [--force-failure journey]")
+	_, _ = fmt.Fprintln(w, "                        [--ssh-principal name]")
+	_, _ = fmt.Fprintln(w, "                        [--workload-socket path]")
 	_, _ = fmt.Fprintln(w, "                        [--ca-file file] [--token-file file] [--sign --signer-socket path]")
 	_, _ = fmt.Fprintln(w, "       trstctl evaluate verify --pack <file> --audit-jwks <file>")
 	_, _ = fmt.Fprintln(w, "\nRuns one certificate journey against the endpoint your deployment target serves: discovery, ownership,")
@@ -40,7 +42,11 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "API token comes from $TRSTCTL_TOKEN or --token-file, never the command line. --sign signs the pack with")
 	_, _ = fmt.Fprintln(w, "the deployment's audit-evidence key through the signer socket. Exit 0: passed; 1: failed; 2: could not run.")
 	_, _ = fmt.Fprintln(w, "\n--journeys adds the secrets journey (create, read, rotate, trstctl run, delete) and the SSH journey (issue,")
-	_, _ = fmt.Fprintln(w, "verify offline, revoke, the served KRL); --deployment-target is needed only for the certificate journey.")
+	_, _ = fmt.Fprintln(w, "verify offline, revoke, the served KRL) and the workload journey (an X.509-SVID and a JWT-SVID from the")
+	_, _ = fmt.Fprintln(w, "Workload API socket at --workload-socket or $SPIFFE_ENDPOINT_SOCKET, checked as a workload checks them).")
+	_, _ = fmt.Fprintln(w, "The incident journey (with the certificate journey) responds to a compromise of the deployed certificate's")
+	_, _ = fmt.Fprintln(w, "key: the effect-free preview, a game day, the reviewed revoke-and-contain command, and OCSP plus this")
+	_, _ = fmt.Fprintln(w, "machine's handshake to check both. --deployment-target is needed for the certificate and incident journeys.")
 	_, _ = fmt.Fprintln(w, "--force-failure <journey> makes one step of that journey expect what did not happen, to show it reported as")
 	_, _ = fmt.Fprintln(w, "a failure.")
 }
@@ -65,9 +71,10 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	out := fs.String("out", "evaluation-pack.json", "where to write the evidence pack")
 	sign := fs.Bool("sign", false, "sign the pack with the deployment's audit-evidence key")
 	signerSocket := fs.String("signer-socket", getenv("TRSTCTL_SIGNER_SOCKET"), "the signer's Unix socket; required by --sign")
-	journeyList := fs.String("journeys", JourneyCertificate, "journeys to run: certificate, secrets, ssh (comma-separated)")
+	journeyList := fs.String("journeys", JourneyCertificate, "journeys to run: certificate, secrets, ssh, workload, incident (comma-separated)")
 	forceFailure := fs.String("force-failure", "", "a journey whose one step expects what did not happen")
 	sshPrincipal := fs.String("ssh-principal", config.DefaultEvalSSHUserPrincipal, "the SSH journey's certificate principal; one protocols.ssh_user_principals lists")
+	workloadSocket := fs.String("workload-socket", getenv("SPIFFE_ENDPOINT_SOCKET"), "the Workload API socket the workload journey dials (default $SPIFFE_ENDPOINT_SOCKET)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -103,7 +110,7 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	pack, err := Evaluate(ctx, Options{Server: *server, Token: token, HTTPClient: client, DeploymentTarget: *target,
 		Endpoint: *endpoint, Name: *name, Owner: *owner, Profile: *profile, Timeout: *timeout,
-		Journeys: journeys, ForceFailure: strings.TrimSpace(*forceFailure), SSHPrincipal: *sshPrincipal})
+		Journeys: journeys, ForceFailure: strings.TrimSpace(*forceFailure), SSHPrincipal: *sshPrincipal, WorkloadSocket: *workloadSocket})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%v\n", err)
 		return ExitError{2}

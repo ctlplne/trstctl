@@ -7712,16 +7712,21 @@ and writes a signed evidence pack. Read the pack with these limits:
 
 ### Evaluation across journeys (A249)
 
-`--journeys certificate,secrets,ssh` adds the secrets journey (create, read,
-rotate, `trstctl run` into a child process, delete) and the SSH journey (issue,
-verify offline against the served CA key, revoke, find the serial in the served
-KRL) to the same signed pack (`trstctl.evaluation-pack/v2`); `--force-failure
-<journey>` shows that journey's failure reported as a failure. Both journeys pass
-against a served control plane. What comes next:
+`--journeys certificate,secrets,ssh,workload,incident` adds the secrets journey
+(create, read, rotate, `trstctl run` into a child process, delete), the SSH journey
+(issue, verify offline against the served CA key, revoke, find the serial in the
+served KRL), the workload identity journey (an X.509-SVID and a JWT-SVID from a
+Workload API socket, checked against the trust bundle and the JWT bundle, and the
+socket's validation refusing the token for another audience) and the incident journey (for
+the certificate journey's deployed certificate: the effect-free compromise preview,
+a revoked-credential game day, the reviewed revoke-and-contain command read back
+until the CA and the host both report, then OCSP saying revoked and the endpoint no
+longer serving it) to the same signed pack (`trstctl.evaluation-pack/v2`);
+`--force-failure <journey>` shows that journey's failure reported as a failure. Each
+journey passes against a served control plane and, for the incident journey, a host
+agent with a containment grant. The game day runs as a static preview and a mocked
+rehearsal, not against a target. What comes next:
 
-- **Workload identity and incident journeys.** X.509 and JWT SVIDs over an agent's
-  Workload API, verified against the trust bundle; a compromise preview and a
-  game day against a non-production target.
 - **Unattended cycles with recovery.** Repeating the journeys on an interval, with
   a restart of the control plane mid-cycle and a recovery check that the next
   cycle passes.

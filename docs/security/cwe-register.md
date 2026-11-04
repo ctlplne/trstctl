@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2413 annotated sites across 30 rules. Each row is
+2414 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -664,7 +664,7 @@ not this file.
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 | `internal/server/mcp_authorization_keycloak_test.go:272` | the lab container's own loopback URL (CWE-88) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (20 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (21 sites)
 
 | Location | Reason |
 |---|---|
@@ -680,6 +680,7 @@ not this file.
 | `internal/server/ca_switch_served_test.go:77` | loopback fixture closed by its stop func (CWE-400) |
 | `internal/server/closed_loop_served_test.go:73` | loopback fixture closed below (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/server/evaluate_incident_served_test.go:57` | loopback fixture is closed below (CWE-400) |
 | `internal/server/evaluate_served_test.go:66` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:533` | loopback fixture closed below (CWE-400) |
@@ -1926,10 +1927,10 @@ not this file.
 | `internal/cli/cli_test.go:2176` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
-| `internal/cli/evaluate/cmd.go:79` | operator-named token file (CWE-22) |
-| `internal/cli/evaluate/cmd.go:141` | the operator names the public trust-bundle path (CWE-22) |
-| `internal/cli/evaluate/cmd.go:198` | operator-named local file (CWE-22) |
-| `internal/cli/evaluate/cmd.go:203` | operator-named local file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:86` | operator-named token file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:148` | the operator names the public trust-bundle path (CWE-22) |
+| `internal/cli/evaluate/cmd.go:205` | operator-named local file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:210` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cli/report_verify.go:44` | operator-named local file (CWE-22) |
