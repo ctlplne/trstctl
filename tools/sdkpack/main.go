@@ -19,7 +19,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"trstctl.com/trstctl/tools/sdkpack/registry"
@@ -92,7 +91,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := registry.AddToManifest(*out, strings.TrimPrefix(pkg.Version, "v"), pkg); err != nil {
+	if err := registry.AddToManifest(*out, pkg); err != nil {
 		return err
 	}
 	fmt.Printf("%s %s %s sha256:%s\n", pkg.Ecosystem, pkg.Name, pkg.Version, pkg.SHA256)

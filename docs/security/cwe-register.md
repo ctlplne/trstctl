@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2432 annotated sites across 30 rules. Each row is
+2439 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1440,8 +1440,8 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/sdk_registry_install_served_test.go:235` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/sdk_registry_install_served_test.go:276` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/sdk_registry_install_served_test.go:239` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/sdk_registry_install_served_test.go:285` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
@@ -1640,7 +1640,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (641 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (648 sites)
 
 | Location | Reason |
 |---|---|
@@ -2139,8 +2139,9 @@ not this file.
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:43` | test fixture under t.TempDir (CWE-22) |
-| `internal/server/sdk_registry_install_served_test.go:319` | the test reads what it downloaded under its own temp dir (CWE-22) |
-| `internal/server/sdk_registry_install_served_test.go:335` | the test reads what it installed under its own temp dir (CWE-22) |
+| `internal/server/sdk_registry_install_served_test.go:330` | the test reads what it downloaded under its own temp dir (CWE-22) |
+| `internal/server/sdk_registry_install_served_test.go:348` | the test reads what it installed under its own temp dir (CWE-22) |
+| `internal/server/sdk_registry_install_served_test.go:352` | the test reads what it installed under its own temp dir (CWE-22) |
 | `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_render_served_test.go:323` | the test's own temp file (CWE-22) |
 | `internal/server/secret_render_served_test.go:363` | the test's own temp file (CWE-22) |
@@ -2268,18 +2269,24 @@ not this file.
 | `tools/pqclab/main.go:269` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/pqclab/main_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/sdkpack/registry/ecosystems.go:156` | the SDK's own pyproject.toml in the checkout (CWE-22) |
-| `tools/sdkpack/registry/ecosystems.go:164` | the SDK's own README in the checkout (CWE-22) |
-| `tools/sdkpack/registry/ecosystems.go:248` | the npm pack output the release script names (CWE-22) |
-| `tools/sdkpack/registry/ecosystems.go:337` | the jar and pom the release script built (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:79` | this registry directory's own list (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:167` | the SDK's own pyproject.toml in the checkout (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:175` | the SDK's own README in the checkout (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:244` | a wheel in this registry directory (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:273` | the npm pack output the release script names (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:305` | this registry directory's own document (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:397` | the jar and pom the release script built (CWE-22) |
 | `tools/sdkpack/registry/handler.go:74` | a fixed directory and an escaped package name with no parent references (CWE-22) |
-| `tools/sdkpack/registry/registry.go:51` | a file this tool just wrote under the operator's output directory (CWE-22) |
-| `tools/sdkpack/registry/registry.go:93` | the registry directory's own manifest (CWE-22) |
-| `tools/sdkpack/registry/registry.go:144` | a tracked file the release script listed (CWE-22) |
-| `tools/sdkpack/registry/registry.go:159` | the operator's file list (CWE-22) |
+| `tools/sdkpack/registry/registry.go:61` | a file this tool just wrote under the operator's output directory (CWE-22) |
+| `tools/sdkpack/registry/registry.go:99` | the registry directory's own manifest (CWE-22) |
+| `tools/sdkpack/registry/registry.go:150` | a tracked file the release script listed (CWE-22) |
+| `tools/sdkpack/registry/registry.go:165` | the operator's file list (CWE-22) |
 | `tools/sdkpack/registry/registry_test.go:98` | the test reads files it wrote under its own temp dir (CWE-22) |
 | `tools/sdkpack/registry/registry_test.go:191` | the test reads files it wrote under its own temp dir (CWE-22) |
-| `tools/sdkpack/registry/registry_test.go:293` | the test reads files it wrote under its own temp dir (CWE-22) |
+| `tools/sdkpack/registry/registry_test.go:290` | the test reads files it wrote under its own temp dir (CWE-22) |
+| `tools/sdkpack/registry/registry_test.go:348` | the test reads files it wrote under its own temp dir (CWE-22) |
+| `tools/sdkpack/registry/registry_test.go:352` | the test reads files it wrote under its own temp dir (CWE-22) |
+| `tools/sdkpack/registry/registry_test.go:356` | the test reads files it wrote under its own temp dir (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:38` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
@@ -2673,7 +2680,7 @@ not this file.
 | `tools/dodcensus/runtime_runner.go:920` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:369` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:520` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/sdkpack/registry/ecosystems.go:28` | a path under the operator's registry output directory (CWE-22) |
+| `tools/sdkpack/registry/ecosystems.go:29` | a path under the operator's registry output directory (CWE-22) |
 | `tools/sdkpack/registry/handler.go:74` | a fixed directory and an escaped package name with no parent references (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |

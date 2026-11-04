@@ -7733,7 +7733,7 @@ served proof restarts the control plane in the middle of a cycle under the secre
 and SSH journeys and repeats the certificate journey on one endpoint; a restart
 during the certificate journey is checked on the real image in the replay.
 
-## Package readiness (A250)
+## Package readiness (A250) — served
 
 `scripts/release/sdk-packages.sh <version> <dir>` (`make sdk-packages`) builds the
 four client SDKs as packages of one version: a Go module proxy tree for
@@ -7743,16 +7743,12 @@ declarations), the `trstctl-sdk` wheel and its PEP 503 index, and the
 `SHA256SUMS`. `go run ./tools/sdkpack serve --dir <dir>` serves them as local
 registries. `make sdk-install-check` installs each by exact version in a clean
 environment and runs auth, read, rotate and revoke against a served control
-plane; a retried mutation keeps its Idempotency-Key and waits out `Retry-After`.
-CI runs it with a JDK. Nothing is published to a public registry: that is a
-release decision. What comes next:
-
-- **Signed release assets.** The four packages attached to a release with build
-  provenance, as the Python SDK and the CLI archives are today.
-- **Upgrade compatibility.** One version installed and upgraded to the next from
-  the same registry, with the round trip passing on both.
-- **OS package checks.** The CLI and agent archives checked and run on clean Linux
-  and macOS runners.
+plane, then upgrades each to the next version from the same registry and runs it
+again; a retried mutation keeps its Idempotency-Key and waits out `Retry-After`. CI
+runs it with a JDK. A tagged release attaches the packages as one registry archive
+with SLSA provenance, and CI checks the CLI and agent archives on clean Linux and
+macOS runners (checksums, unpack, run). Nothing is published to a public registry:
+that is a release decision, and the release job first runs at the next tag.
 
 ## Customer assurance reports
 

@@ -230,7 +230,7 @@ func TestNPMDocumentAndHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := AddToManifest(out, "2.0.1", pkg); err != nil {
+	if err := AddToManifest(out, pkg); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(&Handler{Dir: out})
@@ -284,14 +284,78 @@ func TestNPMDocumentAndHandler(t *testing.T) {
 		}
 	}
 	m, err := ReadManifest(out)
-	if err != nil || len(m.Packages) != 1 || m.Packages[0].SHA256 != crypto.SHA256Hex(raw) {
+	if found, ok := m.Find("npm", "2.0.1"); err != nil || len(m.Packages) != 1 || !ok || found.SHA256 != crypto.SHA256Hex(raw) {
 		t.Fatalf("manifest = %+v, %v", m, err)
-	}
-	if err := AddToManifest(out, "9.9.9", pkg); err == nil {
-		t.Fatal("a second version was added to one registry directory")
 	}
 	sums, err := os.ReadFile(filepath.Join(out, "SHA256SUMS")) // #nosec G304 -- the test reads files it wrote under its own temp dir (CWE-22)
 	if err != nil || string(sums) != crypto.SHA256Hex(raw)+"  npm/tarballs/demo-sdk-2.0.1.tgz\n" {
 		t.Fatalf("SHA256SUMS = %q, %v", sums, err)
+	}
+
+	// A registry holds versions side by side: a later one joins the document
+	// and becomes latest; an earlier one added afterwards does not.
+	for _, version := range []string{"2.0.10", "2.0.2"} {
+		next := filepath.Join(t.TempDir(), "demo-sdk-"+version+".tgz")
+		if err := os.WriteFile(next, npmTarball(t, `{"name":"@demo/sdk","version":"`+version+`"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p, err := NPM(next, out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := AddToManifest(out, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err = srv.Client().Get(srv.URL + "/npm/@demo%2fsdk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.Versions, doc.DistTags = nil, nil
+	err = json.NewDecoder(resp.Body).Decode(&doc)
+	_ = resp.Body.Close()
+	if err != nil || len(doc.Versions) != 3 || doc.DistTags["latest"] != "2.0.10" {
+		t.Fatalf("after two more versions: %d versions, latest %q, %v", len(doc.Versions), doc.DistTags["latest"], err)
+	}
+	if m, err := ReadManifest(out); err != nil || len(m.Packages) != 3 {
+		t.Fatalf("manifest = %+v, %v", m, err)
+	}
+}
+
+// A250: the Go list, the PyPI page and the Maven metadata each hold every
+// version the directory has, oldest first.
+func TestRegistriesHoldSeveralVersions(t *testing.T) {
+	repo, out := t.TempDir(), t.TempDir()
+	files := writeTree(t, repo, map[string]string{
+		"g/go.mod": "module example.test/m\n", "g/a.go": "package m\n",
+		"p/pyproject.toml": "[project]\nname = \"demo-sdk\"\nrequires-python = \">=3.9\"\n", "p/README.md": "# d\n", "p/src/demo_sdk/__init__.py": "\n",
+	})
+	jar := filepath.Join(repo, "x.jar")
+	pom := filepath.Join(repo, "x.pom")
+	writeTree(t, repo, map[string]string{"x.jar": "jar", "x.pom": "<project/>"})
+	at := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
+	for _, v := range []string{"1.10.0", "1.2.0", "1.9.3"} {
+		if _, err := GoModule(repo, files, "g", "example.test/m", "v"+v, at, out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Wheel(repo, files, "p", v, out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Maven(jar, pom, "com.example", "demo", v, at, out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := os.ReadFile(filepath.Join(out, "go", "example.test", "m", "@v", "list")) // #nosec G304 -- the test reads files it wrote under its own temp dir (CWE-22)
+	if err != nil || string(list) != "v1.2.0\nv1.9.3\nv1.10.0\n" {
+		t.Fatalf("Go list = %q, %v", list, err)
+	}
+	page, err := os.ReadFile(filepath.Join(out, "pypi", "simple", "demo-sdk", "index.html")) // #nosec G304 -- the test reads files it wrote under its own temp dir (CWE-22)
+	if err != nil || strings.Count(string(page), "<a href=") != 3 {
+		t.Fatalf("PyPI page = %s, %v", page, err)
+	}
+	meta, err := os.ReadFile(filepath.Join(out, "maven", "com", "example", "demo", "maven-metadata.xml")) // #nosec G304 -- the test reads files it wrote under its own temp dir (CWE-22)
+	if err != nil || !strings.Contains(string(meta), "<latest>1.10.0</latest>") ||
+		!strings.Contains(string(meta), "<version>1.2.0</version>\n      <version>1.9.3</version>\n      <version>1.10.0</version>") {
+		t.Fatalf("Maven metadata = %s, %v", meta, err)
 	}
 }

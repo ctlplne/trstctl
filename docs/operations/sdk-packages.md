@@ -77,16 +77,50 @@ curl -fsSO "$base/trstctl-sdk-0.1.0.jar"
 test "$(shasum -a 256 trstctl-sdk-0.1.0.jar | cut -d' ' -f1)" = "$(curl -fsS "$base/trstctl-sdk-0.1.0.jar.sha256")"
 ```
 
+## Several versions in one registry
+
+Build each version into the same directory and the registry holds them side by
+side: the Go module's `list`, the npm document (its `latest` tag is the highest
+version), the PyPI project page and `maven-metadata.xml` each list every version,
+and `manifest.json` lists every package of every version.
+
+```bash
+scripts/release/sdk-packages.sh 0.1.0 dist/sdk-registry
+scripts/release/sdk-packages.sh 0.1.1 dist/sdk-registry
+```
+
+Upgrade the same way you installed, with the same registry settings, naming the new
+version:
+`go get trstctl.com/sdk/go@v0.1.1`, `npm install @trstctl/sdk@0.1.1`,
+`pip install --upgrade trstctl-sdk==0.1.1`.
+
+## In a release
+
+A tagged release builds the four packages at the tag's version and attaches them
+to the GitHub Release as one archive, `trstctl-sdk-registry_<version>.tar.gz`, with
+SLSA build provenance (`trstctl-sdk-packages.intoto.jsonl`), as the CLI archives
+and the Python SDK have. Unpack it and serve the `sdk-registry` directory.
+
 ## What the install check proves
 
-`make sdk-install-check` builds the packages, serves them, and for each SDK, in
-a clean environment (its own home, empty package caches, only the local
-registry): installs the exact version, checks the registry served the file
-`manifest.json` names (the Go module zip in the module cache and the Maven jar
-are compared with their digests), then runs one round trip against a served
-control plane — an unauthenticated read is refused with `401`; a secret is
+`make sdk-install-check` builds two versions of the packages into one registry,
+serves it, and for each SDK, in a clean environment (its own home, empty package
+caches, only the local registry): installs the first version exactly, checks the
+registry served the file `manifest.json` names (the Go module zip in the module
+cache and the Maven jar are compared with their digests), runs one round trip
+against a served control plane, then upgrades to the second version and runs it
+again. The round trip: an unauthenticated read is refused with `401`; a secret is
 created, read, rotated and read again; a PKI certificate is issued and revoked;
 the secret is deleted. In front of the control plane, the first create from each
 SDK is answered `503` with `Retry-After: 1`: each SDK retries it at least a second
 later with the same `Idempotency-Key`. CI runs the check with a JDK, so the Java
 SDK is installed and run there too.
+
+## The CLI and agent archives on clean machines
+
+The CLI and host-agent archives get the same treatment on clean Linux and macOS CI
+runners (`release archives / OS package checks`): `scripts/release/cli-assets.sh`
+and `agent-assets.sh` build that runner's archives, and
+`scripts/ci/os-package-check.sh` verifies every archive against its `SHA256SUMS`,
+unpacks the runner's own into an empty directory, and runs it; `--version` must
+report the commit it was built from.

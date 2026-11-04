@@ -1165,6 +1165,82 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ github.ref_name }}
 
+  # A250: the four client SDKs as packages of the tag's version — the Go module
+  # proxy tree, the npm tarball, the wheel and its index, the Maven jar and pom,
+  # with manifest.json and SHA256SUMS — as one registry archive attached to the
+  # GitHub Release, with SLSA provenance. Nothing is pushed to a public registry
+  # here; an operator serves the archive with `go run ./tools/sdkpack serve`.
+  sdk-packages:
+    name: client sdk packages / build + attach
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    needs: [test, required-checks, release-evidence]
+    permissions:
+      contents: write # create/update the tag's GitHub Release assets
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    steps:
+      - name: Checkout exact release tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Build the SDK packages at the tag's version
+        env:
+          TRSTCTL_REQUIRE_JAVA_SDK: "1"
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm --prefix clients/sdk/typescript ci
+          scripts/release/sdk-packages.sh "$VERSION" dist/sdk-registry
+          ( cd dist/sdk-registry && sha256sum -c SHA256SUMS )
+          tar -C dist -czf "dist/trstctl-sdk-registry_${VERSION}.tar.gz" sdk-registry
+
+      - name: Compute SLSA subjects (SDK packages)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-sdk-packages.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" "dist/trstctl-sdk-registry_${GITHUB_REF_NAME#v}.tar.gz"
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the SDK registry to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" "dist/trstctl-sdk-registry_${GITHUB_REF_NAME#v}.tar.gz" --clobber
+
+  sdk-packages-provenance:
+    name: slsa / sdk packages provenance
+    needs: [sdk-packages]
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.sdk-packages.outputs.slsa_subjects }}
+      provenance-name: trstctl-sdk-packages.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
   # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless

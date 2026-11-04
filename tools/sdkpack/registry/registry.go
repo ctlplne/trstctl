@@ -34,10 +34,20 @@ type Package struct {
 	Size   int64  `json:"size"`
 }
 
-// Manifest lists every package a registry directory holds.
+// Manifest lists every package a registry directory holds, each version of
+// each one.
 type Manifest struct {
-	Version  string    `json:"version"`
 	Packages []Package `json:"packages"`
+}
+
+// Find is the package an ecosystem holds at version.
+func (m Manifest) Find(ecosystem, version string) (Package, bool) {
+	for _, p := range m.Packages {
+		if p.Ecosystem == ecosystem && strings.TrimPrefix(p.Version, "v") == strings.TrimPrefix(version, "v") {
+			return p, true
+		}
+	}
+	return Package{}, false
 }
 
 const manifestFile = "manifest.json"
@@ -56,16 +66,12 @@ func describe(dir, rel, ecosystem, name, version string) (Package, error) {
 }
 
 // AddToManifest records pkg in dir's manifest, replacing an earlier build of
-// the same package, and rewrites SHA256SUMS beside it.
-func AddToManifest(dir, version string, pkg Package) error {
+// the same package version, and rewrites SHA256SUMS beside it.
+func AddToManifest(dir string, pkg Package) error {
 	m, err := ReadManifest(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if m.Version != "" && m.Version != version {
-		return fmt.Errorf("registry: %s holds version %s, not %s", dir, m.Version, version)
-	}
-	m.Version = version
 	kept := m.Packages[:0]
 	for _, p := range m.Packages {
 		if p.Ecosystem != pkg.Ecosystem || p.Name != pkg.Name || p.Version != pkg.Version {
@@ -172,4 +178,47 @@ func ReadFileList(path string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// newerVersion reports whether version a (X.Y.Z, with or without a v) sorts
+// after b; versions that are not X.Y.Z compare as text.
+func newerVersion(a, b string) bool {
+	pa, oka := semver(a)
+	pb, okb := semver(b)
+	if !oka || !okb {
+		return a > b
+	}
+	for i := range pa {
+		if pa[i] != pb[i] {
+			return pa[i] > pb[i]
+		}
+	}
+	return false
+}
+
+func semver(v string) ([3]int, bool) {
+	var out [3]int
+	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
+	if len(parts) != 3 {
+		return out, false
+	}
+	for i, p := range parts {
+		n := 0
+		if p == "" {
+			return out, false
+		}
+		for _, c := range p {
+			if c < '0' || c > '9' {
+				return out, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		out[i] = n
+	}
+	return out, true
+}
+
+// sortVersions orders versions oldest first.
+func sortVersions(versions []string) {
+	sort.SliceStable(versions, func(i, j int) bool { return newerVersion(versions[j], versions[i]) })
 }

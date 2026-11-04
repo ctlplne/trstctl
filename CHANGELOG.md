@@ -2,6 +2,13 @@
 
 ### Added
 
+- Package readiness, third part (A250 is served): a registry directory holds several versions
+  side by side (the Go `list`, the npm document's `latest`, the PyPI page and `maven-metadata.xml`),
+  and `make sdk-install-check` now installs one version and upgrades each SDK to the next from the
+  same registry, running the round trip on both. A tagged release attaches the four packages as
+  `trstctl-sdk-registry_<version>.tar.gz` with SLSA provenance. A CI job checks the CLI and agent
+  archives on clean Linux and macOS runners: checksums, unpack, run, and the commit `--version`
+  reports.
 - SDK packages from a local registry (A250, second part): `scripts/release/sdk-packages.sh`
   (`make sdk-packages`) builds the Go module, the npm tarball (now compiled JavaScript and
   declarations, so plain Node loads it), a pure-Python wheel and the Maven jar of one version with

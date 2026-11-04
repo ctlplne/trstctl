@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -73,7 +74,17 @@ func GoModule(repo string, files []string, src, module, version string, at time.
 	if err != nil {
 		return Package{}, err
 	}
-	for name, data := range map[string][]byte{"list": []byte(version + "\n"), version + ".info": info, version + ".mod": gomod} {
+	// The list holds every version the directory has; this one joins them.
+	versions := []string{version}
+	if prior, err := os.ReadFile(filepath.Join(root, "list")); err == nil { // #nosec G304 -- this registry directory's own list (CWE-22)
+		for _, v := range strings.Fields(string(prior)) {
+			if v != version {
+				versions = append(versions, v)
+			}
+		}
+	}
+	sortVersions(versions)
+	for name, data := range map[string][]byte{"list": []byte(strings.Join(versions, "\n") + "\n"), version + ".info": info, version + ".mod": gomod} {
 		if err := writeFile(filepath.Join(root, name), data); err != nil {
 			return Package{}, err
 		}
@@ -222,8 +233,22 @@ func Wheel(repo string, files []string, src, version, out string) (Package, erro
 		return Package{}, err
 	}
 	normalized := strings.ToLower(regexp.MustCompile(`[-_.]+`).ReplaceAllString(project.Name, "-"))
-	page := fmt.Sprintf("<!DOCTYPE html>\n<html><body>\n<a href=\"../../packages/%s#sha256=%s\" data-requires-python=\"%s\">%s</a>\n</body></html>\n",
-		file, pkg.SHA256, strings.ReplaceAll(project.RequiresPython, ">", "&gt;"), file)
+	// The project page links every wheel of the project the directory holds.
+	wheels, err := filepath.Glob(filepath.Join(out, "pypi", "packages", module+"-*-py3-none-any.whl"))
+	if err != nil {
+		return Package{}, err
+	}
+	sort.Strings(wheels)
+	var links strings.Builder
+	for _, w := range wheels {
+		raw, err := os.ReadFile(w) // #nosec G304 -- a wheel in this registry directory (CWE-22)
+		if err != nil {
+			return Package{}, err
+		}
+		fmt.Fprintf(&links, "<a href=\"../../packages/%s#sha256=%s\" data-requires-python=\"%s\">%s</a>\n",
+			filepath.Base(w), crypto.SHA256Hex(raw), strings.ReplaceAll(project.RequiresPython, ">", "&gt;"), filepath.Base(w))
+	}
+	page := "<!DOCTYPE html>\n<html><body>\n" + links.String() + "</body></html>\n"
 	index := fmt.Sprintf("<!DOCTYPE html>\n<html><body>\n<a href=\"%s/\">%s</a>\n</body></html>\n", normalized, normalized)
 	if err := writeFile(filepath.Join(out, "pypi", "simple", normalized, "index.html"), []byte(page)); err != nil {
 		return Package{}, err
@@ -273,13 +298,33 @@ func NPM(tarball, out string) (Package, error) {
 	delete(fields, "scripts")
 	delete(fields, "devDependencies")
 	fields["dist"] = map[string]any{"integrity": "sha512-" + base64.StdEncoding.EncodeToString(sum), "tarball": "tarballs/" + file}
+	// The document holds every version the directory has; latest is the
+	// highest of them.
+	metaFile := filepath.Join(out, "npm", "meta", url2file(name)+".json")
+	versions := map[string]any{}
+	if prior, err := os.ReadFile(metaFile); err == nil { // #nosec G304 -- this registry directory's own document (CWE-22)
+		var existing struct {
+			Versions map[string]any `json:"versions"`
+		}
+		if err := json.Unmarshal(prior, &existing); err != nil {
+			return Package{}, fmt.Errorf("registry: %s: %w", metaFile, err)
+		}
+		versions = existing.Versions
+	}
+	versions[version] = fields
+	latest := version
+	for v := range versions {
+		if newerVersion(v, latest) {
+			latest = v
+		}
+	}
 	doc, err := json.MarshalIndent(map[string]any{
-		"name": name, "dist-tags": map[string]string{"latest": version}, "versions": map[string]any{version: fields},
+		"name": name, "dist-tags": map[string]string{"latest": latest}, "versions": versions,
 	}, "", "  ")
 	if err != nil {
 		return Package{}, err
 	}
-	if err := writeFile(filepath.Join(out, "npm", "meta", url2file(name)+".json"), doc); err != nil {
+	if err := writeFile(metaFile, doc); err != nil {
 		return Package{}, err
 	}
 	return describe(out, path.Join("npm", "tarballs", file), "npm", name, version)
@@ -316,6 +361,22 @@ func tarballPackageJSON(raw []byte) ([]byte, error) {
 func Maven(jar, pom, groupID, artifactID, version string, at time.Time, out string) (Package, error) {
 	dir := path.Join("maven", strings.ReplaceAll(groupID, ".", "/"), artifactID)
 	base := path.Join(dir, version, artifactID+"-"+version)
+	// The metadata lists every version the directory holds; latest and
+	// release are the highest.
+	versions := []string{version}
+	if entries, err := os.ReadDir(filepath.Join(out, filepath.FromSlash(dir))); err == nil {
+		for _, e := range entries {
+			if e.IsDir() && e.Name() != version {
+				versions = append(versions, e.Name())
+			}
+		}
+	}
+	sortVersions(versions)
+	var listed strings.Builder
+	for _, v := range versions {
+		fmt.Fprintf(&listed, "      <version>%s</version>\n", v)
+	}
+	highest := versions[len(versions)-1]
 	metadata := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <metadata>
   <groupId>%s</groupId>
@@ -324,12 +385,11 @@ func Maven(jar, pom, groupID, artifactID, version string, at time.Time, out stri
     <latest>%s</latest>
     <release>%s</release>
     <versions>
-      <version>%s</version>
-    </versions>
+%s    </versions>
     <lastUpdated>%s</lastUpdated>
   </versioning>
 </metadata>
-`, groupID, artifactID, version, version, version, at.UTC().Format("20060102150405"))
+`, groupID, artifactID, highest, highest, listed.String(), at.UTC().Format("20060102150405"))
 	for src, dst := range map[string]string{jar: base + ".jar", pom: base + ".pom", "": path.Join(dir, "maven-metadata.xml")} {
 		data := []byte(metadata)
 		if src != "" {

@@ -498,6 +498,51 @@ jobs:
             go test -C clients/terraform -count=1 -run TestTerraformApplyCreatesProfileCertificateAndSecret ./internal/terraformprovider/
 
 
+  # A250: the CLI and host-agent archives the release scripts build, checked the
+  # way an operator installs them on a clean Linux and a clean macOS runner:
+  # every archive against its SHA256SUMS, then this runner's binary unpacked and
+  # run, reporting the commit it was built from.
+  os-package-checks:
+    name: release archives / OS package checks (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux_amd64
+          - runner: macos-latest
+            platform: darwin_arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so the archives carry the commit date
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+
+      - name: Build this runner's CLI and agent archives
+        env:
+          TRSTCTL_CLI_PLATFORMS: ${{ matrix.platform }}
+          TRSTCTL_AGENT_PLATFORMS: ${{ matrix.platform }}
+        run: |
+          scripts/release/cli-assets.sh ci-candidate "${RUNNER_TEMP}/cli"
+          scripts/release/agent-assets.sh ci-candidate "${RUNNER_TEMP}/agent"
+
+      - name: Verify and run them as an operator would
+        run: scripts/ci/os-package-check.sh "${RUNNER_TEMP}/cli" "${RUNNER_TEMP}/agent" "${{ matrix.platform }}"
+
   perf-gates:
     name: perf smoke + capacity calibration
     runs-on: ubuntu-latest
@@ -759,7 +804,7 @@ jobs:
 
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

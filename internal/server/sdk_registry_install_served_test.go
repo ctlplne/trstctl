@@ -214,10 +214,11 @@ func (f *sdkFront) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.next.ServeHTTP(w, r)
 }
 
-// A250: the four SDKs, built as packages of one version and served from a
-// local registry, install in clean environments by exact version and run
-// auth, read, rotate and revoke against a served control plane; each retried
-// mutation keeps its Idempotency-Key and waits out Retry-After. It builds and
+// A250: the four SDKs, built as packages and served from a local registry,
+// install in clean environments by exact version, upgrade to the next one,
+// and run auth, read, rotate and revoke against a served control plane on
+// both; each retried mutation keeps its Idempotency-Key and waits out
+// Retry-After. It builds and
 // installs with the real toolchains, so it runs when
 // TRSTCTL_SDK_REGISTRY_INSTALL=1 (make sdk-install-check, and its CI job);
 // the Maven package needs a JDK, required when TRSTCTL_REQUIRE_JAVA_SDK=1.
@@ -230,20 +231,28 @@ func TestServedSDKsInstallFromALocalRegistryA250(t *testing.T) {
 	}
 	_, thisFile, _, _ := runtime.Caller(0)
 	repo := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
-	const version = "0.1.0"
+	// Two versions in one registry: each SDK installs the first by exact
+	// version, then upgrades to the second, and runs the round trip on both.
+	const version, upgrade = "0.1.0", "0.1.1"
 	dir := filepath.Join(t.TempDir(), "registry")
-	build := exec.CommandContext(t.Context(), "bash", filepath.Join(repo, "scripts", "release", "sdk-packages.sh"), version, dir) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-	build.Dir = repo
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("sdk-packages.sh: %v\n%s", err, out)
+	for _, v := range []string{version, upgrade} {
+		build := exec.CommandContext(t.Context(), "bash", filepath.Join(repo, "scripts", "release", "sdk-packages.sh"), v, dir) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		build.Dir = repo
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("sdk-packages.sh %s: %v\n%s", v, err, out)
+		}
 	}
 	manifest, err := registry.ReadManifest(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	built := map[string]registry.Package{}
-	for _, p := range manifest.Packages {
-		built[p.Ecosystem] = p
+	built := func(t *testing.T, ecosystem, v string) registry.Package {
+		t.Helper()
+		p, ok := manifest.Find(ecosystem, v)
+		if !ok {
+			t.Fatalf("the manifest has no %s %s", ecosystem, v)
+		}
+		return p
 	}
 	var servedMu sync.Mutex
 	served := map[string]int{}
@@ -312,37 +321,42 @@ func TestServedSDKsInstallFromALocalRegistryA250(t *testing.T) {
 			"GOPROXY="+reg.URL+"/go", "GOPRIVATE=trstctl.com/*,github.com/ctlplne/*", "GONOPROXY=none",
 			"GOFLAGS=-mod=mod -modcacherw", "GOTOOLCHAIN=local")
 		runIn(t, d, env, "go", "mod", "init", "example.com/smoke")
-		runIn(t, d, env, "go", "get", "trstctl.com/sdk/go@v"+version)
-		if got := strings.TrimSpace(runIn(t, d, env, "go", "list", "-m", "-f", "{{.Version}}", "trstctl.com/sdk/go")); got != "v"+version {
-			t.Fatalf("installed trstctl.com/sdk/go %s, want v%s", got, version)
-		}
-		zip, err := os.ReadFile(filepath.Join(work, "gomodcache", "cache", "download", "trstctl.com", "sdk", "go", "@v", "v"+version+".zip")) // #nosec G304 -- the test reads what it downloaded under its own temp dir (CWE-22)
-		if err != nil || crypto.SHA256Hex(zip) != built["go"].SHA256 {
-			t.Fatalf("the downloaded module zip is not the manifest's (%v)", err)
-		}
-		servedManifestFile(t, "go", "/"+built["go"].File)
 		write(t, filepath.Join(d, "main.go"), sdkSmokeGo)
-		if out := runIn(t, d, env, "go", "run", "."); !strings.Contains(out, "smoke ok") {
-			t.Fatalf("go smoke: %s", out)
+		for _, v := range []string{version, upgrade} {
+			runIn(t, d, env, "go", "get", "trstctl.com/sdk/go@v"+v)
+			if got := strings.TrimSpace(runIn(t, d, env, "go", "list", "-m", "-f", "{{.Version}}", "trstctl.com/sdk/go")); got != "v"+v {
+				t.Fatalf("installed trstctl.com/sdk/go %s, want v%s", got, v)
+			}
+			zip, err := os.ReadFile(filepath.Join(work, "gomodcache", "cache", "download", "trstctl.com", "sdk", "go", "@v", "v"+v+".zip")) // #nosec G304 -- the test reads what it downloaded under its own temp dir (CWE-22)
+			if err != nil || crypto.SHA256Hex(zip) != built(t, "go", v).SHA256 {
+				t.Fatalf("the downloaded v%s module zip is not the manifest's (%v)", v, err)
+			}
+			servedManifestFile(t, "go", "/"+built(t, "go", v).File)
+			if out := runIn(t, d, env, "go", "run", "."); !strings.Contains(out, "smoke ok") {
+				t.Fatalf("go smoke on v%s: %s", v, out)
+			}
 		}
 	})
 
 	t.Run("npm", func(t *testing.T) {
 		d := mkdir(t, "npm")
 		write(t, filepath.Join(d, "package.json"), `{"name":"smoke","version":"1.0.0","type":"module","private":true}`)
-		env := clean("NPM_CONFIG_USERCONFIG="+filepath.Join(work, "npmrc"), "NPM_CONFIG_CACHE="+filepath.Join(work, "npmcache"))
-		runIn(t, d, env, "npm", "install", "--no-audit", "--no-fund", "--registry", reg.URL+"/npm/", "@trstctl/sdk@"+version)
-		lock, err := os.ReadFile(filepath.Join(d, "package-lock.json")) // #nosec G304 -- the test reads what it installed under its own temp dir (CWE-22)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(lock), `"version": "`+version+`"`) || !strings.Contains(string(lock), "/npm/"+strings.TrimPrefix(built["npm"].File, "npm/")) {
-			t.Fatalf("package-lock.json does not pin the registry's %s:\n%s", version, lock)
-		}
-		servedManifestFile(t, "npm", "/"+built["npm"].File)
 		write(t, filepath.Join(d, "smoke.mjs"), sdkSmokeNode)
-		if out := runIn(t, d, env, "node", "smoke.mjs"); !strings.Contains(out, "smoke ok") {
-			t.Fatalf("npm smoke: %s", out)
+		env := clean("NPM_CONFIG_USERCONFIG="+filepath.Join(work, "npmrc"), "NPM_CONFIG_CACHE="+filepath.Join(work, "npmcache"))
+		for _, v := range []string{version, upgrade} {
+			runIn(t, d, env, "npm", "install", "--no-audit", "--no-fund", "--registry", reg.URL+"/npm/", "@trstctl/sdk@"+v)
+			installed, err := os.ReadFile(filepath.Join(d, "node_modules", "@trstctl", "sdk", "package.json")) // #nosec G304 -- the test reads what it installed under its own temp dir (CWE-22)
+			if err != nil || !strings.Contains(string(installed), `"version": "`+v+`"`) {
+				t.Fatalf("node_modules holds another @trstctl/sdk than %s (%v)", v, err)
+			}
+			lock, err := os.ReadFile(filepath.Join(d, "package-lock.json")) // #nosec G304 -- the test reads what it installed under its own temp dir (CWE-22)
+			if err != nil || !strings.Contains(string(lock), "/npm/"+strings.TrimPrefix(built(t, "npm", v).File, "npm/")) {
+				t.Fatalf("package-lock.json does not pin the registry's %s (%v):\n%s", v, err, lock)
+			}
+			servedManifestFile(t, "npm", "/"+built(t, "npm", v).File)
+			if out := runIn(t, d, env, "node", "smoke.mjs"); !strings.Contains(out, "smoke ok") {
+				t.Fatalf("npm smoke on %s: %s", v, out)
+			}
 		}
 	})
 
@@ -351,29 +365,29 @@ func TestServedSDKsInstallFromALocalRegistryA250(t *testing.T) {
 		env := clean("PIP_CONFIG_FILE="+os.DevNull, "PIP_DISABLE_PIP_VERSION_CHECK=1")
 		runIn(t, d, env, "python3", "-m", "venv", filepath.Join(d, "venv"))
 		python := filepath.Join(d, "venv", "bin", "python")
-		runIn(t, d, env, python, "-m", "pip", "install", "--no-cache-dir", "--index-url", reg.URL+"/pypi/simple/", "trstctl-sdk=="+version)
-		if got := strings.TrimSpace(runIn(t, d, env, python, "-c", "import importlib.metadata as m; print(m.version('trstctl-sdk'))")); got != version {
-			t.Fatalf("installed trstctl-sdk %s, want %s", got, version)
-		}
-		servedManifestFile(t, "pypi", "/"+built["pypi"].File)
 		write(t, filepath.Join(d, "smoke.py"), sdkSmokePython)
-		if out := runIn(t, d, env, python, "smoke.py"); !strings.Contains(out, "smoke ok") {
-			t.Fatalf("pypi smoke: %s", out)
+		for _, v := range []string{version, upgrade} {
+			runIn(t, d, env, python, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "--index-url", reg.URL+"/pypi/simple/", "trstctl-sdk=="+v)
+			if got := strings.TrimSpace(runIn(t, d, env, python, "-c", "import importlib.metadata as m; print(m.version('trstctl-sdk'))")); got != v {
+				t.Fatalf("installed trstctl-sdk %s, want %s", got, v)
+			}
+			servedManifestFile(t, "pypi", "/"+built(t, "pypi", v).File)
+			if out := runIn(t, d, env, python, "smoke.py"); !strings.Contains(out, "smoke ok") {
+				t.Fatalf("pypi smoke on %s: %s", v, out)
+			}
 		}
 	})
 
 	t.Run("maven", func(t *testing.T) {
-		pkg, ok := built["maven"]
-		if !ok {
+		if _, ok := manifest.Find("maven", version); !ok {
 			if os.Getenv("TRSTCTL_REQUIRE_JAVA_SDK") == "1" {
 				t.Fatal("no Maven package was built")
 			}
 			t.Skip("no JDK here, so no Maven package was built")
 		}
 		d := mkdir(t, "maven")
-		// The jar by its coordinates from the repository, checked against the
-		// repository's own .sha256 and the manifest.
-		jar := filepath.Join(d, "trstctl-sdk-"+version+".jar")
+		write(t, filepath.Join(d, "Smoke.java"), sdkSmokeJava)
+		env := clean()
 		fetch := func(urlPath string) []byte {
 			resp, err := reg.Client().Get(reg.URL + urlPath)
 			if err != nil {
@@ -386,16 +400,23 @@ func TestServedSDKsInstallFromALocalRegistryA250(t *testing.T) {
 			}
 			return body
 		}
-		data := fetch("/" + pkg.File)
-		if sum := string(fetch("/" + pkg.File + ".sha256")); crypto.SHA256Hex(data) != sum || sum != pkg.SHA256 {
-			t.Fatalf("the jar's digest %s, the repository's .sha256 %s and the manifest's %s disagree", crypto.SHA256Hex(data), sum, pkg.SHA256)
+		for _, v := range []string{version, upgrade} {
+			// The jar by its coordinates from the repository, checked against
+			// the repository's own .sha256 and the manifest.
+			pkg := built(t, "maven", v)
+			data := fetch("/" + pkg.File)
+			if sum := string(fetch("/" + pkg.File + ".sha256")); crypto.SHA256Hex(data) != sum || sum != pkg.SHA256 {
+				t.Fatalf("the %s jar's digest %s, the repository's .sha256 %s and the manifest's %s disagree", v, crypto.SHA256Hex(data), sum, pkg.SHA256)
+			}
+			jar := filepath.Join(d, "trstctl-sdk-"+v+".jar")
+			write(t, jar, string(data))
+			runIn(t, d, env, "javac", "-cp", jar, "Smoke.java")
+			if out := runIn(t, d, env, "java", "-cp", jar+string(os.PathListSeparator)+d, "Smoke"); !strings.Contains(out, "smoke ok") {
+				t.Fatalf("maven smoke on %s: %s", v, out)
+			}
 		}
-		write(t, jar, string(data))
-		write(t, filepath.Join(d, "Smoke.java"), sdkSmokeJava)
-		env := clean()
-		runIn(t, d, env, "javac", "-cp", jar, "Smoke.java")
-		if out := runIn(t, d, env, "java", "-cp", jar+string(os.PathListSeparator)+d, "Smoke"); !strings.Contains(out, "smoke ok") {
-			t.Fatalf("maven smoke: %s", out)
+		if meta := string(fetch("/maven/com/trstctl/trstctl-sdk/maven-metadata.xml")); !strings.Contains(meta, "<release>"+upgrade+"</release>") {
+			t.Fatalf("maven-metadata.xml does not name %s the release:\n%s", upgrade, meta)
 		}
 	})
 
@@ -403,9 +424,12 @@ func TestServedSDKsInstallFromALocalRegistryA250(t *testing.T) {
 	// Retry-After, with the key it was first sent with.
 	front.mu.Lock()
 	defer front.mu.Unlock()
+	// The first round trip's create was turned away and retried with its
+	// key; the upgraded SDK's create, a new operation, has a key of its own.
 	for family, attempts := range front.attempts {
-		if len(attempts) != 2 || attempts[0].key == "" || attempts[0].key != attempts[1].key || attempts[1].at.Sub(attempts[0].at) < time.Second {
-			t.Errorf("%s: create attempts %+v — want two with one Idempotency-Key, at least a second apart", family, attempts)
+		if len(attempts) != 3 || attempts[0].key == "" || attempts[0].key != attempts[1].key || attempts[1].at.Sub(attempts[0].at) < time.Second ||
+			attempts[2].key == "" || attempts[2].key == attempts[0].key {
+			t.Errorf("%s: create attempts %+v — want a retried pair with one Idempotency-Key at least a second apart, then the upgrade's own", family, attempts)
 		}
 	}
 	for _, family := range []string{"trstctl-go-sdk", "trstctl-ts-sdk", "trstctl-python-sdk"} {
