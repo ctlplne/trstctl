@@ -14594,6 +14594,7 @@
                 "access sessions recording-export",
                 "access sessions recording-hold",
                 "access sessions recording-release",
+                "access agent",
                 "access targets list",
                 "access targets register",
                 "access targets get",

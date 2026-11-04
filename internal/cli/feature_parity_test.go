@@ -413,9 +413,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `access activity export` and the `access run` launcher. A252 adds
 	// `reports evidence`. A255 adds `access sessions terminate`, `access
 	// sessions recording`, `recording-verify`, `recording-frames`,
-	// `recording-export`, `recording-hold` and `recording-release`.
-	if len(out) != 785 {
-		t.Fatalf("CLI commands = %d, want 785", len(out))
+	// `recording-export`, `recording-hold` and `recording-release`. A257 adds
+	// the `access agent` launcher.
+	if len(out) != 786 {
+		t.Fatalf("CLI commands = %d, want 786", len(out))
 	}
 	return out
 }

@@ -73,6 +73,9 @@ type gatewayFixtureOptions struct {
 	// kubernetes adds the Kubernetes target "k8s-gw" (A256), bound to the
 	// gateway, served by this provider ("pam-k8s-provider", role operator).
 	kubernetes DynamicSecretProviderRegistry
+	// agentBroker serves the AI agent broker, so a test can issue an agent
+	// identity and revoke it in one call (A257).
+	agentBroker bool
 	// maxTTL raises the broker's session cap (a Kubernetes token lives at
 	// least ten minutes); zero keeps three minutes.
 	maxTTL time.Duration
@@ -156,6 +159,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			DatabaseTargets: databaseTargets}
 		d.ArchiveObjectStore = f.objects.Open(t)
 		d.AuditSigningKey = f.auditKey
+		if opts.agentBroker {
+			d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
+		}
 	})
 	h := f.h
 	if _, err := h.client.Heartbeat(context.Background(), &transport.HeartbeatRequest{AgentID: h.agent, Version: "a255", Status: "active"}); err != nil {

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -33,12 +34,23 @@ type AccessBundle struct {
 	Permissions      []string
 	Audiences        []string
 	MaxRunTTLSeconds int
-	Revision         int64
-	CreatedBy        string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	DeletedAt        *time.Time
-	DeletedBy        string
+	// AccessTargets are the accounts a run of the bundle may open privileged
+	// sessions to (A257): each a PAM target and the roles allowed on it.
+	AccessTargets []AccessBundleTarget
+	Revision      int64
+	CreatedBy     string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     *time.Time
+	DeletedBy     string
+}
+
+// AccessBundleTarget is one account a bundle delegates (A257): a PAM target
+// by type and ID, and the roles a run may request on it.
+type AccessBundleTarget struct {
+	TargetType string   `json:"target_type"`
+	TargetID   string   `json:"target_id"`
+	Roles      []string `json:"roles"`
 }
 
 // AccessBundleGrant gives a bundle to a user or a machine, optionally until a
@@ -164,19 +176,28 @@ func (s *Store) ApplyAccessBundleSavedTx(ctx context.Context, tx pgx.Tx, tenantI
 	if err != nil {
 		return err
 	}
+	targets := b.AccessTargets
+	if targets == nil {
+		targets = []AccessBundleTarget{}
+	}
+	accessTargets, err := json.Marshal(targets)
+	if err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO access_bundles
 		  (tenant_id, id, name, description, permissions, audiences, max_run_ttl_seconds, revision, created_by,
-		   created_at, updated_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11)
+		   created_at, updated_at, event_sequence, access_targets)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12::jsonb)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		  name = EXCLUDED.name, description = EXCLUDED.description, permissions = EXCLUDED.permissions,
 		  audiences = EXCLUDED.audiences, max_run_ttl_seconds = EXCLUDED.max_run_ttl_seconds,
-		  revision = EXCLUDED.revision, updated_at = EXCLUDED.updated_at, event_sequence = EXCLUDED.event_sequence
+		  revision = EXCLUDED.revision, updated_at = EXCLUDED.updated_at, event_sequence = EXCLUDED.event_sequence,
+		  access_targets = EXCLUDED.access_targets
 		WHERE access_bundles.tenant_id = EXCLUDED.tenant_id AND access_bundles.revision < EXCLUDED.revision
 		  AND access_bundles.deleted_at IS NULL`,
 		tenantID, b.ID, b.Name, b.Description, b.Permissions, b.Audiences, b.MaxRunTTLSeconds, b.Revision,
-		b.CreatedBy, b.CreatedAt.UTC(), seq)
+		b.CreatedBy, b.CreatedAt.UTC(), seq, string(accessTargets))
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
@@ -324,12 +345,16 @@ func (s *Store) ApplyAccessBundleRunRevokedTx(ctx context.Context, tx pgx.Tx, te
 }
 
 const accessBundleColumns = `id::text, name, description, permissions, audiences, max_run_ttl_seconds, revision,
-	created_by, created_at, updated_at, deleted_at, deleted_by`
+	created_by, created_at, updated_at, deleted_at, deleted_by, access_targets`
 
 func scanAccessBundle(row pgx.Row) (AccessBundle, error) {
 	var b AccessBundle
+	var targets []byte
 	err := row.Scan(&b.ID, &b.Name, &b.Description, &b.Permissions, &b.Audiences, &b.MaxRunTTLSeconds, &b.Revision,
-		&b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt, &b.DeletedBy)
+		&b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt, &b.DeletedBy, &targets)
+	if err == nil && len(targets) > 0 {
+		err = json.Unmarshal(targets, &b.AccessTargets)
+	}
 	return b, err
 }
 
@@ -536,6 +561,50 @@ func authorityTx(ctx context.Context, tx pgx.Tx, tenantID, principal string, onl
 	return out, rows.Err()
 }
 
+// RunAccessTargets are the accounts a run may open privileged sessions to now
+// (A257): those named by the bundles of its live grants, read in one
+// transaction. A revoked, expired or unknown run reaches none.
+func (s *Store) RunAccessTargets(ctx context.Context, tenantID, runID string, now time.Time) ([]AccessBundleTarget, error) {
+	var out []AccessBundleTarget
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		run, err := scanAccessBundleRun(tx.QueryRow(ctx, `SELECT `+accessBundleRunColumns+` FROM access_bundle_runs
+			WHERE tenant_id = $1 AND id = $2`, tenantID, runID))
+		if err != nil {
+			return err
+		}
+		if run.RevokedAt != nil || !run.ExpiresAt.After(now) {
+			return nil
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT b.access_targets
+			  FROM access_bundle_grants g
+			  JOIN access_bundles b ON b.tenant_id = g.tenant_id AND b.id = g.bundle_id
+			 WHERE g.tenant_id = $1 AND g.principal = $2 AND `+accessBundleLiveGrant+`
+			   AND g.id::text = ANY($4::text[])
+			 ORDER BY g.granted_at, g.id`, tenantID, run.Principal, now.UTC(), run.GrantIDs)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var raw []byte
+			if err := rows.Scan(&raw); err != nil {
+				return err
+			}
+			var targets []AccessBundleTarget
+			if err := json.Unmarshal(raw, &targets); err != nil {
+				return err
+			}
+			out = append(out, targets...)
+		}
+		return rows.Err()
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrAccessBundleNotFound
+	}
+	return out, err
+}
+
 // RunAuthority is what a run may do now: the permissions it was issued that
 // its grants still give, read with the run in one transaction. A revoked,
 // expired or unknown run may do nothing.
@@ -603,6 +672,34 @@ func (s *Store) ListAccessBundleRuns(ctx context.Context, tenantID, principal, b
 		rows, err := tx.Query(ctx, `SELECT `+accessBundleRunColumns+` FROM access_bundle_runs
 			WHERE tenant_id = $1 AND ($2 = '' OR principal = $2) AND ($3 = '' OR $3 = ANY(bundle_ids::text[]))
 			ORDER BY issued_at DESC, id LIMIT $4`, tenantID, principal, bundleID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			r, err := scanAccessBundleRun(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListLiveAccessBundleRuns lists one principal's runs that are neither revoked
+// nor expired, oldest first (A257): Q4's one-call revoke of an agent's
+// identity revokes the runs that act as the agent.
+func (s *Store) ListLiveAccessBundleRuns(ctx context.Context, tenantID, principal string, now time.Time, limit int) ([]AccessBundleRun, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	out := []AccessBundleRun{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+accessBundleRunColumns+` FROM access_bundle_runs
+			WHERE tenant_id = $1 AND principal = $2 AND revoked_at IS NULL AND expires_at > $3
+			ORDER BY issued_at, id LIMIT $4`, tenantID, principal, now.UTC(), limit)
 		if err != nil {
 			return err
 		}

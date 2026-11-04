@@ -8715,7 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- The agent launcher (A257); credential health checks and emergency access (A258).
+- Credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8830,3 +8830,34 @@ What comes next:
 - A Redis target behind TLS with a private CA: the gateway verifies `rediss://` against the
   system roots, and the provider's `redis_tls_ca_ref` is not yet carried to it with the
   session's credential.
+
+## Agent launcher (A257) — served
+
+Status: served. `trstctl-cli access agent --account TYPE/ID:ROLE ... -- <command>` starts an
+agent or a CI job with gateway sessions to the accounts its task is delegated: it requests
+each account's session with its token, waits for the approvals, opens each through its
+gateway and serves the tunnels on loopback addresses from its own process. The command gets
+instructions (`TRSTCTL_ACCESS_INSTRUCTIONS`, `TRSTCTL_ACCESS_<n>_ADDR`, and `PGHOST`/`PGPORT`,
+`MYSQL_HOST`/`MYSQL_TCP_PORT` or `KUBECONFIG` for a single account of that kind) and no
+credential: the caller's token and every `TRSTCTL_*TOKEN*` variable are removed from its
+environment, the tickets stay in the launcher, and the gateway signs in. Its sessions are
+revoked when it exits. An access bundle names the accounts its runs may reach
+(`access_targets`), and a run is refused (403) any other target or role; the new
+`access:sessions.open` permission (request, open and revoke one's own sessions) is what a
+bundle carries for it. An unattended run acts as the agent's own identity: the run is minted
+for the agent's ID, and its sessions record `requested_by: bundle-run:<agent>`. Revoking the
+agent's broker identity (Q4) also revokes the runs minted for it and ends every live session
+it opened. `TestServedAgentLauncherA257` proves it: the launched agent counts a table's rows
+through the gateway with no password, DSN or run token in its environment, its instructions,
+its output, the launcher's output or the gateway's log; an SSH account its bundle does not
+delegate is refused; and one call revoking its identity revokes its run (the run's token is
+refused from then on), ends its held database connection, and the gateway acknowledges while
+the session's login stops signing in.
+
+What comes next:
+- Standing approvals for a bundle's delegated accounts: each session the launcher opens still
+  waits for its reviewers (no automatic approval is added by default).
+- Confining the command's network to its tunnels (namespaces or a sandbox); today it holds no
+  credential for its accounts, but it can reach whatever its host can.
+- The console creates bundles without delegated accounts and does not show them yet; the API
+  and CLI read and set them (`access_targets`).

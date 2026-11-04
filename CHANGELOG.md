@@ -63,6 +63,16 @@
   API calls plus remote-command streams (stdin, stdout, stderr; masked). `trstctl-cli access sessions connect` writes a
   kubeconfig naming the tunnel and no user; migration 0396 admits Kubernetes targets. SQL Server moves to the x86
   block; Oracle sessions are recorded as what comes next.
+- Agent launcher (A257): an access bundle names the privileged accounts its runs may reach (`access_targets`; a run
+  is refused any other with 403), and the new `access:sessions.open` permission (request, open and revoke one's own
+  sessions; `access:write` includes it) is what a bundle carries for it. `trstctl-cli access agent --account
+  TYPE/ID:ROLE ... -- <command>` requests and opens each account's session through its gateway after its reviews,
+  serves the tunnels from its own process and runs the command with instructions (`TRSTCTL_ACCESS_INSTRUCTIONS`,
+  `TRSTCTL_ACCESS_<n>_ADDR`, `PGHOST`/`PGPORT`, ...) and no credential: every `TRSTCTL_*TOKEN*` variable is removed
+  from its environment and the gateway signs in. Its sessions are revoked when it exits. An unattended run minted for
+  an agent's ID acts as the agent, and revoking the agent's broker identity (Q4) now also revokes those runs and ends
+  every live session the agent opened; the response lists them (`BrokerAgentIdentityRevokeResult`). Migration 0397
+  adds `access_bundles.access_targets`. `access sessions connect` now prints a `psql` line for PostgreSQL sessions.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

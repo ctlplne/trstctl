@@ -35,6 +35,7 @@ const full: AccessBundle = {
   permissions: ["certs:read", "owners:read"],
   audiences: ["ci"],
   max_run_ttl_seconds: 1800,
+  access_targets: [],
   revision: 1,
   created_by: "admin",
   created_at: now,

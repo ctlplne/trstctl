@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -40,7 +42,16 @@ const (
 	accessBundleMinRunTTL       = 60
 	accessBundleMaxRunTTL       = 86400
 	accessBundleLabelMax        = 120
+	accessBundleMaxTargets      = 16
+	accessBundleMaxTargetRoles  = 8
 )
+
+// accessBundleTargetTypes are the PAM target types a bundle may delegate
+// (A257).
+var accessBundleTargetTypes = []string{"clickhouse", "kubernetes", "mongodb", "mysql", "postgres", "redis", "ssh"}
+
+// accessBundleName is a PAM target ID or role name a bundle may name.
+var accessBundleName = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
 var accessBundleAudiences = map[string]bool{"custom_agent": true, "ci": true, "mcp_server": true}
 
@@ -97,25 +108,29 @@ type accessBundleRequest struct {
 	Permissions      []string `json:"permissions"`
 	Audiences        []string `json:"audiences"`
 	MaxRunTTLSeconds int      `json:"max_run_ttl_seconds"`
+	// AccessTargets are the accounts a run may open privileged sessions to
+	// (A257): each a PAM target and the roles allowed on it.
+	AccessTargets []store.AccessBundleTarget `json:"access_targets"`
 	// Revision is the revision being replaced (PUT only).
 	Revision int64 `json:"revision"`
 }
 
 type accessBundleView struct {
-	ID               string                  `json:"id"`
-	Name             string                  `json:"name"`
-	Description      string                  `json:"description"`
-	Permissions      []string                `json:"permissions"`
-	Audiences        []string                `json:"audiences"`
-	MaxRunTTLSeconds int                     `json:"max_run_ttl_seconds"`
-	Revision         int64                   `json:"revision"`
-	CreatedBy        string                  `json:"created_by"`
-	CreatedAt        time.Time               `json:"created_at"`
-	UpdatedAt        time.Time               `json:"updated_at"`
-	LiveGrants       int                     `json:"live_grants"`
-	ActiveRuns       int                     `json:"active_runs"`
-	Grants           []accessBundleGrantView `json:"grants,omitempty"`
-	Runs             []accessRunView         `json:"runs,omitempty"`
+	ID               string                     `json:"id"`
+	Name             string                     `json:"name"`
+	Description      string                     `json:"description"`
+	Permissions      []string                   `json:"permissions"`
+	Audiences        []string                   `json:"audiences"`
+	MaxRunTTLSeconds int                        `json:"max_run_ttl_seconds"`
+	AccessTargets    []store.AccessBundleTarget `json:"access_targets"`
+	Revision         int64                      `json:"revision"`
+	CreatedBy        string                     `json:"created_by"`
+	CreatedAt        time.Time                  `json:"created_at"`
+	UpdatedAt        time.Time                  `json:"updated_at"`
+	LiveGrants       int                        `json:"live_grants"`
+	ActiveRuns       int                        `json:"active_runs"`
+	Grants           []accessBundleGrantView    `json:"grants,omitempty"`
+	Runs             []accessRunView            `json:"runs,omitempty"`
 }
 
 type accessBundleListResponse struct {
@@ -325,6 +340,9 @@ func (a *API) normalizeAccessBundle(ctx context.Context, tenantID string, req ac
 	if req.MaxRunTTLSeconds < accessBundleMinRunTTL || req.MaxRunTTLSeconds > accessBundleMaxRunTTL {
 		return req, errStatus(http.StatusBadRequest, fmt.Sprintf("max_run_ttl_seconds must be %d-%d", accessBundleMinRunTTL, accessBundleMaxRunTTL))
 	}
+	if req.AccessTargets, err = normalizeAccessTargets(req.AccessTargets, req.Permissions); err != nil {
+		return req, err
+	}
 	return req, nil
 }
 
@@ -366,7 +384,7 @@ func (a *API) createAccessBundle(w http.ResponseWriter, r *http.Request) {
 		id := googleuuid.NewString()
 		if err := a.orch.SaveAccessBundle(ctx, tenantID, projections.AccessBundleSaved{
 			ID: id, Name: req.Name, Description: req.Description, Permissions: req.Permissions, Audiences: req.Audiences,
-			MaxRunTTLSeconds: req.MaxRunTTLSeconds, Revision: 1, SavedBy: subject,
+			MaxRunTTLSeconds: req.MaxRunTTLSeconds, Revision: 1, SavedBy: subject, AccessTargets: req.AccessTargets,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -408,7 +426,7 @@ func (a *API) updateAccessBundle(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := a.orch.SaveAccessBundle(ctx, tenantID, projections.AccessBundleSaved{
 			ID: id, Name: req.Name, Description: req.Description, Permissions: req.Permissions, Audiences: req.Audiences,
-			MaxRunTTLSeconds: req.MaxRunTTLSeconds, Revision: current.Revision + 1, SavedBy: subject,
+			MaxRunTTLSeconds: req.MaxRunTTLSeconds, Revision: current.Revision + 1, SavedBy: subject, AccessTargets: req.AccessTargets,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -485,7 +503,66 @@ func toAccessBundleView(b store.AccessBundle, st store.AccessBundleStats) access
 		ID: b.ID, Name: b.Name, Description: b.Description, Permissions: nonNilStringSlice(b.Permissions),
 		Audiences: nonNilStringSlice(b.Audiences), MaxRunTTLSeconds: b.MaxRunTTLSeconds, Revision: b.Revision,
 		CreatedBy: b.CreatedBy, CreatedAt: b.CreatedAt.UTC(), UpdatedAt: b.UpdatedAt.UTC(), LiveGrants: st.LiveGrants, ActiveRuns: st.ActiveRuns,
+		AccessTargets: nonNilAccessTargets(b.AccessTargets),
 	}
+}
+
+func nonNilAccessTargets(t []store.AccessBundleTarget) []store.AccessBundleTarget {
+	if t == nil {
+		return []store.AccessBundleTarget{}
+	}
+	return t
+}
+
+// normalizeAccessTargets checks and sorts the accounts a bundle delegates:
+// at most accessBundleMaxTargets PAM targets, each named once with one to
+// accessBundleMaxTargetRoles roles. Naming any needs the bundle to carry
+// access:sessions.open, without which a run could open none of them.
+func normalizeAccessTargets(targets []store.AccessBundleTarget, perms []string) ([]store.AccessBundleTarget, error) {
+	if len(targets) == 0 {
+		return []store.AccessBundleTarget{}, nil
+	}
+	if len(targets) > accessBundleMaxTargets {
+		return nil, errStatus(http.StatusBadRequest, fmt.Sprintf("a bundle names at most %d access targets", accessBundleMaxTargets))
+	}
+	if !slices.Contains(perms, string(authz.AccessSessionsOpen)) {
+		return nil, errStatus(http.StatusUnprocessableEntity, "a bundle that names access targets carries access:sessions.open, without which its runs could open none")
+	}
+	out := make([]store.AccessBundleTarget, 0, len(targets))
+	seen := map[string]bool{}
+	for _, t := range targets {
+		t.TargetType, t.TargetID = strings.TrimSpace(t.TargetType), strings.TrimSpace(t.TargetID)
+		if !slices.Contains(accessBundleTargetTypes, t.TargetType) {
+			return nil, errStatus(http.StatusBadRequest, "access target type "+t.TargetType+" is not a privileged access target type")
+		}
+		if !accessBundleName.MatchString(t.TargetID) {
+			return nil, errStatus(http.StatusBadRequest, "access target id must be 1-64 lowercase letters, digits, - or _")
+		}
+		key := t.TargetType + "/" + t.TargetID
+		if seen[key] {
+			return nil, errStatus(http.StatusBadRequest, "access target "+key+" is listed twice")
+		}
+		seen[key] = true
+		if len(t.Roles) == 0 || len(t.Roles) > accessBundleMaxTargetRoles {
+			return nil, errStatus(http.StatusBadRequest, fmt.Sprintf("access target %s names 1-%d roles", key, accessBundleMaxTargetRoles))
+		}
+		roles := make([]string, 0, len(t.Roles))
+		for _, role := range t.Roles {
+			role = strings.TrimSpace(role)
+			if !accessBundleName.MatchString(role) {
+				return nil, errStatus(http.StatusBadRequest, "access target role must be 1-64 lowercase letters, digits, - or _")
+			}
+			if !slices.Contains(roles, role) {
+				roles = append(roles, role)
+			}
+		}
+		sort.Strings(roles)
+		out = append(out, store.AccessBundleTarget{TargetType: t.TargetType, TargetID: t.TargetID, Roles: roles})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].TargetType+"/"+out[i].TargetID < out[j].TargetType+"/"+out[j].TargetID
+	})
+	return out, nil
 }
 
 func (a *API) accessBundleDetail(ctx context.Context, tenantID, id string) (accessBundleView, error) {
@@ -1027,7 +1104,9 @@ func (a *API) bundleRunPrincipal(ctx context.Context, rec store.APITokenRecord) 
 	if len(scopes) == 0 {
 		return authz.Principal{}, errors.New("api: access bundle run holds no authority")
 	}
-	return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: scopes, Delegated: rec.Delegated}.Principal(), nil
+	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: scopes, Delegated: rec.Delegated}.Principal()
+	principal.RunID = rec.ID
+	return principal, nil
 }
 
 // accessActivityExportMax bounds one export; narrow the filters for more.
@@ -1196,10 +1275,16 @@ func accessBundleSchemas() map[string]*Schema {
 		"status": {Type: "string", Enum: []string{"active", "no_authority", "expired", "revoked"}}, "expires_at": ts(),
 		"issued_by": str(), "issued_at": ts(), "revoked_at": ts(), "revoked_by": str(), "chain": list(link)},
 		"id", "principal", "bundle_ids", "bundle_names", "grant_ids", "permissions", "effective", "status", "expires_at", "issued_by", "issued_at", "chain")
+	// A257: the accounts a run may open privileged sessions to.
+	accessTarget := object(map[string]*Schema{"target_type": {Type: "string", Enum: accessBundleTargetTypes},
+		"target_id": str(), "roles": {Type: "array", Items: str(), MinItems: 1, MaxItems: accessBundleMaxTargetRoles}},
+		"target_type", "target_id", "roles")
+	accessTargets := &Schema{Type: "array", Items: accessTarget, MaxItems: accessBundleMaxTargets,
+		Description: "the accounts this bundle's runs may open privileged sessions to; none means none (A257)"}
 	bundle := object(map[string]*Schema{"id": str(), "name": str(), "description": str(), "permissions": list(str()),
-		"audiences": list(audience), "max_run_ttl_seconds": integer(), "revision": integer(), "created_by": str(),
+		"audiences": list(audience), "max_run_ttl_seconds": integer(), "access_targets": accessTargets, "revision": integer(), "created_by": str(),
 		"created_at": ts(), "updated_at": ts(), "live_grants": integer(), "active_runs": integer(), "grants": list(grant), "runs": list(run)},
-		"id", "name", "description", "permissions", "audiences", "max_run_ttl_seconds", "revision", "created_by", "created_at", "updated_at",
+		"id", "name", "description", "permissions", "audiences", "max_run_ttl_seconds", "access_targets", "revision", "created_by", "created_at", "updated_at",
 		"live_grants", "active_runs")
 	bounds := object(map[string]*Schema{"revocation": str(), "outage": str(), "lasting": str(), "max_run_ttl_seconds": integer()},
 		"revocation", "outage", "lasting", "max_run_ttl_seconds")
@@ -1218,7 +1303,7 @@ func accessBundleSchemas() map[string]*Schema {
 			"fields":  list(str()), "excludes": list(str()), "rows": integer(), "truncated": boolean(), "items": list(activity)},
 			"kind", "generated_at", "filters", "fields", "excludes", "rows", "truncated", "items"),
 		"AccessBundleRequest": object(map[string]*Schema{"name": str(), "description": str(), "permissions": list(str()),
-			"audiences": list(audience), "max_run_ttl_seconds": integer(), "revision": integer()}, "name", "permissions"),
+			"audiences": list(audience), "max_run_ttl_seconds": integer(), "access_targets": accessTargets, "revision": integer()}, "name", "permissions"),
 		"AccessBundle":     bundle,
 		"AccessBundleList": object(map[string]*Schema{"items": list(bundle)}, "items"),
 		"AccessBundleDeleted": object(map[string]*Schema{"id": str(), "name": str(), "deleted": boolean(), "grants_affected": integer(),

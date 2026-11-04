@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +44,14 @@ type PAMService interface {
 	GetPAMSession(ctx context.Context, tenantID, id string) (PAMSession, error)
 	ListPAMSessions(ctx context.Context, tenantID string, limit int, cursor string) ([]PAMSession, string, error)
 	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (PAMSession, error)
+}
+
+// PAMAgentSessionRevoker ends the live privileged sessions an agent opened,
+// itself or through an access bundle run that acts as it (A257). The served
+// PAM broker implements it beside PAMService; Q4's one-call revoke of the
+// agent's identity calls it.
+type PAMAgentSessionRevoker interface {
+	RevokeAgentPAMSessions(ctx context.Context, tenantID, agent, actor, reason, idempotencyKey string) ([]PAMSession, error)
 }
 
 // PAMRecordingService reads gateway session recordings (A255). The served
@@ -302,6 +312,9 @@ func (a *API) requestPAMSession(w http.ResponseWriter, r *http.Request) {
 		if principal.Subject == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
 		}
+		if err := a.requireDelegatedAccount(ctx, tenantID, principal, req); err != nil {
+			return 0, nil, err
+		}
 		pending, err := a.pam.RequestPAMSession(ctx, tenantID, principal.Subject, req)
 		if err != nil {
 			return 0, nil, err
@@ -381,6 +394,10 @@ func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 		if principal.Subject == "" {
 			opErr = errors.New("an authenticated requester is required")
 			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
+		}
+		if err := a.requireDelegatedAccount(ctx, tenantID, principal, req); err != nil {
+			opErr = err
+			return 0, nil, err
 		}
 		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, principal.Subject, req)
 		if err != nil {
@@ -571,12 +588,44 @@ func (a *API) revokePAMSession(w http.ResponseWriter, r *http.Request) {
 		if principal.Subject == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated revoker is required")
 		}
-		session, err := a.pam.RevokePAMSession(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), principal.Subject, body.Reason, r.Header.Get("Idempotency-Key"))
+		id := strings.TrimSpace(r.PathValue("id"))
+		if !principal.Can(authz.AccessWrite, authz.Scope{TenantID: tenantID}) {
+			// access:sessions.open (A257) revokes the caller's own sessions
+			// only; another principal's needs access:write.
+			current, err := a.pam.GetPAMSession(ctx, tenantID, id)
+			if err != nil {
+				return 0, nil, err
+			}
+			if current.RequestedBy != principal.Subject {
+				return 0, nil, errStatus(http.StatusForbidden, "access:sessions.open revokes your own sessions; another principal's needs access:write")
+			}
+		}
+		session, err := a.pam.RevokePAMSession(ctx, tenantID, id, principal.Subject, body.Reason, r.Header.Get("Idempotency-Key"))
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusAccepted, session, nil
 	})
+}
+
+// requireDelegatedAccount refuses an access bundle run's session request for
+// an account its bundles do not delegate (A257): a run may reach only the
+// (target type, target, role) its live grants' bundles name. A principal
+// that is not a run is limited by its permissions alone, as before.
+func (a *API) requireDelegatedAccount(ctx context.Context, tenantID string, principal authz.Principal, req PAMSessionRequest) error {
+	if principal.RunID == "" {
+		return nil
+	}
+	targets, err := a.store.RunAccessTargets(ctx, tenantID, principal.RunID, time.Now())
+	if err != nil {
+		return err
+	}
+	for _, t := range targets {
+		if t.TargetType == req.TargetType && t.TargetID == req.TargetID && slices.Contains(t.Roles, req.Role) {
+			return nil
+		}
+	}
+	return errStatus(http.StatusForbidden, fmt.Sprintf("%s/%s as %s is not among the accounts this run's access bundles delegate", req.TargetType, req.TargetID, req.Role))
 }
 
 func (a *API) writePAMError(w http.ResponseWriter, err error) bool {

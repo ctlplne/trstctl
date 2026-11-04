@@ -4670,6 +4670,44 @@
       },
       "AccessBundle": {
         "properties": {
+          "access_targets": {
+            "description": "the accounts this bundle's runs may open privileged sessions to; none means none (A257)",
+            "items": {
+              "properties": {
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "target_type": {
+                  "enum": [
+                    "clickhouse",
+                    "kubernetes",
+                    "mongodb",
+                    "mysql",
+                    "postgres",
+                    "redis",
+                    "ssh"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "target_type",
+                "target_id",
+                "roles"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "active_runs": {
             "type": "integer"
           },
@@ -4904,6 +4942,7 @@
           "permissions",
           "audiences",
           "max_run_ttl_seconds",
+          "access_targets",
           "revision",
           "created_by",
           "created_at",
@@ -5297,6 +5336,44 @@
           "items": {
             "items": {
               "properties": {
+                "access_targets": {
+                  "description": "the accounts this bundle's runs may open privileged sessions to; none means none (A257)",
+                  "items": {
+                    "properties": {
+                      "roles": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 8,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "target_id": {
+                        "type": "string"
+                      },
+                      "target_type": {
+                        "enum": [
+                          "clickhouse",
+                          "kubernetes",
+                          "mongodb",
+                          "mysql",
+                          "postgres",
+                          "redis",
+                          "ssh"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "target_type",
+                      "target_id",
+                      "roles"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
                 "active_runs": {
                   "type": "integer"
                 },
@@ -5531,6 +5608,7 @@
                 "permissions",
                 "audiences",
                 "max_run_ttl_seconds",
+                "access_targets",
                 "revision",
                 "created_by",
                 "created_at",
@@ -5550,6 +5628,44 @@
       },
       "AccessBundleRequest": {
         "properties": {
+          "access_targets": {
+            "description": "the accounts this bundle's runs may open privileged sessions to; none means none (A257)",
+            "items": {
+              "properties": {
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "target_type": {
+                  "enum": [
+                    "clickhouse",
+                    "kubernetes",
+                    "mongodb",
+                    "mysql",
+                    "postgres",
+                    "redis",
+                    "ssh"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "target_type",
+                "target_id",
+                "roles"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "audiences": {
             "items": {
               "enum": [
@@ -10510,6 +10626,82 @@
         },
         "required": [
           "reason"
+        ],
+        "type": "object"
+      },
+      "BrokerAgentIdentityRevokeResult": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BulkRevokeItem"
+            },
+            "type": "array"
+          },
+          "runs": {
+            "description": "access bundle runs minted for the agent's ID, revoked by this call",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sessions": {
+            "description": "live privileged sessions the agent opened, itself or through a run, revoked by this call",
+            "items": {
+              "properties": {
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "target_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "target_type",
+                "target_id",
+                "role",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_failed": {
+            "type": "integer"
+          },
+          "total_matched": {
+            "type": "integer"
+          },
+          "total_queued": {
+            "description": "External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request.",
+            "type": "integer"
+          },
+          "total_revoked": {
+            "type": "integer"
+          },
+          "total_skipped": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_matched",
+          "total_revoked",
+          "total_skipped",
+          "total_failed",
+          "items",
+          "runs",
+          "sessions"
         ],
         "type": "object"
       },
@@ -56982,7 +57174,7 @@
           }
         ],
         "summary": "Request a reviewed privileged access session",
-        "x-trstctl-permission": "access:write"
+        "x-trstctl-permission": "access:sessions.open"
       }
     },
     "/api/v1/access/session-requests/{id}": {
@@ -57040,7 +57232,7 @@
           }
         ],
         "summary": "Read the current approval progress of one's own privileged access request",
-        "x-trstctl-permission": "access:write"
+        "x-trstctl-permission": "access:sessions.open"
       }
     },
     "/api/v1/access/sessions": {
@@ -57172,7 +57364,7 @@
           }
         ],
         "summary": "Activate an approved just-in-time privileged access session",
-        "x-trstctl-permission": "access:write",
+        "x-trstctl-permission": "access:sessions.open",
         "x-trstctl-sensitive-response": true
       }
     },
@@ -57708,8 +57900,8 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Request early revocation of a privileged access session",
-        "x-trstctl-permission": "access:write",
+        "summary": "Request early revocation of a privileged access session (your own with access:sessions.open; anyone's with access:write)",
+        "x-trstctl-permission": "access:sessions.open",
         "x-trstctl-sensitive-response": true
       }
     },
@@ -62815,7 +63007,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BulkRevokeResult"
+                  "$ref": "#/components/schemas/BrokerAgentIdentityRevokeResult"
                 }
               }
             },
@@ -62850,7 +63042,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Revoke one AI agent's broker identity in one call; relying parties refuse its next use",
+        "summary": "Revoke one AI agent's broker identity in one call; relying parties refuse its next use, and the access runs and privileged sessions acting as the agent end",
         "x-trstctl-permission": "certs:issue"
       }
     },

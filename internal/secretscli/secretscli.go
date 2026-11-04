@@ -32,6 +32,7 @@ type CLI struct {
 	tenantID string
 	client   Client
 	audit    auditsink.Auditor
+	dropEnv  func(name string) bool
 }
 
 // New constructs a CLI.
@@ -40,6 +41,15 @@ func New(tenantID string, client Client, audit auditsink.Auditor) *CLI {
 		audit = auditsink.Nop{}
 	}
 	return &CLI{tenantID: tenantID, client: client, audit: audit}
+}
+
+// WithoutEnv returns a copy of c whose children also lose every inherited
+// environment variable drop names, beside TRSTCTL_TOKEN, which they always
+// lose. The agent launcher (A257) drops every control-plane token this way.
+func (c *CLI) WithoutEnv(drop func(name string) bool) *CLI {
+	out := *c
+	out.dropEnv = drop
+	return &out
 }
 
 // Fetch retrieves a secret (audited).
@@ -91,7 +101,8 @@ func (c *CLI) InjectIO(ctx context.Context, secrets map[string][]byte, argv []st
 	parentEnv := os.Environ()
 	env := make([]string, 0, len(parentEnv)+len(secrets))
 	for _, entry := range parentEnv {
-		if strings.HasPrefix(entry, "TRSTCTL_TOKEN=") {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == "TRSTCTL_TOKEN" || (c.dropEnv != nil && c.dropEnv(name)) {
 			continue
 		}
 		env = append(env, entry)

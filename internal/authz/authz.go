@@ -84,6 +84,11 @@ const (
 	// AccessTerminate ends another principal's live privileged session through
 	// its gateway (A255): the operator watching a session can stop it.
 	AccessTerminate Permission = "access:terminate"
+	// AccessSessionsOpen requests, opens, reads the progress of and revokes the
+	// caller's own privileged sessions, and nothing else of access (A257): what
+	// an agent launched with its delegated accounts needs, which an access
+	// bundle may carry. AccessWrite includes it.
+	AccessSessionsOpen Permission = "access:sessions.open"
 	// RecordingsRead plays back and watches gateway session recordings;
 	// RecordingsExport exports a recording with its signed manifest and holds
 	// it past retention (A255). Recordings show what a privileged session did,
@@ -156,7 +161,7 @@ func allResourcePermissions() []Permission {
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead, ChangesWrite,
 		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign, AccessBundleRun,
-		AccessTerminate, RecordingsRead, RecordingsExport,
+		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite, KeysApprove,
@@ -179,9 +184,11 @@ type Role struct {
 }
 
 // Allows reports whether the role grants the permission (Wildcard grants all).
+// AccessWrite includes AccessSessionsOpen: requesting one's own sessions was
+// always part of it, and the narrower permission only splits it out.
 func (r Role) Allows(p Permission) bool {
 	for _, have := range r.Permissions {
-		if have == Wildcard || have == p {
+		if have == Wildcard || have == p || (have == AccessWrite && p == AccessSessionsOpen) {
 			return true
 		}
 	}
@@ -205,9 +212,10 @@ func BuiltinRoles() map[string]Role {
 	// carries by default. Enrolling host agents is still in. Reading other
 	// principals' session recordings and ending their sessions (A255) are
 	// withheld the same way: they belong to an operator or auditor, not to a
-	// machine token.
+	// machine token. AccessSessionsOpen (A257) is not listed: the role's
+	// AccessWrite includes it.
 	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay,
-		AccessTerminate, RecordingsRead, RecordingsExport), AuditRead)
+		AccessTerminate, AccessSessionsOpen, RecordingsRead, RecordingsExport), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
@@ -296,6 +304,10 @@ type Principal struct {
 	// (F262). It may do that subject's work, but approval routes refuse it so a
 	// minter cannot cast a second person's vote.
 	Delegated bool
+	// RunID is set when the principal is an access bundle run (A251): the run
+	// whose live grants give its authority, and whose bundles name the
+	// accounts it may open privileged sessions to (A257).
+	RunID string
 }
 
 // Can reports whether the principal may perform perm on a target scope. It

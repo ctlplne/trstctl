@@ -1023,6 +1023,7 @@ export interface AccessAuthority {
 }
 
 export interface AccessBundle {
+  access_targets: ({ roles: string[]; target_id: string; target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh" })[];
   active_runs: number;
   audiences: ("custom_agent" | "ci" | "mcp_server")[];
   created_at: string;
@@ -1060,10 +1061,11 @@ export interface AccessBundleGrantRequest {
 }
 
 export interface AccessBundleList {
-  items: ({ active_runs: number; audiences: ("custom_agent" | "ci" | "mcp_server")[]; created_at: string; created_by: string; description: string; grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; id: string; live_grants: number; max_run_ttl_seconds: number; name: string; permissions: string[]; revision: number; runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[]; updated_at: string })[];
+  items: ({ access_targets: ({ roles: string[]; target_id: string; target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh" })[]; active_runs: number; audiences: ("custom_agent" | "ci" | "mcp_server")[]; created_at: string; created_by: string; description: string; grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; id: string; live_grants: number; max_run_ttl_seconds: number; name: string; permissions: string[]; revision: number; runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[]; updated_at: string })[];
 }
 
 export interface AccessBundleRequest {
+  access_targets?: ({ roles: string[]; target_id: string; target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh" })[];
   audiences?: ("custom_agent" | "ci" | "mcp_server")[];
   description?: string;
   max_run_ttl_seconds?: number;
@@ -2185,6 +2187,17 @@ export interface BrokerAgentIdentityRequest {
 
 export interface BrokerAgentIdentityRevokeRequest {
   reason: string;
+}
+
+export interface BrokerAgentIdentityRevokeResult {
+  items: BulkRevokeItem[];
+  runs: string[];
+  sessions: { id: string; role: string; status: string; target_id: string; target_type: string }[];
+  total_failed: number;
+  total_matched: number;
+  total_queued?: number;
+  total_revoked: number;
+  total_skipped: number;
 }
 
 export interface BrokerIssuanceFacts {

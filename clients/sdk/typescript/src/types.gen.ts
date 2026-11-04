@@ -584,7 +584,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request early revocation of a privileged access session */
+        /** Request early revocation of a privileged access session (your own with access:sessions.open; anyone's with access:write) */
         post: operations["revokePAMSession"];
         delete?: never;
         options?: never;
@@ -1799,7 +1799,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke one AI agent's broker identity in one call; relying parties refuse its next use */
+        /** Revoke one AI agent's broker identity in one call; relying parties refuse its next use, and the access runs and privileged sessions acting as the agent end */
         post: operations["revokeBrokerAgentIdentity"];
         delete?: never;
         options?: never;
@@ -11828,6 +11828,13 @@ export interface components {
             }[];
         };
         AccessBundle: {
+            /** @description the accounts this bundle's runs may open privileged sessions to; none means none (A257) */
+            access_targets: {
+                roles: string[];
+                target_id: string;
+                /** @enum {string} */
+                target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+            }[];
             active_runs: number;
             audiences: ("custom_agent" | "ci" | "mcp_server")[];
             /** Format: date-time */
@@ -11991,6 +11998,13 @@ export interface components {
         };
         AccessBundleList: {
             items: {
+                /** @description the accounts this bundle's runs may open privileged sessions to; none means none (A257) */
+                access_targets: {
+                    roles: string[];
+                    target_id: string;
+                    /** @enum {string} */
+                    target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+                }[];
                 active_runs: number;
                 audiences: ("custom_agent" | "ci" | "mcp_server")[];
                 /** Format: date-time */
@@ -12053,6 +12067,13 @@ export interface components {
             }[];
         };
         AccessBundleRequest: {
+            /** @description the accounts this bundle's runs may open privileged sessions to; none means none (A257) */
+            access_targets?: {
+                roles: string[];
+                target_id: string;
+                /** @enum {string} */
+                target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+            }[];
             audiences?: ("custom_agent" | "ci" | "mcp_server")[];
             description?: string;
             max_run_ttl_seconds?: number;
@@ -13401,6 +13422,26 @@ export interface components {
         BrokerAgentIdentityRevokeRequest: {
             /** @description an RFC 5280 revocation reason such as keyCompromise or cessationOfOperation */
             reason: string;
+        };
+        BrokerAgentIdentityRevokeResult: {
+            items: components["schemas"]["BulkRevokeItem"][];
+            /** @description access bundle runs minted for the agent's ID, revoked by this call */
+            runs: string[];
+            /** @description live privileged sessions the agent opened, itself or through a run, revoked by this call */
+            sessions: {
+                /** Format: uuid */
+                id: string;
+                role: string;
+                status: string;
+                target_id: string;
+                target_type: string;
+            }[];
+            total_failed: number;
+            total_matched: number;
+            /** @description External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request. */
+            total_queued?: number;
+            total_revoked: number;
+            total_skipped: number;
         };
         BrokerIssuanceFacts: {
             agent_id: string;
@@ -30676,7 +30717,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkRevokeResult"];
+                    "application/json": components["schemas"]["BrokerAgentIdentityRevokeResult"];
                 };
             };
             /** @description client error */

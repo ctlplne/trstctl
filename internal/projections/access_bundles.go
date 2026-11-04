@@ -37,6 +37,9 @@ type AccessBundleSaved struct {
 	MaxRunTTLSeconds int      `json:"max_run_ttl_seconds"`
 	Revision         int64    `json:"revision"`
 	SavedBy          string   `json:"saved_by"`
+	// AccessTargets are the accounts a run of the bundle may open privileged
+	// sessions to (A257).
+	AccessTargets []store.AccessBundleTarget `json:"access_targets,omitempty"`
 }
 
 // AccessBundleDeleted is the payload of access.bundle.deleted.
@@ -106,7 +109,7 @@ func (p *Projector) applyAccessBundleTx(ctx context.Context, tx pgx.Tx, e events
 		return true, p.store.ApplyAccessBundleSavedTx(ctx, tx, e.TenantID, store.AccessBundle{
 			ID: d.ID, Name: d.Name, Description: d.Description, Permissions: nonNilStrings(d.Permissions),
 			Audiences: nonNilStrings(d.Audiences), MaxRunTTLSeconds: d.MaxRunTTLSeconds, Revision: d.Revision,
-			CreatedBy: d.SavedBy, CreatedAt: e.Time,
+			CreatedBy: d.SavedBy, CreatedAt: e.Time, AccessTargets: d.AccessTargets,
 		}, e.ID, e.Sequence)
 	case EventAccessBundleDeleted:
 		var d AccessBundleDeleted
@@ -164,7 +167,9 @@ func addAccessBundlePrivacyPolicies(policies map[privacyEventPolicyKey]events.Pr
 	policies[privacyEventPolicyKey{EventAccessBundleSaved, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", text), privacyRule("/description", text),
 		privacyRule("/permissions/*", opaque), privacyRule("/audiences/*", opaque),
-		privacyRule("/max_run_ttl_seconds", opaque), privacyRule("/revision", opaque), privacyRule("/saved_by", exact))
+		privacyRule("/max_run_ttl_seconds", opaque), privacyRule("/revision", opaque), privacyRule("/saved_by", exact),
+		privacyRule("/access_targets/*/target_type", opaque), privacyRule("/access_targets/*/target_id", opaque),
+		privacyRule("/access_targets/*/roles/*", opaque))
 	policies[privacyEventPolicyKey{EventAccessBundleDeleted, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/deleted_by", exact))
 	policies[privacyEventPolicyKey{EventAccessBundleGranted, 1}] = privacyRules(

@@ -50,6 +50,28 @@ func TestInjectAllowsExplicitTokenMapping(t *testing.T) {
 	}
 }
 
+// A257: WithoutEnv keeps the named variables out of the child too, while the
+// unfiltered CLI still passes them on and both drop TRSTCTL_TOKEN.
+func TestInjectWithoutEnvDropsNamedVariables(t *testing.T) {
+	t.Setenv("TRSTCTL_TOKEN", "parent-bearer")
+	t.Setenv("TRSTCTL_ADMIN_TOKEN", "admin-bearer")
+	t.Setenv("KEEP_ME", "kept")
+	script := []string{"sh", "-c", `printf '%s|%s|%s' "$TRSTCTL_TOKEN" "$TRSTCTL_ADMIN_TOKEN" "$KEEP_ME"`}
+	plain := New("t1", nil, nil)
+	out, err := plain.InjectBytes(context.Background(), nil, script)
+	if err != nil || string(out) != "|admin-bearer|kept" {
+		t.Fatalf("unfiltered child saw %q (%v)", out, err)
+	}
+	filtered := plain.WithoutEnv(func(name string) bool { return name == "TRSTCTL_ADMIN_TOKEN" })
+	out, err = filtered.InjectBytes(context.Background(), nil, script)
+	if err != nil || string(out) != "||kept" {
+		t.Fatalf("filtered child saw %q (%v)", out, err)
+	}
+	if out, _ := plain.InjectBytes(context.Background(), nil, script); string(out) != "|admin-bearer|kept" {
+		t.Fatalf("WithoutEnv changed the CLI it was called on: %q", out)
+	}
+}
+
 func TestFetchSetRoundTrip(t *testing.T) {
 	rec := &auditsink.Recorder{}
 	cli := New("t1", &memClient{m: map[string][]byte{}}, rec)

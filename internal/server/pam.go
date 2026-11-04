@@ -657,6 +657,42 @@ func (s *Server) RevokePAMSession(ctx context.Context, tenantID, id, requester, 
 	return s.pam.RevokePAMSession(ctx, tenantID, id, requester, reason, idempotencyKey)
 }
 
+// agentSessionRevokePages bounds one call's passes over an agent's live
+// sessions; each pass ends up to 100.
+const agentSessionRevokePages = 10
+
+// RevokeAgentPAMSessions ends every active privileged session an agent
+// opened, itself or through an access bundle run that acts as it (A257).
+// Q4's one-call revoke of the agent's identity calls it. Each session is
+// revoked as an operator's revocation is (a gateway session's connections
+// close and its login is revoked), under a key derived from the call's own,
+// so a retried call revokes nothing twice.
+func (s *Server) RevokeAgentPAMSessions(ctx context.Context, tenantID, agent, actor, reason, idempotencyKey string) ([]api.PAMSession, error) {
+	if s.pam == nil {
+		return nil, nil
+	}
+	requesters := []string{agent, orchestrator.BundleRunSubjectPrefix + agent}
+	var ended []api.PAMSession
+	for range agentSessionRevokePages {
+		live, err := s.store.ListLivePAMSessionsRequestedBy(ctx, tenantID, requesters, 100)
+		if err != nil || len(live) == 0 {
+			return ended, err
+		}
+		for _, rec := range live {
+			key := crypto.SHA256Hex([]byte(idempotencyKey + "\x00" + rec.ID))
+			session, err := s.pam.RevokePAMSession(ctx, tenantID, rec.ID, actor, reason, key)
+			if errors.Is(err, api.ErrPAMTerminal) {
+				continue // it ended on its own meanwhile
+			}
+			if err != nil {
+				return ended, fmt.Errorf("end session %s: %w", rec.ID, err)
+			}
+			ended = append(ended, session)
+		}
+	}
+	return ended, errors.New("server: the agent has more live sessions than one call ends; retry with the same key")
+}
+
 func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (api.PAMSession, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		return api.PAMSession{}, pgx.ErrNoRows

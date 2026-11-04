@@ -119,6 +119,21 @@ func servedPublicBrokerRevocationFixture(t *testing.T, options ...func(*Deps)) (
 
 func servedPublicBrokerRevocationFixtureWithHistoryOptions(t *testing.T, eventOptions []events.OpenOption, options ...func(*Deps)) (*servedHarness, string, map[string]any) {
 	t.Helper()
+	opts := []func(*Deps){func(d *Deps) {
+		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
+	}}
+	opts = append(opts, options...)
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, opts...)
+	registerServedTenant(t, h, "Public certificate revocation")
+	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write")
+	return h, owner, servedBrokerAgentIssueBody(t, h, owner, "agent-7")
+}
+
+// servedBrokerAgentIssueBody registers a genuine attestation trust source for
+// the harness's tenant and returns a broker issue request for the agent whose
+// proof it signs.
+func servedBrokerAgentIssueBody(t *testing.T, h *servedHarness, owner, agentID string) map[string]any {
+	t.Helper()
 	authority, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -128,13 +143,6 @@ func servedPublicBrokerRevocationFixtureWithHistoryOptions(t *testing.T, eventOp
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := []func(*Deps){func(d *Deps) {
-		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
-	}}
-	opts = append(opts, options...)
-	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, opts...)
-	registerServedTenant(t, h, "Public certificate revocation")
-	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read", "identities:write")
 	fixtureID := crypto.SHA256Hex([]byte(events.NewID()))[:12]
 	issuer := "https://kubernetes.default.svc/" + fixtureID
 	trustName := "public-revocation-trust-" + fixtureID
@@ -148,6 +156,6 @@ func servedPublicBrokerRevocationFixtureWithHistoryOptions(t *testing.T, eventOp
 	body := servedClockProofBody(t, authority, servedAttestedPublicKeyPEM(t), func(claims map[string]any) {
 		claims["iss"] = issuer
 	})
-	body["agent_id"], body["scopes"] = "agent-7", []string{"tool:inventory.read"}
-	return h, owner, body
+	body["agent_id"], body["scopes"] = agentID, []string{"tool:inventory.read"}
+	return body
 }

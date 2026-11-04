@@ -1180,6 +1180,19 @@ func componentSchemas() map[string]*Schema {
 		"total_failed":  {Type: "integer"},
 		"items":         {Type: "array", Items: ref("BulkRevokeItem")},
 	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items")
+	// A257: the one-call revoke also ends what acts as the agent.
+	brokerAgentIdentityRevokeResult := object(map[string]*Schema{
+		"total_matched": {Type: "integer"},
+		"total_revoked": {Type: "integer"},
+		"total_queued":  {Type: "integer", Description: "External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request."},
+		"total_skipped": {Type: "integer"},
+		"total_failed":  {Type: "integer"},
+		"items":         {Type: "array", Items: ref("BulkRevokeItem")},
+		"runs":          {Type: "array", Items: uuid(), Description: "access bundle runs minted for the agent's ID, revoked by this call"},
+		"sessions": {Type: "array", Description: "live privileged sessions the agent opened, itself or through a run, revoked by this call", Items: object(map[string]*Schema{
+			"id": uuid(), "target_type": str(), "target_id": str(), "role": str(), "status": str(),
+		}, "id", "target_type", "target_id", "role", "status")},
+	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items", "runs", "sessions")
 
 	operationApprovalStatuses := []string{"pending", "approved", "denied", "expired", "superseded", "consumed"}
 	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral"}
@@ -9057,6 +9070,7 @@ func componentSchemas() map[string]*Schema {
 		"BulkRevokeRequest":               bulkRevokeReq,
 		"BulkRevokeItem":                  bulkRevokeItem,
 		"BulkRevokeResult":                bulkRevokeResult,
+		"BrokerAgentIdentityRevokeResult": brokerAgentIdentityRevokeResult,
 		"ApprovalRequest":                 approvalReq,
 		"Approval":                        approval,
 		"PendingApprovalRequest":          approvalRequestRecord,

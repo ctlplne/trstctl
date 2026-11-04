@@ -903,6 +903,7 @@ var specialCommandTable = []Command{
 	{Name: []string{"audit", "verify"}, Summary: "Verify any saved audit export completely offline"},
 	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
 	{Name: []string{"access", "run"}, Summary: "Run a command with a short-lived access bundle run credential, revoked when it exits"},
+	{Name: []string{"access", "agent"}, Summary: "Run an agent or CI job with gateway-only sessions to its delegated accounts and no credential; the sessions end when it exits"},
 	{Name: []string{"switching", "import", "preview"}, Method: "POST", Path: "/api/v1/switching/imports/preview", Summary: "Map another product's certificate export without changing state: outcomes, gaps and the digest to apply"},
 	{Name: []string{"switching", "import", "apply"}, Method: "POST", Path: "/api/v1/switching/imports", Summary: "Apply a reviewed export digest: record the import, its certificates (watch-only) and owners"},
 	{Name: []string{"secrets", "scans", "staged-diff"}, Summary: "Scan staged or CI-diff Git files with Gitleaks before commit or merge"},

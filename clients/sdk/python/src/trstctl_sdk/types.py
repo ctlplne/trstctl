@@ -1419,6 +1419,7 @@ AccessAuthority = TypedDict(
 AccessBundle = TypedDict(
     'AccessBundle',
     {
+        'access_targets': list[dict[str, Any]],
         'active_runs': int,
         'audiences': list[str],
         'created_at': str,
@@ -1480,6 +1481,7 @@ AccessBundleList = TypedDict(
 AccessBundleRequest = TypedDict(
     'AccessBundleRequest',
     {
+        'access_targets': list[dict[str, Any]],
         'audiences': list[str],
         'description': str,
         'max_run_ttl_seconds': int,
@@ -3057,6 +3059,21 @@ BrokerAgentIdentityRevokeRequest = TypedDict(
     'BrokerAgentIdentityRevokeRequest',
     {
         'reason': str,
+    },
+    total=False,
+)
+
+BrokerAgentIdentityRevokeResult = TypedDict(
+    'BrokerAgentIdentityRevokeResult',
+    {
+        'items': list[dict[str, Any]],
+        'runs': list[str],
+        'sessions': list[dict[str, Any]],
+        'total_failed': int,
+        'total_matched': int,
+        'total_queued': int,
+        'total_revoked': int,
+        'total_skipped': int,
     },
     total=False,
 )

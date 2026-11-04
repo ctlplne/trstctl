@@ -231,6 +231,7 @@ public final class OpenApiSchemas {
       "BrokerAgentIdentityPreview",
       "BrokerAgentIdentityRequest",
       "BrokerAgentIdentityRevokeRequest",
+      "BrokerAgentIdentityRevokeResult",
       "BrokerIssuanceFacts",
       "BulkRevokeItem",
       "BulkRevokeRequest",

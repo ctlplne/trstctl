@@ -221,6 +221,47 @@ are served only through a gateway; the target builder refuses one without a bind
   4 KiB); a remote-command WebSocket stream is decoded into its stdin, stdout and stderr and
   recorded as a shell session's bytes are (masked), any other stream by its size.
 
+## Agent launcher (A257)
+
+`trstctl-cli access agent --account TYPE/ID:ROLE ... -- <command>` starts an agent or a CI
+job with gateway sessions to the accounts its task is delegated, and no credential.
+
+- **Delegated accounts.** An access bundle names the accounts its runs may open sessions
+  to (`access_targets`: a target type and ID with the roles allowed on it, at most 16 per
+  bundle). A run (A251) that requests or opens a session for any other target or role is
+  refused with 403 and no review is requested. The delegation is read from the run's live
+  grants on every request, so editing the bundle or removing a grant changes it at once.
+  A principal that is not a run is limited by its permissions alone.
+- **`access:sessions.open`.** Requesting, opening, reading the progress of and revoking
+  one's own sessions, and nothing else of access. A bundle may carry it (it may not carry
+  `access:write`, which includes it); revoking another principal's session still needs
+  `access:write`.
+- **The agent's own identity.** An unattended run acts as the agent: the operator grants
+  the bundle to the agent's ID (its broker identity's `agent_id`) and mints a run for it,
+  and the run's token goes to the CI job. Every session it opens records `requested_by:
+  bundle-run:<agent>`. Reviews are not bypassed: each session still needs its approvals.
+- **The launcher.** With that token it requests each account's session, waits for the
+  approvals, opens each through its gateway and serves each session's tunnel on a loopback
+  address from its own process. The command runs with `TRSTCTL_ACCESS_INSTRUCTIONS` (a file
+  naming each account, its local address, its deadline and the stock client line),
+  `TRSTCTL_ACCESS_<n>_TYPE|TARGET|ROLE|ADDR`, and for a single account of a kind the
+  variables its stock client reads (`PGHOST`/`PGPORT`, `MYSQL_HOST`/`MYSQL_TCP_PORT`,
+  `KUBECONFIG`). Its environment holds neither the caller's token nor any `TRSTCTL_*TOKEN*`
+  variable; the tickets stay in the launcher and the gateway signs in for the command. A
+  session delivered directly (its credential in the reply) is revoked at once and the
+  command does not run. When the command exits, its sessions are revoked unless `--keep`
+  is given.
+- **One-call revoke.** Revoking the agent's broker identity (Q4,
+  `POST /api/v1/broker/agent-identities/{id}/revoke`) also revokes the access runs minted
+  for its agent ID, then every live session the agent opened, itself or through a run, as
+  an operator's revocation does: the gateway closes the session's connections and the login
+  is removed. `certs:issue` is all the call needs: ending what the identity opened is part
+  of revoking it. The response lists the runs and sessions it ended, and a retry with the
+  same key ends nothing twice.
+- **What it does not do.** The command's network is not confined: it holds no credential
+  for its accounts, but it can reach whatever its host can. MCP traffic never flows through
+  the gateway or the launcher.
+
 ## Failure modes
 
 - **Control-plane restart mid-session** — the session row, its events and its job row are
@@ -252,6 +293,9 @@ deliberate grant.
 | A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
 | Another tenant | The gateway is one tenant's agent; jobs, sessions and redemption are tenant-scoped under RLS. |
+| An agent asking for an account its task was not given | A run reaches only the accounts its bundles delegate; any other request or open is refused with 403. |
+| An agent's credential leaking through its environment, output or logs | The agent never holds one: the launcher keeps the tickets, the gateway signs in, and the command's environment holds no control-plane token. |
+| A compromised agent | One call revoking its identity revokes the runs that act as it and ends its live sessions. |
 | A gateway impersonator | The CLI verifies the gateway's serving certificate against the tenant's agent CA for the host it dialed and requires the gateway agent's exact SPIFFE ID; the control plane signs a gateway's certificate only for hosts its own bindings declare. |
 
 ## Status
@@ -266,6 +310,9 @@ termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`,
 `redis-cli`), MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`) and MongoDB
 (`TestServedGatewayMongoSessionsA256`, stock `mongosh`) and ClickHouse
 (`TestServedGatewayClickHouseSessionsA256`, curl) and Kubernetes
-(`TestServedGatewayKubernetesSessionsOnKindA256`, kubectl on kind): A256 is served. The agent
-launcher
-(A257) and credential health and emergency access (A258).
+(`TestServedGatewayKubernetesSessionsOnKindA256`, kubectl on kind): A256 is served. A257 (the
+agent launcher) is served: `TestServedAgentLauncherA257` launches an agent with a run that acts
+as it, and the agent completes a database task through the gateway with no credential in its
+environment, its output, the launcher's output or the gateway's log; an account its bundle
+does not delegate is refused; and one call revoking its identity revokes its run and ends its
+live session. Credential health checks and emergency access (A258) come next.

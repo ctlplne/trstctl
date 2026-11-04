@@ -651,6 +651,36 @@ trstctl-cli access activity export --principal ci:deploy > access-activity.json
   saved, granted, minted, used and revoked what, and when. It never carries a token,
   a token hash, an `Authorization` value or a request body.
 
+## Agent sessions to delegated accounts
+
+`trstctl-cli access agent` starts an agent or a CI job with gateway sessions to the accounts
+its task is delegated, and no credential (A257). With the caller's token (in CI, an access
+bundle run's token that acts as the agent) it requests a reviewed session for each
+`--account`, waits for the approvals, opens each session through its gateway, and runs the
+command with a loopback tunnel to each one. A run may reach only the accounts its bundles
+name in `access_targets`; any other is refused before anything runs.
+
+```bash
+# A CI job whose TRSTCTL_TOKEN is a run minted for the agent's ID.
+trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly report" \
+  --method github_oidc --payload-file "$OIDC_TOKEN_FILE" --ttl 15m -- ./report-agent
+```
+
+- The command's environment holds `TRSTCTL_ACCESS_INSTRUCTIONS` (a file naming each account,
+  its local address, its deadline and the stock client line to use),
+  `TRSTCTL_ACCESS_<n>_TYPE`, `_TARGET`, `_ROLE` and `_ADDR`, and, for a single account of a
+  kind, `PGHOST`/`PGPORT`/`PGSSLMODE`, `MYSQL_HOST`/`MYSQL_TCP_PORT` or `KUBECONFIG`. It does
+  not hold your token or any other `TRSTCTL_*TOKEN*` variable; the session tickets stay in
+  the launcher, and the gateway signs in for the command.
+- `--method` and `--payload-file` are the attestation the sessions are opened with;
+  `--ssh-principal` names the login for SSH accounts; `--approval-wait` (default 30m) bounds
+  the wait for reviewers.
+- When the command exits its sessions are revoked, unless `--keep` leaves them to their
+  deadline. The command's exit code is the CLI's. An account delivered directly (with its
+  credential) instead of through a gateway is revoked at once and the command does not run.
+- Revoking the agent's broker identity (`broker agent-identities revoke`) revokes the runs
+  minted for its agent ID and ends its live sessions in the same call.
+
 ## Bootstrapping or recovering a local API token
 
 `trstctl-cli` authenticates with an API token, but a freshly deployed control

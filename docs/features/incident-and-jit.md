@@ -459,6 +459,21 @@ trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --list
 kubectl --kubeconfig ticket.txt.kubeconfig get pods
 ```
 
+An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
+(A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
+bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;
+with the run's token the launcher requests each account's session, waits for its reviewers,
+opens it through the gateway and runs the agent with a loopback tunnel per account and an
+instructions file (`TRSTCTL_ACCESS_INSTRUCTIONS`). The agent holds no credential: its
+environment has no control-plane token, and the gateway signs in for it. A run is refused
+any account its bundles do not name. Revoking the agent's broker identity revokes its runs and
+ends its live sessions in the same call.
+
+```bash
+trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly report" \
+  --method github_oidc --payload-file "$OIDC_TOKEN_FILE" -- ./report-agent
+```
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
 (never file contents), PostgreSQL and MySQL statements, Redis and MongoDB commands and ClickHouse requests with bounded results,

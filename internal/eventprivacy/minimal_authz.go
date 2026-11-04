@@ -30,6 +30,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"access:bundle.run":    true,
 	"access:read":          true,
 	"access:role.assign":   true,
+	"access:sessions.open": true,
 	"access:targets.write": true,
 	"access:terminate":     true,
 	"access:write":         true,

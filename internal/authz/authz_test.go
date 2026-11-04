@@ -427,3 +427,22 @@ func TestAuditArchiveReadIsSeparatelyGranted(t *testing.T) {
 		t.Errorf("a custom role cannot grant %s", authz.AuditArchiveRead)
 	}
 }
+
+// TestAccessWriteIncludesSessionsOpen: access:write grants requesting one's
+// own sessions as it always did; access:sessions.open alone grants that and no
+// other access authority (A257).
+func TestAccessWriteIncludesSessionsOpen(t *testing.T) {
+	writer := authz.Role{Name: "w", Permissions: []authz.Permission{authz.AccessWrite}}
+	if !writer.Allows(authz.AccessSessionsOpen) {
+		t.Fatal("access:write does not include access:sessions.open")
+	}
+	opener := authz.Role{Name: "o", Permissions: []authz.Permission{authz.AccessSessionsOpen}}
+	for _, p := range []authz.Permission{authz.AccessWrite, authz.AccessRead, authz.AccessApprove, authz.AccessTargetsWrite, authz.AccessTerminate, authz.AccessBundleRun} {
+		if opener.Allows(p) {
+			t.Errorf("access:sessions.open grants %s", p)
+		}
+	}
+	if !opener.Allows(authz.AccessSessionsOpen) {
+		t.Fatal("access:sessions.open does not grant itself")
+	}
+}

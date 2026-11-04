@@ -221,6 +221,16 @@ TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.js
   while the control plane is unreachable they authorize nothing, and none outlives its
   expiry. What a run already made (certificates, secrets, enrolled agents) follows its own
   lifecycle.
+- **Delegated accounts (A257).** A bundle may name the privileged accounts its runs may open
+  sessions to: `access_targets`, each a target type and ID with the roles allowed on it (at
+  most 16 targets, 8 roles each; a bundle naming any also carries `access:sessions.open`). A
+  run may request or open a session only for those, and is refused (403) any other; a bundle
+  that names none delegates none. The target itself still decides: a role it does not allow
+  is refused as for any requester. `access:sessions.open` requests, opens and revokes one's
+  own sessions and nothing else of access. Like every other field, an update replaces the
+  list: omit it and the bundle delegates nothing. `trstctl-cli access agent` launches an
+  agent with these accounts through the access gateway and no credential
+  (`docs/design/access-gateway.md`, "Agent launcher").
 
 **Activity and the launcher.** `GET /api/v1/access/activity` (`trstctl-cli access activity`)
 searches every change (bundles saved and deleted, grants given and removed, runs issued and

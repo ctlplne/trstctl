@@ -88,59 +88,20 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 	}
 	defer func() { _ = ln.Close() }()
 	_, _ = fmt.Fprintf(stdout, "session %s: connect your client to %s (gateway %s)\n", sessionID, ln.Addr(), delivery.Address)
-	if targetType == "ssh" {
-		path := *knownHosts
-		if path == "" {
-			path = *ticketFile + ".known_hosts"
-		}
-		local := ln.Addr().(*net.TCPAddr)
-		entry := fmt.Sprintf("[%s]:%d %s\n", local.IP, local.Port, hostKey)
-		if err := os.WriteFile(path, []byte(entry), 0o600); err != nil {
-			_, _ = fmt.Fprintln(stderr, "trstctl: write known_hosts:", err)
-			return 1
-		}
-		_, _ = fmt.Fprintf(stdout, "ssh -p %d -o UserKnownHostsFile=%s -o StrictHostKeyChecking=yes %s\n", local.Port, path, local.IP)
+	knownHostsPath, kubeconfigPath := *knownHosts, *kubeconfig
+	if knownHostsPath == "" {
+		knownHostsPath = *ticketFile + ".known_hosts"
 	}
-	if targetType == "mysql" {
-		// The gateway answers the client's handshake and signs in as the
-		// session's account; the client sends no password.
-		local := ln.Addr().(*net.TCPAddr)
-		_, _ = fmt.Fprintf(stdout, "mysql -h %s -P %d\n", local.IP, local.Port)
+	if kubeconfigPath == "" {
+		kubeconfigPath = *ticketFile + ".kubeconfig"
 	}
-	if targetType == "mongodb" {
-		// The gateway signs in as the session's user; the client sends no
-		// credential (its own sign-in is refused).
-		local := ln.Addr().(*net.TCPAddr)
-		_, _ = fmt.Fprintf(stdout, "mongosh mongodb://%s:%d/?directConnection=true\n", local.IP, local.Port)
+	line, err := gatewayClientLine(targetType, ln.Addr().(*net.TCPAddr), hostKey, knownHostsPath, kubeconfigPath)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "trstctl:", err)
+		return 1
 	}
-	if targetType == "kubernetes" {
-		// A kubeconfig that names the tunnel and no user: the gateway adds
-		// the session's token to every request.
-		path := *kubeconfig
-		if path == "" {
-			path = *ticketFile + ".kubeconfig"
-		}
-		local := ln.Addr().(*net.TCPAddr)
-		config := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: trstctl-gateway\n  cluster:\n    server: http://%s:%d\n"+
-			"users:\n- name: trstctl-session\n  user: {}\ncontexts:\n- name: trstctl-session\n  context:\n    cluster: trstctl-gateway\n    user: trstctl-session\n"+
-			"current-context: trstctl-session\n", local.IP, local.Port)
-		if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
-			_, _ = fmt.Fprintln(stderr, "trstctl: write kubeconfig:", err)
-			return 1
-		}
-		_, _ = fmt.Fprintf(stdout, "kubectl --kubeconfig %s get pods\n", path)
-	}
-	if targetType == "clickhouse" {
-		// ClickHouse's HTTP interface: the gateway signs each request in as
-		// the session's user; the client sends no credential.
-		local := ln.Addr().(*net.TCPAddr)
-		_, _ = fmt.Fprintf(stdout, "curl http://%s:%d/ --data-binary 'SELECT 1'\n", local.IP, local.Port)
-	}
-	if targetType == "redis" {
-		// The gateway signs in as the session's user; the client sends no
-		// AUTH (one it sends is refused).
-		local := ln.Addr().(*net.TCPAddr)
-		_, _ = fmt.Fprintf(stdout, "redis-cli -h %s -p %d\n", local.IP, local.Port)
+	if line != "" {
+		_, _ = fmt.Fprintln(stdout, line)
 	}
 	go func() { <-ctx.Done(); _ = ln.Close() }()
 	var wg sync.WaitGroup
@@ -162,6 +123,51 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 			}
 		}()
 	}
+}
+
+// gatewayClientLine is the stock client command that reaches a session's
+// tunnel at local with no credential: the gateway signs in as the session's
+// own account. An SSH session's gateway host key is first written to
+// knownHosts; a Kubernetes session gets a kubeconfig at kubeconfig that names
+// the tunnel and no user.
+func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHosts, kubeconfig string) (string, error) {
+	switch targetType {
+	case "ssh":
+		entry := fmt.Sprintf("[%s]:%d %s\n", local.IP, local.Port, hostKey)
+		if err := os.WriteFile(knownHosts, []byte(entry), 0o600); err != nil {
+			return "", fmt.Errorf("write known_hosts: %w", err)
+		}
+		return fmt.Sprintf("ssh -p %d -o UserKnownHostsFile=%s -o StrictHostKeyChecking=yes %s", local.Port, knownHosts, local.IP), nil
+	case "postgres":
+		// The gateway signs in as the session's login; the client's user
+		// name is ignored and it sends no password.
+		return fmt.Sprintf("psql \"host=%s port=%d sslmode=disable\"", local.IP, local.Port), nil
+	case "mysql":
+		// The gateway answers the client's handshake and signs in as the
+		// session's account; the client sends no password.
+		return fmt.Sprintf("mysql -h %s -P %d", local.IP, local.Port), nil
+	case "mongodb":
+		// The gateway signs in as the session's user; the client sends no
+		// credential (its own sign-in is refused).
+		return fmt.Sprintf("mongosh mongodb://%s:%d/?directConnection=true", local.IP, local.Port), nil
+	case "kubernetes":
+		config := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: trstctl-gateway\n  cluster:\n    server: http://%s:%d\n"+
+			"users:\n- name: trstctl-session\n  user: {}\ncontexts:\n- name: trstctl-session\n  context:\n    cluster: trstctl-gateway\n    user: trstctl-session\n"+
+			"current-context: trstctl-session\n", local.IP, local.Port)
+		if err := os.WriteFile(kubeconfig, []byte(config), 0o600); err != nil {
+			return "", fmt.Errorf("write kubeconfig: %w", err)
+		}
+		return fmt.Sprintf("kubectl --kubeconfig %s get pods", kubeconfig), nil
+	case "clickhouse":
+		// ClickHouse's HTTP interface: the gateway signs each request in as
+		// the session's user; the client sends no credential.
+		return fmt.Sprintf("curl http://%s:%d/ --data-binary 'SELECT 1'", local.IP, local.Port), nil
+	case "redis":
+		// The gateway signs in as the session's user; the client sends no
+		// AUTH (one it sends is refused).
+		return fmt.Sprintf("redis-cli -h %s -p %d", local.IP, local.Port), nil
+	}
+	return "", nil
 }
 
 type gatewayDelivery struct {

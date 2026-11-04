@@ -208,6 +208,45 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 	return out, err
 }
 
+// ListLivePAMSessionsRequestedBy lists a tenant's active sessions that one of
+// the requesters opened, oldest first (A257): Q4's one-call revoke of an
+// agent's identity ends the sessions the agent opened, itself or through an
+// access bundle run.
+func (s *Store) ListLivePAMSessionsRequestedBy(ctx context.Context, tenantID string, requesters []string, limit int) ([]PAMSession, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var out []PAMSession
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, id::text, target_type, target_id, role, status,
+			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
+			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+			        revocation_requested_by, revocation_reason, revocation_requested_at,
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
+		        gateway_ended_at, gateway_ended
+			   FROM pam_sessions
+			  WHERE tenant_id = $1 AND status = 'active' AND requested_by = ANY($2::text[])
+			  ORDER BY started_at, id
+			  LIMIT $3`,
+			tenantID, requesters, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p PAMSession
+			if err := scanPAMSession(rows, &p); err != nil {
+				return err
+			}
+			out = append(out, p)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ListDuePAMSessions returns active sessions whose backend grant should be expired.
 func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int) ([]PAMSession, error) {
 	if limit <= 0 || limit > 100 {
