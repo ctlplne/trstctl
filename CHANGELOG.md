@@ -2,6 +2,10 @@
 
 ### Added
 
+- MCP client configuration discovery on hosts (P7 host detectors are served): `trstctl-agent
+  --inventory-mcp-config-roots` reads MCP client configuration files by format and reports each configured MCP
+  server — transport, program or host, and which fields hold a static credential, never a value — as `mcp_server`
+  findings in discovery and the shadow NHI posture; an unchanged rescan sends nothing and writes no event.
 - The switching kit, parts one and two (A265): `POST /api/v1/switching/imports/preview` maps another
   certificate-management product's export (CSV or JSON, described by format, with a column map for its own
   column names) without changing state, giving every row one outcome — mapped, mapped with named gaps,

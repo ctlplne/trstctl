@@ -477,6 +477,30 @@ report carries the observer's own CPU time, heap and drops. Observations are dis
 findings, kept across restarts, and they make `passive-wire-traffic` an observed class
 in [computed coverage](../design/cbom-coverage.md).
 
+**AI assistants and MCP servers on hosts (P7).** Desktop assistants and IDEs list
+the MCP servers they start or call in JSON configuration files, and a server's
+credential is often pasted straight into that file. `--inventory-mcp-config-roots`
+names home or configuration directories; the agent reads the `.json` files under them
+(JSON with comments and trailing commas included, package trees skipped) and
+recognizes MCP client configuration by its format — an `mcpServers` object, or a
+`servers` object at the top level or under `mcp` whose entries carry a command or a
+URL — never by product. Each configured server becomes an `mcp_server` discovery
+finding on the host: the file, the server's name, its transport (`stdio`, `http`,
+`sse`, `websocket`), the base name of the program it starts or the
+`scheme://host[:port]` it calls, and `static_credential` with `credential_fields`
+naming where a credential is written as a literal — an environment entry such as
+`env:TRACKER_TOKEN`, a header such as `header:Authorization`, an argument such as
+`arg:--password`, or a URL's user information or query parameter. A reference
+(`${input:…}`, `${env:…}`, `$NAME`) is not flagged. The value itself is never
+reported, hashed or kept: the agent classifies it as bytes and wipes the file's bytes,
+and the control plane refuses a report whose metadata could carry one. Findings
+appear in discovery and in the [shadow NHI posture](observability-and-risk.md)
+with their host, and an `mcp_server` with a static credential is rated high. The agent
+keeps a digest of what it last reported beside its key, so a rescan that finds no
+change sends nothing and writes no event. Finding MCP endpoints by probing approved
+network ranges is what comes next (P7's network probe, after P8's design). Status:
+served (host detectors).
+
 Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
 (JKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`, `.keystore`,
 `.ks`, `.p12` and `.pfx` files. Each key entry is reported as private-key metadata: the

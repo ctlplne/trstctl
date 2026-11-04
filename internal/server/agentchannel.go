@@ -41,6 +41,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
@@ -52,6 +53,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
+	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -1185,8 +1187,12 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 		if err := validateAgentServiceDependencyFinding(sourceKind, f); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "service dependency inventory finding %q: %v", f.Ref, err)
 		}
+		if err := validateAgentMCPServerFinding(sourceKind, f); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "MCP server inventory finding %q: %v", f.Ref, err)
+		}
 		findingMetadata := f.Metadata
-		if kind == agentTrustStoreFindingKind || kind == agentServiceDependencyFindingKind || kind == store.SSHTrustFindingKind {
+		if kind == agentTrustStoreFindingKind || kind == agentServiceDependencyFindingKind || kind == store.SSHTrustFindingKind ||
+			kind == agentdiscovery.FindingKindMCPServer {
 			// The peer certificate, not client-provided metadata or a certificate
 			// path, names the observing machine (A115: the SSH fleet view names a
 			// host's sshd posture by it). Clone before stamping so request
@@ -1253,6 +1259,54 @@ func validateAgentServiceDependencyFinding(sourceKind string, finding transport.
 	}
 	_, err := dependencyobs.ParseMap(finding.Metadata, finding.Ref)
 	return err
+}
+
+// agentMCPServerMetadata is everything an MCP server finding (P7) may carry:
+// where its configuration is and what it names, never a credential's value.
+var agentMCPServerMetadata = map[string]bool{"config_path": true, "format": true, "server_name": true, "transport": true,
+	"command": true, "args": true, "url_host": true, "static_credential": true, "credential_fields": true, "credential_values": true}
+
+var agentMCPCredentialField = regexp.MustCompile(`^(env|header|arg|url):[A-Za-z0-9_.:#-]{1,80}$`)
+
+// validateAgentMCPServerFinding holds MCP client configuration reports to
+// their closed shape: MCP server findings come only from that source and it
+// reports only them, every metadata key is a known one, a credential is named
+// by field and never carried, and a server's host carries no path, query or
+// user information.
+func validateAgentMCPServerFinding(sourceKind string, f transport.InventoryFinding) error {
+	sourceIsMCP := strings.TrimSpace(sourceKind) == agentdiscovery.SourceMCPClientConfig
+	kindIsMCP := strings.TrimSpace(f.Kind) == agentdiscovery.FindingKindMCPServer
+	if sourceIsMCP != kindIsMCP {
+		return fmt.Errorf("source kind %q and finding kind %q must both be MCP client configuration", sourceKind, f.Kind)
+	}
+	if !sourceIsMCP {
+		return nil
+	}
+	for key, value := range f.Metadata {
+		if !agentMCPServerMetadata[key] {
+			return fmt.Errorf("metadata %q is not part of an MCP server finding", key)
+		}
+		if len(value) > 512 {
+			return fmt.Errorf("metadata %q is longer than 512 characters", key)
+		}
+	}
+	if v := f.Metadata["credential_values"]; v != "" && v != "not_collected" {
+		return errors.New("credential values are never collected")
+	}
+	if fields := f.Metadata["credential_fields"]; fields != "" {
+		for _, field := range strings.Split(fields, ",") {
+			if !agentMCPCredentialField.MatchString(field) {
+				return fmt.Errorf("credential field %q is not a field name", field)
+			}
+		}
+	}
+	if host := f.Metadata["url_host"]; host != "" {
+		scheme, rest, ok := strings.Cut(host, "://")
+		if !ok || scheme == "" || rest == "" || strings.ContainsAny(rest, "/?#@") {
+			return errors.New("url_host is scheme://host[:port] only")
+		}
+	}
+	return nil
 }
 
 func metadataJSON(meta map[string]string) (json.RawMessage, error) {

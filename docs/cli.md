@@ -1498,6 +1498,11 @@ after inspection and never sends PEM/DER key bytes to the control plane.
 the key entries of Java keystores and PKCS#12 files, and `--inventory-crypto-libraries`
 and `--inventory-go-binaries` report TLS library and Go program versions with whether
 each can negotiate X25519MLKEM768.
+`--inventory-mcp-config-roots` names home or configuration directories whose MCP
+client configuration files the agent reads (P7): each configured MCP server, its
+transport, the program it starts or the host it calls, and which fields hold a static
+credential. Values never leave the host, and a rescan that finds nothing new sends
+nothing.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload; `--observe-ports`,
 `--observe-max-flows` and `--observe-report-interval` bound it.

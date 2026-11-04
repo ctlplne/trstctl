@@ -97,6 +97,12 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			Flags:       []string{"--inventory-crypto-libraries", "--inventory-go-binaries"},
 		},
 		{
+			// P7: MCP servers named by client configuration files, credentials by field only.
+			Kind:        SourceMCPClientConfig,
+			Constructor: "NewMCPClientConfigSource",
+			Flags:       []string{"--inventory-mcp-config-roots"},
+		},
+		{
 			// X1: handshake metadata from a watched interface; needs the observer role.
 			Kind:        SourceNetworkObserver,
 			Constructor: "NewAssembler",

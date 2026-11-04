@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2449 annotated sites across 30 rules. Each row is
+2451 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1114,7 +1114,7 @@ not this file.
 | `internal/server/agenthttprenewal.go:71` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 | `internal/server/estmtls.go:86` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
-### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (25 sites)
+### G122 — CWE-367 Time-of-check time-of-use race (walk callback) (26 sites)
 
 | Location | Reason |
 |---|---|
@@ -1131,6 +1131,7 @@ not this file.
 | `docs/protect_guards_test.go:4744` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
+| `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1644,7 +1645,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (653 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (655 sites)
 
 | Location | Reason |
 |---|---|
@@ -1679,8 +1680,8 @@ not this file.
 | `cmd/trstctl-agent/edgerenew_test.go:133` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1351` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2012` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1352` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2013` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |
@@ -1804,6 +1805,7 @@ not this file.
 | `internal/agent/discovery/cryptolib.go:106` | the agent inventories operator-configured library paths; reading them is the product function (CWE-22) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/keystore.go:79` | the agent inventories operator-configured keystore paths; reading them is the product function (CWE-22) |
+| `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:93` | the repository's own go.mod under the test's computed repo root (CWE-22) |
 | `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/truststore.go:74` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -1813,6 +1815,7 @@ not this file.
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/agent/mcp_inventory.go:27` | the agent's own state file (CWE-22) |
 | `internal/agent/relay/adcsdatabase_test.go:83` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/adcsrevoke_test.go:67` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
@@ -2062,7 +2065,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:527` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:531` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
-| `internal/server/agentchannel.go:134` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:136` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:167` | the test's own archive (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:35` | the runner's lab CA (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:106` | the runner's mounted rsyslog output (CWE-22) |
