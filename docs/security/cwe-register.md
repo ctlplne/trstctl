@@ -1926,10 +1926,10 @@ not this file.
 | `internal/cli/cli_test.go:2176` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
-| `internal/cli/evaluate/cmd.go:69` | operator-named token file (CWE-22) |
-| `internal/cli/evaluate/cmd.go:125` | the operator names the public trust-bundle path (CWE-22) |
-| `internal/cli/evaluate/cmd.go:176` | operator-named local file (CWE-22) |
-| `internal/cli/evaluate/cmd.go:181` | operator-named local file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:79` | operator-named token file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:141` | the operator names the public trust-bundle path (CWE-22) |
+| `internal/cli/evaluate/cmd.go:198` | operator-named local file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:203` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cli/report_verify.go:44` | operator-named local file (CWE-22) |

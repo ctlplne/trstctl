@@ -2,6 +2,14 @@
 
 ### Added
 
+- Evaluation across journeys (A249, first part): `trstctl evaluate --journeys
+  certificate,secrets,ssh` adds a secrets journey (create, read back by digest, rotate,
+  `trstctl run` into a child process that checks the value without printing it, delete and
+  read 404) and an SSH journey (issue a user certificate for a generated key, verify it
+  offline against `/ssh/ca`, revoke it, find its serial in `/ssh/krl`) to the same signed
+  pack, format `trstctl.evaluation-pack/v2` when more than the certificate journey runs.
+  `--force-failure <journey>` makes one step expect what did not happen, so the pack shows
+  that failure as one. `--deployment-target` is now needed only for the certificate journey.
 - Reviewed configuration change sets (A248, first part): one typed set of certificate profiles,
   CA bindings, connector targets, member role grants and owners, written as JSON or YAML.
   `POST /api/v1/changes/plan` (CLI `changes plan -f`) refuses a malformed or over-broad set, one

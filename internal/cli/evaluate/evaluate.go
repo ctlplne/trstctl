@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -92,6 +93,16 @@ type Options struct {
 	// Probe is the evaluator's own TLS handshake; nil uses tlsprobe.
 	Probe func(ctx context.Context, addr, serverName string) (tlsprobe.Result, error)
 	Now   func() time.Time
+	// Journeys are the journeys to run (A249); nil runs the certificate
+	// journey alone. ForceFailure names one journey whose step expects what
+	// did not happen, to show a failure reported as one.
+	Journeys     []string
+	ForceFailure string
+	// SSHPrincipal is the SSH journey's principal.
+	SSHPrincipal string
+	// RunCLI replaces running `trstctl run` in the secrets journey; nil runs
+	// this binary.
+	RunCLI func(ctx context.Context, secretName, want string) error
 }
 
 // Pack is the evaluation evidence pack.
@@ -110,7 +121,10 @@ type Pack struct {
 	// AuditExport is the signed audit export of the journey and the key set
 	// it was checked with, for a reader to check again with keys of their own.
 	AuditExport *AuditEvidence `json:"audit_export,omitempty"`
-	Signature   *Signature     `json:"signature,omitempty"`
+	// Journeys are a v2 pack's journeys beside the certificate journey,
+	// whose steps stay in Steps.
+	Journeys  []JourneyResult `json:"journeys,omitempty"`
+	Signature *Signature      `json:"signature,omitempty"`
 }
 
 // Target is what the partner chose.
@@ -195,9 +209,19 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 	if strings.TrimSpace(opts.Owner) == "" {
 		opts.Owner = "design-partner-evaluation"
 	}
+	if len(opts.Journeys) == 0 {
+		opts.Journeys = []string{JourneyCertificate}
+	}
+	certificateJourney := slices.Contains(opts.Journeys, JourneyCertificate)
+	if opts.ForceFailure != "" && !slices.Contains(opts.Journeys, opts.ForceFailure) {
+		return Pack{}, fmt.Errorf("evaluate: --force-failure %s names a journey that is not run", opts.ForceFailure)
+	}
 	base := strings.TrimSuffix(strings.TrimSpace(opts.Server), "/")
-	if base == "" || strings.TrimSpace(opts.Token) == "" || strings.TrimSpace(opts.DeploymentTarget) == "" {
-		return Pack{}, errors.New("evaluate: a server, an API token and a deployment target are required")
+	if base == "" || strings.TrimSpace(opts.Token) == "" {
+		return Pack{}, errors.New("evaluate: a server and an API token are required")
+	}
+	if certificateJourney && strings.TrimSpace(opts.DeploymentTarget) == "" {
+		return Pack{}, errors.New("evaluate: the certificate journey needs a deployment target")
 	}
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = netsec.HardenedClient(60 * time.Second)
@@ -211,20 +235,38 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 		},
 		keyPrefix: "evaluate-" + strconv.FormatInt(started.UnixNano(), 36) + "-",
 	}
-	if err := j.resolveTarget(ctx); err != nil {
-		return Pack{}, err
+	if certificateJourney {
+		if err := j.resolveTarget(ctx); err != nil {
+			return Pack{}, err
+		}
+		j.step(ctx, StepDiscovery, j.discover)
+		j.step(ctx, StepOwnership, j.own)
+		j.step(ctx, StepIssuance, j.issue)
+		j.step(ctx, StepDeployment, j.deploy)
+		j.step(ctx, StepVerification, j.verify)
+		j.step(ctx, StepRenewal, j.renew)
+		j.step(ctx, StepRevocation, j.revoke)
 	}
-	j.step(ctx, StepDiscovery, j.discover)
-	j.step(ctx, StepOwnership, j.own)
-	j.step(ctx, StepIssuance, j.issue)
-	j.step(ctx, StepDeployment, j.deploy)
-	j.step(ctx, StepVerification, j.verify)
-	j.step(ctx, StepRenewal, j.renew)
-	j.step(ctx, StepRevocation, j.revoke)
-	// The audit export runs even after a failure: it records what was tried.
-	j.failed = ""
-	j.step(ctx, StepAuditExport, func(ctx context.Context, s *Step) error { return j.exportAudit(ctx, s, started) })
-	j.finish()
+	// Each other journey keeps its own failure: one journey's failure skips
+	// only its own later steps.
+	for _, name := range opts.Journeys {
+		switch name {
+		case JourneySecrets:
+			j.pack.Journeys = append(j.pack.Journeys, j.secretsJourney(ctx))
+		case JourneySSH:
+			j.pack.Journeys = append(j.pack.Journeys, j.sshJourney(ctx))
+		}
+	}
+	if certificateJourney {
+		// The audit export runs even after a failure, last, so it records
+		// what every journey tried.
+		j.failed = ""
+		j.step(ctx, StepAuditExport, func(ctx context.Context, s *Step) error { return j.exportAudit(ctx, s, started) })
+	}
+	if len(j.pack.Journeys) > 0 {
+		j.pack.Format = PackFormatV2
+	}
+	j.finish(certificateJourney)
 	return *j.pack, nil
 }
 
@@ -264,23 +306,7 @@ func (s skippedStep) Error() string { return s.reason }
 
 // step runs one step unless an earlier one failed.
 func (j *journey) step(ctx context.Context, name string, fn func(context.Context, *Step) error) {
-	s := Step{Name: name, StartedAt: j.opts.Now().UTC(), Evidence: map[string]string{}}
-	var skip skippedStep
-	if j.failed != "" {
-		s.Status, s.Detail = StatusSkipped, "Skipped because the "+strings.ReplaceAll(j.failed, "_", " ")+" step failed."
-	} else if err := fn(ctx, &s); errors.As(err, &skip) {
-		s.Status, s.Detail, s.Basis = StatusSkipped, skip.reason, ""
-	} else if err != nil {
-		s.Status, s.Detail, s.Basis = StatusFail, sentence(err.Error()), ""
-		j.failed = name
-	} else {
-		s.Status = StatusPass
-	}
-	if len(s.Evidence) == 0 {
-		s.Evidence = nil
-	}
-	s.FinishedAt = j.opts.Now().UTC()
-	j.pack.Steps = append(j.pack.Steps, s)
+	j.pack.Steps = append(j.pack.Steps, runStep(ctx, j.opts.Now, &j.failed, name, fn))
 }
 
 // poll reads until done says so, the step's wait runs out, or ctx ends.
@@ -763,23 +789,20 @@ func (j *journey) exportAudit(ctx context.Context, s *Step, since time.Time) err
 }
 
 // finish counts the steps, sets the verdict and states the limits.
-func (j *journey) finish() {
+func (j *journey) finish(certificateJourney bool) {
 	p := j.pack
-	for _, s := range p.Steps {
-		switch s.Status {
-		case StatusPass:
-			p.Summary.Passed++
-		case StatusFail:
-			p.Summary.Failed++
-		default:
-			p.Summary.Skipped++
-		}
+	p.Summary = summarize(p.Steps)
+	for _, journey := range p.Journeys {
+		p.Summary.Passed += journey.Summary.Passed
+		p.Summary.Failed += journey.Summary.Failed
+		p.Summary.Skipped += journey.Summary.Skipped
 	}
-	p.Verdict = StatusPass
-	if p.Summary.Failed > 0 || p.Summary.Skipped > 0 {
-		p.Verdict = StatusFail
-	}
+	p.Verdict = verdictOf(p.Summary)
 	p.GeneratedAt = j.opts.Now().UTC()
+	p.Limits = []string{}
+	if !certificateJourney {
+		return
+	}
 	p.Limits = []string{
 		"Discovery is the control plane's own TLS handshake with the endpoint (a CBOM scan). A network relay's scan, which a partner network would use to find endpoints it was not told about, is not part of this journey.",
 		"Verification and the renewal check are this evaluator's own TLS handshakes from where it ran: they show what that vantage was served, not what every client is served.",

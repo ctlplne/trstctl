@@ -11,9 +11,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/netsec"
@@ -29,6 +31,7 @@ func (e ExitError) Error() string { return fmt.Sprintf("evaluate: exit %d", e.Co
 func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage: trstctl evaluate --server <url> --deployment-target <id> [--endpoint host:port] [--name dns-name]")
 	_, _ = fmt.Fprintln(w, "                        [--owner name] [--profile name] [--timeout 10m] [--out evaluation-pack.json]")
+	_, _ = fmt.Fprintln(w, "                        [--journeys certificate,secrets,ssh] [--force-failure journey] [--ssh-principal name]")
 	_, _ = fmt.Fprintln(w, "                        [--ca-file file] [--token-file file] [--sign --signer-socket path]")
 	_, _ = fmt.Fprintln(w, "       trstctl evaluate verify --pack <file> --audit-jwks <file>")
 	_, _ = fmt.Fprintln(w, "\nRuns one certificate journey against the endpoint your deployment target serves: discovery, ownership,")
@@ -36,6 +39,10 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "audit export. Writes an evidence pack with each step's outcome, a pass/fail verdict and its limits. The")
 	_, _ = fmt.Fprintln(w, "API token comes from $TRSTCTL_TOKEN or --token-file, never the command line. --sign signs the pack with")
 	_, _ = fmt.Fprintln(w, "the deployment's audit-evidence key through the signer socket. Exit 0: passed; 1: failed; 2: could not run.")
+	_, _ = fmt.Fprintln(w, "\n--journeys adds the secrets journey (create, read, rotate, trstctl run, delete) and the SSH journey (issue,")
+	_, _ = fmt.Fprintln(w, "verify offline, revoke, the served KRL); --deployment-target is needed only for the certificate journey.")
+	_, _ = fmt.Fprintln(w, "--force-failure <journey> makes one step of that journey expect what did not happen, to show it reported as")
+	_, _ = fmt.Fprintln(w, "a failure.")
 }
 
 // Run is the `trstctl evaluate` command.
@@ -58,6 +65,9 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	out := fs.String("out", "evaluation-pack.json", "where to write the evidence pack")
 	sign := fs.Bool("sign", false, "sign the pack with the deployment's audit-evidence key")
 	signerSocket := fs.String("signer-socket", getenv("TRSTCTL_SIGNER_SOCKET"), "the signer's Unix socket; required by --sign")
+	journeyList := fs.String("journeys", JourneyCertificate, "journeys to run: certificate, secrets, ssh (comma-separated)")
+	forceFailure := fs.String("force-failure", "", "a journey whose one step expects what did not happen")
+	sshPrincipal := fs.String("ssh-principal", config.DefaultEvalSSHUserPrincipal, "the SSH journey's certificate principal; one protocols.ssh_user_principals lists")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -73,8 +83,13 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		}
 		token = strings.TrimSpace(string(raw))
 	}
-	if *server == "" || token == "" || *target == "" {
-		_, _ = fmt.Fprintln(stderr, "evaluate: --server (or $TRSTCTL_SERVER), an API token ($TRSTCTL_TOKEN or --token-file) and --deployment-target are required")
+	journeys, err := Journeys(*journeyList)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return ExitError{2}
+	}
+	if *server == "" || token == "" || (*target == "" && slices.Contains(journeys, JourneyCertificate)) {
+		_, _ = fmt.Fprintln(stderr, "evaluate: --server (or $TRSTCTL_SERVER), an API token ($TRSTCTL_TOKEN or --token-file) and, for the certificate journey, --deployment-target are required")
 		return ExitError{2}
 	}
 	if *sign && *signerSocket == "" {
@@ -87,7 +102,8 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return ExitError{2}
 	}
 	pack, err := Evaluate(ctx, Options{Server: *server, Token: token, HTTPClient: client, DeploymentTarget: *target,
-		Endpoint: *endpoint, Name: *name, Owner: *owner, Profile: *profile, Timeout: *timeout})
+		Endpoint: *endpoint, Name: *name, Owner: *owner, Profile: *profile, Timeout: *timeout,
+		Journeys: journeys, ForceFailure: strings.TrimSpace(*forceFailure), SSHPrincipal: *sshPrincipal})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%v\n", err)
 		return ExitError{2}
@@ -154,6 +170,12 @@ func report(w io.Writer, p Pack) {
 	_, _ = fmt.Fprintf(w, "trstctl evaluate: %s at %s (%s)\n", p.Target.Name, p.Target.Endpoint, p.Server)
 	for _, s := range p.Steps {
 		_, _ = fmt.Fprintf(w, "  %-8s %-13s %s\n", strings.ToUpper(string(s.Status)), s.Name, s.Detail)
+	}
+	for _, journey := range p.Journeys {
+		_, _ = fmt.Fprintf(w, "%s journey: %s\n", journey.Name, strings.ToUpper(string(journey.Verdict)))
+		for _, s := range journey.Steps {
+			_, _ = fmt.Fprintf(w, "  %-8s %-13s %s\n", strings.ToUpper(string(s.Status)), s.Name, s.Detail)
+		}
 	}
 	_, _ = fmt.Fprintf(w, "Verdict: %s (%d passed, %d failed, %d skipped)\n", strings.ToUpper(string(p.Verdict)), p.Summary.Passed, p.Summary.Failed, p.Summary.Skipped)
 }

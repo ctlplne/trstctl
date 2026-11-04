@@ -44,6 +44,9 @@ trstctl evaluate --server https://trstctl.example.internal \
 | `--ca-file PATH` | `$TRSTCTL_CA_FILE` | The CA bundle for the control plane's TLS. |
 | `--sign` | off | Signs the pack through the isolated signer's `audit-export` handle. Requires the signer socket; the command never reads private-key bytes. |
 | `--signer-socket PATH` | `$TRSTCTL_SIGNER_SOCKET` | Required by `--sign`. |
+| `--journeys LIST` | `certificate` | The journeys to run: `certificate`, `secrets`, `ssh`, comma-separated. `--deployment-target` is needed only for `certificate`. |
+| `--force-failure JOURNEY` | none | Makes one step of that journey expect what did not happen, to see a failure reported as one. |
+| `--ssh-principal NAME` | `eval-user` | The SSH journey's login name; one `protocols.ssh_user_principals` lists (the eval profile allows `eval-user`). |
 
 Exit codes: **0** every step passed · **1** a step failed · **2** the command
 could not run (a missing flag, an unreadable target, an unreachable server).
@@ -78,6 +81,31 @@ domain with the key set you pinned, that the pack beside the signature is
 exactly the signed pack, and that the audit export inside it verifies with the
 same keys. It never trusts the key set the pack carries.
 
+## More journeys
+
+`--journeys certificate,secrets,ssh` runs the secrets and SSH journeys beside the
+certificate one, into the same pack (format `trstctl.evaluation-pack/v2`; a run of
+the certificate journey alone still writes `v1`). Each journey keeps its own
+steps, verdict and limits under `journeys`, and the same rule: a step after a
+failure is skipped, never passed. The pack's verdict passes only when every
+journey does.
+
+| Journey | Steps | Needs |
+|---|---|---|
+| `secrets` | `secret_create` a synthetic value · `secret_read` it back (same version and digest) · `secret_rotate` and read the new version · `secret_run`: `trstctl run` puts it in a child process's environment and the child compares it, printing nothing · `secret_delete`, then a read answers 404 | `secrets:read`, `secrets:write`; a POSIX shell for the run step |
+| `ssh` | `ssh_issue` a user certificate for a key the command generates · `ssh_verify` it offline against the served CA key (`/ssh/ca`) · `ssh_revoke` it · `ssh_krl`: the served KRL (`/ssh/krl`) lists its serial | `certs:issue`, `certs:write`; the SSH CA served, with the principal in `protocols.ssh_user_principals` |
+
+The pack keeps the synthetic secret's digest, never its value, and the journey
+deletes it. `--force-failure secrets` makes the read expect a value that was never
+written; `--force-failure ssh` makes the KRL check expect the revoked serial absent.
+Either journey then fails at that step, its later steps are skipped, the other
+journeys run as before, and the pack's verdict fails.
+
+```bash
+trstctl evaluate --server https://trstctl.example.internal \
+  --journeys secrets,ssh --out evaluation-pack.json --sign
+```
+
 ## What it does not show
 
 - **Discovery is a handshake, not a sweep.** The control plane connects to the
@@ -96,3 +124,9 @@ same keys. It never trusts the key set the pack carries.
 - **It changes things.** The run creates an owner (when missing) and an identity,
   issues and deploys two certificates to the endpoint, and revokes the first.
   Run it against an endpoint you are evaluating, not one in production use.
+- **The secrets journey covers the native store.** It writes, reads, rotates,
+  injects and deletes one synthetic secret; syncs to external stores, dynamic
+  secrets and sharing are not part of it.
+- **The SSH journey stops at the KRL.** It issues and revokes one user
+  certificate and reads the served KRL; it does not install the KRL on a host or
+  log in with the certificate.

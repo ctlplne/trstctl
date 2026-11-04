@@ -7709,6 +7709,22 @@ and writes a signed evidence pack. Read the pack with these limits:
   deploys two certificates and revokes the first. It is not a load, failover or
   long-running test, and belongs on an endpoint under evaluation.
 
+### Evaluation across journeys (A249)
+
+`--journeys certificate,secrets,ssh` adds the secrets journey (create, read,
+rotate, `trstctl run` into a child process, delete) and the SSH journey (issue,
+verify offline against the served CA key, revoke, find the serial in the served
+KRL) to the same signed pack (`trstctl.evaluation-pack/v2`); `--force-failure
+<journey>` shows that journey's failure reported as a failure. Both journeys pass
+against a served control plane. What comes next:
+
+- **Workload identity and incident journeys.** X.509 and JWT SVIDs over an agent's
+  Workload API, verified against the trust bundle; a compromise preview and a
+  game day against a non-production target.
+- **Unattended cycles with recovery.** Repeating the journeys on an interval, with
+  a restart of the control plane mid-cycle and a recovery check that the next
+  cycle passes.
+
 ## Customer assurance reports
 
 `GET /api/v1/reports/assurance` and the `customer_assurance` scheduled report put
