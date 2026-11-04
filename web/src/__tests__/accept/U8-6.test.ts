@@ -50,7 +50,9 @@ describe("U8-6 navigation & IA refresh", () => {
     // A235 spends one row on secrets projects: environments, members and the
     // owner's application view are one workspace, not a mode of the store
     // page. Ceiling: 42.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(42);
+    // A248 spends one row on reviewed change sets, which plan and apply
+    // across profiles, issuers, targets, members and owners. Ceiling: 43.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(43);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

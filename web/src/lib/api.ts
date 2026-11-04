@@ -25,6 +25,7 @@ export {
 } from "./apiTransport";
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
+import * as changeSets from "./changeSetsApi";
 import * as decoy from "./decoyApi";
 import * as secretProjects from "./secretProjectsApi";
 import * as scopedSyncs from "./scopedSyncsApi";
@@ -801,6 +802,7 @@ export interface DiscoveryFindingListOptions {
   triageStatus?: DiscoveryTriageFilter;
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
+export type { ChangeApplication, ChangeApplyRequest, ChangeDraft, ChangeDraftRequest, ChangePlan, ChangeSet } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
@@ -2443,6 +2445,9 @@ export interface Api {
   assessMigration(request: unknown): Promise<MigrationAssessment>;
   startMigrationRun(request: MigrationRunStartRequest): Promise<MigrationRun | MigrationRunStartPending>;
   migrationRuns(): Promise<MigrationRunList>;
+  planChangeSet(set: import("./api-types.gen").ChangeSet): Promise<import("./api-types.gen").ChangePlan>;
+  applyChangeSet(request: import("./api-types.gen").ChangeApplyRequest, idempotencyKey?: string): Promise<import("./api-types.gen").ChangeApplication>;
+  draftChangeSet(request: import("./api-types.gen").ChangeDraftRequest): Promise<import("./api-types.gen").ChangeDraft>;
   migrationRun(id: string): Promise<MigrationRun>;
   pauseMigrationRun(id: string, request?: MigrationRunActionRequest): Promise<MigrationRun>;
   resumeMigrationRun(id: string): Promise<MigrationRun>;
@@ -3333,6 +3338,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   assessMigration: estate.assessMigration,
   startMigrationRun: estate.startMigrationRun,
   migrationRuns: estate.migrationRuns,
+  planChangeSet: changeSets.planChangeSet,
+  applyChangeSet: changeSets.applyChangeSet,
+  draftChangeSet: changeSets.draftChangeSet,
   migrationRun: estate.migrationRun,
   pauseMigrationRun: estate.pauseMigrationRun,
   resumeMigrationRun: estate.resumeMigrationRun,

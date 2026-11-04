@@ -2,6 +2,12 @@
 
 ### Added
 
+- Reviewed change sets in the console (A248, third part): the **Change sets** page under Govern &
+  administer writes the same typed set as the API and GitOps — from a template (onboard an
+  application, grant a member roles, add a connector target), the form or JSON — plans it,
+  shows the per-object plan, and applies only the reviewed plan digest. An edit after planning
+  marks the plan stale, and a `409` asks for a new plan. With a model configured, the page drafts
+  a set with AI and plans it the same way.
 - Evaluation across journeys (A249, first part): `trstctl evaluate --journeys
   certificate,secrets,ssh` adds a secrets journey (create, read back by digest, rotate,
   `trstctl run` into a child process that checks the value without printing it, delete and

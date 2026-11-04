@@ -26,7 +26,10 @@ describe("UX-03 task-based navigation", () => {
     // machine-login administration. A235 spends one more on secrets projects
     // (environments, members, the owner's application view). The eight Secrets
     // rows remain task-specific. Ceiling: 42.
-    expect(allSidebarItems.length).toBeLessThanOrEqual(42);
+    // A248 spends one row on reviewed change sets: one plan-and-apply
+    // workspace across profiles, issuers, targets, members and owners, which
+    // belongs to none of those pages alone. Ceiling: 43.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(43);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Overview",
       "Inventory",

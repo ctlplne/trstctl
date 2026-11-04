@@ -45,6 +45,7 @@ const PlatformRedirect = lazyPage(() => import("@/pages/Platform"), "PlatformRed
 const Protocols = lazyPage(() => import("@/pages/Protocols"), "Protocols");
 const Secrets = lazyPage(() => import("@/pages/Secrets"), "Secrets");
 const Policy = lazyPage(() => import("@/pages/Policy"), "Policy");
+const ChangeSets = lazyPage(() => import("@/pages/ChangeSets"), "ChangeSets");
 const Privacy = lazyPage(() => import("@/pages/Privacy"), "Privacy");
 const Integrate = lazyPage(() => import("@/pages/Integrate"), "Integrate");
 const ApiExplorer = lazyPage(() => import("@/pages/ApiExplorer"), "ApiExplorer");
@@ -148,6 +149,7 @@ export function AppRoutes() {
             <Route path="secrets/sync" element={<Secrets />} />
             <Route path="connectors" element={<Connectors />} />
             <Route path="policy" element={<Policy />} />
+            <Route path="changes" element={<ChangeSets />} />
             <Route path="risk" element={<Risk />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="approvals" element={<Approvals />} />

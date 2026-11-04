@@ -7584,19 +7584,20 @@ failover have runbooks under `docs/runbooks/`. What comes next:
 - **One host.** Multi-host qualification of install, upgrade and failover is A176,
   on the x86 machine.
 
-## Reviewed configuration change sets (A248)
+## Reviewed configuration change sets (A248) — served
 
 `POST /api/v1/changes/plan` and `/apply` (`trstctl changes plan|apply -f`, JSON or YAML) plan
 and apply a typed change set of certificate profiles, CA bindings, connector targets, member
-role grants and owners. A malformed or over-broad set, one carrying a secret value, and one
-beyond its author's permissions never runs; the plan lists each object's identities,
-credentials, grants, destinations, approvals, events and verification; applying needs the
-reviewed plan digest and refuses a plan the tenant has moved past. What comes next:
+role grants and owners. The console's **Change sets** page writes the same set from a template,
+a form or JSON, and `POST /api/v1/changes/draft` drafts one with the configured model. A
+malformed or over-broad set, one carrying a secret value, and one beyond its author's
+permissions never runs; the plan lists each object's identities, credentials, grants,
+destinations, approvals, events and verification; applying needs the reviewed plan digest and
+refuses a plan the tenant has moved past, and the page marks a plan stale when the set is
+edited after planning. A draft sends the model names and metadata only, refuses a request
+carrying secret material before the model call, and leaves the form, API and GitOps paths
+working when no model is configured. What comes next:
 
-- **A console form.** It will produce the same typed set and go through the same plan. The AI
-  draft is served (`POST /api/v1/changes/draft`): it sends the model names and metadata only,
-  refuses a request carrying secret material before the model call, and leaves the API and
-  GitOps paths working when no model is configured.
 - **More kinds.** The lifecycle policy, notification channels, report schedules, agent role
   grants and enrollment tokens, and secret metadata (references, never values).
 

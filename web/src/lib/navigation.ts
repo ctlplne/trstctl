@@ -242,6 +242,7 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.governAdminister",
         items: [
           { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F62"] },
+          { to: "/changes", labelKey: "nav.item.changes", icon: "policy", mode: "real", featureIds: ["F28"] },
           { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
           { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
           { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
@@ -402,6 +403,7 @@ export const appRoutePaths = [
   "/secrets/sync",
   "/connectors",
   "/policy",
+  "/changes",
   "/risk",
   "/incidents",
   "/approvals",
@@ -451,6 +453,7 @@ const routePermissionAny: Record<string, string[]> = {
   "/admin/editions": ["access:read"],
   "/platform": ["access:read"],
   "/policy": ["policy:read", "access:read"],
+  "/changes": ["changes:write"],
   "/posture": ["risk:read"],
   "/privacy": ["privacy:read"],
   "/profiles": ["profiles:read"],

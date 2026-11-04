@@ -727,6 +727,11 @@ describe("exported API surface census", () => {
       // without allocating a serial, appending an event, changing the KRL, or
       // calling the isolated signer.
       "/api/v1/ssh/certificates/preview",
+      // A248: a plan computes each object's action and the digests and writes
+      // nothing; a draft asks the configured model for a set and plans it,
+      // recording only its audit event. Applying is the mutation.
+      "/api/v1/changes/plan",
+      "/api/v1/changes/draft",
       // F45: hashes and normalizes the exact attested SSH request without
       // verifying one-time proof, emitting audit evidence, or calling the signer.
       "/api/v1/ssh/attested-user-certs/preview",

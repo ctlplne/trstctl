@@ -424,6 +424,16 @@ trstctl-cli changes plan -f change-set.yaml            # review the items; note 
 trstctl-cli changes apply -f change-set.yaml sha256:…  # apply what you reviewed
 ```
 
+**In the console.** The **Change sets** page (Govern & administer; it needs `changes:write`)
+writes the same set. Start from a template — onboard an application (an owner, a profile and a
+member), grant a member roles, add a connector target, or a blank set — and fill in the form, or
+switch to JSON to edit the set itself. **Plan** shows the per-object table the API returns, with
+both digests. **Apply the reviewed plan** sends that plan's digest; an edit after planning marks
+the plan stale and disables applying until you plan again, and a `409` (the tenant moved past
+the plan) asks you to plan again. Each applied object shows its outcome and whether it read back
+as planned. With a model configured, a **Draft with AI** card puts a drafted set in the JSON
+editor beside its plan.
+
 **An AI draft.** With a model configured ([the pluggable model adapter](graph-query-ai.md)),
 `POST /api/v1/changes/draft` (`trstctl-cli changes draft -f draft-request.json`, body
 `{"request": "..."}`) turns a request in words into the same typed change set and plans it like
@@ -437,10 +447,10 @@ digest and the draft's digests, never the request text. With no model, drafting 
 and the form, API and GitOps paths work exactly as before. A draft that asks for the same
 objects as an API call plans to the same `change_set_digest` and `plan_digest`.
 
-**Status:** served through the API and the CLI for profiles, CA bindings, connector targets,
-member role grants and owners, with AI drafts. A console form and the policy,
-notification-channel, report-schedule, agent and secret-metadata kinds come next (see
-[limitations](../limitations.md#reviewed-configuration-change-sets-a248)).
+**Status:** served through the console, the API and the CLI for profiles, CA bindings, connector
+targets, member role grants and owners, with AI drafts. The policy, notification-channel,
+report-schedule, agent and secret-metadata kinds come next (see
+[limitations](../limitations.md#reviewed-configuration-change-sets-a248--served)).
 
 ### ABAC deny overlay
 
