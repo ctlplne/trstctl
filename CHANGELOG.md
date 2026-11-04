@@ -2,6 +2,12 @@
 
 ### Added
 
+- Native leak-scan collection (N6): a third-party scan source with `collect` has trstctl read the content from
+  the provider — an image from its registry over the OCI distribution API (every platform, config and layer
+  files, digests checked; anonymous, bearer or token-service credentials), Slack channel history, Jira issues,
+  GitHub Actions run logs and GitLab job logs — in the layout of the provider's export, so findings name the
+  image, message, issue, or CI run or job; the content stays in a private temporary directory removed after the
+  run.
 - trstctl as the OpenID issuer clouds trust (N5): with `protocols.spiffe.oidc_issuer_url`, the token-exchange
   tenant has a published issuer `<base>/oidc/<tenant-id>` (discovery document and key set, the signer-held SPIFFE
   JWT key), exchanged tokens carry it as `iss`, and AWS (AssumeRoleWithWebIdentity), Google (workload identity

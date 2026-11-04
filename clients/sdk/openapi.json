@@ -51717,6 +51717,70 @@
           "artifact_path": {
             "type": "string"
           },
+          "collect": {
+            "description": "N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), or CI logs (system github or gitlab, repo, a token reference). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission.",
+            "properties": {
+              "allow_private_endpoint": {
+                "type": "boolean"
+              },
+              "base_url": {
+                "type": "string"
+              },
+              "channels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "jql": {
+                "type": "string"
+              },
+              "max_bytes": {
+                "type": "integer"
+              },
+              "max_items": {
+                "type": "integer"
+              },
+              "private_egress_cidrs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "repo": {
+                "description": "CI logs: a GitHub owner/name, or a GitLab project's ID or path",
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "since": {
+                "description": "lookback for Slack history and Jira issues, such as 720h",
+                "type": "string"
+              },
+              "system": {
+                "description": "CI logs: the system the runs or jobs are read from",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ],
+                "type": "string"
+              },
+              "token_ref": {
+                "type": "string"
+              },
+              "username_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_url"
+            ],
+            "type": "object"
+          },
           "credential_ref": {
             "type": "string"
           },
@@ -51740,8 +51804,7 @@
           }
         },
         "required": [
-          "source",
-          "artifact_path"
+          "source"
         ],
         "type": "object"
       },

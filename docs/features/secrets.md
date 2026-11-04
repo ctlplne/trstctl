@@ -2155,9 +2155,40 @@ refused with 400 when the signature inputs are missing. Add
 that one file once the run is terminal and the run message records the removal. The
 redacted findings themselves age out through the privacy retention worker after
 `TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` (default 90 days); the discovery run
-record stays as evidence that the scan happened. Native
-Slack/Jira/container-registry API polling and provider-native annotations remain
-shortfalls, not served.
+record stays as evidence that the scan happened.
+
+**Native collection (N6).** Instead of `artifact_path`, a source may carry `collect`
+and trstctl reads the content from the provider itself, in the layout of that
+provider's own export, so the scan and the finding-to-object mapping are the same as
+for an export. `container_registry` reads one image (`repository` and `reference`, a
+tag or `sha256:` digest) over the OCI distribution API — anonymously, with a static
+bearer token, or through the registry's token service with `username_ref` and
+`token_ref` — every platform of an index (up to sixteen), each platform's config (its
+environment and build history) and the regular files of each layer, each blob checked
+against its digest before it counts; findings name the image's repository and
+digest. `slack` reads `channels` (IDs) through `conversations.history` with a bot
+token; findings name the channel and message. `jira` reads the issues `jql` selects
+(summary, description and comments) with a personal access token, or with
+`username_ref` and an API token; findings name the issue. `since` bounds Slack and
+Jira to a lookback (`720h`), and `max_items` and `max_bytes` bound what one run
+reads. The content goes to a private temporary directory that the run removes when it
+ends; it never enters an event, the database or a log line, and findings carry the
+item and byte counts and whether a limit stopped the collection. Credentials are
+operator-approved references resolved by the worker for that one call; a private
+endpoint needs `allow_private_endpoint`, `private_egress_cidrs` and the private-egress
+permission, as an annotation connection does. A refused credential or endpoint fails
+the run with the reason and records nothing. `cicd_log` reads CI logs: with
+`system: github` and `repo` (`owner/name`), the newest GitHub Actions runs' log
+archives; with `system: gitlab` and `repo` (a project ID or path), the newest jobs'
+traces (a `PRIVATE-TOKEN` reference). Each run or job lands in a folder named by its
+repository and commit, so its findings name the system, repository, commit and run or
+job; an annotation on a collected CI log or image names only its connection (and a CI
+log's `system`), because the object comes from the collection.
+
+```json
+{"source":"team-app","collect":{"base_url":"https://registry.example.com","repository":"team/app","reference":"v1",
+ "username_ref":"env:REGISTRY_USER","token_ref":"env:REGISTRY_TOKEN"}}
+```
 
 ```bash
 cat > third-party-scan.json <<'JSON'

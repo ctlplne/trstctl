@@ -4870,7 +4870,7 @@ than sending an operator looking for a credential that was never there.
   The console queues an artifact, reopens the exact discovery run by ID after a
   restart, shows its terminal state and redacted findings, and links to the full
   filtered Discovery triage. This is an operator workflow over the local export;
-  it does not collect native provider events.
+  native collection from registries, Slack, Jira and CI systems is N6 (below).
   Provider signature verification is served: an ingest may carry
   `signature_path` (the provider's detached RSA or ECDSA signature over the
   artifact bytes, raw or base64) and `signer_public_key_pem`; the signature is
@@ -4894,7 +4894,8 @@ than sending an operator looking for a credential that was never there.
   thread, a comment on the Jira issue, a failed commit status at GitHub or
   GitLab, or an OCI referrer on the image. The note names the rule and the
   finding and never the secret; the finding records what the provider
-  confirmed. Native provider API polling remains a shortfall (P14).
+  confirmed. Native collection from registries, Slack, Jira, GitHub Actions and
+  GitLab is served (N6).
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every
   DataGrid-backed large table switches to a bounded, overscanned DOM window
@@ -8486,4 +8487,25 @@ What comes next:
 - Key rotation publishes the new key in the same set; a cloud caches the set for
   its own interval, so a rotation should keep the old key published until that
   cache has refreshed.
+
+## Native leak-scan collection: registries, Slack, Jira and CI logs (N6) — served
+
+Status: served. A third-party scan source with `collect` has trstctl read the
+content from the provider in the layout of its export: an image from its registry
+(every platform of an index, config and layer files, digests checked, anonymous,
+bearer or token-service credentials), Slack channel history through
+`conversations.history`, Jira issues through search, GitHub Actions run log
+archives and GitLab job traces. Findings name the image, message, issue, or CI
+run or job; an annotation on a collected CI log or image takes its object from the
+collection. Proven by `TestServedNativeLeakScanCollectionN6` against a stock
+`registry:2` container (an image pushed over the distribution API) and Slack, Jira,
+GitHub and GitLab stand-ins built from their API references, with unit tests for the
+token-service challenge, an index, a tampered blob, paging, redirects, limits and
+refusals.
+
+What comes next:
+- Live Slack, Jira, GitHub, GitLab and hosted-registry runs are Track B proofs (the
+  GitLab container is a multi-GB image; the stand-in follows GitLab's API reference).
+- Slack thread replies (`conversations.replies`) are not read yet, and a layer
+  compressed with zstd is skipped (its digest is still checked).
 

@@ -43,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/scancollect"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -1439,11 +1440,24 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 	if cfg.Provider == "" {
 		return netscan.Report{}, "failed", "third-party secret scan provider is unsupported", nil
 	}
-	target, err := secretscan.PrepareThirdPartyTarget(cfg)
-	if err != nil {
+	var (
+		target    secretscan.ThirdPartyTarget
+		collected scancollect.Result
+		err       error
+	)
+	if cfg.Collect != nil {
+		// N6: the content is read from the provider, not an export.
+		target, collected, err = collectThirdParty(ctx, cfg)
+		if errors.Is(err, scancollect.ErrRefused) {
+			return netscan.Report{}, "failed", "native collection refused: " + err.Error(), nil
+		}
+	} else {
+		target, err = secretscan.PrepareThirdPartyTarget(cfg)
 		if errors.Is(err, secretscan.ErrThirdPartyTargetRequired) {
 			return netscan.Report{}, "failed", err.Error(), nil
 		}
+	}
+	if err != nil {
 		return netscan.Report{}, "", "", err
 	}
 	defer target.Cleanup()
@@ -1453,7 +1467,13 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		// signature stops the run before the scanner opens the artifact.
 		return netscan.Report{}, "failed", "artifact signature verification refused the scan: " + sigErr.Error(), nil
 	}
-	report, err := d.secretRepoScanner.Scan(ctx, target.Path)
+	scan := d.secretRepoScanner.Scan
+	if cloner, ok := d.secretRepoScanner.(cloneSecretScanner); ok && target.Mode == "collected" {
+		// A collection sits in a temporary directory trstctl just made, outside
+		// the operator's scan roots; that directory alone is this scan's root.
+		scan = cloner.ScanClone
+	}
+	report, err := scan(ctx, target.Path)
 	if err != nil {
 		return netscan.Report{}, "", "", err
 	}
@@ -1485,7 +1505,19 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 			"signature_verified": signature.Verified,
 			"signer_key_sha256":  signature.SignerKeySHA256,
 		}
+		if cfg.Collect != nil {
+			fields["collected_items"], fields["collected_bytes"], fields["collection_truncated"] = collected.Items, collected.Bytes, collected.Truncated
+		}
 		object := thirdPartyFindingObject(cfg, target.Path, f)
+		if cfg.Collect != nil {
+			// A collected CI log's run or job, or a collected image, is the
+			// finding's object (N6).
+			if fromPath, ok := scancollect.ObjectForPath(f.File); ok {
+				object = fromPath
+			} else if object == nil && len(collected.Object) > 0 {
+				object = collected.Object
+			}
+		}
 		if object != nil {
 			fields["provider_object"], fields["annotation_provider"] = object, cfg.AnnotationProvider()
 		}

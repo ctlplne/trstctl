@@ -39,11 +39,38 @@ var (
 // ErrNoAnnotation reports a scan configured without an annotation connection.
 var ErrNoAnnotation = errors.New("secretscan: this scan has no annotation connection")
 
+// ValidateCollectedAnnotation checks an annotation block on a collected
+// scan (N6): the connection as for an export, but a collected CI log or image
+// takes its repository and commit, or its digest, from the collection, so the
+// block names none of them; a CI log's system is the collection's.
+func ValidateCollectedAnnotation(provider string, a *AnnotationConfig, c *CollectConfig) error {
+	if a == nil {
+		return nil
+	}
+	if a.Repo != "" || a.CommitSHA != "" || a.Repository != "" || a.Digest != "" {
+		return errors.New("a collected scan's annotation names only its connection: the object comes from the collection")
+	}
+	if NormalizeThirdPartyProvider(provider) == ThirdPartyProviderCICDLog && (c == nil || a.System != c.System) {
+		return errors.New("annotation.system must be the collection's system")
+	}
+	if NormalizeThirdPartyProvider(provider) != ThirdPartyProviderCICDLog && a.System != "" {
+		return errors.New("annotation.system is for CI logs")
+	}
+	return validateAnnotationConnection(a)
+}
+
 // ValidateAnnotation checks an annotation block for a third-party provider.
 func ValidateAnnotation(provider string, a *AnnotationConfig) error {
 	if a == nil {
 		return nil
 	}
+	if err := validateAnnotationConnection(a); err != nil {
+		return err
+	}
+	return validateAnnotationObject(provider, a)
+}
+
+func validateAnnotationConnection(a *AnnotationConfig) error {
 	base, err := url.Parse(strings.TrimSpace(a.BaseURL))
 	if err != nil || base.Host == "" || (base.Scheme != "https" && (base.Scheme != "http" || !a.AllowPrivateEndpoint)) {
 		return errors.New("annotation.base_url must be an https URL (http only for an approved private endpoint)")
@@ -54,6 +81,10 @@ func ValidateAnnotation(provider string, a *AnnotationConfig) error {
 	if a.AllowPrivateEndpoint && len(a.PrivateEgressCIDRs) == 0 {
 		return errors.New("annotation.allow_private_endpoint needs private_egress_cidrs")
 	}
+	return nil
+}
+
+func validateAnnotationObject(provider string, a *AnnotationConfig) error {
 	switch NormalizeThirdPartyProvider(provider) {
 	case ThirdPartyProviderCICDLog:
 		if a.System != "github" && a.System != "gitlab" {

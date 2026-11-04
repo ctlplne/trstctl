@@ -15441,6 +15441,7 @@ ThirdPartySecretScanIngestRequest = TypedDict(
         'annotation': dict[str, Any],
         'artifact_kind': str,
         'artifact_path': str,
+        'collect': dict[str, Any],
         'credential_ref': str,
         'delete_artifact_after_scan': bool,
         'event': str,

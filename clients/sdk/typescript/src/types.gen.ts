@@ -24166,7 +24166,30 @@ export interface components {
                 username_ref?: string;
             };
             artifact_kind?: string;
-            artifact_path: string;
+            artifact_path?: string;
+            /** @description N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), or CI logs (system github or gitlab, repo, a token reference). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission. */
+            collect?: {
+                allow_private_endpoint?: boolean;
+                base_url: string;
+                channels?: string[];
+                jql?: string;
+                max_bytes?: number;
+                max_items?: number;
+                private_egress_cidrs?: string[];
+                reference?: string;
+                /** @description CI logs: a GitHub owner/name, or a GitLab project's ID or path */
+                repo?: string;
+                repository?: string;
+                /** @description lookback for Slack history and Jira issues, such as 720h */
+                since?: string;
+                /**
+                 * @description CI logs: the system the runs or jobs are read from
+                 * @enum {string}
+                 */
+                system?: "github" | "gitlab";
+                token_ref?: string;
+                username_ref?: string;
+            };
             credential_ref?: string;
             delete_artifact_after_scan?: boolean;
             event?: string;

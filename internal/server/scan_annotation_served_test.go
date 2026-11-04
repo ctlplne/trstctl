@@ -25,6 +25,9 @@ import (
 type a174MarkerScanner struct {
 	mu    sync.Mutex
 	paths []string
+	// marker is the text a line must hold to be a finding; LEAK-A174 when
+	// empty.
+	marker string
 }
 
 func (s *a174MarkerScanner) Scan(_ context.Context, target string) (secretscan.Report, error) {
@@ -46,7 +49,11 @@ func (s *a174MarkerScanner) Scan(_ context.Context, target string) (secretscan.R
 		}
 		rel, _ := filepath.Rel(root, path)
 		for i, line := range strings.Split(string(data), "\n") {
-			if strings.Contains(line, "LEAK-A174") {
+			marker := s.marker
+			if marker == "" {
+				marker = "LEAK-A174"
+			}
+			if strings.Contains(line, marker) {
 				report.Findings = append(report.Findings, secretscan.Finding{Scanner: "gitleaks", RuleID: "generic-api-key",
 					File: filepath.ToSlash(rel), Line: i + 1, Fingerprint: filepath.ToSlash(rel) + ":generic-api-key:" + string(rune('0'+i%10)),
 					CredentialRef: "generic-api-key@" + filepath.ToSlash(rel)})

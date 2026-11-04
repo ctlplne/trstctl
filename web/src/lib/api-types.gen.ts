@@ -11144,7 +11144,8 @@ export interface TenantWriteFence {
 export interface ThirdPartySecretScanIngestRequest {
   annotation?: { allow_private_endpoint?: boolean; auto?: boolean; base_url: string; commit_sha?: string; digest?: string; private_egress_cidrs?: string[]; repo?: string; repository?: string; system?: "github" | "gitlab"; token_ref: string; username_ref?: string };
   artifact_kind?: string;
-  artifact_path: string;
+  artifact_path?: string;
+  collect?: { allow_private_endpoint?: boolean; base_url: string; channels?: string[]; jql?: string; max_bytes?: number; max_items?: number; private_egress_cidrs?: string[]; reference?: string; repo?: string; repository?: string; since?: string; system?: "github" | "gitlab"; token_ref?: string; username_ref?: string };
   credential_ref?: string;
   delete_artifact_after_scan?: boolean;
   event?: string;

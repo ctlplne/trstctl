@@ -55,6 +55,9 @@ type ThirdPartyScanConfig struct {
 	// Annotation writes findings back at the provider (A174); see
 	// AnnotationConfig.
 	Annotation *AnnotationConfig `json:"annotation,omitempty"`
+	// Collect (N6) reads the content from the provider instead of
+	// ArtifactPath; see CollectConfig.
+	Collect *CollectConfig `json:"collect,omitempty"`
 }
 
 // ArtifactSignatureEvidence is what a verified provider signature contributes
@@ -159,6 +162,9 @@ func ThirdPartyProviders() []string {
 }
 
 func PrepareThirdPartyTarget(cfg ThirdPartyScanConfig) (ThirdPartyTarget, error) {
+	if cfg.Collect != nil {
+		return ThirdPartyTarget{}, errors.New("secretscan: a collected scan's content is fetched by the worker, not prepared from a path")
+	}
 	path := strings.TrimSpace(cfg.ArtifactPath)
 	if path == "" {
 		return ThirdPartyTarget{}, ErrThirdPartyTargetRequired

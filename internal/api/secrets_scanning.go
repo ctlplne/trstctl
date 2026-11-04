@@ -124,6 +124,9 @@ type thirdPartySecretScanIngestRequest struct {
 	DeleteArtifactAfterScan bool `json:"delete_artifact_after_scan,omitempty"`
 	// Annotation (A174) writes findings back at the provider.
 	Annotation *secretscan.AnnotationConfig `json:"annotation,omitempty"`
+	// Collect (N6) has trstctl read the content from the provider instead of
+	// artifact_path.
+	Collect *secretscan.CollectConfig `json:"collect,omitempty"`
 }
 
 type thirdPartySecretScanReceipt struct {
@@ -527,6 +530,9 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 		if err := a.requireAnnotationAllowed(ctx, tenantID, cfg.Annotation); err != nil {
 			return 0, nil, err
 		}
+		if err := a.requireCollectAllowed(ctx, tenantID, cfg.Collect); err != nil {
+			return 0, nil, err
+		}
 		body, err := json.Marshal(cfg)
 		if err != nil {
 			return 0, nil, err
@@ -693,13 +699,13 @@ func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPo
 			{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 		},
 		OperatorActions: []string{
-			"export CI/CD job logs, container registry layer/config material, Slack messages, or Jira issues to a tenant-local artifact path",
+			"export CI/CD job logs, container registry layer/config material, Slack messages, or Jira issues to a tenant-local artifact path, or name a collect connection so trstctl reads registries, Slack, Jira or CI logs itself (N6)",
 			"submit only artifact_path and metadata through the authenticated ingest route; do not inline secret-bearing log/chat text",
 			"pass the provider's detached signature (signature_path) and PEM public key (signer_public_key_pem), with require_signature for sources that must never scan an unsigned export; every finding then carries signature_verified and signer_key_sha256",
 			"route redacted leaked-secret findings into discovery, graph, risk, and incident workflows",
 		},
 		Residuals: []string{
-			"native Slack/Jira/registry API polling is not yet implemented; operators provide exported artifacts or callbacks",
+			"native collection (collect) reads container registries, Slack, Jira, GitHub Actions run logs and GitLab job logs itself (N6); live provider runs are Track B proofs",
 			"a provider signature is verified only when the operator supplies signature_path and signer_public_key_pem (require_signature refuses unsigned artifacts); export-chain integrity beyond that one detached signature remains an architecture follow-up",
 			"artifact access controls are operator-owned outside the trstctl database; delete_artifact_after_scan removes the export once the scan is terminal, and TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS ages the redacted findings out of discovery",
 		},
@@ -844,8 +850,25 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 	if source == "" {
 		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "source is required")
 	}
+	if req.Collect != nil {
+		// N6: the worker reads the content from the provider; nothing about an
+		// export applies.
+		if artifactPath != "" || req.SignaturePath != "" || req.SignerPublicKeyPEM != "" || req.RequireSignature || req.DeleteArtifactAfterScan {
+			return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "collect replaces artifact_path and its signature and deletion settings")
+		}
+		if err := secretscan.ValidateCollect(provider, req.Collect); err != nil {
+			return secretscan.ThirdPartyScanConfig{}, errStatusFrom(http.StatusBadRequest, err)
+		}
+		if err := secretscan.ValidateCollectedAnnotation(provider, req.Annotation, req.Collect); err != nil {
+			return secretscan.ThirdPartyScanConfig{}, errStatusFrom(http.StatusBadRequest, err)
+		}
+		return secretscan.ThirdPartyScanConfig{
+			Provider: provider, Source: source, ArtifactKind: secretscan.ThirdPartyArtifactKind(provider),
+			Event: strings.TrimSpace(req.Event), Annotation: req.Annotation, Collect: req.Collect,
+		}, nil
+	}
 	if artifactPath == "" {
-		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "artifact_path is required")
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "artifact_path or collect is required")
 	}
 	artifactKind := strings.TrimSpace(req.ArtifactKind)
 	if artifactKind == "" {

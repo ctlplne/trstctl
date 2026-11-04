@@ -7707,7 +7707,17 @@ func componentSchemas() map[string]*Schema {
 			"repo": str(), "commit_sha": str(), "repository": str(), "digest": str(),
 			"auto": {Type: "boolean", Description: "Annotate each new finding without an operator."},
 		}, "base_url", "token_ref"),
-	}, "source", "artifact_path")
+		"collect": {Type: "object", Description: "N6: read the content from the provider instead of artifact_path, in the layout of its export — an image (registry: repository and a tag or sha256 digest, every platform, config and layer files, digests checked), Slack channel history (channels, a bot token reference), Jira issues (jql, a token reference), or CI logs (system github or gitlab, repo, a token reference). Credentials are operator-approved references; a private endpoint needs allow_private_endpoint, its CIDRs and the private-egress permission.",
+			Properties: map[string]*Schema{
+				"base_url": str(), "token_ref": str(), "username_ref": str(),
+				"repository": str(), "reference": str(), "channels": {Type: "array", Items: str()}, "jql": str(),
+				"system":    {Type: "string", Enum: []string{"github", "gitlab"}, Description: "CI logs: the system the runs or jobs are read from"},
+				"repo":      {Type: "string", Description: "CI logs: a GitHub owner/name, or a GitLab project's ID or path"},
+				"since":     {Type: "string", Description: "lookback for Slack history and Jira issues, such as 720h"},
+				"max_items": {Type: "integer"}, "max_bytes": {Type: "integer"},
+				"allow_private_endpoint": {Type: "boolean"}, "private_egress_cidrs": {Type: "array", Items: str()},
+			}, Required: []string{"base_url"}},
+	}, "source")
 	thirdPartySecretScanReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "source": str(), "source_id": uuid(),
 		"run_id": uuid(), "queued": {Type: "boolean"}, "status": str(),

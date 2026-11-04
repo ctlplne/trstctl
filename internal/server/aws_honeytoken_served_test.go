@@ -137,7 +137,7 @@ func newServedAWSHoneyFixture(t *testing.T) *servedAWSHoneyFixture {
 				return
 			}
 			f.keyID, f.issuedKeyID = "AKIADECOY00000001", "AKIADECOY00000001"
-			secretValue := "fake-honey-secret-value"
+			secretValue := "fake-honey-secret-value" // #nosec G101 -- the fixture's fake decoy secret, not a credential (CWE-798)
 			if f.nextKeyID != "" {
 				f.keyID, f.issuedKeyID, secretValue = f.nextKeyID, f.nextKeyID, f.nextSecret
 			}

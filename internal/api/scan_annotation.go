@@ -140,7 +140,21 @@ func (a *API) requireAnnotationAllowed(ctx context.Context, tenantID string, ann
 	if ann == nil {
 		return nil
 	}
-	raw, err := json.Marshal(ann)
+	return a.requireConnectionAllowed(ctx, tenantID, ann)
+}
+
+// requireCollectAllowed holds a native collection's connection (N6) to the
+// same rules as an annotation's: private egress needs its permission, and its
+// credential references must be operator-approved.
+func (a *API) requireCollectAllowed(ctx context.Context, tenantID string, collect *secretscan.CollectConfig) error {
+	if collect == nil {
+		return nil
+	}
+	return a.requireConnectionAllowed(ctx, tenantID, collect)
+}
+
+func (a *API) requireConnectionAllowed(ctx context.Context, tenantID string, connection any) error {
+	raw, err := json.Marshal(connection)
 	if err != nil {
 		return err
 	}
