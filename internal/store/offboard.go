@@ -280,6 +280,8 @@ var TenantScopedTables = []string{
 	"factory_birth_certificates", "factory_batches",
 	// P13: incident closures; no foreign keys.
 	"incident_closures",
+	// A255: session recording chunks, then their recordings; no foreign keys.
+	"pam_session_recording_chunks", "pam_session_recordings",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

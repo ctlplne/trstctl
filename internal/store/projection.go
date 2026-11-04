@@ -881,6 +881,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"factory_batches", "factory_birth_certificates",
 	// P13: projected from incident.execution.closed.
 	"incident_closures",
+	// A255: projected from pam.session.recording_chunk_stored and
+	// pam.session.recording_sealed.
+	"pam_session_recordings", "pam_session_recording_chunks",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

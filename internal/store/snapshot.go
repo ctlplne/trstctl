@@ -265,7 +265,10 @@ import (
 // Version 88 carries P13's incident closures: without them a restored store
 // would show every closed incident as open while its covered offset skipped
 // the closures.
-const SnapshotFormatVersion = 88
+// Version 89 carries A255's session recordings and their chunk index: without
+// them a restored store would lose where each sealed recording lives and its
+// signed manifest while its covered offset skipped the events.
+const SnapshotFormatVersion = 89
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -357,6 +360,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"factory_batches", "factory_birth_certificates",
 	// Format 88: P13's incident closures.
 	"incident_closures",
+	// Format 89: A255's session recordings and their chunks.
+	"pam_session_recordings", "pam_session_recording_chunks",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -712,6 +717,8 @@ SELECT jsonb_build_object(
   'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
   'certificate_key_vault_disables', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_key_vault_disables t),
   'incident_closures', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_closures t),
+  'pam_session_recordings', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_recordings t),
+  'pam_session_recording_chunks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_recording_chunks t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

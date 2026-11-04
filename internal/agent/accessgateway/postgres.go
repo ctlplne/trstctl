@@ -30,7 +30,7 @@ const (
 // session's parameters, key data and readiness and relays the protocol both
 // ways until either side closes or the deadline passes. The client never
 // receives the DSN.
-func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error)) error {
+func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
 	params, err := readClientStartup(client)
 	if err != nil {
 		return err
@@ -65,8 +65,16 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 		return err
 	}
 	done := make(chan struct{}, 2)
-	go func() { _, _ = io.Copy(server, client); _ = server.Close(); done <- struct{}{} }()
-	go func() { _, _ = io.Copy(client, server); _ = client.Close(); done <- struct{}{} }()
+	if rec == nil {
+		go func() { _, _ = io.Copy(server, client); _ = server.Close(); done <- struct{}{} }()
+		go func() { _, _ = io.Copy(client, server); _ = client.Close(); done <- struct{}{} }()
+	} else {
+		// Recorded: relayed message by message, each seen before it is
+		// forwarded (A255).
+		p := &pgRecorder{conn: rec}
+		go func() { _ = relayPostgres(server, client, p.client); _ = server.Close(); done <- struct{}{} }()
+		go func() { _ = relayPostgres(client, server, p.server); _ = client.Close(); done <- struct{}{} }()
+	}
 	<-done
 	return nil
 }

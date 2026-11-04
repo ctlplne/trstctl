@@ -11510,6 +11510,33 @@ PAMPostgresCredential = TypedDict(
     total=False,
 )
 
+PAMRecording = TypedDict(
+    'PAMRecording',
+    {
+        'bytes': int,
+        'chain_head': str,
+        'chunks': int,
+        'final_received': bool,
+        'last_chunk_at': str,
+        'manifest_sha256': str,
+        'sealed_at': str,
+        'session_id': str,
+        'started_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMRecordingVerification = TypedDict(
+    'PAMRecordingVerification',
+    {
+        'chunks': int,
+        'problems': list[str],
+        'verified': bool,
+    },
+    total=False,
+)
+
 PAMRequestProgress = TypedDict(
     'PAMRequestProgress',
     {

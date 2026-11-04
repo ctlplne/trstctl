@@ -14538,6 +14538,8 @@
                 "listPAMSessions",
                 "getPAMSession",
                 "revokePAMSession",
+                "getPAMSessionRecording",
+                "verifyPAMSessionRecording",
                 "listPAMTargets",
                 "registerPAMTarget",
                 "getPAMTarget",

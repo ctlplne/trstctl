@@ -8718,3 +8718,25 @@ What comes next (A255 and on):
 - Session recording, masking and live termination (A255); MySQL, MongoDB, Redis,
   ClickHouse and Kubernetes sessions (A256); the agent launcher (A257); credential health
   checks and emergency access (A258).
+
+## Session recordings (A255) — recording and verification served; playback, live watch, termination and retention next
+
+Status: recording is served. With an object store (`audit.archive_object_store`), tenant
+sealing and the audit signing key, every gateway session is recorded by its gateway:
+SSH session bytes and requests, SFTP as operations without file contents, PostgreSQL
+statements with bounded results. The session's injected credential and well-known token
+shapes are masked at the gateway before anything leaves it; chunks upload in order with
+backpressure, are sealed for the tenant into the object store and chained, and the
+recording closes with a manifest signed by the audit key.
+`GET /api/v1/access/sessions/{id}/recording` reads the index and `.../recording/verify`
+checks the seal end to end. `TestServedGatewayRecordsMaskedSealedSessionsA255` proves it
+with stock `ssh`, `sftp` and a PostgreSQL client through the gateway: the token appears in
+no stored object and no opened frame, SFTP uploads are recorded by path and size only,
+both recordings seal with their final chunk and verify, and a modified chunk or manifest
+fails verification. Design: `docs/design/access-gateway.md` ("Recordings").
+
+What comes next (A255 part 2):
+- Playback and export of a recording, live watching as chunks arrive, and the
+  `recordings:read` / `recordings:export` scopes for them.
+- Live termination by an operator with bounded uncertainty when the gateway is cut off,
+  a maximum session length per target, recording retention and legal hold.

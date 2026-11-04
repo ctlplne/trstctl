@@ -489,6 +489,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a gateway session's recording index */
+        get: operations["getPAMSessionRecording"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/sessions/{id}/recording/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verify a sealed gateway session recording against its signed manifest */
+        get: operations["verifyPAMSessionRecording"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/revoke": {
         parameters: {
             query?: never;
@@ -20802,6 +20836,28 @@ export interface components {
             dsn: string;
             username: string;
         };
+        PAMRecording: {
+            bytes: number;
+            chain_head: string;
+            chunks: number;
+            final_received: boolean;
+            /** Format: date-time */
+            last_chunk_at: string;
+            manifest_sha256?: string;
+            /** Format: date-time */
+            sealed_at?: string;
+            /** Format: uuid */
+            session_id: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "recording" | "sealed";
+        };
+        PAMRecordingVerification: {
+            chunks: number;
+            problems?: string[];
+            verified: boolean;
+        };
         PAMRequestProgress: {
             approval_count: number;
             /** Format: uuid */
@@ -26783,6 +26839,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMSessionRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecording"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyPAMSessionRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecordingVerification"];
                 };
             };
             /** @description client error */

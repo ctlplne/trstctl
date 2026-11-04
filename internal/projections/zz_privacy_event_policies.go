@@ -1000,6 +1000,16 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/gateway_agent_id", opaque), privacyRule("/gateway_address", opaque),
 			privacyRule("/host_key_fingerprints", opaque),
 		),
+		{EventPAMRecordingChunkStored, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/gateway_agent_id", opaque), privacyRule("/ord", opaque),
+			privacyRule("/attempt", opaque), privacyRule("/seq", opaque), privacyRule("/object_ref", opaque),
+			privacyRule("/sha256", opaque), privacyRule("/sealed_sha256", opaque), privacyRule("/chain", opaque),
+			privacyRule("/size", opaque), privacyRule("/final", opaque), privacyRule("/stored_at", opaque),
+		),
+		{EventPAMRecordingSealed, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/manifest_ref", opaque), privacyRule("/manifest_sha256", opaque),
+			privacyRule("/manifest_signature", opaque), privacyRule("/sealed_at", opaque),
+		),
 		{EventPAMTargetDisabled, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque),
 			privacyRule("/disabled_by", exact), privacyRule("/reason", clear),
@@ -1579,6 +1589,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMSessionStarted, 1}:                                                          privacyPayloadShape[PAMSessionStarted](),
 		{EventPAMTargetRegistered, 1}:                                                        privacyPayloadShape[PAMTargetRegistered](),
 		{EventPAMTargetDisabled, 1}:                                                          privacyPayloadShape[PAMTargetDisabled](),
+		{EventPAMRecordingChunkStored, 1}:                                                    privacyPayloadShape[PAMRecordingChunkStored](),
+		{EventPAMRecordingSealed, 1}:                                                         privacyPayloadShape[PAMRecordingSealed](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),

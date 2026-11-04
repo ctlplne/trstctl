@@ -38316,6 +38316,80 @@
         ],
         "type": "object"
       },
+      "PAMRecording": {
+        "properties": {
+          "bytes": {
+            "type": "integer"
+          },
+          "chain_head": {
+            "type": "string"
+          },
+          "chunks": {
+            "type": "integer"
+          },
+          "final_received": {
+            "type": "boolean"
+          },
+          "last_chunk_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "manifest_sha256": {
+            "type": "string"
+          },
+          "sealed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "sealed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "status",
+          "chunks",
+          "bytes",
+          "started_at",
+          "last_chunk_at",
+          "final_received",
+          "chain_head"
+        ],
+        "type": "object"
+      },
+      "PAMRecordingVerification": {
+        "properties": {
+          "chunks": {
+            "type": "integer"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified",
+          "chunks"
+        ],
+        "type": "object"
+      },
       "PAMRequestProgress": {
         "properties": {
           "approval_count": {
@@ -57027,6 +57101,122 @@
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/recording": {
+      "get": {
+        "operationId": "getPAMSessionRecording",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecording"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a gateway session's recording index",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/sessions/{id}/recording/verify": {
+      "get": {
+        "operationId": "verifyPAMSessionRecording",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecordingVerification"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Verify a sealed gateway session recording against its signed manifest",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/sessions/{id}/revoke": {

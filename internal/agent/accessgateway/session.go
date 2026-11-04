@@ -48,6 +48,9 @@ type SessionIntent struct {
 	SSHAddress             string   `json:"ssh_address,omitempty"`
 	SSHPrincipal           string   `json:"ssh_principal,omitempty"`
 	SSHHostKeyFingerprints []string `json:"ssh_host_key_fingerprints,omitempty"`
+	// Record asks the gateway to record the session (A255): masked, and
+	// uploaded over its agent channel as the session runs.
+	Record bool `json:"record,omitempty"`
 }
 
 // SessionReport is what the gateway reports when a session ends.

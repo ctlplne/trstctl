@@ -11,19 +11,21 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"trstctl.com/trstctl/internal/agent/accessgateway"
-	"trstctl.com/trstctl/internal/config"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	sshca "trstctl.com/trstctl/internal/protocols/ssh"
@@ -107,6 +109,9 @@ type pamService struct {
 	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
 	// certificate against (A254); nil when no agent channel is served.
 	agentCAPEM func() []byte
+	// recordings stores gateway session recordings (A255); nil when the
+	// deployment has no object store, tenant sealing or audit signing key.
+	recordings *pamRecordings
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -141,6 +146,10 @@ type pamDeps struct {
 	Orch         *orchestrator.Orchestrator
 	// AgentCAPEM is the agent CA a client verifies a gateway against (A254).
 	AgentCAPEM func() []byte
+	// RecordingObjects and RecordingSigner store and sign gateway session
+	// recordings (A255); either unset leaves sessions unrecorded.
+	RecordingObjects objectstore.Store
+	RecordingSigner  *jose.SigningKey
 }
 
 func newPAMService(d pamDeps) (*pamService, error) {
@@ -195,8 +204,13 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
+	var recordings *pamRecordings
+	if d.RecordingObjects != nil && d.RecordingSigner != nil && (d.TenantCrypto != nil || d.KEK != nil) {
+		recordings = &pamRecordings{objects: d.RecordingObjects, access: d.TenantCrypto, legacy: d.KEK, signer: d.RecordingSigner}
+	}
 	return &pamService{
-		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
+		recordings: recordings,
+		store:      d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, postgres: postgresTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
@@ -801,6 +815,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 	for {
 		_ = s.expireOnce(ctx)
 		s.ensureGatewayJobs(ctx)
+		s.sealIdleRecordings(ctx)
 		select {
 		case <-ctx.Done():
 			return

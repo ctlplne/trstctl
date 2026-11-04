@@ -8300,6 +8300,25 @@ export interface PAMPostgresCredential {
   username: string;
 }
 
+export interface PAMRecording {
+  bytes: number;
+  chain_head: string;
+  chunks: number;
+  final_received: boolean;
+  last_chunk_at: string;
+  manifest_sha256?: string;
+  sealed_at?: string;
+  session_id: string;
+  started_at: string;
+  status: "recording" | "sealed";
+}
+
+export interface PAMRecordingVerification {
+  chunks: number;
+  problems?: string[];
+  verified: boolean;
+}
+
 export interface PAMRequestProgress {
   approval_count: number;
   approval_request_id: string;

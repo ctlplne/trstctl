@@ -271,8 +271,11 @@ type agentService struct {
 	signGatewayServerCSR func(csr []byte, hosts, uris []string, ttl time.Duration) ([]byte, error)
 	// signGatewaySSHKey certifies a gateway's per-session SSH key for a
 	// session job it holds (A254 part 2).
-	signGatewaySSHKey  func(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error)
-	tenantServiceCheck tenancy.ServiceCheck
+	signGatewaySSHKey func(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error)
+	// storeRecordingChunk takes one chunk of a held session's recording
+	// (A255) and reports whether the recording is closed.
+	storeRecordingChunk func(ctx context.Context, tenantID, agentID string, payload []byte, attempt, seq int, chunk []byte, final bool) (bool, error)
+	tenantServiceCheck  tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
 	logger *slog.Logger
 	store  *store.Store

@@ -134,7 +134,7 @@ func gatewayFor(t *testing.T, host *HostKey, key *SessionKey, up Upstream) *ssh.
 		if err != nil {
 			return
 		}
-		_ = Serve(context.Background(), conn, host, key, up)
+		_ = Serve(context.Background(), conn, host, key, up, nil)
 		_ = conn.Close()
 	}()
 	hostPub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(host.AuthorizedKey()))
@@ -235,7 +235,7 @@ func TestSessionKeyAdoptsOnlyItsOwnUserCertificateA254(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer host.Destroy()
-	if err := Serve(context.Background(), nil, host, key, Upstream{}); err == nil {
+	if err := Serve(context.Background(), nil, host, key, Upstream{}, nil); err == nil {
 		t.Fatal("an uncertified session key served")
 	}
 }

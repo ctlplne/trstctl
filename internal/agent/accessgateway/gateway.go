@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/crypto/pgsignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/sshgateway"
 )
@@ -59,7 +60,12 @@ type session struct {
 	job      relay.Job
 	material relay.Material
 	// sshKey is an SSH session's certified per-session key.
-	sshKey  *sshgateway.SessionKey
+	sshKey *sshgateway.SessionKey
+	// recorder records the session when the control plane asks (A255).
+	recorder *sessionRecorder
+	// serving counts connections still being served; the session's
+	// recording closes only after each has flushed.
+	serving sync.WaitGroup
 	destroy func()
 	mu      sync.Mutex
 	conns   map[net.Conn]struct{}
@@ -193,7 +199,7 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 			return
 		}
 		g.holdSession(ctx, &session{intent: intent, job: job, sshKey: key, destroy: key.Destroy,
-			conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
+			recorder: g.recorderFor(ctx, intent, job), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
 		return
 	}
 	items, err := g.cfg.Channel.RedeemJobCredential(ctx, job.JobID, job.Attempt)
@@ -209,8 +215,27 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
 		return
 	}
+	var secrets [][]byte
+	if target, err := pgsignin.ParseDSN(material[intent.CredentialRef]); err == nil {
+		// The session's own password is masked wherever it shows up.
+		secrets = append(secrets, append([]byte(nil), target.Password...))
+		target.Wipe()
+	}
 	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy,
-		conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
+		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
+	for _, b := range secrets {
+		secret.Wipe(b)
+	}
+}
+
+// recorderFor starts a session's recording when the control plane asks for
+// one and the channel can take it; nil records nothing.
+func (g *Gateway) recorderFor(ctx context.Context, intent SessionIntent, job relay.Job, secrets ...[]byte) *sessionRecorder {
+	uploader, ok := g.cfg.Channel.(RecordingUploader)
+	if !intent.Record || !ok {
+		return nil
+	}
+	return newSessionRecorder(ctx, uploader, job, g.cfg.Now, secrets...)
 }
 
 // holdSession registers a started session and holds it, unless the session is
@@ -219,6 +244,9 @@ func (g *Gateway) holdSession(ctx context.Context, s *session) {
 	g.mu.Lock()
 	if _, held := g.sessions[s.intent.SessionID]; held {
 		g.mu.Unlock()
+		if s.recorder != nil {
+			s.recorder.abandon()
+		}
 		s.destroy()
 		return
 	}
@@ -306,6 +334,12 @@ func (g *Gateway) end(s *session, reason string) {
 		}
 		s.mu.Unlock()
 		close(s.ended)
+		if s.recorder != nil {
+			// Each connection flushes its recording as it closes; then the
+			// last chunk goes up, before the session reports.
+			waitAtMost(&s.serving, 15*time.Second)
+			s.recorder.close()
+		}
 		s.destroy()
 		g.mu.Lock()
 		delete(g.sessions, s.intent.SessionID)
@@ -410,6 +444,11 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		return
 	}
 	defer s.release(conn)
+	var rec *connRecorder
+	if s.recorder != nil {
+		rec = s.recorder.connection()
+		defer rec.close()
+	}
 	if _, err := conn.Write([]byte(answer)); err != nil {
 		_ = conn.Close()
 		return
@@ -419,12 +458,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 	case TargetPostgres:
 		dsn := s.credential()
 		defer secret.Wipe(dsn)
-		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial); err != nil {
+		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetSSH:
 		if err := sshgateway.Serve(ctx, conn, host, s.sshKey, sshgateway.Upstream{Address: s.intent.SSHAddress,
-			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}); err != nil {
+			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}, sshRecorder(rec)); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	}
@@ -450,6 +489,7 @@ func (s *session) admit(conn net.Conn, limit int) bool {
 	}
 	s.conns[conn] = struct{}{}
 	s.served++
+	s.serving.Add(1)
 	return true
 }
 
@@ -457,6 +497,25 @@ func (s *session) release(conn net.Conn) {
 	s.mu.Lock()
 	delete(s.conns, conn)
 	s.mu.Unlock()
+	s.serving.Done()
+}
+
+// sshRecorder hands the SSH relay a connection's recorder, or none.
+func sshRecorder(rec *connRecorder) sshgateway.Recorder {
+	if rec == nil {
+		return nil
+	}
+	return rec
+}
+
+// waitAtMost waits for wg, but not longer than d.
+func waitAtMost(wg *sync.WaitGroup, d time.Duration) {
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(d):
+	}
 }
 
 // credential copies the session's upstream credential for one connection;

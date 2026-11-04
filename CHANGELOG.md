@@ -18,6 +18,12 @@
   principal, ending at its deadline, terminal only); stock `ssh` with no key reaches the target through
   `trstctl-cli access sessions connect`, which writes the gateway's host key to a known_hosts file. Shell, exec
   and SFTP are relayed; forwarding is refused. Revoking the session puts its key ID on the served KRL.
+- Session recordings (A255 part 1): with an object store, tenant sealing and the audit signing key, the gateway
+  records every session — SSH bytes and requests, SFTP as operations without file contents, PostgreSQL statements
+  with bounded results — masking the session's credential and well-known token shapes before anything leaves it.
+  Chunks upload in order with backpressure (`UploadSessionRecording`), are sealed for the tenant into the object
+  store and chained, and the recording closes with a manifest signed by the audit key;
+  `GET /api/v1/access/sessions/{id}/recording` and `.../recording/verify` read and check it.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

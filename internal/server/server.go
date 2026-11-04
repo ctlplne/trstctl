@@ -2534,6 +2534,7 @@ func (s *Server) configurePAMSurface(d Deps) error {
 			}
 			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.agentCACertDER})
 		},
+		RecordingObjects: d.ArchiveObjectStore, RecordingSigner: d.AuditSigningKey,
 	})
 	if err != nil {
 		return err
@@ -2580,6 +2581,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		gatewayBoundHosts:    s.pamGatewayBoundHosts(),
 		signGatewayServerCSR: s.signGatewayServerCSR,
 		signGatewaySSHKey:    s.pamSignGatewaySSHKey(),
+		storeRecordingChunk:  s.pamStoreRecordingChunk(),
 		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page. Control-plane previews write the same
 		// event-sourced receipt through the outbox dispatcher.

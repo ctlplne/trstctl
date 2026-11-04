@@ -326,3 +326,24 @@ func (r relayChannel) SignJobSSHKey(ctx context.Context, jobID int64, attempt in
 }
 
 var _ accessgateway.SSHKeySigner = relayChannel{}
+
+// UploadSessionRecording sends one chunk of a held session's recording
+// (A255). A refusal the control plane will repeat (the recording is sealed,
+// the job is not this gateway's, the chunk does not fit) stops the recording
+// rather than holding the session on retries.
+func (r relayChannel) UploadSessionRecording(ctx context.Context, jobID int64, attempt, seq int, chunk []byte, final bool) error {
+	resp, err := r.c.UploadSessionRecording(ctx, &transport.UploadSessionRecordingRequest{JobID: jobID, Attempt: attempt, Seq: seq, Chunk: chunk, Final: final})
+	if err != nil {
+		switch status.Code(err) {
+		case codes.FailedPrecondition, codes.PermissionDenied, codes.InvalidArgument, codes.Unimplemented:
+			return accessgateway.ErrRecordingStopped
+		}
+		return err
+	}
+	if resp.Stopped || !resp.Accepted {
+		return accessgateway.ErrRecordingStopped
+	}
+	return nil
+}
+
+var _ accessgateway.RecordingUploader = relayChannel{}

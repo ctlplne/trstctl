@@ -1012,6 +1012,12 @@
         "response": ""
       },
       {
+        "full_method": "/trstctl.agent.v1.AgentService/UploadSessionRecording",
+        "name": "UploadSessionRecording",
+        "request": "",
+        "response": ""
+      },
+      {
         "full_method": "/trstctl.agent.v1.AgentService/FetchWorkloadSVID",
         "name": "FetchWorkloadSVID",
         "request": "FetchWorkloadSVIDRequest",

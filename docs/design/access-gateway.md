@@ -85,8 +85,43 @@ inside the tunnel admits them.
 | State | Effect read back |
 |---|---|
 | New logins denied | The gateway no longer holds the session: a connection is refused. |
-| Session terminated | The gateway's end-of-session report (`ended: recalled` or `deadline`); recordings and live termination are A255. |
+| Session terminated | The gateway's end-of-session report (`ended: recalled` or `deadline`), after the session's recording is flushed and sealed. |
 | Upstream credential revoked | The PostgreSQL role is gone / the served SSH KRL holds the session's key ID, which every certificate the gateway was given for the session carries (F33). |
+
+## Recordings (A255)
+
+When the deployment stores recordings — an object store (`audit.archive_object_store`),
+tenant sealing and the audit signing key — every gateway session job carries
+`record: true` and the gateway records the session as it relays it.
+
+- **What is recorded.** SSH: session-channel bytes both ways (`in`, `out`, `err`) and the
+  session requests (exec commands, subsystem, pty, window size, environment, exit
+  status); an SFTP channel is recorded as operations — open, read, write, remove, rename,
+  mkdir, rmdir, setstat, symlink — with the path, the bytes moved and the result, never
+  the file contents. PostgreSQL: each statement (simple queries; prepared statements and
+  their bound values), each result's column names, its first rows up to a bound with a
+  marker where rows stop being recorded, command tags and error codes; COPY data by size.
+- **Masking happens at the gateway, before anything leaves it.** The session's injected
+  credential (the PostgreSQL login's password) and well-known issued-token shapes (AWS
+  access key IDs, GitHub, GitLab, Slack, Stripe and Google API tokens, JWTs, PEM private
+  keys) become `[masked:<rule>]`. A secret split across writes is still found: each stream
+  holds back only a tail that may still become a secret. The control plane's secret-scan
+  rule set cannot be linked into the agent, so the gateway carries this list of its own.
+- **Upload with backpressure.** Frames are JSON lines spooled under a bound and uploaded in
+  order over the agent channel (`UploadSessionRecording`, by the gateway holding the job at
+  that attempt; a recalled claim may still flush its tail). A full spool holds the
+  session's traffic until the upload catches up — nothing is dropped.
+- **Sealed, chained, signed.** The control plane seals each chunk for the tenant (AAD:
+  tenant, session, place and the plaintext's SHA-256) into the object store, and records
+  it (`pam.session.recording_chunk_stored`) with the chain
+  `SHA-256(previous || chunk SHA-256)`. The gateway's final chunk — or, for a session that
+  ended without one, two quiet minutes — closes the recording: a manifest of every chunk's
+  place, digests and object and the chain head, signed with the deployment's audit key
+  (`pam.session.recording_sealed`).
+- **Verification.** `GET /api/v1/access/sessions/{id}/recording/verify` checks the manifest
+  is the one signed, every chunk is present, unmodified and opens only in its place, its
+  plaintext matches its digest, and the chain reaches the manifest's head; an edited,
+  dropped or reordered chunk, or an edited manifest, fails it.
 
 ## Failure modes
 

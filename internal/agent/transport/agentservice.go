@@ -310,6 +310,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
 		{MethodName: methodSignGatewayServerCertificate, Handler: signGatewayServerCertificateHandler},
 		{MethodName: methodSignJobSSHKey, Handler: signJobSSHKeyHandler},
+		{MethodName: methodUploadSessionRecording, Handler: uploadSessionRecordingHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},
@@ -936,6 +937,10 @@ const (
 	// certificate down; no private key crosses it in either direction.
 	methodSignJobSSHKey     = "SignJobSSHKey"
 	fullMethodSignJobSSHKey = "/" + agentServiceName + "/" + methodSignJobSSHKey
+	// A255: a held session's recording, masked at the gateway, in ordered
+	// chunks the control plane seals for the tenant.
+	methodUploadSessionRecording     = "UploadSessionRecording"
+	fullMethodUploadSessionRecording = "/" + agentServiceName + "/" + methodUploadSessionRecording
 	// B3: the workload-identity node API. Carries a public key up and SVIDs
 	// down; no private key crosses it in either direction.
 	methodFetchWorkloadSVID     = "FetchWorkloadSVID"
@@ -1014,6 +1019,8 @@ type AgentGatewayServiceServer interface {
 	// SignJobSSHKey signs the gateway's per-session SSH key for a session job
 	// the gateway holds.
 	SignJobSSHKey(ctx context.Context, req *SignJobSSHKeyRequest) (*SignJobSSHKeyResponse, error)
+	// UploadSessionRecording takes one chunk of a held session's recording.
+	UploadSessionRecording(ctx context.Context, req *UploadSessionRecordingRequest) (*UploadSessionRecordingResponse, error)
 }
 
 // SignGatewayServerCertificateRequest carries the gateway listener's CSR and
@@ -1083,6 +1090,42 @@ func signJobSSHKeyHandler(srv any, ctx context.Context, dec func(any) error, int
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignJobSSHKey}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return gateway.SignJobSSHKey(ctx, req.(*SignJobSSHKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// UploadSessionRecordingRequest is one chunk of a held session's recording,
+// in order from zero; Final closes the recording.
+type UploadSessionRecordingRequest struct {
+	JobID   int64  `json:"job_id"`
+	Attempt int    `json:"attempt"`
+	Seq     int    `json:"seq"`
+	Chunk   []byte `json:"chunk"`
+	Final   bool   `json:"final,omitempty"`
+}
+
+// UploadSessionRecordingResponse says whether the chunk was kept; Stopped
+// means the control plane takes no more of this recording.
+type UploadSessionRecordingResponse struct {
+	Accepted bool `json:"accepted"`
+	Stopped  bool `json:"stopped,omitempty"`
+}
+
+func uploadSessionRecordingHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(UploadSessionRecordingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	gateway, ok := srv.(AgentGatewayServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve access gateways")
+	}
+	if interceptor == nil {
+		return gateway.UploadSessionRecording(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodUploadSessionRecording}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return gateway.UploadSessionRecording(ctx, req.(*UploadSessionRecordingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1214,6 +1257,15 @@ func (c *AgentClient) SignGatewayServerCertificate(ctx context.Context, req *Sig
 func (c *AgentClient) SignJobSSHKey(ctx context.Context, req *SignJobSSHKeyRequest) (*SignJobSSHKeyResponse, error) {
 	out := new(SignJobSSHKeyResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignJobSSHKey, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UploadSessionRecording sends one chunk of a held session's recording (A255).
+func (c *AgentClient) UploadSessionRecording(ctx context.Context, req *UploadSessionRecordingRequest) (*UploadSessionRecordingResponse, error) {
+	out := new(UploadSessionRecordingResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodUploadSessionRecording, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

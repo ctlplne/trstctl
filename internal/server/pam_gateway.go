@@ -172,7 +172,8 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 // nothing: its gateway certifies a key of its own.
 func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSession) (accessgateway.SessionIntent, error) {
 	intent := accessgateway.SessionIntent{SessionID: rec.ID, TargetType: rec.TargetType, TargetID: rec.TargetID,
-		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest, RequiredAgentID: rec.GatewayAgentID}
+		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest, RequiredAgentID: rec.GatewayAgentID,
+		Record: s.recordings != nil}
 	if rec.TargetType != pamTargetSSH {
 		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
 		return intent, nil

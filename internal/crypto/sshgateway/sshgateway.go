@@ -129,15 +129,29 @@ type Upstream struct {
 	Dial func(ctx context.Context, network, address string) (net.Conn, error)
 }
 
+// Recorder sees one connection's session traffic inside the gateway, before
+// any of it leaves (A255). A call that blocks holds that stream's traffic:
+// a recorder that cannot keep up slows the session, it never loses data.
+type Recorder interface {
+	// Data is bytes on session channel ch: stream "in" from the client,
+	// "out" and "err" from the target.
+	Data(ch int, stream string, p []byte)
+	// Request is a session request relayed on channel ch: from the client
+	// (pty-req, env, shell, exec, subsystem, window-change, signal, ...) or
+	// from the target (exit-status, exit-signal, ...).
+	Request(ch int, from, kind string, payload []byte)
+}
+
 // clientRequests are the session requests a client may make through the
 // gateway; agent and X11 forwarding are refused.
 var clientRequests = []string{"pty-req", "env", "shell", "exec", "subsystem", "window-change", "signal", "break", "keepalive@openssh.com"}
 
 // Serve speaks SSH to one admitted client connection and relays its session
 // channels to the upstream target, signed in with the session's certificate.
-// It returns when the client or the target goes away; the caller closes the
-// client connection to end it early (revocation, deadline).
-func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey, up Upstream) error {
+// rec, when set, sees every relayed byte and request. It returns when the
+// client or the target goes away; the caller closes the client connection to
+// end it early (revocation, deadline).
+func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey, up Upstream, rec Recorder) error {
 	signer := key.certified()
 	if signer == nil {
 		return errors.New("sshgateway: the session key is not certified")
@@ -165,16 +179,18 @@ func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey,
 		_ = sconn.Close()
 	}()
 	var relays sync.WaitGroup
+	next := 0
 	for nc := range channels {
 		if nc.ChannelType() != "session" {
 			_ = nc.Reject(ssh.Prohibited, "the access gateway relays sessions only")
 			continue
 		}
 		relays.Add(1)
-		go func() {
+		next++
+		go func(ch int) {
 			defer relays.Done()
-			relaySession(nc, upstream)
-		}()
+			relaySession(nc, upstream, ch, rec)
+		}(next)
 	}
 	// The client is gone: end the target connection, then the relays.
 	_ = upstream.Close()
@@ -235,8 +251,8 @@ func pinnedHostKey(fingerprints []string) ssh.HostKeyCallback {
 
 // relaySession bridges one client session channel to a new upstream one: the
 // data both ways, the client's allowed requests up and the target's requests
-// (exit-status, exit-signal) down, then the close.
-func relaySession(nc ssh.NewChannel, upstream *ssh.Client) {
+// (exit-status, exit-signal) down, then the close. rec sees all of it.
+func relaySession(nc ssh.NewChannel, upstream *ssh.Client, ch int, rec Recorder) {
 	up, upRequests, err := upstream.OpenChannel("session", nc.ExtraData())
 	if err != nil {
 		var refused *ssh.OpenChannelError
@@ -256,7 +272,7 @@ func relaySession(nc ssh.NewChannel, upstream *ssh.Client) {
 	// not closed between the target's answer and the client receiving it.
 	var replying sync.Mutex
 	go func() {
-		forwardRequests(downRequests, up, &replying, func(kind string) bool { return slices.Contains(clientRequests, kind) })
+		forwardRequests(downRequests, up, &replying, func(kind string) bool { return slices.Contains(clientRequests, kind) }, recordRequest(rec, ch, "client"))
 		// The client closed its channel: close the target's, so a process
 		// that outlives its input does not hold the relay open.
 		_ = up.Close()
@@ -264,21 +280,21 @@ func relaySession(nc ssh.NewChannel, upstream *ssh.Client) {
 	targetRequestsDone := make(chan struct{})
 	go func() {
 		defer close(targetRequestsDone)
-		forwardRequests(upRequests, down, nil, func(string) bool { return true })
+		forwardRequests(upRequests, down, nil, func(string) bool { return true }, recordRequest(rec, ch, "target"))
 	}()
 	go func() {
-		_, _ = io.Copy(up, down)
+		_, _ = io.Copy(up, recorded(down, rec, ch, "in"))
 		_ = up.CloseWrite()
 	}()
 	var output sync.WaitGroup
 	output.Add(2)
 	go func() {
 		defer output.Done()
-		_, _ = io.Copy(down, up)
+		_, _ = io.Copy(down, recorded(up, rec, ch, "out"))
 	}()
 	go func() {
 		defer output.Done()
-		_, _ = io.Copy(down.Stderr(), up.Stderr())
+		_, _ = io.Copy(down.Stderr(), recorded(up.Stderr(), rec, ch, "err"))
 	}()
 	output.Wait()
 	_ = down.CloseWrite()
@@ -290,7 +306,7 @@ func relaySession(nc ssh.NewChannel, upstream *ssh.Client) {
 	_ = up.Close()
 }
 
-func forwardRequests(in <-chan *ssh.Request, out ssh.Channel, replying *sync.Mutex, allowed func(string) bool) {
+func forwardRequests(in <-chan *ssh.Request, out ssh.Channel, replying *sync.Mutex, allowed func(string) bool, seen func(*ssh.Request)) {
 	for req := range in {
 		if !allowed(req.Type) {
 			if req.WantReply {
@@ -298,6 +314,7 @@ func forwardRequests(in <-chan *ssh.Request, out ssh.Channel, replying *sync.Mut
 			}
 			continue
 		}
+		seen(req)
 		if replying != nil {
 			replying.Lock()
 		}
@@ -309,4 +326,35 @@ func forwardRequests(in <-chan *ssh.Request, out ssh.Channel, replying *sync.Mut
 			replying.Unlock()
 		}
 	}
+}
+
+// recordedReader passes reads through to the recorder before returning them,
+// so a blocked recorder holds the stream.
+type recordedReader struct {
+	r      io.Reader
+	rec    Recorder
+	ch     int
+	stream string
+}
+
+func recorded(r io.Reader, rec Recorder, ch int, stream string) io.Reader {
+	if rec == nil {
+		return r
+	}
+	return &recordedReader{r: r, rec: rec, ch: ch, stream: stream}
+}
+
+func (r *recordedReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if n > 0 {
+		r.rec.Data(r.ch, r.stream, p[:n])
+	}
+	return n, err
+}
+
+func recordRequest(rec Recorder, ch int, from string) func(*ssh.Request) {
+	if rec == nil {
+		return func(*ssh.Request) {}
+	}
+	return func(req *ssh.Request) { rec.Request(ch, from, req.Type, req.Payload) }
 }

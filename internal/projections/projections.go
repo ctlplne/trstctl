@@ -336,6 +336,8 @@ const (
 	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
 	EventPAMSessionRevocationFailed               = "pam.session.revocation_failed"
 	EventPAMSessionRevoked                        = "pam.session.revoked"
+	EventPAMRecordingChunkStored                  = "pam.session.recording_chunk_stored"
+	EventPAMRecordingSealed                       = "pam.session.recording_sealed"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4352,6 +4354,33 @@ type PAMTargetRegistered struct {
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
 }
 
+// PAMRecordingChunkStored records one sealed chunk of a gateway session's
+// recording (A255): where it is stored, the SHA-256 of its masked plaintext
+// and of the sealed object, and the chain through it, in storage order.
+type PAMRecordingChunkStored struct {
+	ID             string    `json:"id"`
+	GatewayAgentID string    `json:"gateway_agent_id"`
+	Ord            int       `json:"ord"`
+	Attempt        int       `json:"attempt"`
+	Seq            int       `json:"seq"`
+	ObjectRef      string    `json:"object_ref"`
+	SHA256         string    `json:"sha256"`
+	SealedSHA256   string    `json:"sealed_sha256"`
+	Chain          string    `json:"chain"`
+	Size           int       `json:"size"`
+	Final          bool      `json:"final,omitempty"`
+	StoredAt       time.Time `json:"stored_at"`
+}
+
+// PAMRecordingSealed closes a recording with its signed manifest.
+type PAMRecordingSealed struct {
+	ID                string    `json:"id"`
+	ManifestRef       string    `json:"manifest_ref"`
+	ManifestSHA256    string    `json:"manifest_sha256"`
+	ManifestSignature string    `json:"manifest_signature"`
+	SealedAt          time.Time `json:"sealed_at"`
+}
+
 type PAMTargetDisabled struct {
 	TargetType string `json:"target_type"`
 	ID         string `json:"id"`
@@ -4956,6 +4985,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMSessionStarted:                        {1: true},
 	EventPAMTargetRegistered:                      {1: true},
 	EventPAMTargetDisabled:                        {1: true},
+	EventPAMRecordingChunkStored:                  {1: true},
+	EventPAMRecordingSealed:                       {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8260,6 +8291,30 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
 			HostKeyFingerprints: pl.HostKeyFingerprints,
 		})
+	case EventPAMRecordingChunkStored:
+		var pl PAMRecordingChunkStored
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.GatewayAgentID == "" || pl.Ord < 0 || pl.Attempt < 1 || pl.Seq < 0 || pl.ObjectRef == "" ||
+			len(pl.SHA256) != 64 || len(pl.Chain) != 64 || pl.StoredAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMRecordingChunkStoredTx(ctx, tx, store.PAMRecordingChunk{
+			TenantID: e.TenantID, SessionID: pl.ID, Ord: pl.Ord, Attempt: pl.Attempt, Seq: pl.Seq, ObjectRef: pl.ObjectRef,
+			SHA256: pl.SHA256, SealedSHA256: pl.SealedSHA256, Chain: pl.Chain, Size: pl.Size, StoredAt: pl.StoredAt,
+		}, pl.GatewayAgentID, pl.Final)
+	case EventPAMRecordingSealed:
+		var pl PAMRecordingSealed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.ManifestRef == "" || len(pl.ManifestSHA256) != 64 || pl.ManifestSignature == "" || pl.SealedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		sealedAt := pl.SealedAt
+		return p.store.ApplyPAMRecordingSealedTx(ctx, tx, store.PAMRecording{TenantID: e.TenantID, SessionID: pl.ID,
+			SealedAt: &sealedAt, ManifestRef: pl.ManifestRef, ManifestSHA256: pl.ManifestSHA256, ManifestSignature: pl.ManifestSignature})
 	case EventPAMTargetDisabled:
 		var pl PAMTargetDisabled
 		if err := decode(e, &pl); err != nil {

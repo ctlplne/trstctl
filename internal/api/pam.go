@@ -42,6 +42,36 @@ type PAMService interface {
 	RevokePAMSession(ctx context.Context, tenantID, id, requester, reason, idempotencyKey string) (PAMSession, error)
 }
 
+// PAMRecordingService reads gateway session recordings (A255). The served
+// PAM broker implements it beside PAMService.
+type PAMRecordingService interface {
+	GetPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecording, error)
+	VerifyPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecordingVerification, error)
+}
+
+// PAMRecording is a gateway session's recording index (A255): how much is
+// stored and whether it is sealed. The frames themselves are read separately.
+type PAMRecording struct {
+	SessionID      string     `json:"session_id"`
+	Status         string     `json:"status"`
+	Chunks         int        `json:"chunks"`
+	Bytes          int64      `json:"bytes"`
+	StartedAt      time.Time  `json:"started_at"`
+	LastChunkAt    time.Time  `json:"last_chunk_at"`
+	SealedAt       *time.Time `json:"sealed_at,omitempty"`
+	FinalReceived  bool       `json:"final_received"`
+	ChainHead      string     `json:"chain_head"`
+	ManifestSHA256 string     `json:"manifest_sha256,omitempty"`
+}
+
+// PAMRecordingVerification is the outcome of verifying a sealed recording
+// against its signed manifest.
+type PAMRecordingVerification struct {
+	Verified bool     `json:"verified"`
+	Chunks   int      `json:"chunks"`
+	Problems []string `json:"problems,omitempty"`
+}
+
 // PAMTarget is routing policy, never a credential. PostgreSQL administrator
 // material stays in the tenant-bound dynamic-secret provider's protected ref.
 type PAMTarget struct {
@@ -361,6 +391,39 @@ func (a *API) getPAMSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, session)
+}
+
+// getPAMRecording and verifyPAMRecording read a session's recording index
+// and check its seal (A255).
+func (a *API) getPAMRecording(w http.ResponseWriter, r *http.Request) {
+	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
+		return svc.GetPAMRecording(r.Context(), tenantID, id)
+	})
+}
+
+func (a *API) verifyPAMRecording(w http.ResponseWriter, r *http.Request) {
+	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
+		return svc.VerifyPAMRecording(r.Context(), tenantID, id)
+	})
+}
+
+func (a *API) pamRecordingRead(w http.ResponseWriter, r *http.Request, read func(PAMRecordingService, string, string) (any, error)) {
+	svc, ok := a.pam.(PAMRecordingService)
+	if a.pam == nil || !ok {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "session recordings are not enabled"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	out, err := read(svc, tenantID, strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, out)
 }
 
 //trstctl:mutation

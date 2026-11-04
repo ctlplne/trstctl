@@ -395,9 +395,17 @@ or principal; the gateway relays shell, exec and SFTP sessions and refuses port,
 X11 forwarding. Revoking the session recalls its job first: the gateway's next lease
 extension is refused, it closes the session's connections and wipes the credential, then
 the login's removal (PostgreSQL) or the session's key ID on the served KRL (SSH) follows as
-for any session. The design, its failure modes and its threat model are in
-[the access gateway design](../design/access-gateway.md). Session recording and live
-termination follow (A255).
+for any session.
+
+With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
+key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
+(never file contents) and PostgreSQL statements with bounded results, masked at the
+gateway before anything leaves it, sealed for the tenant and closed with a manifest the
+audit key signs. Read a recording's index with
+`GET /api/v1/access/sessions/{id}/recording` and check it end to end with
+`GET /api/v1/access/sessions/{id}/recording/verify`. The design, its failure modes and its
+threat model are in [the access gateway design](../design/access-gateway.md). Playback,
+live watching and live termination follow (A255 part 2).
 
 ### Break-glass procedures (F34)
 

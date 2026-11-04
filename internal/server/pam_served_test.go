@@ -838,11 +838,11 @@ func startPAMSSHD(t *testing.T, caPub []byte) pamSSHD {
 		t.Fatalf("write trusted CA: %v", err)
 	}
 	dockerfile := `FROM alpine:3.20
-RUN apk add --no-cache openssh-server
+RUN apk add --no-cache openssh-server openssh-sftp-server
 RUN adduser -D -s /bin/sh alice && mkdir -p /etc/ssh/trstctl && ssh-keygen -A
 RUN echo 'alice:disabled-password' | chpasswd
 COPY trusted_user_ca_keys /etc/ssh/trstctl/trusted_user_ca_keys
-RUN printf 'Port 22\nTrustedUserCAKeys /etc/ssh/trstctl/trusted_user_ca_keys\nPasswordAuthentication no\nPubkeyAuthentication yes\nAuthorizedKeysFile none\nPermitRootLogin no\nAllowUsers alice\nLogLevel VERBOSE\n' > /etc/ssh/sshd_config
+RUN printf 'Port 22\nTrustedUserCAKeys /etc/ssh/trstctl/trusted_user_ca_keys\nPasswordAuthentication no\nPubkeyAuthentication yes\nAuthorizedKeysFile none\nPermitRootLogin no\nAllowUsers alice\nLogLevel VERBOSE\nSubsystem sftp /usr/lib/ssh/sftp-server\n' > /etc/ssh/sshd_config
 EXPOSE 22
 CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 `
