@@ -269,7 +269,9 @@ var TenantScopedTables = []string{
 	"rehearsal_runs", "rehearsal_scenarios",
 	// A251: runs, then grants (which reference their bundle), then bundles.
 	"access_bundle_activity", "access_bundle_runs", "access_bundle_grants", "access_bundles",
-	"switching_import_rows", "switching_imports",
+	// A265: wave rows, then waves (which reference their import), then the
+	// import's rows, then imports.
+	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.

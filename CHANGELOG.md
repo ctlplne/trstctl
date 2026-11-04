@@ -2,6 +2,12 @@
 
 ### Added
 
+- Renewal waves for the switching kit (A265 is served): `POST /api/v1/switching/imports/{id}/waves/preview`
+  assigns imported rows to deployment targets and names every row it leaves out and why, plus the fingerprints
+  the other product must stop renewing; `POST .../waves` issues each row's single trstctl identity through the
+  ordinary issuance policy so trstctl renews it from then on; `POST /api/v1/switching/waves/{id}/rollback`
+  (refused while an issuance or renewal is in flight) withdraws queued deploys, pauses the renewals and returns the
+  rows to watch-only. The endpoint watch flags a wave row the other product renewed (`trstctl switching waves`).
 - MCP client configuration discovery on hosts (P7 host detectors are served): `trstctl-agent
   --inventory-mcp-config-roots` reads MCP client configuration files by format and reports each configured MCP
   server — transport, program or host, and which fields hold a static credential, never a value — as `mcp_server`

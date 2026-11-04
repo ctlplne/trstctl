@@ -1180,5 +1180,34 @@ counts them, `rows?watch_status=serves_other` lists them, and the leader starts
 the next round itself a day after the last, with the same grant. Rounds run
 eight handshakes at a time with a five-second timeout.
 
-Status: served (import, mapping report and endpoint watch). Moving renewals
-over in waves follows in the same item.
+**Renewals move over in waves, each with its own rollback.** A wave assigns
+imported rows to the deployment targets their replacements go to (a target
+carries one active identity, as everywhere in trstctl). `POST
+/api/v1/switching/imports/{id}/waves/preview` changes nothing: it lists the rows
+the wave moves, the identity each gets — one per imported row, derived from the
+import and the row, so no row ever has two — and every assigned row it leaves
+out with the reason: not mapped, already in the inventory before the import, no
+owner, already in a live wave, a target already carrying another identity, a
+name trstctl already manages, or names the replacement would drop (trstctl
+issues for the identity's name, so a certificate with more names is left to
+the other product rather than narrowed). It also lists the fingerprints the
+other product must stop renewing. `POST .../waves` with the preview's digest
+binds each identity to its target and issues it through the ordinary
+transition — its approval gate and profile policy included — and the deploy
+and every later renewal follow the identity's lifecycle. Imported certificates
+outside a wave are never renewal candidates; a wave row's endpoint serving a
+certificate neither the export nor trstctl issued is flagged
+`renewed_by_other_product` by the watch, and one serving trstctl's is
+`serves_trstctl`. `POST /api/v1/switching/waves/{id}/rollback` refuses while
+any issuance or renewal of the wave is in flight (nothing changes), then
+withdraws its queued deploys, pauses each identity's renewal on its target and
+returns the rows to watch-only; the receipt lists what trstctl issued. A later
+wave that moves the row again finds the same identity and resumes it.
+
+```bash
+trstctl-cli switching waves preview <import-id> -f wave.json   # {"name": "...", "assignments": [{"row_number": 2, "target_id": "..."}]}
+trstctl-cli switching waves cut-over <import-id> -f wave.json  # the same file with "preview_digest"
+trstctl-cli switching waves rollback <wave-id> -f reason.json  # {"reason": "..."}
+```
+
+Status: served.

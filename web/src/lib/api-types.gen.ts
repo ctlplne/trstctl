@@ -10884,6 +10884,47 @@ export interface SwitchingWatchRequest {
   private_egress_cidrs?: string[];
 }
 
+export interface SwitchingWave {
+  created_at: string;
+  created_by: string;
+  id: string;
+  import_id: string;
+  issuer_id?: string;
+  name: string;
+  preview_digest: string;
+  rollback_reason?: string;
+  rolled_back_at?: string;
+  rolled_back_by?: string;
+  rows: { identity_id: string; identity_status: string; imported_fingerprint_sha256: string; live: boolean; renewal_paused: boolean; row_number: number; target_id: string; trstctl_fingerprints_sha256: string[]; watch_status?: string }[];
+  status: "cut_over" | "rolled_back";
+  withdrawn?: number;
+}
+
+export interface SwitchingWaveList {
+  items: ({ created_at: string; created_by: string; id: string; import_id: string; issuer_id?: string; name: string; preview_digest: string; rollback_reason?: string; rolled_back_at?: string; rolled_back_by?: string; rows: { identity_id: string; identity_status: string; imported_fingerprint_sha256: string; live: boolean; renewal_paused: boolean; row_number: number; target_id: string; trstctl_fingerprints_sha256: string[]; watch_status?: string }[]; status: "cut_over" | "rolled_back"; withdrawn?: number })[];
+}
+
+export interface SwitchingWavePreview {
+  digest: string;
+  excluded: { reason: string; row_number: number }[];
+  import_id: string;
+  issuer_id?: string;
+  name: string;
+  rows: { application?: string; common_name: string; folder?: string; identity_exists: boolean; identity_id: string; imported_fingerprint_sha256: string; issuer_id?: string; owner_id: string; row_number: number; target: { connector: string; id: string; name: string }; watch_status?: string }[];
+  stop_renewing: string[];
+}
+
+export interface SwitchingWaveRequest {
+  assignments: { row_number: number; target_id: string }[];
+  issuer_id?: string;
+  name: string;
+  preview_digest?: string;
+}
+
+export interface SwitchingWaveRollbackRequest {
+  reason: string;
+}
+
 export interface SystemDependency {
   error?: string;
   name: string;

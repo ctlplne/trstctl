@@ -372,8 +372,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A251 adds access bundles, their grants, effective authority and runs (676),
 	// then activity search and its export (678). A252 adds the on-demand
 	// evidence report (679).
-	if len(out) != 685 {
-		t.Fatalf("OpenAPI operationIds = %d, want 685", len(out))
+	if len(out) != 690 {
+		t.Fatalf("OpenAPI operationIds = %d, want 690", len(out))
 	}
 	return out
 }

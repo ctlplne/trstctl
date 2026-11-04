@@ -50278,6 +50278,389 @@
         },
         "type": "object"
       },
+      "SwitchingWave": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "import_id": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview_digest": {
+            "type": "string"
+          },
+          "rollback_reason": {
+            "type": "string"
+          },
+          "rolled_back_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rolled_back_by": {
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "properties": {
+                "identity_id": {
+                  "type": "string"
+                },
+                "identity_status": {
+                  "type": "string"
+                },
+                "imported_fingerprint_sha256": {
+                  "type": "string"
+                },
+                "live": {
+                  "type": "boolean"
+                },
+                "renewal_paused": {
+                  "type": "boolean"
+                },
+                "row_number": {
+                  "type": "integer"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "trstctl_fingerprints_sha256": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "watch_status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row_number",
+                "identity_id",
+                "target_id",
+                "identity_status",
+                "renewal_paused",
+                "imported_fingerprint_sha256",
+                "trstctl_fingerprints_sha256",
+                "live"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "cut_over",
+              "rolled_back"
+            ],
+            "type": "string"
+          },
+          "withdrawn": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "import_id",
+          "name",
+          "status",
+          "preview_digest",
+          "created_by",
+          "created_at",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "SwitchingWaveList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "import_id": {
+                  "type": "string"
+                },
+                "issuer_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "preview_digest": {
+                  "type": "string"
+                },
+                "rollback_reason": {
+                  "type": "string"
+                },
+                "rolled_back_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "rolled_back_by": {
+                  "type": "string"
+                },
+                "rows": {
+                  "items": {
+                    "properties": {
+                      "identity_id": {
+                        "type": "string"
+                      },
+                      "identity_status": {
+                        "type": "string"
+                      },
+                      "imported_fingerprint_sha256": {
+                        "type": "string"
+                      },
+                      "live": {
+                        "type": "boolean"
+                      },
+                      "renewal_paused": {
+                        "type": "boolean"
+                      },
+                      "row_number": {
+                        "type": "integer"
+                      },
+                      "target_id": {
+                        "type": "string"
+                      },
+                      "trstctl_fingerprints_sha256": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "watch_status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "row_number",
+                      "identity_id",
+                      "target_id",
+                      "identity_status",
+                      "renewal_paused",
+                      "imported_fingerprint_sha256",
+                      "trstctl_fingerprints_sha256",
+                      "live"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "enum": [
+                    "cut_over",
+                    "rolled_back"
+                  ],
+                  "type": "string"
+                },
+                "withdrawn": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "import_id",
+                "name",
+                "status",
+                "preview_digest",
+                "created_by",
+                "created_at",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SwitchingWavePreview": {
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "excluded": {
+            "items": {
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "row_number": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "row_number",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "import_id": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "properties": {
+                "application": {
+                  "type": "string"
+                },
+                "common_name": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "identity_exists": {
+                  "type": "boolean"
+                },
+                "identity_id": {
+                  "type": "string"
+                },
+                "imported_fingerprint_sha256": {
+                  "type": "string"
+                },
+                "issuer_id": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "row_number": {
+                  "type": "integer"
+                },
+                "target": {
+                  "properties": {
+                    "connector": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "connector"
+                  ],
+                  "type": "object"
+                },
+                "watch_status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row_number",
+                "common_name",
+                "owner_id",
+                "identity_id",
+                "identity_exists",
+                "target",
+                "imported_fingerprint_sha256"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "stop_renewing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "import_id",
+          "name",
+          "rows",
+          "excluded",
+          "stop_renewing",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "SwitchingWaveRequest": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "properties": {
+                "row_number": {
+                  "type": "integer"
+                },
+                "target_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row_number",
+                "target_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "assignments"
+        ],
+        "type": "object"
+      },
+      "SwitchingWaveRollbackRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "SystemDependency": {
         "properties": {
           "error": {
@@ -94807,6 +95190,343 @@
         ],
         "summary": "Start a watch round of a completed import: read what every imported certificate's endpoints serve, from the control plane under its egress rules (private ranges only through the CIDRs granted here), and flag each row matched, serves_other, unreachable or no_endpoint; the round repeats daily",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/switching/imports/{id}/waves": {
+      "get": {
+        "operationId": "listSwitchingWaves",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingWaveList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List an import's renewal waves, newest first",
+        "x-trstctl-permission": "certs:read"
+      },
+      "post": {
+        "operationId": "cutOverSwitchingWave",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingWaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingWave"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Cut over a previewed renewal wave: each row's identity is bound to its deployment target and issued through the ordinary issuance policy, and trstctl renews it from then on; a changed plan refuses the stale digest",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/switching/imports/{id}/waves/preview": {
+      "post": {
+        "operationId": "previewSwitchingWave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingWaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingWavePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Plan a renewal wave without changing state: the imported rows it moves to trstctl, each with the deployment target it is assigned and the identity it gets, every assigned row it leaves out and why, and the certificates the other product must stop renewing",
+        "x-trstctl-permission": "connectors:write",
+        "x-trstctl-read-only": true
+      }
+    },
+    "/api/v1/switching/waves/{id}": {
+      "get": {
+        "operationId": "getSwitchingWave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingWave"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a renewal wave: each row's identity and its state, the certificates trstctl issued for it and what its endpoint serves",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/switching/waves/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackSwitchingWave",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingWaveRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingWave"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Roll a renewal wave back once no issuance or renewal of it is in flight: withdraw its queued deploys, pause each identity's renewal on its target and return the rows to watch-only, with a receipt of what trstctl issued",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/tenant/key-generation": {

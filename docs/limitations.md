@@ -7781,6 +7781,24 @@ agent that loses that file reports the same servers again as a new run. Finding 
 ranges is P7's network probe, which follows P8's design (section 35); the proof is a served test over the real
 agent channel, and a live host with installed assistants is a replay item.
 
+## Switching kit (A265) — served
+
+Another certificate-management product's export (CSV or JSON, described by format, with a column map) previews
+into a mapping report — every row one outcome with named gaps, folder profile proposals, owners per application
+group, rows already in the inventory — and applies only against the reviewed digest; the leader records the
+certificates (watch-only observations, never renewal candidates) and owners in batches of 500, linking a
+certificate already in the inventory instead of rewriting it. Applying runs at the speed of recording one
+certificate (the same path discovery uses; about 15 rows a second on the shared lab), so a 50,000-row export takes
+about an hour in the background. The endpoint watch reads each row's endpoints from the control plane under its
+egress rules (public addresses unless private ranges are granted by CIDR); a relay or agent vantage for endpoints
+only reachable from inside a network is what comes next. Renewal waves assign each row a deployment target, issue
+through the ordinary policy and renew through the identity lifecycle; a certificate whose export lists names
+beyond its common name is left to the other product, because trstctl's first issuance covers the identity's name.
+A wave's deploys and their verification are the target executor's, as for any identity; the served proof records
+the executor's delivered and verified receipts where a host agent would. Rolling back pauses trstctl's renewals and
+withdraws queued deploys; a certificate trstctl already deployed stays until the other product renews it or the
+target's predecessor rollback restores the previous one.
+
 ## Edition and qualification ledger (A253) — served
 
 `go run ./tools/editionledger` writes `docs/editions-ledger.md` and `docs/editions-ledger.json` from

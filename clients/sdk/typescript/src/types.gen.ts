@@ -9803,6 +9803,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/switching/imports/{id}/waves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an import's renewal waves, newest first */
+        get: operations["listSwitchingWaves"];
+        put?: never;
+        /** Cut over a previewed renewal wave: each row's identity is bound to its deployment target and issued through the ordinary issuance policy, and trstctl renews it from then on; a changed plan refuses the stale digest */
+        post: operations["cutOverSwitchingWave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/imports/{id}/waves/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Plan a renewal wave without changing state: the imported rows it moves to trstctl, each with the deployment target it is assigned and the identity it gets, every assigned row it leaves out and why, and the certificates the other product must stop renewing */
+        post: operations["previewSwitchingWave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/waves/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a renewal wave: each row's identity and its state, the certificates trstctl issued for it and what its endpoint serves */
+        get: operations["getSwitchingWave"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/waves/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Roll a renewal wave back once no issuance or renewal of it is in flight: withdraw its queued deploys, pause each identity's renewal on its target and return the rows to watch-only, with a receipt of what trstctl issued */
+        post: operations["rollbackSwitchingWave"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenant/key-generation": {
         parameters: {
             query?: never;
@@ -23578,6 +23647,104 @@ export interface components {
         SwitchingWatchRequest: {
             allow_private_endpoint?: boolean;
             private_egress_cidrs?: string[];
+        };
+        SwitchingWave: {
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            id: string;
+            import_id: string;
+            issuer_id?: string;
+            name: string;
+            preview_digest: string;
+            rollback_reason?: string;
+            /** Format: date-time */
+            rolled_back_at?: string;
+            rolled_back_by?: string;
+            rows: {
+                identity_id: string;
+                identity_status: string;
+                imported_fingerprint_sha256: string;
+                live: boolean;
+                renewal_paused: boolean;
+                row_number: number;
+                target_id: string;
+                trstctl_fingerprints_sha256: string[];
+                watch_status?: string;
+            }[];
+            /** @enum {string} */
+            status: "cut_over" | "rolled_back";
+            withdrawn?: number;
+        };
+        SwitchingWaveList: {
+            items: {
+                /** Format: date-time */
+                created_at: string;
+                created_by: string;
+                id: string;
+                import_id: string;
+                issuer_id?: string;
+                name: string;
+                preview_digest: string;
+                rollback_reason?: string;
+                /** Format: date-time */
+                rolled_back_at?: string;
+                rolled_back_by?: string;
+                rows: {
+                    identity_id: string;
+                    identity_status: string;
+                    imported_fingerprint_sha256: string;
+                    live: boolean;
+                    renewal_paused: boolean;
+                    row_number: number;
+                    target_id: string;
+                    trstctl_fingerprints_sha256: string[];
+                    watch_status?: string;
+                }[];
+                /** @enum {string} */
+                status: "cut_over" | "rolled_back";
+                withdrawn?: number;
+            }[];
+        };
+        SwitchingWavePreview: {
+            digest: string;
+            excluded: {
+                reason: string;
+                row_number: number;
+            }[];
+            import_id: string;
+            issuer_id?: string;
+            name: string;
+            rows: {
+                application?: string;
+                common_name: string;
+                folder?: string;
+                identity_exists: boolean;
+                identity_id: string;
+                imported_fingerprint_sha256: string;
+                issuer_id?: string;
+                owner_id: string;
+                row_number: number;
+                target: {
+                    connector: string;
+                    id: string;
+                    name: string;
+                };
+                watch_status?: string;
+            }[];
+            stop_renewing: string[];
+        };
+        SwitchingWaveRequest: {
+            assignments: {
+                row_number: number;
+                target_id: string;
+            }[];
+            issuer_id?: string;
+            name: string;
+            preview_digest?: string;
+        };
+        SwitchingWaveRollbackRequest: {
+            reason: string;
         };
         SystemDependency: {
             error?: string;
@@ -52812,6 +52979,224 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwitchingImport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSwitchingWaves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingWaveList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cutOverSwitchingWave: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchingWaveRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingWave"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSwitchingWave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchingWaveRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingWavePreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSwitchingWave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingWave"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rollbackSwitchingWave: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchingWaveRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingWave"];
                 };
             };
             /** @description client error */

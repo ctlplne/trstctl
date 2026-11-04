@@ -15062,6 +15062,67 @@ SwitchingWatchRequest = TypedDict(
     total=False,
 )
 
+SwitchingWave = TypedDict(
+    'SwitchingWave',
+    {
+        'created_at': str,
+        'created_by': str,
+        'id': str,
+        'import_id': str,
+        'issuer_id': str,
+        'name': str,
+        'preview_digest': str,
+        'rollback_reason': str,
+        'rolled_back_at': str,
+        'rolled_back_by': str,
+        'rows': list[dict[str, Any]],
+        'status': str,
+        'withdrawn': int,
+    },
+    total=False,
+)
+
+SwitchingWaveList = TypedDict(
+    'SwitchingWaveList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SwitchingWavePreview = TypedDict(
+    'SwitchingWavePreview',
+    {
+        'digest': str,
+        'excluded': list[dict[str, Any]],
+        'import_id': str,
+        'issuer_id': str,
+        'name': str,
+        'rows': list[dict[str, Any]],
+        'stop_renewing': list[str],
+    },
+    total=False,
+)
+
+SwitchingWaveRequest = TypedDict(
+    'SwitchingWaveRequest',
+    {
+        'assignments': list[dict[str, Any]],
+        'issuer_id': str,
+        'name': str,
+        'preview_digest': str,
+    },
+    total=False,
+)
+
+SwitchingWaveRollbackRequest = TypedDict(
+    'SwitchingWaveRollbackRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 SystemDependency = TypedDict(
     'SystemDependency',
     {

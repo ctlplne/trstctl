@@ -25,7 +25,10 @@ import (
 // certificate's endpoints serve — from the control plane, under its egress
 // rules, private ranges only through the CIDRs the operator granted — and
 // records matched, serves_other, unreachable or no_endpoint for every row. A
-// watched import is checked again every day.
+// row in a live renewal wave is matched while its endpoint still serves the
+// imported certificate, serves_trstctl once it serves one trstctl issued for
+// the row's identity, and renewed_by_other_product when it serves neither:
+// both products renewed it. A watched import is checked again every day.
 
 const (
 	defaultSwitchingImportInterval = 2 * time.Second
@@ -124,53 +127,90 @@ func (s *Server) watchSwitchingImport(ctx context.Context, tenantID string, imp 
 		}
 		control = netsec.SafeDialControlWithOptions(opts)
 	}
+	live, err := s.store.LiveSwitchingWaveRows(ctx, tenantID, imp.ID)
+	if err != nil {
+		return 0, err
+	}
+	identities := make([]string, 0, len(live))
+	for _, w := range live {
+		identities = append(identities, w.IdentityID)
+	}
+	issued, err := s.store.TrstctlFingerprintsForIdentities(ctx, tenantID, identities)
+	if err != nil {
+		return 0, err
+	}
 	results := make([]store.SwitchingWatchResult, len(rows))
 	sem := make(chan struct{}, switchingWatchConcurrency)
 	var wg sync.WaitGroup
 	for i, row := range rows {
+		var trstctl map[string]bool
+		if w, inWave := live[row.Row]; inWave {
+			trstctl = map[string]bool{}
+			for _, fp := range issued[w.IdentityID] {
+				trstctl[fp] = true
+			}
+		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(i int, row store.SwitchingImportRow) {
+		go func(i int, row store.SwitchingImportRow, trstctl map[string]bool) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[i] = observeSwitchingRow(ctx, row, control)
-		}(i, row)
+			results[i] = observeSwitchingRow(ctx, row, trstctl, control)
+		}(i, row, trstctl)
 	}
 	wg.Wait()
 	return len(rows), s.orch.RecordSwitchingWatch(ctx, tenantID, imp.ID, imp.WatchRound, results)
 }
 
 // observeSwitchingRow reads what each of a row's endpoints serves. One
-// endpoint serving another certificate makes the row serves_other; failing
-// that, one unreachable endpoint makes it unreachable.
-func observeSwitchingRow(ctx context.Context, row store.SwitchingImportRow,
+// endpoint serving another certificate makes the row serves_other (for a row
+// in a live wave: renewed_by_other_product, unless trstctl issued it, which is
+// serves_trstctl); failing that, one unreachable endpoint makes it
+// unreachable. trstctl is nil for a row in no live wave.
+func observeSwitchingRow(ctx context.Context, row store.SwitchingImportRow, trstctl map[string]bool,
 	control func(network, address string, c syscall.RawConn) error) store.SwitchingWatchResult {
 	out := store.SwitchingWatchResult{Row: row.Row}
 	if len(row.Endpoints) == 0 {
 		out.Status, out.Detail = store.SwitchingWatchNoEndpoint, "the export names no endpoint for this certificate"
 		return out
 	}
-	var other, unreachable []string
-	var otherFingerprint, unreachableReason string
+	var other, unreachable, ours []string
+	var otherFingerprint, oursFingerprint, unreachableReason string
 	for _, endpoint := range row.Endpoints {
 		res, err := tlsprobe.Probe(ctx, endpoint, tlsprobe.WithDialControl(control), tlsprobe.WithTimeout(switchingWatchTimeout))
-		switch {
-		case err != nil:
+		if err != nil {
 			unreachable = append(unreachable, endpoint)
 			if unreachableReason == "" {
 				unreachableReason = err.Error()
 			}
-		case crypto.SHA256Hex(res.PeerCertificates[0]) != row.Fingerprint:
+			continue
+		}
+		served := crypto.SHA256Hex(res.PeerCertificates[0])
+		switch {
+		case served == row.Fingerprint:
+		case trstctl[served]:
+			ours = append(ours, endpoint)
+			if oursFingerprint == "" {
+				oursFingerprint = served
+			}
+		default:
 			other = append(other, endpoint)
 			if otherFingerprint == "" {
-				otherFingerprint = crypto.SHA256Hex(res.PeerCertificates[0])
+				otherFingerprint = served
 			}
 		}
 	}
 	switch {
+	case len(other) > 0 && trstctl != nil:
+		out.Status, out.Endpoint, out.ServedFingerprint = store.SwitchingWatchRenewedByOtherProduct, other[0], otherFingerprint
+		out.Detail = fmt.Sprintf("%d of %d endpoints serve a certificate neither the export nor trstctl issued: the other product "+
+			"renewed a certificate trstctl now renews", len(other), len(row.Endpoints))
 	case len(other) > 0:
 		out.Status, out.Endpoint, out.ServedFingerprint = store.SwitchingWatchServesOther, other[0], otherFingerprint
 		out.Detail = fmt.Sprintf("%d of %d endpoints serve another certificate", len(other), len(row.Endpoints))
+	case len(ours) > 0 && len(unreachable) == 0:
+		out.Status, out.Endpoint, out.ServedFingerprint = store.SwitchingWatchServesTrstctl, ours[0], oursFingerprint
+		out.Detail = fmt.Sprintf("%d of %d endpoints serve the certificate trstctl issued", len(ours), len(row.Endpoints))
 	case len(unreachable) > 0:
 		out.Status, out.Endpoint = store.SwitchingWatchUnreachable, unreachable[0]
 		out.Detail = fmt.Sprintf("%d of %d endpoints unreachable: %s", len(unreachable), len(row.Endpoints), unreachableReason)
