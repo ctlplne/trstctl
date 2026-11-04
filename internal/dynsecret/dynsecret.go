@@ -161,6 +161,9 @@ type Lease struct {
 	RevocationStatus      string
 	RevokedAt             *time.Time
 	RevocationCompletedAt *time.Time
+	// RevocationMethod is how the credential ended, for a provider that says
+	// (RevocationMethodDenyPolicy or RevocationMethodNativeExpiry, N3).
+	RevocationMethod string
 }
 
 // RevokeItem is a queued backend revocation.

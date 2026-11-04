@@ -86,7 +86,10 @@ type DynamicSecretLease struct {
 	HardExpiresAt         time.Time
 	RevokedAt             *time.Time
 	RevocationCompletedAt *time.Time
-	UpdatedAt             time.Time
+	// RevocationMethod is how a completed revocation ended an AWS STS
+	// session: deny_policy or native_expiry; empty for other providers (N3).
+	RevocationMethod string
+	UpdatedAt        time.Time
 }
 
 // ApplyDynamicSecretLeasePendingTx projects a dynsecret.lease.pending event before
@@ -548,12 +551,18 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedTx(ctx context.Context
 		return err
 	}
 	return s.ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(
-		ctx, tx, tenantID, tenantEpoch, leaseID, completedAt)
+		ctx, tx, tenantID, tenantEpoch, leaseID, completedAt, "")
 }
 
-func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, leaseID string, completedAt time.Time) error {
+// ApplyDynamicSecretLeaseRevocationCompletedForEpochTx records a completed
+// revocation and, for a provider that names it, how the credential ended
+// (method: "", "deny_policy" or "native_expiry", N3).
+func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, leaseID string, completedAt time.Time, method string) error {
 	if tenantID == "" || leaseID == "" || completedAt.IsZero() {
 		return errors.New("store: dynamic-secret revocation completion is incomplete")
+	}
+	if method != "" && method != "deny_policy" && method != "native_expiry" {
+		return fmt.Errorf("store: dynamic-secret revocation method %q is not deny_policy or native_expiry", method)
 	}
 	if err := s.ValidateDynamicSecretTenantEpochTx(ctx, tx, tenantID, tenantEpoch); err != nil {
 		return err
@@ -584,9 +593,10 @@ func (s *Store) ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(ctx context
 		    SET revocation_status = 'completed', last_error = '',
 		        revocation_sealed_credential = ''::bytea,
 		        revocation_completed_at = COALESCE(revocation_completed_at, $3),
+		        revocation_method = $5,
 		        updated_at = GREATEST(updated_at, $3)
 		  WHERE tenant_id = $1 AND tenant_epoch = $4 AND id = $2 AND state = 'revoked'`,
-		tenantID, leaseID, completedAt, tenantEpoch)
+		tenantID, leaseID, completedAt, tenantEpoch, method)
 	if err != nil {
 		return err
 	}
@@ -660,7 +670,7 @@ const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_ep
        sealed_credential, revocation_sealed_credential, sealed_preparation, preparation_digest, prepared_at,
        credential_digest, state, issue_outbox_id, revocation_status,
        revoke_outbox_id, last_error, issued_at, expires_at, hard_expires_at,
-       revoked_at, revocation_completed_at, updated_at
+       revoked_at, revocation_completed_at, revocation_method, updated_at
   FROM dynamic_secret_leases
  WHERE tenant_id = $1`
 
@@ -692,7 +702,7 @@ func scanDynamicSecretLeaseAuthority(row rowScanner, lease *DynamicSecretLease) 
 		&lease.State, &lease.IssueOutboxID, &lease.RevocationStatus,
 		&lease.RevokeOutboxID, &lease.LastError,
 		&lease.IssuedAt, &lease.ExpiresAt, &lease.HardExpiresAt,
-		&lease.RevokedAt, &lease.RevocationCompletedAt, &lease.UpdatedAt,
+		&lease.RevokedAt, &lease.RevocationCompletedAt, &lease.RevocationMethod, &lease.UpdatedAt,
 	)
 }
 

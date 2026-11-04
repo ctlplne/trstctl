@@ -422,6 +422,10 @@ type DynamicSecretLeaseRevocationCompleted struct {
 	TenantEpoch string `json:"tenant_epoch,omitempty"`
 	ID          string `json:"id"`
 	AttemptID   string `json:"attempt_id,omitempty"`
+	// Method is how the credential ended, for a provider that says: an AWS
+	// STS session denied through its role ("deny_policy") or lapsed at its
+	// expiry ("native_expiry") (N3).
+	Method string `json:"method,omitempty"`
 }
 
 // DynamicSecretOperationRequested claims one raw Idempotency-Key for an exact
@@ -790,7 +794,7 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 			return true, err
 		}
 		return true, p.store.ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(
-			ctx, tx, e.TenantID, tenantEpoch, payload.ID, e.Time)
+			ctx, tx, e.TenantID, tenantEpoch, payload.ID, e.Time, payload.Method)
 	case EventDynamicSecretLeaseRevocationFailed:
 		var payload DynamicSecretLeaseFailure
 		if err := decode(e, &payload); err != nil {

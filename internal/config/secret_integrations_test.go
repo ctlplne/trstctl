@@ -21,7 +21,7 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 			{TenantID: tenant, ID: "mysql", Type: "mysql", AdminDSNRef: ref, Database: "app", Addr: "mysql.internal:3306", AccountHost: "10.4.0.12", AllowedRoles: role},
 			{TenantID: tenant, ID: "mongo", Type: "mongodb", AdminDSNRef: ref, Database: "app", AllowedRoles: role},
 			{TenantID: tenant, ID: "aws", Type: "aws-iam", Endpoint: "https://sts.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:role/trstctl-reader"}, MaxTTL: "1h"},
-			{TenantID: tenant, ID: "sts", Type: "aws-sts", Endpoint: "https://sts.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:role/trstctl-reader"}, MaxTTL: "1h"},
+			{TenantID: tenant, ID: "sts", Type: "aws-sts", Endpoint: "https://sts.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:role/trstctl-reader"}, MaxTTL: "1h", RevokeWithDenyPolicy: true},
 			{TenantID: tenant, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},
 			{TenantID: tenant, ID: "azure", Type: "azure-entra", Endpoint: "https://graph.example.test", ApplicationObject: "object", ApplicationClient: "client", AzureTenant: "tenant", BearerTokenRef: ref, AllowedRoles: role},
 			{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "default", KubernetesAudience: "https://kubernetes.example.test", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/secret-reader"}},
@@ -1450,5 +1450,20 @@ func TestValidateSecretIntegrationsRequiresHTTPSExceptExplicitLoopback(t *testin
 				t.Fatalf("ValidateSecretIntegrations() = %v, want ok=%v", err, tt.ok)
 			}
 		})
+	}
+}
+
+// N3: revoke_with_deny_policy belongs to the AWS STS issuer (aws-sts, and its
+// legacy aws-iam name) only.
+func TestValidateRevokeWithDenyPolicyIsAWSSTSOnlyN3(t *testing.T) {
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	for _, c := range []DynamicSecretProviderConfig{
+		{TenantID: tenant, ID: "pg", Type: "postgresql", AdminDSNRef: "file:/var/lib/trstctl/dsn", AllowedRoles: []string{"reader"}, RevokeWithDenyPolicy: true},
+		{TenantID: tenant, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project", ServiceAccount: "issuer@example.test", BearerTokenRef: "file:/var/lib/trstctl/token", AllowedRoles: []string{"reader"}, RevokeWithDenyPolicy: true}, // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+	} {
+		err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+		if err == nil || !strings.Contains(err.Error(), "revoke_with_deny_policy is only valid for aws-sts") {
+			t.Fatalf("%s with revoke_with_deny_policy = %v", c.Type, err)
+		}
 	}
 }

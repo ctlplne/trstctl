@@ -2183,6 +2183,14 @@ partition's IAM, `https://iam.amazonaws.com`, signed for `us-east-1`), so its
 credentials need `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies` on those
 roles; without them a lease's policies read `unknown`.
 
+An `aws-sts` (or `aws-iam`) provider with `revoke_with_deny_policy: true` ends a
+revoked lease's session before its expiry (N3): it writes an inline policy on the
+session's role, through the same `iam_endpoint`, that denies that one session
+(`aws:userid`), reads it back, and deletes the role's denials of expired sessions. Its
+credentials then also need `iam:PutRolePolicy`, `iam:GetRolePolicy` and
+`iam:DeleteRolePolicy` on the bound roles. The setting is refused on any other
+provider type; without it a revoked session stays valid until it expires.
+
 #### Signed webhook, Parameter Store and Netlify targets
 
 A `webhook` target POSTs JSON to `endpoint` and signs every delivery with the HMAC

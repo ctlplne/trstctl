@@ -643,7 +643,8 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
   expiry, as an AWS STS session or a TOTP code does. Each configured provider also
   states its own `revocation` (an OAuth provider is confirmed only with a revocation
-  endpoint). The response also returns
+  endpoint; an AWS STS provider with `revoke_with_deny_policy` is `deny_policy`). The
+  response also returns
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,
   credential references, or provider credential values. Configuration remains a
@@ -667,7 +668,8 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   renewal ceiling, not proof of native credential expiry. `revocation_status` is
   `none`, `pending`, `completed`, or `failed`; only `completed` with
   `revocation_completed_at` confirms the provider removal operation, or for AWS
-  STS, that its native session expiration has passed. `revoked_at`
+  STS, that its session is denied through its role or its native session expiration
+  has passed — `revocation_method` (`deny_policy` or `native_expiry`) says which. `revoked_at`
   records when the control plane queued the request. Older immutable operation
   receipts may omit these additional fields; GET returns current durable evidence.
   If provider creation finishes after `expires_at`, `issued_at` records the real
@@ -683,10 +685,26 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   `secret://` reference. A short-lived caller also needs `session_token_ref`. The
   issued credential contains an access key ID, secret access key, session token, and
   expiration; `native_expires_at` on metadata is the AWS session expiry. STS has no
-  per-session delete call: early revoke closes the trstctl lease and leaves
+  per-session delete call: by default early revoke closes the trstctl lease and leaves
   `revocation_status=pending` until native expiry. AWS can still accept the old
   session during that window. Set the shortest workable TTL and replace dependent
-  workload credentials promptly. A saved AssumeRole result can be recovered with
+  workload credentials promptly. With `revoke_with_deny_policy: true` on the provider,
+  revoking a lease ends its session early instead (N3): trstctl writes an inline
+  policy on the session's role named `trstctl-revoked-<expiry>-<digest>`, holding one
+  statement that denies every action on every resource when `aws:userid` equals that
+  session's assumed-role ID, so no other session of the role is touched. It reads the
+  policy back before the revocation reaches `completed` with `revocation_method`
+  `deny_policy`; AWS enforces the denial once IAM has propagated the policy, usually
+  within seconds. Each revoked
+  session has its own policy, so two revocations never rewrite one document, and
+  every revocation first deletes the role's denials of sessions more than five
+  minutes past expiry. The provider's credentials then also need
+  `iam:PutRolePolicy`, `iam:GetRolePolicy`, `iam:ListRolePolicies` and
+  `iam:DeleteRolePolicy` on the bound roles; a refused write or a readback without
+  the statement is a retried, then failed, revocation, never a completed one. A
+  role's inline policies share a 10,240-character quota, which bounds how many of its
+  sessions can be denied at once. Sessions the revoked session started by assuming
+  another role are not covered. A saved AssumeRole result can be recovered with
   the original idempotency key. If AWS may have accepted the request but its response
   was lost, trstctl fences that operation as indeterminate and does not submit it
   again; reconcile it with CloudTrail before starting a new lease.

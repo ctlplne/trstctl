@@ -157,6 +157,7 @@ type privacyDynamicSecretLeaseRevocationCompletedV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`
 	AttemptID   string `json:"attempt_id,omitempty"`
+	Method      string `json:"method,omitempty"`
 }
 
 type privacyDynamicSecretOperationRequestedV2 struct {

@@ -2,6 +2,12 @@
 
 ### Added
 
+- Secrets: an AWS STS provider with `revoke_with_deny_policy` ends a revoked lease's
+  session before it expires through an inline policy on its role that denies that one
+  session (`aws:userid`), read back before the revocation completes; denials of expired
+  sessions are pruned, the provider catalog reports `deny_policy`, and leases show
+  `revocation_method` (`deny_policy` or `native_expiry`). Proven against LocalStack;
+  AWS's enforcement of the denial is a live proof (N3).
 - Renewal waves for the switching kit (A265 is served): `POST /api/v1/switching/imports/{id}/waves/preview`
   assigns imported rows to deployment targets and names every row it leaves out and why, plus the fingerprints
   the other product must stop renewing; `POST .../waves` issues each row's single trstctl identity through the

@@ -7087,7 +7087,7 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "type": str(), "label": str(),
 		"allowed_roles": {Type: "array", Items: str()}, "maximum_ttl_seconds": {Type: "integer"},
 		"ready": {Type: "boolean"}, "configuration_revision": str(),
-		"revocation": {Type: "string", Enum: []string{"confirmed", "ttl_only"}, Description: "Whether revoking a lease ends its credential before its native expiry (confirmed) or it lapses only then (ttl_only), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint."},
+		"revocation": {Type: "string", Enum: []string{"confirmed", "ttl_only", "deny_policy"}, Description: "Whether revoking a lease ends its credential before its native expiry (confirmed), it lapses only then (ttl_only), or a policy the provider enforces denies it before then (deny_policy: an AWS STS provider with revoke_with_deny_policy), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint."},
 	}, "id", "type", "label", "allowed_roles", "maximum_ttl_seconds", "ready", "configuration_revision")
 	dynamicSecretProviderCatalog := object(map[string]*Schema{
 		"capability":                            {Type: "string", Enum: []string{"F65"}},
@@ -7704,7 +7704,8 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "provider": str(), "role": str(), "state": str(),
 		"credential": {Type: "string", Description: "Reveal-once provider credential on issue. A Kubernetes renewal returns a replacement bound token with a new lease ID after predecessor revocation completes. Metadata reads omit this field."}, "issued_at": timestamp(), "expires_at": timestamp(),
 		"hard_expires_at":   {Type: "string", Format: "date-time", Description: "Original lease renewal ceiling. Not proof of native credential expiry."},
-		"native_expires_at": {Type: "string", Format: "date-time", Description: "AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless AWS denies the exact session sooner."},
+		"native_expires_at": {Type: "string", Format: "date-time", Description: "AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner."},
+		"revocation_method": {Type: "string", Enum: []string{"deny_policy", "native_expiry"}, Description: "For an AWS STS lease whose revocation completed, how its session ended: deny_policy when an inline policy on the role, read back before completion, denies that one session (aws:userid) before its expiry — AWS enforces the denial; native_expiry when it lapsed at its expiry. Absent for other providers, which remove the credential themselves."},
 		"revocation_status": {Type: "string", Enum: []string{"none", "pending", "completed", "failed"}, Description: "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt."},
 		"revoked_at":        timestamp(), "revocation_completed_at": timestamp(),
 	}, "id", "provider", "role", "state", "issued_at", "expires_at")

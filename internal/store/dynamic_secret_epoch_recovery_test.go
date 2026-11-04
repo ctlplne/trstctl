@@ -118,7 +118,7 @@ func TestDynamicSecretTenantEpochRotatesAcrossOffboardAndReregistrationAUD108(t 
 			name: "revocation completed",
 			apply: func(tx pgx.Tx) error {
 				return s.ApplyDynamicSecretLeaseRevocationCompletedForEpochTx(
-					ctx, tx, tenantA, first, lease.ID, now.Add(time.Second))
+					ctx, tx, tenantA, first, lease.ID, now.Add(time.Second), "")
 			},
 		},
 		{

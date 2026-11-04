@@ -1138,6 +1138,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	373: true, // TestMigration0373KeepsRotationsUnacknowledged
 	372: true, // TestMigration0372KeepsRotationsAndStartsWithNoRetirementGate
 	371: true, // TestMigration0371KeepsLeasesAndStartsWithNoRevocationCredential

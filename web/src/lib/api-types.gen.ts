@@ -4468,6 +4468,7 @@ export interface DynamicLease {
   native_expires_at?: string;
   provider: string;
   revocation_completed_at?: string;
+  revocation_method?: "deny_policy" | "native_expiry";
   revocation_status?: "none" | "pending" | "completed" | "failed";
   revoked_at?: string;
   role: string;
@@ -4518,7 +4519,7 @@ export interface DynamicSecretConfiguredProvider {
   label: string;
   maximum_ttl_seconds: number;
   ready: boolean;
-  revocation?: "confirmed" | "ttl_only";
+  revocation?: "confirmed" | "ttl_only" | "deny_policy";
   type: string;
 }
 

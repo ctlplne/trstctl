@@ -5253,7 +5253,8 @@ when off, requiring a KEK when on):
   API server can still accept a token it authenticated recently for its
   authentication cache TTL (10 seconds by default) after its ServiceAccount is
   gone. AWS cannot end one STS session early, so revoking an STS lease closes
-  the lease and reports the session valid until its native expiry. Vault's
+  the lease and reports the session valid until its native expiry, unless the
+  provider has `revoke_with_deny_policy` (N3, below). Vault's
   engine configuration paths
   (`database/config`, `database/roles`, `aws/roles`, `kubernetes/roles`), static
   database credentials, `revoke-prefix` and lease listing are not served:
@@ -5409,7 +5410,8 @@ when off, requiring a KEK when on):
   issue expiring AssumeRole sessions; they no longer create permanent IAM users or
   keys. STS cannot delete one session early. A trstctl revoke closes its lease,
   but AWS may accept the session until `native_expires_at`; the status remains
-  pending until then. A lost AssumeRole reply leaves an indeterminate, fenced
+  pending until then, unless the provider has `revoke_with_deny_policy`, which
+  denies the session through its role (N3, below). A lost AssumeRole reply leaves an indeterminate, fenced
   operation rather than risking a second session. Existing `aws-iam` startup
   attachments must migrate their policy ARN role bindings to full assumable IAM
   role ARNs and set an explicit 15-minute to 12-hour `max_ttl`.
@@ -8398,3 +8400,36 @@ Version 1 license files predate environment binding. They remain loadable for
 upgrade continuity but are production-only and cannot claim the bundled
 non-production entitlement. Issue a v2 file before moving a legacy deployment
 into a staging or test slot.
+
+## Early AWS STS session revocation (N3) — served
+
+Status: served. An `aws-sts` provider (or its `aws-iam` alias) with
+`revoke_with_deny_policy: true` ends a revoked lease's session before it expires:
+the revocation writes an inline policy on the session's role that denies every
+action on every resource to that one session (`aws:userid` equal to its
+assumed-role ID), reads it back, and only then completes with
+`revocation_method: deny_policy`. Each session has its own policy
+(`trstctl-revoked-<expiry>-<digest>`), so concurrent revocations of one role never
+rewrite a shared document, and each revocation first deletes the role's denials of
+sessions more than five minutes past expiry. The provider catalog reports such a
+provider's `revocation` as `deny_policy`; without the setting, revocation stays
+pending until the session's native expiry and completes as `native_expiry`.
+Proven locally against LocalStack's IAM and STS
+(`TestServedSTSRevocationDeniesTheSessionThroughItsRoleN3`): two revoked sessions
+of one role each read back with their own denial, a planted expired denial is
+pruned by the next revocation, the role's own policy is kept, and an opted-out
+provider leaves its revocation pending and the role untouched; unit tests refuse a
+readback naming another session, a narrower condition, an allow or a narrower
+action.
+
+What comes next:
+- LocalStack stores IAM policies but does not enforce them, so AWS refusing the
+  denied session's next request is a live proof with an AWS account (Track B).
+- The denial uses the provider's own credentials; a separate IAM credential for
+  writing denials, kept apart from the one that calls `AssumeRole`, is a lead.
+- A role's inline policies share a 10,240-character quota (about forty denials
+  beside small existing policies); a revocation that hits it fails and is retried,
+  and the session still lapses at its expiry. A managed-policy or
+  `aws:TokenIssueTime` fallback is a lead.
+- Sessions the revoked session started by assuming another role (role chaining)
+  carry the other role's `aws:userid` and are not denied.

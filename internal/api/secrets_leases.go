@@ -42,6 +42,8 @@ type dynamicLeaseResponse struct {
 	RevocationStatus      string          `json:"revocation_status,omitempty"`
 	RevokedAt             *time.Time      `json:"revoked_at,omitempty"`
 	RevocationCompletedAt *time.Time      `json:"revocation_completed_at,omitempty"`
+	// RevocationMethod is how an AWS STS lease's session ended (N3).
+	RevocationMethod string `json:"revocation_method,omitempty"`
 }
 
 // ---- dynamic secret leases (dynsecret, F65) --------------------------------
@@ -425,7 +427,7 @@ func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseRe
 		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
 		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
 		HardExpiresAt: hardExpiresAt, NativeExpiresAt: nativeExpiresAt, RevocationStatus: l.RevocationStatus,
-		RevokedAt: l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt,
+		RevokedAt: l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt, RevocationMethod: l.RevocationMethod,
 	}
 }
 

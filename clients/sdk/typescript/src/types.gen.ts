@@ -15962,12 +15962,17 @@ export interface components {
             issued_at: string;
             /**
              * Format: date-time
-             * @description AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless AWS denies the exact session sooner.
+             * @description AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner.
              */
             native_expires_at?: string;
             provider: string;
             /** Format: date-time */
             revocation_completed_at?: string;
+            /**
+             * @description For an AWS STS lease whose revocation completed, how its session ended: deny_policy when an inline policy on the role, read back before completion, denies that one session (aws:userid) before its expiry — AWS enforces the denial; native_expiry when it lapsed at its expiry. Absent for other providers, which remove the credential themselves.
+             * @enum {string}
+             */
+            revocation_method?: "deny_policy" | "native_expiry";
             /**
              * @description Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt.
              * @enum {string}
@@ -16022,10 +16027,10 @@ export interface components {
             maximum_ttl_seconds: number;
             ready: boolean;
             /**
-             * @description Whether revoking a lease ends its credential before its native expiry (confirmed) or it lapses only then (ttl_only), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint.
+             * @description Whether revoking a lease ends its credential before its native expiry (confirmed), it lapses only then (ttl_only), or a policy the provider enforces denies it before then (deny_policy: an AWS STS provider with revoke_with_deny_policy), for this provider as configured; an OAuth provider is confirmed only with a revocation endpoint.
              * @enum {string}
              */
-            revocation?: "confirmed" | "ttl_only";
+            revocation?: "confirmed" | "ttl_only" | "deny_policy";
             type: string;
         };
         DynamicSecretProviderCatalog: {

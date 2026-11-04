@@ -176,7 +176,7 @@ func (s *Store) ApplyDynamicSecretRevocationRetryIntentForEpochTx(
 	result, err := tx.Exec(ctx,
 		`UPDATE dynamic_secret_leases
 		    SET revocation_status = 'pending', revoke_outbox_id = $4,
-		        last_error = '', revocation_completed_at = NULL, updated_at = now()
+		        last_error = '', revocation_completed_at = NULL, revocation_method = '', updated_at = now()
 		  WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3
 		    AND state = 'revoked' AND revocation_status = 'failed' AND revoke_outbox_id = $5`,
 		tenantID, tenantEpoch, leaseID, outboxID, previousOutboxID)

@@ -830,7 +830,8 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	}
 	for _, provider := range d.dynamicProvidersForTenant(m.TenantID) {
 		if provider.Name() == item.Provider {
-			if err := d.revokeDynamicSecretAtProvider(ctx, m.TenantID, provider, record, item.BackendRef); err != nil {
+			method, err := d.revokeDynamicSecretAtProvider(ctx, m.TenantID, provider, record, item.BackendRef)
+			if err != nil {
 				if errors.Is(err, dynsecret.ErrNativeExpiryPending) {
 					// The provider did no remote I/O. Keep revocation visibly
 					// pending until the credential's own expiry, without using
@@ -842,10 +843,9 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 				}
 				return fmt.Errorf("server: revoke dynamic-secret lease %s with provider %s: %w", item.LeaseID, item.Provider, err)
 			}
-			err := d.appendAndProjectID(ctx, completedEventID, m.TenantID, projections.EventDynamicSecretLeaseRevocationCompleted, projections.DynamicSecretLeaseRevocationCompleted{
-				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
+			return d.appendAndProjectID(ctx, completedEventID, m.TenantID, projections.EventDynamicSecretLeaseRevocationCompleted, projections.DynamicSecretLeaseRevocationCompleted{
+				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID, Method: method,
 			})
-			return err
 		}
 	}
 	return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", item.Provider)
@@ -853,21 +853,25 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 
 // revokeDynamicSecretAtProvider presents the lease's retained credential to a
 // provider that revokes that way (an OAuth access token, RFC 7009, A239) and
-// otherwise revokes by the provider reference alone.
-func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecretAtProvider(ctx context.Context, tenantID string, provider dynsecret.Provider, record store.DynamicSecretLease, backendRef string) error {
+// otherwise revokes by the provider reference alone. method is how the
+// credential ended, for a provider that says (N3).
+func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecretAtProvider(ctx context.Context, tenantID string, provider dynsecret.Provider, record store.DynamicSecretLease, backendRef string) (method string, err error) {
 	revoker, ok := provider.(interface {
 		RevokeCredential(context.Context, string, []byte) error
 	})
 	if !ok || len(record.RevocationSealedCredential) == 0 {
-		return provider.Revoke(ctx, backendRef)
+		if methodRevoker, ok := provider.(dynsecret.MethodRevoker); ok {
+			return methodRevoker.RevokeMethod(ctx, backendRef)
+		}
+		return "", provider.Revoke(ctx, backendRef)
 	}
 	credential, err := openTenantValue(ctx, d.tenantCrypto, d.kek, tenantID, record.RevocationSealedCredential,
 		dynamicSecretCredentialAAD(tenantID, record.ID, record.Provider))
 	if err != nil {
-		return fmt.Errorf("server: open the credential dynamic-secret lease %s is revoked with: %w", record.ID, err)
+		return "", fmt.Errorf("server: open the credential dynamic-secret lease %s is revoked with: %w", record.ID, err)
 	}
 	defer secret.Wipe(credential)
-	return revoker.RevokeCredential(ctx, backendRef, credential)
+	return "", revoker.RevokeCredential(ctx, backendRef, credential)
 }
 
 func (d *secretIntegrationOutboxDispatcher) deliverSecretSync(ctx context.Context, m orchestrator.Message) error {

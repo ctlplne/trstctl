@@ -43,12 +43,18 @@ type AWSSTSConfig struct {
 	// reaches it (HTTPClient when nil).
 	IAMEndpoint   string
 	IAMHTTPClient HTTPDoer
+	// RevokeWithDenyPolicy ends a revoked lease's session before its expiry
+	// with an inline deny policy on the role for that one session (N3). The
+	// credentials then also need iam:PutRolePolicy, iam:GetRolePolicy,
+	// iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles.
+	RevokeWithDenyPolicy bool
 }
 
 type AWSSTSBackend struct {
-	query    *AWSIAMBackend
-	iam      *AWSIAMBackend
-	roleARNs map[string]string
+	query      *AWSIAMBackend
+	iam        *AWSIAMBackend
+	roleARNs   map[string]string
+	denyPolicy bool
 }
 
 type awsSTSRef struct {
@@ -96,7 +102,7 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 		query.Close()
 		return nil, fmt.Errorf("dynsecret aws-sts: initialize IAM read client: %w", err)
 	}
-	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs)}, nil
+	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs), denyPolicy: cfg.RevokeWithDenyPolicy}, nil
 }
 
 func (b *AWSSTSBackend) Create(context.Context, string) (string, []byte, error) {
@@ -173,11 +179,13 @@ func (b *AWSSTSBackend) CreateCredential(ctx context.Context, req GenerateReques
 	return string(refBytes), credential, nil
 }
 
-// Revoke cannot claim remote invalidation: STS has no per-credential delete
-// operation. The durable revoke outbox keeps the provider status pending until
-// the native expiry has passed; only then is passive invalidation complete.
-func (b *AWSSTSBackend) Revoke(_ context.Context, ref string) error {
-	return CheckAWSSTSExpiration(ref, b.query.now())
+// Revoke cannot claim remote invalidation by itself: STS has no
+// per-credential delete operation. Without revoke_with_deny_policy the durable
+// revoke outbox keeps the provider status pending until the native expiry has
+// passed; with it, RevokeMethod denies the session through its role (N3).
+func (b *AWSSTSBackend) Revoke(ctx context.Context, ref string) error {
+	_, err := b.RevokeMethod(ctx, ref)
+	return err
 }
 
 // CheckAWSSTSExpiration is local-only and requires no AWS administrator key.

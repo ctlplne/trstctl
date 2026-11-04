@@ -48,7 +48,8 @@ type dynamicSecretConfiguredProvider struct {
 	ConfigurationRevision string   `json:"configuration_revision"`
 	// Revocation is the type's catalog value, or what this provider's
 	// configuration makes it (an OAuth provider without a revocation endpoint
-	// is ttl_only, A239).
+	// is ttl_only, A239; an AWS STS provider with revoke_with_deny_policy is
+	// deny_policy, N3).
 	Revocation string `json:"revocation,omitempty"`
 }
 
@@ -141,6 +142,9 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	roles := func(description string) dynamicSecretProviderRequirement {
 		return dynamicSecretRequirement("role_bindings", "Role bindings", "role_binding", description, true)
 	}
+	// N3: the AWS STS issuer's opt-in to end a revoked session early.
+	awsDenyPolicy := value("revoke_with_deny_policy", "Deny revoked sessions",
+		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
 	providers := []dynamicSecretSupportedProvider{
 		{Type: "postgresql", Label: "PostgreSQL", Purpose: "Creates and drops a scoped PostgreSQL login role.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
@@ -158,13 +162,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("admin_dsn_ref", "Admin URI reference", "Credential reference containing the least-privilege administrative MongoDB URI.", true),
 			value("database", "Database", "Database in which the generated user is created.", true),
 		)},
-		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session. Early lease revocation remains pending until AWS session expiry.", Requirements: dynamicSecretAWSRequirements(
+		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session. Early lease revocation remains pending until AWS session expiry, unless revoke_with_deny_policy denies the revoked session through an inline policy on its role.", Requirements: dynamicSecretAWSRequirements(
 			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
 			value("region", "AWS region", "Region used to sign STS requests.", true),
 			value("access_key_id", "Caller access key ID", "Identifier of the identity allowed to call STS AssumeRole.", true),
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
+			awsDenyPolicy,
 		)},
 		{Type: "aws-iam", Label: "AWS STS (legacy aws-iam name)", Purpose: "Compatibility name for the same expiring AssumeRole session issuer; IAM user access keys are not created.", Requirements: dynamicSecretAWSRequirements(
 			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
@@ -173,6 +178,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
+			awsDenyPolicy,
 		)},
 		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity. A static rotation is two-phase: the successor is a new key of the service account beside the predecessor (an account holds ten), and retirement deletes the predecessor; only keys of the bound service account are ever deleted. A new key can take a minute to work and has no side-effect-free check, so verification reports not available and retirement waits for consumer evidence or the approved deadline.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),

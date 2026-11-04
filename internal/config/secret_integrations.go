@@ -97,6 +97,12 @@ type DynamicSecretProviderConfig struct {
 	// of the roles its leases assume (G2). Empty means AWS IAM for the
 	// region's partition.
 	IAMEndpoint string `json:"iam_endpoint,omitempty"`
+	// RevokeWithDenyPolicy (aws-sts) ends a revoked lease's session before its
+	// expiry with an inline deny policy on its role for that one session (N3).
+	// The provider's credentials then also need iam:PutRolePolicy,
+	// iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the
+	// bound roles. Without it a revoked session lapses at its expiry.
+	RevokeWithDenyPolicy bool `json:"revoke_with_deny_policy,omitempty"`
 
 	PasswordRef             string `json:"password_ref,omitempty"`
 	SecretAccessRef         string `json:"secret_access_key_ref,omitempty"`
@@ -696,6 +702,9 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	}
 	if c.Type != "azure-entra" && c.AuthorityHost != "" {
 		errs = append(errs, fmt.Errorf("%s authority_host is only valid for azure-entra", where))
+	}
+	if c.RevokeWithDenyPolicy && c.Type != "aws-iam" && c.Type != "aws-sts" {
+		errs = append(errs, fmt.Errorf("%s revoke_with_deny_policy is only valid for aws-sts", where))
 	}
 	if c.IAMEndpoint != "" {
 		if c.Type != "aws-iam" && c.Type != "aws-sts" {

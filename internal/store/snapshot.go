@@ -244,7 +244,10 @@ import (
 // Version 82 carries N2's Key Vault disables: without them a restored store
 // would show every disabled version as never disabled while its covered offset
 // skipped the readbacks.
-const SnapshotFormatVersion = 82
+// Version 83 carries N3's revocation_method on dynamic-secret leases: without
+// it a restored store would forget how each AWS STS revocation ended while its
+// covered offset skipped the completions.
+const SnapshotFormatVersion = 83
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

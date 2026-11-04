@@ -271,6 +271,10 @@ func (p *configuredDynamicProvider) DynamicSecretIndeterminateIssue() string {
 // credential lapses only then. An OAuth provider is confirmed only with a
 // revocation endpoint (A239).
 func (p *configuredDynamicProvider) DynamicSecretRevocation() string {
+	if (p.cfg.Type == "aws-sts" || p.cfg.Type == "aws-iam") && p.cfg.RevokeWithDenyPolicy {
+		// N3: a revoked session is denied through its role before it expires.
+		return dynsecret.RevocationMethodDenyPolicy
+	}
 	if p.cfg.Type == "oauth-client-credentials" {
 		if p.cfg.RevocationEndpoint != "" {
 			return "confirmed"
@@ -406,6 +410,32 @@ func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef strin
 	}
 	defer closeBackend()
 	return backend.Revoke(ctx, backendRef)
+}
+
+// RevokeMethod revokes like Revoke and, for an AWS STS lease, names how its
+// session ended: denied through its role by an inline policy before its expiry
+// when the provider has revoke_with_deny_policy (N3), else at its native
+// expiry. Other providers name no method.
+func (p *configuredDynamicProvider) RevokeMethod(ctx context.Context, backendRef string) (string, error) {
+	if p.cfg.Type != "aws-sts" && p.cfg.Type != "aws-iam" {
+		return "", p.Revoke(ctx, backendRef)
+	}
+	if !p.cfg.RevokeWithDenyPolicy {
+		if err := dynsecret.CheckNativeExpiration(backendRef, time.Now()); err != nil {
+			return "", err
+		}
+		return dynsecret.RevocationMethodNativeExpiry, nil
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer closeBackend()
+	revoker, ok := backend.(dynsecret.MethodRevoker)
+	if !ok {
+		return "", fmt.Errorf("server: dynamic-secret provider %q can't deny a session through its role", p.id)
+	}
+	return revoker.RevokeMethod(ctx, backendRef)
 }
 
 // RevokeCredential revokes a lease by presenting its credential (an OAuth access
@@ -689,6 +719,7 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 			SessionPrefix: cfg.UsernamePrefix, RoleARNs: cfg.RoleBindings,
 			IAMEndpoint: iamEndpoint, IAMHTTPClient: iamClient,
+			RevokeWithDenyPolicy: cfg.RevokeWithDenyPolicy,
 		})
 		if err != nil {
 			return o.fail(err)
