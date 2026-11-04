@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2481 annotated sites across 30 rules. Each row is
+2483 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -195,7 +195,7 @@ not this file.
 | `internal/authmethod/aws_iam_http_test.go:64` | fabricated signed-request fixture (CWE-798) |
 | `internal/broker/issuanceprecondition_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/ca/ejbca/ejbcafake/ejbcafake.go:28` | test-support package compiled only into test binaries (CWE-798) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:30` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:31` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
 | `internal/ca/venafi/venafifake/venafifake.go:25` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/cbom/coverage/envelope.go:35` | an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:50` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
@@ -1668,7 +1668,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (659 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (660 sites)
 
 | Location | Reason |
 |---|---|
@@ -1936,6 +1936,7 @@ not this file.
 | `internal/ca/capability_evidence_test.go:65` | fixed in-tree proof manifest |
 | `internal/ca/external_error_redaction_test.go:62` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/letsencrypt/dnspersist_pebble_test.go:53` | the runner's copy of Pebble's test root (CWE-22) |
+| `internal/ca/letsencrypt/revoke_authorized_pebble_test.go:42` | the runner's copy of Pebble's test root (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca.go:104` | operator-configured shell-CA output path; the shell CA is an explicit operator integration (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2591,7 +2592,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:935` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (131 sites)
+### G703 — CWE-22 Path traversal (taint) (132 sites)
 
 | Location | Reason |
 |---|---|
@@ -2622,6 +2623,7 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:131` | atomic replace of the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/ca/adcs/kerberos_lab_test.go:33` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/ca/letsencrypt/dnspersist_pebble_test.go:53` | the runner's copy of Pebble's test root (CWE-22) |
+| `internal/ca/letsencrypt/revoke_authorized_pebble_test.go:42` | the runner's copy of Pebble's test root (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2761,14 +2763,15 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (15 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (16 sites)
 
 | Location | Reason |
 |---|---|
 | `ee/provider/reports.go:112` | the exact signed JSON report, sent as an application/json attachment that is never rendered as HTML (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:440` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:464` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:468` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:404` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:558` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:585` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:589` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/dynsecret/aws_sts_deny_test.go:69` | test writes fixture bytes to its own recorder/local server (CWE-79) |

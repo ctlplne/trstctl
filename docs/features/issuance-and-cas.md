@@ -946,11 +946,20 @@ revocation reason and use **Revoke at issuer** on a finding. A certificate in
 inventory goes through the exact revocation, which reaches its recorded issuer.
 A Certificate Transparency finding — a certificate trstctl never asked for, such
 as one issued in your own vendor account outside trstctl — is revoked by serial
-at the external CA you name; only CAs whose revocation takes a serial are
-offered (DigiCert, Sectigo, AWS Private CA, Google CAS, step-ca, EJBCA, Vault
-PKI). The finding then shows the revocation queued, and revoked once the CA
-confirms; a CA that has no certificate with that serial leaves it unconfirmed
-with the reason. Automation uses `POST /api/v1/revocation/rogue-certificates/revoke`
+at the external CA you name; CAs whose revocation takes a serial are offered
+(DigiCert, Sectigo, AWS Private CA, Google CAS, step-ca, EJBCA, Vault PKI), and so
+is an ACME CA (N10). An ACME CA identifies the certificate by its bytes, which
+trstctl never held: trstctl reads them back from the Certificate Transparency log
+that recorded the finding (through that CT source's own egress settings), checks
+them against the finding's fingerprint and serial, gets its own ACME account
+authorized for every DNS name in the certificate through the issuer's DNS-01
+provider (an order it never finalizes), then asks the CA to revoke, as RFC 8555
+§7.6 allows an account authorized for all of a certificate's names. A
+precertificate entry, an entry that is not the finding's certificate, a log the
+source no longer names, or a certificate with an IP identifier is refused without
+contacting the CA. The finding then shows the revocation queued, and revoked once
+the CA confirms; a CA that has no certificate with that serial, or that refuses
+the account, leaves it unconfirmed with the reason. Automation uses `POST /api/v1/revocation/rogue-certificates/revoke`
 with `discovery_id`, `authority_id` and `reason` (`identities:write` plus
 `certs:issue`), or `trstctl-cli revocation rogue-certificates revoke -f req.json`.
 

@@ -287,7 +287,8 @@ func IssuerCapabilityMatrix() []IssuerCapabilities {
 // RevokesBySerial reports whether an issuer kind's revocation addresses a
 // certificate by its serial alone (A163), so trstctl can revoke one it found
 // in Certificate Transparency without holding the certificate. Venafi needs the
-// certificate's thumbprint, ACME its bytes, and AD CS its relay route.
+// certificate's thumbprint and AD CS its relay route; ACME takes its bytes,
+// read back from the log (RevokesByCertificate, N10).
 func RevokesBySerial(issuer string) bool {
 	switch issuer {
 	case "digicert", "sectigo", "awspca", "gcpcas", "smallstep", "ejbca", "vaultpki":
@@ -295,6 +296,24 @@ func RevokesBySerial(issuer string) bool {
 	default:
 		return false
 	}
+}
+
+// RevokesByCertificate reports whether an issuer kind revokes a certificate
+// trstctl does not hold from the certificate's bytes, after trstctl's account
+// is authorized for every name in it (N10, RFC 8555 §7.6).
+func RevokesByCertificate(issuer string) bool {
+	switch issuer {
+	case "letsencrypt":
+		return CanRevoke(issuer)
+	default:
+		return false
+	}
+}
+
+// AuthorizedRevoker revokes a certificate trstctl found but never issued, from
+// its DER, by first proving control of every identifier in it (N10).
+type AuthorizedRevoker interface {
+	RevokeWithAuthorizations(ctx context.Context, tenantID string, certDER []byte, reasonCode int) error
 }
 
 // CanRevoke reports whether an issuer kind can revoke through trstctl.

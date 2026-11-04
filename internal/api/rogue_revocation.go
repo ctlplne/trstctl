@@ -24,7 +24,8 @@ import (
 // for — someone issued it in the tenant's own vendor account outside trstctl,
 // say. An operator who names the external authority that issued it can have
 // trstctl revoke it there by serial, through that authority's revocation API;
-// the finding reads revoked at the issuer only once the authority confirms. A
+// the finding reads revoked at the issuer only once the authority confirms. An
+// ACME authority takes the certificate's bytes instead of a serial (N10). A
 // rogue certificate already in inventory goes through the exact revocation
 // (POST /api/v1/certificates/bulk-revoke), which reaches its recorded issuer.
 
@@ -85,8 +86,11 @@ func (a *API) revokeRogueCertificateAtIssuer(w http.ResponseWriter, r *http.Requ
 		if kind == "" {
 			return 0, nil, errStatus(http.StatusNotFound, "this tenant has no external CA with that id")
 		}
-		if !ca.RevokesBySerial(kind) {
-			return 0, nil, errStatus(http.StatusConflict, "this authority ("+kind+") revokes a certificate by its bytes or through a relay, "+
+		// An ACME authority revokes from the certificate's bytes once trstctl's
+		// account is authorized for every name in it (N10): the delivery reads
+		// the bytes back from the CT log that recorded the finding.
+		if !ca.RevokesBySerial(kind) && !ca.RevokesByCertificate(kind) {
+			return 0, nil, errStatus(http.StatusConflict, "this authority ("+kind+") revokes a certificate by its thumbprint or through a relay, "+
 				"which a Certificate Transparency finding does not give trstctl; revoke it at the CA")
 		}
 		requested, _, err := a.orch.RequestRogueCertificateRevocation(ctx, tenantID, orchestrator.RogueCertificateRevocationRequest{

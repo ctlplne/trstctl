@@ -1715,10 +1715,11 @@ never live in the API process. What you can do end to end against the running bi
   CA the operator names, by serial (`POST
   /api/v1/revocation/rogue-certificates/revoke`, `trstctl-cli revocation
   rogue-certificates revoke`, or **Revoke at issuer** on the Certificates
-  page). Only authorities whose revocation addresses a serial take it
-  (digicert, sectigo, awspca, gcpcas, smallstep, ejbca, vaultpki); Venafi needs
-  the certificate's thumbprint, ACME its bytes (part 3's N10) and AD CS its
-  relay, so those are refused. The request is an event plus a
+  page). Authorities whose revocation addresses a serial take it (digicert,
+  sectigo, awspca, gcpcas, smallstep, ejbca, vaultpki), and so does an ACME
+  authority, from the certificate's bytes read back from its CT log once
+  trstctl's account is authorized for every name (N10, below); Venafi needs the
+  certificate's thumbprint and AD CS its relay, so those are refused. The request is an event plus a
   `revocation.publish` delivery; the finding reads revoked at the issuer only
   after the authority confirms, a redelivery calls it no second time, and a
   serial the authority never issued stays unconfirmed with its reason. A rogue
@@ -7839,6 +7840,23 @@ no body, and a failed check-in is not retried on its own. Proven against Intune 
 TLS with the production relay; a live Intune tenant and Jamf Pro server are a Track B row. What comes next: Jamf
 mobile devices (the device read today covers computers only), and checking in every device of a renewal wave
 under one approval.
+
+## ACME revocation of a certificate trstctl doesn't hold (N10) — served
+
+A Certificate Transparency finding can be revoked at an ACME CA (the `letsencrypt` external CA kind) through
+`POST /api/v1/revocation/rogue-certificates/revoke` or **Revoke at issuer**. trstctl reads the certificate back from
+the log that recorded the finding, through that CT source's egress settings, and sends it only when it is the
+finding's issued certificate (fingerprint and serial match; not a precertificate). Its ACME account is first
+authorized for every DNS name in the certificate through the issuer's DNS-01 provider, in an order it never
+finalizes, and then asks the CA to revoke, which RFC 8555 §7.6 allows an account authorized for all of a
+certificate's names; the finding reads revoked only after the CA confirms. Proven end to end against the in-repo
+ACME stand-in, which models §7.6 (the issuing account or an account authorized for every name may revoke; any
+other account is refused), and against Pebble 2.10.1, where trstctl's account obtains its authorizations and the
+revocation identifies the certificate, but Pebble refuses any account but the issuing one (its revocation code
+leaves the authorized-account rule unimplemented, as does step-ca's). A live CA that implements the rule (Let's
+Encrypt's staging environment) is a Track B row. What comes next: findings at a precertificate entry (finding the
+issued certificate in another log, or revoking the precertificate where a CA accepts that), and certificates with IP
+identifiers.
 
 ## Edition and qualification ledger (A253) — served
 

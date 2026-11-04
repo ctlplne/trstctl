@@ -8,11 +8,16 @@ import { newIdempotencyKey } from "@/lib/apiTransport";
 
 // A163: revoke a rogue certificate at the CA that issued it. A Certificate
 // Transparency finding is revoked by serial at the external CA the operator
-// names (only kinds that revoke by serial are offered); an inventory finding
-// goes through the exact revocation, which reaches its recorded issuer.
+// names (only kinds that revoke by serial are offered), or at an ACME CA from
+// the certificate's bytes once trstctl's account is authorized for its names
+// (N10); an inventory finding goes through the exact revocation, which reaches
+// its recorded issuer.
 
 /** External CA kinds whose revocation addresses a certificate by serial alone. */
 export const SERIAL_REVOCABLE_KINDS = ["digicert", "sectigo", "awspca", "gcpcas", "smallstep", "ejbca", "vaultpki"];
+
+/** ACME CA kinds that revoke a found certificate from its bytes (N10). */
+export const AUTHORIZED_REVOCABLE_KINDS = ["letsencrypt"];
 
 /** RFC 5280 reasons an operator chooses from when revoking a rogue certificate. */
 export const ROGUE_REVOCATION_REASONS = [
@@ -93,7 +98,7 @@ export function RogueIssuerRevocationCell({
   if (!finding.discovery_id) {
     return <span className="text-xs text-muted-foreground">{t("certificates.rogue.issuerNone")}</span>;
   }
-  const offered = authorities.filter((ca) => SERIAL_REVOCABLE_KINDS.includes(ca.type));
+  const offered = authorities.filter((ca) => SERIAL_REVOCABLE_KINDS.includes(ca.type) || AUTHORIZED_REVOCABLE_KINDS.includes(ca.type));
   return (
     <span className="grid gap-1 text-xs">
       <label className="grid gap-1">

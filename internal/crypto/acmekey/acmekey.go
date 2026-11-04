@@ -401,6 +401,54 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) (chain [][]by
 	return der, nil
 }
 
+// IsUnauthorized reports the authority's RFC 8555 unauthorized problem, such
+// as a revocation it does not accept from this account.
+func IsUnauthorized(err error) bool {
+	var problem *acme.Error
+	return errors.As(err, &problem) && problem.ProblemType == "urn:ietf:params:acme:error:unauthorized"
+}
+
+// AuthorizeIdentifiers obtains valid authorizations for exactly these DNS
+// names for this account, solving their challenges as an issuance would, and
+// never finalizes the order (N10). RFC 8555 §7.6 lets an account that holds
+// authorizations for every identifier in a certificate revoke it, whichever
+// account requested it — which is how trstctl revokes a certificate it found
+// in Certificate Transparency but never issued.
+func (d *Driver) AuthorizeIdentifiers(ctx context.Context, tenantID string, dnsNames []string) error {
+	if d == nil || d.client == nil {
+		return errors.New("acmekey: driver is destroyed")
+	}
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("acmekey: authorizations need the tenant they are obtained for")
+	}
+	if len(dnsNames) == 0 {
+		return errors.New("acmekey: no identifiers to authorize")
+	}
+	if _, err := d.client.Register(ctx, d.registrationAccount(), acme.AcceptTOS); err != nil && !errors.Is(err, acme.ErrAccountAlreadyExists) {
+		return fmt.Errorf("acmekey: register: %w", err)
+	}
+	order, err := d.authorizeOrder(ctx, dnsNames)
+	if err != nil {
+		return fmt.Errorf("acmekey: authorize order: %w", err)
+	}
+	orderURL := order.URI
+	if order.Status == acme.StatusReady || order.Status == acme.StatusValid {
+		d.observeReusedOrder(ctx, tenantID, order)
+		return nil
+	}
+	if err := d.fulfill(ctx, tenantID, order); err != nil {
+		return err
+	}
+	ready, err := d.client.WaitOrder(ctx, orderURL)
+	if err != nil {
+		return fmt.Errorf("acmekey: wait order: %w", err)
+	}
+	if ready.Status != acme.StatusReady && ready.Status != acme.StatusValid {
+		return fmt.Errorf("acmekey: authorize order: the order is %s, not authorized", ready.Status)
+	}
+	return nil
+}
+
 // observeReusedOrder records every authorization of an already-ready order.
 //
 // Best-effort by design: this is reporting, and failing an issuance the

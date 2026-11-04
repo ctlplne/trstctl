@@ -22,6 +22,7 @@ import (
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Server is a running fake ACME CA.
@@ -63,6 +64,86 @@ type Server struct {
 	// refusal carried, so a test can tell why the client was turned away even
 	// though the client sanitizes upstream errors.
 	lastAccountProblem string
+	// N10: RFC 8555 §7.6 mode. Accounts are told apart by their JWK and
+	// requests by their kid; an order records which account it authorizes for
+	// which names; a certificate records the account that finalized it. A
+	// revocation is accepted only from that account or from an account holding
+	// valid authorizations for every name in the certificate. Signatures are
+	// still not verified: the mode models the authorization rule, not JWS.
+	revocationAuthority bool
+	accountsByKey       map[string]string          // JWK JSON -> account URL
+	orderAccount        map[string]string          // order number -> account URL
+	authorized          map[string]map[string]bool // account URL -> DNS name -> valid
+	certOwner           map[string]string          // serial hex -> account URL
+	revokedBy           map[string]string          // serial hex -> account URL
+}
+
+// EnforceRevocationAuthority switches on RFC 8555 §7.6's revocation rule
+// (N10): the issuing account, or an account holding valid authorizations for
+// every name in the certificate, may revoke it; anyone else is refused.
+func (s *Server) EnforceRevocationAuthority() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revocationAuthority = true
+	s.accountsByKey = map[string]string{}
+	s.orderAccount = map[string]string{}
+	s.authorized = map[string]map[string]bool{}
+	s.certOwner = map[string]string{}
+	s.revokedBy = map[string]string{}
+}
+
+// RevokedBy names the account that revoked the certificate with this serial
+// (hex), or "" while it is not revoked. §7.6 mode only.
+func (s *Server) RevokedBy(serialHex string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.revokedBy[normalSerial(serialHex)]
+}
+
+// OwnerOf names the account that finalized the certificate with this serial.
+func (s *Server) OwnerOf(serialHex string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.certOwner[normalSerial(serialHex)]
+}
+
+func normalSerial(v string) string {
+	return strings.TrimLeft(strings.ToLower(strings.ReplaceAll(v, ":", "")), "0")
+}
+
+// jwsParts decodes a flattened JWS's protected header (its kid or jwk) and
+// payload. The signature is not checked.
+func jwsParts(body []byte) (kid, jwk string, payload []byte, err error) {
+	var jws struct {
+		Protected string `json:"protected"`
+		Payload   string `json:"payload"`
+	}
+	if err := json.Unmarshal(body, &jws); err != nil {
+		return "", "", nil, fmt.Errorf("acmefake: decode jws: %w", err)
+	}
+	header, err := base64.RawURLEncoding.DecodeString(jws.Protected)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("acmefake: decode protected header: %w", err)
+	}
+	var h struct {
+		KID string          `json:"kid"`
+		JWK json.RawMessage `json:"jwk"`
+	}
+	if err := json.Unmarshal(header, &h); err != nil {
+		return "", "", nil, fmt.Errorf("acmefake: decode protected header: %w", err)
+	}
+	payload, err = base64.RawURLEncoding.DecodeString(jws.Payload)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("acmefake: decode payload: %w", err)
+	}
+	return h.KID, string(h.JWK), payload, nil
+}
+
+// problem writes an RFC 8555 problem document.
+func problem(w http.ResponseWriter, status int, typ, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	writeJSON(w, map[string]string{"type": typ, "detail": detail})
 }
 
 // LastAccountProblem reports the problem type of the most recent newAccount
@@ -299,17 +380,28 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 			_, _ = fmt.Fprintf(w, `{"type":%q,"detail":%q}`, problem, detail)
 			return
 		}
+		account, alreadyRegistered := s.u("/account/1"), false
 		s.mu.Lock()
-		alreadyRegistered := s.accountRegistered
-		s.accountRegistered = true
+		if s.revocationAuthority {
+			_, jwk, _, _ := jwsParts(body)
+			if existing, ok := s.accountsByKey[jwk]; ok {
+				account, alreadyRegistered = existing, true
+			} else {
+				account = s.u(fmt.Sprintf("/account/%d", len(s.accountsByKey)+1))
+				s.accountsByKey[jwk] = account
+			}
+		} else {
+			alreadyRegistered = s.accountRegistered
+			s.accountRegistered = true
+		}
 		s.mu.Unlock()
-		w.Header().Set("Location", s.u("/account/1"))
+		w.Header().Set("Location", account)
 		if alreadyRegistered {
 			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusCreated)
 		}
-		_, _ = fmt.Fprintf(w, `{"status":"valid","orders":%q}`, s.u("/account/1/orders"))
+		_, _ = fmt.Fprintf(w, `{"status":"valid","orders":%q}`, account+"/orders") // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
 	case r.URL.Path == "/new-order":
 		orderBody, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		profile := requestedProfile(orderBody)
@@ -327,6 +419,29 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.orders++
 		n := s.orders
 		requireDV := s.requireDV
+		if s.revocationAuthority {
+			kid, _, payload, _ := jwsParts(orderBody)
+			var order struct {
+				Identifiers []struct {
+					Type  string `json:"type"`
+					Value string `json:"value"`
+				} `json:"identifiers"`
+			}
+			_ = json.Unmarshal(payload, &order)
+			s.orderAccount[fmt.Sprint(n)] = kid
+			if !requireDV {
+				// A pre-authorized order is this account's valid
+				// authorization for each of its names.
+				if s.authorized[kid] == nil {
+					s.authorized[kid] = map[string]bool{}
+				}
+				for _, id := range order.Identifiers {
+					if id.Type == "dns" {
+						s.authorized[kid][strings.ToLower(id.Value)] = true
+					}
+				}
+			}
+		}
 		s.mu.Unlock()
 		w.Header().Set("Location", s.u(fmt.Sprintf("/order/%d", n)))
 		w.WriteHeader(http.StatusCreated)
@@ -420,12 +535,15 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		s.mu.Lock()
 		s.revocations = append(s.revocations, string(body))
-		problem := s.revocationProblem
+		configured := s.revocationProblem
+		enforce := s.revocationAuthority
 		s.mu.Unlock()
-		if problem != "" {
-			w.Header().Set("Content-Type", "application/problem+json")
-			w.WriteHeader(http.StatusBadRequest)
-			writeJSON(w, map[string]string{"type": problem, "detail": "configured revocation refusal"})
+		if configured != "" {
+			problem(w, http.StatusBadRequest, configured, "configured revocation refusal")
+			return
+		}
+		if enforce {
+			s.revokeWithAuthority(w, body)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -458,6 +576,9 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	certPath := "/cert/" + id
 	s.mu.Lock()
 	s.certs[certPath] = issued.CertificatePEM
+	if s.revocationAuthority {
+		s.certOwner[normalSerial(issued.Serial)] = s.orderAccount[id]
+	}
 	asyncFinalize := s.asyncFinalize
 	s.mu.Unlock()
 	if asyncFinalize {
@@ -466,6 +587,57 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", s.u("/order/"+id))
 	_, _ = fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath)) // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
+}
+
+// revokeWithAuthority applies RFC 8555 §7.6 to a revokeCert request signed by
+// an account (kid): the issuing account may revoke, and so may an account that
+// holds valid authorizations for every name in the certificate.
+func (s *Server) revokeWithAuthority(w http.ResponseWriter, body []byte) {
+	kid, _, payload, err := jwsParts(body)
+	var req struct {
+		Certificate string `json:"certificate"`
+	}
+	if err != nil || json.Unmarshal(payload, &req) != nil || kid == "" {
+		problem(w, http.StatusBadRequest, "urn:ietf:params:acme:error:malformed", "a revocation names its account and certificate")
+		return
+	}
+	der, err := base64.RawURLEncoding.DecodeString(req.Certificate)
+	if err != nil {
+		problem(w, http.StatusBadRequest, "urn:ietf:params:acme:error:malformed", "certificate is not base64url DER")
+		return
+	}
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		problem(w, http.StatusBadRequest, "urn:ietf:params:acme:error:malformed", "certificate does not parse")
+		return
+	}
+	serial := normalSerial(info.SerialNumber)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	owner, issued := s.certOwner[serial]
+	switch {
+	case !issued:
+		problem(w, http.StatusNotFound, "urn:ietf:params:acme:error:malformed", "this authority did not issue the certificate")
+		return
+	case s.revokedBy[serial] != "":
+		problem(w, http.StatusBadRequest, "urn:ietf:params:acme:error:alreadyRevoked", "the certificate is already revoked")
+		return
+	}
+	if owner != kid {
+		for _, name := range info.DNSNames {
+			if !s.authorized[kid][strings.ToLower(name)] {
+				problem(w, http.StatusForbidden, "urn:ietf:params:acme:error:unauthorized",
+					"the account neither issued the certificate nor holds authorizations for all of its identifiers")
+				return
+			}
+		}
+		if len(info.DNSNames) == 0 {
+			problem(w, http.StatusForbidden, "urn:ietf:params:acme:error:unauthorized", "the certificate names no DNS identifier")
+			return
+		}
+	}
+	s.revokedBy[serial] = kid
+	w.WriteHeader(http.StatusOK)
 }
 
 // csrFromJWS extracts the finalize request's CSR from the flattened-JSON JWS body

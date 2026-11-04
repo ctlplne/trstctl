@@ -2,6 +2,10 @@
 
 ### Added
 
+- ACME revocation of a certificate trstctl doesn't hold (N10 is served): a Certificate Transparency finding can be
+  revoked at an ACME external CA. trstctl reads the certificate back from the log that recorded it, checks it against
+  the finding, gets its own ACME account authorized for every DNS name in it through the issuer's DNS-01 provider,
+  then asks the CA to revoke (RFC 8555 §7.6). **Revoke at issuer** now offers ACME CAs for CT findings.
 - MDM device check-in behind approval (N9 is served): `POST /api/v1/mdm/{mdm}/devices/{id}/check-in/approval-requests`
   asks for one device trstctl has read from its MDM; after another reviewer approves, `POST .../check-ins` queues one
   job for the MDM schedule's relay, which calls Intune's `syncDevice` or sends a Jamf Pro blank push to that computer

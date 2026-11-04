@@ -88,6 +88,7 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     apiMock.externalCAs.mockReset().mockResolvedValue([
       { id: "corp-digicert", type: "digicert", name: "Corp DigiCert", status: "available" },
       { id: "corp-venafi", type: "venafi", name: "Corp Venafi", status: "available" },
+      { id: "corp-acme", type: "letsencrypt", name: "Corp ACME", status: "available" },
     ]);
     apiMock.revokeRogueCertificateAtIssuer.mockReset();
     apiMock.bulkRevokeCertificates.mockReset();
@@ -107,6 +108,8 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     const shadow = rowOf("shadow.corp.example");
     await within(shadow).findByRole("option", { name: "Corp DigiCert" });
     expect(within(shadow).queryByRole("option", { name: "Corp Venafi" })).not.toBeInTheDocument();
+    // N10: an ACME CA revokes a found certificate from its bytes.
+    expect(within(shadow).getByRole("option", { name: "Corp ACME" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Revocation reason"), { target: { value: "keyCompromise" } });
     fireEvent.change(within(shadow).getByLabelText("Issuing CA"), { target: { value: "corp-digicert" } });
     fireEvent.click(within(shadow).getByRole("button", { name: "Revoke at issuer" }));

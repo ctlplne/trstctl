@@ -195,6 +195,50 @@ func (p *Plugin) Revoke(ctx context.Context, req ca.RevokeRequest) error {
 	return p.driver.RevokeChain(ctx, block.Bytes, req.ReasonCode)
 }
 
+var _ ca.AuthorizedRevoker = (*Plugin)(nil)
+
+// RevokeWithAuthorizations revokes a certificate trstctl did not request, from
+// its bytes (N10, RFC 8555 §7.6): trstctl's account first obtains valid
+// authorizations for every DNS name in the certificate through this issuer's
+// domain-validation solver, then asks for the revocation with its account key.
+// The authority decides; a certificate with an IP identifier or no DNS name is
+// refused here, since this path only proves control of DNS names.
+func (p *Plugin) RevokeWithAuthorizations(ctx context.Context, tenantID string, certDER []byte, reasonCode int) error {
+	if p == nil || p.driver == nil {
+		return errors.New("letsencrypt: plugin is destroyed")
+	}
+	info, err := certinfo.Inspect(certDER)
+	if err != nil {
+		return errors.New("letsencrypt: the certificate to revoke could not be parsed")
+	}
+	if len(info.IPAddresses) > 0 || len(info.DNSNames) == 0 {
+		return errors.New("letsencrypt: only a certificate whose identifiers are all DNS names can be revoked by proving control of them")
+	}
+	if err := p.driver.AuthorizeIdentifiers(ctx, tenantID, info.DNSNames); err != nil {
+		return authorizationFailure(err)
+	}
+	if err := p.driver.RevokeChain(ctx, certDER, reasonCode); err != nil {
+		if acmekey.IsUnauthorized(err) {
+			return newSafeACMEError("external_ca_revocation_unauthorized",
+				"letsencrypt: the authority refused the revocation: it does not accept trstctl's account, though it is authorized for every name in the certificate", err)
+		}
+		return newSafeACMEError("external_ca_revocation_failed", "letsencrypt: the authority refused the revocation", err)
+	}
+	return nil
+}
+
+// authorizationFailure names why trstctl's account could not be authorized for
+// a certificate's names, in the same closed phrases as issuance.
+func authorizationFailure(err error) error {
+	switch {
+	case errors.Is(err, acme.ErrNoDNS01ProviderConfig), errors.Is(err, acmekey.ErrSolverNotConfigured), errors.Is(err, acmekey.ErrNoSolvableChallenge):
+		return dvFailureOrGeneric(err)
+	default:
+		return newSafeACMEError("external_ca_authorization_failed",
+			"letsencrypt: the authority did not authorize trstctl's account for every name in the certificate", err)
+	}
+}
+
 // dvFailureOrGeneric maps a classified domain-validation failure to a closed
 // phrase an operator can act on, and everything else to the generic message.
 //
