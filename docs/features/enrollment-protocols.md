@@ -330,7 +330,8 @@ profile. An old signed challenge can remain valid until its expiry if its signin
 anchor is still trusted. If the version write fails, keep the dialog open, review
 the refreshed plan, and retry. After rotation, use the device trace to distinguish
 a challenge refusal from an offline device. Repair the named refusal, or bring an
-offline device online and trigger an MDM check-in. Do not weaken challenge, tenant,
+offline device online and trigger an MDM check-in (trstctl can ask for one behind
+approval, below). Do not weaken challenge, tenant,
 CSR, or replay validation
 to make enrollment appear green.
 
@@ -376,6 +377,28 @@ The JSON body sets `required_agent_id` to the enrolled agent UUID shown in
 schedule, last run and last error. A saved schedule is configuration, not a
 completed relay read or proof that any certificate was installed. Check the last
 run and each device trace before treating the MDM estate as observed.
+
+**Device check-in behind approval (N9).** When a device has a new or renewed SCEP
+profile waiting, trstctl can ask its MDM to have the device check in now instead of
+at its next scheduled check-in: Intune's `syncDevice` action on one managed device,
+or a Jamf Pro blank push to one computer. This is the only write trstctl makes to an
+MDM, and it sends no body; the MDM decides what the device then fetches. The device
+must be one trstctl has read from that MDM, and the MDM's schedule must be enabled,
+use an `https` base URL and name its relay. The check-in runs on that relay with the
+schedule's token (or Entra client credentials) redeemed for the one call, and the
+relay must have `mdm.device.check_in` enabled in `agent_channel.claimable_job_kinds`
+(until then an ask is refused with that reason). The requester asks with a reason
+(`POST /api/v1/mdm/{mdm}/devices/{id}/check-in/approval-requests`,
+`trstctl-cli mdm check-in ask`); a reviewer with `certs:issue` other than the
+requester approves it from the approval queue; the requester then executes exactly
+that approval (`POST /api/v1/mdm/{mdm}/devices/{id}/check-ins`,
+`trstctl-cli mdm check-in run`), which queues one relay job and spends the
+approval. Executing it again returns the same check-in. `GET
+/api/v1/mdm/{mdm}/check-ins` (`trstctl-cli mdm check-ins`) shows each one as
+`queued`, `checked_in` with the MDM's status code, or `failed` with the relay's
+reason (a device deleted at the MDM answers 404). A failed check-in is not retried
+on its own; ask again. A check-in only tells the MDM to contact the device: whether
+the device is online and installs the profile still shows in its trace.
 
 ## Use it
 

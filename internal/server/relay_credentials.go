@@ -105,8 +105,9 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// secret:// reference — same custody as the AD CS bind above: resolved
 		// per attempt, never carried on the queue.
 		return r.resolveJobReferences(ctx, tenantID, job)
-	case "mdm.sync":
-		// I5: identical custody for the MDM token.
+	case "mdm.sync", relay.KindMDMCheckIn:
+		// I5: identical custody for the MDM token; N9's check-in redeems the
+		// same schedule's token for its one call.
 		return r.resolveJobReferences(ctx, tenantID, job)
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.

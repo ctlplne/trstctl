@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -80,7 +81,8 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 		}
 	}
-	if job.Destination == agentJobKindMDMSync && (job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network")) {
+	if (job.Destination == agentJobKindMDMSync || job.Destination == relay.KindMDMCheckIn) &&
+		(job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network")) {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
 	if job.Destination == "connector.deploy" || job.Destination == "connector.test" || job.Destination == agentJobKindEndpointRenew || job.Destination == orchestrator.DestinationConnectorRollback {

@@ -255,7 +255,10 @@ import (
 // messages: without them a restored store would forget the workspace, who
 // linked which Slack user and which messages were decided while its covered
 // offset skipped the events.
-const SnapshotFormatVersion = 85
+// Version 86 carries N9's MDM device check-ins: without them a restored store
+// would show every acknowledged check-in as still queued while its covered
+// offset skipped the acknowledgements.
+const SnapshotFormatVersion = 86
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -341,6 +344,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"adcs_request_decisions",
 	// Format 82: N2's Key Vault disables.
 	"certificate_key_vault_disables",
+	// Format 86: N9's MDM device check-ins.
+	"mdm_device_check_ins",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -699,6 +704,7 @@ SELECT jsonb_build_object(
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),
   'slack_approval_messages', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_approval_messages t),
+  'mdm_device_check_ins', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM mdm_device_check_ins t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

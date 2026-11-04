@@ -874,6 +874,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// N1: projected from adcs.request.decision_queued and adcs.request.decided.
 	"adcs_request_decisions",
+	// N9: projected from mdm.device.check_in_queued and mdm.device.checked_in.
+	"mdm_device_check_ins",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

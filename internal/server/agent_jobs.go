@@ -124,6 +124,8 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindADCSRevoke: true,
 	// N1: an approved decision on a pending AD CS request, on the issuer's relay.
 	relay.KindADCSDecide: true,
+	// N9: an approved device check-in at the MDM, on the schedule's relay.
+	relay.KindMDMCheckIn: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -1005,6 +1007,13 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("AD CS decision result needs a terminal executed report")
 		}
 		return a.recordADCSDecisionResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
+	case relay.KindMDMCheckIn:
+		// N9: the check-in is recorded only from a report checked against its
+		// job: the exact relay, the same MDM and device, accepted by the MDM.
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("MDM check-in result needs a terminal executed report")
+		}
+		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -1324,6 +1333,12 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// holds the request as pending, certutil refused); it is never retried on
 	// its own, because the CA's state may have moved.
 	if claim.Destination == relay.KindADCSDecide {
+		permanent = true
+	}
+	// N9: a failed MDM check-in ends with the relay's reason (the MDM refused
+	// it or could not be reached); it is never retried on its own — another
+	// check-in is another approval.
+	if claim.Destination == relay.KindMDMCheckIn {
 		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on

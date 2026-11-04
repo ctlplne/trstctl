@@ -5830,6 +5830,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/{mdm}/check-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an MDM's device check-ins, newest first: queued, checked in with the MDM's answer, or failed with the relay's reason */
+        get: operations["listMDMCheckIns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/{mdm}/devices/{id}/check-in/approval-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for approval to have one device check in with its MDM now (Intune syncDevice or a Jamf blank push); other reviewers decide it before anything reaches the MDM */
+        post: operations["requestMDMCheckInApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/{mdm}/devices/{id}/check-ins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute an approved check-in: the MDM schedule's relay asks the MDM to have the device check in, and records the MDM's answer */
+        post: operations["executeMDMCheckIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mdm/{mdm}/devices/{id}/trace": {
         parameters: {
             query?: never;
@@ -18339,6 +18390,65 @@ export interface components {
             text: string;
             tool: string;
             truncated?: boolean;
+        };
+        MDMCheckIn: {
+            approval_request_id: string;
+            /** Format: date-time */
+            checked_in_at?: string;
+            device_id: string;
+            device_name?: string;
+            failure?: string;
+            id: string;
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            provider_status?: number;
+            /** Format: date-time */
+            queued_at: string;
+            reason: string;
+            requested_by: string;
+            /** @enum {string} */
+            status: "queued" | "checked_in" | "failed";
+        };
+        MDMCheckInApproval: {
+            approval_count: number;
+            approval_intent_digest: string;
+            approval_request_id: string;
+            device_id: string;
+            device_name?: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @enum {string} */
+            mdm: "intune" | "jamf";
+            reason: string;
+            required_approvals: number;
+            status: string;
+        };
+        MDMCheckInList: {
+            items: {
+                approval_request_id: string;
+                /** Format: date-time */
+                checked_in_at?: string;
+                device_id: string;
+                device_name?: string;
+                failure?: string;
+                id: string;
+                /** @enum {string} */
+                mdm: "intune" | "jamf";
+                provider_status?: number;
+                /** Format: date-time */
+                queued_at: string;
+                reason: string;
+                requested_by: string;
+                /** @enum {string} */
+                status: "queued" | "checked_in" | "failed";
+            }[];
+        };
+        MDMCheckInRequest: {
+            reason: string;
+        };
+        MDMCheckInStart: {
+            approval_intent_digest: string;
+            approval_request_id: string;
         };
         MDMDevice: {
             device_name?: string;
@@ -41542,6 +41652,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MDMSCEPStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMDMCheckIns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckInList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestMDMCheckInApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+                /** @description the MDM's own device id, as shown in its console */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMCheckInRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckInApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeMDMCheckIn: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description intune or jamf */
+                mdm: string;
+                /** @description the MDM's own device id, as shown in its console */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMCheckInStart"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMCheckIn"];
                 };
             };
             /** @description client error */

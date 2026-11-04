@@ -281,15 +281,18 @@ func TestServedCorrelationRefusesAnUnrenderableState(t *testing.T) {
 	}
 }
 
-// Read-only is structural: inventory is GET-only. The sole non-GET operation is
-// Microsoft's fixed report-export creation, which cannot name an MDM mutation.
+// Read-only is structural: inventory is GET-only. The non-GET operations are
+// Microsoft's fixed report-export creation, which cannot name an MDM mutation,
+// and N9's approved device check-in, which lives in its own file and is pinned
+// by TestTheOnlyMDMWriteIsTheApprovedCheckInN9.
 func TestNoMDMCodePathCanWrite(t *testing.T) {
 	t.Parallel()
 	// The poller and the relay executor joined the list when I5 gained its
 	// producer: both FETCH from an MDM, so both are exactly where a mutating
-	// verb would be a profile pushed to real laptops.
+	// verb would be a profile pushed to real laptops. N9's control-plane side
+	// queues the check-in and never calls an MDM itself.
 	for _, f := range []string{"../mdm/correlate.go", "../mdm/trace.go", "../mdm/renewal.go", "../mdm/install.go",
-		"../api/mdm_devices.go", "mdm_poller.go", "../agent/relay/mdmsync.go"} {
+		"../api/mdm_devices.go", "mdm_poller.go", "../agent/relay/mdmsync.go", "../api/mdm_check_ins.go", "mdm_check_ins.go"} {
 		src, err := readSourceFile(f)
 		if err != nil {
 			t.Fatal(err)
@@ -319,6 +322,41 @@ func TestNoMDMCodePathCanWrite(t *testing.T) {
 	for _, forbidden := range []string{"deviceConfigurations/", "/assign", "managedDevices/"} {
 		if strings.Contains(reportSource, forbidden) {
 			t.Fatalf("Intune report reader contains mutation-capable resource fragment %q", forbidden)
+		}
+	}
+}
+
+// N9: the one write trstctl makes to an MDM is a bodiless POST to one of two
+// fixed endpoints — Graph's syncDevice on one managed device, or a Jamf Pro
+// blank push to one computer — from an approved relay job. Nothing in that file
+// may name another verb or a command that changes a device.
+func TestTheOnlyMDMWriteIsTheApprovedCheckInN9(t *testing.T) {
+	t.Parallel()
+	src, err := readSourceFile("../agent/relay/mdmcheckin.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, verb := range []string{"MethodPut", "MethodPatch", "MethodDelete"} {
+		if strings.Contains(src, verb) {
+			t.Fatalf("the MDM check-in references http.%s", verb)
+		}
+	}
+	if n := strings.Count(src, "http.MethodPost"); n != 1 {
+		t.Fatalf("the MDM check-in makes %d POSTs; it makes exactly one", n)
+	}
+	for _, fixed := range []string{`"/syncDevice"`, `"/JSSResource/computercommands/command/BlankPush/id/"`,
+		"http.MethodPost, MDMCheckInEndpoint(intent), nil)"} {
+		if !strings.Contains(src, fixed) {
+			t.Fatalf("the MDM check-in lost its fixed, bodiless call %q", fixed)
+		}
+	}
+	lower := strings.ToLower(src)
+	// Path and command fragments of the MDMs' device-changing actions (secret.Wipe
+	// on the redeemed token is the relay's own memory hygiene, not a device wipe).
+	for _, forbidden := range []string{"/wipe", "/retire", "erasedevice", "devicelock", "remotelock", "unmanagedevice",
+		"resetpasscode", "/rebootnow", "/shutdown", "deviceconfigurations", "/assign", "mobiledevicecommands", "/delete"} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("the MDM check-in contains device-changing fragment %q", forbidden)
 		}
 	}
 }

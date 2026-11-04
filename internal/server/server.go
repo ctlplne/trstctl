@@ -910,6 +910,8 @@ type Server struct {
 	externalCAs *externalCARegistry
 	// adcsDecisionApprovals is how many approvals an AD CS decision needs (N1).
 	adcsDecisionApprovals int
+	// mdmCheckInApprovals is how many approvals an MDM device check-in needs (N9).
+	mdmCheckInApprovals int
 	// notifications is the served notification dispatcher. It fans notification.*
 	// outbox rows to operator-configured channels; nil preserves the prior no-channel
 	// behavior for notification rows while still letting producers enqueue intents.
@@ -1838,6 +1840,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithSSHTrustFleet(sshTrustFleetSurface(d, s.orch)),
 		s.slackAPIOption(),
 		api.WithADCSDecisions(s),
+		api.WithMDMCheckIns(s),
 		api.WithKeyVaultDisable(s),
 		api.WithOIDCIssuer(s),
 		api.WithPKISecretLeafRecovery(s),
@@ -2668,6 +2671,8 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.lifecycleRenewBefore = d.LifecycleRenewBefore
 	// N1: an AD CS decision waits on as many approvals as other privileged actions.
 	s.adcsDecisionApprovals = d.RequiredApprovals
+	// N9: so does an MDM device check-in.
+	s.mdmCheckInApprovals = d.RequiredApprovals
 	s.lifecycleAlertBefore = d.LifecycleAlertBefore
 	s.lifecycleLeafValidity = d.LifecycleLeafValidity
 	s.ownershipAttestationCadence = d.OwnershipAttestationCadence

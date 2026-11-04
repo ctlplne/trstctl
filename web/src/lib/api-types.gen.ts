@@ -6303,6 +6303,47 @@ export interface MCPToolResult {
   truncated?: boolean;
 }
 
+export interface MDMCheckIn {
+  approval_request_id: string;
+  checked_in_at?: string;
+  device_id: string;
+  device_name?: string;
+  failure?: string;
+  id: string;
+  mdm: "intune" | "jamf";
+  provider_status?: number;
+  queued_at: string;
+  reason: string;
+  requested_by: string;
+  status: "queued" | "checked_in" | "failed";
+}
+
+export interface MDMCheckInApproval {
+  approval_count: number;
+  approval_intent_digest: string;
+  approval_request_id: string;
+  device_id: string;
+  device_name?: string;
+  expires_at: string;
+  mdm: "intune" | "jamf";
+  reason: string;
+  required_approvals: number;
+  status: string;
+}
+
+export interface MDMCheckInList {
+  items: ({ approval_request_id: string; checked_in_at?: string; device_id: string; device_name?: string; failure?: string; id: string; mdm: "intune" | "jamf"; provider_status?: number; queued_at: string; reason: string; requested_by: string; status: "queued" | "checked_in" | "failed" })[];
+}
+
+export interface MDMCheckInRequest {
+  reason: string;
+}
+
+export interface MDMCheckInStart {
+  approval_intent_digest: string;
+  approval_request_id: string;
+}
+
 export interface MDMDevice {
   device_name?: string;
   identity_id?: string;

@@ -2,6 +2,12 @@
 
 ### Added
 
+- MDM device check-in behind approval (N9 is served): `POST /api/v1/mdm/{mdm}/devices/{id}/check-in/approval-requests`
+  asks for one device trstctl has read from its MDM; after another reviewer approves, `POST .../check-ins` queues one
+  job for the MDM schedule's relay, which calls Intune's `syncDevice` or sends a Jamf Pro blank push to that computer
+  and records the MDM's answer (`GET /api/v1/mdm/{mdm}/check-ins`; `trstctl mdm check-in ask|run`,
+  `trstctl mdm check-ins`). New relay kind `mdm.device.check_in`. The approval queue now also lists AD CS decision
+  requests (N1), which reviewers could previously approve only by ID.
 - A Slack app for approvals (N8): install per tenant through Slack's consent (bot token sealed under the tenant key),
   pick the approval channel, and approve or deny requests with buttons; members link their Slack users with a
   one-time code (`/trstctl link <code>`), and a press decides through the API's own approval route as that member.

@@ -8757,6 +8757,67 @@ MCPToolResult = TypedDict(
     total=False,
 )
 
+MDMCheckIn = TypedDict(
+    'MDMCheckIn',
+    {
+        'approval_request_id': str,
+        'checked_in_at': str,
+        'device_id': str,
+        'device_name': str,
+        'failure': str,
+        'id': str,
+        'mdm': str,
+        'provider_status': int,
+        'queued_at': str,
+        'reason': str,
+        'requested_by': str,
+        'status': str,
+    },
+    total=False,
+)
+
+MDMCheckInApproval = TypedDict(
+    'MDMCheckInApproval',
+    {
+        'approval_count': int,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'device_id': str,
+        'device_name': str,
+        'expires_at': str,
+        'mdm': str,
+        'reason': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+MDMCheckInList = TypedDict(
+    'MDMCheckInList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MDMCheckInRequest = TypedDict(
+    'MDMCheckInRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+MDMCheckInStart = TypedDict(
+    'MDMCheckInStart',
+    {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+    },
+    total=False,
+)
+
 MDMDevice = TypedDict(
     'MDMDevice',
     {

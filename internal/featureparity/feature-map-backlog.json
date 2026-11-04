@@ -8760,7 +8760,10 @@
                 "listMDMDevices",
                 "getMDMDeviceTrace",
                 "putMDMPollSchedule",
-                "listMDMPollSchedules"
+                "listMDMPollSchedules",
+                "requestMDMCheckInApproval",
+                "executeMDMCheckIn",
+                "listMDMCheckIns"
             ],
             "api_na": "",
             "cli_surface": [
@@ -8777,7 +8780,10 @@
                 "mdm devices",
                 "mdm trace",
                 "mdm poll-schedule set",
-                "mdm poll-schedule show"
+                "mdm poll-schedule show",
+                "mdm check-in ask",
+                "mdm check-in run",
+                "mdm check-ins"
             ],
             "cli_na": "",
             "facet_evidence": {

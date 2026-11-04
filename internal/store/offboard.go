@@ -274,6 +274,8 @@ var TenantScopedTables = []string{
 	"switching_wave_rows", "switching_waves", "switching_import_rows", "switching_imports",
 	// N1: AD CS request decisions; no foreign keys.
 	"adcs_request_decisions",
+	// N9: MDM device check-ins; no foreign keys.
+	"mdm_device_check_ins",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

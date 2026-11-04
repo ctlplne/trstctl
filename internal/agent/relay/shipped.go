@@ -271,6 +271,13 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// N9: one approved device check-in at the MDM (Intune syncDevice
+			// or a Jamf blank push), with the token redeemed for this attempt.
+			Kind:  KindMDMCheckIn,
+			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,
