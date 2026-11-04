@@ -218,7 +218,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/cli/doctor/probes_ops.go": 3,
 		"internal/store/rls_inventory.go":   3,
 		"internal/idemgc/idemgc.go":         2,
-		"internal/perf/live.go":             1,
+		// The perf harness reads its own backend pid once, and its CI-L37
+		// wait-event sampler (measurement only, never in production) copies
+		// the system pool's connection config to open one untraced connection
+		// that reads pg_stat_activity wait events — never a tenant row.
+		"internal/perf/live.go": 2,
 		// finalizeClaim records its outcome — one UPDATE of the claimed row by
 		// id, tenant and lease worker, never a payload — through WithSystemFirst
 		// (CI-L37 d′), once per outcome: that is two of the three.
