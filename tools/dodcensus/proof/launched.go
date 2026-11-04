@@ -2837,11 +2837,11 @@ func validateObservedSocketOwners(parentPID int, owners map[int]bool) error {
 	}
 	for owner := range owners {
 		if owner != parentPID {
-			return fmt.Errorf("same-UID owners = %v, want no owner or only PID %d", sortedPIDs(owners), parentPID)
+			return fmt.Errorf("same-UID owners = %v, want no owner or only PID %d%s", sortedPIDs(owners), parentPID, foreignSocketOwners(parentPID, owners))
 		}
 	}
 	if len(owners) > 1 {
-		return fmt.Errorf("same-UID owners = %v, want no owner or only PID %d", sortedPIDs(owners), parentPID)
+		return fmt.Errorf("same-UID owners = %v, want no owner or only PID %d%s", sortedPIDs(owners), parentPID, foreignSocketOwners(parentPID, owners))
 	}
 	// Zero owners is valid for a connection that closed after the parent FD was
 	// sampled with O_CLOEXEC. Unreadable direct companions are accepted above
@@ -2849,6 +2849,23 @@ func validateObservedSocketOwners(parentPID int, owners map[int]bool) error {
 	// live child is the exact hardened companion. A readable foreign owner still
 	// fails above.
 	return nil
+}
+
+// foreignSocketOwners names each owner other than the parent — its name,
+// state, parent PID and executable — so a failure says which process held the
+// socket (CI-L41: whether it is a child caught between fork and exec, or a
+// real descriptor leak).
+func foreignSocketOwners(parentPID int, owners map[int]bool) string {
+	var parts []string
+	for _, owner := range sortedPIDs(owners) {
+		if owner != parentPID {
+			parts = append(parts, fmt.Sprintf("PID %d (%s)", owner, boundedProcessSummary(owner)))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; foreign: " + strings.Join(parts, "; ")
 }
 
 type reviewedCompanionStatus struct {

@@ -72,8 +72,13 @@ func TestValidateObservedSocketOwnersAllowsOnlyParentOrClosedRace(t *testing.T) 
 		"parent and foreign owner": {parentPID: true, 99: true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := validateObservedSocketOwners(parentPID, owners); err == nil {
+			err := validateObservedSocketOwners(parentPID, owners)
+			if err == nil {
 				t.Fatal("foreign same-UID socket owner was accepted")
+			}
+			// CI-L41: the failure names the foreign owner, not only the PID list.
+			if !strings.Contains(err.Error(), "foreign: PID 99 (") {
+				t.Fatalf("the failure does not name the foreign owner: %v", err)
 			}
 		})
 	}
