@@ -64,8 +64,11 @@ const (
 	// separate from AccessRead because knowing which controls the current caller
 	// can use is navigation posture, not authority to enumerate members or roles.
 	CapabilitiesRead Permission = "capabilities:read"
-	AccessRead       Permission = "access:read"
-	AccessWrite      Permission = "access:write"
+	// ChangesWrite plans and applies a reviewed configuration change set
+	// (A248). Every object in the set also needs its own write permission.
+	ChangesWrite Permission = "changes:write"
+	AccessRead   Permission = "access:read"
+	AccessWrite  Permission = "access:write"
 	// AccessApprove lets a distinct custodian review PAM access without the
 	// authority to request or activate a privileged session.
 	AccessApprove Permission = "access:approve"
@@ -137,7 +140,7 @@ func allResourcePermissions() []Permission {
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
-		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead,
+		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead, ChangesWrite,
 		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,

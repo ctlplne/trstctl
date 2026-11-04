@@ -19,6 +19,8 @@ const (
 	bodyIntentDigestReason                 // digest + denial reason wrapped as an immutable decision
 	bodyApprovalFile                       // exact legacy approval JSON from -f, including request ID + digest
 	bodyCertificateFile                    // PEM certificate or JSON ingest body from -f
+	bodyChangeSetFile                      // a change set written as YAML or JSON, from -f (A248)
+	bodyChangeSetApply                     // that change set plus one positional plan digest, wrapped for apply
 )
 
 // Command maps a CLI invocation to one API operation, so the command set is
@@ -416,6 +418,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"incidents", "fleet-reissuance", "resume"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/resume", Body: bodyFile, Summary: "Resume at the retained signed H2 gate"},
 	{Name: []string{"incidents", "fleet-reissuance", "rollback"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback", Body: bodyFile, Summary: "Roll back the current unrevoked incident cohort"},
 	{Name: []string{"incidents", "fleet-reissuance", "evidence"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence", Summary: "Export fleet reissuance evidence"},
+	{Name: []string{"changes", "plan"}, Method: "POST", Path: "/api/v1/changes/plan", Body: bodyChangeSetFile, ExampleFile: "change-set.yaml", ReadOnly: true, Summary: "Plan a reviewed change set (YAML or JSON): validate it, check every object's permission, and list exactly what applying it would do, with the plan digest to apply"},
+	{Name: []string{"changes", "apply"}, Method: "POST", Path: "/api/v1/changes/apply", Body: bodyChangeSetApply, ExampleFile: "change-set.yaml", Summary: "Apply a change set as it was planned; the plan digest you reviewed is required and a plan the tenant has moved past is refused"},
 	{Name: []string{"rehearsals", "scenarios", "save"}, Method: "POST", Path: "/api/v1/rehearsals/scenarios", Body: bodyFile, Summary: "Save a failure scenario to rehearse: its kind, candidate, data set and the effect each step should have"},
 	{Name: []string{"rehearsals", "scenarios", "list"}, Method: "GET", Path: "/api/v1/rehearsals/scenarios", Summary: "List the saved failure scenarios"},
 	{Name: []string{"rehearsals", "scenarios", "show"}, Method: "GET", Path: "/api/v1/rehearsals/scenarios/{id}", Summary: "Show one saved failure scenario"},

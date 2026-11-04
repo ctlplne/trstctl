@@ -34,7 +34,11 @@ var cmdbSweepEventNamespace = uuid.MustParse("0f235a4f-5938-5bd4-a6a8-e26bf50856
 // wrapper remains for older embedders, while every served API write uses this
 // complete event shape.
 func (o *Orchestrator) CreateOwnerRecord(ctx context.Context, owner store.Owner) (store.Owner, error) {
-	owner.ID = uuid.NewString()
+	// A reviewed change set (A248) names its owners by key, so it creates each
+	// under the deterministic ID the key gives; every other caller gets a new one.
+	if owner.ID == "" {
+		owner.ID = uuid.NewString()
+	}
 	if err := validateOwnerRecord(owner); err != nil {
 		return store.Owner{}, err
 	}
@@ -87,6 +91,9 @@ func (o *Orchestrator) UpdateOwnerRecord(ctx context.Context, owner store.Owner)
 	})
 	return updated, err
 }
+
+// ValidateOwnerRecord checks an owner as creating or updating it would.
+func ValidateOwnerRecord(owner store.Owner) error { return validateOwnerRecord(owner) }
 
 func validateOwnerRecord(owner store.Owner) error {
 	switch owner.Kind {

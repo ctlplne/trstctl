@@ -2,6 +2,15 @@
 
 ### Added
 
+- Reviewed configuration change sets (A248, first part): one typed set of certificate profiles,
+  CA bindings, connector targets, member role grants and owners, written as JSON or YAML.
+  `POST /api/v1/changes/plan` (CLI `changes plan -f`) refuses a malformed or over-broad set, one
+  carrying a secret value, and one beyond its author's permissions (`changes:write` plus each
+  object's own permission; member grants get the members API's checks), then lists per object
+  the identities, credentials, grants, destinations, approvals, events and verification
+  involved. `POST /api/v1/changes/apply` (CLI `changes apply -f <set> <plan_digest>`) needs the
+  reviewed plan digest, refuses a plan the tenant has moved past, writes each object through
+  the operator's own command and reads it back. New permission `changes:write`.
 - Rehearsals of failure scenarios (A247): save a scenario — approval resumption,
   target outage, renewal failure, revoked credential, stale policy, restore or retry — with its
   candidate, data set (named identities, or a scrubbed failure: identifiers and codes, no values)

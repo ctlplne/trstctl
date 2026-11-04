@@ -239,19 +239,30 @@ func (a *API) authorizeRoleAssignment(ctx context.Context, tenantID, subject str
 	if !ok || principal.Subject == "" {
 		return errStatus(http.StatusUnauthorized, "missing authenticated principal for role assignment")
 	}
-	if principal.Subject == subject {
-		if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", "self role assignment is not allowed"); err != nil {
-			return err
-		}
-		return errStatus(http.StatusForbidden, "self role assignment is not allowed")
+	reason, err := a.roleAssignmentRefusal(ctx, tenantID, principal, subject, roles)
+	if err != nil {
+		return err
 	}
-	target := authz.Scope{TenantID: tenantID}
-	if !principal.Can(authz.AccessRoleAssign, target) {
-		reason := string(authz.AccessRoleAssign) + " is required to assign member roles"
+	if reason != "" {
 		if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", reason); err != nil {
 			return err
 		}
 		return errStatus(http.StatusForbidden, reason)
+	}
+	return a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "allow", "")
+}
+
+// roleAssignmentRefusal is why principal may not grant roles to subject, or ""
+// when it may: the checks authorizeRoleAssignment records, run without
+// recording, so a reviewed change set's plan (A248) refuses what applying it
+// would.
+func (a *API) roleAssignmentRefusal(ctx context.Context, tenantID string, principal authz.Principal, subject string, roles []string) (string, error) {
+	if principal.Subject == subject {
+		return "self role assignment is not allowed", nil
+	}
+	target := authz.Scope{TenantID: tenantID}
+	if !principal.Can(authz.AccessRoleAssign, target) {
+		return string(authz.AccessRoleAssign) + " is required to assign member roles", nil
 	}
 	// Only a caller that holds every permission may grant a role that holds every
 	// permission, so an operator or a role-provisioning token cannot create an
@@ -259,35 +270,28 @@ func (a *API) authorizeRoleAssignment(ctx context.Context, tenantID, subject str
 	if !principal.Can(authz.Wildcard, target) {
 		resolved, err := a.resolveRoles(ctx, tenantID, roles)
 		if err != nil {
-			return err
+			return "", err
 		}
 		for _, name := range roles {
 			role, ok := resolved[strings.TrimSpace(name)]
 			if !ok {
 				continue
 			}
-			reason := ""
 			if role.Allows(authz.Wildcard) {
-				reason = "only an administrator can grant the " + role.Name + " role, which holds every permission"
-			} else if _, builtin := authz.BuiltinRoles()[role.Name]; !builtin {
+				return "only an administrator can grant the " + role.Name + " role, which holds every permission", nil
+			}
+			if _, builtin := authz.BuiltinRoles()[role.Name]; !builtin {
 				// A207: a custom role is assignable only by a caller holding
 				// every permission it grants.
 				for _, p := range role.Permissions {
 					if !principal.Can(p, target) {
-						reason = "granting the " + role.Name + " role needs " + string(p) + ", which you do not hold"
-						break
+						return "granting the " + role.Name + " role needs " + string(p) + ", which you do not hold", nil
 					}
 				}
 			}
-			if reason != "" {
-				if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", reason); err != nil {
-					return err
-				}
-				return errStatus(http.StatusForbidden, reason)
-			}
 		}
 	}
-	return a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "allow", "")
+	return "", nil
 }
 
 func (a *API) recordRoleAssignDecision(ctx context.Context, tenantID string, principal authz.Principal, subject string, roles []string, decision, reason string) error {

@@ -384,6 +384,18 @@ func (a *API) ApplyTenantBaseline(ctx context.Context, tenantID, scope string, b
 	return out, nil
 }
 
+// baselineOrigin names what asked for a baseline's objects, in the records its
+// steps write: a tenant baseline (A186) or a reviewed change set (A248).
+type baselineOrigin struct {
+	label        string // a policy version's default description; "applied by " + label activates it
+	memberSource string
+	memberReason string
+}
+
+func tenantBaselineOrigin(scope string) baselineOrigin {
+	return baselineOrigin{label: "tenant baseline " + scope, memberSource: "baseline", memberReason: "granted by a tenant baseline"}
+}
+
 // baselineStep reads one object's state and applies it. read returns the
 // current object (or nil) so apply knows whether it creates or updates.
 type baselineStep struct {
@@ -392,12 +404,13 @@ type baselineStep struct {
 }
 
 func (a *API) baselineSteps(tenantID, scope string, b TenantBaseline) []baselineStep {
+	origin := tenantBaselineOrigin(scope)
 	var steps []baselineStep
 	for _, p := range b.Profiles {
 		steps = append(steps, a.baselineProfileStep(tenantID, p))
 	}
 	if b.Policy != nil {
-		steps = append(steps, a.baselinePolicyStep(tenantID, scope, *b.Policy))
+		steps = append(steps, a.baselinePolicyStep(tenantID, scope, origin, *b.Policy))
 	}
 	for _, x := range b.Issuers {
 		steps = append(steps, a.baselineIssuerStep(tenantID, scope, x))
@@ -409,7 +422,7 @@ func (a *API) baselineSteps(tenantID, scope string, b TenantBaseline) []baseline
 		steps = append(steps, a.baselineChannelStep(tenantID, x))
 	}
 	for _, x := range b.Members {
-		steps = append(steps, a.baselineMemberStep(tenantID, x))
+		steps = append(steps, a.baselineMemberStep(tenantID, origin, x))
 	}
 	for _, x := range b.ReportSchedules {
 		steps = append(steps, a.baselineScheduleStep(tenantID, scope, x))
@@ -475,7 +488,7 @@ func (a *API) baselineProfileStep(tenantID string, p BaselineProfile) baselineSt
 	}
 }
 
-func (a *API) baselinePolicyStep(tenantID, scope string, p BaselinePolicy) baselineStep {
+func (a *API) baselinePolicyStep(tenantID, scope string, origin baselineOrigin, p BaselinePolicy) baselineStep {
 	module := strings.TrimSpace(p.Module)
 	return baselineStep{
 		read: func(ctx context.Context) (BaselineObjectState, any, error) {
@@ -499,7 +512,7 @@ func (a *API) baselinePolicyStep(tenantID, scope string, p BaselinePolicy) basel
 		},
 		apply: func(ctx context.Context, current any) (string, string, error) {
 			err := a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
-				return a.authorAndActivateBaselinePolicy(ctx, tenantID, scope, module, p.Description)
+				return a.authorAndActivateBaselinePolicy(ctx, tenantID, scope, origin, module, p.Description)
 			})
 			if err != nil {
 				return "", "", err
@@ -512,7 +525,7 @@ func (a *API) baselinePolicyStep(tenantID, scope string, p BaselinePolicy) basel
 // authorAndActivateBaselinePolicy records the module as a lifecycle policy
 // version (once: its ID derives from the module digest) and activates it, with
 // the same events an operator's create and activate requests append.
-func (a *API) authorAndActivateBaselinePolicy(ctx context.Context, tenantID, scope, module, description string) error {
+func (a *API) authorAndActivateBaselinePolicy(ctx context.Context, tenantID, scope string, origin baselineOrigin, module, description string) error {
 	live, ok := a.liveLifecyclePolicy()
 	if !ok {
 		return errStatus(http.StatusServiceUnavailable, "live lifecycle policy activation is not configured")
@@ -534,7 +547,7 @@ func (a *API) authorAndActivateBaselinePolicy(ctx context.Context, tenantID, sco
 	if _, exists := state.items[id]; !exists {
 		payload, err := json.Marshal(policyVersionAuthoredEvent{
 			ID: id, Kind: kind, Module: prepared, ModuleSHA256: info.ModuleSHA256, Package: info.Package, Query: info.Query,
-			Description: trimPolicyText(firstNonEmpty(description, "tenant baseline "+scope), 500), Author: actor,
+			Description: trimPolicyText(firstNonEmpty(description, origin.label), 500), Author: actor,
 		})
 		if err != nil {
 			return err
@@ -552,7 +565,7 @@ func (a *API) authorAndActivateBaselinePolicy(ctx context.Context, tenantID, sco
 		previousID = policyVersionBootID
 	}
 	payload, err := json.Marshal(policyVersionActivatedEvent{
-		ID: id, Kind: kind, Reason: "applied by tenant baseline " + scope, ActivatedBy: actor,
+		ID: id, Kind: kind, Reason: "applied by " + origin.label, ActivatedBy: actor,
 		PreviousID: previousID, PreviousModule: previousModule, PreviousModuleSHA256: previousInfo.ModuleSHA256,
 		PreviousPackage: previousInfo.Package, PreviousQuery: previousInfo.Query,
 	})
@@ -696,7 +709,7 @@ func memberDigest(roles []string, active bool) string {
 	}{sorted, active})
 }
 
-func (a *API) baselineMemberStep(tenantID string, x BaselineMember) baselineStep {
+func (a *API) baselineMemberStep(tenantID string, origin baselineOrigin, x BaselineMember) baselineStep {
 	subject := strings.TrimSpace(x.Subject)
 	expected := memberDigest(x.Roles, true)
 	return baselineStep{
@@ -720,7 +733,7 @@ func (a *API) baselineMemberStep(tenantID string, x BaselineMember) baselineStep
 				return "", "", err
 			}
 			if _, err := a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
-				Subject: subject, DisplayName: x.DisplayName, Email: x.Email, Roles: x.Roles, Source: "baseline",
+				Subject: subject, DisplayName: x.DisplayName, Email: x.Email, Roles: x.Roles, Source: origin.memberSource,
 			}); err != nil {
 				return "", "", err
 			}
@@ -728,7 +741,7 @@ func (a *API) baselineMemberStep(tenantID string, x BaselineMember) baselineStep
 			if actor, ok := events.ActorFromContext(ctx); ok {
 				principal.Subject = actor.Subject
 			}
-			if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, x.Roles, "allow", "granted by a tenant baseline"); err != nil {
+			if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, x.Roles, "allow", origin.memberReason); err != nil {
 				return "", "", err
 			}
 			return createdOrUpdated(current), "", nil

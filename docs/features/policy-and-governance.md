@@ -370,6 +370,65 @@ reporting zero.
 **Status:** served for PR/ticket/CAB-backed access-change requests with distinct-approver
 enforcement, idempotency, event projection, API, CLI, and console coverage.
 
+### Reviewed configuration change sets
+
+A change set is the configuration a tenant should hold, as one typed document: certificate
+profiles, CA bindings (issuers), connector targets, member role grants, and owners with their
+application model. You write it as JSON or YAML (a GitOps repository keeps it as YAML), plan
+it, review the plan, and apply exactly what you reviewed.
+
+`POST /api/v1/changes/plan` (`trstctl-cli changes plan -f change-set.yaml`) changes nothing.
+It refuses a set that is malformed (an unknown field, a missing name, no objects, more than
+200 objects), over-broad (a name, key, subject or role written as a pattern such as `*`), or
+that carries a secret value (a field named for one, or a private key, token, bearer
+credential or password-bearing connection string anywhere in it; name a stored secret with a
+`…_ref` field instead). It checks you may write every object: the route needs
+`changes:write`, and each object also needs its own permission — `profiles:write`,
+`issuers:write`, `connectors:write`, `access:role.assign` or `owners:write` — and a member grant
+gets the same checks as `PUT /api/v1/access/members/{subject}` (no self-assignment; only an
+administrator grants an all-permissions role; a custom role only by someone holding all of
+it). Then it lists, per object, whether applying creates, updates or leaves it alone, and
+exactly what that involves: the identities (the member, or how many identities are issued
+under a CA, deploy to a target or belong to an owner), credentials (the public certificates
+in a chain; the stored secrets a target names), grants (the roles, and the roles held now),
+destinations (where a target deploys; an owner's escalation chain), approvals (a profile
+version that waits for a second operator), the events it appends, and how the result is
+verified. The plan's `plan_digest` binds the set's objects and each object's current
+revision. The set's `change_set_digest` is its intent alone: the same objects written in any
+order, under any name, digest the same.
+
+`POST /api/v1/changes/apply` (`trstctl-cli changes apply -f change-set.yaml <plan_digest>`)
+needs that digest. It plans again and refuses with `409` when the tenant or the set differs
+from what was reviewed, so an edit made after the review is never overwritten. Otherwise it
+writes each changed object through the command the operator's own request takes, reads each
+back, and reports `verified` per object; `complete` is false while anything waits for an
+approval or failed. Applying is idempotent under its `Idempotency-Key`, and a second plan of
+an applied set lists every object as `unchanged`.
+
+```yaml
+# change-set.yaml
+name: onboard payments
+owners:
+  - {key: payments, kind: team, name: Payments, application_id: app-42, environment: production,
+     escalation_chain: [payments-oncall]}
+profiles:
+  - {name: payments-web, spec: {allowed_key_algorithms: [ECDSA], allowed_protocols: [acme], max_validity: 720h}}
+deployment_targets:
+  - {key: payments-lb, name: payments-lb, connector: f5, config: {address_ref: payments-lb}, enabled: false}
+members:
+  - {subject: dev@payments.example, roles: [viewer]}
+```
+
+```bash
+trstctl-cli changes plan -f change-set.yaml            # review the items; note plan_digest
+trstctl-cli changes apply -f change-set.yaml sha256:…  # apply what you reviewed
+```
+
+**Status:** served through the API and the CLI for profiles, CA bindings, connector targets,
+member role grants and owners. A console form, an AI-drafted change set, and the policy,
+notification-channel, report-schedule, agent and secret-metadata kinds come next (see
+[limitations](../limitations.md#reviewed-configuration-change-sets-a248)).
+
 ### ABAC deny overlay
 
 Attribute-based access control (ABAC) narrows a permission RBAC already granted. It's

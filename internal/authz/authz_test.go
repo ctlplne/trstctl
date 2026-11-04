@@ -326,6 +326,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.IncidentsGameDay,
 			authz.PrivateEgress,
 			authz.CapabilitiesRead,
+			authz.ChangesWrite,
 			authz.AccessRead,
 			authz.AccessWrite,
 			// The CLI can carry reviewer authority; PAM still rejects the

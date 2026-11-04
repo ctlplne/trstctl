@@ -4245,6 +4245,27 @@ CertificateTransparencyEntry = TypedDict(
     total=False,
 )
 
+ChangeApplication = TypedDict(
+    'ChangeApplication',
+    {
+        'change_set_digest': str,
+        'complete': bool,
+        'name': str,
+        'plan_digest': str,
+        'results': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ChangeApplyRequest = TypedDict(
+    'ChangeApplyRequest',
+    {
+        'change_set': dict[str, Any],
+        'plan_digest': str,
+    },
+    total=False,
+)
+
 ChangeImpact = TypedDict(
     'ChangeImpact',
     {
@@ -4252,6 +4273,32 @@ ChangeImpact = TypedDict(
         'identities': list[dict[str, Any]],
         'kind': str,
         'name': str,
+    },
+    total=False,
+)
+
+ChangePlan = TypedDict(
+    'ChangePlan',
+    {
+        'change_set_digest': str,
+        'changes': int,
+        'items': list[dict[str, Any]],
+        'name': str,
+        'plan_digest': str,
+    },
+    total=False,
+)
+
+ChangeSet = TypedDict(
+    'ChangeSet',
+    {
+        'deployment_targets': list[dict[str, Any]],
+        'description': str,
+        'issuers': list[dict[str, Any]],
+        'members': list[dict[str, Any]],
+        'name': str,
+        'owners': list[dict[str, Any]],
+        'profiles': list[dict[str, Any]],
     },
     total=False,
 )

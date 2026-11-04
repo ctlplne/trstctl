@@ -214,6 +214,33 @@ func DefaultRedactor(prompt string) string {
 	return out
 }
 
+// privatePEM is a PEM block holding a private key, of any algorithm.
+var privatePEM = regexp.MustCompile(`(?i)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----`)
+
+// StructuredSecret reports the first structured secret in s — a private-key PEM
+// block, a JWT, a bearer credential, a trstctl or vendor token, an AWS key, a
+// keyed secret assignment, or a connection string carrying a password — and
+// names its shape. Unlike DefaultRedactor it has no generic high-entropy sweep,
+// so certificates, public keys, digests and fingerprints pass: it decides
+// whether a value IS a secret, where the redactor errs toward anything that
+// might be one.
+func StructuredSecret(s string) (string, bool) {
+	for _, shape := range []struct {
+		name string
+		re   *regexp.Regexp
+	}{
+		{"a private key", privatePEM}, {"a JWT", jwt}, {"a trstctl API token", trstToken},
+		{"a vendor token", vendorOpaqueToken}, {"a bearer credential", bearer}, {"an AWS secret key", awsSecret},
+		{"an AWS access key ID", awsKeyID}, {"a connection string with a password", connString},
+		{"a secret assignment", secretKV},
+	} {
+		if shape.re.MatchString(s) {
+			return shape.name, true
+		}
+	}
+	return "", false
+}
+
 // residualHighEntropy detects any high-entropy run that survived redaction — the
 // detector behind the hard egress gate. It is deliberately a superset of the
 // redactor's generic sweeps (base64/hex) plus the structured vendor-token

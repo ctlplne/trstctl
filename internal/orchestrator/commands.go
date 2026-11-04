@@ -644,6 +644,12 @@ func profileNameFromIdentityAttributes(attrs json.RawMessage) (string, error) {
 	return strings.TrimSpace(probe.Profile), nil
 }
 
+// ProfileEditRequiresApproval reports whether saving spec as the profile name
+// would wait for a second operator's approval rather than take effect.
+func (o *Orchestrator) ProfileEditRequiresApproval(ctx context.Context, tenantID, name string, spec json.RawMessage) (bool, error) {
+	return o.profileEditRequiresApproval(ctx, tenantID, name, spec)
+}
+
 func (o *Orchestrator) profileEditRequiresApproval(ctx context.Context, tenantID, name string, spec json.RawMessage) (bool, error) {
 	proposed, err := profileSpecRequiresApproval(spec)
 	if err != nil {

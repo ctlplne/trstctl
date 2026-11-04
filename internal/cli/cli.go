@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -467,6 +469,8 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		bodyParams = []string{"intent_digest"}
 	case bodyIntentDigestReason:
 		bodyParams = []string{"intent_digest", "reason"}
+	case bodyChangeSetApply:
+		bodyParams = []string{"plan_digest"}
 	}
 	expectedParams := append(append([]string(nil), params...), bodyParams...)
 	if len(positionals) != len(expectedParams) {
@@ -497,6 +501,24 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 				return "", nil, nil, false, err
 			}
 		}
+	} else if cmd.Body == bodyChangeSetFile || cmd.Body == bodyChangeSetApply {
+		if bodyFilePath == "" {
+			return "", nil, nil, false, fmt.Errorf("%s needs a change set: -f <file.yaml|file.json> or -f - for stdin", strings.Join(cmd.Name, " "))
+		}
+		raw, err := readBody(bodyFilePath, stdin)
+		if err != nil {
+			return "", nil, nil, false, err
+		}
+		body, err = changeSetJSON(raw)
+		if err != nil {
+			return "", nil, nil, false, err
+		}
+		if cmd.Body == bodyChangeSetApply {
+			body, err = json.Marshal(map[string]any{"change_set": json.RawMessage(body), "plan_digest": positionals[len(params)]})
+			if err != nil {
+				return "", nil, nil, false, err
+			}
+		}
 	} else if cmd.Body == bodyOptionalFile && bodyFilePath != "" {
 		body, err = readBody(bodyFilePath, stdin)
 		if err != nil {
@@ -517,6 +539,19 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		}
 	}
 	return path, query, body, force, nil
+}
+
+// changeSetJSON reads a change set written as YAML or JSON — GitOps keeps them
+// in YAML — and returns it as JSON.
+func changeSetJSON(raw []byte) ([]byte, error) {
+	var v any
+	if err := yaml.Unmarshal(raw, &v); err != nil {
+		return nil, fmt.Errorf("the change set is neither YAML nor JSON: %w", err)
+	}
+	if _, ok := v.(map[string]any); !ok {
+		return nil, errors.New("a change set is a mapping with a name and its objects")
+	}
+	return json.Marshal(v)
 }
 
 // certificateIngestBody preserves the API's JSON form for owner/source metadata
@@ -720,6 +755,12 @@ func commandUsage(w io.Writer, cmd Command) {
 	if cmd.Body == bodyIntentDigestReason {
 		_, _ = fmt.Fprint(w, " <intent_digest> <reason>")
 	}
+	if cmd.Body == bodyChangeSetFile {
+		_, _ = fmt.Fprint(w, " -f <file.yaml|file.json|->")
+	}
+	if cmd.Body == bodyChangeSetApply {
+		_, _ = fmt.Fprint(w, " -f <file.yaml|file.json|-> <plan_digest>")
+	}
 	if cmd.Body == bodyOptionalFile {
 		_, _ = fmt.Fprint(w, " [-f <file|->]")
 	}
@@ -762,6 +803,12 @@ func commandExample(cmd Command) string {
 	}
 	if cmd.Body == bodyIntentDigestReason {
 		parts = append(parts, "<intent_digest>", "\"review reason\"")
+	}
+	if cmd.Body == bodyChangeSetFile || cmd.Body == bodyChangeSetApply {
+		parts = append(parts, "-f", cmd.ExampleFile)
+	}
+	if cmd.Body == bodyChangeSetApply {
+		parts = append(parts, "<plan_digest>")
 	}
 	if cmd.Body == bodyOptionalFile {
 		parts = append(parts, "-f", "request.json")

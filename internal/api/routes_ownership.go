@@ -136,5 +136,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, revocationReportRoutes(a)...)    // see revocation_report.go
 	out = append(out, operationsDashboardRoutes(a)...) // see operations_dashboard.go
 	out = append(out, rehearsalRoutes(a)...)           // see rehearsals.go
+	out = append(out, changeSetRoutes(a)...)           // see change_sets.go
 	return out
 }

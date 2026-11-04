@@ -47,6 +47,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"certs:read":           true,
 	"certs:request":        true,
 	"certs:write":          true,
+	"changes:write":        true,
 	"connectors:read":      true,
 	"connectors:write":     true,
 	"discovery:read":       true,

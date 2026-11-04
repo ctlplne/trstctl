@@ -3031,11 +3031,42 @@ export interface CertificateTransparencyEntry {
   tree_size?: number;
 }
 
+export interface ChangeApplication {
+  change_set_digest: string;
+  complete: boolean;
+  name: string;
+  plan_digest: string;
+  results: { approval_request_id?: string; error?: string; key: string; kind: string; object_id?: string; outcome: string; verified: boolean }[];
+}
+
+export interface ChangeApplyRequest {
+  change_set: { deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[]; description?: string; issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[]; members?: { display_name?: string; email?: string; roles: string[]; subject: string }[]; name: string; owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[]; profiles?: { name: string; spec: unknown }[] };
+  plan_digest: string;
+}
+
 export interface ChangeImpact {
   approvals: { action: string; id: string; identity_id: string; status: string }[];
   identities: { id: string; name: string; owner_id?: string; status: string }[];
   kind: "deployment_target" | "profile";
   name: string;
+}
+
+export interface ChangePlan {
+  change_set_digest: string;
+  changes: number;
+  items: ({ action: "create" | "update" | "unchanged"; actual_digest?: string; approvals: string[]; credentials: string[]; destinations: string[]; detail?: string; effects: string[]; expected_digest: string; grants: string[]; identities: string[]; key: string; kind: string; object_id?: string; verification: string })[];
+  name: string;
+  plan_digest: string;
+}
+
+export interface ChangeSet {
+  deployment_targets?: { config: unknown; connector: string; enabled?: boolean; key: string; name: string }[];
+  description?: string;
+  issuers?: { chain?: string[]; internal?: boolean; key: string; kind: string; name: string; public_key?: string }[];
+  members?: { display_name?: string; email?: string; roles: string[]; subject: string }[];
+  name: string;
+  owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[];
+  profiles?: { name: string; spec: unknown }[];
 }
 
 export interface CloudSecretManagerIntegration {

@@ -12511,6 +12511,238 @@
         ],
         "type": "object"
       },
+      "ChangeApplication": {
+        "properties": {
+          "change_set_digest": {
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "approval_request_id": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "object_id": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "type": "string"
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "key",
+                "outcome",
+                "verified"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "change_set_digest",
+          "plan_digest",
+          "complete",
+          "results"
+        ],
+        "type": "object"
+      },
+      "ChangeApplyRequest": {
+        "properties": {
+          "change_set": {
+            "properties": {
+              "deployment_targets": {
+                "items": {
+                  "properties": {
+                    "config": {},
+                    "connector": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "connector",
+                    "config"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": "string"
+              },
+              "issuers": {
+                "items": {
+                  "properties": {
+                    "chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "public_key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "members": {
+                "items": {
+                  "properties": {
+                    "display_name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "subject": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "roles"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "owners": {
+                "items": {
+                  "properties": {
+                    "application_id": {
+                      "type": "string"
+                    },
+                    "business_unit": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "environment": {
+                      "type": "string"
+                    },
+                    "escalation_chain": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "profiles": {
+                "items": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "spec": {}
+                  },
+                  "required": [
+                    "name",
+                    "spec"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "change_set",
+          "plan_digest"
+        ],
+        "type": "object"
+      },
       "ChangeImpact": {
         "properties": {
           "approvals": {
@@ -12582,6 +12814,277 @@
           "name",
           "identities",
           "approvals"
+        ],
+        "type": "object"
+      },
+      "ChangePlan": {
+        "properties": {
+          "change_set_digest": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "create",
+                    "update",
+                    "unchanged"
+                  ],
+                  "type": "string"
+                },
+                "actual_digest": {
+                  "type": "string"
+                },
+                "approvals": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "credentials": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "destinations": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "effects": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "expected_digest": {
+                  "type": "string"
+                },
+                "grants": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "identities": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "object_id": {
+                  "type": "string"
+                },
+                "verification": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "key",
+                "action",
+                "expected_digest",
+                "identities",
+                "credentials",
+                "grants",
+                "destinations",
+                "approvals",
+                "effects",
+                "verification"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "change_set_digest",
+          "plan_digest",
+          "changes",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ChangeSet": {
+        "properties": {
+          "deployment_targets": {
+            "items": {
+              "properties": {
+                "config": {},
+                "connector": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "connector",
+                "config"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "issuers": {
+            "items": {
+              "properties": {
+                "chain": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "internal": {
+                  "type": "boolean"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "public_key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "kind"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "members": {
+            "items": {
+              "properties": {
+                "display_name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "roles": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subject",
+                "roles"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owners": {
+            "items": {
+              "properties": {
+                "application_id": {
+                  "type": "string"
+                },
+                "business_unit": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "environment": {
+                  "type": "string"
+                },
+                "escalation_chain": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "service": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "profiles": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "spec": {}
+              },
+              "required": [
+                "name",
+                "spec"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -59298,6 +59801,132 @@
         ],
         "summary": "Get a certificate's device-bound custody evidence for offline re-verification",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/changes/apply": {
+      "post": {
+        "operationId": "applyChangeSet",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeApplication"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a planned change set; a plan the tenant has moved past is refused",
+        "x-trstctl-permission": "changes:write"
+      }
+    },
+    "/api/v1/changes/plan": {
+      "post": {
+        "operationId": "planChangeSet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Plan a reviewed configuration change set: validate it, check every object's permission, and list exactly what applying it would do",
+        "x-trstctl-permission": "changes:write",
+        "x-trstctl-read-only": true
       }
     },
     "/api/v1/code-signing/identities": {
