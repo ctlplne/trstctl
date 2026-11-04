@@ -92,6 +92,7 @@ nav:
           - Operations and resilience: operations.md
           - Prove isolation (trstctl doctor): operations/doctor.md
           - Evaluate on your endpoint (trstctl evaluate): operations/evaluate.md
+          - SDK packages from a local registry: operations/sdk-packages.md
           - Troubleshooting: troubleshooting.md
           - Uninstall: uninstall.md
       - On-call responder:

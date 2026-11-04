@@ -870,6 +870,15 @@ sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs, th
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=clients/sdk/python/src python3 -m unittest discover -s clients/sdk/python/tests -v
 	clients/sdk/java/scripts/run_tests.sh
 
+.PHONY: sdk-packages
+sdk-packages: ## Build the four client SDKs as installable packages of SDK_VERSION into SDK_REGISTRY_DIR (a local registry directory; publishes nothing)
+	scripts/release/sdk-packages.sh $(or $(SDK_VERSION),0.1.0) $(or $(SDK_REGISTRY_DIR),dist/sdk-registry)
+
+.PHONY: sdk-install-check
+sdk-install-check: ## A250: build the SDK packages, serve them as local registries, install each by exact version in a clean environment and run auth, read, rotate and revoke against a served control plane
+	npm --prefix clients/sdk/typescript ci
+	TRSTCTL_SDK_REGISTRY_INSTALL=1 $(GO) test -count=1 -run 'TestServedSDKsInstallFromALocalRegistryA250' ./internal/server/
+
 .PHONY: docker-context-check
 docker-context-check: ## Prove ignored caches/secrets cannot enter any Docker build stage
 	./scripts/ci/docker-context-audit.sh

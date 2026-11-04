@@ -14,10 +14,14 @@ published to a public package registry. The exact distribution boundary is:
 
 | SDK | Verified way to use it today | Public package claim |
 | --- | --- | --- |
-| Go | clone the repository and use a local `replace` to `clients/sdk/go` | none; the vanity `go-import` endpoint is not served |
-| TypeScript | `npm install` the checked-out `clients/sdk/typescript` directory | none |
-| Python | `python -m pip install` the checked-out `clients/sdk/python` directory | none |
-| Java | build/install the checked-out `clients/sdk/java/pom.xml` into the local Maven repository | none |
+| Go | clone the repository and use a local `replace` to `clients/sdk/go`, or `go get trstctl.com/sdk/go@v0.1.0` from a local registry | none; the vanity `go-import` endpoint is not served |
+| TypeScript | `npm install` the checked-out `clients/sdk/typescript` directory, or `@trstctl/sdk@0.1.0` from a local registry | none |
+| Python | `python -m pip install` the checked-out `clients/sdk/python` directory, or `trstctl-sdk==0.1.0` from a local registry | none |
+| Java | build/install the checked-out `clients/sdk/java/pom.xml` into the local Maven repository, or the `com.trstctl:trstctl-sdk:0.1.0` jar from a local registry | none |
+
+[SDK packages from a local registry](../operations/sdk-packages.md) builds all four
+as packages of one version, serves them, and installs each in a clean
+environment (`make sdk-install-check`, run in CI).
 
 The console uses only these verified local-source commands. A registry command can
 replace one of them only after CI installs that exact published artifact from a

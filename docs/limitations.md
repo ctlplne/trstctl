@@ -7706,9 +7706,9 @@ and writes a signed evidence pack. Read the pack with these limits:
 - **Keys from the same server.** The run checks the audit export with the keys
   the server publishes; `trstctl evaluate verify` checks the pack and its export
   again with a key set obtained separately.
-- **One run, and it changes the endpoint.** The journey creates an identity,
-  deploys two certificates and revokes the first. It is not a load, failover or
-  long-running test, and belongs on an endpoint under evaluation.
+- **It changes the endpoint.** The journey creates an identity, deploys two
+  certificates and revokes the first; `--cycles` repeats that unattended. It is
+  not a load or failover test, and belongs on an endpoint under evaluation.
 
 ### Evaluation across journeys (A249) — served
 
@@ -7732,6 +7732,27 @@ for `/readyz`, and the run passes only if the next cycle passes after it. The
 served proof restarts the control plane in the middle of a cycle under the secrets
 and SSH journeys and repeats the certificate journey on one endpoint; a restart
 during the certificate journey is checked on the real image in the replay.
+
+## Package readiness (A250)
+
+`scripts/release/sdk-packages.sh <version> <dir>` (`make sdk-packages`) builds the
+four client SDKs as packages of one version: a Go module proxy tree for
+`trstctl.com/sdk/go`, the `@trstctl/sdk` npm tarball (compiled JavaScript and
+declarations), the `trstctl-sdk` wheel and its PEP 503 index, and the
+`com.trstctl:trstctl-sdk` jar and pom in a Maven 2 layout, with `manifest.json` and
+`SHA256SUMS`. `go run ./tools/sdkpack serve --dir <dir>` serves them as local
+registries. `make sdk-install-check` installs each by exact version in a clean
+environment and runs auth, read, rotate and revoke against a served control
+plane; a retried mutation keeps its Idempotency-Key and waits out `Retry-After`.
+CI runs it with a JDK. Nothing is published to a public registry: that is a
+release decision. What comes next:
+
+- **Signed release assets.** The four packages attached to a release with build
+  provenance, as the Python SDK and the CLI archives are today.
+- **Upgrade compatibility.** One version installed and upgraded to the next from
+  the same registry, with the round trip passing on both.
+- **OS package checks.** The CLI and agent archives checked and run on clean Linux
+  and macOS runners.
 
 ## Customer assurance reports
 

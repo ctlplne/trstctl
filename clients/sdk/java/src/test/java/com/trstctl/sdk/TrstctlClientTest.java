@@ -149,6 +149,7 @@ public final class TrstctlClientTest {
           .build();
       PkiSecret issued = client.issuePkiSecret("java-sdk.unit.test", 300, "issue-1");
       check("SERIAL-1".equals(issued.serial()), "serial parsed");
+      check("cert-1".equals(issued.certificateId()), "certificate ID parsed");
       check(issued.certificate().contains("BEGIN CERTIFICATE"), "certificate parsed");
       check(issued.privateKey().contains("BEGIN PRIVATE KEY"), "private key parsed");
 
@@ -237,7 +238,7 @@ public final class TrstctlClientTest {
     requireHeader(exchange, "X-Tenant-ID", "tenant-a");
     if ("POST".equals(method) && "/api/v1/secrets/pki".equals(path)) {
       requireHeader(exchange, "Idempotency-Key", "issue-1");
-      write(exchange, 201, "{\"serial\":\"SERIAL-1\",\"certificate\":\"-----BEGIN CERTIFICATE-----\\nMIIB\\n-----END CERTIFICATE-----\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nMIIB\\n-----END PRIVATE KEY-----\"}");
+      write(exchange, 201, "{\"certificate_id\":\"cert-1\",\"serial\":\"SERIAL-1\",\"certificate\":\"-----BEGIN CERTIFICATE-----\\nMIIB\\n-----END CERTIFICATE-----\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nMIIB\\n-----END PRIVATE KEY-----\"}");
       return;
     }
     if ("POST".equals(method) && "/api/v1/secrets/store".equals(path)) {

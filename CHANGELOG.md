@@ -2,6 +2,14 @@
 
 ### Added
 
+- SDK packages from a local registry (A250, second part): `scripts/release/sdk-packages.sh`
+  (`make sdk-packages`) builds the Go module, the npm tarball (now compiled JavaScript and
+  declarations, so plain Node loads it), a pure-Python wheel and the Maven jar of one version with
+  `manifest.json` and `SHA256SUMS`; `go run ./tools/sdkpack serve` serves them as a Go module
+  proxy, an npm registry, a PEP 503 index and a Maven repository. `make sdk-install-check` (in CI)
+  installs each by exact version in a clean environment and runs auth, read, rotate and revoke
+  against a served control plane, with retries keeping their Idempotency-Key and waiting out
+  `Retry-After`. The Java SDK's `PkiSecret` now carries the certificate ID.
 - One SDK surface for secrets, PKI and revocation (A250, first part): the Go and TypeScript SDKs
   gain the secrets-store calls (create, get, rotate, delete) and PKI-secret issuance the Python
   and Java SDKs had, and all four gain certificate revocation (`RevokeCertificates`,

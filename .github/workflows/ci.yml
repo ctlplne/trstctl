@@ -458,6 +458,26 @@ jobs:
           make sdk-check
           make sdk-test
 
+      # A250: the four SDKs, built as packages of one version and served from a
+      # local registry, install by exact version in clean environments and run
+      # auth, read, rotate and revoke against a served control plane (the Java
+      # one needs this runner's JDK). The served control plane uses the pinned
+      # embedded PostgreSQL archive, restored rather than fetched.
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+
+      - name: SDK packages install from local registries (A250)
+        env:
+          TRSTCTL_REQUIRE_JAVA_SDK: "1"
+        run: make sdk-install-check
+
       # A REAL `terraform apply` drives the provider against the acceptance
       # fixture server, so the provider's plan/apply/read/delete loop cannot
       # regress to a documented-but-unrun claim (B6). The terraform binary is a

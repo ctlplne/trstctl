@@ -84,12 +84,16 @@ without a custom transport it uses operating-system trust roots.
 
 ### Install — `trstctl.com/sdk/go` is a vanity path, not a code host
 
+From a local registry built and served as
+[SDK packages from a local registry](../../docs/operations/sdk-packages.md) describes:
+
 ```bash
-go get trstctl.com/sdk/go
+GOPROXY=http://127.0.0.1:8790/go GOPRIVATE='trstctl.com/*,github.com/ctlplne/*' GONOPROXY=none \
+  go get trstctl.com/sdk/go@v0.1.0
 ```
 
-That command resolves only if `trstctl.com` serves a `go-import` meta tag for the
-path. **Nothing in this repository serves one today** — no tracked service or
+Without such a registry, `go get trstctl.com/sdk/go` resolves only if
+`trstctl.com` serves a `go-import` meta tag for the path. **Nothing in this repository serves one today** — no tracked service or
 config emits that tag, and the code is hosted at
 `https://github.com/ctlplne/trstctl`, a host that does not match the module path.
 Until the endpoint exists, use the fallback below.
