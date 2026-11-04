@@ -66,8 +66,12 @@ type cloudCertificateProviderConfig struct {
 	SessionTokenRef      string   `json:"session_token_ref"`
 	VaultURL             string   `json:"vault_url"`
 	TokenRef             string   `json:"token_ref"`
-	Project              string   `json:"project"`
-	Location             string   `json:"location"`
+	// WriteTokenRef (azure-keyvault only, N2) is a separate credential allowed to
+	// disable a certificate version in the vault; discovery itself never writes,
+	// and a vault without one cannot be disabled through trstctl.
+	WriteTokenRef string `json:"write_token_ref"`
+	Project       string `json:"project"`
+	Location      string `json:"location"`
 }
 
 type cloudSecretDiscoveryConfig struct {

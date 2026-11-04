@@ -2504,6 +2504,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{id}/key-vault-disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable the exact Key Vault certificate version this inventory row was found as, through the vault's write credential; this is not a revocation — the certificate stays valid until it expires or its CA revokes it */
+        post: operations["disableKeyVaultCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/{id}/key-vault-disables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a certificate's Key Vault disables: queued, disabled with the vault's readback, or failed; none is a revocation */
+        get: operations["listKeyVaultDisables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/changes/apply": {
         parameters: {
             query?: never;
@@ -17794,6 +17828,47 @@ export interface components {
             /** @description Outbox status or delivered from the exact retained CA worker receipt after outbox cleanup. evidence_unavailable means a historical row expired without that receipt; CA outcome is unknown and must be checked at the issuing authority. */
             status: string;
         };
+        KeyVaultDisable: {
+            certificate_id: string;
+            /** Format: date-time */
+            disabled_at?: string;
+            failure?: string;
+            id: string;
+            note: string;
+            reason: string;
+            /** Format: date-time */
+            requested_at: string;
+            requested_by: string;
+            resource_id: string;
+            revoked: boolean;
+            /** @enum {string} */
+            status: "queued" | "disabled" | "failed";
+            /** Format: date-time */
+            vault_updated_at?: string;
+        };
+        KeyVaultDisableList: {
+            items: {
+                certificate_id: string;
+                /** Format: date-time */
+                disabled_at?: string;
+                failure?: string;
+                id: string;
+                note: string;
+                reason: string;
+                /** Format: date-time */
+                requested_at: string;
+                requested_by: string;
+                resource_id: string;
+                revoked: boolean;
+                /** @enum {string} */
+                status: "queued" | "disabled" | "failed";
+                /** Format: date-time */
+                vault_updated_at?: string;
+            }[];
+        };
+        KeyVaultDisableRequest: {
+            reason: string;
+        };
         KubernetesCSRSupport: {
             api_group: string;
             api_version: string;
@@ -31682,6 +31757,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CertificateKeyAttestation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    disableKeyVaultCertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyVaultDisableRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyVaultDisable"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listKeyVaultDisables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyVaultDisableList"];
                 };
             };
             /** @description client error */

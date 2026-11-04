@@ -241,7 +241,10 @@ import (
 // Version 81 carries N1's AD CS request decisions: without them a restored
 // store would forget each decision's outcome while its covered offset skipped
 // the decided events.
-const SnapshotFormatVersion = 81
+// Version 82 carries N2's Key Vault disables: without them a restored store
+// would show every disabled version as never disabled while its covered offset
+// skipped the readbacks.
+const SnapshotFormatVersion = 82
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -325,6 +328,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// Format 81: N1's AD CS request decisions.
 	"adcs_request_decisions",
+	// Format 82: N2's Key Vault disables.
+	"certificate_key_vault_disables",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -674,6 +679,7 @@ SELECT jsonb_build_object(
   'switching_waves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_waves t),
   'switching_wave_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_wave_rows t),
   'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
+  'certificate_key_vault_disables', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_key_vault_disables t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

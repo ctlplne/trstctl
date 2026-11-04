@@ -5994,6 +5994,29 @@ export interface KeyCompromiseRevocationAttempt {
   status: string;
 }
 
+export interface KeyVaultDisable {
+  certificate_id: string;
+  disabled_at?: string;
+  failure?: string;
+  id: string;
+  note: string;
+  reason: string;
+  requested_at: string;
+  requested_by: string;
+  resource_id: string;
+  revoked: boolean;
+  status: "queued" | "disabled" | "failed";
+  vault_updated_at?: string;
+}
+
+export interface KeyVaultDisableList {
+  items: ({ certificate_id: string; disabled_at?: string; failure?: string; id: string; note: string; reason: string; requested_at: string; requested_by: string; resource_id: string; revoked: boolean; status: "queued" | "disabled" | "failed"; vault_updated_at?: string })[];
+}
+
+export interface KeyVaultDisableRequest {
+  reason: string;
+}
+
 export interface KubernetesCSRSupport {
   api_group: string;
   api_version: string;

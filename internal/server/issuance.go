@@ -374,6 +374,9 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.archiveHolds.Deliver(ctx, m) // an archive object's legal hold (A208)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
+	case store.KeyVaultDisableDestination:
+		// N2: disable one certificate version in Key Vault (not a revocation).
+		return d.handleKeyVaultDisable(ctx, m)
 	default:
 		if d.tenantKeyDomains != nil {
 			handled, err := d.tenantKeyDomains.Deliver(ctx, m)

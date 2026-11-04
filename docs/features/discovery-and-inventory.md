@@ -501,6 +501,21 @@ change sends nothing and writes no event. Finding MCP endpoints by probing appro
 network ranges is what comes next (P7's network probe, after P8's design). Status:
 served (host detectors).
 
+**Disabling a certificate in Azure Key Vault — not a revocation (N2).** Key Vault
+cannot revoke a certificate; only its issuing CA can. For a certificate the inventory
+found in Key Vault (source `cloud-azure-keyvault`), `POST
+/api/v1/certificates/{id}/key-vault-disable` (`trstctl-cli certificates
+key-vault-disable <id> -f reason.json`) disables the exact certificate version it was
+found as, so the vault stops serving it to the applications that read it there.
+Discovery never writes to a vault: the disable uses a separate `write_token_ref`
+configured beside the vault's `azure-keyvault` entry in a `cloud_certificate` discovery
+source (an operator-approved `env:` reference, like every discovery credential), and a
+vault without one refuses the request. The call runs from an outbox job and counts
+only when the vault reads the version back disabled. Every answer is labeled: status
+`disabled`, `revoked: false`, and the note that the certificate stays valid until it
+expires or its CA revokes it; the inventory row keeps its status. `GET
+/api/v1/certificates/{id}/key-vault-disables` lists them. Status: served.
+
 Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
 (JKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`, `.keystore`,
 `.ks`, `.p12` and `.pfx` files. Each key entry is reported as private-key metadata: the

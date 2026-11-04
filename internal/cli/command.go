@@ -289,6 +289,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"revocation", "rogue-certificates", "takedown"}, Method: "POST", Path: "/api/v1/revocation/rogue-certificates/takedown", Body: bodyFile, Summary: "Queue removal of a rogue certificate from the connector target where trstctl installed it"},
 	{Name: []string{"revocation", "ct-submit"}, Method: "POST", Path: "/api/v1/revocation/ct-submissions", Body: bodyFile, Summary: "Queue precertificate and certificate submission to Certificate Transparency logs"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
+	{Name: []string{"certificates", "key-vault-disable"}, Method: "POST", Path: "/api/v1/certificates/{id}/key-vault-disable", Body: bodyFile, Summary: "Disable the Key Vault certificate version this row was found as (not a revocation)"},
+	{Name: []string{"certificates", "key-vault-disables"}, Method: "GET", Path: "/api/v1/certificates/{id}/key-vault-disables", Summary: "List a certificate's Key Vault disables; none is a revocation"},
 	{Name: []string{"certificates", "key-attestation"}, Method: "GET", Path: "/api/v1/certificates/{id}/key-attestation", Summary: "Print a certificate's device-bound custody evidence for offline re-verification"},
 	{Name: []string{"certificates", "verify-key-attestation"}, Summary: "Re-check a certificate's device-bound custody claim on this machine against TPM roots you choose"},
 	{Name: []string{"certificates", "assurance-record"}, Method: "GET", Path: "/api/v1/certificates/{id}/assurance-record", Summary: "Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed"},

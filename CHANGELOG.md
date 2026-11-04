@@ -27,6 +27,10 @@
   another reviewer approves the exact decision, and only while the CA still holds it as pending; `GET
   /api/v1/external-cas/{id}/adcs-decisions` shows each decision queued, decided with the CA's disposition, or failed
   with the relay's reason.
+- Azure Key Vault disable, labeled not revoked (N2 is served): `POST /api/v1/certificates/{id}/key-vault-disable`
+  disables the exact Key Vault certificate version the inventory found, through a `write_token_ref` configured
+  beside the vault's discovery source, from an outbox job with readback; every answer says it is not a revocation
+  and the inventory row keeps its status.
 - The edition and qualification ledger (A253 is served): `go run ./tools/editionledger` generates
   `docs/editions-ledger.md` and `.json` from the license table and the feature map; the README and
   `docs/editions.md` carry its generated blocks, the Editions API and the console name the no-license

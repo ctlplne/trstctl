@@ -28269,6 +28269,148 @@
         ],
         "type": "object"
       },
+      "KeyVaultDisable": {
+        "properties": {
+          "certificate_id": {
+            "type": "string"
+          },
+          "disabled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "disabled",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "vault_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "certificate_id",
+          "resource_id",
+          "status",
+          "revoked",
+          "note",
+          "reason",
+          "requested_by",
+          "requested_at"
+        ],
+        "type": "object"
+      },
+      "KeyVaultDisableList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "certificate_id": {
+                  "type": "string"
+                },
+                "disabled_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "failure": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "requested_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "requested_by": {
+                  "type": "string"
+                },
+                "resource_id": {
+                  "type": "string"
+                },
+                "revoked": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "enum": [
+                    "queued",
+                    "disabled",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                "vault_updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "certificate_id",
+                "resource_id",
+                "status",
+                "revoked",
+                "note",
+                "reason",
+                "requested_by",
+                "requested_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "KeyVaultDisableRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "KubernetesCSRSupport": {
         "properties": {
           "api_group": {
@@ -64180,6 +64322,141 @@
           }
         ],
         "summary": "Get a certificate's device-bound custody evidence for offline re-verification",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/{id}/key-vault-disable": {
+      "post": {
+        "operationId": "disableKeyVaultCertificate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyVaultDisableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyVaultDisable"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Disable the exact Key Vault certificate version this inventory row was found as, through the vault's write credential; this is not a revocation — the certificate stays valid until it expires or its CA revokes it",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/certificates/{id}/key-vault-disables": {
+      "get": {
+        "operationId": "listKeyVaultDisables",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyVaultDisableList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List a certificate's Key Vault disables: queued, disabled with the vault's readback, or failed; none is a revocation",
         "x-trstctl-permission": "certs:read"
       }
     },

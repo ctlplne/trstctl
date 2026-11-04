@@ -1822,6 +1822,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithSSHWorkflow(s),
 		api.WithSSHTrustFleet(sshTrustFleetSurface(d, s.orch)),
 		api.WithADCSDecisions(s),
+		api.WithKeyVaultDisable(s),
 		api.WithPKISecretLeafRecovery(s),
 		api.WithManagedCALeafRecovery(s),
 		api.WithBroker(s),

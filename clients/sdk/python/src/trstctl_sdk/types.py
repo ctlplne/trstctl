@@ -8344,6 +8344,41 @@ KeyCompromiseRevocationAttempt = TypedDict(
     total=False,
 )
 
+KeyVaultDisable = TypedDict(
+    'KeyVaultDisable',
+    {
+        'certificate_id': str,
+        'disabled_at': str,
+        'failure': str,
+        'id': str,
+        'note': str,
+        'reason': str,
+        'requested_at': str,
+        'requested_by': str,
+        'resource_id': str,
+        'revoked': bool,
+        'status': str,
+        'vault_updated_at': str,
+    },
+    total=False,
+)
+
+KeyVaultDisableList = TypedDict(
+    'KeyVaultDisableList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+KeyVaultDisableRequest = TypedDict(
+    'KeyVaultDisableRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 KubernetesCSRSupport = TypedDict(
     'KubernetesCSRSupport',
     {

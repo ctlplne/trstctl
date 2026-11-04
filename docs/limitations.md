@@ -7813,6 +7813,16 @@ re-running the identity's issuance submits a new request (what comes next: resum
 CA request id). The relay names request ids the operator reads from the CA; trstctl does not list pending requests
 itself (the CA database collection returns counts, not rows).
 
+## Azure Key Vault disable, labeled not revoked (N2) — served
+
+A certificate version the inventory found in Azure Key Vault can be disabled there through the vault's
+`write_token_ref` (configured beside its discovery source), from an outbox job, counted only when the vault reads
+the version back disabled. It is labeled "disabled, not revoked" everywhere: the certificate stays valid until it
+expires or its issuing CA revokes it, and the inventory row keeps its status. Proven against a Key Vault double
+built from the REST reference (the version update and get calls); a live vault is a Track B row (Azure account).
+The served proof trusts the double's certificate through a test-only client constructor; production calls use the
+same egress-guarded client as cloud discovery. Re-enabling a version is done in Key Vault.
+
 ## Edition and qualification ledger (A253) — served
 
 `go run ./tools/editionledger` writes `docs/editions-ledger.md` and `docs/editions-ledger.json` from

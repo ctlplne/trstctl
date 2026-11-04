@@ -874,6 +874,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"switching_imports", "switching_import_rows", "switching_waves", "switching_wave_rows",
 	// N1: projected from adcs.request.decision_queued and adcs.request.decided.
 	"adcs_request_decisions",
+	// N2: projected from certificate.key_vault_disable_requested and
+	// certificate.key_vault_disabled.
+	"certificate_key_vault_disables",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
