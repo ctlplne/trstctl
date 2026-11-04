@@ -247,8 +247,10 @@ describe("agent fleet surface", () => {
     const dialog = screen.getByRole("dialog", { name: "Change roles for edge-01" });
     expect(dialog).toHaveTextContent(/next certificate renewal signs them/i);
     expect(dialog).toHaveTextContent(/agents:relay\.grant/);
-    const network = within(dialog).getByRole("checkbox", { name: /network/i });
-    expect(within(dialog).getByRole("checkbox", { name: /host/i })).toBeChecked();
+    // A role's name begins with its label; its help follows (the gateway's
+    // mentions a host), so each query is anchored to the label.
+    const network = within(dialog).getByRole("checkbox", { name: /^network/i });
+    expect(within(dialog).getByRole("checkbox", { name: /^host/i })).toBeChecked();
     expect(network).not.toBeChecked();
     fireEvent.click(network);
     fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "front the plant 7 appliances" } });
