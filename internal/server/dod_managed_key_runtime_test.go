@@ -1624,13 +1624,19 @@ func dodManagedKeyRequest(r *dodManagedKeyRuntime, method, path, idempotency str
 
 func dodManagedKeyRequestWithToken(r *dodManagedKeyRuntime, token, method, path, idempotency string, value any) *http.Response {
 	r.t.Helper()
-	request := dodManagedKeyRequestObjectWithToken(r, token, method, path, idempotency, value)
 	client := &http.Client{Timeout: 35 * time.Second}
-	response, err := client.Do(request)
-	if err != nil {
-		r.t.Fatalf("managed-key %s: %v logs=%s", path, err, r.control.Logs())
+	for attempt := 1; ; attempt++ {
+		response, err := client.Do(dodManagedKeyRequestObjectWithToken(r, token, method, path, idempotency, value))
+		if err != nil {
+			r.t.Fatalf("managed-key %s: %v logs=%s", path, err, r.control.Logs())
+		}
+		wait, busy := dodBusyStoreRetry(response, attempt)
+		if !busy {
+			return response
+		}
+		r.t.Logf("managed-key %s: busy store (503) on attempt %d; retrying the same request in %s", path, attempt, wait)
+		time.Sleep(wait)
 	}
-	return response
 }
 
 func (r *dodManagedKeyRuntime) approveManagedKeyAction(keyID, action string) {
