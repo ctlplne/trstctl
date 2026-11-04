@@ -434,6 +434,24 @@ trstctl rehearsals run <scenario-id> -f run.json      # {"mode":"mocked_rehearsa
 trstctl rehearsals runs list <scenario-id>
 ```
 
+### Response playbooks for SOAR tools (N7)
+
+`clients/soar/` is a response pack a SOAR runs against trstctl's API: `pack.json`
+names the API scopes its token needs, and each playbook is an ordered list of HTTP
+calls — operation, method, path, JSON body, `Idempotency-Key`, expected answers,
+assertions on the answer, waits, and outputs for later steps — so any SOAR that can
+make an authenticated HTTP request runs it without a trstctl connector. Playbooks:
+`revoke-compromised-certificate` (bulk revoke for key compromise, then wait until the
+certificate reads revoked), `rotate-leaked-secret` (write a new value for a stored
+secret, then resolve the leaked-secret finding as remediated with the new version as
+evidence) and `retire-triggered-honeytoken` (refuse a bait that has not triggered,
+revoke one that has). Every mutating step's `Idempotency-Key` is built from its
+inputs, so a retried step or a second run gets trstctl's first answer. The pack is
+checked against the served OpenAPI document (operation, method, path, the permission
+among the pack's scopes) and each playbook runs against the served API with a token
+holding only those scopes. Status: served (vendor-neutral pack; a vendor's own
+playbook format is a separate, approved integration).
+
 ### In the console
 
 The `/incidents` screen is the response console: a served **blast-radius** preview for the

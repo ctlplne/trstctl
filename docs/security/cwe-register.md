@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2475 annotated sites across 30 rules. Each row is
+2477 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1664,7 +1664,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (657 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (659 sites)
 
 | Location | Reason |
 |---|---|
@@ -2184,6 +2184,8 @@ not this file.
 | `internal/server/server.go:1570` | operator-configured key file path (CWE-22) |
 | `internal/server/server.go:2860` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/server.go:2937` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
+| `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/server/tsa_certificates_served_test.go:87` | the test's own temp file (CWE-22) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:156` | test reads the cluster CA its runner wrote (CWE-22) |

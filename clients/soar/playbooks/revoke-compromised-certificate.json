@@ -1,0 +1,29 @@
+{
+  "id": "revoke-compromised-certificate",
+  "title": "Revoke a compromised certificate",
+  "description": "Revokes one certificate for key compromise and waits until trstctl reports it revoked. Revocation at the issuer and CRL and OCSP publication follow trstctl's own revocation path.",
+  "inputs": {
+    "certificate_id": {"type": "string", "required": true, "description": "the certificate's trstctl ID"}
+  },
+  "steps": [
+    {
+      "name": "revoke",
+      "operation_id": "bulkRevokeCertificates",
+      "method": "POST",
+      "path": "/api/v1/certificates/bulk-revoke",
+      "idempotency_key": "soar-revoke-{{certificate_id}}",
+      "body": {"certificate_ids": ["{{certificate_id}}"], "reason": "keyCompromise"},
+      "expect": [200],
+      "assert": {"/total_matched": 1}
+    },
+    {
+      "name": "confirm",
+      "operation_id": "getCertificate",
+      "method": "GET",
+      "path": "/api/v1/certificates/{{certificate_id}}",
+      "expect": [200],
+      "until": {"assert": {"/status": "revoked"}, "every_seconds": 5, "max_seconds": 300},
+      "outputs": {"revoked_at": "/revoked_at"}
+    }
+  ]
+}

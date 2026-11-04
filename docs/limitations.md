@@ -8509,3 +8509,22 @@ What comes next:
 - Slack thread replies (`conversations.replies`) are not read yet, and a layer
   compressed with zstd is skipped (its digest is still checked).
 
+## Response playbooks for SOAR tools (N7) — served
+
+Status: served as a vendor-neutral pack. `clients/soar/` holds playbooks a SOAR runs
+as plain HTTP calls against trstctl's API (revoke a compromised certificate, rotate a
+leaked stored secret and resolve its finding, retire a triggered honeytoken), with
+the API scopes its token needs. `TestServedSOARPlaybookPackN7` checks every step
+against the served OpenAPI document and runs every playbook against the served API
+with a token holding only the pack's scopes; running them found that certificate
+revocation needs `certs:issue` beside the route's declared `identities:write`, which
+the pack's scopes now carry.
+
+What comes next:
+- Packs in a specific SOAR product's own playbook or app format are integrations
+  the owner names; none is named yet (listed for approval).
+- Running the playbooks inside a SOAR platform is a live proof (SOAR vendor
+  accounts, Track B).
+- The OpenAPI permission of `bulkRevokeCertificates` names `identities:write` but
+  the handler also requires `certs:issue`; the document should say both.
+

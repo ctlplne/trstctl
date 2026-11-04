@@ -1,0 +1,16 @@
+{
+  "pack": "trstctl-response",
+  "version": "1",
+  "description": "Response playbooks a SOAR runs against trstctl's API: each step is one HTTP call with its method, path, body, Idempotency-Key and expected answers, so any tool that can make an authenticated HTTP request can run them.",
+  "api": {
+    "base_url_input": "trstctl_url",
+    "authorization": "Bearer <API token>",
+    "tenant_header": "X-Tenant-ID",
+    "scopes": ["certs:read", "certs:issue", "identities:write", "secrets:read", "secrets:write", "discovery:read", "discovery:write"]
+  },
+  "playbooks": [
+    "playbooks/revoke-compromised-certificate.json",
+    "playbooks/rotate-leaked-secret.json",
+    "playbooks/retire-triggered-honeytoken.json"
+  ]
+}

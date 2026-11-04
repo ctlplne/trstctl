@@ -2,6 +2,10 @@
 
 ### Added
 
+- Response playbooks for SOAR tools (N7): `clients/soar/` is a vendor-neutral pack of playbooks a SOAR runs as
+  plain HTTP calls against trstctl's API — revoke a compromised certificate, rotate a leaked stored secret and
+  resolve its finding, retire a triggered honeytoken — with idempotency keys built from their inputs and the
+  exact API scopes their token needs, checked against the served OpenAPI document and run against the served API.
 - Native leak-scan collection (N6): a third-party scan source with `collect` has trstctl read the content from
   the provider — an image from its registry over the OCI distribution API (every platform, config and layer
   files, digests checked; anonymous, bearer or token-service credentials), Slack channel history, Jira issues,

@@ -1,0 +1,35 @@
+{
+  "id": "retire-triggered-honeytoken",
+  "title": "Retire a honeytoken once it has triggered",
+  "description": "Reads the honeytoken, refuses to act on one that has not triggered, and revokes it so the bait stops working; the trigger record stays as incident evidence.",
+  "inputs": {
+    "honeytoken_id": {"type": "string", "required": true}
+  },
+  "steps": [
+    {
+      "name": "read",
+      "operation_id": "getHoneyToken",
+      "method": "GET",
+      "path": "/api/v1/secrets/honeytokens/{{honeytoken_id}}",
+      "expect": [200],
+      "assert": {"/state": "triggered"},
+      "outputs": {"triggered_at": "/triggered_at"}
+    },
+    {
+      "name": "revoke",
+      "operation_id": "revokeHoneyToken",
+      "method": "POST",
+      "path": "/api/v1/secrets/honeytokens/{{honeytoken_id}}/revoke",
+      "idempotency_key": "soar-retire-{{honeytoken_id}}",
+      "expect": [200]
+    },
+    {
+      "name": "confirm",
+      "operation_id": "getHoneyToken",
+      "method": "GET",
+      "path": "/api/v1/secrets/honeytokens/{{honeytoken_id}}",
+      "expect": [200],
+      "assert": {"/state": "revoked"}
+    }
+  ]
+}
