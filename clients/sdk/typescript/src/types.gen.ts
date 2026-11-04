@@ -12209,7 +12209,7 @@ export interface components {
             role_grant?: components["schemas"]["AgentRoleGrant"];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
-            roles: ("host" | "network" | "observer")[];
+            roles: ("host" | "network" | "observer" | "gateway")[];
             status: string;
             version?: string;
             workload_api: components["schemas"]["AgentWorkloadAPIStatus"];
@@ -12367,7 +12367,7 @@ export interface components {
             event_id: string;
             /** Format: date-time */
             granted_at: string;
-            roles: ("host" | "network" | "observer")[];
+            roles: ("host" | "network" | "observer" | "gateway")[];
             /**
              * @description pending until a renewal signs the roles into the agent's certificate.
              * @enum {string}
@@ -12377,7 +12377,7 @@ export interface components {
         AgentRoleGrantRequest: {
             reason?: string;
             /** @description The complete role set the agent's next certificate carries; at least one. */
-            roles: ("host" | "network" | "observer")[];
+            roles: ("host" | "network" | "observer" | "gateway")[];
         };
         AgentUpgradeCampaign: {
             active: boolean;
@@ -16867,19 +16867,19 @@ export interface components {
             renewal_path: string;
             renewal_ready: boolean;
             required_permissions: string[];
-            roles: ("host" | "network" | "observer")[];
+            roles: ("host" | "network" | "observer" | "gateway")[];
             side_effects: boolean;
         };
         EnrollmentToken: {
             agent_server: string;
             agent_server_name: string;
             enroll_path?: string;
-            roles: ("host" | "network" | "observer")[];
+            roles: ("host" | "network" | "observer" | "gateway")[];
             token: string;
         };
         EnrollmentTokenRequest: {
             allowed_identity?: string;
-            roles?: ("host" | "network" | "observer")[];
+            roles?: ("host" | "network" | "observer" | "gateway")[];
         };
         EnterpriseProfessionalService: {
             deliverables: string[];
@@ -20826,10 +20826,20 @@ export interface components {
         PAMSession: {
             attestation?: components["schemas"]["Attestation"];
             audit?: Record<string, never>;
+            /** @enum {string} */
+            delivery?: "direct" | "gateway";
             /** Format: date-time */
             ended_at?: string;
             /** Format: date-time */
             expires_at: string;
+            gateway?: {
+                address: string;
+                agent_id: string;
+                ca_pem?: string;
+                spiffe_id: string;
+                /** @description The one-time ticket that admits the requester's connections at the gateway (A254); returned once, by the open. It is not the upstream credential, which only the gateway holds. */
+                ticket?: string;
+            };
             /** Format: uuid */
             id: string;
             postgres?: components["schemas"]["PAMPostgresCredential"];
@@ -20896,6 +20906,8 @@ export interface components {
             disabled_by?: string;
             disabled_reason?: string;
             enabled: boolean;
+            gateway_address?: string;
+            gateway_agent_id?: string;
             host?: string;
             id: string;
             port?: number;
@@ -20918,6 +20930,13 @@ export interface components {
         };
         PAMTargetRequest: {
             allowed_roles?: string[];
+            /** @description host:port where clients reach the gateway (A254). */
+            gateway_address?: string;
+            /**
+             * Format: uuid
+             * @description The gateway-role agent that serves this target (A254); set with gateway_address.
+             */
+            gateway_agent_id?: string;
             host?: string;
             id: string;
             port?: number;

@@ -308,6 +308,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodReportJobResult, Handler: reportJobResultHandler},
 		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
+		{MethodName: methodSignGatewayServerCertificate, Handler: signGatewayServerCertificateHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},
@@ -926,6 +927,10 @@ const (
 	// is the entire point of epic B2 (CWE-798).
 	methodSignJobCSR     = "SignJobCSR"
 	fullMethodSignJobCSR = "/" + agentServiceName + "/" + methodSignJobCSR
+	// A254: an access gateway's listener CSR up, its serving certificate down;
+	// no private key crosses it in either direction.
+	methodSignGatewayServerCertificate     = "SignGatewayServerCertificate"
+	fullMethodSignGatewayServerCertificate = "/" + agentServiceName + "/" + methodSignGatewayServerCertificate
 	// B3: the workload-identity node API. Carries a public key up and SVIDs
 	// down; no private key crosses it in either direction.
 	methodFetchWorkloadSVID     = "FetchWorkloadSVID"
@@ -991,6 +996,47 @@ func signJobCSRHandler(srv any, ctx context.Context, dec func(any) error, interc
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignJobCSR}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return jobs.SignJobCSR(ctx, req.(*SignJobCSRRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AgentGatewayServiceServer is the access gateway's half of the agent service
+// (A254). A control plane that does not serve it answers Unimplemented.
+type AgentGatewayServiceServer interface {
+	// SignGatewayServerCertificate signs a gateway-role agent's listener CSR
+	// for host names its target bindings declare, naming the agent's SPIFFE ID.
+	SignGatewayServerCertificate(ctx context.Context, req *SignGatewayServerCertificateRequest) (*SignGatewayServerCertificateResponse, error)
+}
+
+// SignGatewayServerCertificateRequest carries the gateway listener's CSR and
+// the host names clients reach it by; each must be the host of a target
+// binding naming this agent.
+type SignGatewayServerCertificateRequest struct {
+	CSRDER []byte   `json:"csr_der"`
+	Hosts  []string `json:"hosts"`
+}
+
+// SignGatewayServerCertificateResponse returns the serving certificate.
+type SignGatewayServerCertificateResponse struct {
+	CertificatePEM []byte `json:"certificate_pem"`
+	NotAfterUnix   int64  `json:"not_after_unix"`
+}
+
+func signGatewayServerCertificateHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(SignGatewayServerCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	gateway, ok := srv.(AgentGatewayServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve access gateways")
+	}
+	if interceptor == nil {
+		return gateway.SignGatewayServerCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignGatewayServerCertificate}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return gateway.SignGatewayServerCertificate(ctx, req.(*SignGatewayServerCertificateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1102,6 +1148,16 @@ func (c *AgentClient) RedeemJobCredential(ctx context.Context, req *RedeemJobCre
 func (c *AgentClient) SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*SignJobCSRResponse, error) {
 	out := new(SignJobCSRResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignJobCSR, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SignGatewayServerCertificate asks for an access gateway's serving
+// certificate (A254).
+func (c *AgentClient) SignGatewayServerCertificate(ctx context.Context, req *SignGatewayServerCertificateRequest) (*SignGatewayServerCertificateResponse, error) {
+	out := new(SignGatewayServerCertificateResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignGatewayServerCertificate, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

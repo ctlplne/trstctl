@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/sshtrustfleet"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -343,6 +344,15 @@ func TestEveryShippedKindIsActuallyClaimed(t *testing.T) {
 	for _, kind := range sshtrustfleet.ClaimableKinds() {
 		if claimed[kind] {
 			t.Fatalf("dedicated SSH work also enters the shared relay pool: %s", kind)
+		}
+		claimed[kind] = true
+	}
+	// A254's access gateway holds each session for its lifetime in a claim
+	// loop of its own, started by --access-gateway-listen on a gateway-role
+	// agent; a held session must never occupy the shared relay pool.
+	for _, kind := range accessgateway.ClaimableKinds() {
+		if claimed[kind] {
+			t.Fatalf("gateway sessions also enter the shared relay pool: %s", kind)
 		}
 		claimed[kind] = true
 	}

@@ -11541,8 +11541,10 @@ PAMSession = TypedDict(
     {
         'attestation': dict[str, Any],
         'audit': dict[str, Any],
+        'delivery': str,
         'ended_at': str,
         'expires_at': str,
+        'gateway': dict[str, Any],
         'id': str,
         'postgres': dict[str, Any],
         'reason': str,
@@ -11624,6 +11626,8 @@ PAMTarget = TypedDict(
         'disabled_by': str,
         'disabled_reason': str,
         'enabled': bool,
+        'gateway_address': str,
+        'gateway_agent_id': str,
         'host': str,
         'id': str,
         'port': int,
@@ -11658,6 +11662,8 @@ PAMTargetRequest = TypedDict(
     'PAMTargetRequest',
     {
         'allowed_roles': list[str],
+        'gateway_address': str,
+        'gateway_agent_id': str,
         'host': str,
         'id': str,
         'port': int,

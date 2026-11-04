@@ -355,6 +355,33 @@ Target commands are `trstctl-cli access targets list`,
 `get <target_type> <id>`, `register -f target.json`, and
 `disable <target_type> <id> -f reason.json`.
 
+#### Sessions through the access gateway (A254)
+
+A PostgreSQL target may be bound to an access gateway: a `trstctl-agent` in its own
+process with the **gateway** role (granted with `agents:relay.grant`) started with
+`--access-gateway-listen ADDR`. Register the target with `gateway_agent_id` (the agent)
+and `gateway_address` (`host:port` where clients reach it), or set the same fields on a
+`pam.postgres_targets` entry. A session to a bound target never returns the credential:
+the open's response carries `delivery: "gateway"` and a `gateway` block — the agent, its
+address, its SPIFFE ID, the agent CA to verify it against, and a one-time `ticket`
+(returned once; only its SHA-256 is stored). The gateway claims the session as an agent
+job (`access.gateway.session`; list it in `agent_channel.claimable_job_kinds`), redeems the
+session's login into locked memory, and admits only connections carrying the ticket.
+
+Connect a stock client through the CLI:
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:15432
+psql "postgres://anyone@127.0.0.1:15432/postgres?sslmode=disable"
+```
+
+The client signs in with no password and runs as the session's login. Revoking the
+session recalls its job first: the gateway's next lease extension is refused, it closes
+the session's connections and wipes the credential, then the login's removal proceeds as
+for any session. The design, its failure modes and its threat model are in
+[the access gateway design](../design/access-gateway.md). SSH through the gateway, session
+recording and live termination follow (A254 part 2, A255).
+
 ### Break-glass procedures (F34)
 
 If the control plane is reachable during an incident, `POST /api/v1/breakglass/issue`

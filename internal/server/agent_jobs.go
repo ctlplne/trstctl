@@ -128,6 +128,9 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindADCSDecide: true,
 	// N9: an approved device check-in at the MDM, on the schedule's relay.
 	relay.KindMDMCheckIn: true,
+	// A254: one brokered access session, held by its gateway until the
+	// deadline or a recall.
+	relay.KindAccessGatewaySession: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -1022,6 +1025,10 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM check-in result needs a terminal executed report")
 		}
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
+	case relay.KindAccessGatewaySession:
+		// A254: the gateway reports how a session ended; the session itself
+		// is ended by its deadline and revocation, not by this report.
+		return validateGatewaySessionReport(claim.Payload, req.Detail)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -1347,6 +1354,12 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// it or could not be reached); it is never retried on its own — another
 	// check-in is another approval.
 	if claim.Destination == relay.KindMDMCheckIn {
+		permanent = true
+	}
+	// A254: a gateway session that could not be held (its credential was not
+	// redeemable, its deadline passed) is never retried: a new session is a
+	// new approval.
+	if claim.Destination == relay.KindAccessGatewaySession {
 		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on

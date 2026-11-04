@@ -208,6 +208,14 @@ func (r *RenewingServerCertificate) TLSConfig() *tls.Config {
 	return cfg
 }
 
+// GatewayTLSConfig serves the renewing certificate without asking for a
+// client certificate: an access gateway's clients are admitted by the session
+// ticket inside the tunnel (A254), and a client verifies the gateway against
+// the agent CA, its host name and its SPIFFE ID (GatewayClientTLSConfig).
+func (r *RenewingServerCertificate) GatewayTLSConfig() *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS13, GetCertificate: r.certificate}
+}
+
 // Credentials is the same renewing identity for the gRPC agent listener.
 func (r *RenewingServerCertificate) Credentials() credentials.TransportCredentials {
 	return credentials.NewTLS(r.TLSConfig())

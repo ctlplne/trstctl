@@ -278,6 +278,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// A254: one brokered access session, held by a gateway-role agent
+			// until its deadline; the session's credential is redeemed into
+			// the gateway's locked memory and never leaves it.
+			Kind:  KindAccessGatewaySession,
+			Flags: []string{"--access-gateway-listen"},
+			Roles: []string{mtls.AgentRoleGateway},
+		},
+		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,

@@ -88,6 +88,9 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	if rest[0] == "run" {
 		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"access", "sessions", "connect"}) {
+		return runAccessConnect(ctx, rest[3:], env, stdout, stderr, *server, *token, *tenant, *caFile)
+	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"access", "run"}) {
 		if commandHelpRequested(rest[2:]) {
 			accessRunUsage(stdout)

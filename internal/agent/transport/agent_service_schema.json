@@ -1000,6 +1000,12 @@
         "response": "SignJobCSRResponse"
       },
       {
+        "full_method": "/trstctl.agent.v1.AgentService/SignGatewayServerCertificate",
+        "name": "SignGatewayServerCertificate",
+        "request": "",
+        "response": ""
+      },
+      {
         "full_method": "/trstctl.agent.v1.AgentService/FetchWorkloadSVID",
         "name": "FetchWorkloadSVID",
         "request": "FetchWorkloadSVIDRequest",

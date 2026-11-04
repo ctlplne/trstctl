@@ -2,6 +2,16 @@
 
 ### Added
 
+- Access gateway, PostgreSQL (A254 part 1): a PAM PostgreSQL target can be bound to a gateway-role agent
+  (`gateway_agent_id`, `gateway_address`); a session to it returns a one-time ticket and the gateway's identity,
+  never the credential. The gateway (`trstctl-agent --access-gateway-listen`, new `gateway` role) claims the
+  session as an agent job, redeems its login into locked memory, admits only connections carrying the ticket,
+  and signs in upstream itself; `trstctl-cli access sessions connect` tunnels a stock client to it over TLS
+  verified against the agent CA for the gateway's host and its SPIFFE ID (the agent CA signs a gateway's
+  serving certificate only for hosts its own target bindings declare). Revoking the session recalls its job, so
+  the gateway ends its connections. The gateway's PostgreSQL sign-in is its own (`internal/crypto/pgsignin`:
+  SCRAM-SHA-256, MD5 or cleartext as the target demands, TLS always verified), so the agent binary links no
+  database driver. Design and threat model: `docs/design/access-gateway.md`.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

@@ -731,6 +731,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/ssh_key_id", opaque), privacyRule("/ssh_serial", opaque),
 		privacyRule("/idempotency_key", opaque), privacyRule("/audit", clear),
 		privacyRule("/started_at", opaque), privacyRule("/expires_at", opaque), privacyRule("/approval_request_id", opaque),
+		privacyRule("/delivery", opaque), privacyRule("/gateway_agent_id", opaque), privacyRule("/gateway_ticket_digest", opaque),
 	)
 	pamSessionActivationRequested := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/request_id", opaque),
@@ -995,6 +996,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/provider_id", opaque), privacyRule("/allowed_roles", opaque),
 			privacyRule("/host", opaque), privacyRule("/port", opaque),
 			privacyRule("/principals", opaque), privacyRule("/registered_by", exact),
+			privacyRule("/gateway_agent_id", opaque), privacyRule("/gateway_address", opaque),
 		),
 		{EventPAMTargetDisabled, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque),

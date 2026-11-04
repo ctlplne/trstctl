@@ -34,14 +34,16 @@ const certRevocationReasons = [
 // vantages, not ranks: a host agent acts on the machine it runs on, a network
 // agent acts on things in its segment that cannot run an agent at all, and an
 // observer (X1) watches an interface's handshakes. An agent can hold several —
-// host and network together is the F5-beside-a-server case.
-type AgentRole = "host" | "network" | "observer";
+// host and network together is the F5-beside-a-server case. gateway (A254)
+// serves brokered access sessions and holds their upstream credentials.
+type AgentRole = "host" | "network" | "observer" | "gateway";
 type AgentDisclosure = "fleet" | "trust" | "operations";
 
 const AGENT_ROLE_CHOICES = [
   { value: "host", labelKey: "source.agent.role.host.a2r0le0003", helpKey: "source.agent.role.host.help.a2r0le0004" },
   { value: "network", labelKey: "source.agent.role.network.a2r0le0005", helpKey: "source.agent.role.network.help.a2r0le0006" },
   { value: "observer", labelKey: "agents.role.observer", helpKey: "agents.role.observer.help" },
+  { value: "gateway", labelKey: "agents.role.gateway", helpKey: "agents.role.gateway.help" },
 ] as const satisfies readonly { value: AgentRole; labelKey: MessageKey; helpKey: MessageKey }[];
 
 // A194: the agent's clock against the control plane's, as a short drift.
@@ -64,6 +66,7 @@ function clockSkewWarning(agent: Agent): string | null {
 
 function agentRoleLabel(role: string): string {
   if (role === "observer") return translateNow("agents.role.observer");
+  if (role === "gateway") return translateNow("agents.role.gateway");
   return role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003");
 }
 

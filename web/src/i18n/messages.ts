@@ -31988,6 +31988,12 @@ export const messages = {
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
   "agents.role.observer": { defaultMessage: "Observer", description: "X1: the agent role that observes connections' handshakes on an interface." },
+  "agents.role.gateway": { defaultMessage: "Access gateway", description: "A254: the agent role that serves brokered access sessions." },
+  "agents.role.gateway.help": {
+    defaultMessage:
+      "Serves brokered access sessions: clients connect through it to a database or host, and it signs in with the session's credential, which the client never receives. It sees every session's traffic, so granting it requires the agents:relay.grant permission.",
+    description: "A254: what the gateway role does and who may grant it.",
+  },
   "agents.role.observer.help": {
     defaultMessage:
       "Watches a mirrored interface, or one on the agent's own machine, and reports what connections' handshakes state in the clear: TLS versions, key exchange groups, TLS 1.2 certificates, SSH key exchange and plaintext protocols, never payload. It sees which systems talk to which, so granting it requires the agents:relay.grant permission.",

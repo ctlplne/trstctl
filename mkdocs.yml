@@ -167,6 +167,7 @@ nav:
           - PCAS threat model: pcas-threat-model.md
           - PCAS ceremonies and break-glass: pcas-ceremony.md
           - SSH trust rewrite design: design/ssh-trust-rewrite.md
+          - Access gateway design: design/access-gateway.md
           - Discovery coverage model: design/cbom-coverage.md
   - Feature reference:
       - All features: features.md

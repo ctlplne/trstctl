@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/sshcollection"
@@ -80,6 +81,10 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 		if err != nil || command.RequiredAgentID != agentID {
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 		}
+	}
+	if job.Destination == relay.KindAccessGatewaySession &&
+		(job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, mtls.AgentRoleGateway)) {
+		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
 	if (job.Destination == agentJobKindMDMSync || job.Destination == relay.KindMDMCheckIn) &&
 		(job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network")) {

@@ -49,6 +49,10 @@ type relayCredentialResolver struct {
 	// rightSizeBindings lets a relay attempt redeem the entitlement binding's
 	// token and learn its endpoint (A64); nothing of either rides the queue.
 	rightSizeBindings map[string]config.ConnectorRightSizeBinding
+	// pamGatewayCredential reopens a gateway session's upstream credential
+	// from its lease for the session's own gateway (A254); nil when PAM is
+	// not served.
+	pamGatewayCredential func(ctx context.Context, tenantID, sessionID string) ([]byte, error)
 }
 
 // redeemedMaterial is one resolved attempt's material plus the wipe that ends
@@ -105,6 +109,8 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// secret:// reference — same custody as the AD CS bind above: resolved
 		// per attempt, never carried on the queue.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case relay.KindAccessGatewaySession:
+		return r.resolveGatewaySession(ctx, tenantID, job)
 	case "mdm.sync", relay.KindMDMCheckIn:
 		// I5: identical custody for the MDM token; N9's check-in redeems the
 		// same schedule's token for its one call.

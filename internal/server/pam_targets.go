@@ -62,6 +62,9 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 		return api.PAMTarget{}, fmt.Errorf("%w: tenant, actor, and a lowercase target id are required", api.ErrPAMInvalid)
 	}
 	key := pamTargetID{tenantID, target.ID}
+	if err := s.validateGatewayBinding(ctx, tenantID, target); err != nil {
+		return api.PAMTarget{}, err
+	}
 	switch target.TargetType {
 	case pamTargetPostgres:
 		if s.postgres[key] != nil {
@@ -104,7 +107,7 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 	sort.Strings(principals)
 	payload := projections.PAMTargetRegistered{TargetType: target.TargetType, ID: target.ID,
 		ProviderID: target.ProviderID, AllowedRoles: roles, Host: target.Host, Port: target.Port,
-		Principals: principals, RegisteredBy: actor}
+		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-target:"+tenantID+":"+target.TargetType+":"+target.ID)).String()
 	if err := s.appendCanonicalPAMTarget(ctx, tenantID, id, projections.EventPAMTargetRegistered, payload); err != nil {
 		return api.PAMTarget{}, err
@@ -136,7 +139,8 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		AllowedRoles: rec.AllowedRoles, Host: rec.Host, Port: rec.Port, Principals: rec.Principals,
 		Enabled: rec.Enabled, Source: "tenant", RegisteredBy: rec.RegisteredBy,
 		RegisteredAt: &rec.RegisteredAt, DisabledBy: rec.DisabledBy,
-		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt}
+		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt,
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}
 }
 
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
@@ -225,7 +229,8 @@ func (s *pamService) postgresTarget(ctx context.Context, tenantID, id string) (*
 		return nil, fmt.Errorf("%w: postgres target %q is disabled", api.ErrPAMRejected, id)
 	}
 	d := s.targetDeps
-	d.Config.PostgresTargets = []PAMPostgresTarget{{TenantID: tenantID, ID: id, ProviderID: rec.ProviderID, AllowedRoles: rec.AllowedRoles}}
+	d.Config.PostgresTargets = []PAMPostgresTarget{{TenantID: tenantID, ID: id, ProviderID: rec.ProviderID, AllowedRoles: rec.AllowedRoles,
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}}
 	targets, err := buildPAMPostgresTargets(d)
 	if err != nil {
 		return nil, fmt.Errorf("%w: registered postgres target %q is no longer valid: %v", api.ErrPAMRejected, id, err)
@@ -248,7 +253,8 @@ func (s *pamService) sshTarget(ctx context.Context, tenantID, id string) (PAMSSH
 		return PAMSSHTarget{}, fmt.Errorf("%w: ssh target %q is disabled", api.ErrPAMRejected, id)
 	}
 	d := s.targetDeps
-	d.Config.SSHTargets = []PAMSSHTarget{{TenantID: tenantID, ID: id, Host: rec.Host, Port: rec.Port, Principals: rec.Principals}}
+	d.Config.SSHTargets = []PAMSSHTarget{{TenantID: tenantID, ID: id, Host: rec.Host, Port: rec.Port, Principals: rec.Principals,
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}}
 	targets, err := buildPAMSSHTargets(d)
 	if err != nil {
 		return PAMSSHTarget{}, fmt.Errorf("%w: registered ssh target %q is no longer valid: %v", api.ErrPAMRejected, id, err)

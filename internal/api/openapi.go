@@ -5827,7 +5827,9 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
-		"principals": {Type: "array", Items: str()},
+		"principals":       {Type: "array", Items: str()},
+		"gateway_agent_id": {Type: "string", Format: "uuid", Description: "The gateway-role agent that serves this target (A254); set with gateway_address."},
+		"gateway_address":  {Type: "string", Description: "host:port where clients reach the gateway (A254)."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
 		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
@@ -5836,6 +5838,7 @@ func componentSchemas() map[string]*Schema {
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
 		"registered_by": str(), "registered_at": timestamp(), "disabled_by": str(),
 		"disabled_reason": str(), "disabled_at": timestamp(),
+		"gateway_agent_id": str(), "gateway_address": str(),
 	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
@@ -5872,6 +5875,11 @@ func componentSchemas() map[string]*Schema {
 		"revocation_failure": str(), "revocation_failed_at": timestamp(),
 		"attestation": ref("Attestation"), "postgres": ref("PAMPostgresCredential"),
 		"ssh": ref("PAMSSHCredential"), "audit": {Type: "object"},
+		"delivery": {Type: "string", Enum: []string{"direct", "gateway"}},
+		"gateway": object(map[string]*Schema{
+			"agent_id": str(), "address": str(), "spiffe_id": str(), "ca_pem": str(),
+			"ticket": {Type: "string", Description: "The one-time ticket that admits the requester's connections at the gateway (A254); returned once, by the open. It is not the upstream credential, which only the gateway holds."},
+		}, "agent_id", "address", "spiffe_id"),
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
@@ -6647,7 +6655,7 @@ func componentSchemas() map[string]*Schema {
 		// Capability grant projected from the agent's certificate SANs (epic A2).
 		// Not editable here: the role lives in a signed SAN, so an operator
 		// changes it with a grant the agent's next renewal signs (A191).
-		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}},
+		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
 		"role_source": {Type: "string", Enum: []string{"certificate", "unreported"}},
 		"role_grant":  ref("AgentRoleGrant"),
 		// A194: the agent's clock against the control plane's.
@@ -6725,7 +6733,7 @@ func componentSchemas() map[string]*Schema {
 		// The effective grant this token carries into the enrolled certificate,
 		// after normalization — so an operator sees what they authorized rather
 		// than what they typed (epic A2).
-		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}},
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
 	}, "token", "roles", "agent_server", "agent_server_name")
 	enrollmentTokenReq := object(map[string]*Schema{
 		"allowed_identity": str(),
@@ -6733,13 +6741,13 @@ func componentSchemas() map[string]*Schema {
 		// Requesting "network" additionally requires the agents:relay.grant
 		// permission, because a relay holds the credentials for the appliances it
 		// fronts.
-		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}},
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
 	})
 	enrollmentPlanPreview := object(map[string]*Schema{
 		"ready":                  {Type: "boolean"},
 		"side_effects":           {Type: "boolean"},
 		"allowed_identity":       str(),
-		"roles":                  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}},
+		"roles":                  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
 		"required_permissions":   {Type: "array", Items: str()},
 		"enroll_path":            str(),
 		"agent_server":           str(),
@@ -6763,7 +6771,7 @@ func componentSchemas() map[string]*Schema {
 	// A191: an operator's change to the roles an agent's next certificate
 	// carries. Requires agents:relay.grant.
 	agentRoleGrantReq := object(map[string]*Schema{
-		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
+		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
 		"reason": str(),
 	}, "roles")
 	agentClockSkew := object(map[string]*Schema{
@@ -6774,7 +6782,7 @@ func componentSchemas() map[string]*Schema {
 		"detail":            str(),
 	}, "state", "skew_seconds", "threshold_seconds", "observed_at", "detail")
 	agentRoleGrant := object(map[string]*Schema{
-		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer"}}},
+		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
 		"state":          {Type: "string", Enum: []string{"pending", "applied"}, Description: "pending until a renewal signs the roles into the agent's certificate."},
 		"granted_at":     timestamp(),
 		"event_id":       str(),

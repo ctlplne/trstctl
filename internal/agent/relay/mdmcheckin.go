@@ -29,6 +29,11 @@ import (
 // KindMDMCheckIn is the relay-executed MDM device check-in.
 const KindMDMCheckIn = "mdm.device.check_in"
 
+// KindAccessGatewaySession is one brokered access session a gateway-role agent
+// holds (A254, internal/agent/accessgateway). It is declared here, beside the
+// other job kinds, so the shipped census names it without an import cycle.
+const KindAccessGatewaySession = "access.gateway.session"
+
 // Device identifiers a check-in may name: an Intune managed device ID, or a
 // Jamf Pro computer ID (the inventory mdm.sync reads). Each travels as one
 // escaped path segment of a fixed endpoint.

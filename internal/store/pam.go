@@ -50,6 +50,13 @@ type PAMSession struct {
 	// ApprovalRequestID is the operation approval the activation consumed (G1).
 	// Sessions projected before migration 0355 read "".
 	ApprovalRequestID string
+	// Delivery (A254) is "direct" (the requester received the credential) or
+	// "gateway" (only the named gateway ever holds it). GatewayTicketDigest is
+	// the SHA-256 of the one-time ticket the requester holds; the ticket itself
+	// is never stored.
+	Delivery            string
+	GatewayAgentID      string
+	GatewayTicketDigest string
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -63,11 +70,11 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		         approval_request_id)
+		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
 		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
-		         $20)
+		         $20, $21, NULLIF($22,'')::uuid, $23)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -86,11 +93,14 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        started_at = EXCLUDED.started_at,
 		        expires_at = EXCLUDED.expires_at,
 		        ended_at = EXCLUDED.ended_at,
-		        approval_request_id = EXCLUDED.approval_request_id`,
+		        approval_request_id = EXCLUDED.approval_request_id,
+		        delivery = EXCLUDED.delivery,
+		        gateway_agent_id = EXCLUDED.gateway_agent_id,
+		        gateway_ticket_digest = EXCLUDED.gateway_ticket_digest`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
 		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
-		p.ApprovalRequestID) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -143,7 +153,8 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
-		        revocation_idempotency_key, revocation_failure, revocation_failed_at
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -164,7 +175,8 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
-		        revocation_idempotency_key, revocation_failure, revocation_failed_at
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -197,7 +209,8 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
-		        revocation_idempotency_key, revocation_failure, revocation_failed_at
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -230,7 +243,8 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		        subject, requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
-		        revocation_idempotency_key, revocation_failure, revocation_failed_at
+		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -260,6 +274,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
+		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows
@@ -271,4 +286,58 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 	}
 	out.SSHSerial = uint64(serial)
 	return nil
+}
+
+// pamDelivery names a session's delivery; sessions projected before A254 were
+// all direct.
+func pamDelivery(d string) string {
+	if d == "" {
+		return "direct"
+	}
+	return d
+}
+
+// RecallPAMGatewayJob withdraws a gateway session's job (A254): its gateway's
+// next lease extension is refused, so it closes the session's connections and
+// wipes the credential. Recalling an already finished job changes nothing.
+func (s *Store) RecallPAMGatewayJob(ctx context.Context, tenantID, sessionID, destination, idempotencyKey string, at time.Time) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox
+		    SET status = $5, agent_recalled_at = COALESCE(agent_recalled_at, $4), last_error = 'session revoked',
+		        worker_id = NULL, lease_until = NULL
+		  WHERE tenant_id = $1 AND destination = $2 AND idempotency_key = $3
+		    AND status IN ('pending', 'processing') AND delivered_at IS NULL AND claim_completed_at IS NULL`,
+			tenantID, destination, idempotencyKey, at.UTC(), OutboxStatusCancelled)
+		return err
+	})
+}
+
+// ListActiveGatewayPAMSessions lists active gateway-delivered sessions across
+// tenants, for the expiry worker's job check.
+func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time, limit int) ([]PAMSession, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	var out []PAMSession
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — the PAM expiry worker checks every tenant's active gateway sessions for a queued job, as it lists due sessions across tenants (ListDuePAMSessions); each job is then queued under its own tenant's RLS context.
+		`SELECT tenant_id::text, id::text, target_type, target_id, expires_at,
+		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest
+		   FROM pam_sessions
+		  WHERE delivery = 'gateway' AND status = 'active' AND expires_at > $1
+		  ORDER BY expires_at, id
+		  LIMIT $2`, now.UTC(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p PAMSession
+		if err := rows.Scan(&p.TenantID, &p.ID, &p.TargetType, &p.TargetID, &p.ExpiresAt, &p.GatewayAgentID, &p.GatewayTicketDigest); err != nil {
+			return nil, err
+		}
+		p.Delivery = "gateway"
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }

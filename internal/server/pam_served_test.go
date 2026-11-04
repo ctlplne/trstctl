@@ -642,6 +642,17 @@ type servedPAMSessionResponse struct {
 	Attestation *attest.Attestation          `json:"attestation,omitempty"`
 	Postgres    *servedPAMPostgresCredential `json:"postgres,omitempty"`
 	SSH         *servedPAMSSHCredential      `json:"ssh,omitempty"`
+	Delivery    string                       `json:"delivery,omitempty"`
+	Gateway     *servedPAMGateway            `json:"gateway,omitempty"`
+}
+
+// servedPAMGateway is a gateway-delivered session's delivery (A254).
+type servedPAMGateway struct {
+	AgentID  string `json:"agent_id"`
+	Address  string `json:"address"`
+	SPIFFEID string `json:"spiffe_id"`
+	CAPEM    string `json:"ca_pem"`
+	Ticket   string `json:"ticket"`
 }
 
 type servedPAMPostgresCredential struct {

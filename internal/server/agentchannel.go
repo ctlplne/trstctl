@@ -118,6 +118,7 @@ const agentServiceDependencyFindingKind = dependencyobs.Kind
 type agentChannelService interface {
 	transport.AgentServiceServer
 	transport.AgentJobServiceServer
+	transport.AgentGatewayServiceServer
 }
 
 // provisionAgentCA establishes the AGENT CA whose key lives inside the signer (AN-4),
@@ -263,7 +264,12 @@ func (s *Server) OutOfProcessAgentCA() bool {
 // the signer-held agent CA. All access is tenant-scoped by the agent's verified
 // certificate (AN-1).
 type agentService struct {
-	tenantServiceCheck tenancy.ServiceCheck
+	// gatewayBoundHosts lists the host names of the targets bound to one
+	// gateway-role agent, and signGatewayServerCSR signs its listener's CSR
+	// with the agent CA (A254); nil when access gateways are not served.
+	gatewayBoundHosts    func(ctx context.Context, tenantID, agentID string) ([]string, error)
+	signGatewayServerCSR func(csr []byte, hosts, uris []string, ttl time.Duration) ([]byte, error)
+	tenantServiceCheck   tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
 	logger *slog.Logger
 	store  *store.Store

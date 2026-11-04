@@ -444,6 +444,14 @@ func SignTimestampingCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER
 // certificate is verified against the CA before return (fail closed). The chain is
 // leaf || CA (DER list), PEM-encoded.
 func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, hosts []string, ttl time.Duration) ([]byte, error) {
+	return SignServerCertFromCSRWithURIs(caCertDER, caSigner, csrDER, hosts, nil, ttl)
+}
+
+// SignServerCertFromCSRWithURIs is SignServerCertFromCSR with URI SANs too:
+// an access gateway's serving certificate (A254) also names the gateway
+// agent's SPIFFE ID, so a client verifies which agent it reached, not only
+// the host.
+func SignServerCertFromCSRWithURIs(caCertDER []byte, caSigner DigestSigner, csrDER []byte, hosts, uris []string, ttl time.Duration) ([]byte, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
@@ -488,6 +496,13 @@ func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byt
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		SubjectKeyId:          ski,
+	}
+	for _, raw := range uris {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" {
+			return nil, fmt.Errorf("crypto: server cert URI SAN %q is not a URI", raw)
+		}
+		leaf.URIs = append(leaf.URIs, u)
 	}
 	if len(caCert.SubjectKeyId) > 0 {
 		leaf.AuthorityKeyId = caCert.SubjectKeyId

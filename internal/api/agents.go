@@ -732,7 +732,7 @@ func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
 type enrollmentTokenRequest struct {
 	AllowedIdentity string `json:"allowed_identity,omitempty"`
 	// Roles is the capability grant the enrolled agent's certificate will carry
-	// (epic A2): "host", "network", "observer" (X1), or several. Empty means host-only, which is what
+	// (epic A2): "host", "network", "observer" (X1), "gateway" (A254), or several. Empty means host-only, which is what
 	// every agent enrolled before roles existed effectively had.
 	Roles []string `json:"roles,omitempty"`
 }
@@ -818,7 +818,7 @@ func (a *API) previewEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 
 	blocked := a.agentEnrollmentBlockers()
 	permissions := []string{string(authz.AgentsWrite)}
-	if slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver) {
+	if slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver) || slices.Contains(roles, mtls.AgentRoleGateway) {
 		permissions = append(permissions, string(authz.AgentsGrantRelay))
 	}
 	a.writeJSON(w, http.StatusOK, enrollmentPlanPreview{
@@ -894,7 +894,7 @@ func (a *API) parseEnrollmentTokenGrant(r *http.Request) (enrollmentTokenRequest
 	// Granting the network role is a separate authority from enrolling agents: a
 	// relay holds the credentials for the appliances it fronts, so placing one is
 	// a different decision from adding a host agent (epic A2).
-	if (slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver)) && !a.canGrantRelayRole(r) {
+	if (slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver) || slices.Contains(roles, mtls.AgentRoleGateway)) && !a.canGrantRelayRole(r) {
 		return enrollmentTokenRequest{}, nil, errStatus(http.StatusForbidden,
 			"granting an agent the network relay or observer role requires the agents:relay.grant permission")
 	}
@@ -991,8 +991,8 @@ func normalizeEnrollmentRoles(requested []string) ([]string, error) {
 			continue
 		}
 		if !mtls.ValidAgentRole(role) {
-			return nil, fmt.Errorf("unknown agent role %q: expected %q, %q or %q",
-				role, mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleObserver)
+			return nil, fmt.Errorf("unknown agent role %q: expected %q, %q, %q or %q",
+				role, mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleObserver, mtls.AgentRoleGateway)
 		}
 	}
 	return mtls.NormalizeAgentRoles(requested), nil

@@ -1,0 +1,108 @@
+# Access gateway: design and threat model (A254–A258)
+
+The access gateway lets agents, services and people reach databases and hosts without
+ever receiving the upstream credential. It builds on the just-in-time PAM lane (F33):
+requests, quorum approval, the tenant SSH CA, dynamic-secret providers, revocation and
+signed audit. It is not a human PAM suite.
+
+**Boundary.** The gateway never carries, proxies or inspects MCP traffic, and never
+starts, sandboxes or hosts MCP servers. Per-tool authorization for agents (P8) is a
+separate design with no component in the call path, and does not reuse the gateway.
+
+## Pieces
+
+| Piece | Role |
+|---|---|
+| Control plane | Approves and opens the session (F33), binds it to its gateway, mints a one-time ticket (stores only its SHA-256), queues the session as one agent job, revokes. |
+| Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs, redeems each session's upstream credential into locked memory, admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
+| CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`) connect to the loopback address. |
+
+The gateway's outbound destinations are the control plane and the targets bound to it.
+Its listener serves a certificate the agent CA signs for it (in the signer process, AN-4):
+ServerAuth, for the host names clients reach it by (`--access-gateway-hosts`, each the host
+of a target binding that names this agent — the control plane signs no other name), and
+naming the gateway agent's SPIFFE ID as a URI SAN. Its key stays in locked memory and the
+certificate is renewed before it ends. A client verifies it with ordinary TLS verification
+against the tenant's agent CA for the host it dialed, then requires the exact SPIFFE ID, so
+it knows which agent it reached. The gateway asks clients for no certificate: the ticket
+inside the tunnel admits them.
+
+## A session's life
+
+1. **Request and approval** — unchanged from F33. A target bound to a gateway
+   (`gateway_agent_id`, `gateway_address`) is part of the approved command: the binding is
+   in the target digest, so changing it invalidates the approval.
+2. **Open** — the control plane consumes the approval once, issues the upstream credential
+   as for any session (PostgreSQL: a per-session login from the dynamic-secret provider
+   with `rolvaliduntil` at the deadline), records `pam.session.started` with
+   `delivery: gateway`, the gateway and the ticket's SHA-256, and queues one agent job
+   (`access.gateway.session`, keyed by the session, demanding the gateway role and that
+   exact agent). The response carries the ticket (once) and how to verify the gateway —
+   never the credential.
+3. **Claim and redemption** — the gateway claims the job, and redemption reopens the
+   credential from the session's lease for that gateway only (exact agent, gateway role);
+   it travels over the gateway's mTLS channel into locked memory.
+4. **Connect** — the client's first line is `TRSTCTL-GATEWAY/1 <session> <ticket>`; the
+   gateway compares the ticket's SHA-256 in constant time, checks the deadline, then:
+   for PostgreSQL it answers the client's startup itself, signs in upstream as the
+   session login, hands the client the upstream session's parameters and readiness, and
+   relays the protocol. The sign-in is the gateway's own (inside `internal/crypto`), not a
+   database driver — the agent binary links none and never sends a query of its own: it
+   answers the server's password request as libpq does (SCRAM-SHA-256, MD5 or cleartext,
+   as the target's `pg_hba` demands; Kerberos, GSSAPI and SSPI are refused), passes only
+   the client's harmless runtime parameters (`application_name`,
+   `client_encoding`, `DateStyle`, `TimeZone`, `extra_float_digits`, `IntervalStyle`),
+   and whenever it uses TLS it verifies the database's certificate against `sslrootcert`
+   (a file on the gateway's host) or the system roots, including the host name —
+   stricter than libpq's `prefer`, `require` and `verify-ca`.
+5. **End** — at the deadline the gateway closes the session's connections, wipes the
+   credential and reports; the native deadline (`rolvaliduntil`, certificate
+   `valid_before`) holds even without it. **Revocation** recalls the session's job
+   first, so the gateway's next lease extension (every few seconds) is refused and it
+   closes the session; the upstream credential's revocation then proceeds as for any
+   session.
+
+## End states, each read back on its own
+
+| State | Effect read back |
+|---|---|
+| New logins denied | The gateway no longer holds the session: a connection is refused. |
+| Session terminated | The gateway's end-of-session report (`ended: recalled` or `deadline`); recordings and live termination are A255. |
+| Upstream credential revoked | The PostgreSQL role is gone / the served SSH KRL holds the session's key ID (F33). |
+
+## Failure modes
+
+- **Control-plane restart mid-session** — the session row, its events and its job row are
+  durable; the gateway keeps its claim and connections; the session ID derives from the
+  approval and the deadline from the lease, so a restart neither duplicates nor extends
+  it. An open interrupted between its event and its job is completed by the PAM expiry
+  worker, which re-queues the job of every active gateway session (the job key is the
+  session, so never twice).
+- **Gateway restart** — its memory is gone and its connections drop; the job's lease
+  lapses and the job is claimable again, so a restarted gateway re-claims and re-redeems
+  it.
+- **Partition between gateway and control plane** — no new claims; a held session
+  continues until its deadline or until an extension is refused. A revocation during a
+  partition takes effect when the gateway next reaches the control plane, and the native
+  deadline bounds it regardless.
+
+## What the gateway can see, and the threats
+
+The gateway sees every session's plaintext: SQL statements and results, shell input and
+output. That is why recording and masking (A255) happen there and why the role is a
+deliberate grant.
+
+| Threat | Answer |
+|---|---|
+| A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
+| A client connecting straight to the target | The client holds no credential the target accepts. |
+| A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
+| Another tenant | The gateway is one tenant's agent; jobs, sessions and redemption are tenant-scoped under RLS. |
+| A gateway impersonator | The CLI verifies the gateway's serving certificate against the tenant's agent CA for the host it dialed and requires the gateway agent's exact SPIFFE ID; the control plane signs a gateway's certificate only for hosts its own bindings declare. |
+
+## Status
+
+A254 part 1 — PostgreSQL through the gateway — is served. SSH through the gateway (the
+gateway's per-session key signed by the tenant SSH CA) completes A254. Recording, masking
+and live termination (A255), more session types (A256), the agent launcher (A257) and
+credential health and emergency access (A258) follow.

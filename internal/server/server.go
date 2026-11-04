@@ -2528,6 +2528,12 @@ func (s *Server) configurePAMSurface(d Deps) error {
 		Config: d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
 		Audit: attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
 		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,
+		AgentCAPEM: func() []byte {
+			if len(s.agentCACertDER) == 0 {
+				return nil
+			}
+			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.agentCACertDER})
+		},
 	})
 	if err != nil {
 		return err
@@ -2569,7 +2575,10 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// The redemption resolver seals with the SAME KEK and tenant custody the
 		// issuance dispatcher sealed with — constructed from the same Deps, so
 		// the two sides of the seal cannot drift apart (epic A3).
-		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings)},
+		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings),
+			pamGatewayCredential: s.pamGatewayCredential()},
+		gatewayBoundHosts:    s.pamGatewayBoundHosts(),
+		signGatewayServerCSR: s.signGatewayServerCSR,
 		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page. Control-plane previews write the same
 		// event-sourced receipt through the outbox dispatcher.

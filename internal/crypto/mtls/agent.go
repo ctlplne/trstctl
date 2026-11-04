@@ -838,6 +838,12 @@ const (
 	// connections' handshakes state in the clear (X1). It sees which systems
 	// talk to which, so granting it is a deliberate operator act, like network.
 	AgentRoleObserver = "observer"
+	// AgentRoleGateway serves brokered access sessions (A254): it holds the
+	// upstream credential of each session it is handed, injects it and never
+	// returns it, so clients reach a database or host without ever receiving
+	// that credential. It sees every session's traffic, so granting it is a
+	// deliberate operator act, like network.
+	AgentRoleGateway = "gateway"
 )
 
 // AgentRoleSPIFFEID is the capability SAN for one role.
@@ -853,7 +859,7 @@ func AgentRoleSPIFFEID(tenantID, cn, role string) string {
 // refused at enrollment rather than stamped and puzzled over later.
 func ValidAgentRole(role string) bool {
 	switch strings.TrimSpace(role) {
-	case AgentRoleHost, AgentRoleNetwork, AgentRoleObserver:
+	case AgentRoleHost, AgentRoleNetwork, AgentRoleObserver, AgentRoleGateway:
 		return true
 	default:
 		return false
@@ -866,7 +872,7 @@ func ValidAgentRole(role string) bool {
 func NormalizeAgentRoles(roles []string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, role := range []string{AgentRoleHost, AgentRoleNetwork, AgentRoleObserver} {
+	for _, role := range []string{AgentRoleHost, AgentRoleNetwork, AgentRoleObserver, AgentRoleGateway} {
 		for _, candidate := range roles {
 			if strings.TrimSpace(candidate) == role && !seen[role] {
 				seen[role] = true

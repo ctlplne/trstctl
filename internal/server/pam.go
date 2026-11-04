@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/config"
 
 	"github.com/google/uuid"
@@ -63,6 +64,9 @@ type PAMPostgresTarget struct {
 	// Its admin DSN remains a protected file:/secret:// reference in that provider.
 	ProviderID   string
 	AllowedRoles []string
+	// GatewayAgentID and GatewayAddress (A254) bind the target to the gateway
+	// that serves it: a session to it is delivered through that gateway only.
+	GatewayAgentID, GatewayAddress string
 }
 
 type PAMSSHTarget struct {
@@ -71,6 +75,8 @@ type PAMSSHTarget struct {
 	Host       string
 	Port       int
 	Principals []string
+	// GatewayAgentID and GatewayAddress (A254), as for PostgreSQL targets.
+	GatewayAgentID, GatewayAddress string
 }
 
 type pamService struct {
@@ -96,6 +102,9 @@ type pamService struct {
 	approvalTTL       time.Duration
 	requiredApprovals int
 	targetDeps        pamDeps
+	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
+	// certificate against (A254); nil when no agent channel is served.
+	agentCAPEM func() []byte
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -128,6 +137,8 @@ type pamDeps struct {
 	WakeOutbox   func()
 	TenantCrypto tenantseal.Access
 	Orch         *orchestrator.Orchestrator
+	// AgentCAPEM is the agent CA a client verifies a gateway against (A254).
+	AgentCAPEM func() []byte
 }
 
 func newPAMService(d pamDeps) (*pamService, error) {
@@ -189,7 +200,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
-		targetDeps: d,
+		targetDeps: d, agentCAPEM: d.AgentCAPEM,
 	}, nil
 }
 
@@ -550,6 +561,15 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		return api.PAMSession{}, fmt.Errorf("%w: tenant SSH revocation list is unavailable", api.ErrPAMRejected)
 	}
 	at := s.clock().UTC()
+	if rec.Delivery == "gateway" {
+		// A254: new logins through the gateway end first — its next lease
+		// extension is refused and it closes the session's connections —
+		// while the upstream credential's revocation proceeds as for any
+		// session.
+		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindSession, accessgateway.JobKey(id), at); err != nil {
+			return api.PAMSession{}, err
+		}
+	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionRevocationRequested, projections.PAMSessionRevocationRequested{
 		ID: id, RequestedBy: requester, Reason: reason, RequestedAt: at,
 		IdempotencyKey: idempotencyKey,
@@ -750,7 +770,12 @@ func (s *pamService) GetPAMSession(ctx context.Context, tenantID, id string) (ap
 	if err != nil {
 		return api.PAMSession{}, err
 	}
-	return pamSessionFromStore(rec), nil
+	session := pamSessionFromStore(rec)
+	if rec.Delivery == "gateway" {
+		// A254: how to reach the session's gateway, never its ticket.
+		session.Gateway = s.gatewayDeliveryForRead(ctx, tenantID, rec)
+	}
+	return session, nil
 }
 
 func (s *pamService) ListPAMSessions(ctx context.Context, tenantID string, limit int, _ string) ([]api.PAMSession, string, error) {
@@ -770,6 +795,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		_ = s.expireOnce(ctx)
+		s.ensureGatewayJobs(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -1000,6 +1026,13 @@ func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempot
 	if err != nil {
 		return api.PAMSession{}, fmt.Errorf("%w: postgres target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
 	}
+	if target.cfg.GatewayAgentID != "" {
+		// A254: the requester receives a ticket for the target's gateway,
+		// never this credential; the gateway reopens it from the lease.
+		secret.Wipe(credential)
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID,
+			target.cfg.GatewayAgentID, target.cfg.GatewayAddress, func() { _ = lifecycle.Revoke(context.Background(), lease.ID) })
+	}
 	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID, "", 0)
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {
 		secret.Wipe(credential)
@@ -1227,7 +1260,17 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		RevocationFailure:     rec.RevocationFailure, RevocationFailedAt: rec.RevocationFailedAt,
 		Attestation: verified,
 		Audit:       jsonMap(rec.Audit),
+		Delivery:    pamDeliveryName(rec.Delivery),
 	}
+}
+
+// pamDeliveryName reads a session's delivery; sessions projected before A254
+// were all direct.
+func pamDeliveryName(d string) string {
+	if d == "" {
+		return "direct"
+	}
+	return d
 }
 
 func jsonMap(raw []byte) map[string]any {
@@ -1261,7 +1304,8 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	for _, target := range c.PostgresTargets {
 		out.PostgresTargets = append(out.PostgresTargets, PAMPostgresTarget{
 			TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,
-			AllowedRoles: append([]string(nil), target.AllowedRoles...),
+			AllowedRoles:   append([]string(nil), target.AllowedRoles...),
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
 		})
 	}
 	for _, target := range c.SSHTargets {

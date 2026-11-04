@@ -20,6 +20,9 @@ type pamTargetRequest struct {
 	Host         string   `json:"host,omitempty"`
 	Port         int      `json:"port,omitempty"`
 	Principals   []string `json:"principals,omitempty"`
+	// GatewayAgentID and GatewayAddress bind the target to a gateway (A254).
+	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
+	GatewayAddress string `json:"gateway_address,omitempty"`
 }
 
 //trstctl:mutation
@@ -40,6 +43,7 @@ func (a *API) registerPAMTarget(w http.ResponseWriter, r *http.Request) {
 			ID: strings.TrimSpace(body.ID), TargetType: strings.TrimSpace(body.TargetType),
 			ProviderID: strings.TrimSpace(body.ProviderID), AllowedRoles: body.AllowedRoles,
 			Host: strings.TrimSpace(body.Host), Port: body.Port, Principals: body.Principals,
+			GatewayAgentID: strings.TrimSpace(body.GatewayAgentID), GatewayAddress: strings.TrimSpace(body.GatewayAddress),
 		})
 		if err != nil {
 			return 0, nil, err

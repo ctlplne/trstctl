@@ -1896,6 +1896,11 @@ type PAMPostgresTarget struct {
 	ID           string   `json:"id"`
 	ProviderID   string   `json:"provider_id"`
 	AllowedRoles []string `json:"allowed_roles"`
+	// GatewayAgentID and GatewayAddress (A254) bind the target to the
+	// gateway-role agent that serves it and where clients reach it: sessions to
+	// it are delivered through that gateway, never as a credential.
+	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
+	GatewayAddress string `json:"gateway_address,omitempty"`
 }
 
 type PAMSSHTarget struct {
@@ -5089,6 +5094,16 @@ func validatePAM(p PAM) []error {
 		prefix := fmt.Sprintf("pam.postgres_targets[%d]", i)
 		if _, err := uuid.Parse(target.TenantID); err != nil || target.ID == "" || target.ProviderID == "" || len(target.AllowedRoles) == 0 {
 			errs = append(errs, fmt.Errorf("%s requires tenant_id UUID, id, provider_id, and allowed_roles", prefix))
+		}
+		if (target.GatewayAgentID == "") != (target.GatewayAddress == "") {
+			errs = append(errs, fmt.Errorf("%s gateway binding names both gateway_agent_id and gateway_address", prefix))
+		} else if target.GatewayAgentID != "" {
+			if _, err := uuid.Parse(target.GatewayAgentID); err != nil {
+				errs = append(errs, fmt.Errorf("%s gateway_agent_id must be an agent UUID", prefix))
+			}
+			if host, port, err := net.SplitHostPort(target.GatewayAddress); err != nil || host == "" || port == "" {
+				errs = append(errs, fmt.Errorf("%s gateway_address must be host:port", prefix))
+			}
 		}
 		key := target.TenantID + "/postgres/" + target.ID
 		if seen[key] {

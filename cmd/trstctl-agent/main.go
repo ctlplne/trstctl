@@ -1027,6 +1027,8 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		if relayTimer == nil {
 			relayTimer = time.NewTimer(0)
 		}
+		stopGateway := startGateway(ctx, a, reporter, caPEM) // A254: brokered access sessions, gateway role only
+		defer stopGateway()
 	}
 	var hostRollback *relay.HostRollbackStore
 	// A network relay keeps a store too: a remote Envoy's TLS posture (A104)

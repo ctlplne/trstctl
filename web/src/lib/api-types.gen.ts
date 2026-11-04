@@ -1222,7 +1222,7 @@ export interface Agent {
   reported_ssh_trust_readiness?: SSHTrustReadiness;
   role_grant?: AgentRoleGrant;
   role_source: "certificate" | "unreported";
-  roles: ("host" | "network" | "observer")[];
+  roles: ("host" | "network" | "observer" | "gateway")[];
   status: string;
   version?: string;
   workload_api: AgentWorkloadAPIStatus;
@@ -1378,13 +1378,13 @@ export interface AgentRoleGrant {
   detail: string;
   event_id: string;
   granted_at: string;
-  roles: ("host" | "network" | "observer")[];
+  roles: ("host" | "network" | "observer" | "gateway")[];
   state: "pending" | "applied";
 }
 
 export interface AgentRoleGrantRequest {
   reason?: string;
-  roles: ("host" | "network" | "observer")[];
+  roles: ("host" | "network" | "observer" | "gateway")[];
 }
 
 export interface AgentUpgradeCampaign {
@@ -4992,7 +4992,7 @@ export interface EnrollmentPlanPreview {
   renewal_path: string;
   renewal_ready: boolean;
   required_permissions: string[];
-  roles: ("host" | "network" | "observer")[];
+  roles: ("host" | "network" | "observer" | "gateway")[];
   side_effects: boolean;
 }
 
@@ -5000,13 +5000,13 @@ export interface EnrollmentToken {
   agent_server: string;
   agent_server_name: string;
   enroll_path?: string;
-  roles: ("host" | "network" | "observer")[];
+  roles: ("host" | "network" | "observer" | "gateway")[];
   token: string;
 }
 
 export interface EnrollmentTokenRequest {
   allowed_identity?: string;
-  roles?: ("host" | "network" | "observer")[];
+  roles?: ("host" | "network" | "observer" | "gateway")[];
 }
 
 export interface EnterpriseProfessionalService {
@@ -8321,8 +8321,10 @@ export interface PAMSSHCredential {
 export interface PAMSession {
   attestation?: Attestation;
   audit?: Record<string, unknown>;
+  delivery?: "direct" | "gateway";
   ended_at?: string;
   expires_at: string;
+  gateway?: { address: string; agent_id: string; ca_pem?: string; spiffe_id: string; ticket?: string };
   id: string;
   postgres?: PAMPostgresCredential;
   reason?: string;
@@ -8384,6 +8386,8 @@ export interface PAMTarget {
   disabled_by?: string;
   disabled_reason?: string;
   enabled: boolean;
+  gateway_address?: string;
+  gateway_agent_id?: string;
   host?: string;
   id: string;
   port?: number;
@@ -8406,6 +8410,8 @@ export interface PAMTargetList {
 
 export interface PAMTargetRequest {
   allowed_roles?: string[];
+  gateway_address?: string;
+  gateway_agent_id?: string;
   host?: string;
   id: string;
   port?: number;

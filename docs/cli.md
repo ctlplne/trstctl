@@ -1506,6 +1506,15 @@ nothing.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload; `--observe-ports`,
 `--observe-max-flows` and `--observe-report-interval` bound it.
+`--access-gateway-listen ADDR` (gateway role) serves brokered access sessions (A254):
+it claims `access.gateway.session` jobs, holds each session's upstream credential in
+locked memory and admits only connections carrying the session's ticket.
+`--access-gateway-hosts` names the hosts clients reach it by (default: the listen
+address's host); the agent CA signs its serving certificate only for hosts of target
+bindings that name this agent.
+`trstctl-cli access sessions connect <session-id> --ticket-file FILE [--listen
+127.0.0.1:PORT]` carries a stock client's connections to that gateway over TLS verified
+against its agent certificate; the client never receives the credential.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

@@ -6556,7 +6556,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -7125,7 +7126,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -7160,7 +7162,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -23580,7 +23583,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -23622,7 +23626,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -23650,7 +23655,8 @@
               "enum": [
                 "host",
                 "network",
-                "observer"
+                "observer",
+                "gateway"
               ],
               "type": "string"
             },
@@ -38392,6 +38398,13 @@
           "audit": {
             "type": "object"
           },
+          "delivery": {
+            "enum": [
+              "direct",
+              "gateway"
+            ],
+            "type": "string"
+          },
           "ended_at": {
             "format": "date-time",
             "type": "string"
@@ -38399,6 +38412,32 @@
           "expires_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "gateway": {
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "agent_id": {
+                "type": "string"
+              },
+              "ca_pem": {
+                "type": "string"
+              },
+              "spiffe_id": {
+                "type": "string"
+              },
+              "ticket": {
+                "description": "The one-time ticket that admits the requester's connections at the gateway (A254); returned once, by the open. It is not the upstream credential, which only the gateway holds.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent_id",
+              "address",
+              "spiffe_id"
+            ],
+            "type": "object"
           },
           "id": {
             "format": "uuid",
@@ -38620,6 +38659,12 @@
           "enabled": {
             "type": "boolean"
           },
+          "gateway_address": {
+            "type": "string"
+          },
+          "gateway_agent_id": {
+            "type": "string"
+          },
           "host": {
             "type": "string"
           },
@@ -38703,6 +38748,15 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "gateway_address": {
+            "description": "host:port where clients reach the gateway (A254).",
+            "type": "string"
+          },
+          "gateway_agent_id": {
+            "description": "The gateway-role agent that serves this target (A254); set with gateway_address.",
+            "format": "uuid",
+            "type": "string"
           },
           "host": {
             "type": "string"

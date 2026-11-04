@@ -4290,6 +4290,13 @@ type PAMSessionStarted struct {
 	// ApprovalRequestID names the approval the activation consumed (G1); events
 	// recorded before it existed carry none.
 	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+	// Delivery is "gateway" for a session delivered through a gateway (A254);
+	// events recorded before it existed carry none and read as direct.
+	// GatewayTicketDigest is the SHA-256 of the requester's one-time ticket —
+	// never the ticket.
+	Delivery            string `json:"delivery,omitempty"`
+	GatewayAgentID      string `json:"gateway_agent_id,omitempty"`
+	GatewayTicketDigest string `json:"gateway_ticket_digest,omitempty"`
 }
 
 // PAMSessionActivationRequested consumes one exact approval before any target
@@ -4333,6 +4340,10 @@ type PAMTargetRegistered struct {
 	Port         int      `json:"port,omitempty"`
 	Principals   []string `json:"principals,omitempty"`
 	RegisteredBy string   `json:"registered_by"`
+	// GatewayAgentID and GatewayAddress bind the target to the gateway that
+	// serves it (A254); targets registered before carry none.
+	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
+	GatewayAddress string `json:"gateway_address,omitempty"`
 }
 
 type PAMTargetDisabled struct {
@@ -8240,7 +8251,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, TargetType: pl.TargetType, ID: pl.ID,
 			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
 			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
-			RegisteredAt: e.Time,
+			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
 		})
 	case EventPAMTargetDisabled:
 		var pl PAMTargetDisabled
@@ -8290,6 +8301,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Reason: pl.Reason, AttestationID: pl.AttestationID, Attestation: attestation, BackendRef: pl.BackendRef,
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
+			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

@@ -2357,6 +2357,14 @@ zero uses two. An operator must separately configure the SSH server to trust the
 trstctl SSH CA. The request and activation commands are documented in
 [Incident response and JIT access](features/incident-and-jit.md#just-in-time-issuance-with-approval-f33).
 
+A PostgreSQL target may also carry `gateway_agent_id` (an enrolled agent holding the
+`gateway` role) and `gateway_address` (`host:port` where clients reach it), both or
+neither (A254). Sessions to such a target are delivered through that gateway: the
+requester receives a one-time ticket, never the credential. Run the gateway as
+`trstctl-agent --access-gateway-listen ADDR` and add `access.gateway.session` to
+`agent_channel.claimable_job_kinds`. See the
+[access gateway design](design/access-gateway.md).
+
 For Kubernetes, create a dedicated namespace and an administrator ServiceAccount
 whose Role can create, get, and delete ServiceAccounts, Opaque Secrets, and RoleBindings,
 create `serviceaccounts/token`, and `bind` only the named target Roles or

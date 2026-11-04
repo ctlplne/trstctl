@@ -59,6 +59,12 @@ type PAMTarget struct {
 	DisabledBy     string     `json:"disabled_by,omitempty"`
 	DisabledReason string     `json:"disabled_reason,omitempty"`
 	DisabledAt     *time.Time `json:"disabled_at,omitempty"`
+	// GatewayAgentID and GatewayAddress (A254): the gateway-role agent that
+	// serves this target and where clients reach it. A session to a bound
+	// target is delivered through that gateway; the requester never receives
+	// the upstream credential.
+	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
+	GatewayAddress string `json:"gateway_address,omitempty"`
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.
@@ -146,7 +152,25 @@ type PAMSession struct {
 	Attestation *attest.Attestation    `json:"attestation,omitempty"`
 	Postgres    *PAMPostgresCredential `json:"postgres,omitempty"`
 	SSH         *PAMSSHCredential      `json:"ssh,omitempty"`
-	Audit       map[string]any         `json:"audit,omitempty"`
+	// Gateway (A254) is how to reach a session delivered through a gateway;
+	// its ticket is returned once, by the open. Such a session never carries
+	// Postgres or SSH credentials.
+	Gateway *PAMGatewayDelivery `json:"gateway,omitempty"`
+	// Delivery is "direct" or "gateway".
+	Delivery string         `json:"delivery,omitempty"`
+	Audit    map[string]any `json:"audit,omitempty"`
+}
+
+// PAMGatewayDelivery names the gateway a session is delivered through and how
+// a client verifies it: the gateway's agent certificate chains to CAPEM and
+// carries exactly SPIFFEID. Ticket admits the client's connections; it is
+// shown once and is not the upstream credential.
+type PAMGatewayDelivery struct {
+	AgentID  string          `json:"agent_id"`
+	Address  string          `json:"address"`
+	SPIFFEID string          `json:"spiffe_id"`
+	CAPEM    string          `json:"ca_pem,omitempty"`
+	Ticket   secretJSONBytes `json:"ticket,omitempty"`
 }
 
 type PAMPostgresCredential struct {
