@@ -114,6 +114,8 @@ func ClaimableKinds() []string {
 		// N9: an approved device check-in at the MDM, on the schedule's relay.
 		KindMDMCheckIn,
 		KindTicketSync,
+		// P13: ServiceNow change-request approvals for intake-opened requests.
+		KindTicketStatus,
 		KindTrustDistribute,
 		// A71: the post-upgrade functional check; every polling agent answers
 		// the one pinned to it.
@@ -371,6 +373,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// I3: ServiceNow ticket intake is the same read-only, JIT-token custody
 	// shape as CMDB sync. The relay observes typed ticket fields; the control
 	// plane opens requests through its event-sourced lifecycle.
+	if job.Kind == KindTicketStatus {
+		return runTicketStatus(ctx, ch, client, job)
+	}
 	if job.Kind == KindTicketSync {
 		return runTicketSync(ctx, ch, client, job)
 	}

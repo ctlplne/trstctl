@@ -5162,6 +5162,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	if handled, err := p.applyFactoryTx(ctx, tx, e); handled {
 		return err
 	}
+	if handled, err := p.applyIncidentClosedTx(ctx, tx, e); handled {
+		return err
+	}
 	if handled, err := p.applyKeyVaultDisableTx(ctx, tx, e); handled {
 		return err
 	}

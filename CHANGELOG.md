@@ -2,6 +2,10 @@
 
 ### Added
 
+- ServiceNow two-way sync (P13 is served): a ServiceNow change request approved or rejected decides the trstctl
+  request intake opened from it, once (relay job `ticket.status`); `POST /api/v1/incidents/executions/{id}/close`
+  (`trstctl incidents executions close|closure`) closes a trstctl incident and resolves the ServiceNow incident its
+  response dispatch opened (correlation `trstctl:incident:<id>`), and a replayed update changes nothing.
 - Factory provisioning for devices (P12 is served): factory batches (`POST /api/v1/edge/factory-batches`,
   `trstctl edge factory-batches create|list|show|manifest|reconcile`) give a production-line station a quota of birth
   certificates under one edge delegation. `trstctl-agent --factory-issue` certifies each device's own CSR offline with

@@ -1135,6 +1135,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addADCSDecisionPrivacyPolicies(policies)
 	addMDMCheckInPrivacyPolicies(policies)
 	addFactoryPrivacyPolicies(policies)
+	addIncidentClosedPrivacyPolicies(policies)
 	addKeyVaultDisablePrivacyPolicies(policies)
 	addSlackAppPrivacyPolicies(policies)
 	current := agentHeartbeat
@@ -1671,6 +1672,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addADCSDecisionPrivacyShapes(shapes)
 	addMDMCheckInPrivacyShapes(shapes)
 	addFactoryPrivacyShapes(shapes)
+	addIncidentClosedPrivacyShapes(shapes)
 	addKeyVaultDisablePrivacyShapes(shapes)
 	addSlackAppPrivacyShapes(shapes)
 	addCredentialActivityPrivacyShapes(shapes)

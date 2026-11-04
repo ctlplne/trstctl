@@ -109,6 +109,9 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// I5: identical custody for the MDM token; N9's check-in redeems the
 		// same schedule's token for its one call.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case "ticket.status":
+		// P13: the same intake token, for one approval read.
+		return r.resolveJobReferences(ctx, tenantID, job)
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
 		return r.resolveJobReferences(ctx, tenantID, job)

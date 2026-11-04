@@ -117,6 +117,8 @@ var agentJobKindAllowlist = map[string]bool{
 	// I3: relay-executed ServiceNow ticket observation. Request creation stays
 	// in the control plane; the bearer token and network call do not.
 	agentJobKindTicketSync: true,
+	// P13: ServiceNow change-request approvals for intake-opened requests.
+	relay.KindTicketStatus: true,
 	// A162: relay-executed AD CS CA database read. Counts return; rows stay
 	// on the domain-joined relay.
 	relay.KindADCSDatabase: true,
@@ -982,6 +984,12 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM result receiver is not configured")
 		}
 		return a.recordMDMSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindTicketStatus:
+		// P13: decisions only from a report checked against its read.
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("ticket status result needs a terminal executed report")
+		}
+		return a.recordTicketStatus(ctx, info.TenantID, claim.Payload, req.Detail)
 	case agentJobKindTicketSync:
 		if a.recordTicketSync == nil {
 			return errors.New("ticket result receiver is not configured")

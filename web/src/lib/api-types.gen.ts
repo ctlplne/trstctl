@@ -5774,6 +5774,20 @@ export interface IdentityTransitionPreview {
   warnings: string[];
 }
 
+export interface IncidentCloseRequest {
+  resolution: string;
+  servicenow?: { allow_private_endpoint?: boolean; instance_url: string; token_ref: string };
+}
+
+export interface IncidentClosure {
+  closed_at: string;
+  closed_by: string;
+  incident_id: string;
+  resolution: string;
+  servicenow?: "queued" | "resolved" | "failed";
+  servicenow_error?: string;
+}
+
 export interface IncidentExecution {
   blast_radius: GraphImpact;
   compromised_identity_id: string;

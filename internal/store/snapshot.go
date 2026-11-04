@@ -262,7 +262,10 @@ import (
 // them a restored store would forget which birth certificates a station
 // issued, which are over the quota and which devices enrolled, while its
 // covered offset skipped those events.
-const SnapshotFormatVersion = 87
+// Version 88 carries P13's incident closures: without them a restored store
+// would show every closed incident as open while its covered offset skipped
+// the closures.
+const SnapshotFormatVersion = 88
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -352,6 +355,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"mdm_device_check_ins",
 	// Format 87: P12's factory batches and their birth certificates.
 	"factory_batches", "factory_birth_certificates",
+	// Format 88: P13's incident closures.
+	"incident_closures",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -706,6 +711,7 @@ SELECT jsonb_build_object(
   'switching_wave_rows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM switching_wave_rows t),
   'adcs_request_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_request_decisions t),
   'certificate_key_vault_disables', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_key_vault_disables t),
+  'incident_closures', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_closures t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

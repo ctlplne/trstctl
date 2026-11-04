@@ -278,6 +278,8 @@ var TenantScopedTables = []string{
 	"mdm_device_check_ins",
 	// P12: factory birth certificates, then their batches; no foreign keys.
 	"factory_birth_certificates", "factory_batches",
+	// P13: incident closures; no foreign keys.
+	"incident_closures",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

@@ -363,6 +363,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleCMDBCertificateExport(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
 		return d.handleServiceNowTicket(ctx, m)
+	case orchestrator.DestinationITSMServiceNowClose:
+		return d.handleServiceNowClose(ctx, m)
 	case orchestrator.DestinationResponseSplunk:
 		return d.handleSplunkResponseIntegration(ctx, m)
 	case orchestrator.DestinationResponseJira:

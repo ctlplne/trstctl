@@ -27542,6 +27542,70 @@
         ],
         "type": "object"
       },
+      "IncidentCloseRequest": {
+        "properties": {
+          "resolution": {
+            "type": "string"
+          },
+          "servicenow": {
+            "properties": {
+              "allow_private_endpoint": {
+                "type": "boolean"
+              },
+              "instance_url": {
+                "type": "string"
+              },
+              "token_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "instance_url",
+              "token_ref"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "resolution"
+        ],
+        "type": "object"
+      },
+      "IncidentClosure": {
+        "properties": {
+          "closed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "closed_by": {
+            "type": "string"
+          },
+          "incident_id": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "servicenow": {
+            "enum": [
+              "queued",
+              "resolved",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "servicenow_error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "incident_id",
+          "resolution",
+          "closed_by",
+          "closed_at"
+        ],
+        "type": "object"
+      },
       "IncidentExecution": {
         "properties": {
           "blast_radius": {
@@ -74486,6 +74550,141 @@
           }
         ],
         "summary": "Get an incident execution evidence pack",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/incidents/executions/{id}/close": {
+      "post": {
+        "operationId": "closeIncidentExecution",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "incident execution id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentCloseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentClosure"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Close an incident; naming the approved ServiceNow binding also resolves the ServiceNow incident its response dispatch opened",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/executions/{id}/closure": {
+      "get": {
+        "operationId": "getIncidentClosure",
+        "parameters": [
+          {
+            "description": "incident execution id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentClosure"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read an incident's closure and the state of its ServiceNow resolution",
         "x-trstctl-permission": "incidents:read"
       }
     },

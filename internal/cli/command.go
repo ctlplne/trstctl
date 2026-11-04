@@ -420,6 +420,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"incidents", "executions", "execute"}, Method: "POST", Path: "/api/v1/incidents/executions", Body: bodyFile, Summary: "Refuse retired direct remediation and return H2 fleet-planning guidance"},
 	{Name: []string{"incidents", "executions", "list"}, Method: "GET", Path: "/api/v1/incidents/executions", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List incident execution evidence packs"},
 	{Name: []string{"incidents", "executions", "get"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}", Summary: "Get an incident execution evidence pack"},
+	{Name: []string{"incidents", "executions", "close"}, Method: "POST", Path: "/api/v1/incidents/executions/{id}/close", Body: bodyFile, Summary: "Close an incident; naming the approved ServiceNow binding also resolves its ServiceNow incident"},
+	{Name: []string{"incidents", "executions", "closure"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}/closure", Summary: "Show an incident's closure and the state of its ServiceNow resolution"},
 	{Name: []string{"incidents", "outbox-reconciliation-conflicts", "list"}, Method: "GET", Path: "/api/v1/incidents/outbox-reconciliation-conflicts", Summary: "List quarantined historical receiver-command conflicts without executable payloads"},
 	{Name: []string{"incidents", "response-integrations", "dispatch"}, Method: "POST", Path: "/api/v1/incidents/response-integrations/dispatch", Body: bodyFile, Summary: "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations"},
 	{Name: []string{"incidents", "fleet-reissuance", "start"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs", Body: bodyFile, Summary: "Start exact-H1, signed-gate H2 compromise cohorts"},

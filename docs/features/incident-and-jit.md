@@ -83,6 +83,18 @@ endpoints should be HTTPS; `allow_private_endpoint` is accepted only when the
 configured binding explicitly permits that private/eval endpoint and grants the
 destination CIDR.
 
+**Closing an incident (P13).** `POST /api/v1/incidents/executions/{id}/close`
+(`trstctl incidents executions close <id> -f close.json`) records the incident's
+closure with a `resolution`. Naming the approved ServiceNow binding
+(`servicenow.instance_url` and `token_ref`) also resolves the ServiceNow incident
+the response dispatch opened for it: tickets dispatched for an incident carry the
+correlation `trstctl:incident:<id>`, and the outbox job finds them by it, reads each
+one, and sets Resolved with close notes naming the trstctl incident only where they
+are not already resolved with those notes, so a replayed update changes nothing.
+`GET .../closure` shows the closure and whether the ServiceNow resolution is
+queued, resolved or failed. Closing again the same way changes nothing; closing
+again differently is refused.
+
 For a broader response packet, `POST
 /api/v1/incidents/response-integrations/dispatch` records
 `response.integration.dispatched` and fans out one tenant-scoped outbox row per

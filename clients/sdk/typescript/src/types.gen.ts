@@ -4696,6 +4696,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents/executions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an incident; naming the approved ServiceNow binding also resolves the ServiceNow incident its response dispatch opened */
+        post: operations["closeIncidentExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/executions/{id}/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an incident's closure and the state of its ServiceNow resolution */
+        get: operations["getIncidentClosure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/fleet-reissuance-runs": {
         parameters: {
             query?: never;
@@ -17848,6 +17882,24 @@ export interface components {
             to: string;
             verification_steps: string[];
             warnings: string[];
+        };
+        IncidentCloseRequest: {
+            resolution: string;
+            servicenow?: {
+                allow_private_endpoint?: boolean;
+                instance_url: string;
+                token_ref: string;
+            };
+        };
+        IncidentClosure: {
+            /** Format: date-time */
+            closed_at: string;
+            closed_by: string;
+            incident_id: string;
+            resolution: string;
+            /** @enum {string} */
+            servicenow?: "queued" | "resolved" | "failed";
+            servicenow_error?: string;
         };
         IncidentExecution: {
             blast_radius: components["schemas"]["GraphImpact"];
@@ -38457,6 +38509,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IncidentExecution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    closeIncidentExecution: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description incident execution id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncidentCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentClosure"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getIncidentClosure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description incident execution id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentClosure"];
                 };
             };
             /** @description client error */

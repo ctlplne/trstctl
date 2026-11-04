@@ -1329,6 +1329,16 @@ owner; a new ticket/request is needed to correct an unassigned one. The existing
 request lifecycle carries a mapped OwnerID into identity preparation and issuance.
 No approval, ownership-readiness or requester separation check is bypassed.
 
+**ServiceNow change approvals decide the request (P13).** When an intake schedule
+reads the `change_request` table, each intake pass also has the network relay read
+the approval and state of the change requests whose trstctl requests still wait (at
+most 100, by `sys_id`, with the schedule's token redeemed for that one read). A change
+approved in ServiceNow approves the matching request once, attributed to the change
+(`servicenow:change_request:<number>`, "change <number> was approved in ServiceNow");
+a rejected change denies it. Separation of duties still applies, other approval
+values change nothing, and reading the same approvals again records nothing new.
+The relay job kind is `ticket.status`; enable it beside `ticket.sync`.
+
 `TestServedNamedTicketIntakesKeepTheirSourcesAndMapTenantOwners` covers two tables
 and two Jira projects with independent jobs, owner mapping and cross-schedule
 report refusal. The named lifecycle test covers removal idempotency, active-sweep

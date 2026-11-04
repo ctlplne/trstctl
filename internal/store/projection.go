@@ -879,6 +879,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// P12: projected from edge.factory_batch.created, edge.factory_birth.recorded
 	// and edge.factory_device.enrolled.
 	"factory_batches", "factory_birth_certificates",
+	// P13: projected from incident.execution.closed.
+	"incident_closures",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

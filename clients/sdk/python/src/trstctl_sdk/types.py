@@ -8032,6 +8032,28 @@ IdentityTransitionPreview = TypedDict(
     total=False,
 )
 
+IncidentCloseRequest = TypedDict(
+    'IncidentCloseRequest',
+    {
+        'resolution': str,
+        'servicenow': dict[str, Any],
+    },
+    total=False,
+)
+
+IncidentClosure = TypedDict(
+    'IncidentClosure',
+    {
+        'closed_at': str,
+        'closed_by': str,
+        'incident_id': str,
+        'resolution': str,
+        'servicenow': str,
+        'servicenow_error': str,
+    },
+    total=False,
+)
+
 IncidentExecution = TypedDict(
     'IncidentExecution',
     {

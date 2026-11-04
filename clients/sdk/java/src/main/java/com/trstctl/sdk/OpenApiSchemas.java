@@ -577,6 +577,8 @@ public final class OpenApiSchemas {
       "IdentityRevocationReport",
       "IdentityStatusSummary",
       "IdentityTransitionPreview",
+      "IncidentCloseRequest",
+      "IncidentClosure",
       "IncidentExecution",
       "IncidentExecutionList",
       "IncidentExecutionRequest",

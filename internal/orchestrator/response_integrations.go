@@ -180,6 +180,11 @@ func normalizeResponseIntegrationDispatch(ctx context.Context, in ResponseIntegr
 	if out.ID == "" {
 		out.ID = uuid.NewString()
 	}
+	if out.CorrelationID == "" && out.IncidentID != "" {
+		// P13: an incident's tickets carry its correlation, so closing the
+		// incident in trstctl can find and resolve them.
+		out.CorrelationID = IncidentCorrelationID(out.IncidentID)
+	}
 	if out.CorrelationID == "" {
 		out.CorrelationID = out.ID
 	}

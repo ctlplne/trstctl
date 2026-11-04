@@ -285,6 +285,13 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// P13: the approval and state of exactly the change requests
+			// intake opened requests from; the token redeemed per attempt.
+			Kind:  KindTicketStatus,
+			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			// A5: this agent's own staged upgrade. It redeems nothing — the
 			// artifact URL travels in the payload and the pinned sha256 is the
 			// trust anchor — and it declares no connectors because the thing it

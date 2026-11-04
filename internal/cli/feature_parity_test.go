@@ -412,8 +412,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// authority` and `access runs create|list|revoke`, then `access activity`,
 	// `access activity export` and the `access run` launcher. A252 adds
 	// `reports evidence`.
-	if len(out) != 776 {
-		t.Fatalf("CLI commands = %d, want 776", len(out))
+	if len(out) != 778 {
+		t.Fatalf("CLI commands = %d, want 778", len(out))
 	}
 	return out
 }

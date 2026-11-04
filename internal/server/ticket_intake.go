@@ -83,6 +83,9 @@ func (s *Server) RunTicketIntake(ctx context.Context) {
 			}
 			for _, sched := range due {
 				s.dispatchTicketSyncJob(ctx, tenantID, sched)
+				// P13: and read the approvals of the change requests whose
+				// requests still wait.
+				s.dispatchTicketStatusJob(ctx, tenantID, sched)
 			}
 		}
 	}
