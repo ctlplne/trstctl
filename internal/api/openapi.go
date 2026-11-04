@@ -222,6 +222,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range keyVaultDisableSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range oidcIssuerSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range evidenceReportSchemas() {
 		schemas[name] = schema
 	}

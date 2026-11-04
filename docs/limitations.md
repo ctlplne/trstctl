@@ -8463,3 +8463,27 @@ What comes next:
   day folders.
 - A file delivered for a day older than yesterday (UTC) is not read.
 
+## trstctl as the OpenID issuer for cloud workload federation (N5) — served
+
+Status: served. With `protocols.spiffe.oidc_issuer_url`, the token-exchange tenant
+has a published issuer `<base>/oidc/<tenant-id>` with a discovery document and key
+set, and exchanged tokens carry it as `iss`, so AWS, Google and Azure workload
+federation can trust trstctl's tokens. Proven by
+`TestServedOIDCIssuerIsTrustedByACloudTokenExchangeN5` against a stand-in cloud
+token exchange that registers one issuer and audience, fetches the discovery
+document and then its key set through the issuer's host, and checks the signature,
+issuer, audience, expiry and subject: it accepts the tenant's token and refuses a
+trust for another tenant's issuer, another audience, a tampered token and an
+expired one.
+
+What comes next:
+- A live exchange with each cloud (an AWS IAM OIDC provider, a Google workload
+  identity pool, an Azure federated credential) is a Track B proof; their
+  algorithm and thumbprint rules are theirs to enforce. The key is the SPIFFE JWT
+  key (ES256 by default); a cloud that accepts only RS256 needs an RSA JWT key.
+- The token exchange serves one tenant (`protocols.spiffe.tenant_id`), so one
+  tenant has an issuer; per-tenant exchange for every tenant is what comes next.
+- Key rotation publishes the new key in the same set; a cloud caches the set for
+  its own interval, so a rotation should keep the old key published until that
+  cache has refreshed.
+

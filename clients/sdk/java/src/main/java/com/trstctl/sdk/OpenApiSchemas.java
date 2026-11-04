@@ -759,6 +759,7 @@ public final class OpenApiSchemas {
       "NotificationRoutingPreview",
       "OAuthProviderActionRequest",
       "OAuthProviderActionResult",
+      "OIDCIssuer",
       "OIDCMappingStatus",
       "OIDCTenantMapping",
       "Observation",

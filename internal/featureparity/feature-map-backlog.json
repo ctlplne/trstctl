@@ -9648,7 +9648,8 @@
                 "revokeWorkloadAttesterTrustSource",
                 "deleteWorkloadAttesterTrustSource",
                 "previewAttestedSVID",
-                "issueAttestedSVID"
+                "issueAttestedSVID",
+                "getOIDCIssuer"
             ],
             "api_na": "",
             "cli_surface": [
@@ -9660,7 +9661,8 @@
                 "workloads attester-trust-sources revoke",
                 "workloads attester-trust-sources delete",
                 "workloads attested-issuance preview",
-                "workloads attested-issuance"
+                "workloads attested-issuance",
+                "workloads oidc-issuer"
             ],
             "cli_na": "",
             "facet_evidence": {

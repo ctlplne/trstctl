@@ -134,6 +134,7 @@ type API struct {
 	adcsDecisions            ADCSDecisionService
 	keyVaultDisable          KeyVaultDisableService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
+	oidcIssuer               OIDCIssuerSource
 	managedCALeafRecovery    ManagedCALeafRecoveryService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
@@ -304,6 +305,7 @@ type config struct {
 	adcsDecisions               ADCSDecisionService
 	keyVaultDisable             KeyVaultDisableService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
+	oidcIssuer                  OIDCIssuerSource
 	managedCALeafRecovery       ManagedCALeafRecoveryService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
@@ -635,6 +637,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		sshTrustFleet:               cfg.sshTrustFleet,
 		adcsDecisions:               cfg.adcsDecisions,
 		keyVaultDisable:             cfg.keyVaultDisable,
+		oidcIssuer:                  cfg.oidcIssuer,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
 		managedCALeafRecovery:       cfg.managedCALeafRecovery,
 		broker:                      cfg.broker,
@@ -1683,6 +1686,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.extractedRouteGroups()...)    // see routes_ownership.go
 	routes = append(routes, a.caHierarchyRoutes(idPath)...) // see routes_ca_hierarchy.go
 	routes = append(routes, a.kmipClientRoutes(idPath)...)  // see kmip_clients.go
+	routes = append(routes, a.oidcIssuerRoutes()...)        // see oidc_issuer.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.accessBundleRoutes()...)    // see access_bundles.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go

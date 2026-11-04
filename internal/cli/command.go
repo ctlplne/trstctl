@@ -302,6 +302,7 @@ var coreCommandTable = []Command{
 
 	{Name: []string{"workloads", "attester-trust-sources", "create"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources", Body: bodyFile, Summary: "Create a tenant workload attester trust source"},
 	{Name: []string{"workloads", "attester-trust-sources", "list"}, Method: "GET", Path: "/api/v1/workloads/attester-trust-sources", Summary: "List tenant workload attester trust sources"},
+	{Name: []string{"workloads", "oidc-issuer"}, Method: "GET", Path: "/api/v1/workloads/oidc-issuer", Summary: "Show this tenant's published OpenID issuer, which a cloud registers to trust exchanged workload tokens"},
 	{Name: []string{"workloads", "attester-trust-sources", "get"}, Method: "GET", Path: "/api/v1/workloads/attester-trust-sources/{id}", Summary: "Get a tenant workload attester trust source"},
 	{Name: []string{"workloads", "attester-trust-sources", "update"}, Method: "PUT", Path: "/api/v1/workloads/attester-trust-sources/{id}", Body: bodyFile, Summary: "Replace a tenant workload attester trust source"},
 	{Name: []string{"workloads", "attester-trust-sources", "rotate"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources/{id}/rotate", Body: bodyFile, Summary: "Rotate workload attester trust material"},

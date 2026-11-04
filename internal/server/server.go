@@ -1827,6 +1827,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithSSHTrustFleet(sshTrustFleetSurface(d, s.orch)),
 		api.WithADCSDecisions(s),
 		api.WithKeyVaultDisable(s),
+		api.WithOIDCIssuer(s),
 		api.WithPKISecretLeafRecovery(s),
 		api.WithManagedCALeafRecovery(s),
 		api.WithBroker(s),
@@ -2803,6 +2804,9 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	// M4: OAuth token exchange (RFC 8693) and the key its JWT-SVIDs verify against.
 	mux.Handle("POST /oauth2/token", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeHandler(d.MachineAuthMethods)))
 	mux.Handle("GET /oauth2/jwks", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeJWKSHandler()))
+	// N5: each tenant's published OpenID issuer, which clouds trust those tokens through.
+	mux.Handle("GET /oidc/{tenant}/.well-known/openid-configuration", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.oidcIssuerDocumentHandler()))
+	mux.Handle("GET /oidc/{tenant}/jwks.json", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.oidcIssuerJWKSHandler()))
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}

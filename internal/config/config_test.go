@@ -1084,3 +1084,22 @@ func TestReconcileKMIPSourceValidates(t *testing.T) {
 		t.Fatalf("a valid kmip source was refused: %v", err)
 	}
 }
+
+// N5: the published OpenID issuer base is an https URL a cloud can fetch.
+func TestValidateOIDCIssuerURLN5(t *testing.T) {
+	for _, good := range []string{"https://trstctl.example.com", "https://example.com:8443/trstctl"} {
+		if err := ValidateOIDCIssuerURL(good); err != nil {
+			t.Fatalf("%s: %v", good, err)
+		}
+	}
+	for _, bad := range []string{"http://trstctl.example.com", "https://", "https://trstctl.example.com/", "https://u:p@trstctl.example.com",
+		"https://trstctl.example.com?x=1", "https://trstctl.example.com#f", "trstctl.example.com", "https://example.com//x"} {
+		if err := ValidateOIDCIssuerURL(bad); err == nil {
+			t.Fatalf("%q was accepted as an issuer base", bad)
+		}
+	}
+	p := Protocols{SPIFFE: SPIFFEProtocol{OIDCIssuerURL: "http://insecure.example.com"}}
+	if errs := p.ValidateTenantBindings(""); len(errs) == 0 {
+		t.Fatal("a plain-http issuer base passed protocol validation")
+	}
+}

@@ -35810,6 +35810,43 @@
         ],
         "type": "object"
       },
+      "OIDCIssuer": {
+        "properties": {
+          "algorithms": {
+            "description": "the signing algorithms of the issuer's keys",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "discovery_url": {
+            "type": "string"
+          },
+          "issuer": {
+            "description": "the issuer URL a cloud registers; exchanged tokens carry it as iss",
+            "type": "string"
+          },
+          "jwks_uri": {
+            "type": "string"
+          },
+          "token_endpoint": {
+            "description": "where a workload exchanges its platform token (RFC 8693) for one this issuer signs",
+            "type": "string"
+          },
+          "token_lifetime_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issuer",
+          "discovery_url",
+          "jwks_uri",
+          "algorithms",
+          "token_endpoint",
+          "token_lifetime_seconds"
+        ],
+        "type": "object"
+      },
       "OIDCMappingStatus": {
         "properties": {
           "allow_default_tenant": {
@@ -97726,6 +97763,53 @@
         ],
         "summary": "Rotate public trust material for a workload attester trust source",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/workloads/oidc-issuer": {
+      "get": {
+        "operationId": "getOIDCIssuer",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCIssuer"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show this tenant's published OpenID issuer: the URL a cloud registers to trust the tokens POST /oauth2/token exchanges, its discovery document and key set",
+        "x-trstctl-permission": "certs:read"
       }
     }
   }

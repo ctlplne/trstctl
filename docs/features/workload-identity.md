@@ -484,6 +484,30 @@ Because subject tokens are single-use and Kubernetes hands a pod the same projec
 token until kubelet rotates it, a pod that exchanges more than once per rotation
 requests a fresh token (the TokenRequest API) for each exchange.
 
+### trstctl as the OpenID issuer clouds trust (N5)
+
+With `protocols.spiffe.oidc_issuer_url` set to the control plane's public https base
+URL, the tenant whose workloads exchange tokens (`protocols.spiffe.tenant_id`) has a
+published OpenID issuer, `<base>/oidc/<tenant-id>`, and every token `POST /oauth2/token`
+exchanges for it carries that issuer as `iss`. The issuer's discovery document,
+`GET <issuer>/.well-known/openid-configuration`, names the issuer, its `jwks_uri`
+(`GET <issuer>/jwks.json`, the same signer-held SPIFFE JWT key as `/oauth2/jwks`) and
+the signing algorithm (ES256 with the default key). A cloud registers that issuer and
+trusts the tokens directly, with no long-lived cloud key on the workload: an AWS IAM
+OIDC identity provider for `AssumeRoleWithWebIdentity` (audience `sts.amazonaws.com`),
+a Google workload identity pool provider for its STS token exchange, or an Azure
+federated identity credential (audience `api://AzureADTokenExchange`); the role's
+condition names the workload's SPIFFE ID (`sub`). `GET /api/v1/workloads/oidc-issuer`
+(`trstctl-cli workloads oidc-issuer`, `certs:read`) shows the issuer, discovery URL,
+key set URL, algorithms and token lifetime to register. Because `iss` is a signed
+claim the server takes from the tenant whose login method verified the subject
+token, a cloud trust registered for one tenant's issuer never accepts a token naming
+another; a tenant the exchange does not serve has no issuer. The documents are
+public, like the key set, and must be reachable from the cloud at the configured
+base URL. Status: served (proven against a stand-in cloud token exchange that
+fetches the discovery document and key set and checks issuer, audience, expiry,
+signature and subject).
+
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
 The ephemeral issuer ties it together: it verifies an attestation (refusing to sign on

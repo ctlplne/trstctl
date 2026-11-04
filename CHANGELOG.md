@@ -2,6 +2,11 @@
 
 ### Added
 
+- trstctl as the OpenID issuer clouds trust (N5): with `protocols.spiffe.oidc_issuer_url`, the token-exchange
+  tenant has a published issuer `<base>/oidc/<tenant-id>` (discovery document and key set, the signer-held SPIFFE
+  JWT key), exchanged tokens carry it as `iss`, and AWS (AssumeRoleWithWebIdentity), Google (workload identity
+  federation) and Azure (federated credentials) can trust them with no cloud key on the workload;
+  `GET /api/v1/workloads/oidc-issuer` (`trstctl workloads oidc-issuer`) shows what to register.
 - AWS decoy keys are also looked for in a CloudTrail trail's log files (N4): an account attachment may name
   its trail (`trail`: bucket, Region, key prefix, organization ID, accounts), and the leader reads the trail's
   log files from S3 — every account of an organization trail, and data events when the trail logs them, which

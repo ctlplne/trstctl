@@ -1188,8 +1188,9 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		// B3: the agent channel issues through the SAME server, so a workload
 		// gets the same identity whichever socket it reached — the control
 		// plane's during the deprecation window, or its own host's after.
-		wl:          wl,
-		trustDomain: td,
+		wl:             wl,
+		trustDomain:    td,
+		oidcIssuerBase: cfg.OIDCIssuerURL,
 	}, nil
 }
 

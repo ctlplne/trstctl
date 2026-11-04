@@ -173,10 +173,15 @@ func (s *Server) exchangeToken(r *http.Request, methods func(string) []authmetho
 	spiffeID := exchangeSPIFFEID(sp.trustDomain, method.Name(), principal)
 	jti := uuid.NewString()
 	expires := time.Now().UTC().Add(tokenExchangeTTL).Truncate(time.Second)
-	token, err := sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, map[string]any{
+	claims := map[string]any{
 		"jti": jti, "scope": strings.Join(scopes, " "),
 		"act": map[string]any{"sub": principal, "iss": issuer},
-	})
+	}
+	if published := sp.oidcIssuer(tenantID); published != "" {
+		// N5: the tenant's published OpenID issuer, which a cloud trusts.
+		claims["iss"] = published
+	}
+	token, err := sp.issuer.SignJWTSVIDWithClaims(r.Context(), spiffeID, audience, tokenExchangeTTL, claims)
 	if err != nil {
 		return tokenExchangeResponse{}, err
 	}

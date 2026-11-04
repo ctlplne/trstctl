@@ -1274,6 +1274,23 @@ type SPIFFEProtocol struct {
 	// is where workload identity is delivered. The retention release is over;
 	// this switch is the last, explicit, audited escape hatch.
 	ServeLocalWorkloads bool `json:"serve_local_workloads,omitempty"`
+	// OIDCIssuerURL (N5) is the public https base URL at which this control
+	// plane publishes an OpenID issuer per tenant, <base>/oidc/<tenant-id>, so
+	// a cloud (AWS AssumeRoleWithWebIdentity, Google STS, Azure federated
+	// credentials) can trust the tokens POST /oauth2/token exchanges: they then
+	// carry that issuer as iss. Empty publishes no issuer.
+	OIDCIssuerURL string `json:"oidc_issuer_url,omitempty"`
+}
+
+// ValidateOIDCIssuerURL checks an N5 issuer base: an absolute https URL with a
+// host and no user information, query, fragment or trailing slash.
+func ValidateOIDCIssuerURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		strings.HasSuffix(raw, "/") || strings.Contains(u.Path, "//") {
+		return fmt.Errorf("protocols.spiffe.oidc_issuer_url %q must be an https base URL with a host and no user, query, fragment or trailing slash", raw)
+	}
+	return nil
 }
 
 // ValidateTenantBindings reports AN-1 configuration errors for enabled served
@@ -1321,6 +1338,11 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 		requireTenant("spiffe", true, p.SPIFFE.TenantID)
 		if strings.TrimSpace(p.SPIFFE.TrustDomain) == "" {
 			errs = append(errs, errors.New("protocols.spiffe.trust_domain is required when protocols.spiffe.enabled is true"))
+		}
+	}
+	if p.SPIFFE.OIDCIssuerURL != "" {
+		if err := ValidateOIDCIssuerURL(p.SPIFFE.OIDCIssuerURL); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errs
@@ -3814,6 +3836,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &p.SPIFFE.TenantID)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &p.SPIFFE.SocketPath)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_OIDC_ISSUER_URL", &p.SPIFFE.OIDCIssuerURL)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED", &p.SPIFFE.HybridSVIDs)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS", &p.SPIFFE.ServeLocalWorkloads)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)

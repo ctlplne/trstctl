@@ -10761,6 +10761,19 @@ OAuthProviderActionResult = TypedDict(
     total=False,
 )
 
+OIDCIssuer = TypedDict(
+    'OIDCIssuer',
+    {
+        'algorithms': list[str],
+        'discovery_url': str,
+        'issuer': str,
+        'jwks_uri': str,
+        'token_endpoint': str,
+        'token_lifetime_seconds': int,
+    },
+    total=False,
+)
+
 OIDCMappingStatus = TypedDict(
     'OIDCMappingStatus',
     {

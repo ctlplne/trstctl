@@ -462,6 +462,9 @@ type spiffeProtocol struct {
 	trustDomain string
 	// issuer signs the token exchange's JWT-SVIDs (M4) with the SPIFFE JWT key.
 	issuer tenantSPIFFEIssuer
+	// oidcIssuerBase is protocols.spiffe.oidc_issuer_url: each tenant's
+	// published OpenID issuer is <base>/oidc/<tenant-id> (N5).
+	oidcIssuerBase string
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

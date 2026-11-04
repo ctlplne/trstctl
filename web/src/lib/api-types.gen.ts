@@ -7775,6 +7775,15 @@ export interface OAuthProviderActionResult {
   status: "queued";
 }
 
+export interface OIDCIssuer {
+  algorithms: string[];
+  discovery_url: string;
+  issuer: string;
+  jwks_uri: string;
+  token_endpoint: string;
+  token_lifetime_seconds: number;
+}
+
 export interface OIDCMappingStatus {
   allow_default_tenant: boolean;
   claim_is_tenant: boolean;
