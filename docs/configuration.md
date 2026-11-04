@@ -673,6 +673,23 @@ Zero open witnesses alone do not establish agreement or current authority health
 
 ## Notifications
 
+### Slack app (`slack_app`, N8)
+
+Register an app at Slack with the bot scopes `chat:write`, `channels:read` and
+`groups:read`, interactivity at `<public_url>/integrations/slack/interactions`, a
+`/trstctl` slash command at `<public_url>/integrations/slack/commands`, and the
+redirect URL `<public_url>/integrations/slack/oauth/callback`. Then:
+
+```json
+{"slack_app": {"client_id": "1234.5678", "client_secret_ref": "env:TRSTCTL_SLACK_CLIENT_SECRET",
+  "signing_secret_ref": "env:TRSTCTL_SLACK_SIGNING_SECRET", "public_url": "https://trstctl.example.com"}}
+```
+
+`api_base` (default `https://slack.com`) with `allow_private_api` and
+`private_egress_cidrs` points at a private stand-in. Startup refuses a partial block.
+Tenants install the app themselves (see approvals in
+[policy and governance](features/policy-and-governance.md)).
+
 Notification channels are off until an operator configures them. When enabled, lifecycle
 expiry alerts are written to the `notification.*` outbox first, then delivered by the
 registered channel workers. Tenant-scoped routing policy authoring and channel-test

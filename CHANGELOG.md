@@ -2,6 +2,10 @@
 
 ### Added
 
+- A Slack app for approvals (N8): install per tenant through Slack's consent (bot token sealed under the tenant key),
+  pick the approval channel, and approve or deny requests with buttons; members link their Slack users with a
+  one-time code (`/trstctl link <code>`), and a press decides through the API's own approval route as that member.
+  Every request from Slack is signature-checked (`trstctl integrations slack …`).
 - Response playbooks for SOAR tools (N7): `clients/soar/` is a vendor-neutral pack of playbooks a SOAR runs as
   plain HTTP calls against trstctl's API — revoke a compromised certificate, rotate a leaked stored secret and
   resolve its finding, retire a triggered honeytoken — with idempotency keys built from their inputs and the

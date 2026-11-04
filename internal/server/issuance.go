@@ -196,6 +196,9 @@ type issuanceDispatcher struct {
 	// notifications fans notification.* outbox rows to operator-configured channels
 	// (NOTIF-01/F29). Nil preserves the prior no-channel behavior.
 	notifications *notify.Dispatcher
+	// slackApprovals posts an approval request to the tenant's Slack approval
+	// channel (N8); nil when the Slack app is not configured.
+	slackApprovals func(context.Context, string, notify.Alert) (bool, error)
 	// transparency handles transparency.* outbox rows such as Rekor publication for
 	// served code signing (CLM-06/F50). Nil fails those rows closed.
 	transparency orchestrator.Handler
@@ -403,14 +406,34 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 			}
 		}
 		if strings.HasPrefix(m.Destination, "notification.") {
+			slackPosted := false
+			if m.Destination == notify.DestinationApproval && d.slackApprovals != nil {
+				var alert notify.Alert
+				if json.Unmarshal(m.Payload, &alert) == nil {
+					posted, err := d.slackApprovals(ctx, m.TenantID, alert)
+					if err != nil {
+						return err
+					}
+					slackPosted = posted
+				}
+			}
 			if d.notifications == nil {
+				if slackPosted {
+					return nil
+				}
 				return orchestrator.DefiniteNoEffect(fmt.Errorf("server: notification outbox destination is not configured"))
 			}
-			return d.notifications.DispatchMessage(ctx, notify.DeliveryMessage{
+			err := d.notifications.DispatchMessage(ctx, notify.DeliveryMessage{
 				TenantID: m.TenantID, Destination: m.Destination,
 				IdempotencyKey: m.IdempotencyKey, Payload: m.Payload,
 				OutboxID: m.ID, Attempts: m.Attempts,
 			})
+			var classed interface{ SafeDeliveryClass() string }
+			if slackPosted && errors.As(err, &classed) && classed.SafeDeliveryClass() == "notification_receiver_not_configured" {
+				// The Slack app delivered it; no other channel was configured.
+				return nil
+			}
+			return err
 		}
 		if strings.HasPrefix(m.Destination, "transparency.") {
 			if d.transparency == nil {

@@ -1413,6 +1413,8 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// M4: single-use records of machine login tokens (tenant rows, no
 		// foreign keys).
 		"machine_credential_replays",
+		// N8: the Slack app's single-use codes (tenant rows, no foreign keys).
+		"slack_one_time_codes",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

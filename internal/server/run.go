@@ -806,6 +806,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		UpstreamDV:                   outbound.upstreamDV,
 		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,
 		TenantAWSHoneyAccounts:       outbound.awsHoneyAccounts,
+		SlackApp:                     cfg.SlackApp,
 		TenantSecretSyncTargets:      outbound.secretSyncTargets,
 		CloudTokenMinter:             outbound.cloudTokenMinter,
 		Logger:                       logger, RateLimiter: securityGuards.rateLimiter,

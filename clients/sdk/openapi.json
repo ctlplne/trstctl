@@ -50164,6 +50164,113 @@
         ],
         "type": "object"
       },
+      "SlackApp": {
+        "properties": {
+          "approval_channel_id": {
+            "type": "string"
+          },
+          "approval_channel_name": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "installed_by": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": "string"
+          },
+          "team_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "installed"
+        ],
+        "type": "object"
+      },
+      "SlackApprovalChannel": {
+        "properties": {
+          "channel_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id"
+        ],
+        "type": "object"
+      },
+      "SlackChannelList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "is_member": {
+                  "type": "boolean"
+                },
+                "is_private": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SlackInstallStart": {
+        "properties": {
+          "authorize_url": {
+            "description": "Slack's consent screen; open it in a browser signed in to the workspace",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "SlackLinkCode": {
+        "properties": {
+          "code": {
+            "description": "type /trstctl link \u003ccode\u003e in Slack; shown once",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "SwitchingImport": {
         "properties": {
           "completed_at": {
@@ -74376,6 +74483,333 @@
         ],
         "summary": "Read a certificate export's queue state and independently verified CMDB receipt",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/integrations/slack": {
+      "delete": {
+        "operationId": "uninstallSlackApp",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Remove this tenant's Slack app install, its user links and its approval messages",
+        "x-trstctl-permission": "connectors:write"
+      },
+      "get": {
+        "operationId": "getSlackApp",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackApp"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show this tenant's Slack app install: the workspace and the channel approval requests are posted to; never the token",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/integrations/slack/approval-channel": {
+      "put": {
+        "operationId": "setSlackApprovalChannel",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlackApprovalChannel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackApp"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Pick the channel approval requests are posted to with Approve and Deny buttons",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/integrations/slack/channels": {
+      "get": {
+        "operationId": "listSlackChannels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackChannelList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the workspace's channels the app can see, for picking the approval channel",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/integrations/slack/install": {
+      "post": {
+        "operationId": "startSlackInstall",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackInstallStart"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start installing the Slack app: returns Slack's consent URL, valid for ten minutes and once",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/integrations/slack/link-codes": {
+      "post": {
+        "operationId": "createSlackLinkCode",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackLinkCode"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a one-time code that links your Slack user to you: type /trstctl link \u003ccode\u003e in Slack within ten minutes",
+        "x-trstctl-permission": "approvals:review"
       }
     },
     "/api/v1/issuance-requests": {

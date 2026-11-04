@@ -228,6 +228,12 @@ var coreCommandTable = []Command{
 	{Name: []string{"approval-requests", "list"}, Method: "GET", Path: "/api/v1/approval-requests", Query: []string{"status", "limit", "cursor"}, Summary: "List a paginated queue of genuine immutable operation approval requests"},
 	{Name: []string{"approval-requests", "approve"}, Method: "POST", Path: "/api/v1/approval-requests/{id}/approvals", Body: bodyIntentDigest, Summary: "Approve an exact immutable request ID and intent digest"},
 	{Name: []string{"approval-requests", "deny"}, Method: "POST", Path: "/api/v1/approval-requests/{id}/denials", Body: bodyIntentDigestReason, Summary: "Deny an exact immutable request with its digest and a review reason"},
+	{Name: []string{"integrations", "slack", "status"}, Method: "GET", Path: "/api/v1/integrations/slack", Summary: "Show this tenant's Slack app install and approval channel"},
+	{Name: []string{"integrations", "slack", "install"}, Method: "POST", Path: "/api/v1/integrations/slack/install", Summary: "Start installing the Slack app: prints Slack's consent URL, valid for ten minutes and once"},
+	{Name: []string{"integrations", "slack", "channels"}, Method: "GET", Path: "/api/v1/integrations/slack/channels", Summary: "List the workspace channels the Slack app can see"},
+	{Name: []string{"integrations", "slack", "approval-channel"}, Method: "PUT", Path: "/api/v1/integrations/slack/approval-channel", Body: bodyFile, Summary: "Pick the channel approval requests are posted to with Approve and Deny buttons"},
+	{Name: []string{"integrations", "slack", "link-code"}, Method: "POST", Path: "/api/v1/integrations/slack/link-codes", Summary: "Get a one-time code that links your Slack user to you: type /trstctl link <code> in Slack"},
+	{Name: []string{"integrations", "slack", "uninstall"}, Method: "DELETE", Path: "/api/v1/integrations/slack", Summary: "Remove this tenant's Slack app install, its user links and its approval messages"},
 
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor", "q", "kind", "include_summary"}, Summary: "List identities with optional search and complete status summary"},

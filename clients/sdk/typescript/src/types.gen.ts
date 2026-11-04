@@ -4832,6 +4832,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integrations/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show this tenant's Slack app install: the workspace and the channel approval requests are posted to; never the token */
+        get: operations["getSlackApp"];
+        put?: never;
+        post?: never;
+        /** Remove this tenant's Slack app install, its user links and its approval messages */
+        delete: operations["uninstallSlackApp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/slack/approval-channel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Pick the channel approval requests are posted to with Approve and Deny buttons */
+        put: operations["setSlackApprovalChannel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the workspace's channels the app can see, for picking the approval channel */
+        get: operations["listSlackChannels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/slack/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start installing the Slack app: returns Slack's consent URL, valid for ten minutes and once */
+        post: operations["startSlackInstall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/slack/link-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get a one-time code that links your Slack user to you: type /trstctl link <code> in Slack within ten minutes */
+        post: operations["createSlackLinkCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests": {
         parameters: {
             query?: never;
@@ -23727,6 +23813,40 @@ export interface components {
         ShareValue: {
             value: string;
         };
+        SlackApp: {
+            approval_channel_id?: string;
+            approval_channel_name?: string;
+            configured: boolean;
+            installed: boolean;
+            /** Format: date-time */
+            installed_at?: string;
+            installed_by?: string;
+            team_id?: string;
+            team_name?: string;
+        };
+        SlackApprovalChannel: {
+            channel_id: string;
+        };
+        SlackChannelList: {
+            items: {
+                id?: string;
+                is_member?: boolean;
+                is_private?: boolean;
+                name?: string;
+            }[];
+        };
+        SlackInstallStart: {
+            /** @description Slack's consent screen; open it in a browser signed in to the workspace */
+            authorize_url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        SlackLinkCode: {
+            /** @description type /trstctl link <code> in Slack; shown once */
+            code: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         SwitchingImport: {
             /** Format: date-time */
             completed_at?: string;
@@ -38419,6 +38539,248 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CMDBCertificateExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSlackApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackApp"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    uninstallSlackApp: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setSlackApprovalChannel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlackApprovalChannel"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackApp"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSlackChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startSlackInstall: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackInstallStart"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSlackLinkCode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackLinkCode"];
                 };
             };
             /** @description client error */

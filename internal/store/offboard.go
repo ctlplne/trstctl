@@ -278,6 +278,9 @@ var TenantScopedTables = []string{
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
+	// N8: the Slack app's messages, user links, one-time codes and install;
+	// no foreign keys.
+	"slack_approval_messages", "slack_user_links", "slack_one_time_codes", "slack_installs",
 	// Asset overrides reference owners through a composite tenant FK.
 	"ownership_assignments",
 	"owners",

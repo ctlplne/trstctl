@@ -217,6 +217,9 @@ var RecoveredFromPostgresBackup = []string{
 	// M4: single-use records of machine login tokens. A restore without them
 	// would re-admit a still-valid oidc/jwt token once, so the dump carries them.
 	"machine_credential_replays",
+	// N8: the Slack app's single-use install states and link codes, for the
+	// same reason.
+	"slack_one_time_codes",
 	// M2: Enterprise misuse findings share provider_operators' dual recovery
 	// posture: the licensed projection rebuilds them from misuse.finding.detected
 	// at boot, and the full PostgreSQL artifact carries the rows for a restore

@@ -612,6 +612,8 @@ type Deps struct {
 	// creation and CloudTrail monitoring. Its hidden lease providers are also
 	// present in TenantDynamicSecretProviders for durable outbox execution.
 	TenantAWSHoneyAccounts AWSHoneyAccountRegistry
+	// SlackApp is trstctl's Slack app (N8); empty disables it.
+	SlackApp config.SlackAppConfig
 	// SecretRotators retain configured static-credential engines for library users
 	// and a future durable worker. The served HTTP route refuses them before any
 	// provider effect; only connector rotation is executable today (F37).
@@ -912,6 +914,8 @@ type Server struct {
 	// outbox rows to operator-configured channels; nil preserves the prior no-channel
 	// behavior for notification rows while still letting producers enqueue intents.
 	notifications *notify.Dispatcher
+	// slack is trstctl's Slack app (N8); nil when it is not configured.
+	slack *slackAppServer
 	// notificationTenantChannels resolves tenant-authored channels at delivery
 	// time into their family's notifier with the tenant's own credential (A98).
 	notificationTenantChannels *notify.StoreChannelResolver
@@ -1600,6 +1604,13 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 		s.registry = observ.NewRegistry()
 	}
 	s.featureMetrics = observ.NewFeatureMetrics(s.registry)
+	// N8: the Slack app's API routes, posting and decisions; built before the
+	// API options and the outbox dispatcher that use it.
+	slackApp, err := newSlackAppServer(s, d.SlackApp)
+	if err != nil {
+		return nil, nil, err
+	}
+	s.slack = slackApp
 	defaults := s.baseAPIOptions(d, ea)
 	if d.AuditSigningKey != nil {
 		defaults = append(defaults, api.WithPQCCampaignClosureSigner(d.AuditSigningKey))
@@ -1825,6 +1836,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithCMDBCertificateExports(s.cmdbExports),
 		api.WithSSHWorkflow(s),
 		api.WithSSHTrustFleet(sshTrustFleetSurface(d, s.orch)),
+		s.slackAPIOption(),
 		api.WithADCSDecisions(s),
 		api.WithKeyVaultDisable(s),
 		api.WithOIDCIssuer(s),
@@ -2317,9 +2329,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, slackApprovals: s.slackApprovalPoster(), transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, acmeEmail: s.acmeEmail, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	}
 	return nil
 }
@@ -2803,6 +2815,11 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle(agentKeySetPrefix, bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.agentKeySetHandler()))
 	// M4: OAuth token exchange (RFC 8693) and the key its JWT-SVIDs verify against.
 	mux.Handle("POST /oauth2/token", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeHandler(d.MachineAuthMethods)))
+	// N8: Slack's install redirect, button presses and /trstctl command, each
+	// checked against the app's signing secret (the redirect against its state).
+	if s.slack != nil {
+		s.slack.routes(mux, func(h http.Handler) http.Handler { return bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, h) })
+	}
 	mux.Handle("GET /oauth2/jwks", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeJWKSHandler()))
 	// N5: each tenant's published OpenID issuer, which clouds trust those tokens through.
 	mux.Handle("GET /oidc/{tenant}/.well-known/openid-configuration", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.oidcIssuerDocumentHandler()))

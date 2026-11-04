@@ -89,51 +89,54 @@ const (
 type Config struct {
 	// RuntimeFIPSRequired is the resolved startup assertion from the CLI, environment,
 	// and regulated CA configuration. It is process state, never a config-file key.
-	RuntimeFIPSRequired       bool                     `json:"-"`
-	CBOM                      CBOM                     `json:"cbom"`
-	Server                    Server                   `json:"server"`
-	Postgres                  Postgres                 `json:"postgres"`
-	NATS                      NATS                     `json:"nats"`
-	Log                       Log                      `json:"log"`
-	Lifecycle                 Lifecycle                `json:"lifecycle"`
-	Connectors                Connectors               `json:"connectors"`
-	ExternalCAs               []ExternalCAConfig       `json:"external_cas,omitempty"`
-	SecretIntegrations        SecretIntegrationsConfig `json:"secret_integrations,omitempty"`
-	Notifications             Notifications            `json:"notifications"`
-	CodeSigning               CodeSigning              `json:"code_signing"`
-	ITSM                      ITSM                     `json:"itsm"`
-	AirGap                    AirGap                   `json:"air_gap"`
-	Trust                     Trust                    `json:"trust"`
-	OutboundEnvCredentialRefs []string                 `json:"outbound_env_credential_refs,omitempty"`
-	Telemetry                 Telemetry                `json:"telemetry"`
-	OTLP                      OTLP                     `json:"otlp"`
-	Audit                     Audit                    `json:"audit"`
-	Breakglass                Breakglass               `json:"breakglass"`
-	Privacy                   Privacy                  `json:"privacy"`
-	AttestedIssuance          AttestedIssuance         `json:"attested_issuance"`
-	EphemeralIssuance         EphemeralIssuance        `json:"ephemeral_issuance"`
-	Provider                  Provider                 `json:"provider"`
-	Reconcile                 Reconcile                `json:"reconcile"`
-	AgentBroker               AgentBroker              `json:"agent_broker"`
-	PAM                       PAM                      `json:"pam"`
-	Backup                    Backup                   `json:"backup"`
-	ObjectStore               ObjectStore              `json:"object_store"`
-	License                   License                  `json:"license"`
-	RateLimit                 RateLimit                `json:"rate_limit"`
-	Bulkheads                 Bulkheads                `json:"bulkheads"`
-	Migrate                   Migrate                  `json:"migrate"`
-	Secrets                   Secrets                  `json:"secrets"`
-	Transit                   Transit                  `json:"transit"`
-	ManagedKeys               ManagedKeys              `json:"managed_keys"`
-	Signer                    Signer                   `json:"signer"`
-	CA                        CA                       `json:"ca"`
-	Protocols                 Protocols                `json:"protocols"`
-	Auth                      Auth                     `json:"auth"`
-	Plugins                   Plugins                  `json:"plugins"`
-	HA                        HA                       `json:"ha"`
-	Federation                Federation               `json:"federation"`
-	PCAS                      PCAS                     `json:"pcas"`
-	AI                        AI                       `json:"ai"`
+	RuntimeFIPSRequired bool                     `json:"-"`
+	CBOM                CBOM                     `json:"cbom"`
+	Server              Server                   `json:"server"`
+	Postgres            Postgres                 `json:"postgres"`
+	NATS                NATS                     `json:"nats"`
+	Log                 Log                      `json:"log"`
+	Lifecycle           Lifecycle                `json:"lifecycle"`
+	Connectors          Connectors               `json:"connectors"`
+	ExternalCAs         []ExternalCAConfig       `json:"external_cas,omitempty"`
+	SecretIntegrations  SecretIntegrationsConfig `json:"secret_integrations,omitempty"`
+	// SlackApp (N8) is trstctl's Slack app: installs, the approval channel,
+	// and Approve and Deny buttons. Empty disables it.
+	SlackApp                  SlackAppConfig    `json:"slack_app,omitempty"`
+	Notifications             Notifications     `json:"notifications"`
+	CodeSigning               CodeSigning       `json:"code_signing"`
+	ITSM                      ITSM              `json:"itsm"`
+	AirGap                    AirGap            `json:"air_gap"`
+	Trust                     Trust             `json:"trust"`
+	OutboundEnvCredentialRefs []string          `json:"outbound_env_credential_refs,omitempty"`
+	Telemetry                 Telemetry         `json:"telemetry"`
+	OTLP                      OTLP              `json:"otlp"`
+	Audit                     Audit             `json:"audit"`
+	Breakglass                Breakglass        `json:"breakglass"`
+	Privacy                   Privacy           `json:"privacy"`
+	AttestedIssuance          AttestedIssuance  `json:"attested_issuance"`
+	EphemeralIssuance         EphemeralIssuance `json:"ephemeral_issuance"`
+	Provider                  Provider          `json:"provider"`
+	Reconcile                 Reconcile         `json:"reconcile"`
+	AgentBroker               AgentBroker       `json:"agent_broker"`
+	PAM                       PAM               `json:"pam"`
+	Backup                    Backup            `json:"backup"`
+	ObjectStore               ObjectStore       `json:"object_store"`
+	License                   License           `json:"license"`
+	RateLimit                 RateLimit         `json:"rate_limit"`
+	Bulkheads                 Bulkheads         `json:"bulkheads"`
+	Migrate                   Migrate           `json:"migrate"`
+	Secrets                   Secrets           `json:"secrets"`
+	Transit                   Transit           `json:"transit"`
+	ManagedKeys               ManagedKeys       `json:"managed_keys"`
+	Signer                    Signer            `json:"signer"`
+	CA                        CA                `json:"ca"`
+	Protocols                 Protocols         `json:"protocols"`
+	Auth                      Auth              `json:"auth"`
+	Plugins                   Plugins           `json:"plugins"`
+	HA                        HA                `json:"ha"`
+	Federation                Federation        `json:"federation"`
+	PCAS                      PCAS              `json:"pcas"`
+	AI                        AI                `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
@@ -4243,6 +4246,12 @@ func (c *Config) Validate() error {
 		func(c *Config) []error { return validateExternalCAs(c.ExternalCAs) },
 		func(c *Config) []error { return validateSecretIntegrations(c.SecretIntegrations, c.Secrets.EnableAPI) },
 		func(c *Config) []error { return validateCodeSigning(c.CodeSigning) },
+		func(c *Config) []error {
+			if err := c.SlackApp.Validate(); err != nil {
+				return []error{err}
+			}
+			return nil
+		},
 		validateOptionalServices,
 		validateBulkheadConfig,
 		validateSignerConfig,

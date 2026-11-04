@@ -390,6 +390,32 @@ signed CRL or OCSP with a relying-party client where applicable.
 **Status:** served for managed NHI identities selected by departure, vendor-term,
 and inactivity signals, using event-sourced revoke/retire transitions.
 
+### Approving from Slack (N8)
+
+trstctl's Slack app posts approval requests to a channel with **Approve** and
+**Deny** buttons. An operator configures the app trstctl was registered as at Slack
+(`slack_app` in the server configuration), then installs it per tenant:
+`POST /api/v1/integrations/slack/install` (`trstctl-cli integrations slack install`,
+`connectors:write`) returns Slack's consent URL, valid for ten minutes and once; Slack
+returns to `<public_url>/integrations/slack/oauth/callback`, and trstctl exchanges the
+code for the workspace's bot token and keeps it sealed under the tenant's key (the
+event carries only the ciphertext). One workspace serves one tenant.
+`GET /api/v1/integrations/slack/channels` lists the channels the app can see and
+`PUT /api/v1/integrations/slack/approval-channel` picks the one approval requests go
+to (invite the app to it first). Each member who decides from Slack links their Slack
+user once: `POST /api/v1/integrations/slack/link-codes`
+(`trstctl-cli integrations slack link-code`) returns a one-time code, valid for ten
+minutes, which they type into Slack as `/trstctl link <code>`. A button press decides
+the request through the API's own approval route as the linked member, with the roles
+their membership holds at that moment: the requester's own press is refused like any
+self-approval, an unlinked Slack user is told to link first, a press is never matched
+by name or email, and the intent digest the message carries must still match. Every
+request Slack sends (`/integrations/slack/interactions` and `/commands`) must carry a
+valid `X-Slack-Signature` under the app's signing secret within five minutes. The
+message is then updated with the outcome; a request decided elsewhere keeps its
+message. `DELETE /api/v1/integrations/slack` removes the install, the links and the
+message records. Status: served.
+
 ### Access-change approvals
 
 Access-change approvals answer "who approved this non-human identity change, and which

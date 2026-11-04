@@ -1134,6 +1134,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addSSHTrustFleetPrivacyPolicies(policies)
 	addADCSDecisionPrivacyPolicies(policies)
 	addKeyVaultDisablePrivacyPolicies(policies)
+	addSlackAppPrivacyPolicies(policies)
 	current := agentHeartbeat
 	current.Rules = append(append([]events.PrivacyFieldRule{}, agentHeartbeat.Rules...), privacyRule("/executors/ssh_trust/enabled", opaque), privacyRule("/executors/ssh_trust/confirmed", opaque), privacyRule("/executors/ssh_trust/ca_fingerprint", opaque), privacyRule("/executors/ssh_trust/policy_digest", opaque), privacyRule("/executors/ssh_trust/issue_code", opaque))
 	policies[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = current
@@ -1667,6 +1668,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addSSHTrustFleetPrivacyShapes(shapes)
 	addADCSDecisionPrivacyShapes(shapes)
 	addKeyVaultDisablePrivacyShapes(shapes)
+	addSlackAppPrivacyShapes(shapes)
 	addCredentialActivityPrivacyShapes(shapes)
 	addSecretProjectPrivacyShapes(shapes)
 	addRehearsalPrivacyShapes(shapes)

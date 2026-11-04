@@ -288,6 +288,7 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// 100 tenant IDs with an import still being applied; the import and its
 		// rows are then read inside that tenant's RLS context.
 		"internal/store/switching_imports.go": 1,
+		"internal/store/slack_app.go":         1,
 		// The ARI leader enumerates tenant IDs with an active leaf missing its
 		// first upstream poll. It reads no certificate material through this
 		// system pool; each candidate is loaded inside its tenant's RLS context.

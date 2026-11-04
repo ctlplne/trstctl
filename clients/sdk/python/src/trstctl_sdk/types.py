@@ -15105,6 +15105,55 @@ ShareValue = TypedDict(
     total=False,
 )
 
+SlackApp = TypedDict(
+    'SlackApp',
+    {
+        'approval_channel_id': str,
+        'approval_channel_name': str,
+        'configured': bool,
+        'installed': bool,
+        'installed_at': str,
+        'installed_by': str,
+        'team_id': str,
+        'team_name': str,
+    },
+    total=False,
+)
+
+SlackApprovalChannel = TypedDict(
+    'SlackApprovalChannel',
+    {
+        'channel_id': str,
+    },
+    total=False,
+)
+
+SlackChannelList = TypedDict(
+    'SlackChannelList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SlackInstallStart = TypedDict(
+    'SlackInstallStart',
+    {
+        'authorize_url': str,
+        'expires_at': str,
+    },
+    total=False,
+)
+
+SlackLinkCode = TypedDict(
+    'SlackLinkCode',
+    {
+        'code': str,
+        'expires_at': str,
+    },
+    total=False,
+)
+
 SwitchingImport = TypedDict(
     'SwitchingImport',
     {

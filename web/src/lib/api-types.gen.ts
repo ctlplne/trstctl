@@ -10915,6 +10915,35 @@ export interface ShareValue {
   value: string;
 }
 
+export interface SlackApp {
+  approval_channel_id?: string;
+  approval_channel_name?: string;
+  configured: boolean;
+  installed: boolean;
+  installed_at?: string;
+  installed_by?: string;
+  team_id?: string;
+  team_name?: string;
+}
+
+export interface SlackApprovalChannel {
+  channel_id: string;
+}
+
+export interface SlackChannelList {
+  items: { id?: string; is_member?: boolean; is_private?: boolean; name?: string }[];
+}
+
+export interface SlackInstallStart {
+  authorize_url: string;
+  expires_at: string;
+}
+
+export interface SlackLinkCode {
+  code: string;
+  expires_at: string;
+}
+
 export interface SwitchingImport {
   completed_at?: string;
   counts: Record<string, unknown>;

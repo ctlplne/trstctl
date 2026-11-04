@@ -8528,3 +8528,25 @@ What comes next:
 - The OpenAPI permission of `bulkRevokeCertificates` names `identities:write` but
   the handler also requires `certs:issue`; the document should say both.
 
+## Slack app with approve and deny buttons (N8) — served
+
+Status: served. trstctl's Slack app installs per tenant through Slack's OAuth consent
+(single-use state; bot token sealed under the tenant key), lists channels for the
+approval-channel pick, posts approval requests with Approve and Deny buttons, links
+members' Slack users through a one-time code typed into Slack, and takes a press as
+the linked member through the API's own approval route. Proven by
+`TestServedSlackAppApprovesFromButtonsN8` against a Slack API stand-in built from its
+reference (install, replayed state refused, channel pick refusing an unseen channel,
+two links with a reused code refused, the request posted with buttons, the
+requester's own press, an unlinked user's press and an unsigned press refused, the
+reviewer's press approving it, the message updated, uninstall), with unit tests for
+the request signature.
+
+What comes next:
+- A live workspace install is a Track B proof (a Slack account).
+- Posting is at-least-once: a crash between Slack accepting a message and trstctl
+  recording it can post the request twice (Slack has no idempotent post); both
+  messages decide the same request.
+- Deny from Slack records the reason "denied in Slack by <member>"; asking the
+  reviewer for a reason in a Slack dialog is what comes next.
+

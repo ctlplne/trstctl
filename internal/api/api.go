@@ -135,6 +135,7 @@ type API struct {
 	keyVaultDisable          KeyVaultDisableService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
 	oidcIssuer               OIDCIssuerSource
+	slackApp                 SlackAppService
 	managedCALeafRecovery    ManagedCALeafRecoveryService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
@@ -306,6 +307,7 @@ type config struct {
 	keyVaultDisable             KeyVaultDisableService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
 	oidcIssuer                  OIDCIssuerSource
+	slackApp                    SlackAppService
 	managedCALeafRecovery       ManagedCALeafRecoveryService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
@@ -635,6 +637,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		cmdbRunNow:                  cfg.cmdbRunNow,
 		sshWorkflow:                 cfg.sshWorkflow,
 		sshTrustFleet:               cfg.sshTrustFleet,
+		slackApp:                    cfg.slackApp,
 		adcsDecisions:               cfg.adcsDecisions,
 		keyVaultDisable:             cfg.keyVaultDisable,
 		oidcIssuer:                  cfg.oidcIssuer,
@@ -738,6 +741,16 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		a.principal = cfg.principalFromReg(reg, a.resolvePrincipal)
 	default:
 		a.principal = a.resolvePrincipal
+	}
+	// N8: a request the server builds for a member it vouches for (a Slack
+	// user the member linked) carries that member's principal; nothing an HTTP
+	// client sends can set it.
+	resolve := a.principal
+	a.principal = func(r *http.Request) (authz.Principal, error) {
+		if p, ok := delegatedPrincipal(r); ok {
+			return p, nil
+		}
+		return resolve(r)
 	}
 	mux := http.NewServeMux()
 	a.guardedPatterns = make(map[string]bool)
@@ -1687,6 +1700,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.caHierarchyRoutes(idPath)...) // see routes_ca_hierarchy.go
 	routes = append(routes, a.kmipClientRoutes(idPath)...)  // see kmip_clients.go
 	routes = append(routes, a.oidcIssuerRoutes()...)        // see oidc_issuer.go
+	routes = append(routes, a.slackAppRoutes()...)          // see slack_app.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.accessBundleRoutes()...)    // see access_bundles.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
