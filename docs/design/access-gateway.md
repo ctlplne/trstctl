@@ -208,6 +208,18 @@ are served only through a gateway; the target builder refuses one without a bind
   each request (method, path, the `query` parameter and the body's first 4 KiB) and each
   response (status, exception code, summary and the body's first 4 KiB), masked; bodies
   stream, they are never held whole.
+- **Kubernetes.** The provider's TokenRequest token for a lease-scoped service account
+  (its role bound by the provider; the token lives at least ten minutes). The session's job
+  names the API server, its CA and server name (`upstream_url`, `upstream_ca_pem`,
+  `upstream_server_name`, public facts). The gateway serves HTTP on the tunnel, removes a
+  client's own credential and every impersonation header (`Impersonate-User`, `-Group`,
+  `-Uid`, `-Extra-*`), adds the session's token to every request, and forwards it over
+  HTTPS verified against the cluster CA. Exec, attach and port-forward upgrade the
+  connection; the upgraded stream passes through untouched. The connect command writes a
+  kubeconfig that names the tunnel and no user. Recordings keep each API request
+  (method, path and query, the body's first 4 KiB) and response (status, the body's first
+  4 KiB); a remote-command WebSocket stream is decoded into its stdin, stdout and stderr and
+  recorded as a shell session's bytes are (masked), any other stream by its size.
 
 ## Failure modes
 
@@ -235,7 +247,7 @@ deliberate grant.
 |---|---|
 | A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
 | A client connecting straight to the target | The client holds no credential the target accepts. |
-| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET; MySQL COM_CHANGE_USER; MongoDB saslStart, saslContinue, authenticate, logout, a handshake's speculativeAuthenticate) | Never forwarded: Redis gets a stand-in command the server refuses in its place, MySQL and MongoDB an error from the gateway, and a MongoDB handshake loses the field; the connection keeps the session's login. |
+| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET; MySQL COM_CHANGE_USER; MongoDB saslStart, saslContinue, authenticate, logout, a handshake's speculativeAuthenticate; a ClickHouse or Kubernetes client's own credential or impersonation) | Never forwarded: Redis gets a stand-in command the server refuses in its place, MySQL and MongoDB an error from the gateway, a MongoDB handshake loses the field, and an HTTP request loses the header or parameter; the connection keeps the session's login. |
 | A host impersonating the SSH target | The gateway accepts only a host key the target registration pins. |
 | A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
@@ -253,6 +265,7 @@ session keeps its one start, one job and deadline. A255 (recording, masking, liv
 termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`, stock
 `redis-cli`), MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`) and MongoDB
 (`TestServedGatewayMongoSessionsA256`, stock `mongosh`) and ClickHouse
-(`TestServedGatewayClickHouseSessionsA256`, curl); Kubernetes follows, then the agent
+(`TestServedGatewayClickHouseSessionsA256`, curl) and Kubernetes
+(`TestServedGatewayKubernetesSessionsOnKindA256`, kubectl on kind): A256 is served. The agent
 launcher
 (A257) and credential health and emergency access (A258).

@@ -38281,6 +38281,7 @@
           "target_type": {
             "enum": [
               "clickhouse",
+              "kubernetes",
               "mongodb",
               "mysql",
               "postgres",
@@ -38727,6 +38728,7 @@
           "target_type": {
             "enum": [
               "clickhouse",
+              "kubernetes",
               "mongodb",
               "mysql",
               "postgres",
@@ -38798,6 +38800,7 @@
           "target_type": {
             "enum": [
               "clickhouse",
+              "kubernetes",
               "mongodb",
               "mysql",
               "postgres",
@@ -38899,6 +38902,7 @@
           "target_type": {
             "enum": [
               "clickhouse",
+              "kubernetes",
               "mongodb",
               "mysql",
               "postgres",
@@ -38989,6 +38993,7 @@
           "target_type": {
             "enum": [
               "clickhouse",
+              "kubernetes",
               "mongodb",
               "mysql",
               "postgres",

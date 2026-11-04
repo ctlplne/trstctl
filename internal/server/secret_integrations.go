@@ -303,11 +303,31 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 
 // DynamicSecretGatewayUpstream is where an access gateway reaches a
 // provider's server for a session whose credential names no address (A256):
-// ClickHouse's HTTP endpoint, verified against the system roots. Other types
-// answer an empty endpoint.
-func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(context.Context) (string, []byte, string, error) {
-	if p.cfg.Type == "clickhouse" {
+// ClickHouse's HTTP endpoint (verified against the system roots), or a
+// cluster's API server with its CA and server name. Other types answer an
+// empty endpoint.
+func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Context) (string, []byte, string, error) {
+	switch p.cfg.Type {
+	case "clickhouse":
 		return p.cfg.Endpoint, nil, "", nil
+	case "kubernetes":
+		var caPEM []byte
+		if p.cfg.KubernetesTLSCARef != "" {
+			buf, err := p.credentials.resolve(ctx, p.tenantID, p.cfg.KubernetesTLSCARef)
+			if err != nil {
+				return "", nil, "", fmt.Errorf("the cluster CA: %w", err)
+			}
+			// A CA certificate is public: it leaves the buffer as plain bytes.
+			err = buf.Use(func(b []byte) error {
+				caPEM = append([]byte(nil), b...)
+				return nil
+			})
+			buf.Destroy()
+			if err != nil {
+				return "", nil, "", err
+			}
+		}
+		return p.cfg.Endpoint, caPEM, p.cfg.KubernetesTLSServerName, nil
 	}
 	return "", nil, "", nil
 }

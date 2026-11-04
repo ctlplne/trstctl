@@ -56,6 +56,13 @@
   certificate-auth headers, user/password parameters) and signs each request in as the session's user; requests and
   responses are recorded with bounded, masked bodies that stream. `trstctl-cli access sessions connect` prints the curl
   command; migration 0395 admits ClickHouse targets.
+- Kubernetes sessions through the access gateway (A256 part 5; A256 is served): `pam.kubernetes_targets` (or a tenant
+  registration of `target_type: "kubernetes"`) names a Kubernetes dynamic-secret provider and a gateway; the session's
+  job names the API server, its CA and server name. The gateway adds the session's TokenRequest token to every request,
+  removes a client's own credential and impersonation headers, relays exec/attach/port-forward upgrades, and records
+  API calls plus remote-command streams (stdin, stdout, stderr; masked). `trstctl-cli access sessions connect` writes a
+  kubeconfig naming the tunnel and no user; migration 0396 admits Kubernetes targets. SQL Server moves to the x86
+  block; Oracle sessions are recorded as what comes next.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

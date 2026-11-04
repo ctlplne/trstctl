@@ -448,6 +448,17 @@ trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --list
 curl http://127.0.0.1:18123/ --data-binary 'SELECT currentUser()'
 ```
 
+A Kubernetes target (`target_type: "kubernetes"`) is reached with kubectl: the connect command
+writes a kubeconfig that names the tunnel and no user (`--kubeconfig`, default: the ticket
+file with `.kubeconfig` appended), and the gateway adds the session's token to every
+request, exec and port-forward included. A client's own credential and `--as`
+impersonation are removed. Sessions must last at least ten minutes (`ttl_seconds` ≥ 600).
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:16443
+kubectl --kubeconfig ticket.txt.kubeconfig get pods
+```
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
 (never file contents), PostgreSQL and MySQL statements, Redis and MongoDB commands and ClickHouse requests with bounded results,

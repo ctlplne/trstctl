@@ -85,3 +85,36 @@ func TestPAMDatabaseTargetsNameAKnownTypeAndAGateway(t *testing.T) {
 		t.Fatal("a repeated Redis target id passed validation")
 	}
 }
+
+// TestPAMKubernetesTargetsNameAProviderAndAGateway: a Kubernetes target
+// (A256) names its provider, roles and the gateway it is served through.
+func TestPAMKubernetesTargetsNameAProviderAndAGateway(t *testing.T) {
+	const tenantID = "22222222-2222-4222-8222-222222222222"
+	valid := PAM{Enabled: true, KubernetesTargets: []PAMKubernetesTarget{{TenantID: tenantID, ID: "apps", ProviderID: "tenant-k8s",
+		AllowedRoles: []string{"operator"}, GatewayAgentID: "33333333-3333-4333-8333-333333333333", GatewayAddress: "gw.lab.local:7443"}}}
+	if errs := validatePAM(valid); len(errs) != 0 {
+		t.Fatalf("a Kubernetes target alone: %v", errs)
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*PAMKubernetesTarget)
+	}{
+		{"no gateway", func(k *PAMKubernetesTarget) { k.GatewayAgentID, k.GatewayAddress = "", "" }},
+		{"no provider", func(k *PAMKubernetesTarget) { k.ProviderID = "" }},
+		{"no roles", func(k *PAMKubernetesTarget) { k.AllowedRoles = nil }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := valid
+			p.KubernetesTargets = append([]PAMKubernetesTarget(nil), valid.KubernetesTargets...)
+			tc.edit(&p.KubernetesTargets[0])
+			if errs := validatePAM(p); len(errs) == 0 {
+				t.Fatal("an invalid Kubernetes target passed validation")
+			}
+		})
+	}
+	dup := valid
+	dup.KubernetesTargets = append(append([]PAMKubernetesTarget(nil), valid.KubernetesTargets...), valid.KubernetesTargets...)
+	if errs := validatePAM(dup); len(errs) == 0 {
+		t.Fatal("a repeated Kubernetes target id passed validation")
+	}
+}

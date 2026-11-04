@@ -2378,6 +2378,11 @@ which is required: such a session is delivered only through its gateway, which s
 the session's own user or account. The tenant registration endpoint takes the same
 fields.
 
+Kubernetes targets (A256) are `pam.kubernetes_targets` entries with the same fields and no
+`target_type`: each names a Kubernetes dynamic-secret provider (its roles bind the
+session's service account) and the gateway, which is required. A session's token lives at
+least ten minutes (TokenRequest's floor), so `pam.max_ttl` must allow that.
+
 ```json
 {
   "pam": {

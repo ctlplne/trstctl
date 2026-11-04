@@ -40,6 +40,7 @@ const (
 	pamTargetMySQL    = "mysql"
 	pamTargetMongo    = "mongodb"
 	pamTargetCH       = "clickhouse"
+	pamTargetK8s      = "kubernetes"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -57,10 +58,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetMySQL:    "mysql",
 	pamTargetMongo:    "mongodb",
 	pamTargetCH:       "clickhouse",
+	pamTargetK8s:      "kubernetes",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -1473,6 +1475,13 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	for _, target := range c.DatabaseTargets {
 		out.DatabaseTargets = append(out.DatabaseTargets, PAMDatabaseTarget{
 			TargetType: target.TargetType, TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,
+			AllowedRoles:   append([]string(nil), target.AllowedRoles...),
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
+		})
+	}
+	for _, target := range c.KubernetesTargets {
+		out.DatabaseTargets = append(out.DatabaseTargets, PAMDatabaseTarget{
+			TargetType: pamTargetK8s, TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,
 			AllowedRoles:   append([]string(nil), target.AllowedRoles...),
 			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
 		})

@@ -1897,9 +1897,24 @@ type PAM struct {
 	SSHTargets         []PAMSSHTarget      `json:"ssh_targets,omitempty"`
 	// DatabaseTargets (A256) are provider-backed targets of the other
 	// database kinds, reached only through an access gateway: target_type
-	// redis. Each names a dynamic-secret provider of its kind, whose
-	// per-session login only the gateway ever holds.
+	// redis, mysql, mongodb or clickhouse. Each names a dynamic-secret
+	// provider of its kind, whose per-session login only the gateway ever
+	// holds.
 	DatabaseTargets []PAMDatabaseTarget `json:"database_targets,omitempty"`
+	// KubernetesTargets (A256) are clusters reached only through an access
+	// gateway. Each names a Kubernetes dynamic-secret provider: a session's
+	// credential is a TokenRequest token for a lease-scoped service account.
+	KubernetesTargets []PAMKubernetesTarget `json:"kubernetes_targets,omitempty"`
+}
+
+// PAMKubernetesTarget is one gateway-delivered Kubernetes target (A256).
+type PAMKubernetesTarget struct {
+	TenantID       string   `json:"tenant_id"`
+	ID             string   `json:"id"`
+	ProviderID     string   `json:"provider_id"`
+	AllowedRoles   []string `json:"allowed_roles"`
+	GatewayAgentID string   `json:"gateway_agent_id"`
+	GatewayAddress string   `json:"gateway_address"`
 }
 
 // PAMDatabaseTarget is one gateway-delivered database target (A256).
@@ -5111,8 +5126,8 @@ func validatePAM(p PAM) []error {
 		return nil
 	}
 	var errs []error
-	if len(p.PostgresTargets)+len(p.DatabaseTargets)+len(p.SSHTargets) == 0 {
-		errs = append(errs, errors.New("pam requires at least one postgres_targets, database_targets or ssh_targets entry"))
+	if len(p.PostgresTargets)+len(p.DatabaseTargets)+len(p.KubernetesTargets)+len(p.SSHTargets) == 0 {
+		errs = append(errs, errors.New("pam requires at least one postgres_targets, database_targets, kubernetes_targets or ssh_targets entry"))
 	}
 	parsePositive := func(name, raw string) time.Duration {
 		if strings.TrimSpace(raw) == "" {
@@ -5178,6 +5193,23 @@ func validatePAM(p PAM) []error {
 			errs = append(errs, fmt.Errorf("%s gateway_address must be host:port", prefix))
 		}
 		key := target.TenantID + "/" + target.TargetType + "/" + target.ID
+		if seen[key] {
+			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
+		}
+		seen[key] = true
+	}
+	for i, target := range p.KubernetesTargets {
+		prefix := fmt.Sprintf("pam.kubernetes_targets[%d]", i)
+		if _, err := uuid.Parse(target.TenantID); err != nil || target.ID == "" || target.ProviderID == "" || len(target.AllowedRoles) == 0 {
+			errs = append(errs, fmt.Errorf("%s requires tenant_id UUID, id, provider_id, and allowed_roles", prefix))
+		}
+		if _, err := uuid.Parse(target.GatewayAgentID); err != nil {
+			errs = append(errs, fmt.Errorf("%s is served only through a gateway: gateway_agent_id must be an agent UUID", prefix))
+		}
+		if host, port, err := net.SplitHostPort(target.GatewayAddress); err != nil || host == "" || port == "" {
+			errs = append(errs, fmt.Errorf("%s gateway_address must be host:port", prefix))
+		}
+		key := target.TenantID + "/kubernetes/" + target.ID
 		if seen[key] {
 			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
 		}

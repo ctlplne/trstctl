@@ -23,11 +23,13 @@ const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession = relay.KindAccessGatewaySession
 	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
-	// TargetRedis and TargetSSH are the session types the gateway serves.
+	// TargetRedis, TargetKubernetes and TargetSSH are the session types the
+	// gateway serves.
 	TargetPostgres   = "postgres"
 	TargetMySQL      = "mysql"
 	TargetMongo      = "mongodb"
 	TargetClickHouse = "clickhouse"
+	TargetKubernetes = "kubernetes"
 	TargetRedis      = "redis"
 	TargetSSH        = "ssh"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
@@ -41,10 +43,16 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes:
 		return true
 	}
 	return false
+}
+
+// HTTPUpstream reports whether a session type is spoken to over HTTP and
+// names its upstream in the job (its credential names no address).
+func HTTPUpstream(targetType string) bool {
+	return targetType == TargetClickHouse || targetType == TargetKubernetes
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -111,7 +119,7 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.SessionID == "" || in.TargetID == "" || in.RequiredAgentID == "":
 		return errors.New("accessgateway: a session needs its id, target and gateway")
 	case !RedeemsCredential(in.TargetType) && in.TargetType != TargetSSH:
-		return errors.New("accessgateway: a session is postgres, mysql, mongodb, clickhouse, redis or ssh")
+		return errors.New("accessgateway: a session is postgres, mysql, mongodb, clickhouse, redis, kubernetes or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
@@ -124,14 +132,14 @@ func ValidateSessionIntent(in SessionIntent) error {
 		if in.SSHAddress != "" || in.SSHPrincipal != "" || len(in.SSHHostKeyFingerprints) != 0 {
 			return errors.New("accessgateway: a database session carries no SSH routing")
 		}
-		if in.TargetType != TargetClickHouse {
+		if !HTTPUpstream(in.TargetType) {
 			if in.UpstreamURL != "" || in.UpstreamCAPEM != "" || in.UpstreamServerName != "" {
 				return errors.New("accessgateway: only an HTTP session names an upstream")
 			}
 			return nil
 		}
 		if u, err := url.Parse(in.UpstreamURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-			return errors.New("accessgateway: a ClickHouse session names its upstream http(s) URL")
+			return errors.New("accessgateway: an HTTP session names its upstream http(s) URL")
 		}
 		return nil
 	}

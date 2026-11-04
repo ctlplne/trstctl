@@ -176,9 +176,10 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 		Record: s.recordings != nil}
 	if rec.TargetType != pamTargetSSH {
 		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
-		if rec.TargetType == pamTargetCH {
-			// The ClickHouse credential is a user and password; where the
-			// server answers is its provider's endpoint.
+		if accessgateway.HTTPUpstream(rec.TargetType) {
+			// A ClickHouse credential is a user and password, a Kubernetes
+			// one a token; where the server answers is the provider's
+			// endpoint.
 			endpoint, caPEM, serverName, err := s.databaseUpstream(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {
 				return accessgateway.SessionIntent{}, err

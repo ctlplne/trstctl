@@ -8292,7 +8292,7 @@ export interface PAMApprovalRequest {
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   subject: string;
   target_id: string;
-  target_type: "clickhouse" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
 export interface PAMPostgresCredential {
@@ -8396,7 +8396,7 @@ export interface PAMSessionActivationRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "clickhouse" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
   ttl_seconds?: number;
 }
 
@@ -8414,7 +8414,7 @@ export interface PAMSessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "clickhouse" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
   ttl_seconds?: number;
 }
 
@@ -8439,7 +8439,7 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "clickhouse" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
 export interface PAMTargetDisableRequest {
@@ -8461,7 +8461,7 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "clickhouse" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
 export interface PKISecret {

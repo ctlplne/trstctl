@@ -24,7 +24,7 @@ import (
 // it reads a gateway-delivered session, listens on a loopback address, and
 // carries each local connection to the session's gateway over TLS verified
 // against the gateway's agent certificate, opening with the session's ticket.
-// Stock clients (psql, mysql, mongosh, redis-cli, curl, ssh) connect to the local address; neither they nor
+// Stock clients (psql, mysql, mongosh, redis-cli, curl, kubectl, ssh) connect to the local address; neither they nor
 // this command ever receive the upstream credential. For an SSH session it
 // first learns the gateway's SSH host key through that verified tunnel and
 // writes it to a known_hosts file for the ssh command it prints.
@@ -34,6 +34,7 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 	ticketFile := fs.String("ticket-file", "", "file holding the session's one-time ticket (from the open)")
 	listen := fs.String("listen", "127.0.0.1:0", "loopback address the local client connects to")
 	knownHosts := fs.String("known-hosts", "", "SSH sessions: file to write the gateway's host key to (default: the ticket file with .known_hosts appended)")
+	kubeconfig := fs.String("kubeconfig", "", "Kubernetes sessions: file to write a kubeconfig for the tunnel to (default: the ticket file with .kubeconfig appended)")
 	// The session ID may come before or after the flags.
 	var sessionID string
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
@@ -111,6 +112,23 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 		// credential (its own sign-in is refused).
 		local := ln.Addr().(*net.TCPAddr)
 		_, _ = fmt.Fprintf(stdout, "mongosh mongodb://%s:%d/?directConnection=true\n", local.IP, local.Port)
+	}
+	if targetType == "kubernetes" {
+		// A kubeconfig that names the tunnel and no user: the gateway adds
+		// the session's token to every request.
+		path := *kubeconfig
+		if path == "" {
+			path = *ticketFile + ".kubeconfig"
+		}
+		local := ln.Addr().(*net.TCPAddr)
+		config := fmt.Sprintf("apiVersion: v1\nkind: Config\nclusters:\n- name: trstctl-gateway\n  cluster:\n    server: http://%s:%d\n"+
+			"users:\n- name: trstctl-session\n  user: {}\ncontexts:\n- name: trstctl-session\n  context:\n    cluster: trstctl-gateway\n    user: trstctl-session\n"+
+			"current-context: trstctl-session\n", local.IP, local.Port)
+		if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+			_, _ = fmt.Fprintln(stderr, "trstctl: write kubeconfig:", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout, "kubectl --kubeconfig %s get pods\n", path)
 	}
 	if targetType == "clickhouse" {
 		// ClickHouse's HTTP interface: the gateway signs each request in as

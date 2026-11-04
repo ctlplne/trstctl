@@ -70,6 +70,12 @@ type gatewayFixtureOptions struct {
 	// clickhouseNote adds the ClickHouse target "clickhouse-gw" (A256),
 	// bound to the gateway, its lab.notes table holding this note.
 	clickhouseNote string
+	// kubernetes adds the Kubernetes target "k8s-gw" (A256), bound to the
+	// gateway, served by this provider ("pam-k8s-provider", role operator).
+	kubernetes DynamicSecretProviderRegistry
+	// maxTTL raises the broker's session cap (a Kubernetes token lives at
+	// least ten minutes); zero keeps three minutes.
+	maxTTL time.Duration
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -129,12 +135,21 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mongodb", TenantID: servedTestTenant, ID: "mongo-gw", ProviderID: "pam-mongo-provider",
 				AllowedRoles: []string{"mongo-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
+		if opts.kubernetes != nil {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], opts.kubernetes.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "kubernetes", TenantID: servedTestTenant, ID: "k8s-gw", ProviderID: "pam-k8s-provider",
+				AllowedRoles: []string{"operator"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
 		if opts.clickhouseNote != "" {
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], clickhouseProviders.ForTenant(servedTestTenant)...)
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "clickhouse", TenantID: servedTestTenant, ID: "clickhouse-gw", ProviderID: "pam-clickhouse-provider",
 				AllowedRoles: []string{"reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
-		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
+		maxTTL := 3 * time.Minute
+		if opts.maxTTL > 0 {
+			maxTTL = opts.maxTTL
+		}
+		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: maxTTL, ExpiryInterval: 50 * time.Millisecond,
 			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},
 			PostgresTargets: []PAMPostgresTarget{{TenantID: servedTestTenant, ID: "pg-gw", ProviderID: "pam-pg-provider",
 				AllowedRoles: []string{"readonly"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}},

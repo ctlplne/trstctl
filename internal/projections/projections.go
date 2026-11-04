@@ -4338,12 +4338,12 @@ type PAMSSHSigningRecoveryRequested struct {
 	Reason string `json:"reason"`
 }
 
-// PAMDatabaseTargetType reports whether a PAM target type is a
-// provider-backed database (A256): PostgreSQL, or ClickHouse, MongoDB, MySQL
-// or Redis through a gateway.
+// PAMDatabaseTargetType reports whether a PAM target type is provider-backed
+// (A256): PostgreSQL, or ClickHouse, MongoDB, MySQL, Redis or a Kubernetes
+// cluster through a gateway.
 func PAMDatabaseTargetType(targetType string) bool {
 	switch targetType {
-	case "postgres", "clickhouse", "mongodb", "mysql", "redis":
+	case "postgres", "clickhouse", "mongodb", "mysql", "redis", "kubernetes":
 		return true
 	}
 	return false

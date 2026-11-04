@@ -8715,8 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- Kubernetes sessions (A256; Redis, MySQL, MongoDB and ClickHouse are served); the agent
-  launcher (A257); credential health checks and emergency access (A258).
+- The agent launcher (A257); credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8749,10 +8748,10 @@ What comes next:
   lengths; privacy erasure of PAM operator metadata (target disable reasons, legal hold
   reasons) alongside the session subject's.
 
-## More session types through the gateway (A256) — Redis, MySQL, MongoDB and ClickHouse served
+## More session types through the gateway (A256) — served
 
-Status: Redis, MySQL, MongoDB and ClickHouse are served; Kubernetes sessions are the rest of
-A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
+Status: served for Redis, MySQL, MongoDB, ClickHouse and Kubernetes; SQL Server and Oracle
+are recorded below. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
 names a Redis dynamic-secret provider and a gateway, which is required: the broker refuses
 a Redis target without one. A session's credential is an ACL user the provider creates for
 it, scoped by the role's key prefixes and commands; the gateway redeems it, signs in with
@@ -8804,9 +8803,25 @@ run as the session's user; a write outside its role is refused (exception 497); 
 closes a live keep-alive connection, the gateway acknowledges it and the user is dropped;
 the recording seals, verifies and holds each request and response with the token masked.
 
+A `pam.kubernetes_targets` entry (or a tenant registration of `target_type: "kubernetes"`)
+names a Kubernetes dynamic-secret provider and a gateway; its session's credential is a
+TokenRequest token for a service account the provider creates with its role's binding. The
+gateway adds the token to every request and removes a client's own credential and
+impersonation. `TestServedGatewayKubernetesSessionsOnKindA256` proves it with stock kubectl
+on kind through a kubeconfig that names the tunnel and no user: the kubeconfig and the CLI
+output hold no token; the session's service account lists its namespace's pods and is
+forbidden cluster-scoped reads, by name, even with `--as` (impersonation removed, not
+refused); exec runs and its output is recorded with the token masked; termination ends a
+live exec, the gateway acknowledges it and the service account is deleted; the recording
+seals and verifies.
+
+SQL Server and Oracle (measured 2026-11-04 on this Mac): no MySQL-style sign-in is built for
+them here. SQL Server's images are amd64-only, so its session type moves to the x86 block
+with its provider proofs; Oracle Free's arm64 image runs here, and an Oracle session type
+(TNS sign-in) is recorded as what comes next.
+
 What comes next:
-- Kubernetes (kind) sessions; SQL Server and Oracle where their images run on this Mac,
-  otherwise in the x86 block.
+- SQL Server sessions (x86 block) and Oracle sessions.
 - ClickHouse's native protocol (`clickhouse-client`) through the gateway.
 - MongoDB through `mongodb+srv://` (DNS seed lists) and SCRAM-SHA-1 users.
 - MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
