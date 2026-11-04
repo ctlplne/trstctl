@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -30,11 +31,20 @@ func a201Container(t *testing.T, port string, args ...string) (string, string) {
 	// failure below can say why (CI on 491: LocalStack exited on the runner
 	// before its port was published, and nothing recorded the reason).
 	run := append([]string{"run", "-d", "-p", "127.0.0.1::" + port}, args...)
-	out, err := exec.Command("docker", run...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-	if err != nil {
-		t.Fatalf("docker run: %v\n%s", err, out)
+	// The container's ID is on stdout alone: when the runner first pulls the
+	// image, stderr carries the pull's progress (CI on 501: that progress was
+	// taken for the ID, and "docker port" found no such object).
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("docker", run...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("docker run: %v\n%s%s", err, stdout.Bytes(), stderr.Bytes())
 	}
-	id := strings.TrimSpace(string(out))
+	lines := strings.Fields(stdout.String())
+	if len(lines) == 0 {
+		t.Fatalf("docker run printed no container ID\n%s", stderr.Bytes())
+	}
+	id := lines[len(lines)-1]
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", id).Run() })  // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	mapped, err := exec.Command("docker", "port", id, port+"/tcp").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {

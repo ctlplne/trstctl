@@ -1552,13 +1552,13 @@ not this file.
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:33` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:42` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:80` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:52` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
