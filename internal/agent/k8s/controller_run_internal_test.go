@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -565,4 +566,57 @@ func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
 		t.Fatalf("ClusterTrustBundle target on a cluster without the API = %v", err)
 	}
 	notReady(plain, "projected", "enable certificates.k8s.io/v1beta1 clustertrustbundles")
+}
+
+// An update that loses the optimistic-concurrency race with the controller's
+// own status write (409 Conflict) is read again and reapplied, instead of
+// failing the rollout: the conflict says only that the object moved.
+func TestApplyDesiredTrustBundleRetriesAnUpdateConflict(t *testing.T) {
+	f := startRunFixture(t)
+	inner := f.api.handler()
+	var puts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/trustbundles/") && puts.Add(1) == 1 {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"kind":"Status","code":409}`))
+			return
+		}
+		inner.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+		return nil, nil
+	}), DefaultIssuerGroup, runSignerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, hash, err := trustBundlePEM(map[string]any{"caBundlePEM": string(f.ca.BundlePEM())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := DesiredTrustBundle{
+		RolloutID: "11111111-1111-4111-8111-111111111111", Name: "platform-roots", CABundlePEM: bundle, BundleSHA256: hash,
+		ConfigMapName: "platform-roots", Key: "ca-bundle.pem", Namespaces: []string{"apps"},
+	}
+	ctx := context.Background()
+	if n, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{desired}); err != nil || n != 1 {
+		t.Fatalf("first apply = %d, %v", n, err)
+	}
+	moved := desired
+	moved.RolloutID = "22222222-2222-4222-8222-222222222222"
+	if n, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{moved}); err != nil || n != 1 {
+		t.Fatalf("apply after a conflicting update = %d, %v", n, err)
+	}
+	if got := puts.Load(); got != 2 {
+		t.Fatalf("updates sent = %d, want the refused one and its retry", got)
+	}
+	obj, ok := f.api.get(resTrustBundles, "", "platform-roots")
+	if !ok {
+		t.Fatal("TrustBundle gone")
+	}
+	meta, _ := obj["metadata"].(map[string]any)
+	annotations, _ := meta["annotations"].(map[string]any)
+	if annotations[trustRolloutAnnotation] != moved.RolloutID {
+		t.Fatalf("TrustBundle annotations = %v", annotations)
+	}
 }

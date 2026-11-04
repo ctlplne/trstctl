@@ -58,10 +58,27 @@ func (c *IssuerController) applyDesiredTrustBundle(ctx context.Context, bundle D
 	if _, hash, err := trustBundlePEM(spec); err != nil || hash != bundle.BundleSHA256 {
 		return false, fmt.Errorf("k8s: rollout %s TrustBundle %s is not the public bundle it names: %v", bundle.RolloutID, bundle.Name, err)
 	}
+	// The running controller writes the same object's status, so an update can
+	// lose the optimistic-concurrency race (409 Conflict). Read it again and
+	// reapply: a conflict says only that the object moved, not that this
+	// rollout is wrong.
+	for attempt := 1; ; attempt++ {
+		wrote, conflict, err := c.applyDesiredTrustBundleOnce(ctx, bundle, spec)
+		if !conflict || attempt == trustBundleUpdateAttempts {
+			return wrote, err
+		}
+	}
+}
+
+// trustBundleUpdateAttempts bounds the read-modify-write retries one apply
+// makes after update conflicts.
+const trustBundleUpdateAttempts = 3
+
+func (c *IssuerController) applyDesiredTrustBundleOnce(ctx context.Context, bundle DesiredTrustBundle, spec map[string]any) (bool, bool, error) {
 	path := trustBundleCollectionPath() + "/" + bundle.Name
 	st, body, err := c.client.request(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	if st == http.StatusNotFound {
 		obj := map[string]any{
@@ -75,43 +92,46 @@ func (c *IssuerController) applyDesiredTrustBundle(ctx context.Context, bundle D
 		}
 		st, body, err = c.client.request(ctx, http.MethodPost, trustBundleCollectionPath(), obj)
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		if st/100 != 2 {
-			return false, fmt.Errorf("k8s: create TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
+			return false, false, fmt.Errorf("k8s: create TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
 		}
-		return true, nil
+		return true, false, nil
 	}
 	if st/100 != 2 {
-		return false, fmt.Errorf("k8s: read TrustBundle %s: status %d: %s", bundle.Name, st, string(body))
+		return false, false, fmt.Errorf("k8s: read TrustBundle %s: status %d: %s", bundle.Name, st, string(body))
 	}
 	var live map[string]any
 	if err := json.Unmarshal(body, &live); err != nil {
-		return false, fmt.Errorf("k8s: decode TrustBundle %s: %w", bundle.Name, err)
+		return false, false, fmt.Errorf("k8s: decode TrustBundle %s: %w", bundle.Name, err)
 	}
 	meta, _ := live["metadata"].(map[string]any)
 	labels, _ := meta["labels"].(map[string]any)
 	if labels["app.kubernetes.io/managed-by"] != "trstctl-agent" {
-		return false, fmt.Errorf("k8s: TrustBundle %s exists and was not created by the agent; rollout %s leaves it alone", bundle.Name, bundle.RolloutID)
+		return false, false, fmt.Errorf("k8s: TrustBundle %s exists and was not created by the agent; rollout %s leaves it alone", bundle.Name, bundle.RolloutID)
 	}
 	annotations, _ := meta["annotations"].(map[string]any)
 	if annotations == nil {
 		annotations = map[string]any{}
 	}
 	if annotations[trustRolloutAnnotation] == bundle.RolloutID && trustBundleSpecEqual(live["spec"], spec) {
-		return false, nil
+		return false, false, nil
 	}
 	annotations[trustRolloutAnnotation] = bundle.RolloutID
 	meta["annotations"] = annotations
 	live["spec"] = spec
 	st, body, err = c.client.request(ctx, http.MethodPut, path, live)
 	if err != nil {
-		return false, err
+		return false, false, err
+	}
+	if st == http.StatusConflict {
+		return false, true, fmt.Errorf("k8s: update TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
 	}
 	if st/100 != 2 {
-		return false, fmt.Errorf("k8s: update TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
+		return false, false, fmt.Errorf("k8s: update TrustBundle %s for rollout %s: status %d: %s", bundle.Name, bundle.RolloutID, st, string(body))
 	}
-	return true, nil
+	return true, false, nil
 }
 
 func trustBundleSpecEqual(live any, want map[string]any) bool {
