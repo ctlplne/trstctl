@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/reportstate"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -312,3 +313,16 @@ func (r relayChannel) SignJobCSR(ctx context.Context, jobID int64, attempt int, 
 	}
 	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
 }
+
+// SignJobSSHKey has the control plane certify an access gateway session's
+// per-session SSH key for the job attempt the gateway holds (A254). Without
+// it the gateway refuses SSH sessions rather than serving them uncertified.
+func (r relayChannel) SignJobSSHKey(ctx context.Context, jobID int64, attempt int, publicKey []byte) ([]byte, error) {
+	resp, err := r.c.SignJobSSHKey(ctx, &transport.SignJobSSHKeyRequest{JobID: jobID, Attempt: attempt, PublicKey: publicKey})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Certificate, nil
+}
+
+var _ accessgateway.SSHKeySigner = relayChannel{}

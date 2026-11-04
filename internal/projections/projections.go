@@ -4297,6 +4297,9 @@ type PAMSessionStarted struct {
 	Delivery            string `json:"delivery,omitempty"`
 	GatewayAgentID      string `json:"gateway_agent_id,omitempty"`
 	GatewayTicketDigest string `json:"gateway_ticket_digest,omitempty"`
+	// SSHPrincipal is the login a gateway SSH session's certificate names; the
+	// gateway's own key is certified when it claims the session.
+	SSHPrincipal string `json:"ssh_principal,omitempty"`
 }
 
 // PAMSessionActivationRequested consumes one exact approval before any target
@@ -4344,6 +4347,9 @@ type PAMTargetRegistered struct {
 	// serves it (A254); targets registered before carry none.
 	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
 	GatewayAddress string `json:"gateway_address,omitempty"`
+	// HostKeyFingerprints pin the host keys a gateway accepts from an SSH
+	// target (A254).
+	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
 }
 
 type PAMTargetDisabled struct {
@@ -8252,6 +8258,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
 			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
 			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
+			HostKeyFingerprints: pl.HostKeyFingerprints,
 		})
 	case EventPAMTargetDisabled:
 		var pl PAMTargetDisabled
@@ -8302,6 +8309,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
+			SSHPrincipal: pl.SSHPrincipal,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

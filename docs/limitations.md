@@ -8673,31 +8673,48 @@ What comes next:
   asymmetric keys would show there), and rotation history (`ListKeyRotations`) is not
   read, so "never rotated" is shown as rotation disabled.
 
-## Credential-hidden access gateway (A254) — PostgreSQL served; SSH next
+## Credential-hidden access gateway (A254) — served
 
-Status: PostgreSQL through the gateway is served. A PAM PostgreSQL target bound to a
-gateway-role agent (`gateway_agent_id`, `gateway_address`) delivers its sessions through
-that gateway: the open returns a one-time ticket and the gateway's identity, never the
-credential; the gateway (`trstctl-agent --access-gateway-listen`) claims the session as an
-agent job, redeems its login into locked memory, admits only connections carrying the
-ticket, and signs in upstream itself (its own sign-in — the agent binary links no database
-driver — answering SCRAM-SHA-256, MD5 or cleartext as the target demands, with TLS, whenever
-used, verified against `sslrootcert` or the system roots); `trstctl-cli access sessions
-connect` carries a stock
-client to it over TLS verified against the agent CA for the gateway's host and its exact
-SPIFFE ID (the agent CA signs a gateway's serving certificate only for hosts its own target
-bindings declare).
-`TestServedGatewayKeepsThePostgresCredentialFromTheClientA254` proves it end to end: a
-client with no password runs as the session's login; the password appears in no session
-read, CLI output, gateway log or ticket file; a wrong ticket is refused at the gateway; a
-revocation recalls the session's job, so the gateway ends the live connection and admits
-no new one. Design and threat model: `docs/design/access-gateway.md`.
+Status: served for PostgreSQL and SSH. A PAM target bound to a gateway-role agent
+(`gateway_agent_id`, `gateway_address`; an SSH target also pins its host keys in
+`host_key_fingerprints`) delivers its sessions through that gateway: the open returns a
+one-time ticket and the gateway's identity, never a credential; the gateway
+(`trstctl-agent --access-gateway-listen`) claims the session as an agent job and admits only
+connections carrying the ticket. For PostgreSQL it redeems the session's login into locked
+memory and signs in upstream itself (its own sign-in — the agent binary links no database
+driver — answering SCRAM-SHA-256, MD5 or cleartext as the target demands, with TLS,
+whenever used, verified against `sslrootcert` or the system roots). For SSH it generates
+the session's key in locked memory and the tenant SSH CA certifies it for the job it holds
+(key ID `pam:<session>`, the session's principal, ending at the deadline, terminal only),
+then signs in to the target, accepting only a pinned host key, and relays shell, exec and
+SFTP sessions; forwarding is refused. `trstctl-cli access sessions connect` carries a
+stock client to the gateway over TLS verified against the agent CA for the gateway's host
+and its exact SPIFFE ID (the agent CA signs a gateway's serving certificate only for hosts
+its own target bindings declare), and for SSH writes the gateway's host key to a
+known_hosts file.
+`TestServedGatewayKeepsThePostgresCredentialFromTheClientA254` and
+`TestServedGatewayKeepsTheSSHCredentialFromTheClientA254` prove it end to end with stock
+`psql` and `ssh` (sshd in a container trusting the tenant SSH CA): the client holds no
+password, key or certificate and runs as the session's login or principal; no credential
+appears in a session read, the CLI output, the gateway log, the ticket or known_hosts
+files; refusals happen where they are claimed — a wrong ticket and an expired session at
+the gateway, an unlisted principal and a requester key at the open, another tenant at the
+API, and a straight connection at the target; a control-plane restart mid-session keeps
+the live SSH connection, the gateway's lease extends against the new process, and the
+session keeps one start event, one job and its deadline; a revocation recalls the job (the
+gateway ends live connections and admits no new one) and, for SSH, puts the session's key
+ID on the served KRL. Design and threat model: `docs/design/access-gateway.md`.
 
-What comes next (A254 part 2 and on):
-- SSH through the gateway (the gateway's per-session key signed by the tenant SSH CA), and
-  the control-plane-restart proof across both session types — part 2 completes A254.
+What comes next (A255 and on):
 - A database that authenticates with Kerberos, GSSAPI or SSPI, or presents a TLS
-  certificate the gateway cannot verify, is refused rather than signed in to.
+  certificate the gateway cannot verify, and an SSH target with no pinned host key, are
+  refused rather than signed in to. SSH host certificates are accepted only when pinned
+  (or certifying a pinned key); trusting a host CA instead of pins is a lead.
+- A gateway cut off from the control plane for longer than its lease keeps its live
+  connections only until the control plane answers again: the next extension of an
+  expired lease is refused, so the gateway ends the session's connections and re-claims
+  the session (a new attempt and, for SSH, a new key and certificate). Keeping live
+  connections across a long partition is a lead.
 - Session recording, masking and live termination (A255); MySQL, MongoDB, Redis,
   ClickHouse and Kubernetes sessions (A256); the agent launcher (A257); credential health
   checks and emergency access (A258).

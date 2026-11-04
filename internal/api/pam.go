@@ -65,6 +65,9 @@ type PAMTarget struct {
 	// the upstream credential.
 	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
 	GatewayAddress string `json:"gateway_address,omitempty"`
+	// HostKeyFingerprints pin the host keys the gateway accepts from an SSH
+	// target (SHA256:...); a gateway-bound SSH target names at least one.
+	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.

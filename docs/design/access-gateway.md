@@ -14,8 +14,8 @@ separate design with no component in the call path, and does not reuse the gatew
 | Piece | Role |
 |---|---|
 | Control plane | Approves and opens the session (F33), binds it to its gateway, mints a one-time ticket (stores only its SHA-256), queues the session as one agent job, revokes. |
-| Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs, redeems each session's upstream credential into locked memory, admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
-| CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`) connect to the loopback address. |
+| Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs in a claim loop of its own, holds each session's upstream credential in locked memory (a redeemed PostgreSQL login, or a key it generated for an SSH session and the certificate the tenant SSH CA issued for it), admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
+| CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`, `ssh`) connect to the loopback address. |
 
 The gateway's outbound destinations are the control plane and the targets bound to it.
 Its listener serves a certificate the agent CA signs for it (in the signer process, AN-4):
@@ -34,14 +34,24 @@ inside the tunnel admits them.
    in the target digest, so changing it invalidates the approval.
 2. **Open** — the control plane consumes the approval once, issues the upstream credential
    as for any session (PostgreSQL: a per-session login from the dynamic-secret provider
-   with `rolvaliduntil` at the deadline), records `pam.session.started` with
+   with `rolvaliduntil` at the deadline; SSH: nothing yet — the session records its
+   principal and the key ID `pam:<session>` its certificates will carry, and a request
+   naming an `ssh_public_key` of its own is refused), records `pam.session.started` with
    `delivery: gateway`, the gateway and the ticket's SHA-256, and queues one agent job
    (`access.gateway.session`, keyed by the session, demanding the gateway role and that
    exact agent). The response carries the ticket (once) and how to verify the gateway —
    never the credential.
-3. **Claim and redemption** — the gateway claims the job, and redemption reopens the
-   credential from the session's lease for that gateway only (exact agent, gateway role);
-   it travels over the gateway's mTLS channel into locked memory.
+3. **Claim and redemption** — the gateway claims the job. PostgreSQL: redemption reopens
+   the credential from the session's lease for that gateway only (exact agent, gateway
+   role); it travels over the gateway's mTLS channel into locked memory. SSH: the gateway
+   generates the session's key (ECDSA P-256, locked memory) and sends its public half with
+   the job and attempt it holds (`SignJobSSHKey`); the control plane checks the lease is
+   this agent's at that attempt, the session is still an active gateway SSH session of
+   this agent's before its deadline, and the target still binds this agent and lists the
+   principal, then the tenant SSH CA (in the signer, AN-4) certifies the key: key ID
+   `pam:<session>`, the session's principal, valid until the session's deadline, and only
+   `permit-pty` — no port, agent or X11 forwarding. A re-claim after a gateway restart gets
+   a new key and a new certificate with the same key ID.
 4. **Connect** — the client's first line is `TRSTCTL-GATEWAY/1 <session> <ticket>`; the
    gateway compares the ticket's SHA-256 in constant time, checks the deadline, then:
    for PostgreSQL it answers the client's startup itself, signs in upstream as the
@@ -55,6 +65,14 @@ inside the tunnel admits them.
    and whenever it uses TLS it verifies the database's certificate against `sslrootcert`
    (a file on the gateway's host) or the system roots, including the host name —
    stricter than libpq's `prefer`, `require` and `verify-ca`.
+   For SSH (inside `internal/crypto/sshgateway`) the admission answer carries the gateway's
+   own SSH host key, which the CLI — having verified the gateway over TLS — writes to a
+   known_hosts file for the stock client; the client's SSH handshake asks for no
+   authentication (the ticketed tunnel was it). The gateway then signs in to the target as
+   the session's principal with the session certificate, accepting only a host key the
+   target's `host_key_fingerprints` pin (or a host certificate for one), and relays session
+   channels — shell, exec, SFTP — and their requests; any other channel and agent or X11
+   forwarding are refused.
 5. **End** — at the deadline the gateway closes the session's connections, wipes the
    credential and reports; the native deadline (`rolvaliduntil`, certificate
    `valid_before`) holds even without it. **Revocation** recalls the session's job
@@ -68,7 +86,7 @@ inside the tunnel admits them.
 |---|---|
 | New logins denied | The gateway no longer holds the session: a connection is refused. |
 | Session terminated | The gateway's end-of-session report (`ended: recalled` or `deadline`); recordings and live termination are A255. |
-| Upstream credential revoked | The PostgreSQL role is gone / the served SSH KRL holds the session's key ID (F33). |
+| Upstream credential revoked | The PostgreSQL role is gone / the served SSH KRL holds the session's key ID, which every certificate the gateway was given for the session carries (F33). |
 
 ## Failure modes
 
@@ -96,13 +114,19 @@ deliberate grant.
 |---|---|
 | A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
 | A client connecting straight to the target | The client holds no credential the target accepts. |
+| A host impersonating the SSH target | The gateway accepts only a host key the target registration pins. |
+| A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
 | Another tenant | The gateway is one tenant's agent; jobs, sessions and redemption are tenant-scoped under RLS. |
 | A gateway impersonator | The CLI verifies the gateway's serving certificate against the tenant's agent CA for the host it dialed and requires the gateway agent's exact SPIFFE ID; the control plane signs a gateway's certificate only for hosts its own bindings declare. |
 
 ## Status
 
-A254 part 1 — PostgreSQL through the gateway — is served. SSH through the gateway (the
-gateway's per-session key signed by the tenant SSH CA) completes A254. Recording, masking
-and live termination (A255), more session types (A256), the agent launcher (A257) and
-credential health and emergency access (A258) follow.
+A254 is served: PostgreSQL and SSH through the gateway. The served proofs drive stock
+`psql` and `ssh` through the CLI with no credential; refuse an unlisted principal and a
+requester key at the open, another tenant at the API, an expired session at the gateway
+and a straight connection at the target; and restart the control plane mid-session — the
+live connection continues, the gateway's lease extends against the new process, and the
+session keeps its one start, one job and deadline. Recording, masking and live termination
+(A255), more session types (A256), the agent launcher (A257) and credential health and
+emergency access (A258) follow.

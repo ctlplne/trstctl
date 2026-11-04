@@ -48,6 +48,10 @@ func (stubAgentChannelService) SignJobCSR(context.Context, *transport.SignJobCSR
 	return &transport.SignJobCSRResponse{}, nil
 }
 
+func (stubAgentChannelService) SignJobSSHKey(context.Context, *transport.SignJobSSHKeyRequest) (*transport.SignJobSSHKeyResponse, error) {
+	return &transport.SignJobSSHKeyResponse{}, nil
+}
+
 func (stubAgentChannelService) SignGatewayServerCertificate(context.Context, *transport.SignGatewayServerCertificateRequest) (*transport.SignGatewayServerCertificateResponse, error) {
 	return &transport.SignGatewayServerCertificateResponse{}, nil
 }

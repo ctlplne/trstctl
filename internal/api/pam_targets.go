@@ -23,6 +23,8 @@ type pamTargetRequest struct {
 	// GatewayAgentID and GatewayAddress bind the target to a gateway (A254).
 	GatewayAgentID string `json:"gateway_agent_id,omitempty"`
 	GatewayAddress string `json:"gateway_address,omitempty"`
+	// HostKeyFingerprints pin a gateway-bound SSH target's host keys.
+	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
 }
 
 //trstctl:mutation
@@ -44,6 +46,7 @@ func (a *API) registerPAMTarget(w http.ResponseWriter, r *http.Request) {
 			ProviderID: strings.TrimSpace(body.ProviderID), AllowedRoles: body.AllowedRoles,
 			Host: strings.TrimSpace(body.Host), Port: body.Port, Principals: body.Principals,
 			GatewayAgentID: strings.TrimSpace(body.GatewayAgentID), GatewayAddress: strings.TrimSpace(body.GatewayAddress),
+			HostKeyFingerprints: body.HostKeyFingerprints,
 		})
 		if err != nil {
 			return 0, nil, err

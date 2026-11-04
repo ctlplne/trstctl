@@ -14,7 +14,14 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/sshgateway"
 )
+
+// SSHKeySigner is the part of the agent channel that certifies an SSH
+// session's per-session key for the job the gateway holds (A254).
+type SSHKeySigner interface {
+	SignJobSSHKey(ctx context.Context, jobID int64, attempt int, publicKey []byte) ([]byte, error)
+}
 
 // Config wires a gateway to its agent channel and listener.
 type Config struct {
@@ -40,19 +47,26 @@ type Gateway struct {
 	mu       sync.Mutex
 	sessions map[string]*session
 	claimNow chan struct{}
+	// sshHost is the host key SSH clients see, made with the first SSH
+	// session and wiped when the gateway stops.
+	sshHostOnce sync.Once
+	sshHost     *sshgateway.HostKey
+	sshHostErr  error
 }
 
 type session struct {
 	intent   SessionIntent
 	job      relay.Job
 	material relay.Material
-	destroy  func()
-	mu       sync.Mutex
-	conns    map[net.Conn]struct{}
-	served   int
-	ended    chan struct{}
-	endOnce  sync.Once
-	reason   string
+	// sshKey is an SSH session's certified per-session key.
+	sshKey  *sshgateway.SessionKey
+	destroy func()
+	mu      sync.Mutex
+	conns   map[net.Conn]struct{}
+	served  int
+	ended   chan struct{}
+	endOnce sync.Once
+	reason  string
 }
 
 // New builds a gateway.
@@ -107,6 +121,9 @@ func (g *Gateway) Run(ctx context.Context) error {
 			cancel()
 			wg.Wait()
 			g.endAll("gateway stopped")
+			if g.sshHost != nil {
+				g.sshHost.Destroy()
+			}
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -168,6 +185,17 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "deadline", 0))
 		return
 	}
+	if intent.TargetType == TargetSSH {
+		key, err := g.certifySessionKey(ctx, job)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", intent.SessionID, err)
+			g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
+			return
+		}
+		g.holdSession(ctx, &session{intent: intent, job: job, sshKey: key, destroy: key.Destroy,
+			conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
+		return
+	}
 	items, err := g.cfg.Channel.RedeemJobCredential(ctx, job.JobID, job.Attempt)
 	if err != nil {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
@@ -181,17 +209,50 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
 		return
 	}
-	s := &session{intent: intent, job: job, material: material, destroy: destroy,
-		conns: map[net.Conn]struct{}{}, ended: make(chan struct{})}
+	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy,
+		conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
+}
+
+// holdSession registers a started session and holds it, unless the session is
+// held already (its earlier claim is still live).
+func (g *Gateway) holdSession(ctx context.Context, s *session) {
 	g.mu.Lock()
-	if _, held := g.sessions[intent.SessionID]; held {
+	if _, held := g.sessions[s.intent.SessionID]; held {
 		g.mu.Unlock()
-		destroy()
+		s.destroy()
 		return
 	}
-	g.sessions[intent.SessionID] = s
+	g.sessions[s.intent.SessionID] = s
 	g.mu.Unlock()
 	go g.hold(ctx, s)
+}
+
+// certifySessionKey makes an SSH session's key and has the control plane
+// certify it for this job attempt. The key never leaves this process.
+func (g *Gateway) certifySessionKey(ctx context.Context, job relay.Job) (*sshgateway.SessionKey, error) {
+	signer, ok := g.cfg.Channel.(SSHKeySigner)
+	if !ok {
+		return nil, errors.New("the agent channel cannot certify SSH session keys")
+	}
+	key, err := sshgateway.NewSessionKey()
+	if err != nil {
+		return nil, err
+	}
+	certificate, err := signer.SignJobSSHKey(ctx, job.JobID, job.Attempt, key.PublicKey())
+	if err != nil {
+		key.Destroy()
+		return nil, fmt.Errorf("certify the session key: %w", err)
+	}
+	if _, err := key.Certify(certificate); err != nil {
+		key.Destroy()
+		return nil, err
+	}
+	return key, nil
+}
+
+func (g *Gateway) hostKey() (*sshgateway.HostKey, error) {
+	g.sshHostOnce.Do(func() { g.sshHost, g.sshHostErr = sshgateway.NewHostKey() })
+	return g.sshHost, g.sshHostErr
 }
 
 // hold keeps the session's lease until its deadline or until the control
@@ -332,12 +393,24 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		g.deny(conn, "session expired")
 		return
 	}
+	var host *sshgateway.HostKey
+	answer := "OK\n"
+	if s.intent.TargetType == TargetSSH {
+		var err error
+		if host, err = g.hostKey(); err != nil {
+			g.deny(conn, "the gateway has no SSH host key")
+			return
+		}
+		// The client's tunnel verified this gateway over TLS; the host key it
+		// learns here is the one its SSH client is told to expect.
+		answer = "OK " + host.AuthorizedKey() + "\n"
+	}
 	if !s.admit(conn, g.cfg.MaxConnections) {
 		g.deny(conn, "session ended or at its connection limit")
 		return
 	}
 	defer s.release(conn)
-	if _, err := conn.Write([]byte("OK\n")); err != nil {
+	if _, err := conn.Write([]byte(answer)); err != nil {
 		_ = conn.Close()
 		return
 	}
@@ -349,8 +422,11 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
-	default:
-		g.cfg.Logf("accessgateway: session %s: target type %s is not served yet", s.intent.SessionID, s.intent.TargetType)
+	case TargetSSH:
+		if err := sshgateway.Serve(ctx, conn, host, s.sshKey, sshgateway.Upstream{Address: s.intent.SSHAddress,
+			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}); err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
 	}
 	_ = conn.Close()
 }

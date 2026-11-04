@@ -1006,6 +1006,12 @@
         "response": ""
       },
       {
+        "full_method": "/trstctl.agent.v1.AgentService/SignJobSSHKey",
+        "name": "SignJobSSHKey",
+        "request": "",
+        "response": ""
+      },
+      {
         "full_method": "/trstctl.agent.v1.AgentService/FetchWorkloadSVID",
         "name": "FetchWorkloadSVID",
         "request": "FetchWorkloadSVIDRequest",

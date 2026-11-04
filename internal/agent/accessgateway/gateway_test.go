@@ -199,4 +199,36 @@ func TestSessionIntentValidationA254(t *testing.T) {
 	if !TicketMatches("t", TicketDigest("t")) || TicketMatches("u", TicketDigest("t")) || TicketMatches("t", "") {
 		t.Fatal("ticket comparison is wrong")
 	}
+	// An SSH session redeems nothing and names where to sign in, as whom, and
+	// which host keys to accept.
+	pin := "SHA256:" + strings.Repeat("A", 43)
+	ssh := SessionIntent{SessionID: "s", TargetType: TargetSSH, TargetID: "bastion", ExpiresAt: time.Now(),
+		TicketDigest: TicketDigest("t"), RequiredAgentID: "gw", SSHAddress: "10.0.0.5:22", SSHPrincipal: "deploy",
+		SSHHostKeyFingerprints: []string{pin}}
+	if err := ValidateSessionIntent(ssh); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*SessionIntent){
+		"a credential to redeem": func(i *SessionIntent) { i.CredentialRef = CredentialRef("s") },
+		"no address":             func(i *SessionIntent) { i.SSHAddress = "10.0.0.5" },
+		"no principal":           func(i *SessionIntent) { i.SSHPrincipal = "" },
+		"two principals":         func(i *SessionIntent) { i.SSHPrincipal = "deploy,root" },
+		"a wildcard principal":   func(i *SessionIntent) { i.SSHPrincipal = "*" },
+		"no host key pin":        func(i *SessionIntent) { i.SSHHostKeyFingerprints = nil },
+		"a malformed pin":        func(i *SessionIntent) { i.SSHHostKeyFingerprints = []string{"MD5:aa:bb"} },
+	} {
+		in := ssh
+		mutate(&in)
+		if ValidateSessionIntent(in) == nil {
+			t.Fatalf("SSH intent with %s was accepted", name)
+		}
+	}
+	routed := good
+	routed.SSHAddress = "10.0.0.5:22"
+	if ValidateSessionIntent(routed) == nil {
+		t.Fatal("a PostgreSQL session carrying SSH routing was accepted")
+	}
+	if got := ClaimableKinds(); len(got) != 1 || got[0] != KindSession {
+		t.Fatalf("the gateway claims %v", got)
+	}
 }

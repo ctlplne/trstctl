@@ -20909,6 +20909,7 @@ export interface components {
             gateway_address?: string;
             gateway_agent_id?: string;
             host?: string;
+            host_key_fingerprints?: string[];
             id: string;
             port?: number;
             principals?: string[];
@@ -20938,6 +20939,8 @@ export interface components {
              */
             gateway_agent_id?: string;
             host?: string;
+            /** @description SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight. */
+            host_key_fingerprints?: string[];
             id: string;
             port?: number;
             principals?: string[];

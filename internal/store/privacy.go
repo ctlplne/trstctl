@@ -1583,6 +1583,10 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			          WHEN requested_by LIKE 'retained:%' OR requested_by LIKE 'erased:%' THEN requested_by
 			          ELSE 'retained:' || left(md5($1::text || ':' || requested_by), 12)
 			        END,
+			        ssh_principal = CASE
+			          WHEN ssh_principal = '' OR ssh_principal LIKE 'retained:%' OR ssh_principal LIKE 'erased:%' THEN ssh_principal
+			          ELSE 'retained:' || left(md5($1::text || ':' || ssh_principal), 12)
+			        END,
 		        reason = '', revocation_reason = '',
 		        revocation_requested_by = CASE
 		          WHEN revocation_requested_by = '' OR revocation_requested_by LIKE 'retained:%' OR revocation_requested_by LIKE 'erased:%' THEN revocation_requested_by
@@ -1595,6 +1599,7 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			    AND (
 			          subject NOT LIKE 'retained:%'
 		       OR requested_by NOT LIKE 'retained:%'
+		       OR (ssh_principal <> '' AND ssh_principal NOT LIKE 'retained:%' AND ssh_principal NOT LIKE 'erased:%')
 		       OR (revocation_requested_by <> '' AND revocation_requested_by NOT LIKE 'retained:%' AND revocation_requested_by NOT LIKE 'erased:%')
 		       OR reason <> ''
 		       OR revocation_reason <> ''
@@ -2134,11 +2139,11 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 		{
 			table: "pam_sessions",
 			sql: `SELECT id::text, ''::text,
-			             jsonb_build_object('target_type', target_type, 'target_id', target_id, 'role', role, 'status', status, 'subject', subject, 'requested_by', requested_by, 'reason', reason, 'audit', audit, 'attestation', attestation, 'started_at', started_at, 'expires_at', expires_at, 'ended_at', ended_at)::text,
+			             jsonb_build_object('target_type', target_type, 'target_id', target_id, 'role', role, 'status', status, 'subject', subject, 'requested_by', requested_by, 'ssh_principal', ssh_principal, 'reason', reason, 'audit', audit, 'attestation', attestation, 'started_at', started_at, 'expires_at', expires_at, 'ended_at', ended_at)::text,
 			             started_at
 			        FROM pam_sessions
 			       WHERE tenant_id = $1
-			         AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0)
+			         AND (subject = $2 OR requested_by = $2 OR ssh_principal = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0)
 			       ORDER BY id`,
 			args: []any{tenantID, subject},
 		},
@@ -2327,7 +2332,7 @@ func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadMode
 			       ORDER BY d.request_id, d.event_id`,
 			args: []any{tenantID, subject},
 		},
-		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR ssh_principal = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
@@ -2781,15 +2786,15 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 	if len(ids) == 0 {
 		return nil
 	}
-	type row struct{ id, subject, requestedBy, revocationRequestedBy string }
+	type row struct{ id, subject, requestedBy, revocationRequestedBy, sshPrincipal string }
 	var rowsToUpdate []row
-	rows, err := tx.Query(ctx, `SELECT id::text, subject, requested_by, revocation_requested_by FROM pam_sessions WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	rows, err := tx.Query(ctx, `SELECT id::text, subject, requested_by, revocation_requested_by, ssh_principal FROM pam_sessions WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.subject, &r.requestedBy, &r.revocationRequestedBy); err != nil {
+		if err := rows.Scan(&r.id, &r.subject, &r.requestedBy, &r.revocationRequestedBy, &r.sshPrincipal); err != nil {
 			rows.Close()
 			return err
 		}
@@ -2806,12 +2811,14 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 			    SET subject = $3,
 			        requested_by = $4,
 			        revocation_requested_by = $5,
+			        ssh_principal = $6,
 			        reason = '',
 			        revocation_reason = '',
 			        audit = '{}'::jsonb,
 			        attestation = NULL
 			  WHERE tenant_id = $1 AND id::text = $2`,
-			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.subject), redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy), redactSubjectValue(tenantID, subjectRef, placeholder, r.revocationRequestedBy)); err != nil {
+			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.subject), redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy), redactSubjectValue(tenantID, subjectRef, placeholder, r.revocationRequestedBy),
+			redactSubjectValue(tenantID, subjectRef, placeholder, r.sshPrincipal)); err != nil {
 			return err
 		}
 	}
@@ -3736,6 +3743,7 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 				         AND (
 				               subject NOT LIKE 'retained:%'
 				            OR requested_by NOT LIKE 'retained:%'
+				            OR (ssh_principal <> '' AND ssh_principal NOT LIKE 'retained:%' AND ssh_principal NOT LIKE 'erased:%')
 				            OR reason <> ''
 			            OR audit <> '{}'::jsonb
 			            OR attestation IS NOT NULL

@@ -5827,9 +5827,10 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
-		"principals":       {Type: "array", Items: str()},
-		"gateway_agent_id": {Type: "string", Format: "uuid", Description: "The gateway-role agent that serves this target (A254); set with gateway_address."},
-		"gateway_address":  {Type: "string", Description: "host:port where clients reach the gateway (A254)."},
+		"principals":            {Type: "array", Items: str()},
+		"gateway_agent_id":      {Type: "string", Format: "uuid", Description: "The gateway-role agent that serves this target (A254); set with gateway_address."},
+		"gateway_address":       {Type: "string", Description: "host:port where clients reach the gateway (A254)."},
+		"host_key_fingerprints": {Type: "array", Items: str(), Description: "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
 		"id": str(), "target_type": {Type: "string", Enum: []string{"postgres", "ssh"}},
@@ -5839,6 +5840,7 @@ func componentSchemas() map[string]*Schema {
 		"registered_by": str(), "registered_at": timestamp(), "disabled_by": str(),
 		"disabled_reason": str(), "disabled_at": timestamp(),
 		"gateway_agent_id": str(), "gateway_address": str(),
+		"host_key_fingerprints": {Type: "array", Items: str()},
 	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),

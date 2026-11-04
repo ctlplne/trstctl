@@ -23,6 +23,7 @@ func TestAgentAuditPayloadsKeepClosedProductionSchemas(t *testing.T) {
 		"agent.jobs.envelope_refused":             {`{"agent":"agent-1","job_id":12,"kind":"connector.deploy"}`},
 		"agent.jobs.csr_signed":                   {`{"agent":"agent-1","job_id":12,"names":["edge.example.test"],"fingerprint":"fp-1"}`},
 		"agent.gateway.server_certificate_signed": {`{"agent":"gateway-1","hosts":["gateway.example.test"]}`},
+		"agent.gateway.session_key_certified":     {`{"agent":"gateway-1","job_id":12,"attempt":1}`},
 		"agent.job.credential.redeemed":           {`{"agent":"agent-1","job_id":12,"attempt":2,"audit_ref":"audit-1","ref_names":["edge-password"]}`},
 		"agent.job.credential.redemption_refused": {`{"agent":"agent-1","job_id":12,"attempt":2,"reason":"claim_not_held"}`},
 		"agent.job.receipt.rejected":              {`{"agent":"agent-1","job_id":12,"outcome":"executed","reason":"signature_missing","agent_fingerprint":"fp-1"}`},

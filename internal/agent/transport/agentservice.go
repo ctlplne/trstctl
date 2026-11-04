@@ -309,6 +309,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
 		{MethodName: methodSignGatewayServerCertificate, Handler: signGatewayServerCertificateHandler},
+		{MethodName: methodSignJobSSHKey, Handler: signJobSSHKeyHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},
@@ -931,6 +932,10 @@ const (
 	// no private key crosses it in either direction.
 	methodSignGatewayServerCertificate     = "SignGatewayServerCertificate"
 	fullMethodSignGatewayServerCertificate = "/" + agentServiceName + "/" + methodSignGatewayServerCertificate
+	// A254: an access gateway's per-session SSH public key up, its user
+	// certificate down; no private key crosses it in either direction.
+	methodSignJobSSHKey     = "SignJobSSHKey"
+	fullMethodSignJobSSHKey = "/" + agentServiceName + "/" + methodSignJobSSHKey
 	// B3: the workload-identity node API. Carries a public key up and SVIDs
 	// down; no private key crosses it in either direction.
 	methodFetchWorkloadSVID     = "FetchWorkloadSVID"
@@ -1006,6 +1011,9 @@ type AgentGatewayServiceServer interface {
 	// SignGatewayServerCertificate signs a gateway-role agent's listener CSR
 	// for host names its target bindings declare, naming the agent's SPIFFE ID.
 	SignGatewayServerCertificate(ctx context.Context, req *SignGatewayServerCertificateRequest) (*SignGatewayServerCertificateResponse, error)
+	// SignJobSSHKey signs the gateway's per-session SSH key for a session job
+	// the gateway holds.
+	SignJobSSHKey(ctx context.Context, req *SignJobSSHKeyRequest) (*SignJobSSHKeyResponse, error)
 }
 
 // SignGatewayServerCertificateRequest carries the gateway listener's CSR and
@@ -1037,6 +1045,44 @@ func signGatewayServerCertificateHandler(srv any, ctx context.Context, dec func(
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignGatewayServerCertificate}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return gateway.SignGatewayServerCertificate(ctx, req.(*SignGatewayServerCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// SignJobSSHKeyRequest carries the public half of a key an access gateway
+// generated for one session it holds. The control plane reads the job's own
+// payload to decide the principal and lifetime; the gateway names neither.
+type SignJobSSHKeyRequest struct {
+	JobID   int64 `json:"job_id"`
+	Attempt int   `json:"attempt"`
+	// PublicKey is the key in authorized_keys form.
+	PublicKey []byte `json:"public_key"`
+}
+
+// SignJobSSHKeyResponse returns the session's SSH user certificate.
+type SignJobSSHKeyResponse struct {
+	// Certificate is the user certificate in authorized_keys form.
+	Certificate []byte `json:"certificate"`
+	// ValidBeforeUnix is when the certificate stops working (the session's
+	// deadline).
+	ValidBeforeUnix int64 `json:"valid_before_unix"`
+}
+
+func signJobSSHKeyHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(SignJobSSHKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	gateway, ok := srv.(AgentGatewayServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not serve access gateways")
+	}
+	if interceptor == nil {
+		return gateway.SignJobSSHKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodSignJobSSHKey}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return gateway.SignJobSSHKey(ctx, req.(*SignJobSSHKeyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1158,6 +1204,16 @@ func (c *AgentClient) SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*
 func (c *AgentClient) SignGatewayServerCertificate(ctx context.Context, req *SignGatewayServerCertificateRequest) (*SignGatewayServerCertificateResponse, error) {
 	out := new(SignGatewayServerCertificateResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignGatewayServerCertificate, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SignJobSSHKey asks for a session's SSH user certificate for a key the
+// access gateway generated for it (A254).
+func (c *AgentClient) SignJobSSHKey(ctx context.Context, req *SignJobSSHKeyRequest) (*SignJobSSHKeyResponse, error) {
+	out := new(SignJobSSHKeyResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodSignJobSSHKey, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

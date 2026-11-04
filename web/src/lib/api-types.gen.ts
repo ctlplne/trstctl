@@ -8389,6 +8389,7 @@ export interface PAMTarget {
   gateway_address?: string;
   gateway_agent_id?: string;
   host?: string;
+  host_key_fingerprints?: string[];
   id: string;
   port?: number;
   principals?: string[];
@@ -8413,6 +8414,7 @@ export interface PAMTargetRequest {
   gateway_address?: string;
   gateway_agent_id?: string;
   host?: string;
+  host_key_fingerprints?: string[];
   id: string;
   port?: number;
   principals?: string[];

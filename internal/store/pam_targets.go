@@ -27,30 +27,33 @@ type PAMTarget struct {
 	// target and GatewayAddress where clients reach it (host:port); a session
 	// to the target is delivered through that gateway only.
 	GatewayAgentID, GatewayAddress string
+	// HostKeyFingerprints (A254) pin the SSH host keys a gateway accepts from
+	// an SSH target (SHA256:...).
+	HostKeyFingerprints []string
 }
 
 const pamTargetColumns = `tenant_id::text, target_type, id, provider_id, allowed_roles,
     host, port, principals, enabled, registered_by, registered_at,
-    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address`
+    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints`
 
 func scanPAMTarget(row pgx.Row) (PAMTarget, error) {
 	var rec PAMTarget
 	err := row.Scan(&rec.TenantID, &rec.TargetType, &rec.ID, &rec.ProviderID,
 		&rec.AllowedRoles, &rec.Host, &rec.Port, &rec.Principals, &rec.Enabled,
 		&rec.RegisteredBy, &rec.RegisteredAt, &rec.DisabledBy, &rec.DisabledReason, &rec.DisabledAt,
-		&rec.GatewayAgentID, &rec.GatewayAddress)
+		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints)
 	return rec, err
 }
 
 func (s *Store) ApplyPAMTargetRegisteredTx(ctx context.Context, tx pgx.Tx, rec PAMTarget) error {
 	_, err := tx.Exec(ctx, `INSERT INTO pam_targets
         (tenant_id, target_type, id, provider_id, allowed_roles, host, port,
-         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address)
+         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints)
 		 VALUES ($1::uuid,$2,$3,$4,COALESCE($5::text[], '{}'::text[]),$6,$7,
-		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12)
+		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]))
         ON CONFLICT (tenant_id,target_type,id) DO NOTHING`,
 		rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, rec.AllowedRoles,
-		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress)
+		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress, rec.HostKeyFingerprints)
 	return err
 }
 

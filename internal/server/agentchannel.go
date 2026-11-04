@@ -269,7 +269,10 @@ type agentService struct {
 	// with the agent CA (A254); nil when access gateways are not served.
 	gatewayBoundHosts    func(ctx context.Context, tenantID, agentID string) ([]string, error)
 	signGatewayServerCSR func(csr []byte, hosts, uris []string, ttl time.Duration) ([]byte, error)
-	tenantServiceCheck   tenancy.ServiceCheck
+	// signGatewaySSHKey certifies a gateway's per-session SSH key for a
+	// session job it holds (A254 part 2).
+	signGatewaySSHKey  func(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error)
+	tenantServiceCheck tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
 	logger *slog.Logger
 	store  *store.Store

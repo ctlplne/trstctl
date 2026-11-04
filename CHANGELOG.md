@@ -12,6 +12,12 @@
   the gateway ends its connections. The gateway's PostgreSQL sign-in is its own (`internal/crypto/pgsignin`:
   SCRAM-SHA-256, MD5 or cleartext as the target demands, TLS always verified), so the agent binary links no
   database driver. Design and threat model: `docs/design/access-gateway.md`.
+- Access gateway, SSH (A254 part 2; A254 is served): an SSH target bound to a gateway pins the host keys it
+  accepts (`host_key_fingerprints`). The gateway generates each session's key in locked memory and the tenant
+  SSH CA certifies it for the job the gateway holds (`SignJobSSHKey`: key ID `pam:<session>`, the session's
+  principal, ending at its deadline, terminal only); stock `ssh` with no key reaches the target through
+  `trstctl-cli access sessions connect`, which writes the gateway's host key to a known_hosts file. Shell, exec
+  and SFTP are relayed; forwarding is refused. Revoking the session puts its key ID on the served KRL.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

@@ -75,8 +75,10 @@ type PAMSSHTarget struct {
 	Host       string
 	Port       int
 	Principals []string
-	// GatewayAgentID and GatewayAddress (A254), as for PostgreSQL targets.
+	// GatewayAgentID and GatewayAddress (A254), as for PostgreSQL targets;
+	// HostKeyFingerprints pin the host keys the gateway accepts from it.
 	GatewayAgentID, GatewayAddress string
+	HostKeyFingerprints            []string
 }
 
 type pamService struct {
@@ -304,6 +306,9 @@ func buildPAMSSHTargets(d pamDeps) (map[pamTargetID]PAMSSHTarget, error) {
 		}
 		if d.SSHProtocol == nil || target.TenantID != d.SSHProtocol.tenantID {
 			return nil, fmt.Errorf("server: PAM SSH target %q requires its tenant-bound served KRL", target.ID)
+		}
+		if err := validateSSHGatewayPins(target.GatewayAgentID, target.HostKeyFingerprints); err != nil {
+			return nil, fmt.Errorf("server: PAM SSH target %q: %v", target.ID, err)
 		}
 		sshTargets[key] = target
 	}
@@ -1030,8 +1035,9 @@ func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempot
 		// A254: the requester receives a ticket for the target's gateway,
 		// never this credential; the gateway reopens it from the lease.
 		secret.Wipe(credential)
-		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID,
-			target.cfg.GatewayAgentID, target.cfg.GatewayAddress, func() { _ = lifecycle.Revoke(context.Background(), lease.ID) })
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req,
+			gatewayStart{backendRef: lease.ID, agentID: target.cfg.GatewayAgentID, address: target.cfg.GatewayAddress,
+				undo: func() { _ = lifecycle.Revoke(context.Background(), lease.ID) }})
 	}
 	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, lease.ExpiresAt, att, req, lease.ID, "", 0)
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {
@@ -1056,6 +1062,15 @@ func (s *pamService) openSSH(ctx context.Context, tenantID, idempotencyKey, requ
 		return api.PAMSession{}, fmt.Errorf("%w: principal %q is not allowed on target %q", api.ErrPAMRejected, principal, req.TargetID)
 	}
 	keyID := "pam:" + id
+	if target.GatewayAgentID != "" {
+		// A254: nothing is signed now. The gateway certifies its own
+		// per-session key when it claims the session; every certificate it
+		// gets carries this key ID, so revoking the session revokes them all.
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, gatewayStart{
+			backendRef: req.TargetID, agentID: target.GatewayAgentID, address: target.GatewayAddress,
+			sshKeyID: keyID, sshPrincipal: principal, undo: func() {},
+		})
+	}
 	issued, err := s.sshCA.IssueUserCert(ctx, sshca.Profile{
 		Name:           "pam-jit",
 		MaxTTL:         s.maxTTL,
@@ -1202,10 +1217,16 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 			return fmt.Errorf("%w: role %q is not allowed on postgres target %q", api.ErrPAMInvalid, req.Role, req.TargetID)
 		}
 	case pamTargetSSH:
-		if _, err := s.sshTarget(ctx, tenantID, req.TargetID); err != nil {
+		target, err := s.sshTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
 			return err
 		}
-		if len(req.SSHPublicKey) == 0 {
+		switch {
+		case target.GatewayAgentID != "" && len(req.SSHPublicKey) != 0:
+			// A254: the gateway certifies a key of its own for the session;
+			// the requester holds no SSH credential at all.
+			return fmt.Errorf("%w: ssh target %q is reached through its access gateway; omit ssh_public_key", api.ErrPAMInvalid, req.TargetID)
+		case target.GatewayAgentID == "" && len(req.SSHPublicKey) == 0:
 			return fmt.Errorf("%w: ssh_public_key is required for ssh targets", api.ErrPAMInvalid)
 		}
 		if req.Role != "user" {
@@ -1311,7 +1332,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	for _, target := range c.SSHTargets {
 		out.SSHTargets = append(out.SSHTargets, PAMSSHTarget{
 			TenantID: target.TenantID, ID: target.ID, Host: target.Host, Port: target.Port,
-			Principals: append([]string(nil), target.Principals...),
+			Principals:     append([]string(nil), target.Principals...),
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
+			HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...),
 		})
 	}
 	return out

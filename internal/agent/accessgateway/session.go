@@ -10,6 +10,7 @@ package accessgateway
 
 import (
 	"errors"
+	"net"
 	"strings"
 	"time"
 
@@ -29,17 +30,24 @@ const (
 	maxPrefaceBytes = 512
 )
 
-// SessionIntent is the job payload: one session, by reference only. The
-// upstream credential arrives by redemption under CredentialRef; the ticket
-// arrives only as its digest.
+// SessionIntent is the job payload: one session, by reference only. A
+// PostgreSQL session's upstream credential arrives by redemption under
+// CredentialRef; an SSH session redeems nothing — the gateway certifies a key
+// of its own for it — and names where to sign in, as whom, and which host keys
+// to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
 	SessionID       string    `json:"session_id"`
 	TargetType      string    `json:"target_type"`
 	TargetID        string    `json:"target_id"`
 	ExpiresAt       time.Time `json:"expires_at"`
 	TicketDigest    string    `json:"ticket_digest"`
-	CredentialRef   string    `json:"credential_ref"`
+	CredentialRef   string    `json:"credential_ref,omitempty"`
 	RequiredAgentID string    `json:"required_agent_id"`
+	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
+	// (SHA256:...) route an SSH session; they are public facts.
+	SSHAddress             string   `json:"ssh_address,omitempty"`
+	SSHPrincipal           string   `json:"ssh_principal,omitempty"`
+	SSHHostKeyFingerprints []string `json:"ssh_host_key_fingerprints,omitempty"`
 }
 
 // SessionReport is what the gateway reports when a session ends.
@@ -78,10 +86,33 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return errors.New("accessgateway: a session is postgres or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
-	case in.CredentialRef != CredentialRef(in.SessionID):
-		return errors.New("accessgateway: a session redeems only its own credential")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
+	}
+	if in.TargetType == TargetPostgres {
+		if in.CredentialRef != CredentialRef(in.SessionID) {
+			return errors.New("accessgateway: a session redeems only its own credential")
+		}
+		if in.SSHAddress != "" || in.SSHPrincipal != "" || len(in.SSHHostKeyFingerprints) != 0 {
+			return errors.New("accessgateway: a PostgreSQL session carries no SSH routing")
+		}
+		return nil
+	}
+	host, port, err := net.SplitHostPort(in.SSHAddress)
+	switch {
+	case in.CredentialRef != "":
+		return errors.New("accessgateway: an SSH session redeems no credential")
+	case err != nil || host == "" || port == "":
+		return errors.New("accessgateway: an SSH session names its target's host:port")
+	case strings.TrimSpace(in.SSHPrincipal) == "" || strings.ContainsAny(in.SSHPrincipal, " \t\r\n,*"):
+		return errors.New("accessgateway: an SSH session names one principal")
+	case len(in.SSHHostKeyFingerprints) == 0 || len(in.SSHHostKeyFingerprints) > 8:
+		return errors.New("accessgateway: an SSH session pins one to eight host keys")
+	}
+	for _, fp := range in.SSHHostKeyFingerprints {
+		if !strings.HasPrefix(fp, "SHA256:") || len(fp) != len("SHA256:")+43 {
+			return errors.New("accessgateway: an SSH host key pin is SHA256:<base64>")
+		}
 	}
 	return nil
 }

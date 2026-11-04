@@ -21,8 +21,9 @@ import (
 
 var (
 	accessGatewayListen = flag.String("access-gateway-listen", "",
-		"serve brokered access sessions on this address (A254): clients connect through this agent to a database, "+
-			"and it signs in with the session's credential, which it holds in locked memory and never returns. "+
+		"serve brokered access sessions on this address (A254): clients connect through this agent to a database or "+
+			"an SSH server, and it signs in with the session's credential (a database login, or a certificate for a key it "+
+			"generates), which it holds in locked memory and never returns. "+
 			"Requires the gateway role and access.gateway.session in the control plane's claimable job kinds; "+
 			"it never carries MCP traffic. Empty disables it")
 	accessGatewayHosts = flag.String("access-gateway-hosts", "",

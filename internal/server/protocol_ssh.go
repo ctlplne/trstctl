@@ -377,7 +377,11 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 		if err := json.Unmarshal(event.Data, &req); err != nil {
 			return fmt.Errorf("decode PAM SSH revocation event %d: %w", event.Sequence, err)
 		}
-		if req.Serial != 0 && req.KeyID == "pam:"+req.ID {
+		// A direct session's one certificate is revoked by serial and key ID.
+		// A gateway session (A254) is opened with no certificate (serial 0):
+		// its gateway's certificates, signed per claim, all carry the
+		// session's key ID, which revokes every one of them.
+		if req.KeyID == "pam:"+req.ID {
 			p.Revoke(req.Serial, req.KeyID)
 		}
 	}

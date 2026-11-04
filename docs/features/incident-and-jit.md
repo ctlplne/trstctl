@@ -357,16 +357,22 @@ Target commands are `trstctl-cli access targets list`,
 
 #### Sessions through the access gateway (A254)
 
-A PostgreSQL target may be bound to an access gateway: a `trstctl-agent` in its own
+A PostgreSQL or SSH target may be bound to an access gateway: a `trstctl-agent` in its own
 process with the **gateway** role (granted with `agents:relay.grant`) started with
 `--access-gateway-listen ADDR`. Register the target with `gateway_agent_id` (the agent)
 and `gateway_address` (`host:port` where clients reach it), or set the same fields on a
-`pam.postgres_targets` entry. A session to a bound target never returns the credential:
+`pam.postgres_targets` or `pam.ssh_targets` entry; an SSH target also pins the host keys the
+gateway accepts from it (`host_key_fingerprints`, one to eight `SHA256:...` values as
+`ssh-keygen -lf` prints them). A session to a bound target never returns the credential:
 the open's response carries `delivery: "gateway"` and a `gateway` block — the agent, its
 address, its SPIFFE ID, the agent CA to verify it against, and a one-time `ticket`
 (returned once; only its SHA-256 is stored). The gateway claims the session as an agent
-job (`access.gateway.session`; list it in `agent_channel.claimable_job_kinds`), redeems the
-session's login into locked memory, and admits only connections carrying the ticket.
+job (`access.gateway.session`; list it in `agent_channel.claimable_job_kinds`) and admits
+only connections carrying the ticket. For PostgreSQL it redeems the session's login into
+locked memory; for SSH it generates the session's key itself and the tenant SSH CA
+certifies it for the job the gateway holds — key ID `pam:<session>`, the session's
+principal, ending at the session's deadline, with no forwarding extensions — so an SSH
+session's request carries no `ssh_public_key`.
 
 Connect a stock client through the CLI:
 
@@ -375,12 +381,23 @@ trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --list
 psql "postgres://anyone@127.0.0.1:15432/postgres?sslmode=disable"
 ```
 
-The client signs in with no password and runs as the session's login. Revoking the
-session recalls its job first: the gateway's next lease extension is refused, it closes
-the session's connections and wipes the credential, then the login's removal proceeds as
+For SSH the command learns the gateway's host key through its verified tunnel, writes it
+to a known_hosts file (`--known-hosts`, default: the ticket file with `.known_hosts`
+appended) and prints the ssh command to run:
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:2222
+ssh -p 2222 -o UserKnownHostsFile=ticket.txt.known_hosts -o StrictHostKeyChecking=yes 127.0.0.1
+```
+
+The client signs in with no password, key or certificate and runs as the session's login
+or principal; the gateway relays shell, exec and SFTP sessions and refuses port, agent and
+X11 forwarding. Revoking the session recalls its job first: the gateway's next lease
+extension is refused, it closes the session's connections and wipes the credential, then
+the login's removal (PostgreSQL) or the session's key ID on the served KRL (SSH) follows as
 for any session. The design, its failure modes and its threat model are in
-[the access gateway design](../design/access-gateway.md). SSH through the gateway, session
-recording and live termination follow (A254 part 2, A255).
+[the access gateway design](../design/access-gateway.md). Session recording and live
+termination follow (A255).
 
 ### Break-glass procedures (F34)
 

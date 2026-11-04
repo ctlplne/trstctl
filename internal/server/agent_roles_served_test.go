@@ -51,6 +51,9 @@ type roleHarness struct {
 	serverName  string
 	// identity signs this harness's job receipts (epic A1).
 	identity *agent.Agent
+	// stopChannel stops serving the agent channel, as a control-plane
+	// process exit does; the address stays free to serve again.
+	stopChannel func()
 }
 
 func (h *roleHarness) report(t *testing.T, jobID int64, attempt int,
@@ -151,6 +154,7 @@ func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, 
 		channelAddr:   ln.Addr().String(),
 		serverName:    serverName,
 		identity:      a,
+		stopChannel:   func() { chCancel(); <-chDone },
 	}
 }
 

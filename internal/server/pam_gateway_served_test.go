@@ -244,6 +244,19 @@ func TestServedGatewayKeepsThePostgresCredentialFromTheClientA254(t *testing.T) 
 	if !strings.Contains(wrongOut.String(), "ticket refused") {
 		t.Fatalf("wrong ticket CLI output = %s", wrongOut.String())
 	}
+	// Refused at the target: straight to the database as the session's
+	// login, the client has no password it accepts.
+	targetURL, err := url.Parse(pgDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directCtx, directCancel := context.WithTimeout(ctx, 20*time.Second)
+	if c, err := pgconn.Connect(directCtx, "postgres://"+login+"@"+targetURL.Host+"/postgres?sslmode=disable&connect_timeout=15"); err == nil {
+		_ = c.Close(ctx)
+		directCancel()
+		t.Fatal("a straight connection to the database signed in without the session's password")
+	}
+	directCancel()
 
 	// Revocation recalls the session's job: the gateway ends the live
 	// connection and admits no new one.

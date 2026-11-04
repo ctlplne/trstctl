@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -67,6 +68,52 @@ func (a *agentService) SignGatewayServerCertificate(ctx context.Context, req *tr
 		CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		NotAfterUnix:   time.Now().Add(gatewayServerCertificateTTL).Unix(),
 	}, nil
+}
+
+// SignJobSSHKey certifies an access gateway's per-session SSH key (A254 part
+// 2) for a session job the gateway holds now: the lease is this agent's at
+// this attempt, the agent holds the gateway role, and the job is that
+// gateway's session. The certificate names the session's principal and its
+// key ID (pam:<session>) and stops working at the session's deadline;
+// revoking the session revokes the key ID, so every certificate signed for it.
+func (a *agentService) SignJobSSHKey(ctx context.Context, req *transport.SignJobSSHKeyRequest) (*transport.SignJobSSHKeyResponse, error) {
+	ctx, info, release, err := a.beginPeerWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if a.store == nil || a.signGatewaySSHKey == nil {
+		return nil, status.Error(codes.FailedPrecondition, "access gateways are not served by this control plane")
+	}
+	if !agentHasRole(info.Roles, mtls.AgentRoleGateway) {
+		return nil, status.Error(codes.PermissionDenied, "a session SSH key is certified only for a gateway-role agent")
+	}
+	if req == nil || req.JobID <= 0 || req.Attempt <= 0 || len(req.PublicKey) == 0 || len(req.PublicKey) > 8<<10 {
+		return nil, status.Error(codes.InvalidArgument, "job_id, attempt and a public key are required")
+	}
+	agentID := agentRowID(info.TenantID, info.CommonName)
+	job, held, err := a.store.GetAgentJobForRedemption(ctx, info.TenantID, agentID, req.JobID, time.Now().UTC())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "load job: %v", err)
+	}
+	if !held || job.ClaimAttempts != req.Attempt || job.Destination != relay.KindAccessGatewaySession || job.RequiredAgentID != agentID {
+		return nil, status.Error(codes.PermissionDenied, "this agent does not hold that gateway session at that attempt")
+	}
+	certificate, validBefore, err := a.signGatewaySSHKey(ctx, info.TenantID, agentID, job.Payload, req.PublicKey)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "certify the session key: %v", err)
+	}
+	a.recordAgentJobEvent(ctx, info.TenantID, "agent.gateway.session_key_certified", map[string]any{
+		"agent": info.CommonName, "job_id": req.JobID, "attempt": req.Attempt,
+	})
+	return &transport.SignJobSSHKeyResponse{Certificate: certificate, ValidBeforeUnix: validBefore.Unix()}, nil
+}
+
+// SignJobSSHKey on the bulkhead wrapper dispatches into the agent-channel pool.
+func (b *bulkheadedAgentService) SignJobSSHKey(ctx context.Context, req *transport.SignJobSSHKeyRequest) (*transport.SignJobSSHKeyResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "sign_job_ssh_key", b.metrics, func(ctx context.Context) (*transport.SignJobSSHKeyResponse, error) {
+		return b.next.SignJobSSHKey(ctx, req)
+	})
 }
 
 // SignGatewayServerCertificate on the bulkhead wrapper dispatches into the

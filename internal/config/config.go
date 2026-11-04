@@ -8,6 +8,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1909,6 +1910,26 @@ type PAMSSHTarget struct {
 	Host       string   `json:"host"`
 	Port       int      `json:"port"`
 	Principals []string `json:"principals"`
+	// GatewayAgentID and GatewayAddress (A254) bind the target to the
+	// gateway-role agent that serves it, as for PostgreSQL targets.
+	// HostKeyFingerprints pin the host keys that gateway accepts from the
+	// target (SHA256:..., as ssh-keygen -l prints them); a gateway-bound SSH
+	// target names at least one.
+	GatewayAgentID      string   `json:"gateway_agent_id,omitempty"`
+	GatewayAddress      string   `json:"gateway_address,omitempty"`
+	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
+}
+
+// ValidSSHHostKeyFingerprint reports whether fp is an SSH host key's SHA-256
+// fingerprint as ssh-keygen -l prints it: "SHA256:" and 43 unpadded base64
+// characters.
+func ValidSSHHostKeyFingerprint(fp string) bool {
+	raw, ok := strings.CutPrefix(fp, "SHA256:")
+	if !ok {
+		return false
+	}
+	sum, err := base64.RawStdEncoding.DecodeString(raw)
+	return err == nil && len(sum) == 32
 }
 
 // Reconcile configures cross-authority reconciliation rounds (C4/XREC, AUD-1).
@@ -5126,6 +5147,27 @@ func validatePAM(p PAM) []error {
 			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
 		}
 		seen[key] = true
+		if (target.GatewayAgentID == "") != (target.GatewayAddress == "") {
+			errs = append(errs, fmt.Errorf("%s gateway binding names both gateway_agent_id and gateway_address", prefix))
+		} else if target.GatewayAgentID != "" {
+			if _, err := uuid.Parse(target.GatewayAgentID); err != nil {
+				errs = append(errs, fmt.Errorf("%s gateway_agent_id must be an agent UUID", prefix))
+			}
+			if host, port, err := net.SplitHostPort(target.GatewayAddress); err != nil || host == "" || port == "" {
+				errs = append(errs, fmt.Errorf("%s gateway_address must be host:port", prefix))
+			}
+			if len(target.HostKeyFingerprints) == 0 || len(target.HostKeyFingerprints) > 8 {
+				errs = append(errs, fmt.Errorf("%s gateway binding pins one to eight host_key_fingerprints", prefix))
+			}
+		}
+		for _, fp := range target.HostKeyFingerprints {
+			if !ValidSSHHostKeyFingerprint(fp) {
+				errs = append(errs, fmt.Errorf("%s host_key_fingerprints entry %q is not SHA256:<base64>", prefix, fp))
+			}
+		}
+		if len(target.HostKeyFingerprints) != 0 && target.GatewayAgentID == "" {
+			errs = append(errs, fmt.Errorf("%s host_key_fingerprints apply only to a gateway-bound target", prefix))
+		}
 		for _, principal := range target.Principals {
 			if strings.TrimSpace(principal) == "" || principal == "*" {
 				errs = append(errs, fmt.Errorf("%s contains an empty or wildcard principal", prefix))

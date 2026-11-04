@@ -98,6 +98,11 @@ func SSHPublicKeyFromSigner(s DigestSigner) ([]byte, error) {
 	return ssh.MarshalAuthorizedKey(sshPub), nil
 }
 
+// SSHSigner adapts a signer to an SSH signer for SSH clients and servers
+// inside the crypto boundary (the access gateway's host and session keys,
+// A254); the private key stays in the signer's custody.
+func SSHSigner(ds DigestSigner) (ssh.Signer, error) { return sshSignerFromDigestSigner(ds) }
+
 func sshSignerFromDigestSigner(ds DigestSigner) (ssh.Signer, error) {
 	adapter, err := newX509Signer(ds) // DigestSigner -> crypto.Signer (inside the boundary)
 	if err != nil {

@@ -89,7 +89,8 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 			return api.PAMTarget{}, fmt.Errorf("%w: SSH host must be a hostname or IP address", api.ErrPAMInvalid)
 		}
 		d := s.targetDeps
-		d.Config.SSHTargets = []PAMSSHTarget{{TenantID: tenantID, ID: target.ID, Host: target.Host, Port: target.Port, Principals: target.Principals}}
+		d.Config.SSHTargets = []PAMSSHTarget{{TenantID: tenantID, ID: target.ID, Host: target.Host, Port: target.Port, Principals: target.Principals,
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress, HostKeyFingerprints: target.HostKeyFingerprints}}
 		if _, err := buildPAMSSHTargets(d); err != nil {
 			return api.PAMTarget{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
 		}
@@ -107,7 +108,8 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 	sort.Strings(principals)
 	payload := projections.PAMTargetRegistered{TargetType: target.TargetType, ID: target.ID,
 		ProviderID: target.ProviderID, AllowedRoles: roles, Host: target.Host, Port: target.Port,
-		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress}
+		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
+		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...)}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-target:"+tenantID+":"+target.TargetType+":"+target.ID)).String()
 	if err := s.appendCanonicalPAMTarget(ctx, tenantID, id, projections.EventPAMTargetRegistered, payload); err != nil {
 		return api.PAMTarget{}, err
@@ -140,7 +142,19 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		Enabled: rec.Enabled, Source: "tenant", RegisteredBy: rec.RegisteredBy,
 		RegisteredAt: &rec.RegisteredAt, DisabledBy: rec.DisabledBy,
 		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt,
-		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints}
+}
+
+// operatorPostgresTarget and operatorSSHTarget are the reads of
+// operator-configured targets, with their gateway bindings.
+func operatorPostgresTarget(id string, t *pamPostgresTarget) api.PAMTarget {
+	return api.PAMTarget{ID: id, TargetType: pamTargetPostgres, ProviderID: t.cfg.ProviderID, AllowedRoles: t.cfg.AllowedRoles, Enabled: true, Source: "operator",
+		GatewayAgentID: t.cfg.GatewayAgentID, GatewayAddress: t.cfg.GatewayAddress}
+}
+
+func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
+	return api.PAMTarget{ID: id, TargetType: pamTargetSSH, Host: t.Host, Port: t.Port, Principals: t.Principals, Enabled: true, Source: "operator",
+		GatewayAgentID: t.GatewayAgentID, GatewayAddress: t.GatewayAddress, HostKeyFingerprints: t.HostKeyFingerprints}
 }
 
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
@@ -148,11 +162,11 @@ func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id 
 	switch targetType {
 	case pamTargetPostgres:
 		if t := s.postgres[key]; t != nil {
-			return api.PAMTarget{ID: id, TargetType: targetType, ProviderID: t.cfg.ProviderID, AllowedRoles: t.cfg.AllowedRoles, Enabled: true, Source: "operator"}, nil
+			return operatorPostgresTarget(id, t), nil
 		}
 	case pamTargetSSH:
 		if t, ok := s.sshTargets[key]; ok {
-			return api.PAMTarget{ID: id, TargetType: targetType, Host: t.Host, Port: t.Port, Principals: t.Principals, Enabled: true, Source: "operator"}, nil
+			return operatorSSHTarget(id, t), nil
 		}
 	default:
 		return api.PAMTarget{}, fmt.Errorf("%w: unknown target type", api.ErrPAMInvalid)
@@ -175,12 +189,12 @@ func (s *pamService) ListPAMTargets(ctx context.Context, tenantID string) ([]api
 	}
 	for key, target := range s.postgres {
 		if key.tenantID == tenantID {
-			out = append(out, api.PAMTarget{ID: key.id, TargetType: pamTargetPostgres, ProviderID: target.cfg.ProviderID, AllowedRoles: target.cfg.AllowedRoles, Enabled: true, Source: "operator"})
+			out = append(out, operatorPostgresTarget(key.id, target))
 		}
 	}
 	for key, target := range s.sshTargets {
 		if key.tenantID == tenantID {
-			out = append(out, api.PAMTarget{ID: key.id, TargetType: pamTargetSSH, Host: target.Host, Port: target.Port, Principals: target.Principals, Enabled: true, Source: "operator"})
+			out = append(out, operatorSSHTarget(key.id, target))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -254,7 +268,7 @@ func (s *pamService) sshTarget(ctx context.Context, tenantID, id string) (PAMSSH
 	}
 	d := s.targetDeps
 	d.Config.SSHTargets = []PAMSSHTarget{{TenantID: tenantID, ID: id, Host: rec.Host, Port: rec.Port, Principals: rec.Principals,
-		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}}
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints}}
 	targets, err := buildPAMSSHTargets(d)
 	if err != nil {
 		return PAMSSHTarget{}, fmt.Errorf("%w: registered ssh target %q is no longer valid: %v", api.ErrPAMRejected, id, err)

@@ -21,11 +21,13 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -44,6 +46,11 @@ func (r *relayCredentialResolver) resolveGatewaySession(ctx context.Context, ten
 	}
 	if intent.RequiredAgentID != job.RequiredAgentID {
 		return redeemedMaterial{}, errors.New("gateway job names another gateway")
+	}
+	if intent.TargetType != accessgateway.TargetPostgres {
+		// An SSH session's gateway certifies a key of its own
+		// (SignJobSSHKey); there is no credential to redeem.
+		return redeemedMaterial{}, errors.New("an SSH gateway session redeems no credential")
 	}
 	credential, err := r.pamGatewayCredential(ctx, tenantID, intent.SessionID)
 	if err != nil {
@@ -80,8 +87,8 @@ func validateGatewaySessionReport(payload []byte, detail string) error {
 
 // validateGatewayBinding checks a target's gateway binding (A254): both the
 // agent and its address or neither; the agent enrolled in this tenant with the
-// gateway role and not offboarded; the address a host and port. SSH targets
-// join the gateway with its SSH half.
+// gateway role and not offboarded; the address a host and port; an SSH target
+// pins the host keys its gateway accepts.
 func (s *pamService) validateGatewayBinding(ctx context.Context, tenantID string, target api.PAMTarget) error {
 	if target.GatewayAgentID == "" && target.GatewayAddress == "" {
 		return nil
@@ -89,8 +96,12 @@ func (s *pamService) validateGatewayBinding(ctx context.Context, tenantID string
 	if target.GatewayAgentID == "" || target.GatewayAddress == "" {
 		return fmt.Errorf("%w: a gateway binding names both gateway_agent_id and gateway_address", api.ErrPAMInvalid)
 	}
-	if target.TargetType != pamTargetPostgres {
-		return fmt.Errorf("%w: only postgres targets are served through a gateway yet", api.ErrPAMInvalid)
+	if target.TargetType == pamTargetSSH {
+		if err := validateSSHGatewayPins(target.GatewayAgentID, target.HostKeyFingerprints); err != nil {
+			return fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
+		}
+	} else if len(target.HostKeyFingerprints) != 0 {
+		return fmt.Errorf("%w: host_key_fingerprints apply only to SSH targets", api.ErrPAMInvalid)
 	}
 	if _, err := uuid.Parse(target.GatewayAgentID); err != nil {
 		return fmt.Errorf("%w: gateway_agent_id must be an agent UUID", api.ErrPAMInvalid)
@@ -155,11 +166,28 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 	return err
 }
 
-// gatewaySessionIntent is the job a gateway session rides on.
-func gatewaySessionIntent(rec store.PAMSession) accessgateway.SessionIntent {
-	return accessgateway.SessionIntent{SessionID: rec.ID, TargetType: rec.TargetType, TargetID: rec.TargetID,
-		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest,
-		CredentialRef: accessgateway.CredentialRef(rec.ID), RequiredAgentID: rec.GatewayAgentID}
+// gatewaySessionIntent is the job a gateway session rides on. A PostgreSQL
+// session names its credential for redemption; an SSH session names the
+// target's address, the principal and the pinned host keys, and redeems
+// nothing: its gateway certifies a key of its own.
+func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSession) (accessgateway.SessionIntent, error) {
+	intent := accessgateway.SessionIntent{SessionID: rec.ID, TargetType: rec.TargetType, TargetID: rec.TargetID,
+		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest, RequiredAgentID: rec.GatewayAgentID}
+	if rec.TargetType != pamTargetSSH {
+		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
+		return intent, nil
+	}
+	target, err := s.sshTarget(ctx, rec.TenantID, rec.TargetID)
+	if err != nil {
+		return accessgateway.SessionIntent{}, err
+	}
+	if target.GatewayAgentID != rec.GatewayAgentID {
+		return accessgateway.SessionIntent{}, errors.New("the SSH target is no longer bound to this session's gateway")
+	}
+	intent.SSHAddress = net.JoinHostPort(target.Host, strconv.Itoa(target.Port))
+	intent.SSHPrincipal = rec.SSHPrincipal
+	intent.SSHHostKeyFingerprints = append([]string(nil), target.HostKeyFingerprints...)
+	return intent, nil
 }
 
 // gatewaySessionCredential reopens an active gateway session's upstream
@@ -195,30 +223,59 @@ func (s *Server) pamGatewayCredential() func(ctx context.Context, tenantID, sess
 	return s.pam.gatewaySessionCredential
 }
 
+// gatewayStart is what a gateway-delivered session starts with: the
+// session's backend reference, its gateway and, for SSH, the key ID and
+// principal the gateway's certificates will name. undo releases what the open
+// created when the session cannot start.
+type gatewayStart struct {
+	backendRef, agentID, address string
+	sshKeyID, sshPrincipal       string
+	undo                         func()
+}
+
 // startGatewaySession records a gateway-delivered session (A254) and queues
 // its gateway job. The requester receives the session and its one-time
 // ticket; the started event carries only the ticket's SHA-256. A job that
 // could not be queued now is queued by the expiry worker's next pass.
 func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time,
-	att attest.Attestation, req api.PAMSessionRequest, backendRef, gatewayAgentID, gatewayAddress string, undo func()) (api.PAMSession, error) {
+	att attest.Attestation, req api.PAMSessionRequest, start gatewayStart) (api.PAMSession, error) {
 	ticket, err := newGatewayTicket()
 	if err != nil {
-		undo()
+		start.undo()
 		return api.PAMSession{}, err
 	}
-	delivery, err := s.gatewayDelivery(ctx, tenantID, gatewayAgentID, gatewayAddress, ticket)
+	delivery, err := s.gatewayDelivery(ctx, tenantID, start.agentID, start.address, ticket)
 	if err != nil {
-		undo()
+		start.undo()
 		return api.PAMSession{}, err
 	}
-	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, backendRef, "", 0)
-	payload.Delivery, payload.GatewayAgentID, payload.GatewayTicketDigest = "gateway", gatewayAgentID, accessgateway.TicketDigest(ticket)
-	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload); err != nil {
-		undo()
+	session, payload := s.startedPayload(tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, start.backendRef, start.sshKeyID, 0)
+	payload.Delivery, payload.GatewayAgentID, payload.GatewayTicketDigest = "gateway", start.agentID, accessgateway.TicketDigest(ticket)
+	payload.SSHPrincipal = start.sshPrincipal
+	if req.TargetType == pamTargetSSH {
+		// The deterministic SSH started event completes the activation the
+		// open recorded, exactly as a direct SSH session's does, so the
+		// recovery worker never mistakes this session for an abandoned
+		// signing.
+		err = s.appendSSHSessionStarted(ctx, tenantID, id, payload)
+		if err == nil {
+			activation, lookupErr := s.store.GetPAMSSHActivation(ctx, tenantID, id)
+			if lookupErr != nil || activation.Status != "completed" {
+				err = fmt.Errorf("%w: SSH activation was not durably completed", api.ErrPAMRejected)
+			}
+		}
+	} else {
+		err = s.appendProject(ctx, tenantID, projections.EventPAMSessionStarted, payload)
+	}
+	if err != nil {
+		start.undo()
 		return api.PAMSession{}, err
 	}
-	_ = s.enqueueGatewaySession(ctx, tenantID, gatewaySessionIntent(store.PAMSession{ID: id, TargetType: req.TargetType,
-		TargetID: req.TargetID, ExpiresAt: expiresAt, GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: gatewayAgentID}))
+	rec := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, ExpiresAt: expiresAt,
+		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal}
+	if intent, err := s.gatewaySessionIntent(ctx, rec); err == nil {
+		_ = s.enqueueGatewaySession(ctx, tenantID, intent)
+	}
 	session.Delivery, session.Gateway = "gateway", delivery
 	return session, nil
 }
@@ -232,7 +289,9 @@ func (s *pamService) ensureGatewayJobs(ctx context.Context) {
 		return
 	}
 	for _, rec := range sessions {
-		_ = s.enqueueGatewaySession(ctx, rec.TenantID, gatewaySessionIntent(rec))
+		if intent, err := s.gatewaySessionIntent(ctx, rec); err == nil {
+			_ = s.enqueueGatewaySession(ctx, rec.TenantID, intent)
+		}
 	}
 }
 
@@ -241,9 +300,14 @@ func (s *pamService) ensureGatewayJobs(ctx context.Context) {
 // The ticket was shown once, by the open.
 func (s *pamService) gatewayDeliveryForRead(ctx context.Context, tenantID string, rec store.PAMSession) *api.PAMGatewayDelivery {
 	address := ""
-	if rec.TargetType == pamTargetPostgres {
+	switch rec.TargetType {
+	case pamTargetPostgres:
 		if target, err := s.postgresTarget(ctx, tenantID, rec.TargetID); err == nil && target.cfg.GatewayAgentID == rec.GatewayAgentID {
 			address = target.cfg.GatewayAddress
+		}
+	case pamTargetSSH:
+		if target, err := s.sshTarget(ctx, tenantID, rec.TargetID); err == nil && target.GatewayAgentID == rec.GatewayAgentID {
+			address = target.GatewayAddress
 		}
 	}
 	delivery, err := s.gatewayDelivery(ctx, tenantID, rec.GatewayAgentID, address, "")
@@ -251,4 +315,81 @@ func (s *pamService) gatewayDeliveryForRead(ctx context.Context, tenantID string
 		return &api.PAMGatewayDelivery{AgentID: rec.GatewayAgentID, Address: address}
 	}
 	return delivery
+}
+
+// validateSSHGatewayPins checks a gateway-bound SSH target's host-key pins:
+// one to eight SHA256 fingerprints, and none on a target with no gateway.
+func validateSSHGatewayPins(gatewayAgentID string, fingerprints []string) error {
+	if gatewayAgentID == "" {
+		if len(fingerprints) != 0 {
+			return errors.New("host_key_fingerprints apply only to a gateway-bound SSH target")
+		}
+		return nil
+	}
+	if len(fingerprints) == 0 || len(fingerprints) > 8 {
+		return errors.New("a gateway-bound SSH target pins one to eight host_key_fingerprints")
+	}
+	for _, fp := range fingerprints {
+		if !config.ValidSSHHostKeyFingerprint(fp) {
+			return fmt.Errorf("host_key_fingerprints entry %q is not SHA256:<base64>", fp)
+		}
+	}
+	return nil
+}
+
+// gatewaySSHCertificateExtensions are the only permissions a gateway's
+// session certificate carries: a terminal. The gateway relays session
+// channels alone, so forwarding of ports or agents is never granted.
+var gatewaySSHCertificateExtensions = map[string]string{"permit-pty": ""}
+
+// signGatewaySSHKey certifies a gateway's per-session SSH key (A254 part 2).
+// The job payload is the control plane's own record of the session; the
+// session must still be an active gateway SSH session of this agent's, before
+// its deadline, on a target still bound to this agent that still allows the
+// principal. The certificate ends at the session's deadline and carries the
+// session's key ID, which revocation puts on the KRL.
+func (s *pamService) signGatewaySSHKey(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error) {
+	var intent accessgateway.SessionIntent
+	if err := json.Unmarshal(payload, &intent); err != nil || accessgateway.ValidateSessionIntent(intent) != nil ||
+		intent.TargetType != accessgateway.TargetSSH || intent.RequiredAgentID != agentID {
+		return nil, time.Time{}, errors.New("the job is not an SSH gateway session of this agent's")
+	}
+	rec, err := s.store.GetPAMSession(ctx, tenantID, intent.SessionID)
+	if err != nil {
+		return nil, time.Time{}, errors.New("the gateway session is unknown")
+	}
+	now := s.clock().UTC()
+	switch {
+	case rec.Delivery != "gateway" || rec.TargetType != pamTargetSSH || rec.GatewayAgentID != agentID:
+		return nil, time.Time{}, errors.New("the session is not this gateway's SSH session")
+	case rec.Status != api.PAMSessionStatusActive || !now.Before(rec.ExpiresAt):
+		return nil, time.Time{}, errors.New("the gateway session is not active")
+	case rec.SSHPrincipal == "" || rec.SSHKeyID != "pam:"+rec.ID:
+		return nil, time.Time{}, errors.New("the gateway session names no principal")
+	}
+	target, err := s.sshTarget(ctx, tenantID, rec.TargetID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if target.GatewayAgentID != agentID || !principalAllowed(target.Principals, rec.SSHPrincipal) {
+		return nil, time.Time{}, errors.New("the SSH target no longer admits this session through this gateway")
+	}
+	issued, err := s.sshCA.IssueUserCert(ctx, sshca.Profile{
+		Name: "pam-gateway", MaxTTL: s.maxTTL, AllowUserCerts: true, DefaultExtensions: gatewaySSHCertificateExtensions,
+	}, sshca.IssueRequest{
+		SubjectPublicKey: publicKey, KeyID: rec.SSHKeyID, Principals: []string{rec.SSHPrincipal}, TTL: rec.ExpiresAt.Sub(now),
+	})
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return issued.Certificate, issued.ValidBefore, nil
+}
+
+// pamSignGatewaySSHKey is the agent channel's hook into PAM, nil when PAM is
+// not served (the RPC then answers that gateways are not served).
+func (s *Server) pamSignGatewaySSHKey() func(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error) {
+	if s.pam == nil {
+		return nil
+	}
+	return s.pam.signGatewaySSHKey
 }

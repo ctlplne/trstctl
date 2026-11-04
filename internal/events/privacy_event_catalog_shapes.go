@@ -255,6 +255,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"agent":"","job_id":1,"names":[""],"fingerprint":""}`), true
 	case "agent.gateway.server_certificate_signed":
 		return shape(`{"agent":"","hosts":[""]}`), true
+	case "agent.gateway.session_key_certified":
+		return shape(`{"agent":"","job_id":1,"attempt":1}`), true
 	case "agent.job.credential.redeemed":
 		return shape(`{"agent":"","job_id":1,"attempt":1,"audit_ref":"","ref_names":[""]}`), true
 	case "agent.job.credential.redemption_refused":

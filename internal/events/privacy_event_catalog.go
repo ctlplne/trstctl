@@ -172,6 +172,8 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/names/*", token), catalogPrivacyRule("/fingerprint", opaque)),
 		entry("agent.gateway.server_certificate_signed", catalogPrivacyRule("/agent", exact),
 			catalogPrivacyRule("/hosts/*", token)),
+		entry("agent.gateway.session_key_certified", catalogPrivacyRule("/agent", exact),
+			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/attempt", opaque)),
 		entry("agent.job.credential.redeemed", catalogPrivacyRule("/agent", exact),
 			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/attempt", opaque),
 			catalogPrivacyRule("/audit_ref", opaque), catalogPrivacyRule("/ref_names/*", token)),

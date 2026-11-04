@@ -38668,6 +38668,12 @@
           "host": {
             "type": "string"
           },
+          "host_key_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "id": {
             "type": "string"
           },
@@ -38760,6 +38766,13 @@
           },
           "host": {
             "type": "string"
+          },
+          "host_key_fingerprints": {
+            "description": "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "id": {
             "type": "string"

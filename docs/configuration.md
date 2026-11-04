@@ -2357,9 +2357,10 @@ zero uses two. An operator must separately configure the SSH server to trust the
 trstctl SSH CA. The request and activation commands are documented in
 [Incident response and JIT access](features/incident-and-jit.md#just-in-time-issuance-with-approval-f33).
 
-A PostgreSQL target may also carry `gateway_agent_id` (an enrolled agent holding the
-`gateway` role) and `gateway_address` (`host:port` where clients reach it), both or
-neither (A254). Sessions to such a target are delivered through that gateway: the
+A PostgreSQL or SSH target may also carry `gateway_agent_id` (an enrolled agent holding
+the `gateway` role) and `gateway_address` (`host:port` where clients reach it), both or
+neither (A254); a gateway-bound SSH target also pins its host keys in
+`host_key_fingerprints` (one to eight `SHA256:...` fingerprints). Sessions to such a target are delivered through that gateway: the
 requester receives a one-time ticket, never the credential. Run the gateway as
 `trstctl-agent --access-gateway-listen ADDR` and add `access.gateway.session` to
 `agent_channel.claimable_job_kinds`. See the
