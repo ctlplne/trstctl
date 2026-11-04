@@ -32,8 +32,9 @@ import (
 
 // gatewayFixture is a served control plane with a running access gateway, an
 // sshd target that trusts the tenant SSH CA (bound to the gateway, host keys
-// pinned), an embedded PostgreSQL target bound to the same gateway, recording
-// storage, and the tokens the proofs act with.
+// pinned), an embedded PostgreSQL target bound to the same gateway (and, when
+// asked, a Redis target in a container), recording storage, and the tokens
+// the proofs act with.
 type gatewayFixture struct {
 	t           *testing.T
 	ctx         context.Context
@@ -43,9 +44,12 @@ type gatewayFixture struct {
 	gatewayLog  *lockedBuffer
 	sshd        pamSSHD
 	objects     *s3test.Server
-	auditKey    *jose.SigningKey
-	api         *httptest.Server
-	dir         string
+	// redisID is the Redis target's container, which also carries the stock
+	// redis-cli the proofs use.
+	redisID  string
+	auditKey *jose.SigningKey
+	api      *httptest.Server
+	dir      string
 	// requester opens sessions; operator registers targets and terminates;
 	// auditor reads and exports recordings.
 	requester, reviewerOne, reviewerTwo, operator, auditor string
@@ -53,6 +57,8 @@ type gatewayFixture struct {
 
 type gatewayFixtureOptions struct {
 	recordingRetention time.Duration
+	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
+	redis bool
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -70,6 +76,10 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
+	var redisProviders DynamicSecretProviderRegistry
+	if opts.redis {
+		f.redisID, redisProviders = startPAMRedis(t)
+	}
 	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
 		t.Fatal(err)
@@ -83,10 +93,17 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	f.h = newRoleHarnessWithDeps(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
+		var databaseTargets []PAMDatabaseTarget
+		if opts.redis {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], redisProviders.ForTenant(servedTestTenant)...)
+			databaseTargets = []PAMDatabaseTarget{{TargetType: "redis", TenantID: servedTestTenant, ID: "redis-gw", ProviderID: "pam-redis-provider",
+				AllowedRoles: []string{"redis-writer"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}}
+		}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
 			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},
 			PostgresTargets: []PAMPostgresTarget{{TenantID: servedTestTenant, ID: "pg-gw", ProviderID: "pam-pg-provider",
-				AllowedRoles: []string{"readonly"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}}}
+				AllowedRoles: []string{"readonly"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}},
+			DatabaseTargets: databaseTargets}
 		d.ArchiveObjectStore = f.objects.Open(t)
 		d.AuditSigningKey = f.auditKey
 	})

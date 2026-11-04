@@ -397,11 +397,28 @@ extension is refused, it closes the session's connections and wipes the credenti
 the login's removal (PostgreSQL) or the session's key ID on the served KRL (SSH) follows as
 for any session.
 
+A Redis target (A256) is served only through its gateway: register it with
+`target_type: "redis"`, a Redis dynamic-secret provider and the gateway binding, or set a
+`pam.database_targets` entry. The session's credential is an ACL user the provider creates
+for it, scoped by the role's key prefixes and commands. The gateway signs in as that user
+and relays a stock client's commands; the connect command prints the `redis-cli` line to
+run:
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:16379
+redis-cli -h 127.0.0.1 -p 16379
+```
+
+The client sends no password. AUTH, HELLO with AUTH and RESET are never forwarded: the
+server answers each with an error naming `TRSTCTL-GATEWAY-REFUSED-<command>`, in order with
+the other replies, and the connection keeps the session's user. Inline (telnet-style)
+commands close the connection. Revoking or terminating the session removes its ACL user.
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
-(never file contents) and PostgreSQL statements with bounded results, masked at the
-gateway before anything leaves it, sealed for the tenant and closed with a manifest the
-audit key signs. Read a recording's index with
+(never file contents), PostgreSQL statements and Redis commands with bounded results,
+masked at the gateway before anything leaves it, sealed for the tenant and closed with a
+manifest the audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with
 `GET /api/v1/access/sessions/{id}/recording/verify`. With `recordings:read`, play it back
 or watch a live session (`trstctl access sessions watch <id>`); with `recordings:export`,

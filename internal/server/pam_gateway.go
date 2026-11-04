@@ -47,7 +47,7 @@ func (r *relayCredentialResolver) resolveGatewaySession(ctx context.Context, ten
 	if intent.RequiredAgentID != job.RequiredAgentID {
 		return redeemedMaterial{}, errors.New("gateway job names another gateway")
 	}
-	if intent.TargetType != accessgateway.TargetPostgres {
+	if !accessgateway.RedeemsCredential(intent.TargetType) {
 		// An SSH session's gateway certifies a key of its own
 		// (SignJobSSHKey); there is no credential to redeem.
 		return redeemedMaterial{}, errors.New("an SSH gateway session redeems no credential")
@@ -166,7 +166,7 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 	return err
 }
 
-// gatewaySessionIntent is the job a gateway session rides on. A PostgreSQL
+// gatewaySessionIntent is the job a gateway session rides on. A database
 // session names its credential for redemption; an SSH session names the
 // target's address, the principal and the pinned host keys, and redeems
 // nothing: its gateway certifies a key of its own.
@@ -201,10 +201,10 @@ func (s *pamService) gatewaySessionCredential(ctx context.Context, tenantID, ses
 	if rec.Delivery != "gateway" || rec.Status != api.PAMSessionStatusActive || !s.clock().UTC().Before(rec.ExpiresAt) {
 		return nil, errors.New("gateway session is not active")
 	}
-	if rec.TargetType != pamTargetPostgres || rec.BackendRef == "" {
+	if !isPAMDatabaseType(rec.TargetType) || rec.BackendRef == "" {
 		return nil, errors.New("gateway session has no lease to redeem")
 	}
-	lifecycle, err := s.postgresLifecycle(tenantID)
+	lifecycle, err := s.databaseLifecycle(tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -301,12 +301,12 @@ func (s *pamService) ensureGatewayJobs(ctx context.Context) {
 // The ticket was shown once, by the open.
 func (s *pamService) gatewayDeliveryForRead(ctx context.Context, tenantID string, rec store.PAMSession) *api.PAMGatewayDelivery {
 	address := ""
-	switch rec.TargetType {
-	case pamTargetPostgres:
-		if target, err := s.postgresTarget(ctx, tenantID, rec.TargetID); err == nil && target.cfg.GatewayAgentID == rec.GatewayAgentID {
+	switch {
+	case isPAMDatabaseType(rec.TargetType):
+		if target, err := s.databaseTarget(ctx, tenantID, rec.TargetType, rec.TargetID); err == nil && target.cfg.GatewayAgentID == rec.GatewayAgentID {
 			address = target.cfg.GatewayAddress
 		}
-	case pamTargetSSH:
+	case rec.TargetType == pamTargetSSH:
 		if target, err := s.sshTarget(ctx, tenantID, rec.TargetID); err == nil && target.GatewayAgentID == rec.GatewayAgentID {
 			address = target.GatewayAddress
 		}

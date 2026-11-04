@@ -65,25 +65,25 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 	if err := s.validateGatewayBinding(ctx, tenantID, target); err != nil {
 		return api.PAMTarget{}, err
 	}
-	switch target.TargetType {
-	case pamTargetPostgres:
-		if s.postgres[key] != nil {
+	switch {
+	case isPAMDatabaseType(target.TargetType):
+		if s.databases[pamDatabaseID{tenantID, target.TargetType, target.ID}] != nil {
 			return api.PAMTarget{}, fmt.Errorf("%w: operator-configured target already exists", api.ErrPAMTargetConflict)
 		}
 		if target.Host != "" || target.Port != 0 || len(target.Principals) != 0 {
-			return api.PAMTarget{}, fmt.Errorf("%w: postgres target has SSH-only fields", api.ErrPAMInvalid)
+			return api.PAMTarget{}, fmt.Errorf("%w: %s target has SSH-only fields", api.ErrPAMInvalid, target.TargetType)
 		}
-		d := s.targetDeps
-		d.Config.PostgresTargets = []PAMPostgresTarget{{TenantID: tenantID, ID: target.ID, ProviderID: target.ProviderID, AllowedRoles: target.AllowedRoles}}
-		if _, err := buildPAMPostgresTargets(d); err != nil {
+		if _, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: target.TargetType, TenantID: tenantID, ID: target.ID,
+			ProviderID: target.ProviderID, AllowedRoles: target.AllowedRoles,
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress}); err != nil {
 			return api.PAMTarget{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
 		}
-	case pamTargetSSH:
+	case target.TargetType == pamTargetSSH:
 		if _, ok := s.sshTargets[key]; ok {
 			return api.PAMTarget{}, fmt.Errorf("%w: operator-configured target already exists", api.ErrPAMTargetConflict)
 		}
 		if target.ProviderID != "" || len(target.AllowedRoles) != 0 {
-			return api.PAMTarget{}, fmt.Errorf("%w: SSH target has postgres-only fields", api.ErrPAMInvalid)
+			return api.PAMTarget{}, fmt.Errorf("%w: SSH target has database-only fields", api.ErrPAMInvalid)
 		}
 		if strings.ContainsAny(target.Host, "/@ \t\r\n") {
 			return api.PAMTarget{}, fmt.Errorf("%w: SSH host must be a hostname or IP address", api.ErrPAMInvalid)
@@ -95,7 +95,7 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 			return api.PAMTarget{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
 		}
 	default:
-		return api.PAMTarget{}, fmt.Errorf("%w: target_type must be postgres or ssh", api.ErrPAMInvalid)
+		return api.PAMTarget{}, fmt.Errorf("%w: target_type must be one of %s", api.ErrPAMInvalid, pamTargetTypesText())
 	}
 	if _, err := s.store.GetPAMTarget(ctx, tenantID, target.TargetType, target.ID); err == nil {
 		return api.PAMTarget{}, fmt.Errorf("%w: target id already registered", api.ErrPAMTargetConflict)
@@ -145,10 +145,10 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints}
 }
 
-// operatorPostgresTarget and operatorSSHTarget are the reads of
+// operatorDatabaseTarget and operatorSSHTarget are the reads of
 // operator-configured targets, with their gateway bindings.
-func operatorPostgresTarget(id string, t *pamPostgresTarget) api.PAMTarget {
-	return api.PAMTarget{ID: id, TargetType: pamTargetPostgres, ProviderID: t.cfg.ProviderID, AllowedRoles: t.cfg.AllowedRoles, Enabled: true, Source: "operator",
+func operatorDatabaseTarget(id string, t *pamDatabaseTarget) api.PAMTarget {
+	return api.PAMTarget{ID: id, TargetType: t.cfg.TargetType, ProviderID: t.cfg.ProviderID, AllowedRoles: t.cfg.AllowedRoles, Enabled: true, Source: "operator",
 		GatewayAgentID: t.cfg.GatewayAgentID, GatewayAddress: t.cfg.GatewayAddress}
 }
 
@@ -158,14 +158,13 @@ func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
 }
 
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
-	key := pamTargetID{tenantID, id}
-	switch targetType {
-	case pamTargetPostgres:
-		if t := s.postgres[key]; t != nil {
-			return operatorPostgresTarget(id, t), nil
+	switch {
+	case isPAMDatabaseType(targetType):
+		if t := s.databases[pamDatabaseID{tenantID, targetType, id}]; t != nil {
+			return operatorDatabaseTarget(id, t), nil
 		}
-	case pamTargetSSH:
-		if t, ok := s.sshTargets[key]; ok {
+	case targetType == pamTargetSSH:
+		if t, ok := s.sshTargets[pamTargetID{tenantID, id}]; ok {
 			return operatorSSHTarget(id, t), nil
 		}
 	default:
@@ -183,13 +182,13 @@ func (s *pamService) ListPAMTargets(ctx context.Context, tenantID string) ([]api
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.PAMTarget, 0, len(recs)+len(s.postgres)+len(s.sshTargets))
+	out := make([]api.PAMTarget, 0, len(recs)+len(s.databases)+len(s.sshTargets))
 	for _, rec := range recs {
 		out = append(out, targetFromStore(rec))
 	}
-	for key, target := range s.postgres {
+	for key, target := range s.databases {
 		if key.tenantID == tenantID {
-			out = append(out, operatorPostgresTarget(key.id, target))
+			out = append(out, operatorDatabaseTarget(key.id, target))
 		}
 	}
 	for key, target := range s.sshTargets {
@@ -210,7 +209,7 @@ func (s *pamService) DisablePAMTarget(ctx context.Context, tenantID, targetType,
 	if actor == "" || strings.TrimSpace(reason) == "" || len(reason) > 1000 {
 		return api.PAMTarget{}, fmt.Errorf("%w: actor and disable reason are required", api.ErrPAMInvalid)
 	}
-	if (targetType == pamTargetPostgres && s.postgres[pamTargetID{tenantID, id}] != nil) || (targetType == pamTargetSSH && s.sshTargets[pamTargetID{tenantID, id}].ID != "") {
+	if s.databases[pamDatabaseID{tenantID, targetType, id}] != nil || (targetType == pamTargetSSH && s.sshTargets[pamTargetID{tenantID, id}].ID != "") {
 		return api.PAMTarget{}, fmt.Errorf("%w: operator-configured targets must be removed from deployment configuration", api.ErrPAMTargetConflict)
 	}
 	rec, err := s.store.GetPAMTarget(ctx, tenantID, targetType, id)
@@ -228,28 +227,40 @@ func (s *pamService) DisablePAMTarget(ctx context.Context, tenantID, targetType,
 	return s.GetPAMTarget(ctx, tenantID, targetType, id)
 }
 
-func (s *pamService) postgresTarget(ctx context.Context, tenantID, id string) (*pamPostgresTarget, error) {
-	if t := s.postgres[pamTargetID{tenantID, id}]; t != nil {
+// databaseTarget is a database target of the given type: the deployment's
+// own, or a tenant-registered one checked again against its provider now.
+func (s *pamService) databaseTarget(ctx context.Context, tenantID, targetType, id string) (*pamDatabaseTarget, error) {
+	if t := s.databases[pamDatabaseID{tenantID, targetType, id}]; t != nil {
 		return t, nil
 	}
-	rec, err := s.store.GetPAMTarget(ctx, tenantID, pamTargetPostgres, id)
+	rec, err := s.store.GetPAMTarget(ctx, tenantID, targetType, id)
 	if errors.Is(err, store.ErrPAMTargetNotFound) {
-		return nil, fmt.Errorf("%w: unknown postgres target %q", api.ErrPAMInvalid, id)
+		return nil, fmt.Errorf("%w: unknown %s target %q", api.ErrPAMInvalid, targetType, id)
 	}
 	if err != nil {
 		return nil, err
 	}
 	if !rec.Enabled {
-		return nil, fmt.Errorf("%w: postgres target %q is disabled", api.ErrPAMRejected, id)
+		return nil, fmt.Errorf("%w: %s target %q is disabled", api.ErrPAMRejected, targetType, id)
 	}
-	d := s.targetDeps
-	d.Config.PostgresTargets = []PAMPostgresTarget{{TenantID: tenantID, ID: id, ProviderID: rec.ProviderID, AllowedRoles: rec.AllowedRoles,
-		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress}}
-	targets, err := buildPAMPostgresTargets(d)
+	target, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: targetType, TenantID: tenantID, ID: id, ProviderID: rec.ProviderID,
+		AllowedRoles: rec.AllowedRoles, GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress})
 	if err != nil {
-		return nil, fmt.Errorf("%w: registered postgres target %q is no longer valid: %v", api.ErrPAMRejected, id, err)
+		return nil, fmt.Errorf("%w: registered %s target %q is no longer valid: %v", api.ErrPAMRejected, targetType, id, err)
 	}
-	return targets[pamTargetID{tenantID, id}], nil
+	return target, nil
+}
+
+// buildDatabaseTarget checks one database target as the deployment's own are
+// checked, against its tenant's providers.
+func (s *pamService) buildDatabaseTarget(target PAMDatabaseTarget) (*pamDatabaseTarget, error) {
+	d := s.targetDeps
+	d.Config.PostgresTargets, d.Config.DatabaseTargets = nil, []PAMDatabaseTarget{target}
+	targets, err := buildPAMDatabaseTargets(d)
+	if err != nil {
+		return nil, err
+	}
+	return targets[pamDatabaseID{target.TenantID, target.TargetType, strings.TrimSpace(target.ID)}], nil
 }
 
 func (s *pamService) sshTarget(ctx context.Context, tenantID, id string) (PAMSSHTarget, error) {

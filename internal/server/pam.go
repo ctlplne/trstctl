@@ -36,12 +36,42 @@ import (
 const (
 	pamTargetPostgres = "postgres"
 	pamTargetSSH      = "ssh"
+	pamTargetRedis    = "redis"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
 	defaultPAMExpiryInterval = 30 * time.Second
 	defaultPAMApprovalTTL    = 15 * time.Minute
 )
+
+// pamDatabaseProviderTypes maps each provider-backed database target type to
+// the dynamic-secret provider type that issues its per-session login (A256).
+// PostgreSQL targets may hand the requester that login; every other type is
+// served only through an access gateway, which signs in with it itself.
+var pamDatabaseProviderTypes = map[string]string{
+	pamTargetPostgres: "postgresql",
+	pamTargetRedis:    "redis",
+}
+
+// pamDatabaseKinds are the database types' names in operator-facing text.
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis"}
+
+// isPAMDatabaseType reports whether a target type is a provider-backed
+// database target.
+func isPAMDatabaseType(targetType string) bool {
+	_, ok := pamDatabaseProviderTypes[targetType]
+	return ok
+}
+
+// pamTargetTypesText lists the target types for an operator-facing refusal.
+func pamTargetTypesText() string {
+	types := []string{pamTargetSSH}
+	for t := range pamDatabaseProviderTypes {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return strings.Join(types, ", ")
+}
 
 // PAMConfig enables the served just-in-time privileged-access broker (PAM-01/F33).
 // Postgres targets use real scoped login roles; SSH targets use the signer-backed
@@ -59,7 +89,24 @@ type PAMConfig struct {
 	RecordingRetention time.Duration
 	Attestors          []attest.Attestor
 	PostgresTargets    []PAMPostgresTarget
-	SSHTargets         []PAMSSHTarget
+	// DatabaseTargets are provider-backed targets of the other database
+	// types (A256), each reached only through its access gateway.
+	DatabaseTargets []PAMDatabaseTarget
+	SSHTargets      []PAMSSHTarget
+}
+
+// PAMDatabaseTarget is a provider-backed database target: a PostgreSQL target
+// (the PostgresTargets list) or one of the types served only through an
+// access gateway. ProviderID names a dynamic-secret provider of the type's
+// kind; its administrator credential stays a protected reference there.
+type PAMDatabaseTarget struct {
+	TargetType     string
+	TenantID       string
+	ID             string
+	ProviderID     string
+	AllowedRoles   []string
+	GatewayAgentID string
+	GatewayAddress string
 }
 
 type PAMPostgresTarget struct {
@@ -92,7 +139,7 @@ type pamService struct {
 	projector         *projections.Projector
 	audit             auditsink.Auditor
 	attestors         []attest.Attestor
-	postgres          map[pamTargetID]*pamPostgresTarget
+	databases         map[pamDatabaseID]*pamDatabaseTarget
 	providers         DynamicSecretProviderRegistry
 	kek               seal.KeyWrapper
 	outbox            *orchestrator.Outbox
@@ -122,10 +169,29 @@ type pamService struct {
 	afterSSHSign func([]byte, uint64) error
 }
 
-type pamPostgresTarget struct {
-	cfg              PAMPostgresTarget
+type pamDatabaseTarget struct {
+	cfg              PAMDatabaseTarget
 	roles            map[string]struct{}
 	providerRevision string
+}
+
+// pamDatabaseID names a database target: ids are tenant-local and per type.
+type pamDatabaseID struct {
+	tenantID, targetType, id string
+}
+
+// digestConfig is the target's configuration as its approval digest binds
+// it. A PostgreSQL target keeps the form it had before the other database
+// types, so an approval in flight across an upgrade still matches.
+func (t *pamDatabaseTarget) digestConfig() any {
+	cfg := t.cfg
+	cfg.AllowedRoles = append([]string(nil), cfg.AllowedRoles...)
+	sort.Strings(cfg.AllowedRoles)
+	if cfg.TargetType == pamTargetPostgres {
+		return PAMPostgresTarget{TenantID: cfg.TenantID, ID: cfg.ID, ProviderID: cfg.ProviderID, AllowedRoles: cfg.AllowedRoles,
+			GatewayAgentID: cfg.GatewayAgentID, GatewayAddress: cfg.GatewayAddress}
+	}
+	return cfg
 }
 
 // Target names are tenant-local. In particular, a matching ID in a different
@@ -201,7 +267,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 			return nil, errors.New("server: PAM attestor has empty method")
 		}
 	}
-	postgresTargets, err := buildPAMPostgresTargets(d)
+	databaseTargets, err := buildPAMDatabaseTargets(d)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +282,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	return &pamService{
 		recordings: recordings, recordingRetention: cfg.RecordingRetention,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
-		attestors: cfg.Attestors, postgres: postgresTargets,
+		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
@@ -225,36 +291,57 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	}, nil
 }
 
-func buildPAMPostgresTargets(d pamDeps) (map[pamTargetID]*pamPostgresTarget, error) {
+// buildPAMDatabaseTargets checks every configured database target against
+// its tenant's providers: a provider of the type's kind that enables each
+// allowed role. A PostgreSQL target's roles are the provider's readonly and
+// writer; every other type must name its gateway.
+func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, error) {
 	cfg := d.Config
-	postgresTargets := make(map[pamTargetID]*pamPostgresTarget, len(cfg.PostgresTargets))
-	for _, target := range cfg.PostgresTargets {
+	all := make([]PAMDatabaseTarget, 0, len(cfg.PostgresTargets)+len(cfg.DatabaseTargets))
+	for _, t := range cfg.PostgresTargets {
+		all = append(all, PAMDatabaseTarget{TargetType: pamTargetPostgres, TenantID: t.TenantID, ID: t.ID, ProviderID: t.ProviderID,
+			AllowedRoles: t.AllowedRoles, GatewayAgentID: t.GatewayAgentID, GatewayAddress: t.GatewayAddress})
+	}
+	all = append(all, cfg.DatabaseTargets...)
+	targets := make(map[pamDatabaseID]*pamDatabaseTarget, len(all))
+	for _, target := range all {
+		providerType, known := pamDatabaseProviderTypes[target.TargetType]
+		if !known {
+			return nil, fmt.Errorf("server: PAM database target type %q is not one of %s", target.TargetType, pamTargetTypesText())
+		}
+		kind := target.TargetType
 		if _, err := uuid.Parse(target.TenantID); err != nil {
-			return nil, errors.New("server: PAM postgres target tenant_id must be a UUID")
+			return nil, fmt.Errorf("server: PAM %s target tenant_id must be a UUID", kind)
 		}
 		target.ID = strings.TrimSpace(target.ID)
 		if target.ID == "" {
-			return nil, errors.New("server: PAM postgres target id is required")
+			return nil, fmt.Errorf("server: PAM %s target id is required", kind)
 		}
-		key := pamTargetID{target.TenantID, target.ID}
-		if _, exists := postgresTargets[key]; exists {
-			return nil, fmt.Errorf("server: duplicate PAM postgres target %q in tenant %q", target.ID, target.TenantID)
+		key := pamDatabaseID{target.TenantID, target.TargetType, target.ID}
+		if _, exists := targets[key]; exists {
+			return nil, fmt.Errorf("server: duplicate PAM %s target %q in tenant %q", kind, target.ID, target.TenantID)
 		}
 		if len(target.AllowedRoles) == 0 {
-			return nil, fmt.Errorf("server: PAM postgres target %q requires allowed roles", target.ID)
+			return nil, fmt.Errorf("server: PAM %s target %q requires allowed roles", kind, target.ID)
+		}
+		if target.TargetType != pamTargetPostgres && (target.GatewayAgentID == "" || target.GatewayAddress == "") {
+			return nil, fmt.Errorf("server: PAM %s target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", kind, target.ID)
 		}
 		roles := make(map[string]struct{}, len(target.AllowedRoles))
 		for _, role := range target.AllowedRoles {
-			if role != "readonly" && role != "writer" {
+			if target.TargetType == pamTargetPostgres && role != "readonly" && role != "writer" {
 				return nil, fmt.Errorf("server: PAM postgres target %q has unsupported role %q", target.ID, role)
 			}
+			if strings.TrimSpace(role) == "" {
+				return nil, fmt.Errorf("server: PAM %s target %q has an empty role", kind, target.ID)
+			}
 			if _, exists := roles[role]; exists {
-				return nil, fmt.Errorf("server: PAM postgres target %q repeats role %q", target.ID, role)
+				return nil, fmt.Errorf("server: PAM %s target %q repeats role %q", kind, target.ID, role)
 			}
 			roles[role] = struct{}{}
 		}
 		if target.ProviderID == "" || d.KEK == nil || d.Outbox == nil || d.WakeOutbox == nil {
-			return nil, fmt.Errorf("server: PAM postgres target %q requires a durable provider and its outbox dependencies", target.ID)
+			return nil, fmt.Errorf("server: PAM %s target %q requires a durable provider and its outbox dependencies", kind, target.ID)
 		}
 		var matched bool
 		var providerRevision string
@@ -267,8 +354,8 @@ func buildPAMPostgresTargets(d pamDeps) (map[pamTargetID]*pamPostgresTarget, err
 				DynamicSecretAllowedRoles() []string
 				DynamicSecretConfigurationRevision() string
 			})
-			if !ok || profile.DynamicSecretProviderType() != "postgresql" {
-				return nil, fmt.Errorf("server: PAM target %q provider must be PostgreSQL", target.ID)
+			if !ok || profile.DynamicSecretProviderType() != providerType {
+				return nil, fmt.Errorf("server: PAM target %q provider must be %s", target.ID, pamDatabaseKinds[target.TargetType])
 			}
 			providerRevision = profile.DynamicSecretConfigurationRevision()
 			if providerRevision == "" {
@@ -289,9 +376,9 @@ func buildPAMPostgresTargets(d pamDeps) (map[pamTargetID]*pamPostgresTarget, err
 		if !matched {
 			return nil, fmt.Errorf("server: PAM target %q provider %q is not configured for its tenant", target.ID, target.ProviderID)
 		}
-		postgresTargets[key] = &pamPostgresTarget{cfg: target, roles: roles, providerRevision: providerRevision}
+		targets[key] = &pamDatabaseTarget{cfg: target, roles: roles, providerRevision: providerRevision}
 	}
-	return postgresTargets, nil
+	return targets, nil
 }
 
 func buildPAMSSHTargets(d pamDeps) (map[pamTargetID]PAMSSHTarget, error) {
@@ -432,15 +519,14 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 // Reviewers see the operator-configured destination as well as the hash that
 // binds it. The administrator DSN remains private in its provider reference.
 func (s *pamService) targetReviewEvidence(ctx context.Context, tenantID string, req api.PAMSessionRequest, att attest.Attestation) ([]string, error) {
-	switch req.TargetType {
-	case pamTargetPostgres:
-		target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+	switch {
+	case isPAMDatabaseType(req.TargetType):
+		target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 		if err != nil {
 			return nil, err
 		}
-		cfg := target.cfg
-		return []string{"pam-postgres-provider:" + cfg.ProviderID}, nil
-	case pamTargetSSH:
+		return []string{"pam-" + req.TargetType + "-provider:" + target.cfg.ProviderID}, nil
+	case req.TargetType == pamTargetSSH:
 		cfg, err := s.sshTarget(ctx, tenantID, req.TargetID)
 		if err != nil {
 			return nil, err
@@ -505,20 +591,17 @@ func (s *pamService) validateAttestedTarget(ctx context.Context, tenantID string
 
 func (s *pamService) targetDigest(ctx context.Context, tenantID string, req api.PAMSessionRequest) (string, error) {
 	var target any
-	switch req.TargetType {
-	case pamTargetPostgres:
-		configured, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+	switch {
+	case isPAMDatabaseType(req.TargetType):
+		configured, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 		if err != nil {
 			return "", err
 		}
-		cfg := configured.cfg
-		cfg.AllowedRoles = append([]string(nil), cfg.AllowedRoles...)
-		sort.Strings(cfg.AllowedRoles)
 		target = struct {
-			Config           PAMPostgresTarget
+			Config           any
 			ProviderRevision string
-		}{Config: cfg, ProviderRevision: configured.providerRevision}
-	case pamTargetSSH:
+		}{Config: configured.digestConfig(), ProviderRevision: configured.providerRevision}
+	case req.TargetType == pamTargetSSH:
 		cfg, err := s.sshTarget(ctx, tenantID, req.TargetID)
 		if err != nil {
 			return "", err
@@ -674,10 +757,10 @@ func (s *pamService) activatePAMSession(ctx context.Context, tenantID, idempoten
 		return api.PAMSession{}, fmt.Errorf("server: bind PAM attestation: %w", err)
 	}
 
-	switch req.TargetType {
-	case pamTargetPostgres:
-		return s.openPostgres(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req)
-	case pamTargetSSH:
+	switch {
+	case isPAMDatabaseType(req.TargetType):
+		return s.openDatabase(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req)
+	case req.TargetType == pamTargetSSH:
 		return s.openSSH(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req)
 	default:
 		return api.PAMSession{}, fmt.Errorf("%w: unsupported target_type %q", api.ErrPAMInvalid, req.TargetType)
@@ -959,9 +1042,9 @@ func (s *pamService) appendSSHRecoveryEvent(ctx context.Context, item store.PAMS
 }
 
 func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) error {
-	switch rec.TargetType {
-	case pamTargetPostgres:
-		lifecycle, err := s.postgresLifecycle(rec.TenantID)
+	switch {
+	case isPAMDatabaseType(rec.TargetType):
+		lifecycle, err := s.databaseLifecycle(rec.TenantID)
 		if err != nil {
 			return err
 		}
@@ -997,7 +1080,7 @@ func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) er
 			}
 			return nil
 		}
-	case pamTargetSSH:
+	case rec.TargetType == pamTargetSSH:
 		if s.sshProtocol == nil || s.sshProtocol.tenantID != rec.TenantID {
 			return fmt.Errorf("server: PAM SSH KRL for tenant %s is unavailable", rec.TenantID)
 		}
@@ -1016,24 +1099,31 @@ func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) er
 func (s *pamService) pamRevocationFailed(ctx context.Context, rec store.PAMSession) error {
 	return s.appendProject(ctx, rec.TenantID, projections.EventPAMSessionRevocationFailed,
 		projections.PAMSessionRevocationFailed{ID: rec.ID, IdempotencyKey: rec.RevocationIdempotencyKey,
-			Failure: "PostgreSQL provider removal failed; repair the target and retry revocation", FailedAt: s.clock().UTC()})
+			Failure: pamDatabaseKinds[rec.TargetType] + " provider removal failed; repair the target and retry revocation", FailedAt: s.clock().UTC()})
 }
 
-func (s *pamService) openPostgres(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+func (s *pamService) openDatabase(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
+	target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 	if err != nil {
 		return api.PAMSession{}, err
 	}
-	return s.openPostgresProvider(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, target)
+	return s.openDatabaseProvider(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req, target)
 }
 
-func (s *pamService) postgresLifecycle(tenantID string) (*durableDynamicSecretLifecycle, error) {
+// databaseLifecycle is the tenant's dynamic-secret lifecycle, which issues
+// and revokes every database session's per-session login.
+func (s *pamService) databaseLifecycle(tenantID string) (*durableDynamicSecretLifecycle, error) {
 	return newDurableDynamicSecretLifecycle(tenantID, s.providers.ForTenant(tenantID),
 		s.store, s.log, s.kek, s.outbox, s.wakeOutbox, s.tenantCrypto)
 }
 
-func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest, target *pamPostgresTarget) (api.PAMSession, error) {
-	lifecycle, err := s.postgresLifecycle(tenantID)
+func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest, target *pamDatabaseTarget) (api.PAMSession, error) {
+	if req.TargetType != pamTargetPostgres && target.cfg.GatewayAgentID == "" {
+		// Only a PostgreSQL target hands its login to the requester; the
+		// target builder already refuses any other type without a gateway.
+		return api.PAMSession{}, fmt.Errorf("%w: %s target %q has no access gateway", api.ErrPAMRejected, req.TargetType, req.TargetID)
+	}
+	lifecycle, err := s.databaseLifecycle(tenantID)
 	if err != nil {
 		return api.PAMSession{}, err
 	}
@@ -1048,9 +1138,9 @@ func (s *pamService) openPostgresProvider(ctx context.Context, tenantID, idempot
 	binding := crypto.SHA256Hex(material)
 	secret.Wipe(material)
 	lease, credential, err := lifecycle.IssueBoundNonRenewable(ctx, target.cfg.ProviderID, req.Role,
-		expiresAt.Sub(s.clock().UTC()), "pam-postgres:"+idempotencyKey, binding)
+		expiresAt.Sub(s.clock().UTC()), "pam-"+req.TargetType+":"+idempotencyKey, binding)
 	if err != nil {
-		return api.PAMSession{}, fmt.Errorf("%w: postgres target %q refused session: %v", api.ErrPAMRejected, req.TargetID, err)
+		return api.PAMSession{}, fmt.Errorf("%w: %s target %q refused session: %v", api.ErrPAMRejected, req.TargetType, req.TargetID, err)
 	}
 	if target.cfg.GatewayAgentID != "" {
 		// A254: the requester receives a ticket for the target's gateway,
@@ -1159,9 +1249,9 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 }
 
 func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) error {
-	switch rec.TargetType {
-	case pamTargetPostgres:
-		lifecycle, err := s.postgresLifecycle(rec.TenantID)
+	switch {
+	case isPAMDatabaseType(rec.TargetType):
+		lifecycle, err := s.databaseLifecycle(rec.TenantID)
 		if err != nil {
 			return err
 		}
@@ -1175,7 +1265,7 @@ func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) er
 		if lease.RevocationCompletedAt == nil {
 			return nil // outbox has the removal intent; a later tick observes completion
 		}
-	case pamTargetSSH:
+	case rec.TargetType == pamTargetSSH:
 		// SSH user certificates auto-expire cryptographically. The read model still
 		// records expiry evidence so audit and session lists do not depend on a client
 		// attempting to use the cert after its ValidBefore.
@@ -1210,8 +1300,8 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 	if requester == "" {
 		return fmt.Errorf("%w: requester is required", api.ErrPAMInvalid)
 	}
-	if req.TargetType != pamTargetPostgres && req.TargetType != pamTargetSSH {
-		return fmt.Errorf("%w: target_type must be postgres or ssh", api.ErrPAMInvalid)
+	if !isPAMDatabaseType(req.TargetType) && req.TargetType != pamTargetSSH {
+		return fmt.Errorf("%w: target_type must be one of %s", api.ErrPAMInvalid, pamTargetTypesText())
 	}
 	if req.TargetID == "" {
 		return fmt.Errorf("%w: target_id is required", api.ErrPAMInvalid)
@@ -1228,16 +1318,16 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 	if len(req.Payload) == 0 {
 		return fmt.Errorf("%w: attestation payload is required", api.ErrPAMInvalid)
 	}
-	switch req.TargetType {
-	case pamTargetPostgres:
-		target, err := s.postgresTarget(ctx, tenantID, req.TargetID)
+	switch {
+	case isPAMDatabaseType(req.TargetType):
+		target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 		if err != nil {
 			return err
 		}
 		if _, allowed := target.roles[req.Role]; !allowed {
-			return fmt.Errorf("%w: role %q is not allowed on postgres target %q", api.ErrPAMInvalid, req.Role, req.TargetID)
+			return fmt.Errorf("%w: role %q is not allowed on %s target %q", api.ErrPAMInvalid, req.Role, req.TargetType, req.TargetID)
 		}
-	case pamTargetSSH:
+	case req.TargetType == pamTargetSSH:
 		target, err := s.sshTarget(ctx, tenantID, req.TargetID)
 		if err != nil {
 			return err
@@ -1370,6 +1460,13 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	for _, target := range c.PostgresTargets {
 		out.PostgresTargets = append(out.PostgresTargets, PAMPostgresTarget{
 			TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,
+			AllowedRoles:   append([]string(nil), target.AllowedRoles...),
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
+		})
+	}
+	for _, target := range c.DatabaseTargets {
+		out.DatabaseTargets = append(out.DatabaseTargets, PAMDatabaseTarget{
+			TargetType: target.TargetType, TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,
 			AllowedRoles:   append([]string(nil), target.AllowedRoles...),
 			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
 		})

@@ -574,7 +574,7 @@ func TestServedPAMRequestDoesNotMintBeforeApproval(t *testing.T) {
 			if status != http.StatusForbidden {
 				t.Fatalf("changed PAM command status=%d, want 403; body=%s", status, body)
 			}
-			target := h.srv.pam.postgres[pamTargetID{h.tenant, tc.body["target_id"].(string)}]
+			target := h.srv.pam.databases[pamDatabaseID{h.tenant, pamTargetPostgres, tc.body["target_id"].(string)}]
 			originalProvider := target.cfg.ProviderID
 			target.cfg.ProviderID = "swapped-provider"
 			status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/sessions", requester,

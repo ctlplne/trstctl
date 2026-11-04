@@ -133,9 +133,14 @@ func (s *pamService) gatewayBoundHosts(ctx context.Context, tenantID, agentID st
 			hosts = append(hosts, host)
 		}
 	}
-	for key, t := range s.postgres {
+	for key, t := range s.databases {
 		if key.tenantID == tenantID && t.cfg.GatewayAgentID == agentID {
 			add(t.cfg.GatewayAddress)
+		}
+	}
+	for key, t := range s.sshTargets {
+		if key.tenantID == tenantID && t.GatewayAgentID == agentID {
+			add(t.GatewayAddress)
 		}
 	}
 	targets, err := s.store.ListPAMTargets(ctx, tenantID)

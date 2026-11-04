@@ -1139,6 +1139,7 @@ const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
 	391: true, // TestMigration0391KeepsSessionsWithoutAGatewayEnd
+	392: true, // TestMigration0392KeepsTargetsAndAdmitsRedis
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod

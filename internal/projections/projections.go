@@ -4338,6 +4338,12 @@ type PAMSSHSigningRecoveryRequested struct {
 	Reason string `json:"reason"`
 }
 
+// PAMDatabaseTargetType reports whether a PAM target type is a
+// provider-backed database (A256): PostgreSQL, or Redis through a gateway.
+func PAMDatabaseTargetType(targetType string) bool {
+	return targetType == "postgres" || targetType == "redis"
+}
+
 // PAM targets contain only references and public routing metadata. Their
 // immutable registration event prevents an approved target digest changing.
 type PAMTargetRegistered struct {
@@ -8298,7 +8304,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.TargetType == "ssh" {
 			return p.store.ApplyPAMSSHActivationRequestedTx(ctx, tx, e.TenantID, pl.ID, pl.RequestID, e.Time)
 		}
-		if pl.TargetType != "" && pl.TargetType != "postgres" {
+		if pl.TargetType != "" && !PAMDatabaseTargetType(pl.TargetType) {
 			return fmt.Errorf("projections: invalid PAM activation target type %q", pl.TargetType)
 		}
 		return nil
@@ -8325,7 +8331,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.RegisteredBy == "" || (pl.TargetType != "postgres" && pl.TargetType != "ssh") {
+		if pl.ID == "" || pl.RegisteredBy == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetRegisteredTx(ctx, tx, store.PAMTarget{
@@ -8394,7 +8400,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (pl.TargetType != "postgres" && pl.TargetType != "ssh") {
+		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)

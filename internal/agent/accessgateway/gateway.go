@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
+	"trstctl.com/trstctl/internal/crypto/redissignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/sshgateway"
 )
@@ -215,11 +216,19 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "credential_unavailable", 0))
 		return
 	}
+	// The session's own password is masked wherever it shows up.
 	var secrets [][]byte
-	if target, err := pgsignin.ParseDSN(material[intent.CredentialRef]); err == nil {
-		// The session's own password is masked wherever it shows up.
-		secrets = append(secrets, append([]byte(nil), target.Password...))
-		target.Wipe()
+	switch intent.TargetType {
+	case TargetPostgres:
+		if target, err := pgsignin.ParseDSN(material[intent.CredentialRef]); err == nil {
+			secrets = append(secrets, append([]byte(nil), target.Password...))
+			target.Wipe()
+		}
+	case TargetRedis:
+		if target, err := redissignin.ParseURL(material[intent.CredentialRef]); err == nil {
+			secrets = append(secrets, append([]byte(nil), target.Password...))
+			target.Wipe()
+		}
 	}
 	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy,
 		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
@@ -459,6 +468,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		dsn := s.credential()
 		defer secret.Wipe(dsn)
 		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
+	case TargetRedis:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		if err := serveRedis(ctx, conn, credential, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetSSH:

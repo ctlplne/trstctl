@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1894,7 +1895,27 @@ type PAM struct {
 	RecordingRetention string              `json:"recording_retention,omitempty"`
 	PostgresTargets    []PAMPostgresTarget `json:"postgres_targets,omitempty"`
 	SSHTargets         []PAMSSHTarget      `json:"ssh_targets,omitempty"`
+	// DatabaseTargets (A256) are provider-backed targets of the other
+	// database kinds, reached only through an access gateway: target_type
+	// redis. Each names a dynamic-secret provider of its kind, whose
+	// per-session login only the gateway ever holds.
+	DatabaseTargets []PAMDatabaseTarget `json:"database_targets,omitempty"`
 }
+
+// PAMDatabaseTarget is one gateway-delivered database target (A256).
+type PAMDatabaseTarget struct {
+	TenantID       string   `json:"tenant_id"`
+	ID             string   `json:"id"`
+	TargetType     string   `json:"target_type"`
+	ProviderID     string   `json:"provider_id"`
+	AllowedRoles   []string `json:"allowed_roles"`
+	GatewayAgentID string   `json:"gateway_agent_id"`
+	GatewayAddress string   `json:"gateway_address"`
+}
+
+// PAMDatabaseTargetTypes are the database kinds a PAM database target may
+// name (A256), each served only through an access gateway.
+var PAMDatabaseTargetTypes = []string{"redis"}
 
 type PAMPostgresTarget struct {
 	TenantID     string   `json:"tenant_id"`
@@ -5090,8 +5111,8 @@ func validatePAM(p PAM) []error {
 		return nil
 	}
 	var errs []error
-	if len(p.PostgresTargets)+len(p.SSHTargets) == 0 {
-		errs = append(errs, errors.New("pam requires at least one postgres_targets or ssh_targets entry"))
+	if len(p.PostgresTargets)+len(p.DatabaseTargets)+len(p.SSHTargets) == 0 {
+		errs = append(errs, errors.New("pam requires at least one postgres_targets, database_targets or ssh_targets entry"))
 	}
 	parsePositive := func(name, raw string) time.Duration {
 		if strings.TrimSpace(raw) == "" {
@@ -5141,6 +5162,26 @@ func validatePAM(p PAM) []error {
 				errs = append(errs, fmt.Errorf("%s role %q must be readonly or writer", prefix, role))
 			}
 		}
+	}
+	for i, target := range p.DatabaseTargets {
+		prefix := fmt.Sprintf("pam.database_targets[%d]", i)
+		if _, err := uuid.Parse(target.TenantID); err != nil || target.ID == "" || target.ProviderID == "" || len(target.AllowedRoles) == 0 {
+			errs = append(errs, fmt.Errorf("%s requires tenant_id UUID, id, provider_id, and allowed_roles", prefix))
+		}
+		if !slices.Contains(PAMDatabaseTargetTypes, target.TargetType) {
+			errs = append(errs, fmt.Errorf("%s target_type must be one of %s", prefix, strings.Join(PAMDatabaseTargetTypes, ", ")))
+		}
+		if _, err := uuid.Parse(target.GatewayAgentID); err != nil {
+			errs = append(errs, fmt.Errorf("%s is served only through a gateway: gateway_agent_id must be an agent UUID", prefix))
+		}
+		if host, port, err := net.SplitHostPort(target.GatewayAddress); err != nil || host == "" || port == "" {
+			errs = append(errs, fmt.Errorf("%s gateway_address must be host:port", prefix))
+		}
+		key := target.TenantID + "/" + target.TargetType + "/" + target.ID
+		if seen[key] {
+			errs = append(errs, fmt.Errorf("%s duplicates a tenant target id", prefix))
+		}
+		seen[key] = true
 	}
 	for i, target := range p.SSHTargets {
 		prefix := fmt.Sprintf("pam.ssh_targets[%d]", i)

@@ -74,3 +74,13 @@ it("shows target inventory but no registration controls to a session requester",
   expect(screen.queryByRole("button", { name: "Register target" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Disable target" })).not.toBeInTheDocument();
 });
+
+it("lists a gateway-served Redis target by its provider and roles", async () => {
+  apiMock.pamTargets.mockResolvedValue({
+    items: [{ id: "cache", target_type: "redis", provider_id: "tenant-redis", allowed_roles: ["redis-writer"], source: "operator", enabled: true }],
+  });
+  mount(false);
+  expect(await screen.findByText("redis/cache")).toBeInTheDocument();
+  expect(screen.getByText("tenant-redis")).toBeInTheDocument();
+  expect(screen.getByText("redis-writer")).toBeInTheDocument();
+});

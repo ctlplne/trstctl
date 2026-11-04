@@ -29,6 +29,14 @@
   recording with its signed manifest and places legal holds, and every read is recorded. `access:terminate` ends a live
   gateway session; the gateway's end report acknowledges it, and until then the session reads `uncertain_until` its
   native deadline. `pam.recording_retention` deletes sealed recordings unless a legal hold keeps them.
+- Redis sessions through the access gateway (A256 part 1): a `pam.database_targets` entry or tenant registration of
+  `target_type: "redis"` names a Redis dynamic-secret provider and a gateway, which is required. The gateway redeems
+  the session's own ACL user, signs in with AUTH itself (`internal/crypto/redissignin`; `rediss://` verified against
+  the system roots) and relays a stock client's RESP commands; AUTH, HELLO with AUTH and RESET are never forwarded
+  (a command the server refuses goes in their place, so the refusal arrives in order and the connection keeps the
+  session's user). Recordings hold each command and each reply's type with bounded, masked values; a refused
+  command is recorded by name only. `trstctl-cli access sessions connect` prints the `redis-cli` command. Migration
+  0392 admits Redis targets; PostgreSQL targets' approval digests are unchanged.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

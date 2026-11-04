@@ -2368,6 +2368,30 @@ requester receives a one-time ticket, never the credential. Run the gateway as
 `agent_channel.claimable_job_kinds`. See the
 [access gateway design](design/access-gateway.md).
 
+Redis targets (A256) are `pam.database_targets` entries with `target_type: "redis"`. Each
+names a Redis dynamic-secret provider (`provider_id`; the target's `allowed_roles` are
+roles that provider enables, each an ACL user scope of key prefixes and commands) and a
+gateway binding, which is required: a Redis session is delivered only through its
+gateway, which signs in as the session's own ACL user. The tenant registration endpoint
+takes the same fields.
+
+```json
+{
+  "pam": {
+    "enabled": true,
+    "database_targets": [{
+      "tenant_id": "22222222-2222-4222-8222-222222222222",
+      "id": "incident-cache",
+      "target_type": "redis",
+      "provider_id": "tenant-redis-provider",
+      "allowed_roles": ["redis-reader"],
+      "gateway_agent_id": "33333333-3333-4333-8333-333333333333",
+      "gateway_address": "gateway.internal.example:7443"
+    }]
+  }
+}
+```
+
 For Kubernetes, create a dedicated namespace and an administrator ServiceAccount
 whose Role can create, get, and delete ServiceAccounts, Opaque Secrets, and RoleBindings,
 create `serviceaccounts/token`, and `bind` only the named target Roles or

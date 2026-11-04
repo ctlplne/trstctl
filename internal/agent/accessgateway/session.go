@@ -21,8 +21,10 @@ import (
 const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession = relay.KindAccessGatewaySession
-	// TargetPostgres and TargetSSH are the session types the gateway serves.
+	// TargetPostgres, TargetRedis and TargetSSH are the session types the
+	// gateway serves.
 	TargetPostgres = "postgres"
+	TargetRedis    = "redis"
 	TargetSSH      = "ssh"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
@@ -30,8 +32,15 @@ const (
 	maxPrefaceBytes = 512
 )
 
+// RedeemsCredential reports whether a session type's upstream credential
+// arrives by redemption: every database type does, and the gateway signs in
+// with it itself (A254, A256). An SSH session redeems nothing.
+func RedeemsCredential(targetType string) bool {
+	return targetType == TargetPostgres || targetType == TargetRedis
+}
+
 // SessionIntent is the job payload: one session, by reference only. A
-// PostgreSQL session's upstream credential arrives by redemption under
+// database session's upstream credential arrives by redemption under
 // CredentialRef; an SSH session redeems nothing — the gateway certifies a key
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
@@ -85,19 +94,19 @@ func ValidateSessionIntent(in SessionIntent) error {
 	switch {
 	case in.SessionID == "" || in.TargetID == "" || in.RequiredAgentID == "":
 		return errors.New("accessgateway: a session needs its id, target and gateway")
-	case in.TargetType != TargetPostgres && in.TargetType != TargetSSH:
-		return errors.New("accessgateway: a session is postgres or ssh")
+	case !RedeemsCredential(in.TargetType) && in.TargetType != TargetSSH:
+		return errors.New("accessgateway: a session is postgres, redis or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
 	}
-	if in.TargetType == TargetPostgres {
+	if RedeemsCredential(in.TargetType) {
 		if in.CredentialRef != CredentialRef(in.SessionID) {
 			return errors.New("accessgateway: a session redeems only its own credential")
 		}
 		if in.SSHAddress != "" || in.SSHPrincipal != "" || len(in.SSHHostKeyFingerprints) != 0 {
-			return errors.New("accessgateway: a PostgreSQL session carries no SSH routing")
+			return errors.New("accessgateway: a database session carries no SSH routing")
 		}
 		return nil
 	}

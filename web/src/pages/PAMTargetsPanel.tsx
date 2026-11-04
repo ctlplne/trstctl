@@ -173,9 +173,9 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                     {target.target_type}/{target.id}
                   </td>
                   <td className="font-mono text-xs">
-                    {target.target_type === "postgres" ? target.provider_id : t("admin.access.hostPort", { host: target.host ?? "", port: target.port ?? 0 })}
+                    {target.target_type === "ssh" ? t("admin.access.hostPort", { host: target.host ?? "", port: target.port ?? 0 }) : target.provider_id}
                   </td>
-                  <td>{target.target_type === "postgres" ? target.allowed_roles?.join(", ") : target.principals?.join(", ")}</td>
+                  <td>{target.target_type === "ssh" ? target.principals?.join(", ") : target.allowed_roles?.join(", ")}</td>
                   <td>{target.source === "tenant" ? t("admin.access.sourceTenant") : t("admin.access.sourceOperator")}</td>
                   <td>{target.enabled ? t("admin.access.targetEnabled") : t("admin.access.targetDisabledStatus")}</td>
                   <td>

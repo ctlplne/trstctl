@@ -8715,9 +8715,8 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- Session recording, masking and live termination (A255); MySQL, MongoDB, Redis,
-  ClickHouse and Kubernetes sessions (A256); the agent launcher (A257); credential health
-  checks and emergency access (A258).
+- MySQL, MongoDB, ClickHouse and Kubernetes sessions (A256; Redis is served); the agent
+  launcher (A257); credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8749,3 +8748,30 @@ What comes next:
 - Recording without an object store (a directory store) and per-target maximum session
   lengths; privacy erasure of PAM operator metadata (target disable reasons, legal hold
   reasons) alongside the session subject's.
+
+## More session types through the gateway (A256) — Redis served
+
+Status: Redis is served; MySQL, MongoDB, ClickHouse and Kubernetes sessions are the rest of
+A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
+names a Redis dynamic-secret provider and a gateway, which is required: the broker refuses
+a Redis target without one. A session's credential is an ACL user the provider creates for
+it, scoped by the role's key prefixes and commands; the gateway redeems it, signs in with
+AUTH itself and relays a stock client's commands. AUTH, HELLO with AUTH and RESET are never
+forwarded: a command the server refuses goes in their place, so the refusal arrives in order
+and the connection keeps the session's user. Recordings keep each command and reply with
+bounded, masked values, and a refused command by name only.
+`TestServedGatewayRedisSessionsA256` proves it with stock `redis-cli` (run in the target's
+own image, through the CLI tunnel on the host): the client holds no password and nothing it
+reads carries the session's user; the ACL scopes the session (another prefix answers
+NOPERM); AUTH, RESET and HELLO with AUTH are refused in place on one connection, which still
+reads its own keys after each; the target refuses a client with no credential; termination
+closes a live connection and the gateway acknowledges it; both sessions' ACL users are
+removed; the recording seals, verifies and shows each command, reply and refusal with the
+token masked.
+
+What comes next:
+- MySQL, MongoDB, ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where
+  their images run on this Mac, otherwise in the x86 block.
+- A Redis target behind TLS with a private CA: the gateway verifies `rediss://` against the
+  system roots, and the provider's `redis_tls_ca_ref` is not yet carried to it with the
+  session's credential.

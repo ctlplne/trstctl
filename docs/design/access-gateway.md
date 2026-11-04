@@ -14,8 +14,8 @@ separate design with no component in the call path, and does not reuse the gatew
 | Piece | Role |
 |---|---|
 | Control plane | Approves and opens the session (F33), binds it to its gateway, mints a one-time ticket (stores only its SHA-256), queues the session as one agent job, revokes. |
-| Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs in a claim loop of its own, holds each session's upstream credential in locked memory (a redeemed PostgreSQL login, or a key it generated for an SSH session and the certificate the tenant SSH CA issued for it), admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
-| CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`, `ssh`) connect to the loopback address. |
+| Gateway | `trstctl-agent` in its own process with the **gateway** role (granted explicitly, with `agents:relay.grant`; a host-role agent cannot serve it) and `--access-gateway-listen`. It claims session jobs in a claim loop of its own, holds each session's upstream credential in locked memory (a redeemed PostgreSQL login or Redis ACL user, or a key it generated for an SSH session and the certificate the tenant SSH CA issued for it), admits only connections carrying the session's ticket, signs in upstream itself and never returns the credential. |
+| CLI | `trstctl access sessions connect <id> --ticket-file F`: a loopback listener; each local connection becomes one TLS connection to the gateway, verified as below. Stock clients (`psql`, `redis-cli`, `ssh`) connect to the loopback address. |
 
 The gateway's outbound destinations are the control plane and the targets bound to it.
 Its listener serves a certificate the agent CA signs for it (in the signer process, AN-4):
@@ -144,6 +144,28 @@ tenant sealing and the audit signing key — every gateway session job carries
   manifest digest stay, reading `deleted`), unless a legal hold keeps it; releasing the hold
   lets retention take it on its next pass.
 
+## Session types (A256)
+
+Every database type follows PostgreSQL's pattern: the session's credential is a per-session
+login a dynamic-secret provider of the type's kind mints at the open, the gateway redeems
+it and signs in with a sign-in of its own under `internal/crypto` (the agent binary links no
+database driver), and the client's hop carries no credential. Types other than PostgreSQL
+are served only through a gateway; the target builder refuses one without a binding.
+
+- **Redis.** The provider's ACL user for the session (the role's key prefixes and commands;
+  PING is always allowed). The gateway sends `AUTH <user> <password>` and, for a database
+  other than 0, `SELECT`, over plaintext or `rediss://` verified against the system roots,
+  then relays RESP. It reads each client command's name before forwarding anything: AUTH,
+  HELLO with an AUTH option and RESET would change the connection's login, so they are
+  never forwarded — a command the server answers with an error
+  (`TRSTCTL-GATEWAY-REFUSED-<command>`) goes in their place, so the refusal reaches the
+  client in order even when commands are pipelined, and the connection keeps the session's
+  user. Inline (telnet-style) commands close the connection. A command is held whole, and
+  recorded, before it is forwarded up to 1 MiB; past that it streams. Recordings keep each
+  command with its arguments (each cut at 256 bytes, binary ones by size, 4 KiB per
+  command) and each reply's RESP2 or RESP3 type with a rendering under the same bounds; a
+  refused command is recorded by its name alone, never its arguments.
+
 ## Failure modes
 
 - **Control-plane restart mid-session** — the session row, its events and its job row are
@@ -170,6 +192,7 @@ deliberate grant.
 |---|---|
 | A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
 | A client connecting straight to the target | The client holds no credential the target accepts. |
+| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET) | Never forwarded; the server refuses a stand-in command in its place, and the connection keeps the session's user. |
 | A host impersonating the SSH target | The gateway accepts only a host key the target registration pins. |
 | A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
@@ -183,6 +206,7 @@ A254 is served: PostgreSQL and SSH through the gateway. The served proofs drive 
 requester key at the open, another tenant at the API, an expired session at the gateway
 and a straight connection at the target; and restart the control plane mid-session — the
 live connection continues, the gateway's lease extends against the new process, and the
-session keeps its one start, one job and deadline. Recording, masking and live termination
-(A255), more session types (A256), the agent launcher (A257) and credential health and
-emergency access (A258) follow.
+session keeps its one start, one job and deadline. A255 (recording, masking, live
+termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`, stock
+`redis-cli`); MySQL, MongoDB, ClickHouse and Kubernetes follow, then the agent launcher
+(A257) and credential health and emergency access (A258).
