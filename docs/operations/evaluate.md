@@ -119,6 +119,32 @@ trstctl evaluate --server https://trstctl.example.internal \
   --out evaluation-pack.json --sign
 ```
 
+## Unattended cycles
+
+`--cycles 3 --interval 5m` runs the chosen journeys three times, five minutes
+apart, with nobody watching. Each cycle is its own run, with its own idempotency
+keys, certificates and audit window. The pack (format
+`trstctl.evaluation-pack/v3`) keeps every cycle under `cycles`, with the last
+cycle's steps, journeys and audit export at the top and a verdict and summary for
+the whole run. An endpoint is enrolled once: after the first cycle, the
+certificate journey issues the enrolled identity's next certificate through
+renewal, then deploys, verifies, renews and revokes as before.
+
+When the control plane cannot be reached (it is restarting, or what fronts it
+answers 502, 503 or 504), the cycle it cut short is `interrupted`, not failed.
+The command waits up to `--recovery-timeout` (10 minutes by default) for
+`/readyz`, records when the outage was first seen and when the control plane
+answered again, and runs the next cycle. The run passes only when every cycle
+passed, except an interrupted cycle that the very next cycle passed after. A
+failure with the control plane up, an outage in the last cycle and an outage that
+outlasts the timeout each fail it. The incident journey stops the endpoint it
+contains, so it runs once and is refused with `--cycles`.
+
+```bash
+trstctl evaluate --server https://trstctl.example.internal --deployment-target "$TARGET_ID" \
+  --journeys certificate,secrets,ssh --cycles 12 --interval 30m --out evaluation-pack.json --sign
+```
+
 ## What it does not show
 
 - **Discovery is a handshake, not a sweep.** The control plane connects to the

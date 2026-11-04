@@ -62,7 +62,7 @@ func Verify(document []byte, keys *jose.JWKSet) (Pack, string, error) {
 	if err := json.Unmarshal(payload, &signed); err != nil {
 		return Pack{}, "", fmt.Errorf("evaluate: decode signed pack: %w", err)
 	}
-	if signed.Format != PackFormat && signed.Format != PackFormatV2 {
+	if signed.Format != PackFormat && signed.Format != PackFormatV2 && signed.Format != PackFormatV3 {
 		return Pack{}, "", fmt.Errorf("evaluate: unsupported pack format %q", signed.Format)
 	}
 	// Compare meaning, not bytes: re-indenting the saved file changes nothing

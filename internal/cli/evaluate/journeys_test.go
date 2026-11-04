@@ -28,6 +28,9 @@ type labServer struct {
 	version uint64
 	// lagKRL leaves this many KRL reads without the latest revocation.
 	lagKRL int
+	// down answers every request 503, /readyz included, as a control plane
+	// that is restarting does through its load balancer.
+	down bool
 }
 
 type labSecret struct {
@@ -56,10 +59,16 @@ func (l *labServer) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
 		_ = json.NewEncoder(w).Encode(v)
 	}
+	if l.down {
+		reply(http.StatusServiceUnavailable, map[string]any{"detail": "restarting"})
+		return
+	}
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	const store = "/api/v1/secrets/store"
 	switch {
+	case r.URL.Path == "/readyz":
+		w.WriteHeader(http.StatusOK)
 	case r.Method == http.MethodPost && r.URL.Path == store:
 		name, value := body["name"].(string), body["value"].(string)
 		l.secrets[name] = labSecret{value: value, version: 1}

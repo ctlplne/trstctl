@@ -20,6 +20,9 @@ type apiClient struct {
 	base  string
 	token string
 	http  *http.Client
+	// unavailable hears every call that could not reach the control plane:
+	// a transport error, or a 502, 503 or 504 from what fronts it.
+	unavailable func(error)
 }
 
 // apiError is a refused or failed API call, with the server's own words.
@@ -60,15 +63,30 @@ func (c *apiClient) do(ctx context.Context, method, path string, body any, idemp
 func (c *apiClient) send(req *http.Request, method, path string) ([]byte, error) {
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: %w", method, path, err)
+		err = fmt.Errorf("%s %s: %w", method, path, err)
+		if c.unavailable != nil && req.Context().Err() == nil {
+			c.unavailable(err)
+		}
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: read response: %w", method, path, err)
+		err = fmt.Errorf("%s %s: read response: %w", method, path, err)
+		if c.unavailable != nil && req.Context().Err() == nil {
+			c.unavailable(err)
+		}
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &apiError{Method: method, Path: path, Status: resp.StatusCode, Detail: problemDetail(data)}
+		refused := &apiError{Method: method, Path: path, Status: resp.StatusCode, Detail: problemDetail(data)}
+		switch resp.StatusCode {
+		case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			if c.unavailable != nil {
+				c.unavailable(refused)
+			}
+		}
+		return nil, refused
 	}
 	return data, nil
 }

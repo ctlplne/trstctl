@@ -7710,7 +7710,7 @@ and writes a signed evidence pack. Read the pack with these limits:
   deploys two certificates and revokes the first. It is not a load, failover or
   long-running test, and belongs on an endpoint under evaluation.
 
-### Evaluation across journeys (A249)
+### Evaluation across journeys (A249) — served
 
 `--journeys certificate,secrets,ssh,workload,incident` adds the secrets journey
 (create, read, rotate, `trstctl run` into a child process, delete), the SSH journey
@@ -7725,11 +7725,13 @@ longer serving it) to the same signed pack (`trstctl.evaluation-pack/v2`);
 `--force-failure <journey>` shows that journey's failure reported as a failure. Each
 journey passes against a served control plane and, for the incident journey, a host
 agent with a containment grant. The game day runs as a static preview and a mocked
-rehearsal, not against a target. What comes next:
-
-- **Unattended cycles with recovery.** Repeating the journeys on an interval, with
-  a restart of the control plane mid-cycle and a recovery check that the next
-  cycle passes.
+rehearsal, not against a target. `--cycles` repeats the journeys unattended,
+`--interval` apart, into one pack (`trstctl.evaluation-pack/v3`): a cycle cut short
+because the control plane could not be reached is interrupted, the command waits
+for `/readyz`, and the run passes only if the next cycle passes after it. The
+served proof restarts the control plane in the middle of a cycle under the secrets
+and SSH journeys and repeats the certificate journey on one endpoint; a restart
+during the certificate journey is checked on the real image in the replay.
 
 ## Customer assurance reports
 

@@ -33,7 +33,7 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "                        [--owner name] [--profile name] [--timeout 10m] [--out evaluation-pack.json]")
 	_, _ = fmt.Fprintln(w, "                        [--journeys certificate,secrets,ssh,workload,incident] [--force-failure journey]")
 	_, _ = fmt.Fprintln(w, "                        [--ssh-principal name]")
-	_, _ = fmt.Fprintln(w, "                        [--workload-socket path]")
+	_, _ = fmt.Fprintln(w, "                        [--workload-socket path] [--cycles n --interval 5m --recovery-timeout 10m]")
 	_, _ = fmt.Fprintln(w, "                        [--ca-file file] [--token-file file] [--sign --signer-socket path]")
 	_, _ = fmt.Fprintln(w, "       trstctl evaluate verify --pack <file> --audit-jwks <file>")
 	_, _ = fmt.Fprintln(w, "\nRuns one certificate journey against the endpoint your deployment target serves: discovery, ownership,")
@@ -47,6 +47,9 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "The incident journey (with the certificate journey) responds to a compromise of the deployed certificate's")
 	_, _ = fmt.Fprintln(w, "key: the effect-free preview, a game day, the reviewed revoke-and-contain command, and OCSP plus this")
 	_, _ = fmt.Fprintln(w, "machine's handshake to check both. --deployment-target is needed for the certificate and incident journeys.")
+	_, _ = fmt.Fprintln(w, "--cycles repeats the journeys unattended, --interval apart. A cycle cut short because the control plane")
+	_, _ = fmt.Fprintln(w, "could not be reached is interrupted: the command waits up to --recovery-timeout for /readyz, and the next")
+	_, _ = fmt.Fprintln(w, "cycle must pass. The incident journey runs once.")
 	_, _ = fmt.Fprintln(w, "--force-failure <journey> makes one step of that journey expect what did not happen, to show it reported as")
 	_, _ = fmt.Fprintln(w, "a failure.")
 }
@@ -75,6 +78,9 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	forceFailure := fs.String("force-failure", "", "a journey whose one step expects what did not happen")
 	sshPrincipal := fs.String("ssh-principal", config.DefaultEvalSSHUserPrincipal, "the SSH journey's certificate principal; one protocols.ssh_user_principals lists")
 	workloadSocket := fs.String("workload-socket", getenv("SPIFFE_ENDPOINT_SOCKET"), "the Workload API socket the workload journey dials (default $SPIFFE_ENDPOINT_SOCKET)")
+	cycles := fs.Int("cycles", 1, "how many times to run the journeys, unattended")
+	interval := fs.Duration("interval", 5*time.Minute, "the wait between cycles")
+	recoveryTimeout := fs.Duration("recovery-timeout", 10*time.Minute, "how long to wait for the control plane to answer /readyz after an outage")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -110,7 +116,8 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	pack, err := Evaluate(ctx, Options{Server: *server, Token: token, HTTPClient: client, DeploymentTarget: *target,
 		Endpoint: *endpoint, Name: *name, Owner: *owner, Profile: *profile, Timeout: *timeout,
-		Journeys: journeys, ForceFailure: strings.TrimSpace(*forceFailure), SSHPrincipal: *sshPrincipal, WorkloadSocket: *workloadSocket})
+		Journeys: journeys, ForceFailure: strings.TrimSpace(*forceFailure), SSHPrincipal: *sshPrincipal, WorkloadSocket: *workloadSocket,
+		Cycles: *cycles, Interval: *interval, RecoveryTimeout: *recoveryTimeout})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%v\n", err)
 		return ExitError{2}
@@ -183,6 +190,16 @@ func report(w io.Writer, p Pack) {
 		for _, s := range journey.Steps {
 			_, _ = fmt.Fprintf(w, "  %-8s %-13s %s\n", strings.ToUpper(string(s.Status)), s.Name, s.Detail)
 		}
+	}
+	for _, c := range p.Cycles {
+		line := fmt.Sprintf("cycle %d: %s (%d passed, %d failed, %d skipped)", c.Cycle, strings.ToUpper(string(c.Verdict)), c.Summary.Passed, c.Summary.Failed, c.Summary.Skipped)
+		if c.Outage != nil {
+			line += fmt.Sprintf("; control plane unreachable from %s", c.Outage.FirstSeen.Format(time.RFC3339))
+			if !c.Outage.RecoveredAt.IsZero() {
+				line += fmt.Sprintf(", answering again at %s", c.Outage.RecoveredAt.Format(time.RFC3339))
+			}
+		}
+		_, _ = fmt.Fprintln(w, line)
 	}
 	_, _ = fmt.Fprintf(w, "Verdict: %s (%d passed, %d failed, %d skipped)\n", strings.ToUpper(string(p.Verdict)), p.Summary.Passed, p.Summary.Failed, p.Summary.Skipped)
 }

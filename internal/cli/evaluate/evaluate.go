@@ -103,6 +103,15 @@ type Options struct {
 	// WorkloadSocket is the Workload API socket the workload journey dials as
 	// a workload on this host.
 	WorkloadSocket string
+	// Cycles repeats the chosen journeys unattended, Interval apart (A249).
+	// A cycle that fails while the control plane cannot be reached is
+	// interrupted: the evaluator waits up to RecoveryTimeout for /readyz, and
+	// the next cycle has to pass to show the recovery. CycleStarted, when set,
+	// hears each cycle start.
+	Cycles          int
+	Interval        time.Duration
+	RecoveryTimeout time.Duration
+	CycleStarted    func(cycle int)
 	// RunCLI replaces running `trstctl run` in the secrets journey; nil runs
 	// this binary.
 	RunCLI func(ctx context.Context, secretName, want string) error
@@ -126,8 +135,12 @@ type Pack struct {
 	AuditExport *AuditEvidence `json:"audit_export,omitempty"`
 	// Journeys are a v2 pack's journeys beside the certificate journey,
 	// whose steps stay in Steps.
-	Journeys  []JourneyResult `json:"journeys,omitempty"`
-	Signature *Signature      `json:"signature,omitempty"`
+	Journeys []JourneyResult `json:"journeys,omitempty"`
+	// Cycles are a v3 pack's unattended cycles, first to last; Steps,
+	// Journeys and AuditExport are then the last cycle's, and Verdict and
+	// Summary cover every cycle.
+	Cycles    []CycleResult `json:"cycles,omitempty"`
+	Signature *Signature    `json:"signature,omitempty"`
 }
 
 // Target is what the partner chose.
@@ -189,6 +202,12 @@ type journey struct {
 	// servedChain is the chain the endpoint last served this evaluator.
 	servedChain [][]byte
 	keyPrefix   string
+	// outage is the current cycle's stretch without the control plane.
+	outage *Outage
+	// enrolled is the identity the first cycle enrolled for the endpoint, and
+	// lastDeployed the certificate a cycle left deployed: a later cycle issues
+	// that identity's next certificate.
+	enrolled, lastDeployed string
 }
 
 // Evaluate drives the journey and returns its pack, unsigned. It returns an
@@ -229,6 +248,15 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 	if certificateJourney && strings.TrimSpace(opts.DeploymentTarget) == "" {
 		return Pack{}, errors.New("evaluate: the certificate journey needs a deployment target")
 	}
+	if opts.Cycles <= 0 {
+		opts.Cycles = 1
+	}
+	if opts.Cycles > 1 && slices.Contains(opts.Journeys, JourneyIncident) {
+		return Pack{}, errors.New("evaluate: the incident journey stops the endpoint it contains, so it runs once: run it without --cycles")
+	}
+	if opts.RecoveryTimeout <= 0 {
+		opts.RecoveryTimeout = 10 * time.Minute
+	}
 	if opts.HTTPClient == nil {
 		opts.HTTPClient = netsec.HardenedClient(60 * time.Second)
 	}
@@ -245,6 +273,22 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 		if err := j.resolveTarget(ctx); err != nil {
 			return Pack{}, err
 		}
+	}
+	if opts.Cycles > 1 {
+		j.runCycles(ctx, certificateJourney)
+		return *j.pack, nil
+	}
+	j.runCycle(ctx, certificateJourney, started)
+	j.finish(certificateJourney)
+	return *j.pack, nil
+}
+
+// runCycle runs every chosen journey once into the pack: the certificate
+// journey's steps, the other journeys, then the audit export of what they
+// did since started.
+func (j *journey) runCycle(ctx context.Context, certificateJourney bool, started time.Time) {
+	opts := j.opts
+	if certificateJourney {
 		j.step(ctx, StepDiscovery, j.discover)
 		j.step(ctx, StepOwnership, j.own)
 		j.step(ctx, StepIssuance, j.issue)
@@ -279,8 +323,6 @@ func Evaluate(ctx context.Context, opts Options) (Pack, error) {
 	if len(j.pack.Journeys) > 0 {
 		j.pack.Format = PackFormatV2
 	}
-	j.finish(certificateJourney)
-	return *j.pack, nil
 }
 
 // resolveTarget reads the partner's deployment target for the endpoint and the
@@ -433,6 +475,9 @@ func (j *journey) own(ctx context.Context, s *Step) error {
 // issue binds the endpoint to a new identity on the platform CA after the
 // reviewed preview, and waits for the issued certificate.
 func (j *journey) issue(ctx context.Context, s *Step) error {
+	if j.enrolled != "" {
+		return j.reissue(ctx, s)
+	}
 	request := map[string]any{
 		"owner_id": j.ownerID, "identity_name": j.pack.Target.Name, "target_id": j.pack.Target.DeploymentTargetID,
 		"issuer": map[string]string{"source": "platform", "id": "trstctl-issuing-ca"},
@@ -459,6 +504,7 @@ func (j *journey) issue(ctx context.Context, s *Step) error {
 		return fmt.Errorf("the endpoint binding was refused: %w", err)
 	}
 	j.identity, j.tenant = binding.Identity.ID, binding.Identity.TenantID
+	j.enrolled = j.identity
 	j.pack.TenantID = j.tenant
 	s.Evidence["identity_id"] = j.identity
 	cert, err := j.awaitIssuance(ctx, key, "the certificate for "+j.pack.Target.Name+" was not issued")
@@ -475,6 +521,50 @@ func (j *journey) issue(ctx context.Context, s *Step) error {
 	}
 	s.Detail = fmt.Sprintf("Identity %s was issued certificate %s (SHA-256 %s) %s.", j.identity, cert.ID, short(cert.Fingerprint), where)
 	return nil
+}
+
+// reissue is a later cycle's issuance. An endpoint is enrolled once, so the
+// identity the first cycle enrolled is issued its next certificate the way it
+// would be in service, through renewal, and the cycle goes on from there.
+func (j *journey) reissue(ctx context.Context, s *Step) error {
+	j.identity = j.enrolled
+	if err := j.awaitDeployed(ctx); err != nil {
+		return err
+	}
+	if err := j.api.post(ctx, "/api/v1/identities/"+url.PathEscape(j.identity)+"/transitions",
+		map[string]any{"to": "renewing", "reason": "design-partner evaluation, next cycle"}, j.key("issue"), nil); err != nil {
+		return fmt.Errorf("issuing the enrolled identity's next certificate was refused: %w", err)
+	}
+	if err := j.poll(ctx, "the enrolled identity's next certificate was not issued", func(ctx context.Context) (bool, error) {
+		cert, _, ok, err := j.deployedCertificate(ctx, j.lastDeployed)
+		if ok {
+			j.issued = cert
+		}
+		return ok, err
+	}); err != nil {
+		return err
+	}
+	s.Basis = BasisRecorded
+	s.Evidence["identity_id"] = j.identity
+	s.Evidence["certificate_id"], s.Evidence["fingerprint"], s.Evidence["serial"] = j.issued.ID, j.issued.Fingerprint, j.issued.Serial
+	s.Detail = fmt.Sprintf("The endpoint was enrolled in the first cycle as identity %s; this cycle issued its next certificate %s (SHA-256 %s) through renewal.",
+		j.identity, j.issued.ID, short(j.issued.Fingerprint))
+	return nil
+}
+
+// awaitDeployed waits for the identity to reach deployed. When a host agent
+// made the key, that follows its delivery receipt, which can trail the
+// certificate being served by a moment.
+func (j *journey) awaitDeployed(ctx context.Context) error {
+	return j.poll(ctx, "the identity did not reach deployed", func(ctx context.Context) (bool, error) {
+		var identity struct {
+			Status string `json:"status"`
+		}
+		if err := j.api.get(ctx, "/api/v1/identities/"+url.PathEscape(j.identity), &identity); err != nil {
+			return false, err
+		}
+		return identity.Status == "deployed", nil
+	})
 }
 
 // awaitIssuance waits for the exact issuance a request key accepted. When the
@@ -668,18 +758,8 @@ func (j *journey) awaitServed(ctx context.Context, fingerprint string) error {
 // renew asks for the identity's renewal and waits until the endpoint serves
 // the renewed certificate.
 func (j *journey) renew(ctx context.Context, s *Step) error {
-	// Renewal starts from deployed. When a host agent made the key, the
-	// identity reaches deployed when its delivery receipt is recorded, which
-	// can trail the certificate being served by a moment.
-	if err := j.poll(ctx, "the identity did not reach deployed", func(ctx context.Context) (bool, error) {
-		var identity struct {
-			Status string `json:"status"`
-		}
-		if err := j.api.get(ctx, "/api/v1/identities/"+url.PathEscape(j.identity), &identity); err != nil {
-			return false, err
-		}
-		return identity.Status == "deployed", nil
-	}); err != nil {
+	// Renewal starts from deployed.
+	if err := j.awaitDeployed(ctx); err != nil {
 		return err
 	}
 	key := j.key("renew")
@@ -829,7 +909,11 @@ func (j *journey) finish(certificateJourney bool) {
 		"Verification and the renewal check are this evaluator's own TLS handshakes from where it ran: they show what that vantage was served, not what every client is served.",
 		"Revocation was checked over OCSP at the responder the pack names. CRL publication is asynchronous and was not checked.",
 		"The audit export was checked with the audit keys this server published. Check the pack and the export again with an audit JWK set obtained separately: trstctl evaluate verify --pack <file> --audit-jwks <file>.",
-		"The journey ran once against one endpoint. It is not a load, failover or long-running test.",
+	}
+	if j.opts.Cycles <= 1 {
+		p.Limits = append(p.Limits, "The journey ran once against one endpoint. It is not a load, failover or long-running test.")
+	} else {
+		p.Limits = append(p.Limits, "The journey ran against one endpoint, one cycle at a time. It is not a load or failover test.")
 	}
 }
 

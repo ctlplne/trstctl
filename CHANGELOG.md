@@ -2,6 +2,13 @@
 
 ### Added
 
+- Unattended evaluation cycles (A249, third part; A249 is served): `trstctl evaluate --cycles n
+  --interval d` repeats the chosen journeys with nobody watching, into one pack
+  (`trstctl.evaluation-pack/v3`) that keeps every cycle. A cycle cut short because the control
+  plane could not be reached is `interrupted`: the command waits up to `--recovery-timeout` for
+  `/readyz` and records the outage, and the run passes only if the next cycle passes after it.
+  After the first cycle the certificate journey issues the enrolled identity's next certificate
+  through renewal. The incident journey runs once.
 - Incident journey for `trstctl evaluate` (A249, second part): `--journeys certificate,incident`
   responds to a compromise of the key behind the certificate the certificate journey deployed —
   the effect-free compromise preview, a revoked-credential game day (static preview and mocked
