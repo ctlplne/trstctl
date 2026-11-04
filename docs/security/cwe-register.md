@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2535 annotated sites across 31 rules. Each row is
+2537 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1269,7 +1269,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (316 sites)
+### G204 — CWE-78 OS command injection (318 sites)
 
 | Location | Reason |
 |---|---|
@@ -1506,11 +1506,13 @@ not this file.
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:30` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:36` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:45` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_dynamic_lease_rotation_container_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:33` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:42` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:80` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_scan_hooks_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |

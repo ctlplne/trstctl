@@ -26,7 +26,10 @@ const (
 // its container id and host address.
 func a201Container(t *testing.T, port string, args ...string) (string, string) {
 	t.Helper()
-	run := append([]string{"run", "-d", "--rm", "-p", "127.0.0.1::" + port}, args...)
+	// Not --rm: a container that exits at once is kept until cleanup, so the
+	// failure below can say why (CI on 491: LocalStack exited on the runner
+	// before its port was published, and nothing recorded the reason).
+	run := append([]string{"run", "-d", "-p", "127.0.0.1::" + port}, args...)
 	out, err := exec.Command("docker", run...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
 		t.Fatalf("docker run: %v\n%s", err, out)
@@ -35,7 +38,9 @@ func a201Container(t *testing.T, port string, args ...string) (string, string) {
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", id).Run() })  // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	mapped, err := exec.Command("docker", "port", id, port+"/tcp").Output() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	if err != nil {
-		t.Fatalf("docker port: %v", err)
+		state, _ := exec.Command("docker", "inspect", "--format", "{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}", id).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		logs, _ := exec.Command("docker", "logs", "--tail", "60", id).CombinedOutput()                                                                                               // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		t.Fatalf("docker port: %v (container %s)\n%s", err, strings.TrimSpace(string(state)), logs)
 	}
 	return id, strings.TrimSpace(strings.Split(string(mapped), "\n")[0])
 }
