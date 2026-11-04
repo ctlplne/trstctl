@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudcert/gcmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudkeys"
+	"trstctl.com/trstctl/internal/discovery/cloudkms"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
 	azurekvsecretdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/azurekv"
@@ -34,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/driftplan"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
+	"trstctl.com/trstctl/internal/discovery/lbtls"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
@@ -213,6 +215,11 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	orchestrator.AttackPathSourceKind: (*issuanceDispatcher).executeCloudNetworkPathDiscoveryRun,
 	// M3: a cloud account's IAM user access keys with their age and last use.
 	cloudkeys.SourceKind: (*issuanceDispatcher).executeCloudAccessKeyDiscoveryRun,
+	// X4: an account and Region's KMS keys with type, size and rotation status.
+	cloudkms.SourceKind: (*issuanceDispatcher).executeCloudKMSKeyDiscoveryRun,
+	// X4: the TLS policy each AWS load-balancer listener or BIG-IP virtual
+	// server enforces, and one crypto-inventory finding at its oldest version.
+	lbtls.SourceKind: (*issuanceDispatcher).executeLoadBalancerTLSDiscoveryRun,
 	// secret_store routes through the same served secret-manager
 	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
 	// azure-key-vault, hashicorp-vault): the kinds share the providers

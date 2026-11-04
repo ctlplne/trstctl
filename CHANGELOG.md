@@ -2,6 +2,15 @@
 
 ### Added
 
+- Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
+  lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
+  its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,
+  `disabled`, `not_supported` for keys KMS cannot rotate, `unknown` with KMS's error code), and flags a key KMS could
+  rotate but is not rotating; key material is never read (proven against LocalStack KMS). A `load_balancer_tls`
+  source reads the TLS policy each AWS Application or Network Load Balancer listener (`aws-elbv2`) or F5 BIG-IP
+  virtual server (`f5-bigip`, iControl REST as a read-only user) enforces, and records one crypto-inventory finding
+  per listener at the oldest version it allows, so a listener that allows TLS 1.0 is one weak TLSv1.0 finding,
+  replaced when the policy is tightened (proven against ELBv2 and BIG-IP stand-ins).
 - Live discovery of cloud access keys (M3): a `cloud_access_key` discovery source with the `aws-iam` provider
   lists every IAM user's access keys with status, creation date, age and last use (date, service, Region) through
   the read-only `ListUsers`, `ListAccessKeys` and `GetAccessKeyLastUsed` calls, flags an active key unused for

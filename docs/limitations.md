@@ -8647,3 +8647,32 @@ What comes next:
 - The access graph does not yet link a key to its IAM user as a cloud principal, and
   remediation does not yet offer to replace a stale key with a dynamic AWS credential
   from the finding.
+
+## Cloud KMS keys and load-balancer TLS policies (X4) — served
+
+Status: served for AWS KMS, AWS Application and Network Load Balancers, and F5 BIG-IP. A `cloud_kms_key` source with an `aws-kms` provider
+lists every key in a Region with its type and size (from the key spec), usage, state,
+manager, origin and automatic-rotation status, and flags a key KMS could rotate but is
+not rotating (risk 60). `TestServedCloudKMSKeyInventoryShowsTypeAndRotationX4` runs it
+against LocalStack KMS: a rotating and an unrotated symmetric key, an RSA 2048 signing
+key and an ECDSA P-256 signing key appear with their type, size, usage and rotation
+status (the asymmetric keys `not_supported`, never asked); only the unrotated key is
+flagged; KMS is unchanged; another tenant sees nothing. A `load_balancer_tls` source
+reads each AWS listener's security policy and each BIG-IP virtual server's client SSL
+profile options as the versions they allow, and records one crypto-inventory finding per
+listener at the oldest one. `TestServedListenerPolicyAllowingTLS10RaisesOneFindingX4`
+runs it against an ELBv2 stand-in (LocalStack's community image has no ELBv2) and a
+BIG-IP iControl REST stand-in: each listener whose policy allows TLS 1.0 is exactly one
+weak TLSv1.0 finding, a second run adds none, a tightened policy replaces it, neither
+appliance is changed, and another tenant sees nothing.
+
+What comes next:
+- Against a real AWS account and a real BIG-IP — live proofs, Track B.
+- Azure Key Vault keys, Google Cloud KMS keys, and Azure and Google Cloud load
+  balancers are not read yet.
+- Whether a listener offers a hybrid post-quantum key exchange is not read yet.
+- A listener that is deleted keeps its last crypto-inventory fact until the asset is
+  retired; only listeners a run sees are reconciled.
+- KMS keys do not yet enter the CBOM crypto inventory (their quantum-vulnerable
+  asymmetric keys would show there), and rotation history (`ListKeyRotations`) is not
+  read, so "never rotated" is shown as rotation disabled.

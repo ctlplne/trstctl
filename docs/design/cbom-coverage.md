@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 23 served source kinds
+## Observability envelopes — 25 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -48,12 +48,14 @@ served set by construction.
 | `cbom_import_vendor` | `vendor-embedded-crypto` | `cbom-imported` | 2160h0m0s |
 | `cloud_access_key` | `cloud-access-key` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_certificate` | `cloud-certificate` | `cloud-credential-configured` | 24h0m0s |
+| `cloud_kms_key` | `cloud-kms-key` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_network_path` | `network-path` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_secret` | `stored-secret` | `cloud-credential-configured` | 24h0m0s |
 | `credential_compromise` | `compromised-credential` | `connector-credential-configured` | 24h0m0s |
 | `ct_log` | `ct-exposed-certificate` | `monitored-domains-configured` | 24h0m0s |
 | `drift` | `deployed-certificate` | `deployment-baseline-configured` | 24h0m0s |
 | `k8s_ingress_gateway` | `kubernetes-tls-endpoint` | `cluster-credential-configured` | 24h0m0s |
+| `load_balancer_tls` | `tls-listener-policy` | `cloud-credential-configured` | 24h0m0s |
 | `manual` | `operator-declared` | `operator-supplied-findings` | 24h0m0s |
 | `network` | `certificate-key`, `tls-endpoint` | `scan-ranges-configured` | 24h0m0s |
 | `network-observer` | `passive-wire-traffic` | `observer-agent-reporting` | 24h0m0s |
@@ -96,7 +98,7 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 22 observable-unobserved · 5 structurally unobservable** across 29 classes.
+**2 observed · 24 observable-unobserved · 5 structurally unobservable** across 31 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
@@ -104,6 +106,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `certificate-key` | `OBSERVED` | observed by dc-east |
 | `cloud-access-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_access_key (needs: cloud-credential-configured)** |
 | `cloud-certificate` | `OBSERVABLE-UNOBSERVED` | source "acm-prod" is configured but has never completed a run — **run discovery source "acm-prod"** |
+| `cloud-kms-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_kms_key (needs: cloud-credential-configured)** |
 | `compromised-credential` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind credential_compromise (needs: connector-credential-configured)** |
 | `container-image-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source image:<name> (needs: cbom-imported)** |
 | `ct-exposed-certificate` | `OBSERVABLE-UNOBSERVED` | last run of "ct-watch" finished "failed", not "succeeded" — **fix and re-run discovery source "ct-watch"** |
@@ -123,6 +126,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `stored-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_secret or secret_store (needs: cloud-credential-configured)** |
 | `third-party-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind secret_third_party (needs: connector-credential-configured)** |
 | `tls-endpoint` | `OBSERVED` | observed by dc-east |
+| `tls-listener-policy` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind load_balancer_tls (needs: cloud-credential-configured)** |
 | `vendor-embedded-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source vendor:<name> (needs: cbom-imported)** |
 | `firmware-embedded-crypto` | `STRUCTURALLY-UNOBSERVABLE` | no source inspects device firmware, and a firmware scanner is a standing non-goal; a vendor's published CBOM for it imports as vendor-embedded-crypto |
 | `data-at-rest-posture` | `STRUCTURALLY-UNOBSERVABLE` | volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built |

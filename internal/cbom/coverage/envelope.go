@@ -31,6 +31,8 @@ const (
 	AssetOperatorDeclared     AssetClass = "operator-declared"
 	AssetNetworkPath          AssetClass = "network-path"
 	AssetCloudAccessKey       AssetClass = "cloud-access-key"
+	AssetCloudKMSKey          AssetClass = "cloud-kms-key"
+	AssetTLSListenerPolicy    AssetClass = "tls-listener-policy"
 	// AssetPassiveWireTraffic is what connections' handshakes state on an
 	// interface an observer agent watches (X1).
 	AssetPassiveWireTraffic AssetClass = "passive-wire-traffic" // #nosec G101 -- an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798)
@@ -124,6 +126,10 @@ func Envelopes() map[string]Envelope {
 		env("cloud_network_path", []AssetClass{AssetNetworkPath}, PrecondCloudCredential),
 		// Long-lived cloud access keys with age and last use, never secrets (M3).
 		env("cloud_access_key", []AssetClass{AssetCloudAccessKey}, PrecondCloudCredential),
+		// Cloud KMS keys with type, size and rotation status, never key material (X4).
+		env("cloud_kms_key", []AssetClass{AssetCloudKMSKey}, PrecondCloudCredential),
+		// Load-balancer listener TLS policies on AWS and BIG-IP (X4).
+		env("load_balancer_tls", []AssetClass{AssetTLSListenerPolicy}, PrecondCloudCredential),
 		// Secret-manager metadata, never values (F35/F36). secret_store is a
 		// served alias routed through the same connectors.
 		env("cloud_secret", []AssetClass{AssetStoredSecret}, PrecondCloudCredential),

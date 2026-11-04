@@ -93,6 +93,8 @@ const sourceKindLabels: Record<SourceKind, string> = {
   cloud_certificate: "Cloud certificates",
   cloud_network_path: translateNow("discovery.sourceKind.cloudNetworkPath"),
   cloud_access_key: translateNow("discovery.sourceKind.cloudAccessKey"),
+  cloud_kms_key: translateNow("discovery.sourceKind.cloudKmsKey"),
+  load_balancer_tls: translateNow("discovery.sourceKind.loadBalancerTls"),
   cloud_secret: "Cloud secrets",
   ct_log: "Certificate Transparency",
   drift: "Drift",

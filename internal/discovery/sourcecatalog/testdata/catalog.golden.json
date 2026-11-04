@@ -837,6 +837,273 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-access-keys"
     },
     {
+      "kind": "cloud_kms_key",
+      "label": "Cloud KMS keys",
+      "purpose": "Inventory the keys a cloud account's key management service holds, with each key's type, size and rotation status, so unrotated and quantum-vulnerable keys stand out.",
+      "data_handling": "Uses read-only provider calls and credential references. It stores each key's ID, ARN, key spec, usage, state, manager, origin, creation date and rotation status, never key material or any other account contents.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=cloud_kms_key",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": true,
+          "description": "The Region whose keys are read."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Optional compatible endpoint; the public provider default is safer."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Optional short-lived session-token reference."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-kms",
+          "label": "AWS Key Management Service keys",
+          "least_privilege": "kms:ListKeys, kms:DescribeKey and kms:GetKeyRotationStatus on the authorized account/Region",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-kms-keys"
+    },
+    {
+      "kind": "load_balancer_tls",
+      "label": "Load-balancer TLS policies",
+      "purpose": "Read the TLS policy each load-balancer listener enforces, so a listener that still allows TLS 1.0 or 1.1 stands out in the crypto inventory.",
+      "data_handling": "Uses read-only provider calls and credential references. It stores each listener's name, port, policy, allowed versions and ciphers, never certificates' keys, traffic or other configuration.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=load_balancer_tls",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": false,
+          "description": "The AWS Region whose load balancers are read (aws-elbv2)."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "The BIG-IP management URL (f5-bigip, required), or an optional compatible AWS endpoint."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "AWS: reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "AWS: reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "AWS: optional short-lived session-token reference."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "iControl REST token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "BIG-IP: a token for a read-only (Guest or Auditor) user, instead of a user and password."
+        },
+        {
+          "path": "providers[].username_ref",
+          "label": "User reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "BIG-IP: a read-only (Guest or Auditor) user."
+        },
+        {
+          "path": "providers[].password_ref",
+          "label": "Password reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "BIG-IP: that user's password, by reference only."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-elbv2",
+          "label": "AWS Application and Network Load Balancers",
+          "least_privilege": "elasticloadbalancing:DescribeLoadBalancers, DescribeListeners and DescribeSSLPolicies on the authorized account/Region",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref"
+          ]
+        },
+        {
+          "id": "f5-bigip",
+          "label": "F5 BIG-IP virtual servers and client SSL profiles",
+          "least_privilege": "GET /mgmt/tm/ltm/virtual and /mgmt/tm/ltm/profile/client-ssl as a read-only user",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "endpoint",
+            "token_ref",
+            "username_ref",
+            "password_ref"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#load-balancer-tls-policies"
+    },
+    {
       "kind": "cloud_secret",
       "label": "Cloud secret managers",
       "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates and for the API keys, tokens, and private keys stored in it through a separate explicit choice.",

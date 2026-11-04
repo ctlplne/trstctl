@@ -14266,6 +14266,14 @@ export const messages = {
     defaultMessage: "Cloud access keys",
     description: "Discovery source kind label: a cloud account's long-lived user access keys, read with their age and last use.",
   },
+  "discovery.sourceKind.cloudKmsKey": {
+    defaultMessage: "Cloud KMS keys",
+    description: "Discovery source kind label: the keys a cloud key management service holds, read with their type, size and rotation status.",
+  },
+  "discovery.sourceKind.loadBalancerTls": {
+    defaultMessage: "Load-balancer TLS policies",
+    description: "Discovery source kind label: the TLS policy each load-balancer listener enforces, read as the protocol versions it allows.",
+  },
   "migration.form.controlPlaneExecutor": {
     defaultMessage: "Control plane (cloud certificate store, no agent)",
     description: "Migration executor option for a cloud certificate store the control plane carries itself.",

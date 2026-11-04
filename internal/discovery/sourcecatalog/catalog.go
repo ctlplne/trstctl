@@ -120,6 +120,8 @@ var items = []Capability{
 	cloudCertificateCapability(),
 	cloudNetworkPathCapability(),
 	cloudAccessKeyCapability(),
+	cloudKMSKeyCapability(),
+	loadBalancerTLSCapability(),
 	cloudSecretCapability("cloud_secret", "Cloud secret managers"),
 	cloudSecretCapability("secret_store", "Secret stores"),
 	{
@@ -210,6 +212,63 @@ func cloudAccessKeyCapability() Capability {
 			provider("aws-iam", "AWS IAM user access keys", "iam:ListUsers, iam:ListAccessKeys and iam:GetAccessKeyLastUsed on the authorized account", "env: credential references", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-access-keys",
+	}
+}
+
+// cloudKMSKeyCapability reads an account's cloud KMS keys (X4): each key's
+// type, size, usage, state and automatic-rotation status, never key material.
+// A key the service could rotate but is not rotating is flagged unrotated.
+func cloudKMSKeyCapability() Capability {
+	return Capability{
+		Kind: "cloud_kms_key", Label: "Cloud KMS keys", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_kms_key", SetupSurface: SetupSourceWizard,
+		Purpose:      "Inventory the keys a cloud account's key management service holds, with each key's type, size and rotation status, so unrotated and quantum-vulnerable keys stand out.",
+		DataHandling: "Uses read-only provider calls and credential references. It stores each key's ID, ARN, key spec, usage, state, manager, origin, creation date and rotation status, never key material or any other account contents.",
+		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
+		Configuration: []Field{
+			field("providers[].provider", "Provider", "provider", true, false, false, "The exact read-only provider adapter."),
+			field("providers[].region", "Region", "string", true, false, false, "The Region whose keys are read."),
+			field("providers[].endpoint", "API endpoint", "url", false, false, true, "Optional compatible endpoint; the public provider default is safer."),
+			field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
+			field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this provider; metadata and loopback remain blocked."),
+			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", true, true, true, "Reference only; use a short-lived least-privilege credential."),
+			field("providers[].secret_access_key_ref", "Secret access key reference", "credential_ref", true, true, true, "Reference only; the value never enters source configuration."),
+			field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "Optional short-lived session-token reference."),
+		},
+		Providers: []Provider{
+			provider("aws-kms", "AWS Key Management Service keys", "kms:ListKeys, kms:DescribeKey and kms:GetKeyRotationStatus on the authorized account/Region", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
+		},
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-kms-keys",
+	}
+}
+
+// loadBalancerTLSCapability reads the TLS policy each AWS load-balancer
+// listener or F5 BIG-IP virtual server enforces (X4): the protocol versions it
+// allows and its ciphers. A listener that allows TLS 1.0 is one weak TLSv1.0
+// finding in the crypto inventory.
+func loadBalancerTLSCapability() Capability {
+	return Capability{
+		Kind: "load_balancer_tls", Label: "Load-balancer TLS policies", Tool: "Discover", Route: "/discovery?tab=sources&kind=load_balancer_tls", SetupSurface: SetupSourceWizard,
+		Purpose:      "Read the TLS policy each load-balancer listener enforces, so a listener that still allows TLS 1.0 or 1.1 stands out in the crypto inventory.",
+		DataHandling: "Uses read-only provider calls and credential references. It stores each listener's name, port, policy, allowed versions and ciphers, never certificates' keys, traffic or other configuration.",
+		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
+		Configuration: []Field{
+			field("providers[].provider", "Provider", "provider", true, false, false, "The exact read-only provider adapter."),
+			field("providers[].region", "Region", "string", false, false, false, "The AWS Region whose load balancers are read (aws-elbv2)."),
+			field("providers[].endpoint", "API endpoint", "url", false, false, true, "The BIG-IP management URL (f5-bigip, required), or an optional compatible AWS endpoint."),
+			field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
+			field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this provider; metadata and loopback remain blocked."),
+			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", false, true, true, "AWS: reference only; use a short-lived least-privilege credential."),
+			field("providers[].secret_access_key_ref", "Secret access key reference", "credential_ref", false, true, true, "AWS: reference only; the value never enters source configuration."),
+			field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "AWS: optional short-lived session-token reference."),
+			field("providers[].token_ref", "iControl REST token reference", "credential_ref", false, true, true, "BIG-IP: a token for a read-only (Guest or Auditor) user, instead of a user and password."),
+			field("providers[].username_ref", "User reference", "credential_ref", false, true, true, "BIG-IP: a read-only (Guest or Auditor) user."),
+			field("providers[].password_ref", "Password reference", "credential_ref", false, true, true, "BIG-IP: that user's password, by reference only."),
+		},
+		Providers: []Provider{
+			provider("aws-elbv2", "AWS Application and Network Load Balancers", "elasticloadbalancing:DescribeLoadBalancers, DescribeListeners and DescribeSSLPolicies on the authorized account/Region", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
+			provider("f5-bigip", "F5 BIG-IP virtual servers and client SSL profiles", "GET /mgmt/tm/ltm/virtual and /mgmt/tm/ltm/profile/client-ssl as a read-only user", "env: credential references", "endpoint", "token_ref", "username_ref", "password_ref"),
+		},
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#load-balancer-tls-policies",
 	}
 }
 

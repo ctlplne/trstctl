@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2499 annotated sites across 30 rules. Each row is
+2509 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (585 sites)
+### G101 — CWE-798 Use of hardcoded credentials (595 sites)
 
 | Location | Reason |
 |---|---|
@@ -197,10 +197,10 @@ not this file.
 | `internal/ca/ejbca/ejbcafake/ejbcafake.go:28` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:31` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
 | `internal/ca/venafi/venafifake/venafifake.go:25` | test-support package compiled only into test binaries (CWE-798) |
-| `internal/cbom/coverage/envelope.go:36` | an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:51` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:54` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:55` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:38` | an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:53` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:56` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:57` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -304,6 +304,10 @@ not this file.
 | `internal/discovery/cloudkeys/awsiamkeys/awsiamkeys_test.go:80` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/discovery/cloudsecret/apikeys.go:26` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
+| `internal/discovery/lbtls/awselb/awselb_test.go:41` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/discovery/lbtls/awselb/awselb_test.go:75` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/discovery/lbtls/bigip/bigip_test.go:40` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/discovery/lbtls/bigip/bigip_test.go:69` | a URL carrying credentials, built to prove it is refused; no value is real (CWE-798) |
 | `internal/discovery/netpath/awsnetpath/awsnetpath_test.go:17` | fabricated fixture credential (CWE-798) |
 | `internal/dns/akamai/akamai_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/cloudflare/cloudflare_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -432,6 +436,7 @@ not this file.
 | `internal/server/aws_honeytoken_served_test.go:140` | the fixture's fake decoy secret, not a credential (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_access_keys_served_test.go:78` | credential references only; no credential value enters the config (CWE-798) |
+| `internal/server/cloud_kms_keys_served_test.go:57` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:32` | a secret-store NAME the target references, not a credential value (CWE-798) |
 | `internal/server/cmdb_served_test.go:32` | credential reference (env: pointer), no credential value present (CWE-798) |
@@ -496,6 +501,11 @@ not this file.
 | `internal/server/journey_delivery_served_test.go:735` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:953` | fabricated test-only credential (CWE-798) |
 | `internal/server/key_vault_disable_served_test.go:78` | test-only environment variable names, no credential values (CWE-798) |
+| `internal/server/load_balancer_tls_served_test.go:31` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/load_balancer_tls_served_test.go:32` | fabricated fixture credential; no value is real (CWE-798) |
+| `internal/server/load_balancer_tls_served_test.go:73` | credential references only; no credential value enters the config (CWE-798) |
+| `internal/server/load_balancer_tls_served_test.go:74` | credential references only; no credential value enters the config (CWE-798) |
+| `internal/server/load_balancer_tls_served_test.go:76` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/managedkeys_cloudkms_served_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:34` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:37` | credential reference (secret store pointer), no credential value present (CWE-798) |

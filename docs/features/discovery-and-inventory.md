@@ -595,6 +595,8 @@ that shape eight times, here is what each one actually finds:
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cloud_certificate` (F49)             | Certificates the cloud provider already knows about: AWS ACM, Azure Key Vault, GCP Certificate Manager                                                                                                                                                                                        | `providers[]` (region/vault/project plus `access_key_id_ref`, `secret_access_key_ref`, or `token_ref`); inline credentials are rejected before storage                                    |
 | `cloud_access_key` (M3)               | IAM users' long-lived access keys with owner, status, age and last use; an active key unused for 90 days is flagged stale                                                                                                                                                                     | `providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`                                                         |
+| `cloud_kms_key` (X4)                  | Keys a cloud KMS holds with type, size, usage, state and automatic-rotation status; a key KMS could rotate but is not rotating is flagged unrotated                                                                                                                                           | `providers[]` with `provider: aws-kms`, `region`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`                                               |
+| `load_balancer_tls` (X4)              | The TLS policy each AWS load-balancer listener or F5 BIG-IP virtual server enforces; one crypto-inventory finding per listener at the oldest version it allows                                                                                                                                | `providers[]`: `aws-elbv2` (`region` + AWS references) or `f5-bigip` (`endpoint` + `token_ref` or `username_ref`/`password_ref`)                                                          |
 | `nhi_cross_surface`                   | Non-certificate machine identities across six surfaces: IdP, cloud, SaaS, on-prem, code, and CI                                                                                                                                                                                               | `observations[]`: `surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`, `scopes`; needs at least one observation per surface                                       |
 | `service_account` (CAP-NHI-03)        | AD/on-prem and cloud service accounts                                                                                                                                                                                                                                                         | `accounts[]`: `surface` (`active_directory` or `cloud`), `provider`, `account_id`, `principal`, `credential_refs`; needs at least one of each surface                                     |
 | `oauth_grant`                         | Third-party OAuth apps, grants, and scopes; a second pass flags abused or malicious grants                                                                                                                                                                                                    | `grants[]`: `provider`, `app_id`, `principal`, `resource`, `scopes`, `consent_type`, `third_party`, `owner`; no client-secret or token field exists                                       |
@@ -757,6 +759,52 @@ reaches only its endpoint: a private endpoint needs `allow_private_endpoint` wit
 `private_egress_cidrs`, and with the air-gap guard on (`air_gap.enabled`) a run reaches
 only hosts the guard allows, so an account outside them fails the run and records
 nothing.
+
+### Cloud KMS keys
+
+A `cloud_kms_key` source (X4) inventories the keys an AWS account's Key Management Service
+holds in one Region. It holds the account's read-only credentials as references:
+`providers[]` with `provider: aws-kms`, `region`, `access_key_id_ref`,
+`secret_access_key_ref`, an optional `session_token_ref` and an optional `endpoint`
+(default `https://kms.<region>.amazonaws.com`). It needs `kms:ListKeys`,
+`kms:DescribeKey` and `kms:GetKeyRotationStatus` and nothing else. A run lists every key
+(all pages, at most 10,000) and records one `cloud_kms_key` finding per key:
+
+| Metadata | Meaning |
+|---|---|
+| `key_id`, `arn`, `region` | The key and where it lives |
+| `key_spec`, `key_type`, `key_bits` | The key spec and the type and size it means: `SYMMETRIC_DEFAULT` is AES-256, `RSA_2048` is RSA 2048, `ECC_NIST_P256` is ECDSA P-256, `HMAC_256` is HMAC 256 |
+| `key_usage`, `key_state`, `key_manager`, `origin`, `enabled`, `multi_region`, `created_at` | As KMS reports them |
+| `rotation` | `enabled`, `disabled`, `not_supported` (asymmetric and HMAC keys, imported key material and custom key stores — KMS cannot rotate them automatically, so they are not asked) or `unknown` (KMS refused the read, with its error code in `rotation_error`, or the key is pending deletion) |
+| `rotation_period_days`, `next_rotation_at` | When KMS reports them |
+| `unrotated` | `true` for a key KMS could rotate automatically but is not rotating |
+
+An unrotated key carries risk score 60, any other key 20. A finding never holds
+key material, and the run changes nothing in KMS. Like every cloud source, a private
+endpoint needs `allow_private_endpoint` with `private_egress_cidrs`, and the air-gap
+guard confines the calls.
+
+### Load-balancer TLS policies
+
+A `load_balancer_tls` source (X4) reads the TLS policy each load-balancer listener
+enforces, with `providers[]` of two kinds:
+
+| Provider | Configuration | What it reads |
+|---|---|---|
+| `aws-elbv2` | `region`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint` | Every HTTPS and TLS listener of the Region's Application and Network Load Balancers and its security policy's protocol versions and ciphers (`DescribeLoadBalancers`, `DescribeListeners`, `DescribeSSLPolicies` and nothing else) |
+| `f5-bigip` | `endpoint` (the management URL) and `token_ref`, or `username_ref` and `password_ref`, for a read-only (Guest or Auditor) user | Every virtual server that presents a client SSL profile, and the versions the profile's options leave enabled (`no-tlsv1`, `no-tlsv1.1`, `no-tlsv1.2`, `no-tlsv1.3` each turn one off), through two iControl REST GETs |
+
+Each listener is one `tls_listener_policy` finding (`load_balancer`, `listener`, `port`,
+`policy`, `protocols`, `lowest_protocol`, `allows_tls10`, `allows_tls11`, `ciphers`;
+risk 70 when it allows TLS 1.0, 50 for TLS 1.1, 10 otherwise) and one finding in the
+crypto inventory (`GET /api/v1/cbom/assets`): a `host-config` fact at the listener with
+the oldest version it allows, rated by the crypto policy. A listener whose policy allows
+TLS 1.0 is therefore exactly one weak `TLSv1.0` finding, however many runs see it; when
+the policy is tightened, the next run replaces that fact. A BIG-IP profile's cipher
+string can narrow its versions further than its options do; a TLS scan of the virtual
+address (CBOM scan) shows what actually negotiates. The calls never change the account
+or the appliance, and BIG-IP's management certificate must be trusted by the host
+(`SSL_CERT_FILE` or the system store).
 
 ### Unified NHI inventory — every credential kind, one denominator
 
