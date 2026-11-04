@@ -2,6 +2,16 @@
 
 ### Added
 
+- The switching kit, parts one and two (A265): `POST /api/v1/switching/imports/preview` maps another
+  certificate-management product's export (CSV or JSON, described by format, with a column map for its own
+  column names) without changing state, giving every row one outcome — mapped, mapped with named gaps,
+  duplicate, unparseable or expired — with folder profile proposals, owners per application group, the rows
+  already in the inventory and a digest; `POST /api/v1/switching/imports` applies exactly that digest, and the
+  leader records the certificates (watch-only, never renewal candidates) and owners in bounded batches,
+  linking certificates already in the inventory instead of rewriting them. `POST
+  /api/v1/switching/imports/{id}/watch` matches every imported certificate to what its endpoints serve, under
+  the control plane's egress rules with private ranges only by explicit grant, flagging serves_other,
+  unreachable and no_endpoint, and repeats daily (`trstctl switching import|imports`).
 - The edition and qualification ledger (A253 is served): `go run ./tools/editionledger` generates
   `docs/editions-ledger.md` and `.json` from the license table and the feature map; the README and
   `docs/editions.md` carry its generated blocks, the Editions API and the console name the no-license

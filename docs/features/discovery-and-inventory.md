@@ -1092,3 +1092,69 @@ Extended Protection or successful SCEP enrollment. The service-view ceiling is
 visible when reached. The [endpoint probing runbook](../guides/adcs-endpoint-probing.md)
 explains exact configuration, bounds and recovery. Windows IIS/NDES qualification
 requires the Windows environment; a private Samba/HTTP/TLS fixture is separate proof.
+
+
+### Switching from another certificate-management product (A265)
+
+Moving to trstctl from another certificate-management product starts with that
+product's inventory export, not with re-typing it. The switching kit reads the
+export as data: CSV with a header row, or JSON (an array, or an object with a
+`certificates` array), in the `trstctl.switching-export/v1` field set —
+`certificate_pem` or `fingerprint_sha256`, `common_name`, `sans`, `serial`,
+`issuer`, `not_after`, `folder` (a path such as `Root\Region\Team`),
+`application`, `owner_email`, `owner_name`, `renewal_window_days`,
+`key_algorithm` and `endpoints` (`host:port`, comma-separated). A column map
+renames the export's own column names, so nothing about the other product is
+ever needed: `{"Thumbprint": "fingerprint_sha256", "Valid To": "not_after"}`.
+
+**Preview changes nothing.** Every row gets exactly one outcome — `mapped`,
+`mapped_with_gaps` (each gap named: no owner, no application, no folder policy,
+no endpoint, a folder with conflicting renewal settings), `duplicate` (naming
+the first row with the same certificate), `unparseable` (with the reason) or
+`expired`. Folders become profile proposals with their renewal window and key
+algorithm; owners are matched per email in each application group (A244 groups
+an owner's certificates by application) or proposed; rows whose certificate is
+already in the inventory are marked. The report ends in a digest over every
+row, the column map, the owners and the inventory as they were.
+
+**Apply records exactly what was reviewed.** `POST /api/v1/switching/imports`
+with the preview's digest refuses a changed export, column map, owner list or
+inventory (409), records the import and every row's outcome, and the leader
+then records each mapped row's certificate and owner in bounded batches of 500,
+so a 50,000-row export (the limit, with 20 MiB) never holds one request open.
+A certificate already in the inventory is linked to its row and left exactly as
+it was. Imported certificates carry the source `switching:<import>` and no
+issuance key, so they are watch-only: the other product keeps renewing them
+and trstctl never queues their renewal. The import completes only when every
+recorded row is applied; an apply retried with the same `Idempotency-Key`
+resumes the same import rather than starting another.
+
+```bash
+trstctl-cli switching import preview --file export.csv --column-map map.json
+trstctl-cli switching import apply --file export.csv --column-map map.json \
+  --name "region rollout" --digest sha256:<digest from the preview>
+trstctl-cli switching imports rows <import-id> --outcome unparseable
+```
+
+`GET /api/v1/switching/imports/{id}/rows` pages every row in export order with
+its outcome, reason, gaps and the certificate and owner it became, so nothing
+is dropped silently. A CSV row is numbered by the line it starts on (the header
+is line 1); a JSON row by its position from 1.
+
+**Side by side: every imported certificate is matched to its endpoint or
+flagged.** `POST /api/v1/switching/imports/{id}/watch` (`trstctl-cli switching
+imports watch <id> -f grant.json`) starts a watch round on a completed import.
+The leader reads what each mapped row's endpoints serve with the same TLS
+handshake discovery uses, from the control plane and under its egress rules:
+public addresses only, unless the request grants private ranges
+(`{"allow_private_endpoint": true, "private_egress_cidrs": ["10.20.0.0/16"]}`).
+Every row ends the round with one status — `matched` (every endpoint serves the
+imported certificate), `serves_other` (an endpoint serves another certificate;
+its fingerprint is recorded, so a renewal the other product made shows up),
+`unreachable` (with the reason) or `no_endpoint`. The import's `watch` block
+counts them, `rows?watch_status=serves_other` lists them, and the leader starts
+the next round itself a day after the last, with the same grant. Rounds run
+eight handshakes at a time with a five-second timeout.
+
+Status: served (import, mapping report and endpoint watch). Moving renewals
+over in waves follows in the same item.

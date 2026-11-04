@@ -49662,6 +49662,622 @@
         ],
         "type": "object"
       },
+      "SwitchingImport": {
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "gap_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview_digest": {
+            "type": "string"
+          },
+          "rows_applied": {
+            "type": "integer"
+          },
+          "rows_recorded": {
+            "type": "integer"
+          },
+          "rows_total": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "watch": {
+            "properties": {
+              "allow_private_endpoint": {
+                "type": "boolean"
+              },
+              "counts": {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "private_egress_cidrs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "requested_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "requested_by": {
+                "type": "string"
+              },
+              "round": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "round",
+              "pending",
+              "allow_private_endpoint",
+              "private_egress_cidrs",
+              "counts"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "format",
+          "preview_digest",
+          "status",
+          "rows_total",
+          "rows_recorded",
+          "rows_applied",
+          "counts",
+          "gap_counts",
+          "created_by",
+          "created_at",
+          "watch"
+        ],
+        "type": "object"
+      },
+      "SwitchingImportList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "completed_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "counts": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string"
+                },
+                "gap_counts": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "preview_digest": {
+                  "type": "string"
+                },
+                "rows_applied": {
+                  "type": "integer"
+                },
+                "rows_recorded": {
+                  "type": "integer"
+                },
+                "rows_total": {
+                  "type": "integer"
+                },
+                "status": {
+                  "enum": [
+                    "recording",
+                    "completed"
+                  ],
+                  "type": "string"
+                },
+                "watch": {
+                  "properties": {
+                    "allow_private_endpoint": {
+                      "type": "boolean"
+                    },
+                    "counts": {
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "type": "object"
+                    },
+                    "pending": {
+                      "type": "integer"
+                    },
+                    "private_egress_cidrs": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "requested_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "requested_by": {
+                      "type": "string"
+                    },
+                    "round": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "round",
+                    "pending",
+                    "allow_private_endpoint",
+                    "private_egress_cidrs",
+                    "counts"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "format",
+                "preview_digest",
+                "status",
+                "rows_total",
+                "rows_recorded",
+                "rows_applied",
+                "counts",
+                "gap_counts",
+                "created_by",
+                "created_at",
+                "watch"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SwitchingImportPreview": {
+        "properties": {
+          "applications": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "properties": {
+                "conflicts": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "key_algorithm": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": "string"
+                },
+                "renewal_window_days": {
+                  "type": "integer"
+                },
+                "rows": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "folder",
+                "profile",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "format": {
+            "type": "string"
+          },
+          "gap_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "application": {
+                  "type": "string"
+                },
+                "common_name": {
+                  "type": "string"
+                },
+                "duplicate_of": {
+                  "type": "integer"
+                },
+                "endpoints": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "fingerprint_sha256": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "gaps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "has_pem": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "key_algorithm": {
+                  "type": "string"
+                },
+                "known_certificate_id": {
+                  "type": "string"
+                },
+                "not_after": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "mapped",
+                    "mapped_with_gaps",
+                    "duplicate",
+                    "unparseable",
+                    "expired"
+                  ],
+                  "type": "string"
+                },
+                "owner_email": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "owner_name": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "renewal_window_days": {
+                  "type": "integer"
+                },
+                "row": {
+                  "type": "integer"
+                },
+                "sans": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "serial": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row",
+                "outcome",
+                "has_pem"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "items_truncated": {
+            "type": "boolean"
+          },
+          "known": {
+            "type": "integer"
+          },
+          "owners": {
+            "items": {
+              "properties": {
+                "application": {
+                  "type": "string"
+                },
+                "create": {
+                  "type": "boolean"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "rows": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "email",
+                "create",
+                "rows"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "rows": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "rows",
+          "counts",
+          "gap_counts",
+          "known",
+          "items",
+          "items_truncated",
+          "folders",
+          "owners",
+          "applications",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "SwitchingImportRequest": {
+        "properties": {
+          "column_map": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "export": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "export"
+        ],
+        "type": "object"
+      },
+      "SwitchingImportRowList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "application": {
+                  "type": "string"
+                },
+                "applied_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "certificate_id": {
+                  "type": "string"
+                },
+                "common_name": {
+                  "type": "string"
+                },
+                "duplicate_of": {
+                  "type": "integer"
+                },
+                "endpoints": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "fingerprint_sha256": {
+                  "type": "string"
+                },
+                "folder": {
+                  "type": "string"
+                },
+                "gaps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "has_pem": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "key_algorithm": {
+                  "type": "string"
+                },
+                "linked": {
+                  "type": "boolean"
+                },
+                "not_after": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "mapped",
+                    "mapped_with_gaps",
+                    "duplicate",
+                    "unparseable",
+                    "expired"
+                  ],
+                  "type": "string"
+                },
+                "owner_email": {
+                  "type": "string"
+                },
+                "owner_id": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "row_number": {
+                  "type": "integer"
+                },
+                "sans": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "serial": {
+                  "type": "string"
+                },
+                "served_fingerprint_sha256": {
+                  "type": "string"
+                },
+                "watch_detail": {
+                  "type": "string"
+                },
+                "watch_endpoint": {
+                  "type": "string"
+                },
+                "watch_status": {
+                  "enum": [
+                    "matched",
+                    "serves_other",
+                    "unreachable",
+                    "no_endpoint",
+                    "serves_trstctl",
+                    "renewed_by_other_product"
+                  ],
+                  "type": "string"
+                },
+                "watched_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row_number",
+                "outcome",
+                "gaps",
+                "sans",
+                "endpoints",
+                "has_pem",
+                "linked"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_after": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_after"
+        ],
+        "type": "object"
+      },
+      "SwitchingWatchRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "SystemDependency": {
         "properties": {
           "error": {
@@ -93786,6 +94402,411 @@
         ],
         "summary": "Enterprise support, SLA, and services posture",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/switching/imports": {
+      "get": {
+        "operationId": "listSwitchingImports",
+        "parameters": [
+          {
+            "description": "maximum imports (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImportList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List switching imports, newest first, with their counts and progress",
+        "x-trstctl-permission": "certs:read"
+      },
+      "post": {
+        "operationId": "applySwitchingImport",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a previewed export: record the import and every row's outcome, then record its certificates (watch-only) and owners; a changed export or inventory refuses the stale digest",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/switching/imports/preview": {
+      "post": {
+        "operationId": "previewSwitchingImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImportPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Map another certificate-management product's export (CSV or JSON, with a column map) without changing state: every row's outcome, the folders, owners and application groups it carries, and the digest an import applies",
+        "x-trstctl-permission": "certs:write",
+        "x-trstctl-read-only": true
+      }
+    },
+    "/api/v1/switching/imports/{id}": {
+      "get": {
+        "operationId": "getSwitchingImport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one switching import: its counts, gaps and progress",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/switching/imports/{id}/rows": {
+      "get": {
+        "operationId": "listSwitchingImportRows",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "only rows with this outcome (mapped, mapped_with_gaps, duplicate, unparseable, expired)",
+            "in": "query",
+            "name": "outcome",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only rows whose last watch round found this (matched, serves_other, unreachable, no_endpoint, serves_trstctl, renewed_by_other_product)",
+            "in": "query",
+            "name": "watch_status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "rows after this row number (a CSV row's number is the line it starts on, the header being line 1; a JSON row's is its position from 1)",
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "maximum rows (1-1000, default 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImportRowList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Page an import's rows in export order: each row's outcome, reason, gaps and the certificate and owner it became",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/switching/imports/{id}/watch": {
+      "post": {
+        "operationId": "watchSwitchingImport",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchingWatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchingImport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a watch round of a completed import: read what every imported certificate's endpoints serve, from the control plane under its egress rules (private ranges only through the CIDRs granted here), and flag each row matched, serves_other, unreachable or no_endpoint; the round repeats daily",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/tenant/key-generation": {

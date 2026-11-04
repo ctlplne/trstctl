@@ -1090,6 +1090,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addSecretProjectPrivacyPolicies(policies)
 	addRehearsalPrivacyPolicies(policies)
 	addAccessBundlePrivacyPolicies(policies)
+	addSwitchingImportPrivacyPolicies(policies)
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
@@ -1645,6 +1646,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addSecretProjectPrivacyShapes(shapes)
 	addRehearsalPrivacyShapes(shapes)
 	addAccessBundlePrivacyShapes(shapes)
+	addSwitchingImportPrivacyShapes(shapes)
 	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
 	return shapes
 }

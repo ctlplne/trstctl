@@ -284,6 +284,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// IDs holding a verified SCT whose inclusion is not yet proven; every SCT
 		// row is then read inside that tenant's RLS context.
 		"internal/store/certificate_sct.go": 1,
+		// A265: the switching-import applier's leader enumerator lists at most
+		// 100 tenant IDs with an import still being applied; the import and its
+		// rows are then read inside that tenant's RLS context.
+		"internal/store/switching_imports.go": 1,
 		// The ARI leader enumerates tenant IDs with an active leaf missing its
 		// first upstream poll. It reads no certificate material through this
 		// system pool; each candidate is loaded inside its tenant's RLS context.

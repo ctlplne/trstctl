@@ -9717,6 +9717,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/switching/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List switching imports, newest first, with their counts and progress */
+        get: operations["listSwitchingImports"];
+        put?: never;
+        /** Apply a previewed export: record the import and every row's outcome, then record its certificates (watch-only) and owners; a changed export or inventory refuses the stale digest */
+        post: operations["applySwitchingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Map another certificate-management product's export (CSV or JSON, with a column map) without changing state: every row's outcome, the folders, owners and application groups it carries, and the digest an import applies */
+        post: operations["previewSwitchingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one switching import: its counts, gaps and progress */
+        get: operations["getSwitchingImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/imports/{id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page an import's rows in export order: each row's outcome, reason, gaps and the certificate and owner it became */
+        get: operations["listSwitchingImportRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/switching/imports/{id}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a watch round of a completed import: read what every imported certificate's endpoints serve, from the control plane under its egress rules (private ranges only through the CIDRs granted here), and flag each row matched, serves_other, unreachable or no_endpoint; the round repeats daily */
+        post: operations["watchSwitchingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenant/key-generation": {
         parameters: {
             query?: never;
@@ -23318,6 +23404,180 @@ export interface components {
         };
         ShareValue: {
             value: string;
+        };
+        SwitchingImport: {
+            /** Format: date-time */
+            completed_at?: string;
+            counts: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            created_at: string;
+            created_by: string;
+            format: string;
+            gap_counts: {
+                [key: string]: number;
+            };
+            id: string;
+            name: string;
+            preview_digest: string;
+            rows_applied: number;
+            rows_recorded: number;
+            rows_total: number;
+            /** @enum {string} */
+            status: "recording" | "completed";
+            watch: {
+                allow_private_endpoint: boolean;
+                counts: {
+                    [key: string]: number;
+                };
+                pending: number;
+                private_egress_cidrs: string[];
+                /** Format: date-time */
+                requested_at?: string;
+                requested_by?: string;
+                round: number;
+            };
+        };
+        SwitchingImportList: {
+            items: {
+                /** Format: date-time */
+                completed_at?: string;
+                counts: {
+                    [key: string]: number;
+                };
+                /** Format: date-time */
+                created_at: string;
+                created_by: string;
+                format: string;
+                gap_counts: {
+                    [key: string]: number;
+                };
+                id: string;
+                name: string;
+                preview_digest: string;
+                rows_applied: number;
+                rows_recorded: number;
+                rows_total: number;
+                /** @enum {string} */
+                status: "recording" | "completed";
+                watch: {
+                    allow_private_endpoint: boolean;
+                    counts: {
+                        [key: string]: number;
+                    };
+                    pending: number;
+                    private_egress_cidrs: string[];
+                    /** Format: date-time */
+                    requested_at?: string;
+                    requested_by?: string;
+                    round: number;
+                };
+            }[];
+        };
+        SwitchingImportPreview: {
+            applications: string[];
+            counts: {
+                [key: string]: number;
+            };
+            digest: string;
+            folders: {
+                conflicts?: string[];
+                folder: string;
+                key_algorithm?: string;
+                profile: string;
+                renewal_window_days?: number;
+                rows: number;
+            }[];
+            format: string;
+            gap_counts: {
+                [key: string]: number;
+            };
+            items: {
+                application?: string;
+                common_name?: string;
+                duplicate_of?: number;
+                endpoints?: string[];
+                fingerprint_sha256?: string;
+                folder?: string;
+                gaps?: string[];
+                has_pem: boolean;
+                issuer?: string;
+                key_algorithm?: string;
+                known_certificate_id?: string;
+                /** Format: date-time */
+                not_after?: string;
+                /** @enum {string} */
+                outcome: "mapped" | "mapped_with_gaps" | "duplicate" | "unparseable" | "expired";
+                owner_email?: string;
+                owner_id?: string;
+                owner_name?: string;
+                reason?: string;
+                renewal_window_days?: number;
+                row: number;
+                sans?: string[];
+                serial?: string;
+            }[];
+            items_truncated: boolean;
+            known: number;
+            owners: {
+                application?: string;
+                create: boolean;
+                email: string;
+                name?: string;
+                owner_id?: string;
+                rows: number;
+            }[];
+            rows: number;
+        };
+        SwitchingImportRequest: {
+            column_map?: {
+                [key: string]: string;
+            };
+            export: string;
+            name?: string;
+            preview_digest?: string;
+        };
+        SwitchingImportRowList: {
+            items: {
+                application?: string;
+                /** Format: date-time */
+                applied_at?: string;
+                certificate_id?: string;
+                common_name?: string;
+                duplicate_of?: number;
+                endpoints: string[];
+                fingerprint_sha256?: string;
+                folder?: string;
+                gaps: string[];
+                has_pem: boolean;
+                issuer?: string;
+                key_algorithm?: string;
+                linked: boolean;
+                /** Format: date-time */
+                not_after?: string;
+                /** @enum {string} */
+                outcome: "mapped" | "mapped_with_gaps" | "duplicate" | "unparseable" | "expired";
+                owner_email?: string;
+                owner_id?: string;
+                profile?: string;
+                reason?: string;
+                row_number: number;
+                sans: string[];
+                serial?: string;
+                served_fingerprint_sha256?: string;
+                watch_detail?: string;
+                watch_endpoint?: string;
+                /** @enum {string} */
+                watch_status?: "matched" | "serves_other" | "unreachable" | "no_endpoint" | "serves_trstctl" | "renewed_by_other_product";
+                /** Format: date-time */
+                watched_at?: string;
+            }[];
+            next_after: string;
+        };
+        SwitchingWatchRequest: {
+            allow_private_endpoint?: boolean;
+            private_egress_cidrs?: string[];
         };
         SystemDependency: {
             error?: string;
@@ -52288,6 +52548,270 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnterpriseSupportStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSwitchingImports: {
+        parameters: {
+            query?: {
+                /** @description maximum imports (1-100, default 20) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImportList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applySwitchingImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchingImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSwitchingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchingImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImportPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSwitchingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSwitchingImportRows: {
+        parameters: {
+            query?: {
+                /** @description only rows with this outcome (mapped, mapped_with_gaps, duplicate, unparseable, expired) */
+                outcome?: string;
+                /** @description only rows whose last watch round found this (matched, serves_other, unreachable, no_endpoint, serves_trstctl, renewed_by_other_product) */
+                watch_status?: string;
+                /** @description rows after this row number (a CSV row's number is the line it starts on, the header being line 1; a JSON row's is its position from 1) */
+                after?: number;
+                /** @description maximum rows (1-1000, default 200) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImportRowList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    watchSwitchingImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SwitchingWatchRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchingImport"];
                 };
             };
             /** @description client error */

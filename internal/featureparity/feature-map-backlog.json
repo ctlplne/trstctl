@@ -99,7 +99,13 @@
                 "getCertificateHealth",
                 "getCertificate",
                 "getCertificateKeyAttestation",
-                "getCertificateAssuranceRecord"
+                "getCertificateAssuranceRecord",
+                "previewSwitchingImport",
+                "applySwitchingImport",
+                "listSwitchingImports",
+                "getSwitchingImport",
+                "watchSwitchingImport",
+                "listSwitchingImportRows"
             ],
             "api_na": "",
             "cli_surface": [
@@ -110,7 +116,13 @@
                 "certificates key-attestation",
                 "certificates verify-key-attestation",
                 "certificates assurance-record",
-                "certificates verify-assurance-record"
+                "certificates verify-assurance-record",
+                "switching import preview",
+                "switching import apply",
+                "switching imports list",
+                "switching imports get",
+                "switching imports watch",
+                "switching imports rows"
             ],
             "cli_na": "",
             "facet_evidence": {

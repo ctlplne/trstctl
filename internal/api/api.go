@@ -1678,7 +1678,8 @@ func (a *API) routes() []route {
 	routes = append(routes, a.caHierarchyRoutes(idPath)...) // see routes_ca_hierarchy.go
 	routes = append(routes, a.kmipClientRoutes(idPath)...)  // see kmip_clients.go
 	routes = append(routes, a.codeSigningRoutes()...)
-	routes = append(routes, a.accessBundleRoutes()...) // see access_bundles.go
+	routes = append(routes, a.accessBundleRoutes()...)    // see access_bundles.go
+	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)
 	return append(routes, a.licensedRouteRegistry()...)

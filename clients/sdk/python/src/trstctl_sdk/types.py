@@ -14986,6 +14986,82 @@ ShareValue = TypedDict(
     total=False,
 )
 
+SwitchingImport = TypedDict(
+    'SwitchingImport',
+    {
+        'completed_at': str,
+        'counts': dict[str, Any],
+        'created_at': str,
+        'created_by': str,
+        'format': str,
+        'gap_counts': dict[str, Any],
+        'id': str,
+        'name': str,
+        'preview_digest': str,
+        'rows_applied': int,
+        'rows_recorded': int,
+        'rows_total': int,
+        'status': str,
+        'watch': dict[str, Any],
+    },
+    total=False,
+)
+
+SwitchingImportList = TypedDict(
+    'SwitchingImportList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SwitchingImportPreview = TypedDict(
+    'SwitchingImportPreview',
+    {
+        'applications': list[str],
+        'counts': dict[str, Any],
+        'digest': str,
+        'folders': list[dict[str, Any]],
+        'format': str,
+        'gap_counts': dict[str, Any],
+        'items': list[dict[str, Any]],
+        'items_truncated': bool,
+        'known': int,
+        'owners': list[dict[str, Any]],
+        'rows': int,
+    },
+    total=False,
+)
+
+SwitchingImportRequest = TypedDict(
+    'SwitchingImportRequest',
+    {
+        'column_map': dict[str, Any],
+        'export': str,
+        'name': str,
+        'preview_digest': str,
+    },
+    total=False,
+)
+
+SwitchingImportRowList = TypedDict(
+    'SwitchingImportRowList',
+    {
+        'items': list[dict[str, Any]],
+        'next_after': str,
+    },
+    total=False,
+)
+
+SwitchingWatchRequest = TypedDict(
+    'SwitchingWatchRequest',
+    {
+        'allow_private_endpoint': bool,
+        'private_egress_cidrs': list[str],
+    },
+    total=False,
+)
+
 SystemDependency = TypedDict(
     'SystemDependency',
     {

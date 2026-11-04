@@ -10832,6 +10832,58 @@ export interface ShareValue {
   value: string;
 }
 
+export interface SwitchingImport {
+  completed_at?: string;
+  counts: Record<string, unknown>;
+  created_at: string;
+  created_by: string;
+  format: string;
+  gap_counts: Record<string, unknown>;
+  id: string;
+  name: string;
+  preview_digest: string;
+  rows_applied: number;
+  rows_recorded: number;
+  rows_total: number;
+  status: "recording" | "completed";
+  watch: { allow_private_endpoint: boolean; counts: Record<string, unknown>; pending: number; private_egress_cidrs: string[]; requested_at?: string; requested_by?: string; round: number };
+}
+
+export interface SwitchingImportList {
+  items: ({ completed_at?: string; counts: Record<string, unknown>; created_at: string; created_by: string; format: string; gap_counts: Record<string, unknown>; id: string; name: string; preview_digest: string; rows_applied: number; rows_recorded: number; rows_total: number; status: "recording" | "completed"; watch: { allow_private_endpoint: boolean; counts: Record<string, unknown>; pending: number; private_egress_cidrs: string[]; requested_at?: string; requested_by?: string; round: number } })[];
+}
+
+export interface SwitchingImportPreview {
+  applications: string[];
+  counts: Record<string, unknown>;
+  digest: string;
+  folders: { conflicts?: string[]; folder: string; key_algorithm?: string; profile: string; renewal_window_days?: number; rows: number }[];
+  format: string;
+  gap_counts: Record<string, unknown>;
+  items: ({ application?: string; common_name?: string; duplicate_of?: number; endpoints?: string[]; fingerprint_sha256?: string; folder?: string; gaps?: string[]; has_pem: boolean; issuer?: string; key_algorithm?: string; known_certificate_id?: string; not_after?: string; outcome: "mapped" | "mapped_with_gaps" | "duplicate" | "unparseable" | "expired"; owner_email?: string; owner_id?: string; owner_name?: string; reason?: string; renewal_window_days?: number; row: number; sans?: string[]; serial?: string })[];
+  items_truncated: boolean;
+  known: number;
+  owners: { application?: string; create: boolean; email: string; name?: string; owner_id?: string; rows: number }[];
+  rows: number;
+}
+
+export interface SwitchingImportRequest {
+  column_map?: Record<string, unknown>;
+  export: string;
+  name?: string;
+  preview_digest?: string;
+}
+
+export interface SwitchingImportRowList {
+  items: ({ application?: string; applied_at?: string; certificate_id?: string; common_name?: string; duplicate_of?: number; endpoints: string[]; fingerprint_sha256?: string; folder?: string; gaps: string[]; has_pem: boolean; issuer?: string; key_algorithm?: string; linked: boolean; not_after?: string; outcome: "mapped" | "mapped_with_gaps" | "duplicate" | "unparseable" | "expired"; owner_email?: string; owner_id?: string; profile?: string; reason?: string; row_number: number; sans: string[]; serial?: string; served_fingerprint_sha256?: string; watch_detail?: string; watch_endpoint?: string; watch_status?: "matched" | "serves_other" | "unreachable" | "no_endpoint" | "serves_trstctl" | "renewed_by_other_product"; watched_at?: string })[];
+  next_after: string;
+}
+
+export interface SwitchingWatchRequest {
+  allow_private_endpoint?: boolean;
+  private_egress_cidrs?: string[];
+}
+
 export interface SystemDependency {
   error?: string;
   name: string;

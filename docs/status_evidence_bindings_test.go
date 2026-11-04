@@ -175,6 +175,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	// A251: a run's status is derived at each read from its projected run row,
 	// its API token and the live grants, the same derivation the API applies to
 	// the run's token at every request.
+	evidence("SwitchingImport", "status", predicate(evidenceEventProjection, "recording from switching.import.started; completed only from switching.import.completed, which the leader appends once every recorded row is applied and rows_recorded equals rows_total, so a partly recorded import never completes"), "internal/projections/switching_imports.go:Projector.applySwitchingImportTx"),
 	evidence("AccessRun", "status", predicate(evidenceEventProjection, "revoked requires access.bundle.run_revoked or the run token's api_token.revoked; expired compares the projected expires_at with now; no_authority means no live grant (rebuilt from the access.bundle.* and tenant member events) still gives an issued permission; active otherwise"), "internal/api/access_bundles.go:API.accessRunViews"),
 	evidence("RemediationPlaybookCatalog", "status", configurationPredicate, "internal/api/remediation_playbooks.go:remediationPlaybookCatalog"),
 	evidence("RemediationPlaybookRun", "status", eventProjectionPredicate, "internal/store/remediation_playbooks.go:Store.ApplyRemediationPlaybookRunRecordedTx"),

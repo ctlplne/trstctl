@@ -1529,6 +1529,10 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunSecretMoveClosure),
 			// A237: auto scoped secret syncs apply when their sources change.
 			startRuntimeWorker(workCtx, srv.RunScopedSyncReconciler),
+			// A265: a recorded switching import's certificates and owners are
+			// applied in bounded batches; without this line an import would
+			// stay recorded and never reach the inventory.
+			startRuntimeWorker(workCtx, srv.RunSwitchingImports),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
 			// X3: migration waves that require observed traffic advance on wire evidence or pause.

@@ -95,6 +95,17 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runAccessRun(ctx, rest[2:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
 	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"switching", "import"}) {
+		if len(rest) == 2 || commandHelpRequested(rest[2:]) {
+			switchingImportUsage(stdout, "")
+			return 0
+		}
+		if commandHelpRequested(rest[3:]) {
+			switchingImportUsage(stdout, rest[2])
+			return 0
+		}
+		return runSwitchingImport(ctx, rest[2:], env, stdout, stderr, *server, *token, *tenant, *caFile)
+	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"mcp", "serve"}) {
 		return runMCPServe(ctx, rest[2:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
 	}
