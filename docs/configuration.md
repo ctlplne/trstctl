@@ -2360,7 +2360,9 @@ trstctl SSH CA. The request and activation commands are documented in
 A PostgreSQL or SSH target may also carry `gateway_agent_id` (an enrolled agent holding
 the `gateway` role) and `gateway_address` (`host:port` where clients reach it), both or
 neither (A254); a gateway-bound SSH target also pins its host keys in
-`host_key_fingerprints` (one to eight `SHA256:...` fingerprints). Sessions to such a target are delivered through that gateway: the
+`host_key_fingerprints` (one to eight `SHA256:...` fingerprints). `pam.recording_retention`
+(a duration, e.g. `2160h`) deletes a sealed gateway session recording's objects that long
+after it was sealed unless a legal hold keeps it; empty keeps recordings (A255). Sessions to such a target are delivered through that gateway: the
 requester receives a one-time ticket, never the credential. Run the gateway as
 `trstctl-agent --access-gateway-listen ADDR` and add `access.gateway.session` to
 `agent_channel.claimable_job_kinds`. See the

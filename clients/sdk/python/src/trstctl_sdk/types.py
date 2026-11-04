@@ -11516,13 +11516,46 @@ PAMRecording = TypedDict(
         'bytes': int,
         'chain_head': str,
         'chunks': int,
+        'deleted_at': str,
         'final_received': bool,
         'last_chunk_at': str,
+        'legal_hold': bool,
+        'legal_hold_reason': str,
         'manifest_sha256': str,
         'sealed_at': str,
         'session_id': str,
         'started_at': str,
         'status': str,
+    },
+    total=False,
+)
+
+PAMRecordingExport = TypedDict(
+    'PAMRecordingExport',
+    {
+        'frames': list[dict[str, Any]],
+        'manifest': dict[str, Any],
+        'manifest_signature': str,
+        'session_id': str,
+    },
+    total=False,
+)
+
+PAMRecordingFrames = TypedDict(
+    'PAMRecordingFrames',
+    {
+        'frames': list[dict[str, Any]],
+        'next': int,
+        'session_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMRecordingLegalHoldRequest = TypedDict(
+    'PAMRecordingLegalHoldRequest',
+    {
+        'reason': str,
     },
     total=False,
 )
@@ -11572,6 +11605,7 @@ PAMSession = TypedDict(
         'ended_at': str,
         'expires_at': str,
         'gateway': dict[str, Any],
+        'gateway_end': dict[str, Any],
         'id': str,
         'postgres': dict[str, Any],
         'reason': str,
@@ -11588,6 +11622,7 @@ PAMSession = TypedDict(
         'subject': str,
         'target_id': str,
         'target_type': str,
+        'uncertain_until': str,
     },
     total=False,
 )

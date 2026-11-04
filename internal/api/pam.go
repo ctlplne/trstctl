@@ -5,8 +5,10 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +49,29 @@ type PAMService interface {
 type PAMRecordingService interface {
 	GetPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecording, error)
 	VerifyPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecordingVerification, error)
+	ReadPAMRecordingFrames(ctx context.Context, tenantID, sessionID, actor string, from, limit int, wait time.Duration) (PAMRecordingFrames, error)
+	ExportPAMRecording(ctx context.Context, tenantID, sessionID, actor string) (PAMRecordingExport, error)
+	SetPAMRecordingLegalHold(ctx context.Context, tenantID, sessionID, actor string, hold bool, reason string) (PAMRecording, error)
+	TerminatePAMSession(ctx context.Context, tenantID, id, actor, reason, idempotencyKey string) (PAMSession, error)
+}
+
+// PAMRecordingFrames is one page of a recording's frames, each a JSON object
+// as the gateway recorded it (already masked); Next is where the next page
+// starts. A recording still being made may have more pages later.
+type PAMRecordingFrames struct {
+	SessionID string            `json:"session_id"`
+	Status    string            `json:"status"`
+	Next      int               `json:"next"`
+	Frames    []json.RawMessage `json:"frames"`
+}
+
+// PAMRecordingExport is a sealed recording whole: its manifest, the audit
+// key's JWS over it, and every frame.
+type PAMRecordingExport struct {
+	SessionID         string            `json:"session_id"`
+	Manifest          json.RawMessage   `json:"manifest"`
+	ManifestSignature string            `json:"manifest_signature"`
+	Frames            []json.RawMessage `json:"frames"`
 }
 
 // PAMRecording is a gateway session's recording index (A255): how much is
@@ -62,6 +87,11 @@ type PAMRecording struct {
 	FinalReceived  bool       `json:"final_received"`
 	ChainHead      string     `json:"chain_head"`
 	ManifestSHA256 string     `json:"manifest_sha256,omitempty"`
+	// LegalHold keeps the recording past retention; DeletedAt is when
+	// retention removed its objects.
+	LegalHold       bool       `json:"legal_hold"`
+	LegalHoldReason string     `json:"legal_hold_reason,omitempty"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
 }
 
 // PAMRecordingVerification is the outcome of verifying a sealed recording
@@ -190,8 +220,21 @@ type PAMSession struct {
 	// Postgres or SSH credentials.
 	Gateway *PAMGatewayDelivery `json:"gateway,omitempty"`
 	// Delivery is "direct" or "gateway".
-	Delivery string         `json:"delivery,omitempty"`
-	Audit    map[string]any `json:"audit,omitempty"`
+	Delivery string `json:"delivery,omitempty"`
+	// GatewayEnd (A255) is the gateway's own report that it ended the
+	// session. A revoked or terminated gateway session without one is
+	// uncertain until UncertainUntil, its native deadline: the gateway may be
+	// cut off, and the credential stops working then regardless.
+	GatewayEnd     *PAMGatewayEnd `json:"gateway_end,omitempty"`
+	UncertainUntil *time.Time     `json:"uncertain_until,omitempty"`
+	Audit          map[string]any `json:"audit,omitempty"`
+}
+
+// PAMGatewayEnd is how and when the gateway ended a session: "deadline" or
+// "recalled" (by a revocation or termination).
+type PAMGatewayEnd struct {
+	Ended   string    `json:"ended"`
+	EndedAt time.Time `json:"ended_at"`
 }
 
 // PAMGatewayDelivery names the gateway a session is delivered through and how
@@ -404,6 +447,88 @@ func (a *API) getPAMRecording(w http.ResponseWriter, r *http.Request) {
 func (a *API) verifyPAMRecording(w http.ResponseWriter, r *http.Request) {
 	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
 		return svc.VerifyPAMRecording(r.Context(), tenantID, id)
+	})
+}
+
+// readPAMRecordingFrames plays a recording back by pages; with wait (seconds,
+// at most 25) it long-polls for frames still being recorded — live watching.
+func (a *API) readPAMRecordingFrames(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	from, _ := strconv.Atoi(q.Get("from"))
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	waitSeconds, _ := strconv.Atoi(q.Get("wait"))
+	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
+		return svc.ReadPAMRecordingFrames(r.Context(), tenantID, id, principalSubject(r.Context()), from, limit, time.Duration(waitSeconds)*time.Second)
+	})
+}
+
+func (a *API) exportPAMRecording(w http.ResponseWriter, r *http.Request) {
+	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
+		return svc.ExportPAMRecording(r.Context(), tenantID, id, principalSubject(r.Context()))
+	})
+}
+
+//trstctl:mutation
+func (a *API) placePAMRecordingLegalHold(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), a.pamRecordingLegalHold(r, true))
+}
+
+//trstctl:mutation
+func (a *API) releasePAMRecordingLegalHold(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), a.pamRecordingLegalHold(r, false))
+}
+
+// pamRecordingLegalHold places (hold) or releases a recording's legal hold.
+func (a *API) pamRecordingLegalHold(r *http.Request, hold bool) func(ctx context.Context, tenantID string) (int, any, error) {
+	return func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, ok := a.pam.(PAMRecordingService)
+		if a.pam == nil || !ok {
+			return 0, nil, ErrPAMUnavailable
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if hold {
+			if err := decodeJSON(r, &body); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+		}
+		actor := principalSubject(r.Context())
+		if actor == "" {
+			return 0, nil, errStatus(http.StatusUnauthorized, "authenticated actor required")
+		}
+		out, err := svc.SetPAMRecordingLegalHold(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), actor, hold, body.Reason)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, out, nil
+	}
+}
+
+// terminatePAMSession ends another principal's live gateway session (A255).
+//
+//trstctl:mutation
+func (a *API) terminatePAMSession(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, ok := a.pam.(PAMRecordingService)
+		if a.pam == nil || !ok {
+			return 0, nil, ErrPAMUnavailable
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		actor := principalSubject(r.Context())
+		if actor == "" {
+			return 0, nil, errStatus(http.StatusUnauthorized, "authenticated actor required")
+		}
+		session, err := svc.TerminatePAMSession(ctx, tenantID, strings.TrimSpace(r.PathValue("id")), actor, body.Reason, r.Header.Get("Idempotency-Key"))
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, session, nil
 	})
 }
 

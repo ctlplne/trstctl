@@ -275,7 +275,10 @@ type agentService struct {
 	// storeRecordingChunk takes one chunk of a held session's recording
 	// (A255) and reports whether the recording is closed.
 	storeRecordingChunk func(ctx context.Context, tenantID, agentID string, payload []byte, attempt, seq int, chunk []byte, final bool) (bool, error)
-	tenantServiceCheck  tenancy.ServiceCheck
+	// recordGatewaySessionEnded records a gateway's report that it ended a
+	// session (A255).
+	recordGatewaySessionEnded func(ctx context.Context, tenantID string, payload []byte, detail string, attempt int) error
+	tenantServiceCheck        tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
 	logger *slog.Logger
 	store  *store.Store

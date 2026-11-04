@@ -48,7 +48,7 @@ var accessBundleAudiences = map[string]bool{"custom_agent": true, "ci": true, "m
 // never manage access or mint a credential that would outlive its grants.
 var accessBundleRefused = map[authz.Permission]bool{
 	authz.Wildcard: true, authz.AccessWrite: true, authz.AccessApprove: true, authz.AccessTargetsWrite: true,
-	authz.AccessRoleAssign: true, authz.AccessBundleRun: true, authz.AgentsGrantRelay: true,
+	authz.AccessRoleAssign: true, authz.AccessBundleRun: true, authz.AgentsGrantRelay: true, authz.AccessTerminate: true,
 }
 
 // The bounds every authority view states. They describe how runs behave, so

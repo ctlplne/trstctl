@@ -11,6 +11,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"trstctl.com/trstctl/internal/agent/accessgateway"
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
@@ -61,6 +63,25 @@ func (a *agentService) acceptLateTerminalReceipt(ctx context.Context, info mtls.
 	}
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
+	// A255: a recalled gateway session's job is cancelled before its gateway
+	// can report, so the gateway's report that it ended the session arrives
+	// here. It is that session's termination acknowledgement: recorded once
+	// it matches the job this agent held at this attempt.
+	if destination == relay.KindAccessGatewaySession && strings.TrimSpace(req.Outcome) == transport.JobOutcomeExecuted &&
+		a.recordGatewaySessionEnded != nil {
+		payload, key, err := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "gateway session job is unavailable")
+		}
+		var intent accessgateway.SessionIntent
+		if json.Unmarshal(payload, &intent) != nil || key != accessgateway.JobKey(intent.SessionID) ||
+			validateGatewaySessionReport(payload, req.Detail) != nil {
+			return &transport.ReportJobResultResponse{ReceiptRecorded: true}, nil
+		}
+		if err := a.recordGatewaySessionEnded(ctx, info.TenantID, payload, req.Detail, req.Attempt); err != nil {
+			return nil, status.Error(codes.Unavailable, "gateway session end could not be recorded; retry the same report")
+		}
 	}
 	return &transport.ReportJobResultResponse{ReceiptRecorded: true}, nil
 }

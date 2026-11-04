@@ -338,6 +338,10 @@ const (
 	EventPAMSessionRevoked                        = "pam.session.revoked"
 	EventPAMRecordingChunkStored                  = "pam.session.recording_chunk_stored"
 	EventPAMRecordingSealed                       = "pam.session.recording_sealed"
+	EventPAMSessionGatewayEnded                   = "pam.session.gateway_ended"
+	EventPAMRecordingLegalHold                    = "pam.session.recording_legal_hold"
+	EventPAMRecordingDeleted                      = "pam.session.recording_deleted"
+	EventPAMRecordingRead                         = "pam.session.recording_read"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4381,6 +4385,42 @@ type PAMRecordingSealed struct {
 	SealedAt          time.Time `json:"sealed_at"`
 }
 
+// PAMSessionGatewayEnded is the gateway's own report that it ended a
+// session (A255): at its deadline, or recalled by a revocation or
+// termination. It acknowledges a termination.
+type PAMSessionGatewayEnded struct {
+	ID          string    `json:"id"`
+	Ended       string    `json:"ended"`
+	Connections int       `json:"connections"`
+	Attempt     int       `json:"attempt"`
+	EndedAt     time.Time `json:"ended_at"`
+}
+
+// PAMRecordingLegalHold places or releases a legal hold on a recording.
+type PAMRecordingLegalHold struct {
+	ID     string    `json:"id"`
+	Hold   bool      `json:"hold"`
+	Reason string    `json:"reason,omitempty"`
+	Actor  string    `json:"actor"`
+	At     time.Time `json:"at"`
+}
+
+// PAMRecordingDeleted records retention removing a recording's objects.
+type PAMRecordingDeleted struct {
+	ID        string    `json:"id"`
+	Objects   int       `json:"objects"`
+	DeletedAt time.Time `json:"deleted_at"`
+}
+
+// PAMRecordingRead records one read of a recording's content: playback,
+// export or live watching (A255). Reading a recording is itself audited.
+type PAMRecordingRead struct {
+	ID    string    `json:"id"`
+	Actor string    `json:"actor"`
+	Mode  string    `json:"mode"`
+	At    time.Time `json:"at"`
+}
+
 type PAMTargetDisabled struct {
 	TargetType string `json:"target_type"`
 	ID         string `json:"id"`
@@ -4987,6 +5027,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMTargetDisabled:                        {1: true},
 	EventPAMRecordingChunkStored:                  {1: true},
 	EventPAMRecordingSealed:                       {1: true},
+	EventPAMSessionGatewayEnded:                   {1: true},
+	EventPAMRecordingLegalHold:                    {1: true},
+	EventPAMRecordingDeleted:                      {1: true},
+	EventPAMRecordingRead:                         {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8315,6 +8359,36 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		sealedAt := pl.SealedAt
 		return p.store.ApplyPAMRecordingSealedTx(ctx, tx, store.PAMRecording{TenantID: e.TenantID, SessionID: pl.ID,
 			SealedAt: &sealedAt, ManifestRef: pl.ManifestRef, ManifestSHA256: pl.ManifestSHA256, ManifestSignature: pl.ManifestSignature})
+	case EventPAMSessionGatewayEnded:
+		var pl PAMSessionGatewayEnded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || (pl.Ended != "deadline" && pl.Ended != "recalled") || pl.EndedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMSessionGatewayEndedTx(ctx, tx, e.TenantID, pl.ID, pl.Ended, pl.EndedAt)
+	case EventPAMRecordingLegalHold:
+		var pl PAMRecordingLegalHold
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Actor == "" || (pl.Hold && pl.Reason == "") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMRecordingLegalHoldTx(ctx, tx, e.TenantID, pl.ID, pl.Hold, pl.Reason)
+	case EventPAMRecordingDeleted:
+		var pl PAMRecordingDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.DeletedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMRecordingDeletedTx(ctx, tx, e.TenantID, pl.ID, pl.DeletedAt)
+	case EventPAMRecordingRead:
+		// An audit fact only: who read which recording, how.
+		return nil
 	case EventPAMTargetDisabled:
 		var pl PAMTargetDisabled
 		if err := decode(e, &pl); err != nil {

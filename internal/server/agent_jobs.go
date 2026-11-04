@@ -1027,8 +1027,15 @@ func (a *agentService) ingestExecutedReport(
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
 	case relay.KindAccessGatewaySession:
 		// A254: the gateway reports how a session ended; the session itself
-		// is ended by its deadline and revocation, not by this report.
-		return validateGatewaySessionReport(claim.Payload, req.Detail)
+		// is ended by its deadline and revocation, not by this report. A255:
+		// the report is recorded, acknowledging a termination.
+		if err := validateGatewaySessionReport(claim.Payload, req.Detail); err != nil {
+			return err
+		}
+		if a.recordGatewaySessionEnded == nil || req.Outcome != transport.JobOutcomeExecuted {
+			return nil
+		}
+		return a.recordGatewaySessionEnded(ctx, info.TenantID, claim.Payload, req.Detail, req.Attempt)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:

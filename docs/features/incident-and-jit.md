@@ -403,9 +403,13 @@ key, every gateway session is recorded (A255): SSH bytes and requests, SFTP oper
 gateway before anything leaves it, sealed for the tenant and closed with a manifest the
 audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with
-`GET /api/v1/access/sessions/{id}/recording/verify`. The design, its failure modes and its
-threat model are in [the access gateway design](../design/access-gateway.md). Playback,
-live watching and live termination follow (A255 part 2).
+`GET /api/v1/access/sessions/{id}/recording/verify`. With `recordings:read`, play it back
+or watch a live session (`trstctl access sessions watch <id>`); with `recordings:export`,
+export it with its signed manifest and place a legal hold. With `access:terminate`, end a
+live session (`trstctl access sessions terminate <id> -f reason.json`); until the gateway
+reports the end, the session reads `uncertain_until` its deadline. `pam.recording_retention`
+deletes sealed recordings unless a legal hold keeps them. The design, its failure modes and
+its threat model are in [the access gateway design](../design/access-gateway.md).
 
 ### Break-glass procedures (F34)
 

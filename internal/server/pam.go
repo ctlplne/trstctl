@@ -54,9 +54,12 @@ type PAMConfig struct {
 	ExpiryInterval    time.Duration
 	ApprovalTTL       time.Duration
 	RequiredApprovals int
-	Attestors         []attest.Attestor
-	PostgresTargets   []PAMPostgresTarget
-	SSHTargets        []PAMSSHTarget
+	// RecordingRetention keeps sealed gateway session recordings this long
+	// (A255); zero keeps them.
+	RecordingRetention time.Duration
+	Attestors          []attest.Attestor
+	PostgresTargets    []PAMPostgresTarget
+	SSHTargets         []PAMSSHTarget
 }
 
 type PAMPostgresTarget struct {
@@ -111,7 +114,9 @@ type pamService struct {
 	agentCAPEM func() []byte
 	// recordings stores gateway session recordings (A255); nil when the
 	// deployment has no object store, tenant sealing or audit signing key.
-	recordings *pamRecordings
+	// recordingRetention deletes sealed ones past it (zero keeps them).
+	recordings         *pamRecordings
+	recordingRetention time.Duration
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -209,8 +214,8 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		recordings = &pamRecordings{objects: d.RecordingObjects, access: d.TenantCrypto, legacy: d.KEK, signer: d.RecordingSigner}
 	}
 	return &pamService{
-		recordings: recordings,
-		store:      d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
+		recordings: recordings, recordingRetention: cfg.RecordingRetention,
+		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, postgres: postgresTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
@@ -816,6 +821,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 		_ = s.expireOnce(ctx)
 		s.ensureGatewayJobs(ctx)
 		s.sealIdleRecordings(ctx)
+		s.deleteExpiredRecordings(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -1297,7 +1303,28 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		Attestation: verified,
 		Audit:       jsonMap(rec.Audit),
 		Delivery:    pamDeliveryName(rec.Delivery),
+		GatewayEnd:  pamGatewayEnd(rec), UncertainUntil: pamUncertainUntil(rec),
 	}
+}
+
+// pamGatewayEnd is the gateway's report of a session's end, if it came.
+func pamGatewayEnd(rec store.PAMSession) *api.PAMGatewayEnd {
+	if rec.GatewayEndedAt == nil {
+		return nil
+	}
+	return &api.PAMGatewayEnd{Ended: rec.GatewayEnded, EndedAt: *rec.GatewayEndedAt}
+}
+
+// pamUncertainUntil bounds what is not known about a revoked or terminated
+// gateway session whose gateway has not reported its end (A255): it may still
+// be serving connections until the session's native deadline, when its
+// credential stops working regardless.
+func pamUncertainUntil(rec store.PAMSession) *time.Time {
+	if rec.Delivery != "gateway" || rec.RevocationRequestedAt == nil || rec.GatewayEndedAt != nil {
+		return nil
+	}
+	deadline := rec.ExpiresAt
+	return &deadline
 }
 
 // pamDeliveryName reads a session's delivery; sessions projected before A254
@@ -1336,6 +1363,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.ApprovalTTL)); err == nil {
 		out.ApprovalTTL = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.RecordingRetention)); err == nil {
+		out.RecordingRetention = d
 	}
 	for _, target := range c.PostgresTargets {
 		out.PostgresTargets = append(out.PostgresTargets, PAMPostgresTarget{

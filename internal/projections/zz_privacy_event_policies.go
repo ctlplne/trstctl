@@ -1010,6 +1010,20 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/id", opaque), privacyRule("/manifest_ref", opaque), privacyRule("/manifest_sha256", opaque),
 			privacyRule("/manifest_signature", opaque), privacyRule("/sealed_at", opaque),
 		),
+		{EventPAMSessionGatewayEnded, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/ended", opaque), privacyRule("/connections", opaque),
+			privacyRule("/attempt", opaque), privacyRule("/ended_at", opaque),
+		),
+		{EventPAMRecordingLegalHold, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/hold", opaque), privacyRule("/reason", clear),
+			privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMRecordingDeleted, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/objects", opaque), privacyRule("/deleted_at", opaque),
+		),
+		{EventPAMRecordingRead, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/mode", opaque), privacyRule("/at", opaque),
+		),
 		{EventPAMTargetDisabled, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque),
 			privacyRule("/disabled_by", exact), privacyRule("/reason", clear),
@@ -1591,6 +1605,10 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMTargetDisabled, 1}:                                                          privacyPayloadShape[PAMTargetDisabled](),
 		{EventPAMRecordingChunkStored, 1}:                                                    privacyPayloadShape[PAMRecordingChunkStored](),
 		{EventPAMRecordingSealed, 1}:                                                         privacyPayloadShape[PAMRecordingSealed](),
+		{EventPAMSessionGatewayEnded, 1}:                                                     privacyPayloadShape[PAMSessionGatewayEnded](),
+		{EventPAMRecordingLegalHold, 1}:                                                      privacyPayloadShape[PAMRecordingLegalHold](),
+		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
+		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),

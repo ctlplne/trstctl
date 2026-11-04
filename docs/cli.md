@@ -1517,7 +1517,10 @@ bindings that name this agent.
 127.0.0.1:PORT] [--known-hosts FILE]` carries a stock client's connections to that gateway
 over TLS verified against its agent certificate; the client never receives the credential.
 For an SSH session it writes the gateway's host key to the known_hosts file and prints the
-ssh command to run.
+ssh command to run. `trstctl-cli access sessions watch <session-id>` follows a gateway
+session's recording live (`recordings:read`); `access sessions terminate`, `recording`,
+`recording-verify`, `recording-frames`, `recording-export`, `recording-hold` and
+`recording-release` are the matching API calls (A255).
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

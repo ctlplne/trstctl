@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -421,7 +422,8 @@ func (s *Server) GetPAMRecording(ctx context.Context, tenantID, sessionID string
 	}
 	return api.PAMRecording{SessionID: rec.SessionID, Status: rec.Status, Chunks: rec.Chunks, Bytes: rec.Bytes,
 		StartedAt: rec.StartedAt, LastChunkAt: rec.LastChunkAt, SealedAt: rec.SealedAt, FinalReceived: rec.FinalReceived,
-		ChainHead: rec.ChainHead, ManifestSHA256: rec.ManifestSHA256}, nil
+		ChainHead: rec.ChainHead, ManifestSHA256: rec.ManifestSHA256,
+		LegalHold: rec.LegalHold, LegalHoldReason: rec.LegalHoldReason, DeletedAt: rec.DeletedAt}, nil
 }
 
 // VerifyPAMRecording checks a sealed recording against its signed manifest.
@@ -440,4 +442,301 @@ func (s *Server) VerifyPAMRecording(ctx context.Context, tenantID, sessionID str
 		return api.PAMRecordingVerification{}, err
 	}
 	return api.PAMRecordingVerification{Verified: v.Verified, Chunks: v.Chunks, Problems: v.Problems}, nil
+}
+
+// recordGatewaySessionEnded records the gateway's own report that it ended a
+// session (A255) — at its deadline, or recalled by a revocation or
+// termination — and seals the session's recording if its final chunk never
+// arrived.
+func (s *pamService) recordGatewaySessionEnded(ctx context.Context, tenantID string, payload []byte, detail string, attempt int) error {
+	var intent accessgateway.SessionIntent
+	var report accessgateway.SessionReport
+	if json.Unmarshal(payload, &intent) != nil || json.Unmarshal([]byte(detail), &report) != nil || report.SessionID != intent.SessionID {
+		return errors.New("gateway session report does not match its job")
+	}
+	if report.Ended != "deadline" && report.Ended != "recalled" {
+		return nil
+	}
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-gateway-ended\x00"+tenantID+"\x00"+intent.SessionID+"\x00"+strconv.Itoa(attempt))).String()
+	if err := s.appendOnce(ctx, tenantID, eventID, projections.EventPAMSessionGatewayEnded, projections.PAMSessionGatewayEnded{
+		ID: intent.SessionID, Ended: report.Ended, Connections: report.Connections, Attempt: attempt,
+		EndedAt: s.clock().UTC().Truncate(time.Millisecond)}); err != nil {
+		return err
+	}
+	if s.recordings != nil {
+		if rec, err := s.store.GetPAMRecording(ctx, tenantID, intent.SessionID); err == nil && rec.Status == "recording" {
+			return s.sealRecording(ctx, tenantID, intent.SessionID)
+		}
+	}
+	return nil
+}
+
+// pamRecordGatewaySessionEnded is the agent channel's hook into PAM, nil when
+// PAM is not served.
+func (s *Server) pamRecordGatewaySessionEnded() func(ctx context.Context, tenantID string, payload []byte, detail string, attempt int) error {
+	if s.pam == nil {
+		return nil
+	}
+	return s.pam.recordGatewaySessionEnded
+}
+
+// appendOnce records a fact once under a derived ID: a retry whose payload
+// carries a later time finds the first record and keeps it.
+func (s *pamService) appendOnce(ctx context.Context, tenantID, id, eventType string, payload any) error {
+	if existing, found, err := s.log.EventByID(ctx, id); err != nil {
+		return err
+	} else if found {
+		if existing.Type != eventType || existing.TenantID != tenantID {
+			return orchestrator.ErrIdempotencyConflict
+		}
+		return s.projector.Apply(ctx, existing)
+	}
+	return s.appendDeterministic(ctx, tenantID, id, eventType, payload)
+}
+
+// recordingReadLimit bounds the frames one read returns; recordingExportLimit
+// the plaintext one export returns (read a longer recording by pages).
+const (
+	recordingReadLimit   = 8 << 20
+	recordingExportLimit = 64 << 20
+	recordingMaxWait     = 25 * time.Second
+)
+
+// recordingFrames opens chunks from fromOrd, at most limit, and returns
+// their frames (each a JSON line as the gateway wrote it) and the next place.
+func (s *pamService) recordingFrames(ctx context.Context, tenantID, sessionID string, fromOrd, limit, maxBytes int) ([]json.RawMessage, int, error) {
+	chunks, err := s.store.ListPAMRecordingChunks(ctx, tenantID, sessionID, fromOrd, limit)
+	if err != nil {
+		return nil, fromOrd, err
+	}
+	view, err := objectstore.ForTenant(ctx, s.recordings.objects, tenantID)
+	if err != nil {
+		return nil, fromOrd, err
+	}
+	var frames []json.RawMessage
+	next, total := fromOrd, 0
+	for _, c := range chunks {
+		if total+c.Size > maxBytes && len(frames) > 0 {
+			break
+		}
+		var sealed bytes.Buffer
+		if _, err := view.Get(ctx, recordingRel(view, c.ObjectRef), &sealed, recordingMaxChunk*2); err != nil {
+			return nil, next, fmt.Errorf("recording chunk %d cannot be read: %w", c.Ord, err)
+		}
+		plain, err := openTenantValue(ctx, s.recordings.access, s.recordings.legacy, tenantID, sealed.Bytes(), recordingAAD(tenantID, sessionID, c.Ord, c.SHA256))
+		if err != nil || hex.EncodeToString(crypto.SHA256Sum(plain)) != c.SHA256 {
+			return nil, next, fmt.Errorf("recording chunk %d does not open in its place", c.Ord)
+		}
+		for _, line := range bytes.Split(plain, []byte("\n")) {
+			if len(line) > 0 {
+				frames = append(frames, json.RawMessage(append([]byte(nil), line...)))
+			}
+		}
+		total += c.Size
+		next = c.Ord + 1
+	}
+	return frames, next, nil
+}
+
+// recordRead records who read which recording, and how (A255).
+func (s *pamService) recordRead(ctx context.Context, tenantID, sessionID, actor, mode string) error {
+	return s.appendDeterministic(ctx, tenantID, uuid.NewString(), projections.EventPAMRecordingRead,
+		projections.PAMRecordingRead{ID: sessionID, Actor: actor, Mode: mode, At: s.clock().UTC().Truncate(time.Millisecond)})
+}
+
+func (s *Server) pamRecordingFor(ctx context.Context, tenantID, sessionID string) (store.PAMRecording, error) {
+	if s.pam == nil || s.pam.recordings == nil {
+		return store.PAMRecording{}, api.ErrPAMUnavailable
+	}
+	if _, err := uuid.Parse(sessionID); err != nil {
+		return store.PAMRecording{}, pgx.ErrNoRows
+	}
+	rec, err := s.store.GetPAMRecording(ctx, tenantID, sessionID)
+	if errors.Is(err, store.ErrPAMRecordingNotFound) {
+		return store.PAMRecording{}, pgx.ErrNoRows
+	}
+	return rec, err
+}
+
+// pamRecordingOrPending is a session's recording, or — for a gateway session
+// whose first chunk has not arrived — an empty recording still being made, so
+// a watch can start with the session.
+func (s *Server) pamRecordingOrPending(ctx context.Context, tenantID, sessionID string) (store.PAMRecording, error) {
+	rec, err := s.pamRecordingFor(ctx, tenantID, sessionID)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return rec, err
+	}
+	session, serr := s.store.GetPAMSession(ctx, tenantID, sessionID)
+	if serr != nil || session.Delivery != "gateway" {
+		return store.PAMRecording{}, err
+	}
+	return store.PAMRecording{TenantID: tenantID, SessionID: sessionID, Status: "recording"}, nil
+}
+
+// ReadPAMRecordingFrames plays back a recording from chunk from (A255). With
+// wait, a read that would return nothing waits up to that long for the next
+// chunk of a recording still being made, which is how a session is watched
+// live. Every read is recorded.
+func (s *Server) ReadPAMRecordingFrames(ctx context.Context, tenantID, sessionID, actor string, from, limit int, wait time.Duration) (api.PAMRecordingFrames, error) {
+	rec, err := s.pamRecordingOrPending(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecordingFrames{}, err
+	}
+	if rec.Status == "deleted" {
+		return api.PAMRecordingFrames{}, fmt.Errorf("%w: the recording was deleted by retention", api.ErrPAMTerminal)
+	}
+	if from < 0 {
+		from = 0
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	if err := s.pam.recordRead(ctx, tenantID, sessionID, actor, "frames"); err != nil {
+		return api.PAMRecordingFrames{}, err
+	}
+	wait = min(max(wait, 0), recordingMaxWait)
+	deadline := time.Now().Add(wait)
+	for {
+		frames, next, err := s.pam.recordingFrames(ctx, tenantID, sessionID, from, limit, recordingReadLimit)
+		if err != nil {
+			return api.PAMRecordingFrames{}, err
+		}
+		if len(frames) > 0 || rec.Status != "recording" || !time.Now().Before(deadline) {
+			return api.PAMRecordingFrames{SessionID: sessionID, Status: rec.Status, Next: next, Frames: frames}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return api.PAMRecordingFrames{}, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+		if rec, err = s.pamRecordingOrPending(ctx, tenantID, sessionID); err != nil {
+			return api.PAMRecordingFrames{}, err
+		}
+	}
+}
+
+// ExportPAMRecording returns a sealed recording whole: its manifest, the
+// audit key's signature over it, and every frame (A255). The read is
+// recorded.
+func (s *Server) ExportPAMRecording(ctx context.Context, tenantID, sessionID, actor string) (api.PAMRecordingExport, error) {
+	rec, err := s.pamRecordingFor(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecordingExport{}, err
+	}
+	if rec.Status != "sealed" {
+		return api.PAMRecordingExport{}, fmt.Errorf("%w: only a sealed recording is exported", api.ErrPAMTerminal)
+	}
+	view, err := objectstore.ForTenant(ctx, s.pam.recordings.objects, tenantID)
+	if err != nil {
+		return api.PAMRecordingExport{}, err
+	}
+	var manifest bytes.Buffer
+	if _, err := view.Get(ctx, recordingRel(view, rec.ManifestRef), &manifest, 64<<20); err != nil {
+		return api.PAMRecordingExport{}, fmt.Errorf("the recording manifest cannot be read: %w", err)
+	}
+	frames, next, err := s.pam.recordingFrames(ctx, tenantID, sessionID, 0, 0, recordingExportLimit)
+	if err != nil {
+		return api.PAMRecordingExport{}, err
+	}
+	if next < rec.Chunks {
+		return api.PAMRecordingExport{}, fmt.Errorf("%w: the recording is larger than one export; read it by pages", api.ErrPAMInvalid)
+	}
+	if err := s.pam.recordRead(ctx, tenantID, sessionID, actor, "export"); err != nil {
+		return api.PAMRecordingExport{}, err
+	}
+	return api.PAMRecordingExport{SessionID: sessionID, Manifest: json.RawMessage(manifest.Bytes()),
+		ManifestSignature: rec.ManifestSignature, Frames: frames}, nil
+}
+
+// SetPAMRecordingLegalHold places (hold) or releases a legal hold on a
+// recording; a held recording outlives its retention (A255).
+func (s *Server) SetPAMRecordingLegalHold(ctx context.Context, tenantID, sessionID, actor string, hold bool, reason string) (api.PAMRecording, error) {
+	rec, err := s.pamRecordingFor(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecording{}, err
+	}
+	reason = strings.TrimSpace(reason)
+	switch {
+	case rec.Status == "deleted":
+		return api.PAMRecording{}, fmt.Errorf("%w: the recording was deleted by retention", api.ErrPAMTerminal)
+	case hold && (reason == "" || len(reason) > 1000):
+		return api.PAMRecording{}, fmt.Errorf("%w: a legal hold needs a reason", api.ErrPAMInvalid)
+	case rec.LegalHold == hold:
+		return s.GetPAMRecording(ctx, tenantID, sessionID)
+	}
+	if !hold {
+		reason = ""
+	}
+	if err := s.pam.appendDeterministic(ctx, tenantID, uuid.NewString(), projections.EventPAMRecordingLegalHold,
+		projections.PAMRecordingLegalHold{ID: sessionID, Hold: hold, Reason: reason, Actor: actor, At: s.pam.clock().UTC().Truncate(time.Millisecond)}); err != nil {
+		return api.PAMRecording{}, err
+	}
+	return s.GetPAMRecording(ctx, tenantID, sessionID)
+}
+
+// TerminatePAMSession ends another principal's live gateway session (A255):
+// the session's job is recalled (the gateway closes its connections at its
+// next lease extension) and its credential is revoked, as for a revocation.
+// Until the gateway reports the end, the session reads as uncertain until its
+// native deadline.
+func (s *Server) TerminatePAMSession(ctx context.Context, tenantID, id, actor, reason, idempotencyKey string) (api.PAMSession, error) {
+	if s.pam == nil {
+		return api.PAMSession{}, api.ErrPAMUnavailable
+	}
+	if _, err := uuid.Parse(id); err != nil {
+		return api.PAMSession{}, pgx.ErrNoRows
+	}
+	rec, err := s.store.GetPAMSession(ctx, tenantID, id)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if rec.Delivery != "gateway" {
+		return api.PAMSession{}, fmt.Errorf("%w: only a session through a gateway is terminated; revoke a direct session", api.ErrPAMInvalid)
+	}
+	return s.pam.RevokePAMSession(ctx, tenantID, id, actor, strings.TrimSpace(reason), idempotencyKey)
+}
+
+// deleteExpiredRecordings removes the objects of sealed recordings past the
+// deployment's retention that no legal hold keeps (A255); the index and its
+// manifest digest stay, marked deleted.
+func (s *pamService) deleteExpiredRecordings(ctx context.Context) {
+	if s.recordings == nil || s.recordingRetention <= 0 {
+		return
+	}
+	expired, err := s.store.ListExpiredPAMRecordings(ctx, s.clock().UTC().Add(-s.recordingRetention), 50)
+	if err != nil {
+		return
+	}
+	for _, rec := range expired {
+		_ = s.deleteRecording(ctx, rec)
+	}
+}
+
+func (s *pamService) deleteRecording(ctx context.Context, rec store.PAMRecording) error {
+	view, err := objectstore.ForTenant(ctx, s.recordings.objects, rec.TenantID)
+	if err != nil {
+		return err
+	}
+	chunks, err := s.store.ListPAMRecordingChunks(ctx, rec.TenantID, rec.SessionID, 0, 0)
+	if err != nil {
+		return err
+	}
+	removed := 0
+	for _, ref := range append(chunkRefs(chunks), rec.ManifestRef) {
+		if err := view.Delete(ctx, recordingRel(view, ref)); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
+			return err
+		}
+		removed++
+	}
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-recording-deleted\x00"+rec.TenantID+"\x00"+rec.SessionID)).String()
+	return s.appendOnce(ctx, rec.TenantID, eventID, projections.EventPAMRecordingDeleted, projections.PAMRecordingDeleted{
+		ID: rec.SessionID, Objects: removed, DeletedAt: s.clock().UTC().Truncate(time.Millisecond)})
+}
+
+func chunkRefs(chunks []store.PAMRecordingChunk) []string {
+	out := make([]string, 0, len(chunks))
+	for _, c := range chunks {
+		out = append(out, c.ObjectRef)
+	}
+	return out
 }

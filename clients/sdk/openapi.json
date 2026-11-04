@@ -38327,11 +38327,21 @@
           "chunks": {
             "type": "integer"
           },
+          "deleted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "final_received": {
             "type": "boolean"
           },
           "last_chunk_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "legal_hold": {
+            "type": "boolean"
+          },
+          "legal_hold_reason": {
             "type": "string"
           },
           "manifest_sha256": {
@@ -38352,7 +38362,8 @@
           "status": {
             "enum": [
               "recording",
-              "sealed"
+              "sealed",
+              "deleted"
             ],
             "type": "string"
           }
@@ -38365,7 +38376,78 @@
           "started_at",
           "last_chunk_at",
           "final_received",
-          "chain_head"
+          "chain_head",
+          "legal_hold"
+        ],
+        "type": "object"
+      },
+      "PAMRecordingExport": {
+        "properties": {
+          "frames": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "manifest": {
+            "type": "object"
+          },
+          "manifest_signature": {
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "manifest",
+          "manifest_signature",
+          "frames"
+        ],
+        "type": "object"
+      },
+      "PAMRecordingFrames": {
+        "properties": {
+          "frames": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next": {
+            "type": "integer"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "sealed",
+              "deleted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "status",
+          "next",
+          "frames"
+        ],
+        "type": "object"
+      },
+      "PAMRecordingLegalHoldRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "type": "object"
       },
@@ -38513,6 +38595,26 @@
             ],
             "type": "object"
           },
+          "gateway_end": {
+            "properties": {
+              "ended": {
+                "enum": [
+                  "deadline",
+                  "recalled"
+                ],
+                "type": "string"
+              },
+              "ended_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "ended",
+              "ended_at"
+            ],
+            "type": "object"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -38563,6 +38665,11 @@
             "type": "string"
           },
           "target_type": {
+            "type": "string"
+          },
+          "uncertain_until": {
+            "description": "A revoked or terminated gateway session whose gateway has not reported its end may still serve connections until this time, its native deadline (A255).",
+            "format": "date-time",
             "type": "string"
           }
         },
@@ -57161,6 +57268,290 @@
         "x-trstctl-permission": "access:read"
       }
     },
+    "/api/v1/access/sessions/{id}/recording/export": {
+      "get": {
+        "operationId": "exportPAMSessionRecording",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecordingExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export a sealed gateway session recording with its signed manifest",
+        "x-trstctl-permission": "recordings:export",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/recording/frames": {
+      "get": {
+        "operationId": "readPAMSessionRecordingFrames",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "first chunk to read (the previous page's next)",
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "chunks to read, at most 1000",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "seconds to wait for frames still being recorded, at most 25",
+            "in": "query",
+            "name": "wait",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecordingFrames"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Play back a gateway session recording by pages; wait long-polls for frames still being recorded",
+        "x-trstctl-permission": "recordings:read",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/recording/legal-hold": {
+      "delete": {
+        "operationId": "releasePAMSessionRecordingLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecording"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Release a gateway session recording's legal hold",
+        "x-trstctl-permission": "recordings:export"
+      },
+      "post": {
+        "operationId": "placePAMSessionRecordingLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMRecordingLegalHoldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecording"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Keep a gateway session recording past retention",
+        "x-trstctl-permission": "recordings:export"
+      }
+    },
     "/api/v1/access/sessions/{id}/recording/verify": {
       "get": {
         "operationId": "verifyPAMSessionRecording",
@@ -57294,6 +57685,84 @@
         ],
         "summary": "Request early revocation of a privileged access session",
         "x-trstctl-permission": "access:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/terminate": {
+      "post": {
+        "operationId": "terminatePAMSession",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMSessionRevocationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "End another principal's live gateway session",
+        "x-trstctl-permission": "access:terminate",
         "x-trstctl-sensitive-response": true
       }
     },

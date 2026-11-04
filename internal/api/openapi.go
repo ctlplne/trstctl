@@ -5882,6 +5882,10 @@ func componentSchemas() map[string]*Schema {
 			"agent_id": str(), "address": str(), "spiffe_id": str(), "ca_pem": str(),
 			"ticket": {Type: "string", Description: "The one-time ticket that admits the requester's connections at the gateway (A254); returned once, by the open. It is not the upstream credential, which only the gateway holds."},
 		}, "agent_id", "address", "spiffe_id"),
+		"gateway_end": object(map[string]*Schema{
+			"ended": {Type: "string", Enum: []string{"deadline", "recalled"}}, "ended_at": timestamp(),
+		}, "ended", "ended_at"),
+		"uncertain_until": {Type: "string", Format: "date-time", Description: "A revoked or terminated gateway session whose gateway has not reported its end may still serve connections until this time, its native deadline (A255)."},
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
@@ -8769,10 +8773,20 @@ func componentSchemas() map[string]*Schema {
 		"PAMSession":                     pamSession,
 		"PAMSessionRevocationRequest":    object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMRecording": object(map[string]*Schema{
-			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed"}},
+			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
 			"chunks": {Type: "integer"}, "bytes": {Type: "integer"}, "started_at": timestamp(), "last_chunk_at": timestamp(),
 			"sealed_at": timestamp(), "final_received": {Type: "boolean"}, "chain_head": str(), "manifest_sha256": str(),
-		}, "session_id", "status", "chunks", "bytes", "started_at", "last_chunk_at", "final_received", "chain_head"),
+			"legal_hold": {Type: "boolean"}, "legal_hold_reason": str(), "deleted_at": timestamp(),
+		}, "session_id", "status", "chunks", "bytes", "started_at", "last_chunk_at", "final_received", "chain_head", "legal_hold"),
+		"PAMRecordingFrames": object(map[string]*Schema{
+			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
+			"next": {Type: "integer"}, "frames": {Type: "array", Items: &Schema{Type: "object"}},
+		}, "session_id", "status", "next", "frames"),
+		"PAMRecordingExport": object(map[string]*Schema{
+			"session_id": uuid(), "manifest": {Type: "object"}, "manifest_signature": str(),
+			"frames": {Type: "array", Items: &Schema{Type: "object"}},
+		}, "session_id", "manifest", "manifest_signature", "frames"),
+		"PAMRecordingLegalHoldRequest": object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMRecordingVerification": object(map[string]*Schema{
 			"verified": {Type: "boolean"}, "chunks": {Type: "integer"}, "problems": {Type: "array", Items: str()},
 		}, "verified", "chunks"),

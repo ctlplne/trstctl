@@ -1882,14 +1882,18 @@ type AgentBroker struct {
 // whose administrator DSN lives in a protected file:/secret:// reference. This
 // config never carries an administrator DSN or a private SSH key.
 type PAM struct {
-	Enabled           bool                `json:"enabled"`
-	DefaultTTL        string              `json:"default_ttl,omitempty"`
-	MaxTTL            string              `json:"max_ttl,omitempty"`
-	ExpiryInterval    string              `json:"expiry_interval,omitempty"`
-	ApprovalTTL       string              `json:"approval_ttl,omitempty"`
-	RequiredApprovals int                 `json:"required_approvals,omitempty"`
-	PostgresTargets   []PAMPostgresTarget `json:"postgres_targets,omitempty"`
-	SSHTargets        []PAMSSHTarget      `json:"ssh_targets,omitempty"`
+	Enabled           bool   `json:"enabled"`
+	DefaultTTL        string `json:"default_ttl,omitempty"`
+	MaxTTL            string `json:"max_ttl,omitempty"`
+	ExpiryInterval    string `json:"expiry_interval,omitempty"`
+	ApprovalTTL       string `json:"approval_ttl,omitempty"`
+	RequiredApprovals int    `json:"required_approvals,omitempty"`
+	// RecordingRetention (A255) is how long a sealed gateway session
+	// recording is kept before its objects are deleted, unless a legal hold
+	// keeps it; empty keeps recordings.
+	RecordingRetention string              `json:"recording_retention,omitempty"`
+	PostgresTargets    []PAMPostgresTarget `json:"postgres_targets,omitempty"`
+	SSHTargets         []PAMSSHTarget      `json:"ssh_targets,omitempty"`
 }
 
 type PAMPostgresTarget struct {
@@ -5104,6 +5108,7 @@ func validatePAM(p PAM) []error {
 	maxTTL := parsePositive("max_ttl", p.MaxTTL)
 	_ = parsePositive("expiry_interval", p.ExpiryInterval)
 	_ = parsePositive("approval_ttl", p.ApprovalTTL)
+	_ = parsePositive("recording_retention", p.RecordingRetention)
 	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
 		errs = append(errs, errors.New("pam.default_ttl must not exceed pam.max_ttl"))
 	}

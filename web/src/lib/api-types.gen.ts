@@ -8304,13 +8304,34 @@ export interface PAMRecording {
   bytes: number;
   chain_head: string;
   chunks: number;
+  deleted_at?: string;
   final_received: boolean;
   last_chunk_at: string;
+  legal_hold: boolean;
+  legal_hold_reason?: string;
   manifest_sha256?: string;
   sealed_at?: string;
   session_id: string;
   started_at: string;
-  status: "recording" | "sealed";
+  status: "recording" | "sealed" | "deleted";
+}
+
+export interface PAMRecordingExport {
+  frames: Record<string, unknown>[];
+  manifest: Record<string, unknown>;
+  manifest_signature: string;
+  session_id: string;
+}
+
+export interface PAMRecordingFrames {
+  frames: Record<string, unknown>[];
+  next: number;
+  session_id: string;
+  status: "recording" | "sealed" | "deleted";
+}
+
+export interface PAMRecordingLegalHoldRequest {
+  reason: string;
 }
 
 export interface PAMRecordingVerification {
@@ -8344,6 +8365,7 @@ export interface PAMSession {
   ended_at?: string;
   expires_at: string;
   gateway?: { address: string; agent_id: string; ca_pem?: string; spiffe_id: string; ticket?: string };
+  gateway_end?: { ended: "deadline" | "recalled"; ended_at: string };
   id: string;
   postgres?: PAMPostgresCredential;
   reason?: string;
@@ -8360,6 +8382,7 @@ export interface PAMSession {
   subject: string;
   target_id: string;
   target_type: string;
+  uncertain_until?: string;
 }
 
 export interface PAMSessionActivationRequest {

@@ -2578,10 +2578,11 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// the two sides of the seal cannot drift apart (epic A3).
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings),
 			pamGatewayCredential: s.pamGatewayCredential()},
-		gatewayBoundHosts:    s.pamGatewayBoundHosts(),
-		signGatewayServerCSR: s.signGatewayServerCSR,
-		signGatewaySSHKey:    s.pamSignGatewaySSHKey(),
-		storeRecordingChunk:  s.pamStoreRecordingChunk(),
+		gatewayBoundHosts:         s.pamGatewayBoundHosts(),
+		signGatewayServerCSR:      s.signGatewayServerCSR,
+		signGatewaySSHKey:         s.pamSignGatewaySSHKey(),
+		storeRecordingChunk:       s.pamStoreRecordingChunk(),
+		recordGatewaySessionEnded: s.pamRecordGatewaySessionEnded(),
 		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page. Control-plane previews write the same
 		// event-sourced receipt through the outbox dispatcher.

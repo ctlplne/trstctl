@@ -25,6 +25,11 @@ type PAMRecording struct {
 	FinalReceived                       bool
 	ManifestRef, ManifestSHA256         string
 	ManifestSignature                   string
+	// LegalHold keeps a sealed recording past retention (A255);
+	// DeletedAt marks one whose objects retention removed.
+	LegalHold       bool
+	LegalHoldReason string
+	DeletedAt       *time.Time
 }
 
 // PAMRecordingChunk is one stored chunk, in storage order (Ord).
@@ -73,12 +78,14 @@ func (s *Store) ApplyPAMRecordingSealedTx(ctx context.Context, tx pgx.Tx, r PAMR
 }
 
 const pamRecordingColumns = `tenant_id::text, session_id::text, gateway_agent_id::text, status, chunks, bytes,
-    chain_head, started_at, last_chunk_at, sealed_at, final_received, manifest_ref, manifest_sha256, manifest_signature`
+    chain_head, started_at, last_chunk_at, sealed_at, final_received, manifest_ref, manifest_sha256, manifest_signature,
+    legal_hold, legal_hold_reason, deleted_at`
 
 func scanPAMRecording(row pgx.Row) (PAMRecording, error) {
 	var r PAMRecording
 	err := row.Scan(&r.TenantID, &r.SessionID, &r.GatewayAgentID, &r.Status, &r.Chunks, &r.Bytes, &r.ChainHead,
-		&r.StartedAt, &r.LastChunkAt, &r.SealedAt, &r.FinalReceived, &r.ManifestRef, &r.ManifestSHA256, &r.ManifestSignature)
+		&r.StartedAt, &r.LastChunkAt, &r.SealedAt, &r.FinalReceived, &r.ManifestRef, &r.ManifestSHA256, &r.ManifestSignature,
+		&r.LegalHold, &r.LegalHoldReason, &r.DeletedAt)
 	return r, err
 }
 
@@ -183,4 +190,45 @@ func (s *Store) GetGatewayJobForRecording(ctx context.Context, tenantID, agentID
 		return nil
 	})
 	return out, found, err
+}
+
+// ApplyPAMRecordingLegalHoldTx projects pam.session.recording_legal_hold.
+func (s *Store) ApplyPAMRecordingLegalHoldTx(ctx context.Context, tx pgx.Tx, tenantID, sessionID string, hold bool, reason string) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_session_recordings SET legal_hold = $3, legal_hold_reason = $4
+	  WHERE tenant_id = $1::uuid AND session_id = $2::uuid AND status <> 'deleted'`, tenantID, sessionID, hold, reason)
+	return err
+}
+
+// ApplyPAMRecordingDeletedTx projects pam.session.recording_deleted: the
+// objects are gone, the index (with its manifest digest) stays.
+func (s *Store) ApplyPAMRecordingDeletedTx(ctx context.Context, tx pgx.Tx, tenantID, sessionID string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_session_recordings SET status = 'deleted', deleted_at = coalesce(deleted_at, $3)
+	  WHERE tenant_id = $1::uuid AND session_id = $2::uuid AND status = 'sealed' AND NOT legal_hold`, tenantID, sessionID, at)
+	return err
+}
+
+// ListExpiredPAMRecordings lists sealed recordings sealed before cutoff and
+// not on legal hold, across tenants, for the retention worker.
+func (s *Store) ListExpiredPAMRecordings(ctx context.Context, cutoff time.Time, limit int) ([]PAMRecording, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant system worker: recording retention finds sealed recordings past their window; it reads index metadata only, and each deletion is decided and recorded under the owning tenant's RLS context.
+		`SELECT `+pamRecordingColumns+` FROM pam_session_recordings
+		  WHERE status = 'sealed' AND NOT legal_hold AND sealed_at < $1
+		  ORDER BY sealed_at, tenant_id, session_id LIMIT $2`, cutoff.UTC(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PAMRecording
+	for rows.Next() {
+		r, err := scanPAMRecording(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

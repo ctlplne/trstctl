@@ -506,6 +506,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/recording/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export a sealed gateway session recording with its signed manifest */
+        get: operations["exportPAMSessionRecording"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/sessions/{id}/recording/frames": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Play back a gateway session recording by pages; wait long-polls for frames still being recorded */
+        get: operations["readPAMSessionRecordingFrames"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/sessions/{id}/recording/legal-hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep a gateway session recording past retention */
+        post: operations["placePAMSessionRecordingLegalHold"];
+        /** Release a gateway session recording's legal hold */
+        delete: operations["releasePAMSessionRecordingLegalHold"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/recording/verify": {
         parameters: {
             query?: never;
@@ -534,6 +586,23 @@ export interface paths {
         put?: never;
         /** Request early revocation of a privileged access session */
         post: operations["revokePAMSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/sessions/{id}/terminate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End another principal's live gateway session */
+        post: operations["terminatePAMSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20840,9 +20909,13 @@ export interface components {
             bytes: number;
             chain_head: string;
             chunks: number;
+            /** Format: date-time */
+            deleted_at?: string;
             final_received: boolean;
             /** Format: date-time */
             last_chunk_at: string;
+            legal_hold: boolean;
+            legal_hold_reason?: string;
             manifest_sha256?: string;
             /** Format: date-time */
             sealed_at?: string;
@@ -20851,7 +20924,25 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             /** @enum {string} */
-            status: "recording" | "sealed";
+            status: "recording" | "sealed" | "deleted";
+        };
+        PAMRecordingExport: {
+            frames: Record<string, never>[];
+            manifest: Record<string, never>;
+            manifest_signature: string;
+            /** Format: uuid */
+            session_id: string;
+        };
+        PAMRecordingFrames: {
+            frames: Record<string, never>[];
+            next: number;
+            /** Format: uuid */
+            session_id: string;
+            /** @enum {string} */
+            status: "recording" | "sealed" | "deleted";
+        };
+        PAMRecordingLegalHoldRequest: {
+            reason: string;
         };
         PAMRecordingVerification: {
             chunks: number;
@@ -20896,6 +20987,12 @@ export interface components {
                 /** @description The one-time ticket that admits the requester's connections at the gateway (A254); returned once, by the open. It is not the upstream credential, which only the gateway holds. */
                 ticket?: string;
             };
+            gateway_end?: {
+                /** @enum {string} */
+                ended: "deadline" | "recalled";
+                /** Format: date-time */
+                ended_at: string;
+            };
             /** Format: uuid */
             id: string;
             postgres?: components["schemas"]["PAMPostgresCredential"];
@@ -20916,6 +21013,11 @@ export interface components {
             subject: string;
             target_id: string;
             target_type: string;
+            /**
+             * Format: date-time
+             * @description A revoked or terminated gateway session whose gateway has not reported its end may still serve connections until this time, its native deadline (A255).
+             */
+            uncertain_until?: string;
         };
         PAMSessionActivationRequest: {
             /** Format: uuid */
@@ -26901,6 +27003,183 @@ export interface operations {
             };
         };
     };
+    exportPAMSessionRecording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecordingExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    readPAMSessionRecordingFrames: {
+        parameters: {
+            query?: {
+                /** @description first chunk to read (the previous page's next) */
+                from?: number;
+                /** @description chunks to read, at most 1000 */
+                limit?: number;
+                /** @description seconds to wait for frames still being recorded, at most 25 */
+                wait?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecordingFrames"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    placePAMSessionRecordingLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMRecordingLegalHoldRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecording"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    releasePAMSessionRecordingLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecording"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     verifyPAMSessionRecording: {
         parameters: {
             query?: never;
@@ -26942,6 +27221,53 @@ export interface operations {
         };
     };
     revokePAMSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMSessionRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    terminatePAMSession: {
         parameters: {
             query?: never;
             header: {

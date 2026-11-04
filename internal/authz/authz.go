@@ -81,6 +81,15 @@ const (
 	// from those grants at every request. Minting a run for another principal
 	// also needs AccessWrite and every permission the run carries.
 	AccessBundleRun Permission = "access:bundle.run"
+	// AccessTerminate ends another principal's live privileged session through
+	// its gateway (A255): the operator watching a session can stop it.
+	AccessTerminate Permission = "access:terminate"
+	// RecordingsRead plays back and watches gateway session recordings;
+	// RecordingsExport exports a recording with its signed manifest and holds
+	// it past retention (A255). Recordings show what a privileged session did,
+	// so neither comes with access:read.
+	RecordingsRead   Permission = "recordings:read"
+	RecordingsExport Permission = "recordings:export"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -147,6 +156,7 @@ func allResourcePermissions() []Permission {
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite, IncidentsGameDay, PrivateEgress, CapabilitiesRead, ChangesWrite,
 		AccessRead, AccessWrite, AccessApprove, AccessTargetsWrite, AccessRoleAssign, AccessBundleRun,
+		AccessTerminate, RecordingsRead, RecordingsExport,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite, KeysApprove,
@@ -192,13 +202,17 @@ func BuiltinRoles() map[string]Role {
 	// AgentsGrantRelay is withheld on the same reasoning: it authorizes placing an
 	// agent that will hold appliance credentials, and that is a decision an
 	// operator should make deliberately in the console rather than one a CLI token
-	// carries by default. Enrolling host agents is still in.
-	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay), AuditRead)
+	// carries by default. Enrolling host agents is still in. Reading other
+	// principals' session recordings and ending their sessions (A255) are
+	// withheld the same way: they belong to an operator or auditor, not to a
+	// machine token.
+	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign, AccessTargetsWrite, AgentsGrantRelay,
+		AccessTerminate, RecordingsRead, RecordingsExport), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
 		"viewer":   {Name: "viewer", Permissions: readOnly},
-		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead, AuditArchiveRead, CapabilitiesRead}},
+		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead, AuditArchiveRead, CapabilitiesRead, RecordingsRead, RecordingsExport}},
 		"agent":    {Name: "agent", Permissions: agent},
 		"mcp":      {Name: "mcp", Permissions: mcp},
 		"cli":      {Name: "cli", Permissions: cli},

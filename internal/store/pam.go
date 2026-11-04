@@ -60,6 +60,10 @@ type PAMSession struct {
 	// SSHPrincipal (A254) is the login a gateway SSH session's certificate
 	// names; the gateway's key is certified when it claims the session.
 	SSHPrincipal string
+	// GatewayEndedAt and GatewayEnded (A255) are the gateway's own report
+	// that the session ended (deadline or recalled).
+	GatewayEndedAt *time.Time
+	GatewayEnded   string
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -158,7 +162,8 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
-		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
+		        gateway_ended_at, gateway_ended
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -180,7 +185,8 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
-		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
+		        gateway_ended_at, gateway_ended
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -214,7 +220,8 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
-		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
+		        gateway_ended_at, gateway_ended
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -248,7 +255,8 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		        ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
-		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal
+		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
+		        gateway_ended_at, gateway_ended
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -278,7 +286,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
-		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal,
+		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal, &out.GatewayEndedAt, &out.GatewayEnded,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows
@@ -344,4 +352,12 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// ApplyPAMSessionGatewayEndedTx projects pam.session.gateway_ended: the
+// first report of the session's end is kept.
+func (s *Store) ApplyPAMSessionGatewayEndedTx(ctx context.Context, tx pgx.Tx, tenantID, id, ended string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_sessions SET gateway_ended_at = $3, gateway_ended = $4
+	  WHERE tenant_id = $1 AND id = $2 AND gateway_ended_at IS NULL`, tenantID, id, at, ended)
+	return err
 }

@@ -85,7 +85,7 @@ inside the tunnel admits them.
 | State | Effect read back |
 |---|---|
 | New logins denied | The gateway no longer holds the session: a connection is refused. |
-| Session terminated | The gateway's end-of-session report (`ended: recalled` or `deadline`), after the session's recording is flushed and sealed. |
+| Session terminated | The gateway's end-of-session report (`gateway_end`: `recalled` or `deadline`), after the session's recording is flushed and sealed; without it, `uncertain_until` the native deadline. |
 | Upstream credential revoked | The PostgreSQL role is gone / the served SSH KRL holds the session's key ID, which every certificate the gateway was given for the session carries (F33). |
 
 ## Recordings (A255)
@@ -122,6 +122,27 @@ tenant sealing and the audit signing key — every gateway session job carries
   is the one signed, every chunk is present, unmodified and opens only in its place, its
   plaintext matches its digest, and the chain reaches the manifest's head; an edited,
   dropped or reordered chunk, or an edited manifest, fails it.
+- **Access.** `recordings:read` plays a recording back by pages
+  (`GET .../recording/frames?from=&limit=`) and watches a live one: with `wait` (up to 25
+  seconds) a read long-polls for frames still being recorded, from the session's first
+  moment; `recordings:export` exports a sealed recording whole with its manifest and the
+  audit key's JWS (`GET .../recording/export`) and places or releases a legal hold. Neither
+  comes with `access:read`; the built-in auditor role holds both and the CLI machine role
+  neither. Every read is recorded (`pam.session.recording_read`: who, which recording, how).
+  `trstctl access sessions watch <id>` renders a session live.
+- **Termination and its uncertainty.** `access:terminate` ends another principal's live
+  gateway session (`POST .../terminate`): its job is recalled — the gateway closes its
+  connections at its next lease extension, within seconds — and its credential is revoked
+  as for a revocation. The gateway's report of the end (`pam.session.gateway_ended`, read as
+  `gateway_end`) acknowledges it. Until then a terminated session reads `uncertain_until`
+  its native deadline: a gateway cut off from the control plane may keep serving until the
+  credential stops working by itself, and acknowledges when it reconnects.
+- **Maximum length.** `pam.max_ttl` caps every session at the open, and the gateway ends a
+  session's connections at its deadline (`gateway_end: deadline`).
+- **Retention and legal hold.** `pam.recording_retention` deletes a sealed recording's
+  objects that long after it was sealed (`pam.session.recording_deleted`; the index and
+  manifest digest stay, reading `deleted`), unless a legal hold keeps it; releasing the hold
+  lets retention take it on its next pass.
 
 ## Failure modes
 

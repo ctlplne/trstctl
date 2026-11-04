@@ -24,6 +24,11 @@
   Chunks upload in order with backpressure (`UploadSessionRecording`), are sealed for the tenant into the object
   store and chained, and the recording closes with a manifest signed by the audit key;
   `GET /api/v1/access/sessions/{id}/recording` and `.../recording/verify` read and check it.
+- Recording access, live termination and retention (A255 is served): `recordings:read` plays recordings back and
+  watches live sessions (`.../recording/frames?wait=`, `trstctl access sessions watch`), `recordings:export` exports a
+  recording with its signed manifest and places legal holds, and every read is recorded. `access:terminate` ends a live
+  gateway session; the gateway's end report acknowledges it, and until then the session reads `uncertain_until` its
+  native deadline. `pam.recording_retention` deletes sealed recordings unless a legal hold keeps them.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

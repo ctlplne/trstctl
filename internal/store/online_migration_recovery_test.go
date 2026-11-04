@@ -175,8 +175,9 @@ func TestHistoricalOnlineMigrationRecoversInterruptedBuilds(t *testing.T) {
 				case 253:
 					// Migrate applies the whole remaining sequence. Remove the
 					// additive 0253, 0254, 0355, 0388 and 0389 (A254 gateway
-					// delivery) fields before comparing N-1 content.
-					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at','revocation_idempotency_key','revocation_failure','revocation_failed_at','approval_request_id','delivery','gateway_agent_id','gateway_ticket_digest','ssh_principal']"
+					// delivery) and 0391 (A255 gateway end) fields before
+					// comparing N-1 content.
+					remove = "-ARRAY['revocation_requested_by','revocation_reason','revocation_requested_at','revocation_idempotency_key','revocation_failure','revocation_failed_at','approval_request_id','delivery','gateway_agent_id','gateway_ticket_digest','ssh_principal','gateway_ended_at','gateway_ended']"
 				}
 				afterSQL := strings.Replace(beforeSQL, "to_jsonb(o)::text", "(to_jsonb(o)"+remove+")::text", 1)
 				afterCount, afterChecksum := checksumQuery(t, ctx, pool, afterSQL)
