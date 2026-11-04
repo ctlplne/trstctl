@@ -119,6 +119,7 @@ var items = []Capability{
 	},
 	cloudCertificateCapability(),
 	cloudNetworkPathCapability(),
+	cloudAccessKeyCapability(),
 	cloudSecretCapability("cloud_secret", "Cloud secret managers"),
 	cloudSecretCapability("secret_store", "Secret stores"),
 	{
@@ -184,6 +185,31 @@ func cloudCertificateCapability() Capability {
 			provider("gcp-certmanager", "Google Cloud Certificate Manager", "certificatemanager.certificates.list/get on the authorized project/location", "token_ref", "project", "location", "token_ref"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-certificate-services",
+	}
+}
+
+// cloudAccessKeyCapability reads a cloud account's long-lived user access keys
+// (M3): each key's owner, status, age and last use, never a secret. An active
+// key nobody has used in 90 days is flagged stale.
+func cloudAccessKeyCapability() Capability {
+	return Capability{
+		Kind: "cloud_access_key", Label: "Cloud access keys", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_access_key", SetupSurface: SetupSourceWizard,
+		Purpose:      "Find the long-lived access keys a cloud account's users authenticate with, with each key's age and last use, so stale and unrotated keys stand out.",
+		DataHandling: "Uses read-only provider calls and credential references. It stores each key's ID, owner, status, creation and last-use dates, never a secret access key or any other account contents.",
+		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
+		Configuration: []Field{
+			field("providers[].provider", "Provider", "provider", true, false, false, "The exact read-only provider adapter."),
+			field("providers[].endpoint", "API endpoint", "url", false, false, true, "Optional compatible endpoint; the public provider default is safer."),
+			field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
+			field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this provider; metadata and loopback remain blocked."),
+			field("providers[].access_key_id_ref", "Access key ID reference", "credential_ref", true, true, true, "Reference only; use a short-lived least-privilege credential."),
+			field("providers[].secret_access_key_ref", "Secret access key reference", "credential_ref", true, true, true, "Reference only; the value never enters source configuration."),
+			field("providers[].session_token_ref", "Session token reference", "credential_ref", false, true, true, "Optional short-lived session-token reference."),
+		},
+		Providers: []Provider{
+			provider("aws-iam", "AWS IAM user access keys", "iam:ListUsers, iam:ListAccessKeys and iam:GetAccessKeyLastUsed on the authorized account", "env: credential references", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref"),
+		},
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-access-keys",
 	}
 }
 

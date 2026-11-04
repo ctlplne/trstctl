@@ -14262,6 +14262,10 @@ export const messages = {
     defaultMessage: "Cloud network paths",
     description: "Discovery source kind label: read-only cloud network configuration used to validate exposed endpoints.",
   },
+  "discovery.sourceKind.cloudAccessKey": {
+    defaultMessage: "Cloud access keys",
+    description: "Discovery source kind label: a cloud account's long-lived user access keys, read with their age and last use.",
+  },
   "migration.form.controlPlaneExecutor": {
     defaultMessage: "Control plane (cloud certificate store, no agent)",
     description: "Migration executor option for a cloud certificate store the control plane carries itself.",

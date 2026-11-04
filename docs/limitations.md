@@ -8628,3 +8628,22 @@ What comes next:
 - Deny from Slack records the reason "denied in Slack by <member>"; asking the
   reviewer for a reason in a Slack dialog is what comes next.
 
+## Live discovery of cloud access keys (M3) — served
+
+Status: served for AWS IAM. A `cloud_access_key` source with an `aws-iam` provider
+lists every IAM user's access keys with status, creation date, age and last use (date,
+service, Region), flags an active key unused for 90 days as stale (risk 80), and feeds
+the NHI inventory as API keys. `TestServedCloudAccessKeyDiscoveryFlagsNinetyDaysUnusedM3`
+runs it against LocalStack IAM: a used key, a never-used key and an inactive key appear
+with their owners and last use, a run measured 91 days on flags the two active keys and
+not the inactive one, no secret access key reaches a finding, another tenant sees none of
+it, and with the air-gap guard enforcing the run reaches nothing.
+
+What comes next:
+- Against a real AWS account (IAM's own last-used tracking, a production account's
+  scale) — a live proof, Track B.
+- Google Cloud service-account keys and Azure app-registration secrets are not read
+  yet.
+- The access graph does not yet link a key to its IAM user as a cloud principal, and
+  remediation does not yet offer to replace a stale key with a dynamic AWS credential
+  from the finding.

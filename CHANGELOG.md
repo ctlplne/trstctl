@@ -2,6 +2,11 @@
 
 ### Added
 
+- Live discovery of cloud access keys (M3): a `cloud_access_key` discovery source with the `aws-iam` provider
+  lists every IAM user's access keys with status, creation date, age and last use (date, service, Region) through
+  the read-only `ListUsers`, `ListAccessKeys` and `GetAccessKeyLastUsed` calls, flags an active key unused for
+  90 days as stale (risk 80), and shows the keys in the NHI inventory as API keys; no secret access key is ever
+  read, and the air-gap guard confines the calls. Proven against LocalStack IAM.
 - Live checks for leaked secrets (P14 is served): with `secrets.validity_checks.enabled`, a scan checks each AWS
   access key pair it finds where it found it (an STS GetCallerIdentity signed with the pair, so the secret never leaves
   the host) and records the finding's `validity`; each check's endpoint must be declared in the checks' outbound

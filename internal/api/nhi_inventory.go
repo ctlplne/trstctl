@@ -375,7 +375,7 @@ func normalizeNHIInventoryKind(raw string) string {
 		return "oauth_app"
 	case "iam_role", "role", "aws_role", "gcp_role", "azure_role":
 		return "iam_role"
-	case "api_key", "access_key", "access_key_id":
+	case "api_key", "access_key", "access_key_id", "cloud_access_key":
 		return "api_key"
 	case "pat", "personal_access_token", "token", "bearer_token", "refresh_token", "session_token", "workflow_token":
 		return "token"

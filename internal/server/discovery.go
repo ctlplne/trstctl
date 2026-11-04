@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudcert/acmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/gcmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
+	"trstctl.com/trstctl/internal/discovery/cloudkeys"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
 	azurekvsecretdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/azurekv"
@@ -210,6 +211,8 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	// cloud_network_path validates the endpoints the exposure posture names
 	// (A167); its own run only checks the source can be read.
 	orchestrator.AttackPathSourceKind: (*issuanceDispatcher).executeCloudNetworkPathDiscoveryRun,
+	// M3: a cloud account's IAM user access keys with their age and last use.
+	cloudkeys.SourceKind: (*issuanceDispatcher).executeCloudAccessKeyDiscoveryRun,
 	// secret_store routes through the same served secret-manager
 	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
 	// azure-key-vault, hashicorp-vault): the kinds share the providers

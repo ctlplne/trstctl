@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 22 served source kinds
+## Observability envelopes — 23 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -46,6 +46,7 @@ served set by construction.
 | `cbom_import_image` | `container-image-crypto` | `cbom-imported` | 24h0m0s |
 | `cbom_import_source` | `source-code-crypto` | `cbom-imported` | 24h0m0s |
 | `cbom_import_vendor` | `vendor-embedded-crypto` | `cbom-imported` | 2160h0m0s |
+| `cloud_access_key` | `cloud-access-key` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_certificate` | `cloud-certificate` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_network_path` | `network-path` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_secret` | `stored-secret` | `cloud-credential-configured` | 24h0m0s |
@@ -95,12 +96,13 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 21 observable-unobserved · 5 structurally unobservable** across 28 classes.
+**2 observed · 22 observable-unobserved · 5 structurally unobservable** across 29 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
 | `api-key-token` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind api_key (needs: connector-credential-configured)** |
 | `certificate-key` | `OBSERVED` | observed by dc-east |
+| `cloud-access-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_access_key (needs: cloud-credential-configured)** |
 | `cloud-certificate` | `OBSERVABLE-UNOBSERVED` | source "acm-prod" is configured but has never completed a run — **run discovery source "acm-prod"** |
 | `compromised-credential` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind credential_compromise (needs: connector-credential-configured)** |
 | `container-image-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source image:<name> (needs: cbom-imported)** |

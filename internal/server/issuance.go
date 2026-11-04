@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -233,6 +234,9 @@ type issuanceDispatcher struct {
 	// worker; nil refuses them as not configured.
 	scimWriteback api.SCIMWritebackHandler
 	ldapWriteback api.LDAPWritebackHandler
+	// egress is the product-wide air-gap guard; with it enforcing, cloud
+	// access-key discovery (M3) reaches only the hosts the operator allowed.
+	egress *egress.Guard
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -243,6 +247,9 @@ type issuanceDispatcher struct {
 	afterDeploySideEffects func(context.Context) error
 	// rotateNow is the credential-rotate deadline clock; nil reads time.Now.
 	rotateNow func() time.Time
+	// accessKeyNow is the clock a cloud access key's age and staleness are
+	// measured at (M3); nil reads time.Now. Request signing keeps real time.
+	accessKeyNow func() time.Time
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,

@@ -594,6 +594,7 @@ that shape eight times, here is what each one actually finds:
 | Source kind                           | What it finds                                                                                                                                                                                                                                                                                 | Config essentials                                                                                                                                                                         |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cloud_certificate` (F49)             | Certificates the cloud provider already knows about: AWS ACM, Azure Key Vault, GCP Certificate Manager                                                                                                                                                                                        | `providers[]` (region/vault/project plus `access_key_id_ref`, `secret_access_key_ref`, or `token_ref`); inline credentials are rejected before storage                                    |
+| `cloud_access_key` (M3)               | IAM users' long-lived access keys with owner, status, age and last use; an active key unused for 90 days is flagged stale                                                                                                                                                                     | `providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, optional `session_token_ref` and `endpoint`                                                         |
 | `nhi_cross_surface`                   | Non-certificate machine identities across six surfaces: IdP, cloud, SaaS, on-prem, code, and CI                                                                                                                                                                                               | `observations[]`: `surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`, `scopes`; needs at least one observation per surface                                       |
 | `service_account` (CAP-NHI-03)        | AD/on-prem and cloud service accounts                                                                                                                                                                                                                                                         | `accounts[]`: `surface` (`active_directory` or `cloud`), `provider`, `account_id`, `principal`, `credential_refs`; needs at least one of each surface                                     |
 | `oauth_grant`                         | Third-party OAuth apps, grants, and scopes; a second pass flags abused or malicious grants                                                                                                                                                                                                    | `grants[]`: `provider`, `app_id`, `principal`, `resource`, `scopes`, `consent_type`, `third_party`, `owner`; no client-secret or token field exists                                       |
@@ -730,6 +731,32 @@ internet gateway, the network ACL's first internet-wide rule for the port must a
 in and the reply out, and a security group on the interface must admit the port from the
 internet. The verdict names the resource that decided it. An ordinary run of the source
 checks only that its providers can be built.
+
+### Cloud access keys
+
+A `cloud_access_key` source (M3) finds the long-lived access keys an AWS account's IAM
+users sign in with. It holds one account's read-only credentials as references:
+`providers[]` with `provider: aws-iam`, `access_key_id_ref`, `secret_access_key_ref`, an
+optional `session_token_ref` and an optional `endpoint` (default
+`https://iam.amazonaws.com`). It needs `iam:ListUsers`, `iam:ListAccessKeys` and
+`iam:GetAccessKeyLastUsed` and nothing else. A run lists every user (all pages), each
+user's keys and each key's last use, and records one `cloud_access_key` finding per key
+(at most 10,000 a run) with:
+
+| Metadata | Meaning |
+|---|---|
+| `user`, `access_key_id`, `status` | The key's owner, its ID and `Active` or `Inactive` |
+| `created_at`, `age_days` | When the key was created and how old it is |
+| `last_used_at`, `last_used_service`, `last_used_region` | Its last use, as IAM records it; `never_used: true` when it has none |
+| `unused_days`, `stale` | Days since its last use (or since creation when never used); `stale` is true for an **active** key unused for 90 days or more |
+
+A stale key carries risk score 80, any other key 30. A finding holds no secret access key
+(IAM never returns one after creation) and nothing else from the account. The keys show
+in the NHI inventory as `api_key` rows, and an inactive key is never flagged. The source
+reaches only its endpoint: a private endpoint needs `allow_private_endpoint` with
+`private_egress_cidrs`, and with the air-gap guard on (`air_gap.enabled`) a run reaches
+only hosts the guard allows, so an account outside them fails the run and records
+nothing.
 
 ### Unified NHI inventory — every credential kind, one denominator
 

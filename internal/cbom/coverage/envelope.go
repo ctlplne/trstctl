@@ -30,6 +30,7 @@ const (
 	AssetThirdPartySecret     AssetClass = "third-party-secret"
 	AssetOperatorDeclared     AssetClass = "operator-declared"
 	AssetNetworkPath          AssetClass = "network-path"
+	AssetCloudAccessKey       AssetClass = "cloud-access-key"
 	// AssetPassiveWireTraffic is what connections' handshakes state on an
 	// interface an observer agent watches (X1).
 	AssetPassiveWireTraffic AssetClass = "passive-wire-traffic" // #nosec G101 -- an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798)
@@ -121,6 +122,8 @@ func Envelopes() map[string]Envelope {
 		// Read-only cloud network configuration on the path to an exposed
 		// endpoint: routes, network ACLs, security groups (A167).
 		env("cloud_network_path", []AssetClass{AssetNetworkPath}, PrecondCloudCredential),
+		// Long-lived cloud access keys with age and last use, never secrets (M3).
+		env("cloud_access_key", []AssetClass{AssetCloudAccessKey}, PrecondCloudCredential),
 		// Secret-manager metadata, never values (F35/F36). secret_store is a
 		// served alias routed through the same connectors.
 		env("cloud_secret", []AssetClass{AssetStoredSecret}, PrecondCloudCredential),
