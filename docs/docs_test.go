@@ -4125,9 +4125,11 @@ func TestEditionsMatrixMatchesLicenseFeatureTable(t *testing.T) {
 		"SSH CA",
 		"TSA",
 	} {
-		want := fmt.Sprintf("| %s | Community |", protocol)
+		// The no-license edition is named as the edition ledger names it.
+		free := license.TierDisplay(license.TierCommunity)
+		want := fmt.Sprintf("| %s | %s |", protocol, free)
 		if !strings.Contains(body, want) {
-			t.Errorf("editions.md must explicitly keep core protocol %q in Community", protocol)
+			t.Errorf("editions.md must explicitly keep core protocol %q in %s", protocol, free)
 		}
 	}
 	if strings.Contains(body, "Enterprise protocol") || strings.Contains(body, "Enterprise-only protocol") {

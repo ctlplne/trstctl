@@ -24,13 +24,25 @@ bundles 3 non-production deployments with the full licensed feature set and no
 production SLA; see
 [Signed deployment environment entitlement](#signed-deployment-environment-entitlement).
 
+### What each edition lets you do
+
+The ledger generated from the license table says it plainly; the
+[edition and qualification ledger](editions-ledger.md) has the full tables.
+
+<!-- edition-ledger:begin editions-rights -->
+- **Free.** Run the core in production for yourself: the Business Source License's Additional Use Grant permits it, no signed license is needed, and deployments are unmetered. Each release becomes MPL-2.0 four years after it is published.
+- **Enterprise.** Adds FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO) and audit anchoring, retention and compliance packaging, activated by an offline Ed25519-signed license. You self-host; the license covers 1 production + 3 signed non-production deployment slots.
+- **Provider / MSP.** Everything in Enterprise, plus Provider plane, metering, white label and siloed isolation, and the rights to operate as a managed service and resell for your customers. The license covers 1 production + 3 signed non-production deployment slots per Provider control plane.
+- **In every edition.** PCAS, AGID, XREC, VDEC and PQC attach in every build and take no license gate; multi-tenancy, the crypto boundary, audit and export, and the offline license verifier stay in the core. FIPS is artifact-gated (make fips-build), never a runtime license gate.
+<!-- edition-ledger:end editions-rights -->
+
 ### Grace and expiry
 
 At expiry, the offline verifier provides a 30-day grace period. During grace,
 licensed modes remain enabled. After grace, the license state and commercial
 feature modes become `read_only`; core issuance, renewal, revocation, protocol,
-audit/export, tenancy, and license-verification capabilities remain Community
-software. The core keeps running: a lapsed commercial order never bricks a
+audit/export, tenancy, and license-verification capabilities stay in the Free
+edition. The core keeps running: a lapsed commercial order never bricks a
 customer's PKI. Commercial mutation surfaces honor the served `read_only` mode,
 and the editions page makes that state visible before an operator acts.
 `GET /api/v1/editions` and Platform → Editions expose the effective tier, the
@@ -44,7 +56,7 @@ allowance constant, and the API and docs are guarded against drift from them.
 Open **Plan and license** at `/admin/editions` to answer two questions first:
 which signed features this deployment may use, and when that permission ends.
 The opening card shows the current plan, enabled-feature count, expiry, and a
-plain-language state such as Community, Active, Grace, or Read-only. The page
+plain-language state such as Free, Active, Grace, or Read-only. The page
 makes only the Editions API read needed for that answer.
 
 The deeper proof remains available without putting it in the operator's way:
@@ -75,7 +87,7 @@ them with the `LICENSE_KEYS_B64` build argument of `deploy/docker/Dockerfile`
 (the release pipeline passes the repository variable
 `TRSTCTL_LICENSE_KEYS_B64`). Only public keys are ever baked. A build without
 a baked key bakes no trust: no license file can verify and the deployment stays
-Community, which is the fail-closed default for local builds. The local
+on the Free edition, which is the fail-closed default for local builds. The local
 click-through demo is the one exception: its image target mints a throw-away
 key and license inside the build and deletes the signing material, so a demo
 license never verifies on any other build.
@@ -112,6 +124,7 @@ and license** after the restart for `active` and the expected deployment ID.
 
 ## Buyer Matrix
 
+<!-- edition-ledger:begin editions-buyer-matrix -->
 | Packaging line | Free | Enterprise | Provider / MSP |
 |---|---|---|---|
 | Buyer | Organization operating trstctl for itself | Organization needing the commercial feature set | MSP operating or reselling trstctl-backed services to customers |
@@ -120,12 +133,13 @@ and license** after the restart for `active` and the expected deployment ID.
 | Tenant isolation | PostgreSQL RLS and event spine | Included | Included; shared multi-tenant control plane is the normal shape |
 | Patent-pending families and PQC | Included: PCAS, agent delegation, reconciliation, VDEC, and post-quantum cryptography attach in every build | Included | Included |
 | Remediation | Incident response and guided remediation, subject to authorization and configured targets | Included | Included |
-| Enterprise features | Not included | FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO), and audit anchoring/retention/compliance packaging | All Enterprise features |
-| Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
+| Enterprise features | Not included | FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO) and audit anchoring, retention and compliance packaging | All Enterprise features |
+| Provider operations | Not included | Not included | Provider plane, metering, white label and siloed isolation |
 | Product motion and commercial `ee/` rights | Self-hosted core under BUSL-1.1 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
 | Commercial terms | No license fee | Not yet published | Not yet published |
-| Environment entitlement | Community deployments are unmetered | 1 production + 3 signed non-production deployment slots | Same bundle per licensed Provider control plane |
+| Environment entitlement | Free deployments are unmetered | 1 production + 3 signed non-production deployment slots | Same bundle per licensed Provider control plane |
+<!-- edition-ledger:end editions-buyer-matrix -->
 
 The same binary lineage serves all three tiers. The offline signed tier drives
 both feature inheritance and use rights. Core multi-tenancy, audit/export, crypto,
@@ -181,23 +195,23 @@ file without that pair fails closed before the signing service listens.
 
 ## Core Protocols
 
-These protocol surfaces are Free/Community capabilities. They are not Enterprise-only
+These protocol surfaces are Free capabilities. They are not Enterprise-only
 features in `internal/license`.
 
 | Capability | Edition | Notes |
 |---|---|---|
-| ACME | Community | ACME server, account/order flow, ARI, and DNS-validation framework. |
-| EST | Community | RFC 7030 enrollment endpoint. |
-| SCEP | Community | RFC 8894 enrollment endpoint. |
-| CMP | Community | RFC 4210 / CMPv3 enrollment endpoint. |
-| SPIFFE Workload API | Community | X.509 and JWT SVID workload identity surface. |
-| SSH CA | Community | SSH certificate authority endpoints and KRL publication. |
-| TSA | Community | Timestamping authority surface. |
+| ACME | Free | ACME server, account/order flow, ARI, and DNS-validation framework. |
+| EST | Free | RFC 7030 enrollment endpoint. |
+| SCEP | Free | RFC 8894 enrollment endpoint. |
+| CMP | Free | RFC 4210 / CMPv3 enrollment endpoint. |
+| SPIFFE Workload API | Free | X.509 and JWT SVID workload identity surface. |
+| SSH CA | Free | SSH certificate authority endpoints and KRL publication. |
+| TSA | Free | Timestamping authority surface. |
 
 ## License-Gated Features
 
 This table mirrors `internal/license` exactly. A feature absent from this table is
-Free/Community by default unless a signed license explicitly grants it as an extra.
+Free by default unless a signed license explicitly grants it as an extra.
 Provider inherits every Enterprise row below, then adds the Provider rows.
 PCAS, agent delegation, reconciliation, verifiable decommissioning, PQC and
 remediation are core capabilities and require no commercial feature grant.

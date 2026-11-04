@@ -69,7 +69,7 @@ clients cannot silently omit them.
 Open **Plan and license** (`/admin/editions`). The opening card must read
 *Provider* with an *Active* state, and **Signature verification** must show the
 offline signature verified against the vendor key and the deployment binding your
-operator configured. Community means no Provider entitlement is active; check
+operator configured. Free means no Provider entitlement is active; check
 the license configuration on both processes. An invalid signature or deployment
 binding fails startup. Grace retains full functionality for 30 days after expiry.
 Read-only refuses mutations while retaining delegated reads.

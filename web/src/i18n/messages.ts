@@ -6286,20 +6286,20 @@ export const messages = {
     description: "Enabled runtime license-feature answer metric; excludes artifact-gated FIPS.",
   },
   "admin.editions.featureCount": { defaultMessage: "{enabled} of {total} enabled", description: "Enabled license feature count." },
-  "admin.editions.noExpiry": { defaultMessage: "No expiry — Community", description: "Community has no signed commercial license expiry." },
+  "admin.editions.noExpiry": { defaultMessage: "No expiry — Free", description: "The Free edition has no signed commercial license expiry." },
   "admin.editions.activeAnswer": { defaultMessage: "{plan} plan is active", description: "Answer for an active signed plan." },
   "admin.editions.graceAnswer": {
     defaultMessage: "{plan} plan has expired and is in grace",
     description: "Answer during the bounded post-expiry grace period.",
   },
   "admin.editions.readOnlyAnswer": { defaultMessage: "{plan} plan is read-only", description: "Answer after the signed license grace period." },
-  "admin.editions.communityAnswer": { defaultMessage: "Community plan is active", description: "Answer when no signed license is installed." },
+  "admin.editions.communityAnswer": { defaultMessage: "Free plan is active", description: "Answer when no signed license is installed (the Free edition)." },
   "admin.editions.unavailableAnswer": { defaultMessage: "License status unavailable", description: "Fail-closed answer when license truth cannot be read." },
   "admin.editions.signatureVerified": {
     defaultMessage: "Signed license verified at startup",
-    description: "Truth derived from successful startup verification of a non-Community license.",
+    description: "Truth derived from successful startup verification of a signed Enterprise or Provider license.",
   },
-  "admin.editions.noSignedLicense": { defaultMessage: "No signed license installed", description: "Community signature posture." },
+  "admin.editions.noSignedLicense": { defaultMessage: "No signed license installed", description: "Free edition signature posture." },
   "admin.editions.signature": { defaultMessage: "Signature verification", description: "First Plan and license disclosure label." },
   "admin.editions.signatureDescription": {
     defaultMessage: "How startup checked the signature and when access becomes read-only.",
@@ -31014,7 +31014,7 @@ export const messages = {
     defaultMessage: "Own a migration, assign a wave and deadline, and prove closure over CBOM findings.",
     description: "Core PQC campaign description.",
   },
-  "posture.pqcCampaign.communityHeading": { defaultMessage: "Tracking works in Community", description: "Standalone core capability heading." },
+  "posture.pqcCampaign.communityHeading": { defaultMessage: "Tracking works in the Free edition", description: "Standalone core capability heading." },
   "posture.pqcCampaign.communityBody": {
     defaultMessage:
       "Track ownership, readiness, and evidence for work performed manually or by any tool. Campaigns do not start migrations automatically. Use the core PQC migration workflow to execute a reviewed plan, then record its evidence here.",

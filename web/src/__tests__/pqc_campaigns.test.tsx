@@ -102,10 +102,10 @@ describe("core PQC migration campaigns", () => {
     });
   });
 
-  it("renders an accessible standalone Community list and creation workflow", async () => {
+  it("renders an accessible standalone Free-edition list and creation workflow", async () => {
     const { container } = renderCampaigns();
     expect(await screen.findByText("Payments PQC migration")).toBeInTheDocument();
-    expect(screen.getByText("Tracking works in Community")).toBeInTheDocument();
+    expect(screen.getByText("Tracking works in the Free edition")).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).toHaveAccessibleName("payments.internal:443 RSA");
     expect(await axe(container)).toHaveNoViolations();
   });

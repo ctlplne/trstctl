@@ -3,7 +3,7 @@
 trstctl is pre-1.0 and under active hardening. This page states plainly what the
 running binary serves today versus what is built and tested as library code but
 not yet wired into the served product, and which surfaces are explicitly Phase 2.
-Maturity is separate from edition gates: Community self-host includes the core
+Maturity is separate from edition gates: Free self-host includes the core
 control plane; Enterprise and Provider capabilities activate by an offline signed
 license behind the `ee/` boundary. trstctl's core is source-available under `LICENSE`
 (BUSL-1.1, converting to MPL-2.0 four years after each release); Enterprise,
@@ -7768,6 +7768,17 @@ all of this and shows the effective authority after every grant change. What com
 - **OAuth re-authorization health.** For MCP endpoints that sign in with OAuth, with per-tool
   authorization at the relying party; it waits for the P8 design's go-ahead.
 
+
+## Edition and qualification ledger (A253) — served
+
+`go run ./tools/editionledger` writes `docs/editions-ledger.md` and `docs/editions-ledger.json` from
+`internal/license` (tiers, licensed features, use rights, deployment slots) and the feature map
+(qualification by served state). The README's license paragraph and `docs/editions.md`'s rights list and
+buyer matrix are generated blocks, the Editions API's column names come from the same display names, and
+the console names the no-license edition Free. `-check`, `TestEditionLedgerIsGeneratedAndCurrent`,
+`TestFreeEditionIsNamedFromTheLedger` and `TestNoPageCallsTheBUSLCoreOpenSource` fail on drift. The
+qualification line counts feature-map rows; a row's own evidence and limits stay on its feature page and
+in this file. Edition boundaries did not change.
 
 ## Evidence report templates (A252) — served
 

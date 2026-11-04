@@ -3017,13 +3017,13 @@ trstctl ships as a single binary. Enterprise-tier features (managed keys, HA
 support, FIPS artifact posture, and governance — the full Enterprise row
 in [Editions](editions.md)) unlock through an offline, no-phone-home license check: the
 file is verified locally against public keys baked into the binary at release time.
-No configured file means Community edition; a corrupt or untrusted file fails startup
+No configured file means the Free edition; a corrupt or untrusted file fails startup
 loudly; an expired file still loads and walks a grace ladder so licensed read paths
 stay observable.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_LICENSE_FILE` | unset (Community edition) | Path to the signed license file (Ed25519-verified offline, the AN-9 attach seam). |
+| `TRSTCTL_LICENSE_FILE` | unset (Free edition) | Path to the signed license file (Ed25519-verified offline, the AN-9 attach seam). |
 | `TRSTCTL_LICENSE_DEPLOYMENT_ID` | unset | Stable runtime deployment ID. Required with `TRSTCTL_LICENSE_ENVIRONMENT` for a version 2 license; it must match the signed production ID or one of at most three signed non-production IDs. |
 | `TRSTCTL_LICENSE_ENVIRONMENT` | unset | `production` or `non_production`. Required with `TRSTCTL_LICENSE_DEPLOYMENT_ID` for a version 2 license. A v1 compatibility license may omit both but remains production-only. |
 

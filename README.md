@@ -410,6 +410,9 @@ patent-pending families (PCAS, AGID, XREC, VDEC) and post-quantum cryptography
 ship in the core. Commercial Enterprise and Provider features are proprietary
 material under `ee/`, governed by [ee/LICENSE](ee/LICENSE), and activated by an
 offline Ed25519-signed license.
+<!-- edition-ledger:begin readme-editions -->
+Enterprise adds FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO) and audit anchoring, retention and compliance packaging. Provider / MSP adds Provider plane, metering, white label and siloed isolation on top of every Enterprise feature, with the rights to operate as a managed service and resell. See the [edition and qualification ledger](docs/editions-ledger.md).
+<!-- edition-ledger:end readme-editions -->
 Provider licenses include every Enterprise feature plus managed-service and resale
 rights. A Provider license is scoped by a managed-customer band; the MSP controls
 its own downstream hosting, support, and terms.

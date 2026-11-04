@@ -2,6 +2,11 @@
 
 ### Added
 
+- The edition and qualification ledger (A253 is served): `go run ./tools/editionledger` generates
+  `docs/editions-ledger.md` and `.json` from the license table and the feature map; the README and
+  `docs/editions.md` carry its generated blocks, the Editions API and the console name the no-license
+  edition Free as the ledger does, and guards fail on drift, on another name for it, and on a page that
+  misstates the core's source-available license.
 - Evidence report templates (A252 is served): five scheduled report types — lifecycle, access, rotation,
   incident response and qualification evidence — replay one window of the tenant's event log, sign like
   every scheduled report and verify offline. Each counts its sections' events by type, tallies outcomes,

@@ -338,6 +338,20 @@ Every path uses the same event-sourced,
 PostgreSQL-RLS-isolated binary lineage; none moves tenancy, audit/export,
 crypto, or license verification into `ee/`.
 
+**Edition and qualification ledger (A253).** `go run ./tools/editionledger`
+generates [the edition and qualification ledger](../editions-ledger.md) (and its
+JSON twin) from `internal/license` and the feature map: each edition's name,
+licensed features, use rights and deployment entitlement, and how many feature-map
+rows are served, partial or conditional. The README's and
+[Editions](../editions.md)' edition paragraphs, rights list and buyer matrix are
+generated blocks of that ledger, the Editions API names its columns from the same
+display names, and the console calls the no-license edition Free as the ledger
+does. Guards fail on drift (`go run ./tools/editionledger -check` and the docs
+tests), on a page naming the no-license edition something the ledger does not, and
+on a page that misstates the core's source-available license. Edition boundaries
+are unchanged.
+Status: served.
+
 ### High-volume orchestration (CAP-SCALE-01)
 
 trstctl serves a scale-orchestration posture for 100,000 to 1,000,000+ managed

@@ -1,0 +1,566 @@
+{
+  "format": "trstctl.edition-ledger.v1",
+  "product": {
+    "name": "trstctl",
+    "core_license": "BUSL-1.1",
+    "core_conversion": "MPL-2.0, four years after each release",
+    "clients_license": "MPL-2.0",
+    "commercial_material": "ee/ (proprietary, ee/LICENSE)",
+    "activation": "an offline Ed25519-signed license",
+    "fips": "artifact-gated (make fips-build), never a runtime license gate"
+  },
+  "editions": [
+    {
+      "tier": "community",
+      "name": "Free",
+      "features": [],
+      "rights": [
+        "self-host"
+      ],
+      "environments": "unmetered"
+    },
+    {
+      "tier": "enterprise",
+      "name": "Enterprise",
+      "features": [
+        "FIPS artifact posture",
+        "HA support",
+        "BYOK",
+        "governance",
+        "tenant SAML/LDAP/SCIM (Enterprise SSO)",
+        "audit anchoring, retention and compliance packaging"
+      ],
+      "rights": [
+        "self-host"
+      ],
+      "environments": "1 production + 3 signed non-production deployment slots"
+    },
+    {
+      "tier": "provider",
+      "name": "Provider / MSP",
+      "features": [
+        "FIPS artifact posture",
+        "HA support",
+        "BYOK",
+        "governance",
+        "tenant SAML/LDAP/SCIM (Enterprise SSO)",
+        "audit anchoring, retention and compliance packaging",
+        "Provider plane",
+        "metering",
+        "white label",
+        "siloed isolation"
+      ],
+      "rights": [
+        "self-host",
+        "operate as a managed service",
+        "resell"
+      ],
+      "environments": "1 production + 3 signed non-production deployment slots"
+    }
+  ],
+  "features": [
+    {
+      "feature": "fips",
+      "name": "FIPS artifact posture",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "ha_support",
+      "name": "HA support",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "byok",
+      "name": "BYOK",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "governance",
+      "name": "governance",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "enterprise_sso",
+      "name": "tenant SAML/LDAP/SCIM (Enterprise SSO)",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "audit_compliance",
+      "name": "audit anchoring, retention and compliance packaging",
+      "tier": "enterprise",
+      "editions": [
+        "Enterprise",
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "provider_plane",
+      "name": "Provider plane",
+      "tier": "provider",
+      "editions": [
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "metering",
+      "name": "metering",
+      "tier": "provider",
+      "editions": [
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "white_label",
+      "name": "white label",
+      "tier": "provider",
+      "editions": [
+        "Provider / MSP"
+      ]
+    },
+    {
+      "feature": "siloed_isolation",
+      "name": "siloed isolation",
+      "tier": "provider",
+      "editions": [
+        "Provider / MSP"
+      ]
+    }
+  ],
+  "core_families": [
+    "PCAS",
+    "AGID",
+    "XREC",
+    "VDEC",
+    "PQC"
+  ],
+  "qualification": {
+    "rows": 80,
+    "by_served_state": {
+      "conditional": 40,
+      "partial": 3,
+      "served": 37
+    },
+    "items": [
+      {
+        "feature_id": "F1",
+        "feature": "Certificate inventory",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F2",
+        "feature": "Network discovery",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F3",
+        "feature": "Agent-based discovery",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F4",
+        "feature": "CA-agnostic outbound issuance",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F5",
+        "feature": "Built-in ACME server",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F6",
+        "feature": "Lifecycle automation",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F7",
+        "feature": "Deployment connectors initial set",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F8",
+        "feature": "RBAC",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F9",
+        "feature": "Audit log surfaces",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F10",
+        "feature": "REST API",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F11",
+        "feature": "CLI",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F12",
+        "feature": "Web UI",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F13",
+        "feature": "SSO/OIDC",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F14",
+        "feature": "Single-binary distribution",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F15",
+        "feature": "Encrypted control-plane transport",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F16",
+        "feature": "Crypto-agility and PQC readiness",
+        "served_state": "partial"
+      },
+      {
+        "feature_id": "F17",
+        "feature": "Certificate Transparency monitoring",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F18",
+        "feature": "Drift detection",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F19",
+        "feature": "Credential risk scoring",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F20",
+        "feature": "Plugin SDK with capability sandboxing",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F21",
+        "feature": "Credential graph",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F22",
+        "feature": "EST server",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F23",
+        "feature": "SCEP server",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F24",
+        "feature": "SPIFFE Workload API",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F25",
+        "feature": "Ephemeral credential issuance",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F26",
+        "feature": "HSM integration",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F27",
+        "feature": "Additional deployment connectors",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F28",
+        "feature": "Policy engine",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F29",
+        "feature": "Notification integrations",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F30",
+        "feature": "Workload attestation chain",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F31",
+        "feature": "Credential compromise workflow",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F32",
+        "feature": "Fleet re-issuance for CA compromise",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F33",
+        "feature": "Just-in-time issuance with approval flows",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F34",
+        "feature": "Break-glass procedures",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F35",
+        "feature": "Secret store discovery",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F36",
+        "feature": "API key / token inventory",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F37",
+        "feature": "Secret rotation engine",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F38",
+        "feature": "Ephemeral API key issuance",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F39",
+        "feature": "Code/CI secret scanning bridge",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F40",
+        "feature": "Multi-tenant deployment topology",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F41",
+        "feature": "Cross-cluster / multi-region federation",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F42",
+        "feature": "SSH credential discovery and inventory",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F43",
+        "feature": "SSH certificate authority",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F44",
+        "feature": "SSH deployment and trust configuration agent",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F45",
+        "feature": "Attestation-gated short-lived SSH user certs",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F46",
+        "feature": "ACME Renewal Information (ARI)",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F47",
+        "feature": "X.509 revocation infrastructure",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F48",
+        "feature": "Private/enterprise CA hierarchy management",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F49",
+        "feature": "Agentless cloud certificate discovery",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F50",
+        "feature": "Code-signing service",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F51",
+        "feature": "Timestamping authority",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F52",
+        "feature": "CBOM and cryptographic observability",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F53",
+        "feature": "Certificate profiles and registration-authority model",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F54",
+        "feature": "Embedded / IoT enrollment agent",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F55",
+        "feature": "CMP server",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F56",
+        "feature": "Intune / MDM enrollment integration",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F57",
+        "feature": "PQC migration orchestration",
+        "served_state": "partial"
+      },
+      {
+        "feature_id": "F58",
+        "feature": "Platform auth-method framework",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F59",
+        "feature": "Non-human identity lifecycle management",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F60",
+        "feature": "Secret sharing and secret-change approvals",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F61",
+        "feature": "AI-agent / NHI identity broker",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F62",
+        "feature": "Cryptographic compliance reporting \u0026 posture dashboards",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F63",
+        "feature": "Native secret store",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F64",
+        "feature": "Developer secrets experience",
+        "served_state": "partial"
+      },
+      {
+        "feature_id": "F65",
+        "feature": "Dynamic secrets",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F66",
+        "feature": "Encryption-as-a-service and KMIP",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F67",
+        "feature": "PKI as a secrets engine",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F68",
+        "feature": "Secret sync / platform integrations",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F69",
+        "feature": "DNS-01 challenge automation",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F70",
+        "feature": "DNS-provider plugin framework",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F71",
+        "feature": "CNAME delegation for validation isolation",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F72",
+        "feature": "CAA policy enforcement and management",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F73",
+        "feature": "Multi-method domain-validation policy",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F74",
+        "feature": "Automated wildcard issuance and renewal",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F75",
+        "feature": "Unified semantic query layer",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F76",
+        "feature": "Pluggable AI model adapter",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F77",
+        "feature": "Grounded RCA and natural-language query",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F78",
+        "feature": "trstctl MCP server",
+        "served_state": "conditional"
+      },
+      {
+        "feature_id": "F79",
+        "feature": "Privacy and data-subject controls",
+        "served_state": "served"
+      },
+      {
+        "feature_id": "F80",
+        "feature": "AWS IAM decoy keys",
+        "served_state": "conditional"
+      }
+    ]
+  }
+}

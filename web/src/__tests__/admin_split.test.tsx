@@ -287,7 +287,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Plan and license could not be read. No license state was assumed.");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\/etc\/trstctl|signature bytes|secret/i);
-    expect(screen.queryByText(/Community plan is active/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Free plan is active/i)).not.toBeInTheDocument();
   });
 
   it("keeps backend details out of lazy deployment-architecture failures", async () => {
@@ -311,9 +311,9 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     {
       state: "community" as const,
       tier: "community" as const,
-      answer: "Community plan is active",
+      answer: "Free plan is active",
       signature: "No signed license installed",
-      expiry: "No expiry — Community",
+      expiry: "No expiry — Free",
     },
     {
       state: "grace" as const,
@@ -362,7 +362,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     });
 
     renderAt("/admin/editions");
-    expect(await screen.findByRole("heading", { name: "Community plan is active" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Free plan is active" })).toBeInTheDocument();
     expect(screen.getByText("Licensed features enabled").parentElement).toHaveTextContent("0 of 1 enabled");
     await userEvent.click(screen.getByText("Feature table", { exact: true }));
     const rows = within(screen.getByRole("table", { name: "Feature table" })).getAllByRole("row");

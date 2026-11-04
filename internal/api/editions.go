@@ -129,8 +129,8 @@ func editionPackaging() editionPackagingResponse {
 		Editions: []editionPackagingEntry{
 			{
 				ID:              "community",
-				Name:            "Free",
-				Column:          "Free",
+				Name:            license.TierDisplay(license.TierCommunity),
+				Column:          license.TierDisplay(license.TierCommunity),
 				BuyerFit:        "single organization operating its own credential control plane",
 				LicenseBoundary: "free core; no commercial license file required",
 				Billing:         "no license meter; no per-certificate or ephemeral-identity billing",
@@ -139,7 +139,7 @@ func editionPackaging() editionPackagingResponse {
 			{
 				ID:              "enterprise",
 				Name:            "Enterprise self-host",
-				Column:          "Enterprise",
+				Column:          license.TierDisplay(license.TierEnterprise),
 				BuyerFit:        "regulated or scaled operators that need assurance, governance, BYOK, and support",
 				LicenseBoundary: "offline signed Enterprise license",
 				Billing:         "one production control-plane deployment; three explicitly bound non-production deployments included",
@@ -147,8 +147,8 @@ func editionPackaging() editionPackagingResponse {
 			},
 			{
 				ID:              "provider",
-				Name:            "Provider / MSP",
-				Column:          "Provider / MSP",
+				Name:            license.TierDisplay(license.TierProvider),
+				Column:          license.TierDisplay(license.TierProvider),
 				BuyerFit:        "MSPs operating trstctl for customers from a shared control plane or dedicated deployments",
 				LicenseBoundary: "offline signed Provider license",
 				Billing:         "managed-customer band; the MSP sets its own downstream hosting, support, and terms",

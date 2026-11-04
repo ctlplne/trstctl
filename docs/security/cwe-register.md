@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2442 annotated sites across 30 rules. Each row is
+2447 annotated sites across 30 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1643,7 +1643,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (648 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (652 sites)
 
 | Location | Reason |
 |---|---|
@@ -1770,6 +1770,8 @@ not this file.
 | `docs/docker_acceptance_deadline_test.go:22` | test reads a fixed repository path (CWE-22) |
 | `docs/docker_acceptance_deadline_test.go:38` | test reads a fixed repository path (CWE-22) |
 | `docs/doctor_doc_test.go:33` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
+| `docs/edition_ledger_test.go:83` | test reads the repository's own documentation (CWE-22) |
+| `docs/edition_ledger_test.go:116` | test reads the repository's own documentation and console catalog (CWE-22) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/fuzz_shim_guard_test.go:369` | this repository's own test sources (CWE-22) |
@@ -2267,6 +2269,8 @@ not this file.
 | `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/dodcensus/shard.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/shard.go:198` | developer tool reading the shard receipts it is pointed at (CWE-22) |
+| `tools/editionledger/main.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/editionledger/main.go:56` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
 | `tools/pqclab/main.go:204` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main.go:269` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -2296,7 +2300,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (122 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (123 sites)
 
 | Location | Reason |
 |---|---|
@@ -2420,6 +2424,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:411` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:432` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:435` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `tools/editionledger/main.go:65` | a public documentation file (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 

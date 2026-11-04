@@ -257,7 +257,7 @@ work and evidence; the fleet executor (`internal/pqcmigration`) attaches beside 
 
 ### Core migration campaigns
 
-CBOM sees the problem, so campaign ownership lives beside CBOM in core. A Community
+CBOM sees the problem, so campaign ownership lives beside CBOM in core. A Free-edition
 operator can create a tenant-scoped campaign over existing quantum-vulnerable or
 out-of-policy CBOM findings, assign an owner, deadline, wave, and readiness criteria,
 then record work performed manually or by any external tool. No license is required:

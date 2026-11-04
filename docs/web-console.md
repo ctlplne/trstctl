@@ -383,7 +383,7 @@ An empty inventory says that nothing has been checked; it never claims that the
 estate is safe.
 
 **Plan upgrade** is the only primary action. It opens compatibility, PQC policy,
-campaign tracking, and the guarded migration workflow. The Community edition keeps
+campaign tracking, and the guarded migration workflow. The Free edition keeps
 CBOM discovery, readiness, campaign ownership, evidence, and signed campaign closure
 usable. Core migration execution requires an exact preview, selected
 assets, explicit confirmation, progress evidence, and a second confirmation before
