@@ -2929,6 +2929,14 @@ entry has an `id` (one path segment; the hook's URL is
 secret GitHub signs deliveries with. Startup refuses a duplicate id, a provider other
 than github or an invalid reference.
 
+Leaked-secret validity checks (P14) are configured under `secrets.validity_checks`:
+`enabled` turns them on; `endpoints` maps `aws` to the HTTPS base URL its check calls
+(default `https://sts.amazonaws.com`); `allowlist` lists every destination a check may
+call as `https://host[:port]` (empty declares the default); `rates` maps `aws` to checks
+per second (default 5, at most 100). Startup refuses another provider, a non-HTTPS
+endpoint or allowlist entry, and a rate out of range. A check whose endpoint is not
+in the allowlist is refused before it is sent.
+
 Machine-auth methods beyond the HMAC token are configured in the JSON/YAML config
 file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, or `jwt`. JWT-family methods require

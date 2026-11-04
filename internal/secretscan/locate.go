@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/mail"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -42,6 +44,7 @@ func LocateThirdPartyObject(provider, artifactPath, file string, line int) (map[
 			ThreadTS  string `json:"thread_ts"`
 			Channel   string `json:"channel"`
 			ChannelID string `json:"channel_id"`
+			User      string `json:"user"`
 		}
 		if json.Unmarshal(msg, &m) != nil || m.TS == "" {
 			return nil, false
@@ -58,6 +61,14 @@ func LocateThirdPartyObject(provider, artifactPath, file string, line int) (map[
 			out["channel_id"] = m.ChannelID
 		} else if id := slackChannelID(filepath.Dir(filepath.Dir(full)), channel); id != "" {
 			out["channel_id"] = id
+		}
+		// P14: the poster, and their address from the export's users.json,
+		// so the finding can name its owner.
+		if slackUserPattern.MatchString(m.User) {
+			out["user"] = m.User
+			if email := slackUserEmail(filepath.Dir(filepath.Dir(full)), m.User); email != "" {
+				out["user_email"] = email
+			}
 		}
 		return out, true
 	case ThirdPartyProviderJira:
@@ -222,6 +233,34 @@ func slackChannelID(exportRoot, channel string) string {
 		for _, c := range channels {
 			if c.Name == channel {
 				return c.ID
+			}
+		}
+	}
+	return ""
+}
+
+var slackUserPattern = regexp.MustCompile(`^[UW][A-Z0-9]{2,20}$`)
+
+// slackUserEmail reads a member's email from the export's users.json, as
+// Slack's own export writes it (profile.email).
+func slackUserEmail(exportRoot, userID string) string {
+	data, err := readBounded(filepath.Join(exportRoot, "users.json"))
+	if err != nil {
+		return ""
+	}
+	var users []struct {
+		ID      string `json:"id"`
+		Profile struct {
+			Email string `json:"email"`
+		} `json:"profile"`
+	}
+	if json.Unmarshal(data, &users) != nil {
+		return ""
+	}
+	for _, u := range users {
+		if u.ID == userID {
+			if addr, err := mail.ParseAddress(u.Profile.Email); err == nil && addr.Address == u.Profile.Email {
+				return u.Profile.Email
 			}
 		}
 	}

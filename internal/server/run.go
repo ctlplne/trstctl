@@ -40,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/logging"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	notifyemail "trstctl.com/trstctl/internal/notify/email"
 	"trstctl.com/trstctl/internal/notify/siem"
@@ -53,6 +54,7 @@ import (
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/secretscan/validity"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -828,6 +830,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretsAuthTokenScopes:      append([]string(nil), cfg.Secrets.AuthTokenScopes...),
 		MachineAuthMethods:          withMachineCredentialReplayGuard(machineAuthMethods, st),
 		SecretScanWebhooks:          cfg.Secrets.ScanWebhooks,
+		SecretValidity:              secretValidityChecker(cfg.Secrets.ValidityChecks),
 		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
@@ -1912,4 +1915,15 @@ func apiTokenMaxLifetimeFromConfig(cfg *config.Config) *time.Duration {
 		d = config.DefaultAPITokenMaxLifetime
 	}
 	return &d
+}
+
+// secretValidityChecker builds the leaked-secret validity checker (P14) when
+// it is enabled; its client is the egress-safe one, so a check reaches only
+// public provider endpoints.
+func secretValidityChecker(cfg config.SecretValidityChecks) *validity.Checker {
+	if !cfg.Enabled {
+		return nil
+	}
+	return validity.New(validity.Config{Endpoints: cfg.Endpoints, Allowlist: cfg.Allowlist, Rates: cfg.Rates,
+		Client: netsec.SafeClient(10 * time.Second)})
 }

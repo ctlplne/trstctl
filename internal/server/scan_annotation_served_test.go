@@ -28,6 +28,8 @@ type a174MarkerScanner struct {
 	// marker is the text a line must hold to be a finding; LEAK-A174 when
 	// empty.
 	marker string
+	// rule is the finding's rule; generic-api-key when empty.
+	rule string
 }
 
 func (s *a174MarkerScanner) Scan(_ context.Context, target string) (secretscan.Report, error) {
@@ -54,9 +56,13 @@ func (s *a174MarkerScanner) Scan(_ context.Context, target string) (secretscan.R
 				marker = "LEAK-A174"
 			}
 			if strings.Contains(line, marker) {
-				report.Findings = append(report.Findings, secretscan.Finding{Scanner: "gitleaks", RuleID: "generic-api-key",
-					File: filepath.ToSlash(rel), Line: i + 1, Fingerprint: filepath.ToSlash(rel) + ":generic-api-key:" + string(rune('0'+i%10)),
-					CredentialRef: "generic-api-key@" + filepath.ToSlash(rel)})
+				rule := s.rule
+				if rule == "" {
+					rule = "generic-api-key"
+				}
+				report.Findings = append(report.Findings, secretscan.Finding{Scanner: "gitleaks", RuleID: rule,
+					File: filepath.ToSlash(rel), Line: i + 1, Fingerprint: filepath.ToSlash(rel) + ":" + rule + ":" + string(rune('0'+i%10)),
+					CredentialRef: rule + "@" + filepath.ToSlash(rel)})
 			}
 		}
 		return nil

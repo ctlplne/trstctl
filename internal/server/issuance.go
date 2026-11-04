@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secretscan/validity"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 	"trstctl.com/trstctl/internal/usage"
@@ -209,6 +210,8 @@ type issuanceDispatcher struct {
 	// secretRepoScanner runs repository secret scans from the discovery.run outbox
 	// worker. It is the same pinned/redacting scanner used by POST /secrets/scans.
 	secretRepoScanner secretScanner
+	// validity checks a found secret where the scan found it (P14).
+	validity *validity.Checker
 	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant
 	// provider configs. Nil makes acme.dns01.* destinations fail closed.
 	dns01 *servedACMEDNS01Automation

@@ -1385,7 +1385,7 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		if ref == "" {
 			ref = f.RuleID + "@" + f.File
 		}
-		meta, err := json.Marshal(map[string]any{
+		repoFields := map[string]any{
 			"scanner":        report.Scanner,
 			"engine_version": report.EngineVersion,
 			"rules_active":   report.RulesActive,
@@ -1398,7 +1398,11 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 			"rule_id":        f.RuleID,
 			"file":           f.File,
 			"line":           f.Line,
-		})
+		}
+		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
+			repoFields["validity"] = checked
+		}
+		meta, err := json.Marshal(repoFields)
 		if err != nil {
 			return rep, "", "", err
 		}
@@ -1508,6 +1512,9 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		if cfg.Collect != nil {
 			fields["collected_items"], fields["collected_bytes"], fields["collection_truncated"] = collected.Items, collected.Bytes, collected.Truncated
 		}
+		if checked := d.secretValidity(ctx, target.Path, f); checked != nil {
+			fields["validity"] = checked
+		}
 		object := thirdPartyFindingObject(cfg, target.Path, f)
 		if cfg.Collect != nil {
 			// A collected CI log's run or job, or a collected image, is the
@@ -1520,6 +1527,14 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		}
 		if object != nil {
 			fields["provider_object"], fields["annotation_provider"] = object, cfg.AnnotationProvider()
+			// P14: a secret posted in Slack is linked to the poster's owner.
+			if email := object["user_email"]; object["kind"] == "slack_message" && email != "" {
+				if ownerID, err := d.ownerForEmail(ctx, tenantID, email); err != nil {
+					return rep, "", "", err
+				} else if ownerID != "" {
+					fields["owner_id"] = ownerID
+				}
+			}
 		}
 		meta, err := json.Marshal(fields)
 		if err != nil {
@@ -1719,4 +1734,34 @@ func discoveryRiskScore(notAfter time.Time) int {
 	default:
 		return 10
 	}
+}
+
+// secretValidity checks a finding's secret where the scan found it, while the
+// scanned tree still exists (P14). It returns nil without a checker or for a
+// rule no provider check covers; the value itself is never kept.
+func (d *issuanceDispatcher) secretValidity(ctx context.Context, root string, f secretscan.Finding) map[string]any {
+	if d.validity == nil || f.RuleID != "aws-access-token" {
+		return nil
+	}
+	res := d.validity.CheckAWSFinding(ctx, root, f.File, f.Line)
+	return map[string]any{"provider": res.Provider, "state": res.State, "detail": res.Detail, "checked_at": res.CheckedAt}
+}
+
+// ownerForEmail is the tenant's one owner with this mailbox, or "" when none
+// or several match.
+func (d *issuanceDispatcher) ownerForEmail(ctx context.Context, tenantID, email string) (string, error) {
+	owners, err := d.store.ListOwnersByEmails(ctx, tenantID, []string{email})
+	if err != nil {
+		return "", err
+	}
+	match := ""
+	for _, owner := range owners {
+		if strings.EqualFold(strings.TrimSpace(owner.Email), strings.TrimSpace(email)) {
+			if match != "" {
+				return "", nil
+			}
+			match = owner.ID
+		}
+	}
+	return match, nil
 }

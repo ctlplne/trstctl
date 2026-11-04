@@ -7893,6 +7893,19 @@ production relay; a ServiceNow developer instance is a Track B row. What comes n
 decision of a ServiceNow-origin request, approvals from `sc_req_item` and `sc_request`, and a ServiceNow Store app or a
 connector for ServiceNow's certificate module (through ServiceNow's certification).
 
+## Live checks and chat scanning for leaked secrets (P14) — served
+
+With `secrets.validity_checks.enabled`, a scan checks each AWS access key it finds where it found it: the secret beside
+the key ID signs one STS `GetCallerIdentity` (SigV4: only a signature leaves the host) and the finding records
+`validity` valid, invalid, unknown or unchecked. Each check's endpoint must be in the checks' declared outbound
+allowlist or it is refused before it is sent, and a per-provider rate (5 a second by default) holds checks within the
+provider's limits, recording the rest unchecked. A secret found in a collected Slack channel (N6) names its poster and,
+from the poster's profile email, the tenant owner. Proven against an STS stand-in that verifies SigV4 signatures and a
+Slack stand-in; a live AWS test key and a test Slack workspace are a Track B row. What comes next: checks for other
+providers (GitHub, GitLab, Slack and cloud tokens), checks run on a relay or agent for content found there, Teams and
+Confluence collection, and the engine decision (stay on Gitleaks for patches, evaluate its successor, or add a second
+engine behind the same interface).
+
 ## Edition and qualification ledger (A253) — served
 
 `go run ./tools/editionledger` writes `docs/editions-ledger.md` and `docs/editions-ledger.json` from

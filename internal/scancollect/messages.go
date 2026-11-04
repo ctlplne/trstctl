@@ -16,6 +16,7 @@ import (
 
 var (
 	slackChannelID = regexp.MustCompile(`^[CGD][A-Z0-9]{2,20}$`)
+	slackUserID    = regexp.MustCompile(`^[UW][A-Z0-9]{2,20}$`)
 	slackTS        = regexp.MustCompile(`^[0-9]{1,12}\.[0-9]{1,9}$`)
 	jiraKey        = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}-[0-9]{1,12}$`)
 )
@@ -34,6 +35,7 @@ func collectSlack(ctx context.Context, w *writer, req Request) (Result, error) {
 	}
 	var channels []channelEntry
 	res := Result{}
+	posters := map[string]bool{}
 	for _, channel := range req.Channels {
 		if !slackChannelID.MatchString(channel) {
 			return res, fmt.Errorf("%w: %q is not a Slack channel ID", ErrRefused, channel)
@@ -77,10 +79,14 @@ func collectSlack(ctx context.Context, w *writer, req Request) (Result, error) {
 					break
 				}
 				var m struct {
-					TS string `json:"ts"`
+					TS   string `json:"ts"`
+					User string `json:"user"`
 				}
 				if json.Unmarshal(raw, &m) != nil || !slackTS.MatchString(m.TS) {
 					continue
+				}
+				if slackUserID.MatchString(m.User) {
+					posters[m.User] = true
 				}
 				// Each message names its channel, as a per-message export line does.
 				var fields map[string]json.RawMessage
@@ -124,7 +130,54 @@ func collectSlack(ctx context.Context, w *writer, req Request) (Result, error) {
 	if _, err := w.writeJSON("channels.json", channels); err != nil {
 		return res, err
 	}
+	// P14: users.json, as Slack's export holds it, so a finding can name the
+	// poster's owner. A token without users:read.email gets no addresses and
+	// the collection carries on without them.
+	if users := slackPosters(ctx, req, posters); len(users) > 0 {
+		if _, err := w.writeJSON("users.json", users); err != nil {
+			return res, err
+		}
+	}
 	return res, nil
+}
+
+// maxSlackPosters bounds the users.info calls one collection makes.
+const maxSlackPosters = 200
+
+type slackUser struct {
+	ID      string `json:"id"`
+	Profile struct {
+		Email string `json:"email,omitempty"`
+	} `json:"profile"`
+}
+
+// slackPosters reads each poster's profile (users.info), at most
+// maxSlackPosters, skipping any Slack will not show.
+func slackPosters(ctx context.Context, req Request, posters map[string]bool) []slackUser {
+	ids := make([]string, 0, len(posters))
+	for id := range posters {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if len(ids) > maxSlackPosters {
+		ids = ids[:maxSlackPosters]
+	}
+	var users []slackUser
+	for _, id := range ids {
+		body, _, err := get(ctx, req, req.BaseURL+"/api/users.info?"+url.Values{"user": {id}}.Encode(), authorization(req))
+		if err != nil {
+			continue
+		}
+		var answer struct {
+			OK   bool      `json:"ok"`
+			User slackUser `json:"user"`
+		}
+		if json.Unmarshal(body, &answer) != nil || !answer.OK || answer.User.ID != id {
+			continue
+		}
+		users = append(users, answer.User)
+	}
+	return users
 }
 
 // collectJira reads the issues JQL selects (search, startAt pages; summary,

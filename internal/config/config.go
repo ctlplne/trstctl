@@ -2741,6 +2741,46 @@ type Secrets struct {
 	// each delivery with the hook's own secret, and a push it verifies queues a
 	// repository secret scan for the hook's tenant.
 	ScanWebhooks []SecretScanWebhook `json:"scan_webhooks,omitempty"`
+	// ValidityChecks (P14) checks, on the scanning host, whether a leaked
+	// secret still works. Off unless enabled.
+	ValidityChecks SecretValidityChecks `json:"validity_checks,omitempty"`
+}
+
+// SecretValidityChecks configures leaked-secret validity checks (P14): which
+// identity endpoint each provider's check calls, the checks' declared outbound
+// destinations, and how many checks a second each provider gets.
+type SecretValidityChecks struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// Endpoints maps a provider (aws) to the base URL its check calls; the
+	// default is the provider's public identity endpoint.
+	Endpoints map[string]string `json:"endpoints,omitempty"`
+	// Allowlist names every destination a check may call
+	// (scheme://host[:port]); empty declares each provider's default.
+	Allowlist []string `json:"allowlist,omitempty"`
+	// Rates maps a provider to checks per second (default 5, at most 100).
+	Rates map[string]float64 `json:"rates,omitempty"`
+}
+
+// Validate checks the validity-check configuration.
+func (v SecretValidityChecks) Validate() error {
+	for provider, endpoint := range v.Endpoints {
+		u, err := url.Parse(endpoint)
+		if provider != "aws" || err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.User != nil {
+			return fmt.Errorf("secrets.validity_checks.endpoints: %q must name aws with an https URL", provider)
+		}
+	}
+	for _, entry := range v.Allowlist {
+		u, err := url.Parse(entry)
+		if err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.User != nil {
+			return fmt.Errorf("secrets.validity_checks.allowlist: %q must be https://host[:port]", entry)
+		}
+	}
+	for provider, rate := range v.Rates {
+		if provider != "aws" || rate <= 0 || rate > 100 {
+			return fmt.Errorf("secrets.validity_checks.rates: %q must name aws with a rate above 0 and at most 100", provider)
+		}
+	}
+	return nil
 }
 
 // SecretScanWebhook is one provider-native repository webhook endpoint,
@@ -4953,6 +4993,9 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
+	if err := c.Secrets.ValidityChecks.Validate(); err != nil {
+		errs = append(errs, err)
+	}
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateTenantSealPKCS11Wrappers(c.Secrets.TenantSealPKCS11Wrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)

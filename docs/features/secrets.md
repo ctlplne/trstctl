@@ -2157,6 +2157,24 @@ redacted findings themselves age out through the privacy retention worker after
 `TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` (default 90 days); the discovery run
 record stays as evidence that the scan happened.
 
+**Is the leaked secret still live? (P14).** With `secrets.validity_checks.enabled`,
+a scan checks each AWS access key it finds where it found it, while the scanned tree
+still exists: it reads the 40-character secret access key beside the key ID (a
+credentials file, an environment file or a chat message), signs one STS
+`GetCallerIdentity` call with the pair (SigV4, so only a signature leaves the host,
+never the secret) and records the finding's `validity` as `valid` (with the account
+and ARN), `invalid` (AWS refused the key: deactivated, deleted or a wrong secret),
+`unknown` (AWS could not be reached or answered otherwise) or `unchecked` (no secret
+beside the key ID, the endpoint not declared, or the check budget spent). The
+endpoint each check calls (`endpoints`, the public STS endpoint by default) must be in
+the checks' declared outbound destinations (`allowlist`), or the check is refused
+before anything is sent, and `rates` bounds checks per second (5 by default) so a
+large scan stays within the provider's limits. The value is never kept: the next scan
+of the source rechecks. A secret found in a collected Slack channel also names its
+poster and, from the poster's profile email (`users.info`, which needs the bot's
+`users:read.email` scope), the tenant owner with that address as the finding's
+`owner_id`.
+
 **Native collection (N6).** Instead of `artifact_path`, a source may carry `collect`
 and trstctl reads the content from the provider itself, in the layout of that
 provider's own export, so the scan and the finding-to-object mapping are the same as

@@ -2,6 +2,11 @@
 
 ### Added
 
+- Live checks for leaked secrets (P14 is served): with `secrets.validity_checks.enabled`, a scan checks each AWS
+  access key pair it finds where it found it (an STS GetCallerIdentity signed with the pair, so the secret never leaves
+  the host) and records the finding's `validity`; each check's endpoint must be declared in the checks' outbound
+  allowlist and a per-provider rate bounds them. A secret found in a collected Slack channel names its poster and the
+  tenant owner with the poster's email.
 - ServiceNow two-way sync (P13 is served): a ServiceNow change request approved or rejected decides the trstctl
   request intake opened from it, once (relay job `ticket.status`); `POST /api/v1/incidents/executions/{id}/close`
   (`trstctl incidents executions close|closure`) closes a trstctl incident and resolves the ServiceNow incident its
