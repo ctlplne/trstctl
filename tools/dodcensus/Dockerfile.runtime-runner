@@ -8,13 +8,14 @@ FROM ${BASE_IMAGE}
 
 # The snapshot pins the complete package universe. docker.io supplies only the
 # client here; the runner talks to the explicitly mounted host Docker socket.
+# The snapshot mirror answers 503 under load, so every fetch retries.
 RUN printf '%s\n' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260701T000000Z bookworm main' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
       > /etc/apt/sources.list \
  && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates docker.io git openssl python3 curl build-essential perl \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 update \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 install -y --no-install-recommends ca-certificates docker.io git openssl python3 curl build-essential perl \
  && rm -rf /var/lib/apt/lists/*
 
 # The real-cluster posture proof runs the reviewed kind release, not an ambient

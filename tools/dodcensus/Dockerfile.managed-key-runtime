@@ -8,13 +8,14 @@
 ARG SIGNER_IMAGE
 FROM ${SIGNER_IMAGE}
 USER root
+# The snapshot mirror answers 503 under load, so every fetch retries.
 RUN printf '%s\n' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260701T000000Z bookworm main' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
       > /etc/apt/sources.list \
  && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends openssl opensc softhsm2 swtpm tpm2-tools socat python3 \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 update \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 install -y --no-install-recommends openssl opensc softhsm2 swtpm tpm2-tools socat python3 \
  && rm -rf /var/lib/apt/lists/*
 COPY tools/dodcensus/substrates/managed_key_signer_entrypoint.sh /usr/local/bin/dod-managed-key-signer
 COPY tools/dodcensus/substrates/managed_keys.py /usr/local/libexec/trstctl-managed-keys.py

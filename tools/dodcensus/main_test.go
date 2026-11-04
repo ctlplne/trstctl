@@ -1402,8 +1402,8 @@ func runtimeRunnerFixture() string {
 FROM ${BASE_IMAGE}
 RUN printf '%s\n' 'snapshot.debian.org/archive/debian/20260701T000000Z' 'snapshot.debian.org/archive/debian-security/20260701T000000Z' 'check-valid-until=no' \
  && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update \
- && apt-get install -y ca-certificates docker.io git openssl python3
+ && apt-get -o Acquire::Retries=8 update \
+ && apt-get -o Acquire::Retries=8 install -y ca-certificates docker.io git openssl python3
 ARG KIND_VERSION=v0.31.0
 ARG KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
 ARG KIND_LINUX_ARM64_SHA256=8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4
@@ -1515,4 +1515,17 @@ func containsArg(args []string, want string) bool {
 
 func goTestPass(name string) string {
 	return `{"Action":"pass","Test":"` + name + `"}` + "\n"
+}
+
+// TestPinnedAptSnapshotRequiresRetries: a pinned apt transaction retries every
+// fetch, because the snapshot mirror answers 503 under load (CI on 495).
+func TestPinnedAptSnapshotRequiresRetries(t *testing.T) {
+	retrying := runtimeRunnerFixture()
+	if err := requirePinnedAptSnapshot(retrying); err != nil {
+		t.Fatalf("a retrying pinned transaction was refused: %v", err)
+	}
+	single := strings.Replace(retrying, "apt-get -o Acquire::Retries=8 install", "apt-get install", 1)
+	if err := requirePinnedAptSnapshot(single); err == nil || !strings.Contains(err.Error(), "Acquire::Retries") {
+		t.Fatalf("an apt-get without retries passed: %v", err)
+	}
 }

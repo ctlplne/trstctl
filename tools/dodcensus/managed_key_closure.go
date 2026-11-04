@@ -1065,6 +1065,11 @@ func requirePinnedAptSnapshot(source string) error {
 		if strings.Contains(instruction, "deb.debian.org") || strings.Contains(instruction, "security.debian.org") {
 			return fmt.Errorf("apt RUN retains a moving Debian repository")
 		}
+		// The snapshot mirror answers 503 under load (CI on 495): every
+		// apt-get fetch retries rather than failing the build.
+		if strings.Count(instruction, "apt-get ") != strings.Count(instruction, "apt-get -o Acquire::Retries=") {
+			return fmt.Errorf("apt RUN has an apt-get that does not retry the snapshot mirror (Acquire::Retries)")
+		}
 	}
 	if aptRuns != 1 {
 		return fmt.Errorf("dockerfile has %d apt RUN instructions, want one fully pinned transaction", aptRuns)

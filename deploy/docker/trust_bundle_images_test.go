@@ -33,7 +33,8 @@ func TestEveryImageShipsTheFilteredTrustBundle(t *testing.T) {
 	for _, path := range []string{"Dockerfile.signer-hsm", "Dockerfile.agent-pkcs11"} {
 		df := readArtifact(t, path)
 		for _, line := range strings.Split(df, "\n") {
-			if strings.Contains(line, "apt-get install") && strings.Contains(line, "ca-certificates") {
+			// apt-get carries options before its verb (the snapshot retries).
+			if strings.Contains(line, "apt-get ") && strings.Contains(line, " install ") && strings.Contains(line, "ca-certificates") {
 				t.Errorf("%s installs Debian's ca-certificates: %s", path, strings.TrimSpace(line))
 			}
 		}

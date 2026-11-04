@@ -51,7 +51,8 @@ RUN mkdir -p /out/trust \
 
 FROM ${BASE_IMAGE}
 # Debian snapshot timestamps are immutable. Replacing the image's moving apt
-# sources pins the exact package universe used by released images.
+# sources pins the exact package universe used by released images. The
+# snapshot mirror answers 503 under load, so every fetch retries.
 # softhsm2 ships libsofthsm2.so (and softhsm2-util for lab tokens);
 # opensc-pkcs11 ships opensc-pkcs11.so for smart cards and opensc the
 # pkcs11-tool used to inspect a token independently of the agent. Vendor HSM
@@ -61,8 +62,8 @@ RUN printf '%s\n' \
       'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260701T000000Z bookworm-security main' \
       > /etc/apt/sources.list \
  && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends softhsm2 opensc opensc-pkcs11 \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 update \
+ && apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=60 install -y --no-install-recommends softhsm2 opensc opensc-pkcs11 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 65532 nonroot \
  && useradd --system --uid 65532 --gid 65532 --home-dir /nonexistent --shell /usr/sbin/nologin nonroot \
