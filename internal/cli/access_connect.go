@@ -24,7 +24,7 @@ import (
 // it reads a gateway-delivered session, listens on a loopback address, and
 // carries each local connection to the session's gateway over TLS verified
 // against the gateway's agent certificate, opening with the session's ticket.
-// Stock clients (psql, redis-cli, ssh) connect to the local address; neither they nor
+// Stock clients (psql, mysql, redis-cli, ssh) connect to the local address; neither they nor
 // this command ever receive the upstream credential. For an SSH session it
 // first learns the gateway's SSH host key through that verified tunnel and
 // writes it to a known_hosts file for the ssh command it prints.
@@ -99,6 +99,12 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 			return 1
 		}
 		_, _ = fmt.Fprintf(stdout, "ssh -p %d -o UserKnownHostsFile=%s -o StrictHostKeyChecking=yes %s\n", local.Port, path, local.IP)
+	}
+	if targetType == "mysql" {
+		// The gateway answers the client's handshake and signs in as the
+		// session's account; the client sends no password.
+		local := ln.Addr().(*net.TCPAddr)
+		_, _ = fmt.Fprintf(stdout, "mysql -h %s -P %d\n", local.IP, local.Port)
 	}
 	if targetType == "redis" {
 		// The gateway signs in as the session's user; the client sends no

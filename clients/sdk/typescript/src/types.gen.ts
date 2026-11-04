@@ -20899,7 +20899,7 @@ export interface components {
             subject: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "postgres" | "redis" | "ssh";
+            target_type: "mysql" | "postgres" | "redis" | "ssh";
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -21033,7 +21033,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "postgres" | "redis" | "ssh";
+            target_type: "mysql" | "postgres" | "redis" | "ssh";
             ttl_seconds?: number;
         };
         PAMSessionList: {
@@ -21051,7 +21051,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "postgres" | "redis" | "ssh";
+            target_type: "mysql" | "postgres" | "redis" | "ssh";
             ttl_seconds?: number;
         };
         PAMSessionRevocationRequest: {
@@ -21078,7 +21078,7 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "postgres" | "redis" | "ssh";
+            target_type: "mysql" | "postgres" | "redis" | "ssh";
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -21104,7 +21104,7 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "postgres" | "redis" | "ssh";
+            target_type: "mysql" | "postgres" | "redis" | "ssh";
         };
         PKISecret: {
             certificate: string;

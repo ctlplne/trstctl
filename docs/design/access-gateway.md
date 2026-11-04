@@ -165,6 +165,22 @@ are served only through a gateway; the target builder refuses one without a bind
   command with its arguments (each cut at 256 bytes, binary ones by size, 4 KiB per
   command) and each reply's RESP2 or RESP3 type with a rendering under the same bounds; a
   refused command is recorded by its name alone, never its arguments.
+- **MySQL.** The provider's account for the session (its role's privileges on the
+  provider's database). The gateway connects first and reads the server's handshake, then
+  answers the client with a handshake of its own — the server's version and capabilities
+  without TLS or compression, a fresh nonce, `caching_sha2_password` — and takes the
+  client's response without checking any password. It signs in upstream with the client's
+  own capability flags (less TLS, compression and connect attributes), so the relayed
+  command phase means the same to both ends: `caching_sha2_password`'s fast path, or full
+  authentication with the password encrypted to the server's RSA key (as a driver does
+  without TLS), or `mysql_native_password` when the server switches to it; any other
+  plugin is refused. The server's OK goes to the client, and commands are relayed.
+  `COM_CHANGE_USER` would sign the connection in as another account, so the gateway
+  answers it with an error itself and never forwards it; only a packet with sequence
+  number 0 is a command, so LOAD DATA LOCAL file packets pass. Recordings keep each
+  statement (queries, prepared statements, executions by statement and size, `USE`), the
+  column names, the first ten text rows (values cut at 256 bytes, 4 KiB per result, binary
+  rows by size) with a truncation marker, OK counts and error codes, masked.
 
 ## Failure modes
 
@@ -192,7 +208,7 @@ deliberate grant.
 |---|---|
 | A stolen ticket | It admits connections to one session, at one gateway, until the session's deadline; revocation ends it. |
 | A client connecting straight to the target | The client holds no credential the target accepts. |
-| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET) | Never forwarded; the server refuses a stand-in command in its place, and the connection keeps the session's user. |
+| A client changing the connection's login (Redis AUTH, HELLO with AUTH, RESET; MySQL COM_CHANGE_USER) | Never forwarded: Redis gets a stand-in command the server refuses in its place, MySQL an error from the gateway; the connection keeps the session's login. |
 | A host impersonating the SSH target | The gateway accepts only a host key the target registration pins. |
 | A gateway asking for more SSH certificates | Each is for a key it holds, for a session job it holds at that attempt, with the session's principal, key ID and deadline; the CA records every one (`ssh.cert.issued`) and revocation covers them all by key ID. |
 | A compromised gateway | It holds only the credentials of sessions it is serving, each bounded by its deadline; it cannot mint credentials (only the control plane can, and SSH certificates only through the isolated signer). |
@@ -208,5 +224,6 @@ and a straight connection at the target; and restart the control plane mid-sessi
 live connection continues, the gateway's lease extends against the new process, and the
 session keeps its one start, one job and deadline. A255 (recording, masking, live
 termination) is served. A256 serves Redis (`TestServedGatewayRedisSessionsA256`, stock
-`redis-cli`); MySQL, MongoDB, ClickHouse and Kubernetes follow, then the agent launcher
+`redis-cli`) and MySQL (`TestServedGatewayMySQLSessionsA256`, stock `mysql`); MongoDB,
+ClickHouse and Kubernetes follow, then the agent launcher
 (A257) and credential health and emergency access (A258).

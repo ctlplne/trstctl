@@ -63,7 +63,7 @@ func TestPAMDatabaseTargetsNameAKnownTypeAndAGateway(t *testing.T) {
 		name string
 		edit func(*PAMDatabaseTarget)
 	}{
-		{"unknown type", func(d *PAMDatabaseTarget) { d.TargetType = "mysql" }},
+		{"unknown type", func(d *PAMDatabaseTarget) { d.TargetType = "couchdb" }},
 		{"postgres among database targets", func(d *PAMDatabaseTarget) { d.TargetType = "postgres" }},
 		{"no gateway", func(d *PAMDatabaseTarget) { d.GatewayAgentID, d.GatewayAddress = "", "" }},
 		{"no gateway address", func(d *PAMDatabaseTarget) { d.GatewayAddress = "" }},

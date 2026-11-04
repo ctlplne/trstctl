@@ -21,9 +21,10 @@ import (
 const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession = relay.KindAccessGatewaySession
-	// TargetPostgres, TargetRedis and TargetSSH are the session types the
-	// gateway serves.
+	// TargetPostgres, TargetMySQL, TargetRedis and TargetSSH are the
+	// session types the gateway serves.
 	TargetPostgres = "postgres"
+	TargetMySQL    = "mysql"
 	TargetRedis    = "redis"
 	TargetSSH      = "ssh"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
@@ -36,7 +37,7 @@ const (
 // arrives by redemption: every database type does, and the gateway signs in
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
-	return targetType == TargetPostgres || targetType == TargetRedis
+	return targetType == TargetPostgres || targetType == TargetMySQL || targetType == TargetRedis
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -95,7 +96,7 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.SessionID == "" || in.TargetID == "" || in.RequiredAgentID == "":
 		return errors.New("accessgateway: a session needs its id, target and gateway")
 	case !RedeemsCredential(in.TargetType) && in.TargetType != TargetSSH:
-		return errors.New("accessgateway: a session is postgres, redis or ssh")
+		return errors.New("accessgateway: a session is postgres, mysql, redis or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():

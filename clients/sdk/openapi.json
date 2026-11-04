@@ -38280,6 +38280,7 @@
           },
           "target_type": {
             "enum": [
+              "mysql",
               "postgres",
               "redis",
               "ssh"
@@ -38723,6 +38724,7 @@
           },
           "target_type": {
             "enum": [
+              "mysql",
               "postgres",
               "redis",
               "ssh"
@@ -38791,6 +38793,7 @@
           },
           "target_type": {
             "enum": [
+              "mysql",
               "postgres",
               "redis",
               "ssh"
@@ -38889,6 +38892,7 @@
           },
           "target_type": {
             "enum": [
+              "mysql",
               "postgres",
               "redis",
               "ssh"
@@ -38976,6 +38980,7 @@
           },
           "target_type": {
             "enum": [
+              "mysql",
               "postgres",
               "redis",
               "ssh"

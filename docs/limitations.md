@@ -8715,8 +8715,8 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- MySQL, MongoDB, ClickHouse and Kubernetes sessions (A256; Redis is served); the agent
-  launcher (A257); credential health checks and emergency access (A258).
+- MongoDB, ClickHouse and Kubernetes sessions (A256; Redis and MySQL are served); the
+  agent launcher (A257); credential health checks and emergency access (A258).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8749,10 +8749,10 @@ What comes next:
   lengths; privacy erasure of PAM operator metadata (target disable reasons, legal hold
   reasons) alongside the session subject's.
 
-## More session types through the gateway (A256) — Redis served
+## More session types through the gateway (A256) — Redis and MySQL served
 
-Status: Redis is served; MySQL, MongoDB, ClickHouse and Kubernetes sessions are the rest of
-A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
+Status: Redis and MySQL are served; MongoDB, ClickHouse and Kubernetes sessions are the
+rest of A256. A `pam.database_targets` entry or tenant registration of `target_type: "redis"`
 names a Redis dynamic-secret provider and a gateway, which is required: the broker refuses
 a Redis target without one. A session's credential is an ACL user the provider creates for
 it, scoped by the role's key prefixes and commands; the gateway redeems it, signs in with
@@ -8769,9 +8769,25 @@ closes a live connection and the gateway acknowledges it; both sessions' ACL use
 removed; the recording seals, verifies and shows each command, reply and refusal with the
 token masked.
 
+A `target_type: "mysql"` target names a MySQL dynamic-secret provider and a gateway; its
+session's credential is an account the provider creates with its role's privileges. The
+gateway answers the stock client's handshake itself, signs in upstream with the client's
+capability flags (the first sign-in takes `caching_sha2_password`'s full authentication,
+the password encrypted to the server's RSA key as a driver does without TLS), and refuses
+`COM_CHANGE_USER`. `TestServedGatewayMySQLSessionsA256` proves it with the stock `mysql`
+client in its image: the client holds no password and nothing it reads carries the
+session's account; `CURRENT_USER()` is the session's account and a write outside its grants
+is denied; `COM_CHANGE_USER` is refused and the connection is still the session's account;
+termination closes a live connection, the gateway acknowledges it and the account is
+dropped; the recording seals, verifies and holds each statement, the columns, the rows with
+the token masked, the denial and the refusal.
+
 What comes next:
-- MySQL, MongoDB, ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where
-  their images run on this Mac, otherwise in the x86 block.
+- MongoDB, ClickHouse and Kubernetes (kind) sessions; SQL Server and Oracle where their
+  images run on this Mac, otherwise in the x86 block.
+- MySQL over TLS: the gateway signs in over plaintext, where full authentication trusts the
+  RSA key the server sends (as a driver does without TLS); verified TLS with the
+  provider's CA comes with the private-CA lead below.
 - A Redis target behind TLS with a private CA: the gateway verifies `rediss://` against the
   system roots, and the provider's `redis_tls_ca_ref` is not yet carried to it with the
   session's credential.

@@ -37,6 +37,13 @@
   session's user). Recordings hold each command and each reply's type with bounded, masked values; a refused
   command is recorded by name only. `trstctl-cli access sessions connect` prints the `redis-cli` command. Migration
   0392 admits Redis targets; PostgreSQL targets' approval digests are unchanged.
+- MySQL sessions through the access gateway (A256 part 2): `target_type: "mysql"` names a MySQL dynamic-secret provider
+  and a gateway. The gateway answers a stock client's handshake itself (no TLS, any password), signs in upstream as the
+  session's account with the client's capability flags (`internal/crypto/mysqlsignin`: caching_sha2_password fast
+  path or full authentication to the server's RSA key, mysql_native_password on an auth switch), and refuses
+  COM_CHANGE_USER. Recordings hold statements, column names, the first rows of each result, OK counts and error codes,
+  bounded and masked. `trstctl-cli access sessions connect` prints the `mysql` command; migration 0393 admits MySQL
+  targets.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

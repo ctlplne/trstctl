@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2540 annotated sites across 31 rules. Each row is
+2559 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -721,7 +721,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (381 sites)
+### G115 — CWE-190 Integer overflow or wraparound (393 sites)
 
 | Location | Reason |
 |---|---|
@@ -731,6 +731,10 @@ not this file.
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/governance/misuse/misuse.go:130` | event sequences fit int64 (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
+| `internal/agent/accessgateway/mysql.go:562` | bounded by mysqlMaxLenenc just above (CWE-190) |
+| `internal/agent/accessgateway/mysql_test.go:44` | the 3-byte little-endian packet length (CWE-190) |
+| `internal/agent/accessgateway/mysql_test.go:47` | test strings are under 251 bytes (CWE-190) |
+| `internal/agent/accessgateway/mysql_test.go:74` | one short ERR packet (CWE-190) |
 | `internal/agent/accessgateway/pgrecord.go:183` | the wire field is a signed length (-1 is NULL) (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:21` | test rows are small (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:23` | test values are small (CWE-190) |
@@ -782,6 +786,14 @@ not this file.
 | `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
 | `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
 | `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:135` | the 3-byte little-endian length of a payload checked above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:197` | the capability flags' lower half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:200` | the capability flags' upper half (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:470` | bounded by maxLenenc just above (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:483` | a one-byte length below 251 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:140` | a startup message is a few hundred bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:329` | a SCRAM client-first message is under 100 bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:478` | sign-in messages are bounded and small (CWE-190) |
@@ -867,10 +879,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6808` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6825` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6838` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6872` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6809` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6826` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6839` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6873` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1253,7 +1265,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4196` | closed test table list above |
+| `internal/store/migration_content_test.go:4197` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (1 sites)
 
@@ -1269,7 +1281,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (321 sites)
+### G204 — CWE-78 OS command injection (323 sites)
 
 | Location | Reason |
 |---|---|
@@ -1479,7 +1491,9 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:233` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:244` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_mysql_served_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mysql_served_test.go:131` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:28` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:259` | the stock ssh client against the test's own tunnel (CWE-78) |
@@ -2515,12 +2529,16 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (13 sites)
+### G401 — CWE-328 Use of weak hash (17 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
 | `internal/crypto/leafca.go:743` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:379` | mysql_native_password, when the server demands it (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:380` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:381` | mysql_native_password (CWE-327) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:417` | the OAEP hash MySQL servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pgsignin/pgsignin.go:289` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin.go:294` | PostgreSQL's md5 password exchange, as the server demands it (CWE-327) |
@@ -2600,12 +2618,13 @@ not this file.
 | `internal/crypto/pgsignin/pgsignin.go:19` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:7` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (11 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (12 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
+| `internal/crypto/mysqlsignin/mysqlsignin.go:17` | MySQL's mysql_native_password and the RSA-OAEP padding its servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/otp.go:7` | RFC 6238 TOTP's default HMAC hash, used as an HMAC, not a collision-resistant digest (CWE-327) |
 | `internal/crypto/pqc_x509.go:6` | RFC 5280 4.2.1.2 method-1 key identifiers only (CWE-328) |
@@ -2626,7 +2645,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (24 sites)
+### G702 — CWE-78 OS command injection (taint) (25 sites)
 
 | Location | Reason |
 |---|---|
@@ -2643,6 +2662,7 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_mysql_served_test.go:131` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |

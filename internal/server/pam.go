@@ -37,6 +37,7 @@ const (
 	pamTargetPostgres = "postgres"
 	pamTargetSSH      = "ssh"
 	pamTargetRedis    = "redis"
+	pamTargetMySQL    = "mysql"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -51,10 +52,11 @@ const (
 var pamDatabaseProviderTypes = map[string]string{
 	pamTargetPostgres: "postgresql",
 	pamTargetRedis:    "redis",
+	pamTargetMySQL:    "mysql",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.

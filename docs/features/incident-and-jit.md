@@ -414,9 +414,21 @@ server answers each with an error naming `TRSTCTL-GATEWAY-REFUSED-<command>`, in
 the other replies, and the connection keeps the session's user. Inline (telnet-style)
 commands close the connection. Revoking or terminating the session removes its ACL user.
 
+A MySQL target (`target_type: "mysql"`) is served the same way: the session's credential is
+an account the MySQL provider creates with its role's privileges, and the gateway answers
+the client's handshake itself and signs in as that account. Connect with no password:
+
+```bash
+trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --listen 127.0.0.1:13306
+mysql -h 127.0.0.1 -P 13306
+```
+
+The gateway offers the client no TLS (the tunnel to it already is) and refuses
+`COM_CHANGE_USER`; revoking or terminating the session drops the account.
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
-(never file contents), PostgreSQL statements and Redis commands with bounded results,
+(never file contents), PostgreSQL and MySQL statements and Redis commands with bounded results,
 masked at the gateway before anything leaves it, sealed for the tenant and closed with a
 manifest the audit key signs. Read a recording's index with
 `GET /api/v1/access/sessions/{id}/recording` and check it end to end with

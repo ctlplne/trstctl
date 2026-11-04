@@ -2368,12 +2368,13 @@ requester receives a one-time ticket, never the credential. Run the gateway as
 `agent_channel.claimable_job_kinds`. See the
 [access gateway design](design/access-gateway.md).
 
-Redis targets (A256) are `pam.database_targets` entries with `target_type: "redis"`. Each
-names a Redis dynamic-secret provider (`provider_id`; the target's `allowed_roles` are
-roles that provider enables, each an ACL user scope of key prefixes and commands) and a
-gateway binding, which is required: a Redis session is delivered only through its
-gateway, which signs in as the session's own ACL user. The tenant registration endpoint
-takes the same fields.
+Redis and MySQL targets (A256) are `pam.database_targets` entries with `target_type:
+"redis"` or `"mysql"`. Each names a dynamic-secret provider of its kind (`provider_id`; the
+target's `allowed_roles` are roles that provider enables — a Redis ACL scope of key prefixes
+and commands, a MySQL privilege set on the provider's database) and a gateway binding,
+which is required: such a session is delivered only through its gateway, which signs in as
+the session's own user or account. The tenant registration endpoint takes the same
+fields.
 
 ```json
 {

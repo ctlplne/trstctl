@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/crypto/mysqlsignin"
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
 	"trstctl.com/trstctl/internal/crypto/redissignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -226,6 +227,11 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		}
 	case TargetRedis:
 		if target, err := redissignin.ParseURL(material[intent.CredentialRef]); err == nil {
+			secrets = append(secrets, append([]byte(nil), target.Password...))
+			target.Wipe()
+		}
+	case TargetMySQL:
+		if target, err := mysqlsignin.ParseDSN(material[intent.CredentialRef]); err == nil {
 			secrets = append(secrets, append([]byte(nil), target.Password...))
 			target.Wipe()
 		}
@@ -474,6 +480,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		credential := s.credential()
 		defer secret.Wipe(credential)
 		if err := serveRedis(ctx, conn, credential, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
+	case TargetMySQL:
+		dsn := s.credential()
+		defer secret.Wipe(dsn)
+		if err := serveMySQL(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetSSH:

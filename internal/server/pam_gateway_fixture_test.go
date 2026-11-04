@@ -44,12 +44,12 @@ type gatewayFixture struct {
 	gatewayLog  *lockedBuffer
 	sshd        pamSSHD
 	objects     *s3test.Server
-	// redisID is the Redis target's container, which also carries the stock
-	// redis-cli the proofs use.
-	redisID  string
-	auditKey *jose.SigningKey
-	api      *httptest.Server
-	dir      string
+	// redisID and mysqlID are the Redis and MySQL targets' containers, which
+	// also carry the stock clients the proofs use.
+	redisID, mysqlID string
+	auditKey         *jose.SigningKey
+	api              *httptest.Server
+	dir              string
 	// requester opens sessions; operator registers targets and terminates;
 	// auditor reads and exports recordings.
 	requester, reviewerOne, reviewerTwo, operator, auditor string
@@ -59,6 +59,9 @@ type gatewayFixtureOptions struct {
 	recordingRetention time.Duration
 	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
 	redis bool
+	// mysqlNote adds the MySQL target "mysql-gw" (A256), bound to the
+	// gateway, its app.notes table holding this note.
+	mysqlNote string
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -76,9 +79,12 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
-	var redisProviders DynamicSecretProviderRegistry
+	var redisProviders, mysqlProviders DynamicSecretProviderRegistry
 	if opts.redis {
 		f.redisID, redisProviders = startPAMRedis(t)
+	}
+	if opts.mysqlNote != "" {
+		f.mysqlID, mysqlProviders = startPAMMySQL(t, opts.mysqlNote)
 	}
 	var err error
 	if f.auditKey, err = jose.GenerateRSASigningKey("audit-export"); err != nil {
@@ -96,8 +102,13 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 		var databaseTargets []PAMDatabaseTarget
 		if opts.redis {
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], redisProviders.ForTenant(servedTestTenant)...)
-			databaseTargets = []PAMDatabaseTarget{{TargetType: "redis", TenantID: servedTestTenant, ID: "redis-gw", ProviderID: "pam-redis-provider",
-				AllowedRoles: []string{"redis-writer"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr}}
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "redis", TenantID: servedTestTenant, ID: "redis-gw", ProviderID: "pam-redis-provider",
+				AllowedRoles: []string{"redis-writer"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
+		if opts.mysqlNote != "" {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], mysqlProviders.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mysql", TenantID: servedTestTenant, ID: "mysql-gw", ProviderID: "pam-mysql-provider",
+				AllowedRoles: []string{"mysql-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
 			RecordingRetention: opts.recordingRetention, Attestors: []attest.Attestor{servedPAMAttestor{}},
