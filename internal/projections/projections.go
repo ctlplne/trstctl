@@ -5258,6 +5258,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMAccountHealthChecked:                  {1: true},
 	EventPAMTemplateSaved:                         {1: true},
 	EventPAMTemplateDeleted:                       {1: true},
+	EventPAMAutoApprovalRuleSaved:                 {1: true},
+	EventPAMAutoApprovalRuleDeleted:               {1: true},
+	EventPAMAutoApprovalEvaluated:                 {1: true},
+	EventPAMAutoApprovalApplied:                   {1: true},
 	EventPAMFolderSaved:                           {1: true},
 	EventPAMFolderDeleted:                         {1: true},
 	EventPAMTargetFolderSet:                       {1: true},
@@ -8634,6 +8638,43 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
 			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording,
 			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMAutoApprovalRuleSaved:
+		var pl PAMAutoApprovalRuleSaved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		r := pl.Rule
+		if r.ID == "" || r.Name == "" || len(r.AppliesTo) == 0 || len(r.TargetTypes)+len(r.TargetIDs)+len(r.Folders) == 0 || r.MaxTTLSeconds < 1 || r.Revision < 1 || r.SavedBy == "" || r.SavedAt.IsZero() || r.DeletedAt != nil {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMAutoApprovalRuleSavedTx(ctx, tx, e.TenantID, r)
+	case EventPAMAutoApprovalRuleDeleted:
+		var pl PAMAutoApprovalRuleDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Revision < 1 || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMAutoApprovalRuleDeletedTx(ctx, tx, e.TenantID, pl.ID, pl.Revision, pl.At)
+	case EventPAMAutoApprovalEvaluated:
+		var pl PAMAutoApprovalEvaluated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || pl.Requester == "" || pl.BaseDigest == "" || (pl.Kind != "session" && pl.Kind != "checkout") || pl.At.IsZero() || !pl.ExpiresAt.After(pl.At) || (pl.Rule == nil) != (pl.Facts == nil) {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return nil // frozen authorization metadata, not a new read-model state
+	case EventPAMAutoApprovalApplied:
+		var pl PAMAutoApprovalApplied
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RuleID == "" || pl.RuleRevision < 1 || pl.ApprovalRequestID == "" || pl.IntentDigest == "" || pl.Requester == "" || pl.At.IsZero() || (pl.Kind != "session" && pl.Kind != "checkout") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return nil // the approval decision is projected by approval.decision.recorded
 	case EventPAMFolderSaved:
 		var pl PAMFolderSaved
 		if err := decode(e, &pl); err != nil {

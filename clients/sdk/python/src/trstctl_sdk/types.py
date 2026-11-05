@@ -11564,6 +11564,73 @@ PAMApprovalRequest = TypedDict(
     total=False,
 )
 
+PAMAutoApprovalRule = TypedDict(
+    'PAMAutoApprovalRule',
+    {
+        'applies_to': list[str],
+        'enabled': bool,
+        'folders': list[str],
+        'id': str,
+        'max_ttl_seconds': int,
+        'name': str,
+        'requester_roles': list[str],
+        'revision': int,
+        'saved_at': str,
+        'saved_by': str,
+        'target_ids': list[str],
+        'target_types': list[str],
+        'ticket_pattern': str,
+        'window': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMAutoApprovalRuleDeleted = TypedDict(
+    'PAMAutoApprovalRuleDeleted',
+    {
+        'deleted': bool,
+        'id': str,
+    },
+    total=False,
+)
+
+PAMAutoApprovalRuleList = TypedDict(
+    'PAMAutoApprovalRuleList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMAutoApprovalRuleRequest = TypedDict(
+    'PAMAutoApprovalRuleRequest',
+    {
+        'applies_to': list[str],
+        'enabled': bool,
+        'folders': list[str],
+        'max_ttl_seconds': int,
+        'name': str,
+        'requester_roles': list[str],
+        'revision': int,
+        'target_ids': list[str],
+        'target_types': list[str],
+        'ticket_pattern': str,
+        'window': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMAutoApprovalWindow = TypedDict(
+    'PAMAutoApprovalWindow',
+    {
+        'days': list[str],
+        'end': str,
+        'start': str,
+        'time_zone': str,
+    },
+    total=False,
+)
+
 PAMCheckout = TypedDict(
     'PAMCheckout',
     {

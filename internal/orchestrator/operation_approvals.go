@@ -41,6 +41,9 @@ type OperationApprovalIntent struct {
 	EvidenceRefs      []string
 	RequiredApprovals int
 	TTL               time.Duration
+	// ExpiresAtNotAfter keeps a durable prior policy decision from gaining time on recovery.
+	// Zero preserves the existing request identity and lifetime behavior.
+	ExpiresAtNotAfter time.Time
 }
 
 type OperationApprovalDecision struct {
@@ -113,6 +116,13 @@ func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenan
 		if retainedRequestFound {
 			now = canonicalRequest.CreatedAt
 		}
+		expiresAt := now.Add(intent.TTL)
+		if !intent.ExpiresAtNotAfter.IsZero() && intent.ExpiresAtNotAfter.Before(expiresAt) {
+			expiresAt = intent.ExpiresAtNotAfter
+		}
+		if !expiresAt.After(now) && !retainedRequestFound {
+			return store.ErrApprovalExpired
+		}
 		active, err := o.store.ActiveOperationApprovalsForScopeTx(ctx, tx, tenantID,
 			intent.ResourceKind, intent.ResourceID, intent.Action, intent.Requester)
 		if err != nil {
@@ -136,7 +146,7 @@ func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenan
 				ResourceName: intent.ResourceName, Action: intent.Action, Requester: intent.Requester,
 				FromState: intent.FromState, ToState: intent.ToState, TargetVersion: intent.TargetVersion,
 				Reason: intent.Reason, EvidenceRefs: append([]string(nil), intent.EvidenceRefs...),
-				RequiredApprovals: intent.RequiredApprovals, CreatedAt: now, ExpiresAt: now.Add(intent.TTL),
+				RequiredApprovals: intent.RequiredApprovals, CreatedAt: now, ExpiresAt: expiresAt,
 			}
 			payload.IntentDigest, err = operationApprovalIntentDigest(tenantID, payload)
 			if err != nil {
@@ -594,7 +604,11 @@ func validateCanonicalOperationApprovalRequestEvent(
 	if err := json.Unmarshal(event.Data, &canonical); err != nil {
 		return projections.ApprovalRequested{}, fmt.Errorf("orchestrator: decode canonical approval request: %w", err)
 	}
-	if canonical.CreatedAt.IsZero() || canonical.ExpiresAt.Sub(canonical.CreatedAt) != intent.TTL {
+	expectedExpiry := canonical.CreatedAt.Add(intent.TTL)
+	if !intent.ExpiresAtNotAfter.IsZero() && intent.ExpiresAtNotAfter.Before(expectedExpiry) {
+		expectedExpiry = intent.ExpiresAtNotAfter
+	}
+	if canonical.CreatedAt.IsZero() || !expectedExpiry.After(canonical.CreatedAt) || !canonical.ExpiresAt.Equal(expectedExpiry) {
 		return projections.ApprovalRequested{}, fmt.Errorf("%w: canonical operation approval request lifetime differs", store.ErrIdempotencyConflict)
 	}
 	expected := projections.ApprovalRequested{
@@ -765,6 +779,9 @@ func canonicalApprovalIntent(in OperationApprovalIntent) OperationApprovalIntent
 	in.FromState = strings.TrimSpace(in.FromState)
 	in.ToState = strings.TrimSpace(in.ToState)
 	in.Reason = strings.TrimSpace(in.Reason)
+	if !in.ExpiresAtNotAfter.IsZero() {
+		in.ExpiresAtNotAfter = canonicalOperationApprovalTime(in.ExpiresAtNotAfter)
+	}
 	seen := make(map[string]struct{}, len(in.EvidenceRefs))
 	evidence := make([]string, 0, len(in.EvidenceRefs))
 	for _, ref := range in.EvidenceRefs {
@@ -784,22 +801,27 @@ func canonicalApprovalIntent(in OperationApprovalIntent) OperationApprovalIntent
 }
 
 func operationApprovalRequestID(tenantID string, intent OperationApprovalIntent) (string, error) {
+	var ceiling *time.Time
+	if !intent.ExpiresAtNotAfter.IsZero() {
+		ceiling = &intent.ExpiresAtNotAfter
+	}
 	basis := struct {
-		TenantID          string   `json:"tenant_id"`
-		ResourceKind      string   `json:"resource_kind"`
-		ResourceID        string   `json:"resource_id"`
-		ResourceName      string   `json:"resource_name"`
-		Action            string   `json:"action"`
-		Requester         string   `json:"requester"`
-		FromState         string   `json:"from_state"`
-		ToState           string   `json:"to_state"`
-		TargetVersion     uint64   `json:"target_version"`
-		Reason            string   `json:"reason"`
-		EvidenceRefs      []string `json:"evidence_refs"`
-		RequiredApprovals int      `json:"required_approvals"`
+		TenantID          string     `json:"tenant_id"`
+		ResourceKind      string     `json:"resource_kind"`
+		ResourceID        string     `json:"resource_id"`
+		ResourceName      string     `json:"resource_name"`
+		Action            string     `json:"action"`
+		Requester         string     `json:"requester"`
+		FromState         string     `json:"from_state"`
+		ToState           string     `json:"to_state"`
+		TargetVersion     uint64     `json:"target_version"`
+		Reason            string     `json:"reason"`
+		EvidenceRefs      []string   `json:"evidence_refs"`
+		RequiredApprovals int        `json:"required_approvals"`
+		ExpiresAtNotAfter *time.Time `json:"expires_at_not_after,omitempty"`
 	}{tenantID, intent.ResourceKind, intent.ResourceID, intent.ResourceName, intent.Action,
 		intent.Requester, intent.FromState, intent.ToState, intent.TargetVersion,
-		intent.Reason, intent.EvidenceRefs, intent.RequiredApprovals}
+		intent.Reason, intent.EvidenceRefs, intent.RequiredApprovals, ceiling}
 	raw, err := json.Marshal(basis)
 	if err != nil {
 		return "", err

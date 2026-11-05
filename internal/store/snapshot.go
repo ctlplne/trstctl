@@ -288,7 +288,7 @@ import (
 // template every account in a folder takes, and let a request skip the
 // recording its template requires, while its covered offset skipped their
 // events.
-const SnapshotFormatVersion = 94
+const SnapshotFormatVersion = 95
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -393,6 +393,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_checkouts",
 	// Format 94: A261's account folders.
 	"pam_folders",
+	"pam_auto_approval_rules",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -761,6 +762,7 @@ SELECT jsonb_build_object(
   'pam_imported_accounts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_imported_accounts t),
   'pam_checkouts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_checkouts t),
   'pam_folders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_folders t),
+  'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

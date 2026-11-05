@@ -528,13 +528,62 @@ trstctl-cli access folders save production -f folder.json   # {"template_id":"..
 trstctl-cli access folders list
 trstctl-cli access targets folder postgres orders-db -f membership.json  # {"folder":"production"}
 trstctl-cli access folders save production -f updated-folder.json  # include the revision read
-trstctl-cli access folders delete production --revision 2   # only after moving its targets out
+trstctl-cli access folders delete production --revision 2 --force   # only after moving its targets out
 ```
 
 The console's account folders panel lists the saved templates, target counts and membership.
 It can change a template's recording rule at its read revision. Create templates with
 `access templates create`; use `require_recording` in its JSON body. Recording requires the
 gateway, object store, tenant sealing and audit signing configuration described below. Existing template approvals from before this policy binding must be requested again after upgrade.
+
+Automatic approval rules apply to normal session and vaulted check-out requests, never the
+emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
+with `GET /api/v1/access/auto-approval-rules`, or with the CLI:
+
+```sh
+trstctl-cli access auto-approval-rules list
+trstctl-cli access auto-approval-rules save RULE_UUID -f rule.json
+trstctl-cli access auto-approval-rules delete RULE_UUID --revision 1 --force
+```
+
+A new rule uses revision 0; an edit or deletion must name the revision read. Deleted rule IDs
+cannot be reused. At most 256 live rules are allowed per tenant. The policy author needs
+`access:write`; listing needs `access:read`. Review the exact criteria in the console before
+saving: the rule can approve future requests without a human vote. Example `rule.json`:
+
+```json
+{
+  "name": "Routine incident reads",
+  "revision": 0,
+  "applies_to": ["session"],
+  "target_types": ["postgres"],
+  "target_ids": ["orders-db"],
+  "requester_roles": ["oncall"],
+  "window": {"days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "end": "17:00", "time_zone": "America/New_York"},
+  "ticket_pattern": "INC-[0-9]+",
+  "max_ttl_seconds": 120,
+  "enabled": true
+}
+```
+
+Every nonempty criterion must match; any value within one list may match. At least one of
+`target_types`, `target_ids` or `folders` is required. Roles come from the authenticated actor,
+not the request body. The optional local window includes its start and excludes its end;
+IANA time zones follow daylight saving, empty days mean every day, and an overnight window
+needs two rules. The optional RE2 ticket pattern must match the **whole original requester
+reason**, before a template prefix is added. It checks text shape, not ticket existence or
+approval in another system. The requested lifetime must be within the rule's maximum.
+
+Rules are tried in ID order; the first complete match records one policy approval as
+`auto-approval:RULE_UUID`, with `pam.auto_approval.applied` naming the rule revision, target,
+requester and matched facts. A nonmatch keeps the ordinary human quorum. The first evaluation,
+including no-match, is frozen in `pam.auto_approval.evaluated` for that request UUID: retries
+keep the decision and original deadline through a crash or a rule edit. Edits and deletion
+apply to new request UUIDs; they do not withdraw an existing approval or alter a live session.
+Revoke or terminate access explicitly when needed. An expired evaluation needs a new request.
+A requester equal to the synthetic approver keeps human review. Folder recording requirements,
+current policy revisions, target permissions, attestation, one-time reveal and approval
+consumption remain enforced. The request fence is tenant-scoped; contention returns 503.
 
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the

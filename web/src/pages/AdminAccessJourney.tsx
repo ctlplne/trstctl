@@ -36,6 +36,7 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
+import { PAMAutoApprovalPanel } from "@/pages/PAMAutoApprovalPanel";
 import { PAMFoldersPanel } from "@/pages/PAMFoldersPanel";
 import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
 import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
@@ -842,6 +843,7 @@ export function AdminAccess() {
               </section>
               {pamRows ? (
                 <>
+                  <PAMAutoApprovalPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
                   <PAMFoldersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
                   <PAMTargetsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
                 </>

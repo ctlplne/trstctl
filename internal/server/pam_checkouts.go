@@ -127,6 +127,7 @@ func (s *pamService) vaultedAccount(ctx context.Context, tenantID, targetType, a
 }
 
 func (s *pamService) RequestPAMCheckout(ctx context.Context, tenantID, requester string, req api.PAMCheckoutRequest) (api.PAMCheckoutReview, error) {
+	originalReason := strings.TrimSpace(req.Reason)
 	template, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
 	if err != nil {
 		return api.PAMCheckoutReview{}, err
@@ -176,13 +177,13 @@ func (s *pamService) RequestPAMCheckout(ctx context.Context, tenantID, requester
 	if err != nil {
 		return api.PAMCheckoutReview{}, err
 	}
-	approval, err := s.orch.EnsureOperationApprovalRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
+	approval, err := s.pamEnsureReviewedRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
 		ResourceKind: "pam_checkout", ResourceID: "pam-checkout:" + req.RequestID, ResourceName: req.TargetType + "/" + req.TargetID,
 		Action: "reveal", Requester: requester, FromState: "vaulted", ToState: "revealed", Reason: reason,
 		EvidenceRefs: []string{"pam-checkout-sha256:" + digest, "pam-checkout-target:" + req.TargetType + "/" + req.TargetID,
 			"pam-checkout-account:" + target.cfg.AccountSecret, "pam-checkout-ttl:" + strconv.Itoa(req.TTLSeconds), "pam-checkout-template:" + req.TemplateID, pamCheckoutPolicyRef(policyRefs)},
 		RequiredApprovals: requiredApprovals, TTL: s.approvalTTL,
-	})
+	}, pamAutoApprovalRequest{Kind: "checkout", TargetType: req.TargetType, TargetID: req.TargetID, Reason: originalReason, TTLSeconds: req.TTLSeconds}, req.RequestID)
 	if err != nil {
 		return api.PAMCheckoutReview{}, err
 	}

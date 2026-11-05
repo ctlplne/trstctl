@@ -1148,6 +1148,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	400: true, // TestMigration0400KeepsStagedAccountsUndismissed
 	401: true, // TestMigration0401KeepsTargetsLeased
 	403: true, // TestMigration0403KeepsTargetsOutOfFoldersAndTemplatesUnrecorded
+	404: true, // TestMigration0404AddsNoAutomaticAuthority
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod

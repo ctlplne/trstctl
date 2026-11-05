@@ -293,6 +293,7 @@ var TenantScopedTables = []string{
 	"pam_checkouts",
 	// A261 part 3: account folders; no foreign keys.
 	"pam_folders",
+	"pam_auto_approval_rules",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

@@ -107,6 +107,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/auto-approval-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List automatic access reviews in rule ID order */
+        get: operations["listPAMAutoApprovalRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/auto-approval-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a scoped automatic access review rule at the revision read */
+        put: operations["savePAMAutoApprovalRule"];
+        post?: never;
+        /** Delete an automatic review rule at the revision read */
+        delete: operations["deletePAMAutoApprovalRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/bundles": {
         parameters: {
             query?: never;
@@ -21475,6 +21510,58 @@ export interface components {
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
         };
+        PAMAutoApprovalRule: {
+            applies_to: ("session" | "checkout")[];
+            enabled: boolean;
+            folders?: string[];
+            /** Format: uuid */
+            id: string;
+            /** @description requests longer than this do not match */
+            max_ttl_seconds: number;
+            name: string;
+            requester_roles?: string[];
+            revision: number;
+            /** Format: date-time */
+            saved_at: string;
+            saved_by?: string;
+            target_ids?: string[];
+            target_types?: string[];
+            /** @description RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence */
+            ticket_pattern?: string;
+            window?: components["schemas"]["PAMAutoApprovalWindow"];
+        };
+        PAMAutoApprovalRuleDeleted: {
+            deleted: boolean;
+            /** Format: uuid */
+            id: string;
+        };
+        PAMAutoApprovalRuleList: {
+            items: components["schemas"]["PAMAutoApprovalRule"][];
+        };
+        PAMAutoApprovalRuleRequest: {
+            applies_to: ("session" | "checkout")[];
+            enabled: boolean;
+            folders?: string[];
+            /** @description requests longer than this do not match */
+            max_ttl_seconds: number;
+            name: string;
+            requester_roles?: string[];
+            revision?: number;
+            target_ids?: string[];
+            target_types?: string[];
+            /** @description RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence */
+            ticket_pattern?: string;
+            window?: components["schemas"]["PAMAutoApprovalWindow"];
+        };
+        PAMAutoApprovalWindow: {
+            days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+            /** @description exclusive HH:MM local time; use two rules across midnight */
+            end: string;
+            /** @description inclusive HH:MM local time */
+            start: string;
+            /** @description explicit IANA time zone */
+            time_zone: string;
+        };
         PAMCheckout: {
             account_secret: string;
             /** Format: uuid */
@@ -26607,6 +26694,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMAutoApprovalRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAutoApprovalRuleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savePAMAutoApprovalRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description rule UUID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMAutoApprovalRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAutoApprovalRule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deletePAMAutoApprovalRule: {
+        parameters: {
+            query?: {
+                /** @description the rule revision read */
+                revision?: number;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description rule UUID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAutoApprovalRuleDeleted"];
                 };
             };
             /** @description client error */

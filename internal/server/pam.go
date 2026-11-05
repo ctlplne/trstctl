@@ -194,7 +194,8 @@ type pamService struct {
 	rotation pamAccountRotation
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
-	afterSSHSign func([]byte, uint64) error
+	afterAutoApprovalDecision func() error
+	afterSSHSign              func([]byte, uint64) error
 }
 
 type pamDatabaseTarget struct {
@@ -533,6 +534,7 @@ func (s *pamService) GetPAMRequestProgress(ctx context.Context, tenantID, reques
 // RequestPAMSession records only a reviewable intent. It performs no target
 // call, credential issuance, signer operation, or session-state transition.
 func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester string, req api.PAMSessionRequest) (api.PAMApprovalRequest, error) {
+	originalReason := strings.TrimSpace(req.Reason)
 	if _, err := uuid.Parse(req.RequestID); err != nil {
 		return api.PAMApprovalRequest{}, fmt.Errorf("%w: request_id must be a UUID", api.ErrPAMInvalid)
 	}
@@ -564,7 +566,7 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 		"pam-subject:" + att.Subject,
 		"pam-ttl-seconds:" + fmt.Sprint(int64(s.ttl(req.TTLSeconds)/time.Second)),
 	}, append(targetEvidence, templateRefs...)...)
-	approval, err := s.orch.EnsureOperationApprovalRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
+	approval, err := s.pamEnsureReviewedRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
 		ResourceKind: "pam", ResourceID: "pam:" + req.RequestID,
 		ResourceName: req.TargetType + "/" + req.TargetID + ":" + req.Role,
 		Action:       "activate", Requester: requester,
@@ -572,7 +574,7 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 		Reason:            req.Reason,
 		EvidenceRefs:      evidenceRefs,
 		RequiredApprovals: requiredApprovals, TTL: s.approvalTTL,
-	})
+	}, pamAutoApprovalRequest{Kind: "session", TargetType: req.TargetType, TargetID: req.TargetID, Reason: originalReason, TTLSeconds: int(s.ttl(req.TTLSeconds) / time.Second)}, req.RequestID)
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
 	}

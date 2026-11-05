@@ -38604,6 +38604,217 @@
         ],
         "type": "object"
       },
+      "PAMAutoApprovalRule": {
+        "properties": {
+          "applies_to": {
+            "items": {
+              "enum": [
+                "session",
+                "checkout"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "max_ttl_seconds": {
+            "description": "requests longer than this do not match",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requester_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "saved_by": {
+            "type": "string"
+          },
+          "target_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ticket_pattern": {
+            "description": "RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/PAMAutoApprovalWindow"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "applies_to",
+          "max_ttl_seconds",
+          "enabled",
+          "revision",
+          "saved_at"
+        ],
+        "type": "object"
+      },
+      "PAMAutoApprovalRuleDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "PAMAutoApprovalRuleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMAutoApprovalRule"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMAutoApprovalRuleRequest": {
+        "properties": {
+          "applies_to": {
+            "items": {
+              "enum": [
+                "session",
+                "checkout"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_ttl_seconds": {
+            "description": "requests longer than this do not match",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requester_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "target_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ticket_pattern": {
+            "description": "RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/PAMAutoApprovalWindow"
+          }
+        },
+        "required": [
+          "name",
+          "applies_to",
+          "max_ttl_seconds",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "PAMAutoApprovalWindow": {
+        "properties": {
+          "days": {
+            "items": {
+              "enum": [
+                "mon",
+                "tue",
+                "wed",
+                "thu",
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "end": {
+            "description": "exclusive HH:MM local time; use two rules across midnight",
+            "type": "string"
+          },
+          "start": {
+            "description": "inclusive HH:MM local time",
+            "type": "string"
+          },
+          "time_zone": {
+            "description": "explicit IANA time zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "time_zone"
+        ],
+        "type": "object"
+      },
       "PAMCheckout": {
         "properties": {
           "account_secret": {
@@ -56805,6 +57016,203 @@
         ],
         "summary": "Show a principal's effective authority through access bundles: each permission with the grants that give it, its live grants, active runs with their delegation chain, and the revocation and outage bounds",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/auto-approval-rules": {
+      "get": {
+        "operationId": "listPAMAutoApprovalRules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAutoApprovalRuleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List automatic access reviews in rule ID order",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/auto-approval-rules/{id}": {
+      "delete": {
+        "operationId": "deletePAMAutoApprovalRule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "rule UUID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the rule revision read",
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAutoApprovalRuleDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an automatic review rule at the revision read",
+        "x-trstctl-permission": "access:write"
+      },
+      "put": {
+        "operationId": "savePAMAutoApprovalRule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "rule UUID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMAutoApprovalRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAutoApprovalRule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Save a scoped automatic access review rule at the revision read",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/access/bundles": {

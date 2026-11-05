@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
 )
 
@@ -60,6 +61,8 @@ type gatewayFixture struct {
 }
 
 type gatewayFixtureOptions struct {
+	// duplicateWindow shortens only this fixture's broker deduplication window.
+	duplicateWindow    time.Duration
 	recordingRetention time.Duration
 	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
 	redis bool
@@ -129,7 +132,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	}
 	f.gatewayAddr = raw.Addr().String()
 	gatewayID := agentRowID(servedTestTenant, "role-agent")
-	f.h = newRoleHarnessWithDeps(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, func(d *Deps) {
+	var eventOptions []events.OpenOption
+	if opts.duplicateWindow > 0 {
+		eventOptions = append(eventOptions, events.WithDuplicateWindowForTesting(opts.duplicateWindow))
+	}
+	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, eventOptions, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
 		if opts.vaulted {

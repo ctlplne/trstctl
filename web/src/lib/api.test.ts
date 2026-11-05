@@ -2776,6 +2776,27 @@ describe("CLI-parity client methods (S3.3)", () => {
 
   const cases: ParityCase[] = [
     { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
+    { name: "pamAutoApprovalRules", call: () => api.pamAutoApprovalRules(), method: "GET", path: "/api/v1/access/auto-approval-rules" },
+    {
+      name: "savePAMAutoApprovalRule",
+      call: () =>
+        api.savePAMAutoApprovalRule("rule/one", {
+          name: "Routine",
+          applies_to: ["session"],
+          target_ids: ["orders"],
+          max_ttl_seconds: 120,
+          enabled: true,
+          revision: 4,
+        }),
+      method: "PUT",
+      path: "/api/v1/access/auto-approval-rules/rule%2Fone",
+    },
+    {
+      name: "deletePAMAutoApprovalRule",
+      call: () => api.deletePAMAutoApprovalRule("rule/one", 4),
+      method: "DELETE",
+      path: "/api/v1/access/auto-approval-rules/rule%2Fone?revision=4",
+    },
     { name: "pamFolders", call: () => api.pamFolders(), method: "GET", path: "/api/v1/access/folders" },
     {
       name: "savePAMFolder",

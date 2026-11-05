@@ -2,6 +2,12 @@
 
 ### Added
 
+- Automatic access approvals can match exact target/folder scope, authenticated roles, a local
+  time window, a whole-reason ticket pattern and a maximum lifetime. Rules record a policy vote
+  and matched facts; nonmatches keep human review. Console review, revisioned API and CLI edits
+  apply prospectively. Durable evaluations preserve one decision and the original expiry across
+  retries and rule edits; emergency-session access never uses automatic approval.
+
 - Account folders apply one access template to every registered target's session requests and
   check-outs. Requests cannot select another template, and changed policy revisions require a new
   review. Templates can require recording, refusing direct sessions and credential check-outs.

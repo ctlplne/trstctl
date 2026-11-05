@@ -8338,6 +8338,53 @@ export interface PAMApprovalRequest {
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
+export interface PAMAutoApprovalRule {
+  applies_to: ("session" | "checkout")[];
+  enabled: boolean;
+  folders?: string[];
+  id: string;
+  max_ttl_seconds: number;
+  name: string;
+  requester_roles?: string[];
+  revision: number;
+  saved_at: string;
+  saved_by?: string;
+  target_ids?: string[];
+  target_types?: string[];
+  ticket_pattern?: string;
+  window?: PAMAutoApprovalWindow;
+}
+
+export interface PAMAutoApprovalRuleDeleted {
+  deleted: boolean;
+  id: string;
+}
+
+export interface PAMAutoApprovalRuleList {
+  items: PAMAutoApprovalRule[];
+}
+
+export interface PAMAutoApprovalRuleRequest {
+  applies_to: ("session" | "checkout")[];
+  enabled: boolean;
+  folders?: string[];
+  max_ttl_seconds: number;
+  name: string;
+  requester_roles?: string[];
+  revision?: number;
+  target_ids?: string[];
+  target_types?: string[];
+  ticket_pattern?: string;
+  window?: PAMAutoApprovalWindow;
+}
+
+export interface PAMAutoApprovalWindow {
+  days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+  end: string;
+  start: string;
+  time_zone: string;
+}
+
 export interface PAMCheckout {
   account_secret: string;
   approval_request_id: string;

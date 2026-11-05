@@ -8909,7 +8909,36 @@ func componentSchemas() map[string]*Schema {
 			"targets":  {Type: "integer", Description: "registered targets in the folder"},
 			"revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
 		}, "name", "template_id", "targets", "revision", "saved_at"),
-		"PAMFolderList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMFolder")}}, "items"),
+
+		"PAMAutoApprovalWindow": object(map[string]*Schema{
+			"days":      {Type: "array", Items: &Schema{Type: "string", Enum: []string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"}}},
+			"start":     {Type: "string", Description: "inclusive HH:MM local time"},
+			"end":       {Type: "string", Description: "exclusive HH:MM local time; use two rules across midnight"},
+			"time_zone": {Type: "string", Description: "explicit IANA time zone"},
+		}, "start", "end", "time_zone"),
+		"PAMAutoApprovalRuleRequest": object(map[string]*Schema{
+			"name": str(), "applies_to": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"session", "checkout"}}},
+			"target_types": {Type: "array", Items: str()}, "target_ids": {Type: "array", Items: str()},
+			"folders": {Type: "array", Items: str()}, "requester_roles": {Type: "array", Items: str()},
+			"window":          ref("PAMAutoApprovalWindow"),
+			"ticket_pattern":  {Type: "string", Description: "RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence"},
+			"max_ttl_seconds": {Type: "integer", Description: "requests longer than this do not match"},
+			"enabled":         {Type: "boolean"}, "revision": {Type: "integer"},
+		}, "name", "applies_to", "max_ttl_seconds", "enabled"),
+		"PAMAutoApprovalRule": object(map[string]*Schema{
+			"name": str(), "applies_to": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"session", "checkout"}}},
+			"target_types": {Type: "array", Items: str()}, "target_ids": {Type: "array", Items: str()},
+			"folders": {Type: "array", Items: str()}, "requester_roles": {Type: "array", Items: str()},
+			"window":          ref("PAMAutoApprovalWindow"),
+			"ticket_pattern":  {Type: "string", Description: "RE2 expression matched against the complete requester reason; verifies syntax, not ticket existence"},
+			"max_ttl_seconds": {Type: "integer", Description: "requests longer than this do not match"},
+			"enabled":         {Type: "boolean"}, "revision": {Type: "integer"},
+
+			"id": uuid(), "saved_by": str(), "saved_at": timestamp(),
+		}, "id", "name", "applies_to", "max_ttl_seconds", "enabled", "revision", "saved_at"),
+		"PAMAutoApprovalRuleList":    object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMAutoApprovalRule")}}, "items"),
+		"PAMAutoApprovalRuleDeleted": object(map[string]*Schema{"id": uuid(), "deleted": {Type: "boolean"}}, "id", "deleted"),
+		"PAMFolderList":              object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMFolder")}}, "items"),
 		"PAMFolderRequest": object(map[string]*Schema{
 			"template_id": {Type: "string", Format: "uuid", Description: "the access template every account in the folder takes"},
 			"description": str(),

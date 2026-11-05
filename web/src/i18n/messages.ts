@@ -10,6 +10,82 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.auto.id": { defaultMessage: "Rule ID", description: "Stable automatic approval rule audit identifier." },
+  "admin.access.auto.revision": { defaultMessage: "Revision read", description: "Exact rule revision bound to a policy edit." },
+  "admin.access.auto.heading": { defaultMessage: "Automatic access approvals", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.table": { defaultMessage: "Saved automatic approval rules", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.help": {
+    defaultMessage:
+      "Rules record a policy approval when every configured criterion matches. Requests outside the rules keep their human review. Rules never approve emergency access.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.saved": {
+    defaultMessage: "Approval policy saved. Existing evaluations keep their original rule and deadline.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.failed": { defaultMessage: "Approval policy could not be saved", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.scopeRequired": {
+    defaultMessage: "Choose at least one target type, target ID or folder.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.windowInvalid": {
+    defaultMessage: "Use a same-day start before end, an IANA time zone, and days mon through sun. Use two rules for an overnight window.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.name": { defaultMessage: "Rule name", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.scope": { defaultMessage: "Target scope", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.kind": { defaultMessage: "Request kind", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.session": { defaultMessage: "Gateway session", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.checkout": { defaultMessage: "Credential check-out", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.both": { defaultMessage: "Both request kinds", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.status": { defaultMessage: "Rule status", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.enabled": { defaultMessage: "Enabled", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.disabled": { defaultMessage: "Disabled", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.edit": { defaultMessage: "Edit rule", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.delete": { defaultMessage: "Delete rule", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.deleteReview": { defaultMessage: "Review rule deletion", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.deleteHelp": {
+    defaultMessage: "Delete {name} at revision {revision}? Existing evaluated requests keep their original policy decision.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.deleteConfirm": { defaultMessage: "Delete reviewed rule", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.back": { defaultMessage: "Back to edit", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.criteriaHelp": {
+    defaultMessage:
+      "Use comma-separated exact values. Every nonempty criterion must match; any value within one list may match. Empty optional criteria add no restriction.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.types": { defaultMessage: "Target types", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.targets": { defaultMessage: "Target IDs", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.folders": { defaultMessage: "Folder names", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.roles": { defaultMessage: "Authenticated requester roles", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.ticket": { defaultMessage: "Whole-reason ticket pattern", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.ticketHelp": {
+    defaultMessage:
+      "Optional RE2 pattern, for example INC-[0-9]+. It must match the whole original request reason. This checks text shape; it does not verify a ticket in another system.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.ttl": { defaultMessage: "Maximum request lifetime (seconds)", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.window": { defaultMessage: "Optional local time window", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.windowHelp": {
+    defaultMessage:
+      "Start is included; end is excluded. Leave days empty for every day. The named time zone applies daylight saving changes. Leave start and end empty for any time.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.days": { defaultMessage: "Weekdays (mon, tue, wed, thu, fri, sat, sun)", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.start": { defaultMessage: "Window start", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.end": { defaultMessage: "Window end", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.zone": { defaultMessage: "IANA time zone", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.review": { defaultMessage: "Review rule", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.reviewHeading": { defaultMessage: "Review automatic approval", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.reviewHelp": {
+    defaultMessage:
+      "Saving this rule may approve future matching requests without a human vote. It records the rule revision, matched facts and policy decision in audit. Existing evaluations keep their original result.",
+    description: "Automatic access approval policy workflow.",
+  },
+  "admin.access.auto.save": { defaultMessage: "Save reviewed rule", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.anyTime": { defaultMessage: "Any time", description: "Automatic access approval policy workflow." },
+  "admin.access.auto.unrestricted": { defaultMessage: "No additional restriction", description: "Automatic access approval policy workflow." },
   "discovery.setup.adcsRelayPlaceholder": { defaultMessage: "Select a known relay or enter its UUID", description: "AD CS relay identity example." },
   "discovery.setup.adcsPasswordExample": {
     defaultMessage: "secret://adcs/domain-reader",

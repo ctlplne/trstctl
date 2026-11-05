@@ -897,6 +897,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"pam_checkouts",
 	// A261 part 3: projected from pam.folder.saved and pam.folder.deleted.
 	"pam_folders",
+	"pam_auto_approval_rules",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

@@ -8887,7 +8887,7 @@ without review and a responder reviewing their own grant.
 What comes next:
 - Lockout-aware checks of directory accounts (with the Active Directory account type, A263).
 - Notifying approvers by name; today the notice goes to the approval channels they watch.
-- Auto-approval rules (A261); account folders and their templates are served below.
+- Brokered-account policy rules, folders and templates are served with the limits below.
 
 ## Browser sessions (A259) — served
 
@@ -8966,12 +8966,11 @@ scans sources, imports selected accounts after review and dismisses one (compone
 axe clean).
 
 What comes next:
-- Auto-approval rules (A261); registered account folders apply their templates as described below.
+- Brokered-account policy rules and registered account folders apply as described below.
 
 ## Brokered-account lifecycle (A261) — vaulted accounts, check-outs and folder templates
 
-Status: vaulted accounts, their scheduled rotation, check-outs and folder templates served; auto-approval rules
-come next, and A261 stays open until they land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
+Status: vaulted accounts, their scheduled rotation, check-outs, automatic approval rules and folder templates served. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
 are delivered through its gateway signed in as the account that application secret holds,
 read when the gateway claims the session, so nobody receives the credential and nothing is
 minted per session. The secret is an A240 static credential: its provider must rotate the
@@ -9029,8 +9028,66 @@ override refusals, recording enforcement, counts, revision conflicts and empty-o
 through the served HTTP routes. The console manages folders, membership and recording rules;
 CLI: `access folders list|save|delete`, `access targets folder`.
 
-What comes next:
-- Auto-approval rules (the remaining part 3).
+Automatic approval rules apply to normal session and vaulted check-out requests, never the
+emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
+with `GET /api/v1/access/auto-approval-rules`, or with the CLI:
+
+```sh
+trstctl-cli access auto-approval-rules list
+trstctl-cli access auto-approval-rules save RULE_UUID -f rule.json
+trstctl-cli access auto-approval-rules delete RULE_UUID --revision 1 --force
+```
+
+A new rule uses revision 0; an edit or deletion must name the revision read. Deleted rule IDs
+cannot be reused. At most 256 live rules are allowed per tenant. The policy author needs
+`access:write`; listing needs `access:read`. Review the exact criteria in the console before
+saving: the rule can approve future requests without a human vote. Example `rule.json`:
+
+```json
+{
+  "name": "Routine incident reads",
+  "revision": 0,
+  "applies_to": ["session"],
+  "target_types": ["postgres"],
+  "target_ids": ["orders-db"],
+  "requester_roles": ["oncall"],
+  "window": {"days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "end": "17:00", "time_zone": "America/New_York"},
+  "ticket_pattern": "INC-[0-9]+",
+  "max_ttl_seconds": 120,
+  "enabled": true
+}
+```
+
+Every nonempty criterion must match; any value within one list may match. At least one of
+`target_types`, `target_ids` or `folders` is required. Roles come from the authenticated actor,
+not the request body. The optional local window includes its start and excludes its end;
+IANA time zones follow daylight saving, empty days mean every day, and an overnight window
+needs two rules. The optional RE2 ticket pattern must match the **whole original requester
+reason**, before a template prefix is added. It checks text shape, not ticket existence or
+approval in another system. The requested lifetime must be within the rule's maximum.
+
+Rules are tried in ID order; the first complete match records one policy approval as
+`auto-approval:RULE_UUID`, with `pam.auto_approval.applied` naming the rule revision, target,
+requester and matched facts. A nonmatch keeps the ordinary human quorum. The first evaluation,
+including no-match, is frozen in `pam.auto_approval.evaluated` for that request UUID: retries
+keep the decision and original deadline through a crash or a rule edit. Edits and deletion
+apply to new request UUIDs; they do not withdraw an existing approval or alter a live session.
+Revoke or terminate access explicitly when needed. An expired evaluation needs a new request.
+A requester equal to the synthetic approver keeps human review. Folder recording requirements,
+current policy revisions, target permissions, attestation, one-time reveal and approval
+consumption remain enforced. The request fence is tenant-scoped; contention returns 503.
+
+`TestServedAutoApprovalRulesMatchOnlyTheirCriteriaA261` proves a matching rule approves
+one review and opens an actual PostgreSQL gateway query; nonmatching target, role, ticket,
+time or lifetime, disabled and deleted rules keep human review. The recovery proof crashes
+after the durable decision, edits the rule, retries under a fresh HTTP idempotency key and
+gets one original evaluation, request, decision and applied record. It also checks the
+synthetic-identity collision and an automatically approved checkout whose one revealed
+credential signs in to PostgreSQL. Capacity and parser/property/fuzz proofs cover bounds,
+whole-pattern anchoring and changed canonical authority. These are local real PostgreSQL/NATS
+proofs and console component checks, not an exact-image or live IdP-group qualification.
+
+Remaining limits:
 - A check-in while another rotation of the same account is in flight is refused (409), and at
   the deadline the expiry worker retries on each tick (every 30 seconds by default); adopting
   the in-flight rotation when it started after the reveal would end the check-out at once.

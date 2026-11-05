@@ -513,6 +513,9 @@ import type {
   PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
+  PAMAutoApprovalRule,
+  PAMAutoApprovalRuleList,
+  PAMAutoApprovalRuleRequest,
   PAMFolder,
   PAMFolderList,
   PAMFolderRequest,
@@ -2537,6 +2540,9 @@ export interface Api {
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
+  pamAutoApprovalRules(): Promise<PAMAutoApprovalRuleList>;
+  savePAMAutoApprovalRule(id: string, input: PAMAutoApprovalRuleRequest, idempotencyKey?: string): Promise<PAMAutoApprovalRule>;
+  deletePAMAutoApprovalRule(id: string, revision: number, idempotencyKey?: string): Promise<unknown>;
   pamFolders(): Promise<PAMFolderList>;
   savePAMFolder(name: string, input: PAMFolderRequest, idempotencyKey?: string): Promise<PAMFolder>;
   deletePAMFolder(name: string, revision: number, idempotencyKey?: string): Promise<unknown>;
@@ -3452,6 +3458,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
+  pamAutoApprovalRules: () => req<PAMAutoApprovalRuleList>("/api/v1/access/auto-approval-rules"),
+  savePAMAutoApprovalRule: (id, input, idempotencyKey) =>
+    mutate<PAMAutoApprovalRule>("PUT", `/api/v1/access/auto-approval-rules/${encodeURIComponent(id)}`, input, idempotencyKey),
+  deletePAMAutoApprovalRule: (id, revision, idempotencyKey) =>
+    mutate("DELETE", `/api/v1/access/auto-approval-rules/${encodeURIComponent(id)}?revision=${revision}`, undefined, idempotencyKey),
   pamFolders: () => req<PAMFolderList>("/api/v1/access/folders"),
   savePAMFolder: (name, input, idempotencyKey) => mutate<PAMFolder>("PUT", `/api/v1/access/folders/${encodeURIComponent(name)}`, input, idempotencyKey),
   deletePAMFolder: (name, revision, idempotencyKey) =>
@@ -3932,3 +3943,5 @@ export function identityState(i: Identity): string {
 }
 
 export type { PAMFolder, PAMFolderList, PAMFolderRequest, PAMAccessTemplate, PAMAccessTemplateList, PAMAccessTemplateRequest } from "./api-types.gen";
+
+export type { PAMAutoApprovalRule, PAMAutoApprovalRuleRequest, PAMAutoApprovalRuleList } from "./api-types.gen";
