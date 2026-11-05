@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,9 @@ const (
 	pamTerminalInputMax = 64 << 10
 )
 
+// kubeName is a Kubernetes object name a terminal request may name.
+var kubeName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$`)
+
 type pamBrowserKey struct {
 	tenantID, sessionID string
 }
@@ -55,10 +59,21 @@ type pamBrowserTicket struct {
 	expires  time.Time
 }
 
+// pamShell is what a terminal drives: an SSH shell, or a Kubernetes exec
+// (part 3).
+type pamShell interface {
+	Read(p []byte) (int, error)
+	Write(p []byte) (int, error)
+	Resize(cols, rows int) error
+	Done() <-chan struct{}
+	ExitStatus() int
+	Close() error
+}
+
 // pamTerminal is one shell and the output its reader has not passed.
 type pamTerminal struct {
 	id, tenantID, sessionID, opener string
-	shell                           *sshgateway.Shell
+	shell                           pamShell
 
 	mu     sync.Mutex
 	ring   []byte // the output from offset start up to end
@@ -102,15 +117,29 @@ func (s *pamService) HoldBrowserTicket(tenantID, sessionID, opener string, deliv
 	return nil
 }
 
-// OpenPAMTerminal opens a shell on an active SSH browser session for its
-// opener.
-func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, cols, rows int) (api.PAMTerminal, error) {
+// OpenPAMTerminal opens a terminal on an active browser session for its
+// opener: a shell on an SSH session, or an exec in a pod for a Kubernetes
+// session (part 3).
+func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, req api.PAMTerminalRequest) (api.PAMTerminal, error) {
+	cols, rows := req.Cols, req.Rows
 	rec, err := s.store.GetPAMSession(ctx, tenantID, sessionID)
 	if err != nil {
 		return api.PAMTerminal{}, err
 	}
-	if rec.TargetType != pamTargetSSH || rec.Delivery != "gateway" || rec.Status != api.PAMSessionStatusActive || !s.clock().Before(rec.ExpiresAt) {
-		return api.PAMTerminal{}, fmt.Errorf("%w: a terminal needs an active SSH session through a gateway", api.ErrPAMRejected)
+	if (rec.TargetType != pamTargetSSH && rec.TargetType != pamTargetK8s) || rec.Delivery != "gateway" || rec.Status != api.PAMSessionStatusActive ||
+		!s.clock().Before(rec.ExpiresAt) {
+		return api.PAMTerminal{}, fmt.Errorf("%w: a terminal needs an active SSH or Kubernetes session through a gateway", api.ErrPAMRejected)
+	}
+	if rec.TargetType == pamTargetK8s {
+		if !kubeName.MatchString(req.Namespace) || !kubeName.MatchString(req.Pod) || (req.Container != "" && !kubeName.MatchString(req.Container)) {
+			return api.PAMTerminal{}, fmt.Errorf("%w: a Kubernetes terminal names a namespace, a pod and optionally a container", api.ErrPAMInvalid)
+		}
+		if len(req.Command) == 0 {
+			req.Command = []string{"sh"}
+		}
+		if len(req.Command) > 16 {
+			return api.PAMTerminal{}, fmt.Errorf("%w: a command has at most 16 arguments", api.ErrPAMInvalid)
+		}
 	}
 	s.browser.mu.Lock()
 	held := s.browser.tickets[pamBrowserKey{tenantID, sessionID}]
@@ -140,7 +169,12 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 		_ = conn.Close()
 		return api.PAMTerminal{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
 	}
-	shell, err := sshgateway.OpenShell(conn, hostKey, cols, rows)
+	var shell pamShell
+	if rec.TargetType == pamTargetK8s {
+		shell, err = openKubeExec(conn, req.Namespace, req.Pod, req.Container, req.Command, cols, rows)
+	} else {
+		shell, err = sshgateway.OpenShell(conn, hostKey, cols, rows)
+	}
 	if err != nil {
 		_ = conn.Close()
 		return api.PAMTerminal{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
@@ -364,11 +398,11 @@ func (s *Server) HoldBrowserTicket(tenantID, sessionID, opener string, delivery 
 	return s.pam.HoldBrowserTicket(tenantID, sessionID, opener, delivery, ticket, expires)
 }
 
-func (s *Server) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, cols, rows int) (api.PAMTerminal, error) {
+func (s *Server) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, req api.PAMTerminalRequest) (api.PAMTerminal, error) {
 	if s.pam == nil {
 		return api.PAMTerminal{}, api.ErrPAMUnavailable
 	}
-	return s.pam.OpenPAMTerminal(ctx, tenantID, sessionID, principal, cols, rows)
+	return s.pam.OpenPAMTerminal(ctx, tenantID, sessionID, principal, req)
 }
 
 func (s *Server) ReadPAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, from int64, wait time.Duration) (api.PAMTerminalOutput, error) {

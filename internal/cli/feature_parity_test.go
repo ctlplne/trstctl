@@ -416,9 +416,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `recording-export`, `recording-hold` and `recording-release`. A257 adds
 	// the `access agent` launcher. A258 adds `access targets health-check`,
 	// `access templates list|create|get|update|delete` and `access emergency
-	// responders|set-responders|open|list|review`.
-	if len(out) != 797 {
-		t.Fatalf("CLI commands = %d, want 797", len(out))
+	// responders|set-responders|open|list|review`. A259 adds `access sessions
+	// terminal-open|terminal-output|terminal-input|terminal-resize|
+	// terminal-close` and `access sessions query`.
+	if len(out) != 803 {
+		t.Fatalf("CLI commands = %d, want 803", len(out))
 	}
 	return out
 }

@@ -313,12 +313,22 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   and at most 1,000 rows (a cell beyond 4 KiB is cut and marked), or the database's own
   refusal with its SQLSTATE. The gateway records each statement and its bounded result as for
   a stock client.
+- **Kubernetes exec.** For a Kubernetes session a terminal names a namespace, a pod and
+  optionally a container and command (default `sh`, at most 16 arguments). The control plane
+  admits with the ticket and speaks HTTP to the gateway over that connection, upgrading it to
+  the exec WebSocket (`v5.channel.k8s.io`: channel 0 input, 1 and 2 output, 3 the final
+  status, 4 a resize); the gateway adds the session's own token and forwards to the API server,
+  so the service account's role decides what the exec may do and the control plane never holds
+  the token. The exec's exit status (from channel 3) ends the terminal, and the gateway
+  records the stream as for kubectl.
 - **Reach.** The control plane must reach the gateway's address; a gateway it cannot reach
   serves the CLI only.
 - **Console.** Request privileged session → "Open in the browser" (an SSH request then sends
   no key: the gateway makes its own); once the session is open, "Open terminal" shows an SSH
-  session in xterm.js, loaded on demand, with screen-reader mode on, and "Open database
-  console" a PostgreSQL session's SQL console with its result table.
+  session in xterm.js, loaded on demand, with screen-reader mode on, "Open database
+  console" a PostgreSQL session's SQL console with its result table, and on a Kubernetes
+  session the pod form (namespace, pod, optional container) opens the same terminal in the
+  pod.
 
 ## Failure modes
 

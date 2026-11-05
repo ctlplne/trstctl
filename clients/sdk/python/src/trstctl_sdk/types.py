@@ -11916,6 +11916,10 @@ PAMTerminalRequest = TypedDict(
     'PAMTerminalRequest',
     {
         'cols': int,
+        'command': list[str],
+        'container': str,
+        'namespace': str,
+        'pod': str,
         'rows': int,
     },
     total=False,

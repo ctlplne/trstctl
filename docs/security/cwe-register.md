@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2606 annotated sites across 31 rules. Each row is
+2612 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -722,7 +722,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (417 sites)
+### G115 — CWE-190 Integer overflow or wraparound (423 sites)
 
 | Location | Reason |
 |---|---|
@@ -938,7 +938,13 @@ not this file.
 | `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/pam_browser.go:269` | offsets within the ring, at most 1 MiB apart (CWE-190) |
+| `internal/server/pam_browser.go:303` | offsets within the ring, at most 1 MiB apart (CWE-190) |
+| `internal/server/pam_browser_kube.go:182` | a 7-bit length below 126 (CWE-190) |
+| `internal/server/pam_browser_kube.go:185` | a 16-bit length under 1<<16 (CWE-190) |
+| `internal/server/pam_browser_kube.go:188` | a payload length, never negative (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:38` | test frame length below 126 (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:41` | test frame length under 1<<16 (CWE-190) |
+| `internal/server/pam_browser_kube_test.go:44` | test frame length, never negative (CWE-190) |
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_health.go:91` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1519,8 +1525,8 @@ not this file.
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_fixture_test.go:289` | the stock ssh client against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:146` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:169` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
@@ -2249,8 +2255,8 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:175` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:179` | what the launched agent wrote in the test's temp dir (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:41` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:136` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_gateway_ssh_served_test.go:282` | the test's own temporary files (CWE-22) |
 | `internal/server/pam_served_test.go:913` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2705,8 +2711,8 @@ not this file.
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:146` | the stock kubectl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:169` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
@@ -2801,8 +2807,8 @@ not this file.
 | `internal/server/enrollment_relay_served_test.go:54` | the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22). |
 | `internal/server/pam_agent_launcher_served_test.go:38` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:47` | the launched agent writes beside the path its own test named (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:41` | test reads the cluster CA its runner wrote (CWE-22) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:136` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:692` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2890,8 +2896,8 @@ not this file.
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:53` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:60` | the runner's own lab search engine (CWE-918) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:60` | test calls the cluster its runner named (CWE-918) |
-| `internal/server/pam_gateway_kubernetes_kind_test.go:66` | test calls the cluster its runner named (CWE-918) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:65` | test calls the cluster its runner named (CWE-918) |
+| `internal/server/pam_gateway_kubernetes_kind_test.go:71` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secret_render_served_test.go:136` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |

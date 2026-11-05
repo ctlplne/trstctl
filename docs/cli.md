@@ -1564,7 +1564,12 @@ For an SSH session it writes the gateway's host key to the known_hosts file and 
 ssh command to run. `trstctl-cli access sessions watch <session-id>` follows a gateway
 session's recording live (`recordings:read`); `access sessions terminate`, `recording`,
 `recording-verify`, `recording-frames`, `recording-export`, `recording-hold` and
-`recording-release` are the matching API calls (A255).
+`recording-release` are the matching API calls (A255). A session opened for the browser
+(A259) is worked in through the control plane: `access sessions terminal-open` (an SSH
+shell, or for a Kubernetes session an exec in the pod the body names), `terminal-output`
+(`--from`, `--wait`), `terminal-input`, `terminal-resize` and `terminal-close`, and
+`access sessions query` runs SQL on a PostgreSQL session; the console's terminal and
+database console use the same calls.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

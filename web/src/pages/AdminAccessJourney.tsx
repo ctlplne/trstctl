@@ -14,6 +14,7 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow, Num } from "@/components/typography";
 import { BrowserTerminal } from "@/components/access/BrowserTerminal";
+import { PodTerminal } from "@/components/access/PodTerminal";
 import { SqlConsole } from "@/components/access/SqlConsole";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,7 +42,7 @@ import type { StatusTone } from "@/lib/statusVocab";
 
 const pamFormSchema = z
   .object({
-    target_type: z.enum(["postgres", "ssh"]),
+    target_type: z.enum(["postgres", "ssh", "kubernetes"]),
     target_id: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
     role: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
     method: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
@@ -53,8 +54,9 @@ const pamFormSchema = z
       .refine((value) => value === "" || (/^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value))), translateNow("admin.access.ttlPositiveInteger")),
     ssh_principal: z.string().trim(),
     ssh_public_key: z.string().trim(),
-    // A259: an SSH session through a gateway, opened for the browser
-    // terminal; the gateway makes its own key, so none is sent.
+    // A259: a session through a gateway opened for the browser: a terminal
+    // on SSH (the gateway makes its own key, so none is sent), a database
+    // console on PostgreSQL, a terminal in a pod on Kubernetes.
     browser: z.boolean(),
   })
   .superRefine((value, ctx) => {
@@ -1398,6 +1400,7 @@ function PAMFormDialog({
               </Button>
             )
           ) : null}
+          {browser && created.target_type === "kubernetes" ? <PodTerminal sessionID={created.id} /> : null}
           {browser && created.target_type === "postgres" ? (
             terminalOpen ? (
               <SqlConsole sessionID={created.id} onClose={() => setTerminalOpen(false)} />
@@ -1501,6 +1504,7 @@ function PAMFormDialog({
               <Select {...register("target_type")}>
                 <option value="postgres">{t("admin.access.postgresql")}</option>
                 <option value="ssh">{t("admin.access.ssh")}</option>
+                <option value="kubernetes">{t("admin.access.kubernetes")}</option>
               </Select>
             </FormField>
             <FormField label={t("admin.access.targetId")} hint={errors.target_id?.message}>

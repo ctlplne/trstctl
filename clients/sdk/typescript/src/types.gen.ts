@@ -671,7 +671,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Open a shell on your SSH session opened for the browser; the control plane holds its ticket and the gateway signs in */
+        /** Open a terminal on your SSH or Kubernetes session opened for the browser (a shell, or an exec in a pod); the control plane holds its ticket and the gateway signs in */
         post: operations["openPAMTerminal"];
         delete?: never;
         options?: never;
@@ -21505,6 +21505,14 @@ export interface components {
         };
         PAMTerminalRequest: {
             cols: number;
+            /** @description Kubernetes sessions: the command to run (default sh), at most 16 arguments */
+            command?: string[];
+            /** @description Kubernetes sessions: the container (default: the pod's only one) */
+            container?: string;
+            /** @description Kubernetes sessions: the pod's namespace */
+            namespace?: string;
+            /** @description Kubernetes sessions: the pod to exec into */
+            pod?: string;
             rows: number;
         };
         PKISecret: {

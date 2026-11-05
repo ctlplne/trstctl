@@ -313,6 +313,60 @@ describe("DESIGN-ROUTE-040 People and roles", () => {
     expect(within(dialog).getByText("terminal on 77777777-7777-4777-8777-777777777777")).toBeInTheDocument();
   });
 
+  it("opens a Kubernetes session for the browser and its terminal in a named pod (A259)", async () => {
+    const user = userEvent.setup();
+    const review = {
+      request_id: "88888888-8888-4888-8888-888888888888",
+      approval_request_id: "99999999-9999-4999-8999-999999999999",
+      intent_digest: "reviewed-kubernetes",
+      approval_count: 2,
+      required_approvals: 2,
+    };
+    apiMock.pamRequestProgress.mockResolvedValue({ ...review, status: "approved", expires_at: "2026-11-05T10:05:00Z" });
+    apiMock.requestPAMSession.mockResolvedValue({
+      ...review,
+      status: "pending",
+      approval_count: 0,
+      target_type: "kubernetes",
+      target_id: "k8s",
+      role: "operator",
+    });
+    apiMock.openPAMSession.mockResolvedValue({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      target_type: "kubernetes",
+      target_id: "k8s",
+      role: "operator",
+      status: "active",
+      subject: "operator",
+      requested_by: "operator",
+      started_at: "2026-11-05T10:00:00Z",
+      expires_at: "2026-11-05T10:10:00Z",
+      delivery: "gateway",
+      gateway: { agent_id: "gw", address: "gw.internal:7443", spiffe_id: "spiffe://t/agent/gw" },
+    });
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+    await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+    await user.click(await screen.findByRole("button", { name: "Request privileged session" }));
+    const dialog = screen.getByRole("dialog", { name: "Request privileged session" });
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Target type" }), "kubernetes");
+    await user.click(within(dialog).getByRole("checkbox", { name: /Open in the browser/ }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Target ID" }), "k8s");
+    await user.type(within(dialog).getByRole("textbox", { name: "Role" }), "operator");
+    await user.type(within(dialog).getByRole("textbox", { name: "Method" }), "oidc");
+    await user.type(within(dialog).getByRole("textbox", { name: "Payload (base64)" }), "Z2VudWluZQ==");
+    await user.click(within(dialog).getByRole("button", { name: "Request review" }));
+    await waitFor(() => expect(apiMock.requestPAMSession).toHaveBeenCalledTimes(1));
+    expect(apiMock.requestPAMSession.mock.calls[0][0]).toMatchObject({ target_type: "kubernetes", target_id: "k8s", role: "operator" });
+    await user.click(await within(dialog).findByRole("button", { name: "Activate approved session" }));
+    expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
+    expect(apiMock.openPAMSession.mock.calls[0][0].browser).toBe(true);
+    await user.type(within(dialog).getByRole("textbox", { name: "Namespace" }), "team-a");
+    await user.type(within(dialog).getByRole("textbox", { name: "Pod" }), "web-0");
+    await user.click(within(dialog).getByRole("button", { name: "Open terminal" }));
+    expect(within(dialog).getByText("terminal on aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).toBeInTheDocument();
+  });
+
   it("labels missing historical PAM attestation evidence without inventing a verification time", async () => {
     const user = userEvent.setup();
     apiMock.pamSessions.mockResolvedValue({

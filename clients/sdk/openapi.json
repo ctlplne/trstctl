@@ -39656,6 +39656,25 @@
           "cols": {
             "type": "integer"
           },
+          "command": {
+            "description": "Kubernetes sessions: the command to run (default sh), at most 16 arguments",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "container": {
+            "description": "Kubernetes sessions: the container (default: the pod's only one)",
+            "type": "string"
+          },
+          "namespace": {
+            "description": "Kubernetes sessions: the pod's namespace",
+            "type": "string"
+          },
+          "pod": {
+            "description": "Kubernetes sessions: the pod to exec into",
+            "type": "string"
+          },
           "rows": {
             "type": "integer"
           }
@@ -58825,7 +58844,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Open a shell on your SSH session opened for the browser; the control plane holds its ticket and the gateway signs in",
+        "summary": "Open a terminal on your SSH or Kubernetes session opened for the browser (a shell, or an exec in a pod); the control plane holds its ticket and the gateway signs in",
         "x-trstctl-permission": "access:sessions.open"
       }
     },

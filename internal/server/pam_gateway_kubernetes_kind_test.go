@@ -21,22 +21,27 @@ import (
 
 var fixtureKubectlCommand = regexp.MustCompile(`kubectl --kubeconfig (\S+) `)
 
-// TestServedGatewayKubernetesSessionsOnKindA256: a Kubernetes target is
-// served only through the access gateway, to stock kubectl with a
-// kubeconfig that names the tunnel and no user. The gateway adds the
-// session's TokenRequest token to every request, exec streams included;
-// a client's own credential and impersonation are removed; the service
-// account's role scopes the session; API calls and exec streams are recorded
-// masked, sealed and verifiable; an operator's termination ends a live exec
-// and the gateway acknowledges it; the session's service account is deleted.
-// The runner names the cluster (K8S_SERVER, K8S_ADMIN_TOKEN, K8S_CA_FILE).
-func TestServedGatewayKubernetesSessionsOnKindA256(t *testing.T) {
+// kindPAMCluster is the runner's kind cluster prepared for a Kubernetes PAM
+// proof: a namespace of the proof's own holding a running busybox pod
+// "shell", and the gateway fixture's Kubernetes target "k8s-gw", whose
+// provider makes each session's service account there. The runner names the
+// cluster (K8S_SERVER, K8S_ADMIN_TOKEN, K8S_CA_FILE).
+type kindPAMCluster struct {
+	f          *gatewayFixture
+	namespace  string
+	adminToken string
+	prefix     string
+	kube       func(method, path string, body any) (int, []byte)
+}
+
+// startKindPAMCluster prepares the cluster for a proof whose namespace and
+// service accounts are named after prefix; the namespace is deleted after
+// the test.
+func startKindPAMCluster(t *testing.T, prefix string) kindPAMCluster {
+	t.Helper()
 	server, adminToken, caFile := os.Getenv("K8S_SERVER"), os.Getenv("K8S_ADMIN_TOKEN"), os.Getenv("K8S_CA_FILE")
 	if server == "" || adminToken == "" || caFile == "" {
 		t.Skip("K8S_SERVER, K8S_ADMIN_TOKEN and K8S_CA_FILE name the cluster for this proof")
-	}
-	if _, err := exec.LookPath("kubectl"); err != nil {
-		t.Skipf("the stock kubectl client is required: %v", err)
 	}
 	caPEM, err := os.ReadFile(caFile) // #nosec G304 G703 -- test reads the cluster CA its runner wrote (CWE-22)
 	if err != nil {
@@ -71,7 +76,7 @@ func TestServedGatewayKubernetesSessionsOnKindA256(t *testing.T) {
 		raw, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, raw
 	}
-	namespace := "trstctl-a256-" + strings.ToLower(time.Now().UTC().Format("150405"))
+	namespace := prefix + "-" + strings.ToLower(time.Now().UTC().Format("150405"))
 	if status, body := kube(http.MethodPost, "/api/v1/namespaces", map[string]any{"apiVersion": "v1", "kind": "Namespace",
 		"metadata": map[string]any{"name": namespace}}); status != http.StatusCreated {
 		t.Fatalf("create namespace: %d %s", status, body)
@@ -98,29 +103,49 @@ func TestServedGatewayKubernetesSessionsOnKindA256(t *testing.T) {
 		KubernetesTLSCARef: writeServedCredentialFile(t, "k8s-ca.pem", string(caPEM)),
 		AllowPrivate:       true, PrivateEgressCIDRs: []string{"127.0.0.0/8"},
 		AllowedRoles: []string{"operator"}, RoleBindings: map[string]string{"operator": "ClusterRole/edit"}, MaxTTL: "1h",
-		UsernamePrefix: "trstctl-a256",
+		UsernamePrefix: prefix,
 	}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := startGatewayFixture(t, gatewayFixtureOptions{kubernetes: registry, maxTTL: time.Hour})
-	h := f.h
-	serviceAccounts := func() []string {
-		_, body := kube(http.MethodGet, "/api/v1/namespaces/"+namespace+"/serviceaccounts", nil)
-		var list struct {
-			Items []struct {
-				Metadata struct{ Name string } `json:"metadata"`
-			} `json:"items"`
-		}
-		_ = json.Unmarshal(body, &list)
-		var names []string
-		for _, item := range list.Items {
-			if strings.HasPrefix(item.Metadata.Name, "trstctl-a256") {
-				names = append(names, item.Metadata.Name)
-			}
-		}
-		return names
+	return kindPAMCluster{f: f, namespace: namespace, adminToken: adminToken, prefix: prefix, kube: kube}
+}
+
+// serviceAccounts lists the sessions' service accounts in the proof's
+// namespace.
+func (c kindPAMCluster) serviceAccounts() []string {
+	_, body := c.kube(http.MethodGet, "/api/v1/namespaces/"+c.namespace+"/serviceaccounts", nil)
+	var list struct {
+		Items []struct {
+			Metadata struct{ Name string } `json:"metadata"`
+		} `json:"items"`
 	}
+	_ = json.Unmarshal(body, &list)
+	var names []string
+	for _, item := range list.Items {
+		if strings.HasPrefix(item.Metadata.Name, c.prefix) {
+			names = append(names, item.Metadata.Name)
+		}
+	}
+	return names
+}
+
+// TestServedGatewayKubernetesSessionsOnKindA256: a Kubernetes target is
+// served only through the access gateway, to stock kubectl with a
+// kubeconfig that names the tunnel and no user. The gateway adds the
+// session's TokenRequest token to every request, exec streams included;
+// a client's own credential and impersonation are removed; the service
+// account's role scopes the session; API calls and exec streams are recorded
+// masked, sealed and verifiable; an operator's termination ends a live exec
+// and the gateway acknowledges it; the session's service account is deleted.
+// The runner names the cluster (K8S_SERVER, K8S_ADMIN_TOKEN, K8S_CA_FILE).
+func TestServedGatewayKubernetesSessionsOnKindA256(t *testing.T) {
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		t.Skipf("the stock kubectl client is required: %v", err)
+	}
+	c := startKindPAMCluster(t, "trstctl-a256")
+	f, h, namespace, adminToken, serviceAccounts := c.f, c.f.h, c.namespace, c.adminToken, c.serviceAccounts
 
 	session := f.open("a256-kubernetes", map[string]any{"target_type": "kubernetes", "target_id": "k8s-gw", "role": "operator", "ttl_seconds": 900})
 	if session.Delivery != "gateway" || session.Gateway == nil {

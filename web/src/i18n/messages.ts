@@ -5699,7 +5699,24 @@ export const messages = {
     defaultMessage: "Only the first 1,000 rows are shown; longer cells are cut.",
     description: "Database console note when the result was bounded (A259).",
   },
-  "admin.access.openTerminal": { defaultMessage: "Open terminal", description: "Button opening a browser terminal on a privileged SSH session (A259)." },
+  "admin.access.openTerminal": {
+    defaultMessage: "Open terminal",
+    description: "Button opening a browser terminal on a privileged SSH session or in a pod on a Kubernetes session (A259).",
+  },
+  "admin.access.pod.title": {
+    defaultMessage: "Terminal in a pod",
+    description: "Heading of the pod form on a Kubernetes session opened for the browser (A259).",
+  },
+  "admin.access.pod.hint": {
+    defaultMessage: "The terminal runs sh in the pod as the session's service account; the gateway records it.",
+    description: "Help under the pod form: what the Kubernetes browser terminal runs and as whom (A259).",
+  },
+  "admin.access.pod.namespace": { defaultMessage: "Namespace", description: "Label of the pod's namespace field; Kubernetes noun (A259)." },
+  "admin.access.pod.name": { defaultMessage: "Pod", description: "Label of the pod name field; Kubernetes noun stays literal (A259)." },
+  "admin.access.pod.container": {
+    defaultMessage: "Container (optional)",
+    description: "Label of the optional container field; empty means the pod's only container (A259).",
+  },
   "admin.access.terminal.title": { defaultMessage: "Terminal", description: "Heading of the browser terminal on a privileged session (A259)." },
   "admin.access.terminal.close": { defaultMessage: "Close terminal", description: "Button closing the browser terminal; the session stays open (A259)." },
   "admin.access.terminal.opening": {
@@ -5860,6 +5877,7 @@ export const messages = {
   "admin.access.targetDisabled": { defaultMessage: "Target {id} disabled for new requests.", description: "PAM target disable success." },
   "admin.access.postgresql": { defaultMessage: "PostgreSQL", description: "PostgreSQL target type; product noun stays literal." },
   "admin.access.ssh": { defaultMessage: "SSH", description: "SSH target type; protocol acronym stays literal." },
+  "admin.access.kubernetes": { defaultMessage: "Kubernetes", description: "Kubernetes target type; product noun stays literal (A259)." },
   "admin.access.sshPrincipal": { defaultMessage: "SSH principal", description: "SSH privileged-session principal field label." },
   "admin.access.payloadBase64": { defaultMessage: "Payload (base64)", description: "Base64 broker payload field label." },
   "admin.access.openSessionSubmit": { defaultMessage: "Request review", description: "Submit the exact privileged-session request without granting access." },

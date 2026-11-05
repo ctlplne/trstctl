@@ -8580,6 +8580,10 @@ export interface PAMTerminalOutput {
 
 export interface PAMTerminalRequest {
   cols: number;
+  command?: string[];
+  container?: string;
+  namespace?: string;
+  pod?: string;
   rows: number;
 }
 

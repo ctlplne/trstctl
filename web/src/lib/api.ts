@@ -519,6 +519,7 @@ import type {
   PAMQueryResult,
   PAMTerminal,
   PAMTerminalOutput,
+  PAMTerminalRequest,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -1493,6 +1494,7 @@ export type {
   PAMQueryResult,
   PAMTerminal,
   PAMTerminalOutput,
+  PAMTerminalRequest,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -2510,7 +2512,7 @@ export interface Api {
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   revokePAMSession(id: string, reason: string, idempotencyKey?: string): Promise<PAMSession>;
-  openPAMTerminal(sessionID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
+  openPAMTerminal(sessionID: string, request: PAMTerminalRequest, idempotencyKey?: string): Promise<PAMTerminal>;
   readPAMTerminal(sessionID: string, terminalID: string, from: number, waitSeconds: number): Promise<PAMTerminalOutput>;
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
@@ -3409,8 +3411,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
   revokePAMSession: (id, reason, idempotencyKey) =>
     mutate<PAMSession>("POST", `/api/v1/access/sessions/${encodeURIComponent(id)}/revoke`, { reason }, idempotencyKey),
-  openPAMTerminal: (sessionID, size, idempotencyKey) =>
-    mutate<PAMTerminal>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals`, size, idempotencyKey),
+  openPAMTerminal: (sessionID, request, idempotencyKey) =>
+    mutate<PAMTerminal>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals`, request, idempotencyKey),
   readPAMTerminal: (sessionID, terminalID, from, waitSeconds) =>
     req<PAMTerminalOutput>(
       `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/output?from=${from}&wait=${waitSeconds}`,

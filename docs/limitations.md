@@ -8715,7 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- Browser sessions (A259) and the engineer access items after them (A260–A263).
+- The engineer access items after browser sessions (A260–A263).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8889,10 +8889,9 @@ What comes next:
 - Notifying approvers by name; today the notice goes to the approval channels they watch.
 - Template folders and auto-approval rules (A261).
 
-## Browser sessions (A259) — parts 1–2 of 3: SSH terminal and database console
+## Browser sessions (A259) — served
 
-Status: SSH and PostgreSQL served; Kubernetes exec (part 3) comes next, and A259 stays open
-until it lands. A session opened with `"browser": true` leaves its
+Status: served. A session opened with `"browser": true` leaves its
 ticket with the control plane, which opens an SSH shell through the session's gateway for its
 opener; the console shows it in a terminal (Request privileged session → SSH → "Open in the
 browser" → "Open terminal"). `TestServedBrowserTerminalA259` proves it through the gateway:
@@ -8902,11 +8901,20 @@ termination ends it and it takes no more input. `TestServedBrowserDatabaseConsol
 proves the database console: a read answers with its rows, a write the read-only login may
 not make comes back as the database's refusal (SQLSTATE 42501), a NULL stays null, the
 gateway records the statements, no reply carries the login's password, nobody else can
-query, and termination ends the console. The console tests prove the terminal sends what is
-typed in idempotent batches and closes on leaving, the SQL console shows rows, NULLs and
-refusals, neither holds a ticket, and both pass the axe accessibility check.
+query, and termination ends the console. On a Kubernetes session the terminal is an exec in
+the pod its opener names (Request privileged session → Kubernetes → "Open in the browser",
+then namespace and pod → "Open terminal"). `TestServedBrowserKubernetesExecOnKindA259` proves
+it on a kind cluster: a terminal that names no pod is refused and only the opener can open
+or read one; a command typed in the pod runs and its output comes back; a resize reaches the
+pod's terminal (`stty size` reports it); `exit 3` ends the terminal with exit status 3 and it
+takes no more input; terminating the session deletes its service account and seals a
+verified recording of the exec stream with no cluster credential in it. The console tests
+prove the terminal sends what is typed in idempotent batches and closes on leaving, the pod
+form opens it in the named pod, the SQL console shows rows, NULLs and refusals, none holds a
+ticket, and all pass the axe accessibility check.
 
 What comes next:
-- Kubernetes exec (part 3); a MySQL, MongoDB or Redis console (today the database console
-  serves PostgreSQL sessions; the other types are reached with their stock clients).
+- A MySQL, MongoDB or Redis console (today the database console serves PostgreSQL sessions;
+  the other types are reached with their stock clients), and pod and container pickers listed
+  from the cluster (today the operator types the names).
 - Gateways the control plane cannot reach (a reverse tunnel over the agent channel).

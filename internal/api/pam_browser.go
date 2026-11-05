@@ -19,6 +19,18 @@ import (
 // ticket with the control plane; its opener then works in it from the
 // console through terminals the control plane opens through the gateway.
 
+// PAMTerminalRequest opens a terminal: its size, and for a Kubernetes
+// session the pod (and optionally the container and command, default sh) to
+// exec into.
+type PAMTerminalRequest struct {
+	Cols      int      `json:"cols"`
+	Rows      int      `json:"rows"`
+	Namespace string   `json:"namespace,omitempty"`
+	Pod       string   `json:"pod,omitempty"`
+	Container string   `json:"container,omitempty"`
+	Command   []string `json:"command,omitempty"`
+}
+
 // PAMTerminal is a shell on a browser session.
 type PAMTerminal struct {
 	ID        string `json:"id"`
@@ -58,7 +70,7 @@ type PAMQueryError struct {
 // PAMBrowserBridge serves browser sessions; the served broker implements it.
 type PAMBrowserBridge interface {
 	HoldBrowserTicket(tenantID, sessionID, opener string, delivery PAMGatewayDelivery, ticket []byte, expires time.Time) error
-	OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, cols, rows int) (PAMTerminal, error)
+	OpenPAMTerminal(ctx context.Context, tenantID, sessionID, principal string, req PAMTerminalRequest) (PAMTerminal, error)
 	ReadPAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, from int64, wait time.Duration) (PAMTerminalOutput, error)
 	WritePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, data []byte) error
 	ResizePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, cols, rows int) error
@@ -70,7 +82,7 @@ func (a *API) pamBrowserRoutes() []route {
 	session := []param{pathUUID("id")}
 	terminal := []param{pathUUID("id"), pathUUID("terminal_id")}
 	return []route{
-		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals", opID: "openPAMTerminal", summary: "Open a shell on your SSH session opened for the browser; the control plane holds its ticket and the gateway signs in", handler: a.openPAMTerminal, pathParams: session, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "201", mutation: true, perm: authz.AccessSessionsOpen},
+		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals", opID: "openPAMTerminal", summary: "Open a terminal on your SSH or Kubernetes session opened for the browser (a shell, or an exec in a pod); the control plane holds its ticket and the gateway signs in", handler: a.openPAMTerminal, pathParams: session, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "201", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "GET", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/output", opID: "readPAMTerminalOutput", summary: "Read a terminal's output from an offset; wait long-polls for output still to come", handler: a.readPAMTerminal, pathParams: terminal, query: []param{{name: "from", typ: "integer", desc: "offset to read from (the previous read's next)"}, {name: "wait", typ: "integer", desc: "seconds to wait for output, at most 25"}}, resSchema: "PAMTerminalOutput", successCode: "200", sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/input", opID: "writePAMTerminalInput", summary: "Type into a terminal; a retried request with the same Idempotency-Key types nothing twice", handler: a.writePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalInput", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/resize", opID: "resizePAMTerminal", summary: "Change a terminal's size", handler: a.resizePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
@@ -110,14 +122,11 @@ func (a *API) openPAMTerminal(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		var body struct {
-			Cols int `json:"cols"`
-			Rows int `json:"rows"`
-		}
+		var body PAMTerminalRequest
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		terminal, err := bridge.OpenPAMTerminal(ctx, tenantID, r.PathValue("id"), principalSubject(ctx), body.Cols, body.Rows)
+		terminal, err := bridge.OpenPAMTerminal(ctx, tenantID, r.PathValue("id"), principalSubject(ctx), body)
 		if err != nil {
 			return 0, nil, err
 		}

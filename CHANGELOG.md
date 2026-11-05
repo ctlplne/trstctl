@@ -94,6 +94,11 @@
   refusal with its SQLSTATE) run by the control plane through the session's gateway, which signs in, records and masks.
   The console's "Open in the browser" now covers both target types; "Open database console" shows the SQL console.
   OpenAPI census 735 -> 736.
+- Browser sessions, part 3 (A259 served): a Kubernetes session opened for the browser gets a terminal in a pod. The
+  terminal request names a namespace, a pod and optionally a container and command (default `sh`); the control plane
+  opens the exec through the session's gateway (WebSocket `v5.channel.k8s.io`), which adds the session's own token, so
+  the service account's role bounds it and the token never leaves the gateway. The exec's exit status ends the terminal,
+  and the gateway records the stream. The console's session form offers Kubernetes, and a pod form opens the terminal.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

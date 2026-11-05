@@ -459,6 +459,17 @@ trstctl-cli access sessions connect <session-id> --ticket-file ticket.txt --list
 kubectl --kubeconfig ticket.txt.kubeconfig get pods
 ```
 
+A session can be worked in from the console instead (A259). Open it with `"browser": true`
+(Request privileged session → "Open in the browser"): the control plane keeps the session's
+ticket for the person who opened it, the reply carries none, and the gateway still signs in,
+records and masks. On an SSH session "Open terminal" opens a shell in the browser; on a
+PostgreSQL session "Open database console" runs SQL and shows the last result (at most 1,000
+rows) or the database's refusal; on a Kubernetes session the pod form (namespace, pod,
+optional container) opens a terminal in the pod as the session's service account. The API is
+`POST /api/v1/access/sessions/{id}/terminals` (output by long-poll, typed input, resize,
+close) and `POST /api/v1/access/sessions/{id}/queries`. The control plane must reach the
+gateway's address; only the opener can use a session's terminals.
+
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
 bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;

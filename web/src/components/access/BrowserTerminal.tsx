@@ -4,9 +4,10 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
-// A259: a terminal on a privileged SSH session opened for the browser. The
-// control plane holds the session's ticket and opens the shell through the
-// session's gateway; this component only shows the terminal's output, read by
+// A259: a terminal on a privileged SSH session opened for the browser, or an
+// exec in a pod on a Kubernetes one (exec names the pod). The control plane
+// holds the session's ticket and opens the shell through the session's
+// gateway; this component only shows the terminal's output, read by
 // long-polling, and sends what is typed. No credential or ticket reaches the
 // browser.
 
@@ -36,8 +37,13 @@ function encodeBase64(text: string): string {
   return btoa(binary);
 }
 
-export function BrowserTerminal({ sessionID, onClose }: { sessionID: string; onClose: () => void }) {
+export type PodExec = { namespace: string; pod: string; container?: string };
+
+export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: string; exec?: PodExec; onClose: () => void }) {
   const { t } = useTranslation();
+  const namespace = exec?.namespace;
+  const pod = exec?.pod;
+  const container = exec?.container;
   const host = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"opening" | "open" | "ended" | "failed">("opening");
   const [exitStatus, setExitStatus] = useState<number | null>(null);
@@ -64,7 +70,11 @@ export function BrowserTerminal({ sessionID, onClose }: { sessionID: string; onC
         if (stopped || !host.current) return;
         terminal = new Terminal({ cols: COLS, rows: ROWS, screenReaderMode: true, convertEol: false }) as unknown as XtermTerminal;
         terminal.open(host.current);
-        const opened = await api.openPAMTerminal(sessionID, { cols: COLS, rows: ROWS }, `pam-terminal:${sessionID}:${crypto.randomUUID()}`);
+        const opened = await api.openPAMTerminal(
+          sessionID,
+          { cols: COLS, rows: ROWS, ...(namespace && pod ? { namespace, pod, ...(container ? { container } : {}) } : {}) },
+          `pam-terminal:${sessionID}:${crypto.randomUUID()}`,
+        );
         if (stopped) {
           void api.closePAMTerminal(sessionID, opened.id).catch(() => undefined);
           return;
@@ -101,7 +111,7 @@ export function BrowserTerminal({ sessionID, onClose }: { sessionID: string; onC
       if (terminalID) void api.closePAMTerminal(sessionID, terminalID).catch(() => undefined);
       terminal?.dispose();
     };
-  }, [sessionID]);
+  }, [sessionID, namespace, pod, container]);
 
   return (
     <section aria-labelledby={`pam-terminal-${sessionID}`} className="grid gap-2">
