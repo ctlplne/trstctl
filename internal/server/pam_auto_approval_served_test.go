@@ -223,6 +223,16 @@ func TestServedAutoApprovalRecoversDecisionAndChecksOutA261(t *testing.T) {
 	rule["revision"], rule["applies_to"], rule["target_ids"] = 3, []string{"checkout"}, []string{"auto-vault"}
 	save()
 	checkoutID := uuid.NewString()
+	t.Cleanup(func() {
+		row, err := h.store.GetPAMCheckout(context.Background(), h.tenant, checkoutID)
+		if err != nil {
+			t.Errorf("read automatic checkout fixture state: %v", err)
+			return
+		}
+		if row.Status == "revealed" {
+			t.Error("automatic checkout fixture leaves revealed material for later expiry sweeps")
+		}
+	})
 	status, raw = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/checkouts", requester, uuid.NewString(), map[string]any{"request_id": checkoutID, "target_type": "postgres", "target_id": "auto-vault", "reason": "INC-261", "ttl_seconds": 120})
 	var review api.PAMCheckoutReview
 	if status != http.StatusAccepted || json.Unmarshal(raw, &review) != nil || review.Status != "approved" || review.RequiredApprovals != 1 {
@@ -248,6 +258,43 @@ func TestServedAutoApprovalRecoversDecisionAndChecksOutA261(t *testing.T) {
 		t.Fatalf("second automatic reveal status=%d", status)
 	} else {
 		secret.Wipe(again)
+	}
+	// Finish the resource lifecycle before this fixture stops its database.
+	// Otherwise another fixture's expiry sweep can queue a stale rotation for
+	// the same shared tenant/secret and block that fixture's reviewed checkout.
+	status, raw = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/checkouts/"+checkoutID+"/checkin", requester, uuid.NewString(), nil)
+	var checked api.PAMCheckout
+	if status != http.StatusOK || json.Unmarshal(raw, &checked) != nil || checked.Status != "checked_in" || checked.RotationCommandID == "" {
+		t.Fatalf("check in automatic checkout = %d (credential withheld)", status)
+	}
+	a201Await(t, "the automatic checkout rotation completes before fixture shutdown", func() bool {
+		ctx, cancel := context.WithTimeout(f.ctx, 20*time.Second)
+		defer cancel()
+		_ = h.srv.Drain(ctx)
+		status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/secrets/rotations", custodian, nil)
+		var page struct {
+			Items []struct {
+				ID    string `json:"id"`
+				Phase string `json:"phase"`
+			} `json:"items"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &page) != nil {
+			return false
+		}
+		for _, item := range page.Items {
+			if item.ID == checked.RotationCommandID {
+				return item.Phase == "completed"
+			}
+		}
+		return false
+	})
+	retired, err := pgsignin.SignIn(f.ctx, revealed.Credential, pgsignin.Options{})
+	if err == nil {
+		_ = retired.Conn.Close()
+		t.Fatal("checked-in automatic credential still signs in")
+	}
+	if !strings.Contains(err.Error(), "SQLSTATE 28P01") {
+		t.Fatal("retired automatic credential was not refused by database authentication (credential withheld)")
 	}
 	if n := pamEventCount(t, h.servedHarness, projections.EventPAMAutoApprovalApplied); n != 2 {
 		t.Fatalf("automatic checkout applied records = %d", n)
