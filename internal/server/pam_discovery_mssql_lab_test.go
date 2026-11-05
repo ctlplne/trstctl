@@ -47,20 +47,24 @@ func TestServedPrivilegedAccountDiscoverySQLServerA260(t *testing.T) {
 			_, _ = admin.ExecContext(ctx, "IF SUSER_ID('"+login+"') IS NOT NULL DROP LOGIN "+login)
 		}
 	})
+	// Catalog names and type codes can use different collations. Normalize
+	// the aggregate and ordering explicitly, preserving Unicode login names.
 	logins := func() string {
 		t.Helper()
 		var digest string
 		if err := admin.QueryRowContext(ctx, `WITH memberships AS (
             SELECT m.member_principal_id,
-              STRING_AGG(CONVERT(varchar(max), r.name), ',') WITHIN GROUP (ORDER BY r.name) AS roles
+              STRING_AGG(CONVERT(nvarchar(max), r.name) COLLATE Latin1_General_100_BIN2, N',')
+                WITHIN GROUP (ORDER BY r.name COLLATE Latin1_General_100_BIN2) AS roles
             FROM sys.server_role_members m
             JOIN sys.server_principals r ON r.principal_id = m.role_principal_id
             GROUP BY m.member_principal_id
           )
           SELECT CONVERT(varchar(64), HASHBYTES('SHA2_256', COALESCE((
             SELECT STRING_AGG(CONCAT(p.name, ':', p.type, ':', p.is_disabled, ':',
-              CONVERT(varchar(max), LOGINPROPERTY(p.name, 'PasswordHash'), 1), ':', memberships.roles), ';')
-              WITHIN GROUP (ORDER BY p.name)
+              CONVERT(nvarchar(max), LOGINPROPERTY(p.name, 'PasswordHash'), 1), ':', memberships.roles)
+              COLLATE Latin1_General_100_BIN2, N';')
+              WITHIN GROUP (ORDER BY p.name COLLATE Latin1_General_100_BIN2)
             FROM sys.server_principals p
             LEFT JOIN memberships ON memberships.member_principal_id = p.principal_id), '')), 2)`).Scan(&digest); err != nil {
 			t.Fatalf("hash the logins: %v", err)
