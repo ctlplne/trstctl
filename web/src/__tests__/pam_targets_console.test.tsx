@@ -214,3 +214,35 @@ it("registers a Azure application API account using a provider and required gate
     ),
   );
 });
+
+it("registers an AWS native console handoff using a provider and required gateway references", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "cloud-reader");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "aws-console");
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "tenant-sts");
+  const roles = within(form).getByRole("textbox", { name: "Allowed roles or principals" });
+  await user.clear(roles);
+  await user.type(roles, "reader");
+  expect(within(form).getByText(/native console activity and cookies remain outside gateway capture/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "cloud-reader",
+        target_type: "aws-console",
+        provider_id: "tenant-sts",
+        allowed_roles: ["reader"],
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});

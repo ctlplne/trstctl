@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -57,6 +58,7 @@ type pamRecordings struct {
 
 // recordingManifest is what a sealed recording's signature covers.
 type recordingManifest struct {
+	Scope          string                   `json:"scope,omitempty"`
 	Kind           string                   `json:"kind"`
 	TenantID       string                   `json:"tenant_id"`
 	SessionID      string                   `json:"session_id"`
@@ -235,7 +237,12 @@ func (s *pamService) sealRecording(ctx context.Context, tenantID, sessionID stri
 	if err != nil {
 		return err
 	}
-	manifest := recordingManifest{Kind: "trstctl.pam.session.recording.v1", TenantID: tenantID, SessionID: sessionID,
+	scope, err := s.recordingScope(ctx, tenantID, sessionID)
+	if err != nil {
+		return err
+	}
+
+	manifest := recordingManifest{Scope: scope, Kind: "trstctl.pam.session.recording.v1", TenantID: tenantID, SessionID: sessionID,
 		GatewayAgentID: rec.GatewayAgentID, StartedAt: rec.StartedAt.UTC(), LastChunkAt: rec.LastChunkAt.UTC(),
 		FinalReceived: rec.FinalReceived, Bytes: rec.Bytes, ChainHead: rec.ChainHead, SealedAt: s.clock().UTC().Truncate(time.Second)}
 	for _, c := range chunks {
@@ -286,6 +293,7 @@ func (s *pamService) sealIdleRecordings(ctx context.Context) {
 
 // RecordingVerification is what verifying a sealed recording found.
 type RecordingVerification struct {
+	Scope    string   `json:"scope,omitempty"`
 	Verified bool     `json:"verified"`
 	Chunks   int      `json:"chunks"`
 	Problems []string `json:"problems,omitempty"`
@@ -333,6 +341,16 @@ func (s *pamService) verifyRecording(ctx context.Context, tenantID, sessionID st
 		problem("the signed manifest is not this session's")
 		return out, nil
 	}
+	expectedScope, err := s.recordingScope(ctx, tenantID, sessionID)
+	if err != nil {
+		return RecordingVerification{}, err
+	}
+	out.Scope = expectedScope
+	if manifest.Kind != "trstctl.pam.session.recording.v1" || manifest.Scope != expectedScope {
+		problem("the signed recording scope does not match this session")
+		return out, nil
+	}
+
 	chain := ""
 	for i, c := range manifest.Chunks {
 		if c.Ord != i {
@@ -420,7 +438,12 @@ func (s *Server) GetPAMRecording(ctx context.Context, tenantID, sessionID string
 	if err != nil {
 		return api.PAMRecording{}, err
 	}
-	return api.PAMRecording{SessionID: rec.SessionID, Status: rec.Status, Chunks: rec.Chunks, Bytes: rec.Bytes,
+	scope, err := s.pam.recordingScope(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecording{}, err
+	}
+
+	return api.PAMRecording{Scope: scope, SessionID: rec.SessionID, Status: rec.Status, Chunks: rec.Chunks, Bytes: rec.Bytes,
 		StartedAt: rec.StartedAt, LastChunkAt: rec.LastChunkAt, SealedAt: rec.SealedAt, FinalReceived: rec.FinalReceived,
 		ChainHead: rec.ChainHead, ManifestSHA256: rec.ManifestSHA256,
 		LegalHold: rec.LegalHold, LegalHoldReason: rec.LegalHoldReason, DeletedAt: rec.DeletedAt}, nil
@@ -441,7 +464,7 @@ func (s *Server) VerifyPAMRecording(ctx context.Context, tenantID, sessionID str
 	if err != nil {
 		return api.PAMRecordingVerification{}, err
 	}
-	return api.PAMRecordingVerification{Verified: v.Verified, Chunks: v.Chunks, Problems: v.Problems}, nil
+	return api.PAMRecordingVerification{Scope: v.Scope, Verified: v.Verified, Chunks: v.Chunks, Problems: v.Problems}, nil
 }
 
 // recordGatewaySessionEnded records the gateway's own report that it ended a
@@ -739,4 +762,16 @@ func chunkRefs(chunks []store.PAMRecordingChunk) []string {
 		out = append(out, c.ObjectRef)
 	}
 	return out
+}
+
+// recordingScope is authoritative session metadata, never a gateway's claim.
+func (s *pamService) recordingScope(ctx context.Context, tenantID, sessionID string) (string, error) {
+	session, err := s.store.GetPAMSession(ctx, tenantID, sessionID)
+	if err != nil {
+		return "", err
+	}
+	if session.TargetType == pamTargetAWSConsole {
+		return accessconsole.RecordingScope, nil
+	}
+	return "", nil
 }

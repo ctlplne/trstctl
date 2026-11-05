@@ -12089,6 +12089,7 @@ PAMRecording = TypedDict(
         'legal_hold': bool,
         'legal_hold_reason': str,
         'manifest_sha256': str,
+        'scope': str,
         'sealed_at': str,
         'session_id': str,
         'started_at': str,
@@ -12132,6 +12133,7 @@ PAMRecordingVerification = TypedDict(
     {
         'chunks': int,
         'problems': list[str],
+        'scope': str,
         'verified': bool,
     },
     total=False,

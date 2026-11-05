@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessconsole"
 	"unicode"
 
 	"trstctl.com/trstctl/internal/hostedkey"
@@ -103,6 +104,7 @@ type DynamicSecretGatewayConfig struct {
 }
 
 type DynamicSecretProviderConfig struct {
+	Console  *accessconsole.Binding      `json:"console,omitempty"`
 	Gateway  *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
 	TenantID string                      `json:"tenant_id"`
 	ID       string                      `json:"id"`
@@ -794,6 +796,15 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 			}
 		}
 	}
+	if c.Console != nil {
+		if c.Type != "aws-sts" {
+			errs = append(errs, fmt.Errorf("%s console binding requires aws-sts", where))
+		}
+		if err := c.Console.Validate(c.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s console: %w", where, err))
+		}
+	}
+
 	if c.Gateway != nil {
 		switch c.Type {
 		case "aws-sts":

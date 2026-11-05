@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
@@ -44,6 +45,7 @@ const (
 	TargetAWS        = "aws"
 	TargetGCP        = "gcp"
 	TargetAzure      = "azure"
+	TargetAWSConsole = accessconsole.TargetAWS
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -55,7 +57,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole:
 		return true
 	}
 	return false
@@ -75,20 +77,22 @@ var azureOAuthTenant = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
-	OAuthTenant        string              `json:"oauth_tenant,omitempty"`
-	OAuthTokenEndpoint string              `json:"oauth_token_endpoint,omitempty"`
-	OAuthScopes        []string            `json:"oauth_scopes,omitempty"`
-	OAuthSubject       string              `json:"oauth_subject,omitempty"`
-	AWSService         string              `json:"aws_service,omitempty"`
-	AWSRegion          string              `json:"aws_region,omitempty"`
-	CommandPolicy      *accessrules.Policy `json:"command_policy,omitempty"`
-	SessionID          string              `json:"session_id"`
-	TargetType         string              `json:"target_type"`
-	TargetID           string              `json:"target_id"`
-	ExpiresAt          time.Time           `json:"expires_at"`
-	TicketDigest       string              `json:"ticket_digest"`
-	CredentialRef      string              `json:"credential_ref,omitempty"`
-	RequiredAgentID    string              `json:"required_agent_id"`
+	Console            *accessconsole.Binding `json:"console,omitempty"`
+	ConsoleRole        string                 `json:"console_role,omitempty"`
+	OAuthTenant        string                 `json:"oauth_tenant,omitempty"`
+	OAuthTokenEndpoint string                 `json:"oauth_token_endpoint,omitempty"`
+	OAuthScopes        []string               `json:"oauth_scopes,omitempty"`
+	OAuthSubject       string                 `json:"oauth_subject,omitempty"`
+	AWSService         string                 `json:"aws_service,omitempty"`
+	AWSRegion          string                 `json:"aws_region,omitempty"`
+	CommandPolicy      *accessrules.Policy    `json:"command_policy,omitempty"`
+	SessionID          string                 `json:"session_id"`
+	TargetType         string                 `json:"target_type"`
+	TargetID           string                 `json:"target_id"`
+	ExpiresAt          time.Time              `json:"expires_at"`
+	TicketDigest       string                 `json:"ticket_digest"`
+	CredentialRef      string                 `json:"credential_ref,omitempty"`
+	RequiredAgentID    string                 `json:"required_agent_id"`
 	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
 	// (SHA256:...) route an SSH session; they are public facts.
 	SSHAddress             string   `json:"ssh_address,omitempty"`
@@ -148,6 +152,14 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
 	}
+	if in.TargetType == TargetAWSConsole {
+		if in.Console == nil || in.Console.Validate(true) != nil || in.ConsoleRole == "" || len(in.ConsoleRole) > 128 || strings.ContainsAny(in.ConsoleRole, "\r\n\x00") {
+			return errors.New("accessgateway: console session needs reviewed destinations and role")
+		}
+	} else if in.Console != nil || in.ConsoleRole != "" {
+		return errors.New("accessgateway: only a console session carries console destinations")
+	}
+
 	if in.TargetType == TargetAWS {
 		if (in.AWSService != "s3" && in.AWSService != "sts") || in.AWSRegion == "" || len(in.AWSRegion) > 64 || strings.ContainsAny(in.AWSRegion, "/ \t\r\n") {
 			return errors.New("accessgateway: AWS session needs a fixed supported signing scope")

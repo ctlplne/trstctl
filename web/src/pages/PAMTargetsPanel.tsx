@@ -21,7 +21,7 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console"]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -40,7 +40,13 @@ const targetSchema = z
           path: ["allowed_roles"],
           message: translateNow(value.target_type === "postgres" ? "admin.access.rolesHelp" : "admin.access.providerRolesRequired"),
         });
-      if (value.target_type === "snowflake" || value.target_type === "aws" || value.target_type === "gcp" || value.target_type === "azure") {
+      if (
+        value.target_type === "snowflake" ||
+        value.target_type === "aws" ||
+        value.target_type === "gcp" ||
+        value.target_type === "azure" ||
+        value.target_type === "aws-console"
+      ) {
         if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
         if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });
       }
@@ -263,6 +269,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="ssh">{t("admin.access.ssh")}</option>
               <option value="snowflake">{t("admin.access.snowflake")}</option>
               <option value="aws">{t("admin.access.awsAPI")}</option>
+              <option value="aws-console">{t("admin.access.awsConsole")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
               <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
@@ -335,18 +342,19 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           )}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
+          {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}
           {targetType === "gcp" ? <p>{t("admin.access.gcpAPIProof")}</p> : null}
           {targetType === "azure" ? <p>{t("admin.access.azureAPIProof")}</p> : null}
           <Field
             label={t("admin.access.gatewayAgent")}
-            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure"}
+            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure" || targetType === "aws-console"}
             error={errors.gateway_agent_id ? t("admin.access.gatewayRequired") : undefined}
           >
             {(control) => <Input {...control} {...register("gateway_agent_id")} />}
           </Field>
           <Field
             label={t("admin.access.gatewayAddress")}
-            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure"}
+            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure" || targetType === "aws-console"}
             error={errors.gateway_address ? t("admin.access.gatewayRequired") : undefined}
           >
             {(control) => <Input {...control} {...register("gateway_address")} />}

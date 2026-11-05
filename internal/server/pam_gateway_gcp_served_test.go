@@ -60,8 +60,8 @@ func TestServedGatewayGCPServiceAccountA263(t *testing.T) {
 	if status, _ := secretsReq(t, f.h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID, other, nil); status != http.StatusNotFound {
 		t.Fatal("another tenant read the GCP account session")
 	}
-	denied := map[string]any{"target_type": "gcp", "target_id": "gcp-api", "role": "administrator", "ttl_seconds": 120, "reason": "negative scope proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
-	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-gcp-denied-role", denied); status != http.StatusUnprocessableEntity {
+	denied := map[string]any{"request_id": uuid.NewString(), "target_type": "gcp", "target_id": "gcp-api", "role": "administrator", "ttl_seconds": 120, "reason": "negative scope proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
+	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-gcp-denied-role", denied); status != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("is not allowed")) {
 		t.Fatalf("unauthorized GCP role = %d %s", status, body)
 	}
 	refusedTicket := func(id, ticket string) {

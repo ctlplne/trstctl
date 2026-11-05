@@ -170,6 +170,8 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 			commandGroup = "s3api"
 		}
 		return fmt.Sprintf("aws --no-sign-request --endpoint-url http://%s:%d --region %s %s <operation>", local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
+	case "aws-console":
+		return fmt.Sprintf("Open http://%s/ in your browser", local.String()), nil
 	case "gcp", "azure":
 		return fmt.Sprintf("curl --fail-with-body http://%s:%d/<API-path>", local.IP, local.Port), nil
 	case "snowflake":

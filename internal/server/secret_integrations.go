@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"trstctl.com/trstctl/internal/accessconsole"
 
 	"github.com/google/uuid"
 
@@ -222,6 +223,11 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 		gateway := *cfg.Gateway
 		gateway.Scopes = append([]string(nil), cfg.Gateway.Scopes...)
 		cfg.Gateway = &gateway
+	}
+
+	if cfg.Console != nil {
+		binding := *cfg.Console
+		cfg.Console = &binding
 	}
 
 	provider := &configuredDynamicProvider{
@@ -1908,4 +1914,12 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayAzureTenant() string {
 		return ""
 	}
 	return p.cfg.AzureTenant
+}
+
+// DynamicSecretGatewayConsole returns a copy of the reviewed public destinations.
+func (p *configuredDynamicProvider) DynamicSecretGatewayConsole() (accessconsole.Binding, error) {
+	if p.cfg.Type != "aws-sts" || p.cfg.Console == nil {
+		return accessconsole.Binding{}, errors.New("provider has no native console binding")
+	}
+	return *p.cfg.Console, nil
 }

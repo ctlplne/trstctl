@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessconsole"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -150,6 +151,9 @@ func (s *pamService) gatewayDelivery(ctx context.Context, tenantID, agentID, add
 // enqueueGatewaySession queues the session's one gateway job (idempotent on
 // the session), naming the gateway and the credential by reference.
 func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string, intent accessgateway.SessionIntent) error {
+	if err := accessgateway.ValidateSessionIntent(intent); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -246,6 +250,36 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 			}
 			if !found {
 				return accessgateway.SessionIntent{}, errors.New("server: Google Cloud account has no gateway OAuth scope")
+			}
+		}
+
+		if rec.TargetType == pamTargetAWSConsole {
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			found := false
+			for _, provider := range s.providers.ForTenant(rec.TenantID) {
+				if provider == nil || provider.Name() != target.cfg.ProviderID {
+					continue
+				}
+				source, ok := provider.(interface {
+					DynamicSecretGatewayConsole() (accessconsole.Binding, error)
+				})
+				if !ok {
+					continue
+				}
+				binding, err := source.DynamicSecretGatewayConsole()
+				if err != nil {
+					return accessgateway.SessionIntent{}, err
+				}
+				intent.Console = &binding
+				intent.ConsoleRole = rec.Role
+				found = true
+				break
+			}
+			if !found {
+				return accessgateway.SessionIntent{}, errors.New("server: native console binding unavailable")
 			}
 		}
 
@@ -382,7 +416,7 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 		start.undo()
 		return api.PAMSession{}, err
 	}
-	rec := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, ExpiresAt: expiresAt,
+	rec := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, ExpiresAt: expiresAt,
 		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: payload.CommandPolicy}
 	if intent, err := s.gatewaySessionIntent(ctx, rec); err == nil {
 		_ = s.enqueueGatewaySession(ctx, tenantID, intent)

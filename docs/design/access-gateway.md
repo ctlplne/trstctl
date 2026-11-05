@@ -952,3 +952,68 @@ restart/partition/recording authorization/tamper/retention remain unverified.
 
 Native contracts: [client-credentials grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
 and [token formats and lifetimes](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens).
+
+
+## Native AWS console handoff (A263, LocalStack and strict stand-in)
+
+An `aws-console` target uses an existing `aws-sts` provider and a separate
+reviewed console binding. It can coexist with that provider's API gateway binding;
+API origins never select where console credentials are sent:
+
+```json
+"console": {
+  "federation_endpoint": "https://signin.aws.amazon.com/federation",
+  "destination": "https://console.aws.amazon.com/"
+}
+```
+
+The supported native hosts are the commercial AWS sign-in and console domains,
+including their regional subdomains, over HTTPS on port 443. User information,
+query strings and fragments are refused. Federation uses `/federation`. An
+explicit loopback lab exception supports the stand-in. Other AWS partitions and
+arbitrary destinations are unqualified. Register the `aws-console` target with
+its provider, allowed role and gateway in the console or API, and approve a
+session (STS requires at least 900 seconds). `trstctl access sessions connect
+<id> --ticket-file <file>` prints the local browser URL.
+
+The local page names the approved target/role and the capture limits. GET mints
+no native credential. Its explicit POST requires a matching loopback origin and
+short session/host-bound review proof. It accepts `Idempotency-Key` when supplied,
+checks it against the form key, and replays one original mint outcome for that
+session. Federation Session JSON and form data are byte-backed, locked before
+network writes and wiped afterward. Native sign-in tokens are bounded and held
+locked. The second form posts the intended sign-in token directly to the fixed
+native endpoint; STS keys never reach the browser. No credential enters a GET
+URL, CLI output or gateway recording. Pages disable caching, framing and scripts
+and suppress referrers. HTTP headers are bounded to 16 KiB; local forms to 4 KiB;
+federation grants to 256 KiB; responses to 64 KiB and sign-in tokens to 32 KiB.
+
+An ambiguous mint failure stays failed rather than blindly minting again. If a
+gateway job is reclaimed after losing its in-memory handoff result, a new mint is
+refused; open a fresh approved session. A control-plane restart with the gateway
+still running does not itself discard that state. Paired-image restart and
+partition proofs remain unqualified for this type.
+
+**Recording covers the gateway handoff, not activity or cookies in the native
+console.** The signed manifest and recording index/verification report
+`scope: "native_console_handoff"`; changing the scope invalidates its evidence.
+A `require_recording` access template refuses this type because full native
+activity is outside gateway capture. Termination closes the local gateway and
+uses the provider's exact-session denial when enabled. Native console credentials
+may differ from the input STS key; this does not prove browser logout or native
+cookie invalidation. Sign-in-token validity, console-session duration and the
+local gateway deadline are distinct. No `SessionDuration` is supplied or shortened
+native lifetime inferred from the POST flow.
+
+`TestServedGatewayAWSConsoleHandoffA263` uses native LocalStack STS/IAM plus a
+separately identified federation/login and permission stand-in. Stock curl walks
+the actual forms without STS keys, with forged origin/proof and rebinding refusal,
+one mint under replay, issued-role login, tenant/role/ticket boundaries, local
+recall, role denial and custody checks. Handoff-only policy refusal, sealed
+recording and offline signed scope are checked. This is not a live AWS, actual
+browser-cookie, native sign-in expiry or native-console activity-capture proof.
+Google service accounts and Azure application credentials implement API access;
+they do not establish a human console login. Compatible human federation remains
+unsupported by these provider attachments.
+
+Native contract: [AWS custom identity broker console access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_enable-console-custom-url.html).

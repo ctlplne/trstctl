@@ -3,6 +3,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -103,8 +104,8 @@ func TestServedGatewayAWSSTSAccountA263(t *testing.T) {
 	if status, _ := secretsReq(t, f.h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID, other, nil); status != http.StatusNotFound {
 		t.Fatal("another tenant read the AWS account session")
 	}
-	deniedReq := map[string]any{"target_type": "aws", "target_id": "aws-api", "role": "administrator", "ttl_seconds": 900, "reason": "negative scope proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
-	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-aws-denied-role", deniedReq); status != http.StatusUnprocessableEntity {
+	deniedReq := map[string]any{"request_id": uuid.NewString(), "target_type": "aws", "target_id": "aws-api", "role": "administrator", "ttl_seconds": 900, "reason": "negative scope proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
+	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-aws-denied-role", deniedReq); status != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("is not allowed")) {
 		t.Fatalf("unauthorized AWS role = %d %s", status, body)
 	}
 	wrong, err := mtls.GatewayDial(f.ctx, session.Gateway.Address, []byte(session.Gateway.CAPEM), session.Gateway.SPIFFEID)

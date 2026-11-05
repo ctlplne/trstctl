@@ -60,6 +60,7 @@ type Gateway struct {
 }
 
 type session struct {
+	console  *consoleState
 	intent   SessionIntent
 	job      relay.Job
 	material relay.Material
@@ -257,7 +258,14 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		// The credential is the token itself.
 		secrets = append(secrets, append([]byte(nil), material[intent.CredentialRef]...))
 	}
-	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy,
+	var console *consoleState
+	if intent.TargetType == TargetAWSConsole {
+		console = consoleStateForAttempt(job.Attempt)
+		destroyMaterial := destroy
+		destroy = func() { console.destroy(); destroyMaterial() }
+	}
+
+	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy, console: console,
 		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
 	for _, b := range secrets {
 		secret.Wipe(b)
@@ -547,6 +555,13 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
+	case TargetAWSConsole:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		if err := serveAWSConsole(ctx, conn, credential, s.intent, s.console, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: console handoff setup failed: %v", s.intent.SessionID, err)
+		}
+
 	case TargetAzure:
 		credential := s.credential()
 		defer secret.Wipe(credential)

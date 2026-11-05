@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/accessrules"
 
 	"github.com/google/uuid"
@@ -36,17 +37,18 @@ import (
 )
 
 const (
-	pamTargetPostgres  = "postgres"
-	pamTargetSSH       = "ssh"
-	pamTargetRedis     = "redis"
-	pamTargetMySQL     = "mysql"
-	pamTargetMongo     = "mongodb"
-	pamTargetCH        = "clickhouse"
-	pamTargetK8s       = "kubernetes"
-	pamTargetSnowflake = "snowflake"
-	pamTargetAWS       = "aws"
-	pamTargetGCP       = "gcp"
-	pamTargetAzure     = "azure"
+	pamTargetPostgres   = "postgres"
+	pamTargetSSH        = "ssh"
+	pamTargetRedis      = "redis"
+	pamTargetMySQL      = "mysql"
+	pamTargetMongo      = "mongodb"
+	pamTargetCH         = "clickhouse"
+	pamTargetK8s        = "kubernetes"
+	pamTargetSnowflake  = "snowflake"
+	pamTargetAWS        = "aws"
+	pamTargetGCP        = "gcp"
+	pamTargetAzure      = "azure"
+	pamTargetAWSConsole = accessconsole.TargetAWS
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -59,20 +61,21 @@ const (
 // PostgreSQL targets may hand the requester that login; every other type is
 // served only through an access gateway, which signs in with it itself.
 var pamDatabaseProviderTypes = map[string]string{
-	pamTargetPostgres:  "postgresql",
-	pamTargetRedis:     "redis",
-	pamTargetMySQL:     "mysql",
-	pamTargetMongo:     "mongodb",
-	pamTargetCH:        "clickhouse",
-	pamTargetK8s:       "kubernetes",
-	pamTargetSnowflake: "snowflake",
-	pamTargetAWS:       "aws-sts",
-	pamTargetGCP:       "gcp-iam",
-	pamTargetAzure:     "azure-entra",
+	pamTargetPostgres:   "postgresql",
+	pamTargetRedis:      "redis",
+	pamTargetMySQL:      "mysql",
+	pamTargetMongo:      "mongodb",
+	pamTargetCH:         "clickhouse",
+	pamTargetK8s:        "kubernetes",
+	pamTargetSnowflake:  "snowflake",
+	pamTargetAWS:        "aws-sts",
+	pamTargetAWSConsole: "aws-sts",
+	pamTargetGCP:        "gcp-iam",
+	pamTargetAzure:      "azure-entra",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -406,6 +409,10 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 			if strings.TrimSpace(role) == "" {
 				return nil, fmt.Errorf("server: PAM %s target %q has an empty role", kind, target.ID)
 			}
+			if target.TargetType == pamTargetAWSConsole && (len(role) > 128 || strings.ContainsAny(role, "\r\n\x00")) {
+				return nil, fmt.Errorf("server: console target %q role label must be bounded public text", target.ID)
+			}
+
 			if _, exists := roles[role]; exists {
 				return nil, fmt.Errorf("server: PAM %s target %q repeats role %q", kind, target.ID, role)
 			}
@@ -457,6 +464,19 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 				binding, ok := provider.(interface{ DynamicSecretGatewayAzureTenant() string })
 				if !ok || binding.DynamicSecretGatewayAzureTenant() == "" {
 					return nil, fmt.Errorf("server: Azure target %q needs one fixed tenant", target.ID)
+				}
+			}
+
+			if target.TargetType == pamTargetAWSConsole {
+				providerBinding, ok := provider.(interface {
+					DynamicSecretGatewayConsole() (accessconsole.Binding, error)
+				})
+				if !ok {
+					return nil, fmt.Errorf("server: console target %q provider has no console binding", target.ID)
+				}
+				binding, err := providerBinding.DynamicSecretGatewayConsole()
+				if err != nil || binding.Validate(true) != nil {
+					return nil, fmt.Errorf("server: console target %q needs a valid federation endpoint and destination", target.ID)
 				}
 			}
 

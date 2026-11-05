@@ -9158,3 +9158,18 @@ verified recording. Removing the password stops new grants; issued access tokens
 retain native expiry. Live Azure, native Azure CLI, human Portal sign-in and
 packaged recovery/recording qualification are unverified. See the
 [configuration and proof limits](design/access-gateway.md#azure-application-api-accounts-a263-strict-stand-in-proof).
+
+
+### Native AWS console handoff (A263, stand-in proof)
+
+`aws-console` uses an existing STS issuer with a distinct reviewed federation
+endpoint and destination. LocalStack supplies STS/IAM wire behavior; a strict
+stand-in checks federation Session credentials, native login and role denial.
+The browser receives its intended sign-in form, never STS keys. The local gateway
+records only the handoff, explicitly signed as `native_console_handoff`;
+full-recording templates refuse it. Native console activity, cookies/logout,
+actual browser behavior, native expiry and live AWS remain unverified. A reclaimed
+gateway job refuses to remint after losing its cached result; a fresh approved
+session is required. Packaged recovery and recording qualification remain open.
+Google service-account and Azure application API grants do not implement human
+console sign-in. See [the supported flow and exact limits](design/access-gateway.md#native-aws-console-handoff-a263-localstack-and-strict-stand-in).

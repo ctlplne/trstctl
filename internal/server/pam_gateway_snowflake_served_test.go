@@ -3,6 +3,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -118,8 +119,8 @@ func TestServedGatewaySnowflakeSQLAPISessionsA263(t *testing.T) {
 	if direct.StatusCode != http.StatusUnauthorized {
 		t.Fatal("direct target admitted an unauthenticated client")
 	}
-	deniedReq := map[string]any{"target_type": "snowflake", "target_id": "snowflake-api", "role": "ACCOUNTADMIN", "ttl_seconds": 60, "reason": "negative proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
-	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-snowflake-denied-role", deniedReq); status != http.StatusUnprocessableEntity {
+	deniedReq := map[string]any{"request_id": uuid.NewString(), "target_type": "snowflake", "target_id": "snowflake-api", "role": "ACCOUNTADMIN", "ttl_seconds": 60, "reason": "negative proof", "method": "stub_pam", "payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine"))}
+	if status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", f.requester, "a263-snowflake-denied-role", deniedReq); status != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("is not allowed")) {
 		t.Fatalf("unauthorized role = %d %s", status, body)
 	}
 	otherID := uuid.NewString()

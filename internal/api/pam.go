@@ -88,6 +88,7 @@ type PAMRecordingExport struct {
 // PAMRecording is a gateway session's recording index (A255): how much is
 // stored and whether it is sealed. The frames themselves are read separately.
 type PAMRecording struct {
+	Scope          string     `json:"scope,omitempty"`
 	SessionID      string     `json:"session_id"`
 	Status         string     `json:"status"`
 	Chunks         int        `json:"chunks"`
@@ -108,6 +109,7 @@ type PAMRecording struct {
 // PAMRecordingVerification is the outcome of verifying a sealed recording
 // against its signed manifest.
 type PAMRecordingVerification struct {
+	Scope    string   `json:"scope,omitempty"`
 	Verified bool     `json:"verified"`
 	Chunks   int      `json:"chunks"`
 	Problems []string `json:"problems,omitempty"`

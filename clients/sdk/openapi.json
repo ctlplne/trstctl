@@ -4688,6 +4688,7 @@
                 "target_type": {
                   "enum": [
                     "aws",
+                    "aws-console",
                     "azure",
                     "clickhouse",
                     "gcp",
@@ -5358,6 +5359,7 @@
                       "target_type": {
                         "enum": [
                           "aws",
+                          "aws-console",
                           "azure",
                           "clickhouse",
                           "gcp",
@@ -5654,6 +5656,7 @@
                 "target_type": {
                   "enum": [
                     "aws",
+                    "aws-console",
                     "azure",
                     "clickhouse",
                     "gcp",
@@ -38603,6 +38606,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",
@@ -40227,6 +40231,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",
@@ -40728,6 +40733,10 @@
           "manifest_sha256": {
             "type": "string"
           },
+          "scope": {
+            "description": "native_console_handoff means the signed recording covers only the gateway handoff; native console actions and cookies are outside capture.",
+            "type": "string"
+          },
           "sealed_at": {
             "format": "date-time",
             "type": "string"
@@ -40842,6 +40851,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "scope": {
+            "description": "Expected recording scope, checked against the signed manifest. native_console_handoff does not capture native console activity.",
+            "type": "string"
           },
           "verified": {
             "type": "boolean"
@@ -41120,6 +41133,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",
@@ -41201,6 +41215,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",
@@ -41358,6 +41373,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",
@@ -41473,6 +41489,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "aws-console",
               "azure",
               "clickhouse",
               "gcp",

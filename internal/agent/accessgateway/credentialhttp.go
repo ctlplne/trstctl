@@ -19,6 +19,14 @@ import (
 // credentialHTTPRoundTrip verifies the fixed upstream, bounds response headers,
 // and serializes secret auth headers only from locked byte-backed memory.
 func credentialHTTPRoundTrip(ctx context.Context, request *http.Request, body []byte, upstream httpUpstream, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), authorize func(*http.Request) (*secret.Buffer, error)) (*http.Response, error) {
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	success := false
+	defer func() {
+		if !success {
+			cancel()
+		}
+	}()
+
 	target, err := url.Parse(upstream.URL)
 	if err != nil || target.Host == "" || target.User != nil || (target.Scheme != "http" && target.Scheme != "https") {
 		return nil, errors.New("accessgateway: invalid credential upstream")
@@ -45,6 +53,7 @@ func credentialHTTPRoundTrip(ctx context.Context, request *http.Request, body []
 	if err != nil {
 		return nil, err
 	}
+	_ = conn.SetDeadline(deadline)
 	if target.Scheme == "https" {
 		name := upstream.ServerName
 		if name == "" {
@@ -55,9 +64,8 @@ func credentialHTTPRoundTrip(ctx context.Context, request *http.Request, body []
 			return nil, err
 		}
 	}
-	_ = conn.SetDeadline(deadline)
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	success := false
+	stopAfter := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	stop := func() bool { stopped := stopAfter(); cancel(); return stopped }
 	defer func() {
 		if !success {
 			stop()

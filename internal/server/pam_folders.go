@@ -166,7 +166,7 @@ func (s *pamService) pamRequestTemplate(ctx context.Context, tenantID, targetTyp
 		}
 	}
 	if requested == "" {
-		return nil, refs, target.GatewayAgentID != "" && s.recordings != nil, nil
+		return nil, refs, target.GatewayAgentID != "" && s.recordings != nil && target.TargetType != pamTargetAWSConsole, nil
 	}
 	if !validUUID(requested) {
 		return nil, nil, false, fmt.Errorf("%w: template_id must be a UUID", api.ErrPAMInvalid)
@@ -179,7 +179,7 @@ func (s *pamService) pamRequestTemplate(ctx context.Context, tenantID, targetTyp
 		return nil, nil, false, err
 	}
 	refs = append(refs, fmt.Sprintf("pam-template:%s@%d", t.Name, t.Revision), "pam-template-id:"+t.ID)
-	return &t, refs, target.GatewayAgentID != "" && s.recordings != nil, nil
+	return &t, refs, target.GatewayAgentID != "" && s.recordings != nil && target.TargetType != pamTargetAWSConsole, nil
 }
 
 func (s *Server) SavePAMFolder(ctx context.Context, tenantID, actor string, f api.PAMFolder) (api.PAMFolder, error) {

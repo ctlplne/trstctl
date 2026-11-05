@@ -6502,6 +6502,12 @@ export const messages = {
       "Stand-in proof: the gateway uploads a session key, exchanges a scoped service-account assertion, and holds the API token. Deleting the key stops new grants; existing tokens keep their native expiry. Human console sign-in is separate.",
     description: "Service-account gateway proof and native token expiry limit.",
   },
+  "admin.access.awsConsole": { defaultMessage: "AWS native console handoff", description: "A263 native console account transport." },
+  "admin.access.awsConsoleProof": {
+    defaultMessage:
+      "STS uses LocalStack; federation and login use a stand-in. The gateway holds STS keys and gives the browser its sign-in form. Recording covers the handoff; native console activity and cookies remain outside gateway capture. Full-recording templates refuse this type. Live AWS and browser logout are unverified.",
+    description: "Native console handoff qualification and capture limit.",
+  },
   "admin.access.awsAPI": { defaultMessage: "AWS API with STS", description: "A263 gateway-only cloud account type." },
   "admin.access.awsAPIProof": {
     defaultMessage:
