@@ -14548,7 +14548,18 @@
                 "listPAMTargets",
                 "registerPAMTarget",
                 "getPAMTarget",
-                "disablePAMTarget"
+                "disablePAMTarget",
+                "checkPAMTargetHealth",
+                "listPAMTemplates",
+                "createPAMTemplate",
+                "getPAMTemplate",
+                "updatePAMTemplate",
+                "deletePAMTemplate",
+                "listPAMEmergencyResponders",
+                "setPAMEmergencyResponders",
+                "openPAMEmergencySession",
+                "listPAMEmergencyGrants",
+                "reviewPAMEmergencyGrant"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14598,7 +14609,18 @@
                 "access targets list",
                 "access targets register",
                 "access targets get",
-                "access targets disable"
+                "access targets disable",
+                "access targets health-check",
+                "access templates list",
+                "access templates create",
+                "access templates get",
+                "access templates update",
+                "access templates delete",
+                "access emergency responders",
+                "access emergency set-responders",
+                "access emergency open",
+                "access emergency list",
+                "access emergency review"
             ],
             "cli_na": "",
             "facet_evidence": {

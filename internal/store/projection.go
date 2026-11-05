@@ -884,6 +884,10 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A255: projected from pam.session.recording_chunk_stored and
 	// pam.session.recording_sealed.
 	"pam_session_recordings", "pam_session_recording_chunks",
+	// A258: projected from pam.account.health_checked, pam.template.*,
+	// pam.emergency.responders_set, pam.emergency.opened and
+	// pam.emergency.reviewed.
+	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

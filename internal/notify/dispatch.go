@@ -705,6 +705,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Emergency endpoint containment failed")
 	case KindApprovalRequest:
 		b.WriteString("Approval requested")
+	case KindEmergencyAccess:
+		b.WriteString("Emergency access opened without approval")
 	case KindEndpointVerificationFailed:
 		// The wording is chosen to be unmistakable at 3am. "Verification
 		// failed" would read as a tooling problem; this says what is actually

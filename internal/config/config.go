@@ -1892,9 +1892,13 @@ type PAM struct {
 	// RecordingRetention (A255) is how long a sealed gateway session
 	// recording is kept before its objects are deleted, unless a legal hold
 	// keeps it; empty keeps recordings.
-	RecordingRetention string              `json:"recording_retention,omitempty"`
-	PostgresTargets    []PAMPostgresTarget `json:"postgres_targets,omitempty"`
-	SSHTargets         []PAMSSHTarget      `json:"ssh_targets,omitempty"`
+	RecordingRetention string `json:"recording_retention,omitempty"`
+	// HealthCheckInterval (A258) is how often each brokered account's stored
+	// credential is signed in with, read-only; empty is an hour. Checks are
+	// spread over the interval.
+	HealthCheckInterval string              `json:"health_check_interval,omitempty"`
+	PostgresTargets     []PAMPostgresTarget `json:"postgres_targets,omitempty"`
+	SSHTargets          []PAMSSHTarget      `json:"ssh_targets,omitempty"`
 	// DatabaseTargets (A256) are provider-backed targets of the other
 	// database kinds, reached only through an access gateway: target_type
 	// redis, mysql, mongodb or clickhouse. Each names a dynamic-secret
@@ -5145,6 +5149,7 @@ func validatePAM(p PAM) []error {
 	_ = parsePositive("expiry_interval", p.ExpiryInterval)
 	_ = parsePositive("approval_ttl", p.ApprovalTTL)
 	_ = parsePositive("recording_retention", p.RecordingRetention)
+	_ = parsePositive("health_check_interval", p.HealthCheckInterval)
 	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
 		errs = append(errs, errors.New("pam.default_ttl must not exceed pam.max_ttl"))
 	}

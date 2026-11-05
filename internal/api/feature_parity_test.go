@@ -373,9 +373,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// then activity search and its export (678). A252 adds the on-demand
 	// evidence report (679). A255 adds a gateway session's recording index
 	// and its verification (714), then playing back, exporting and holding a
-	// recording and terminating a session (719).
-	if len(out) != 719 {
-		t.Fatalf("OpenAPI operationIds = %d, want 719", len(out))
+	// recording and terminating a session (719). A258 adds checking a
+	// brokered account's credential now, access templates and emergency
+	// access (730).
+	if len(out) != 730 {
+		t.Fatalf("OpenAPI operationIds = %d, want 730", len(out))
 	}
 	return out
 }

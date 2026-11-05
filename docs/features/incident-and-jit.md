@@ -474,6 +474,15 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
   --method github_oidc --payload-file "$OIDC_TOKEN_FILE" -- ./report-agent
 ```
 
+Each provider-backed target's stored credential is checked once an hour (A258,
+`pam.health_check_interval`), read-only; a refused credential is not tried again until it
+changes or an operator runs `trstctl-cli access targets health-check`, so checks never lock
+an account out. Access templates set a request's reason, approvals and maximum length (name
+one with `template_id`). When the reviewers cannot be reached, a named emergency responder
+opens access at once (`trstctl-cli access emergency open`): every approver is notified, the
+session lasts at most an hour, and its post-incident review stays open until another
+approver records it.
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
 (never file contents), PostgreSQL and MySQL statements, Redis and MongoDB commands and ClickHouse requests with bounded results,

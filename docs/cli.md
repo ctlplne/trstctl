@@ -681,6 +681,20 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
 - Revoking the agent's broker identity (`broker agent-identities revoke`) revokes the runs
   minted for its agent ID and ends its live sessions in the same call.
 
+## Credential health, templates and emergency access
+
+`trstctl-cli access targets health-check <type> <id>` signs in once now with the credential
+a provider-backed target's provider holds, read-only, and prints the target with its health
+(A258); use it after repairing an account the scheduled checks found failing (they never
+retry a refused credential on their own). `access templates list|create|get|update|delete`
+keep access templates (`{"name", "reason", "required_approvals", "max_ttl_seconds"}`); a
+session request names one with `template_id`. `access emergency set-responders -f` names
+the emergency responders (`{"subjects": [...]}`), `access emergency open -f` opens emergency
+access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
+`payload_base64`, `ttl_seconds` up to 3600), `access emergency list` shows the grants and
+`access emergency review <session-id> -f` records the post-incident review
+(`{"outcome": "justified"|"unjustified", "notes"}`), which the responder cannot record.
+
 ## Bootstrapping or recovering a local API token
 
 `trstctl-cli` authenticates with an API token, but a freshly deployed control

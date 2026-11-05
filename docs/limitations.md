@@ -8715,7 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- Credential health checks and emergency access (A258).
+- Browser sessions (A259) and the engineer access items after them (A260–A263).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8861,3 +8861,30 @@ What comes next:
   credential for its accounts, but it can reach whatever its host can.
 - The console creates bundles without delegated accounts and does not show them yet; the API
   and CLI read and set them (`access_targets`).
+
+## Credential health, access templates and emergency access (A258) — served
+
+Status: served. Every provider-backed target's stored credential is signed in with once per
+`pam.health_check_interval` (default an hour, spread over the interval), read-only; its
+outcome (healthy, rejected, expired, locked, unreachable, error) shows on the target. A
+credential the server refused is not signed in with again until it changes or an operator
+checks the account now (`trstctl-cli access targets health-check`), so a check never pushes
+an account toward lockout. Access templates set a request's reason, its approvals (never
+below the deployment's) and its maximum length. A named emergency responder opens a session
+at once; every approver is notified on the approval channels, the session lasts at most an
+hour, and a post-incident review by someone else stays pending until recorded.
+`TestServedCredentialHealthNeverLocksOutA258` proves the health checks against MySQL 8.4
+with `FAILED_LOGIN_ATTEMPTS 2` (a control account locks after two refused sign-ins): a
+changed password reads rejected and an expired one expired, each within one interval, with
+one refused sign-in only and the account never locked; a new stored credential reads healthy
+within one interval; repaired at the server, the account stays failing until an operator's
+check. `TestServedTemplatesAndEmergencyAccessA258` proves templates (the reason recorded,
+three approvals needed, the session bounded) and emergency access through the gateway: the
+notice on the approval channel, the deadline, the review closed once by another approver,
+and refusals for an unnamed responder, a token minted for the responder, a normal open
+without review and a responder reviewing their own grant.
+
+What comes next:
+- Lockout-aware checks of directory accounts (with the Active Directory account type, A263).
+- Notifying approvers by name; today the notice goes to the approval channels they watch.
+- Template folders and auto-approval rules (A261).

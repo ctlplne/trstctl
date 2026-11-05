@@ -161,6 +161,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/emergency-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List emergency access grants, newest first, with their post-incident reviews */
+        get: operations["listPAMEmergencyGrants"];
+        put?: never;
+        /** Open a privileged session at once as a named responder: every approver is notified, it ends at its short deadline and requires a post-incident review */
+        post: operations["openPAMEmergencySession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/emergency-sessions/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an emergency grant's post-incident review; its responder cannot review it */
+        post: operations["reviewPAMEmergencyGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/emergency/responders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the named responders who may open emergency access */
+        get: operations["listPAMEmergencyResponders"];
+        /** Replace the named responders who may open emergency access */
+        put: operations["setPAMEmergencyResponders"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/members": {
         parameters: {
             query?: never;
@@ -656,6 +709,60 @@ export interface paths {
         /** Disable a tenant privileged access target for new sessions */
         post: operations["disablePAMTarget"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/targets/{target_type}/{id}/health-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in once now with the credential a provider-backed target's provider holds, changing nothing, and record the result (A258) */
+        post: operations["checkPAMTargetHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List access templates: the reason, approvals and maximum length a session request can take from one */
+        get: operations["listPAMTemplates"];
+        put?: never;
+        /** Create an access template */
+        post: operations["createPAMTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an access template */
+        get: operations["getPAMTemplate"];
+        /** Replace an access template at the revision you read; requests already under review keep what they were reviewed with */
+        put: operations["updatePAMTemplate"];
+        post?: never;
+        /** Delete an access template; requests naming it are refused from then on */
+        delete: operations["deletePAMTemplate"];
         options?: never;
         head?: never;
         patch?: never;
@@ -20924,6 +21031,34 @@ export interface components {
         OwnershipResolveInput: {
             resolution: string;
         };
+        PAMAccessTemplate: {
+            /** Format: uuid */
+            id: string;
+            max_ttl_seconds: number;
+            name: string;
+            reason: string;
+            required_approvals: number;
+            revision: number;
+            /** Format: date-time */
+            saved_at: string;
+            saved_by?: string;
+        };
+        PAMAccessTemplateDeleted: {
+            deleted: boolean;
+            /** Format: uuid */
+            id: string;
+        };
+        PAMAccessTemplateList: {
+            items: components["schemas"]["PAMAccessTemplate"][];
+        };
+        PAMAccessTemplateRequest: {
+            max_ttl_seconds: number;
+            name: string;
+            reason: string;
+            required_approvals: number;
+            /** @description the revision being replaced (PUT only) */
+            revision?: number;
+        };
         PAMApprovalRequest: {
             approval_count: number;
             /** Format: uuid */
@@ -20941,6 +21076,53 @@ export interface components {
             target_id: string;
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+        };
+        PAMEmergencyGrant: {
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            opened_at: string;
+            reason: string;
+            responder: string;
+            review: {
+                notes?: string;
+                /** @enum {string} */
+                outcome?: "justified" | "unjustified";
+                /** Format: date-time */
+                reviewed_at?: string;
+                reviewer?: string;
+                /** @enum {string} */
+                status: "pending" | "reviewed";
+            };
+            role: string;
+            /** Format: uuid */
+            session_id: string;
+            target_id: string;
+            target_type: string;
+        };
+        PAMEmergencyGrantList: {
+            items: components["schemas"]["PAMEmergencyGrant"][];
+        };
+        PAMEmergencyResponders: {
+            subjects: string[];
+        };
+        PAMEmergencyReviewRequest: {
+            notes: string;
+            /** @enum {string} */
+            outcome: "justified" | "unjustified";
+        };
+        PAMEmergencySessionRequest: {
+            method: string;
+            payload_base64: string;
+            reason: string;
+            role: string;
+            ssh_principal?: string;
+            ssh_public_key?: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+            /** @description at most 3600: an emergency session lasts an hour at most */
+            ttl_seconds?: number;
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -21016,6 +21198,7 @@ export interface components {
             audit?: Record<string, never>;
             /** @enum {string} */
             delivery?: "direct" | "gateway";
+            emergency?: components["schemas"]["PAMEmergencyGrant"];
             /** Format: date-time */
             ended_at?: string;
             /** Format: date-time */
@@ -21075,6 +21258,11 @@ export interface components {
             target_id: string;
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+            /**
+             * Format: uuid
+             * @description the access template the request named (A258)
+             */
+            template_id?: string;
             ttl_seconds?: number;
         };
         PAMSessionList: {
@@ -21093,6 +21281,11 @@ export interface components {
             target_id: string;
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+            /**
+             * Format: uuid
+             * @description an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session
+             */
+            template_id?: string;
             ttl_seconds?: number;
         };
         PAMSessionRevocationRequest: {
@@ -21107,6 +21300,21 @@ export interface components {
             enabled: boolean;
             gateway_address?: string;
             gateway_agent_id?: string;
+            health?: {
+                /** @description sign-ins the check took (more than one only when no sign-in exchange took place) */
+                attempts: number;
+                /** Format: date-time */
+                checked_at: string;
+                /** Format: date-time */
+                failing_since?: string;
+                /** @description the server judged and refused the credential: it is not tried again until it changes or an operator checks it now */
+                not_retried: boolean;
+                /**
+                 * @description the last read-only sign-in check of the credential the target's provider holds (A258)
+                 * @enum {string}
+                 */
+                status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported";
+            };
             host?: string;
             host_key_fingerprints?: string[];
             id: string;
@@ -25955,6 +26163,219 @@ export interface operations {
             };
         };
     };
+    listPAMEmergencyGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMEmergencyGrantList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    openPAMEmergencySession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMEmergencySessionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reviewPAMEmergencyGrant: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMEmergencyReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMEmergencyGrant"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMEmergencyResponders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMEmergencyResponders"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setPAMEmergencyResponders: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMEmergencyResponders"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMEmergencyResponders"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listMembers: {
         parameters: {
             query?: {
@@ -27509,6 +27930,265 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    checkPAMTargetHealth: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description a provider-backed target type */
+                target_type: string;
+                /** @description target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccessTemplateList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createPAMTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMAccessTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccessTemplate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccessTemplate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updatePAMTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMAccessTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccessTemplate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deletePAMTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccessTemplateDeleted"];
                 };
             };
             /** @description client error */

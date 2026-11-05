@@ -73,6 +73,16 @@
   an agent's ID acts as the agent, and revoking the agent's broker identity (Q4) now also revokes those runs and ends
   every live session the agent opened; the response lists them (`BrokerAgentIdentityRevokeResult`). Migration 0397
   adds `access_bundles.access_targets`. `access sessions connect` now prints a `psql` line for PostgreSQL sessions.
+- Credential health, access templates and emergency access (A258; A258 is served): every provider-backed PAM target's
+  stored credential is signed in with once per `pam.health_check_interval` (default an hour, spread by target name),
+  read-only, and its health (healthy, rejected, expired, locked, unreachable, error) shows on the target; a credential the
+  server refused is not tried again until it changes or an operator runs `access targets health-check`, so no check adds
+  a second failed sign-in. Access templates (`/api/v1/access/templates`) set a request's reason, its approvals (never
+  below the deployment's) and its maximum length. Named emergency responders (`/api/v1/access/emergency/responders`) open
+  a session at once (`POST /api/v1/access/emergency-sessions`, an hour at most); every approver is notified on the
+  approval channels and the grant's post-incident review stays pending until someone else with `access:approve` records
+  it. Migration 0398 (credential health, templates, responders, emergency grants), snapshot format 90, OpenAPI census
+  719 -> 730, CLI census 786 -> 797.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

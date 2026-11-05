@@ -147,6 +147,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("OwnerRemediationQueue", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:ownerRemediationSummaryFor"),
 	evidence("OwnerRemediationRun", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:API.acceptedOwnerRemediationRuns"),
 	evidence("PAMApprovalRequest", "status", operationApprovalPredicate, "internal/server/pam.go:pamService.RequestPAMSession"),
+	evidence("PAMEmergencyReviewRequest", "outcome", predicate(evidenceEventProjection, "a reviewer other than the grant's responder, holding access:approve, records the outcome once as pam.emergency.reviewed, and the grant's review is rebuilt from that event"), "internal/server/pam_emergency.go:pamService.ReviewPAMEmergencyGrant"),
 	evidence("PAMRequestProgress", "status", predicate(evidenceEventProjection, "pending/approved/denied/consumed come from the tenant-scoped operation-approval event projection; an unprojected elapsed deadline is conservatively reported as expired and never makes an approval reusable"), "internal/server/pam.go:pamService.GetPAMRequestProgress"),
 	evidence("PAMRecording", "status", eventProjectionPredicate, "internal/server/pam_recording.go:Server.GetPAMRecording"),
 	evidence("PAMRecordingFrames", "status", eventProjectionPredicate, "internal/server/pam_recording.go:Server.ReadPAMRecordingFrames"),

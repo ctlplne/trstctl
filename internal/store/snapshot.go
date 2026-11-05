@@ -268,7 +268,12 @@ import (
 // Version 89 carries A255's session recordings and their chunk index: without
 // them a restored store would lose where each sealed recording lives and its
 // signed manifest while its covered offset skipped the events.
-const SnapshotFormatVersion = 89
+// Version 90 carries A258's brokered account credential health, access
+// templates, emergency responders and emergency grants: without them a
+// restored store would show every failing account as never checked and lose
+// every template, responder and pending post-incident review while its
+// covered offset skipped their events.
+const SnapshotFormatVersion = 90
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -362,6 +367,9 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"incident_closures",
 	// Format 89: A255's session recordings and their chunks.
 	"pam_session_recordings", "pam_session_recording_chunks",
+	// Format 90: A258's brokered account credential health, access
+	// templates, emergency responders and emergency grants.
+	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -719,6 +727,10 @@ SELECT jsonb_build_object(
   'incident_closures', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_closures t),
   'pam_session_recordings', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_recordings t),
   'pam_session_recording_chunks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_session_recording_chunks t),
+  'pam_account_health', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_health t),
+  'pam_access_templates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_access_templates t),
+  'pam_emergency_responders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_emergency_responders t),
+  'pam_emergency_grants', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_emergency_grants t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

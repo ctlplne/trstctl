@@ -11500,6 +11500,50 @@ OwnershipResolveInput = TypedDict(
     total=False,
 )
 
+PAMAccessTemplate = TypedDict(
+    'PAMAccessTemplate',
+    {
+        'id': str,
+        'max_ttl_seconds': int,
+        'name': str,
+        'reason': str,
+        'required_approvals': int,
+        'revision': int,
+        'saved_at': str,
+        'saved_by': str,
+    },
+    total=False,
+)
+
+PAMAccessTemplateDeleted = TypedDict(
+    'PAMAccessTemplateDeleted',
+    {
+        'deleted': bool,
+        'id': str,
+    },
+    total=False,
+)
+
+PAMAccessTemplateList = TypedDict(
+    'PAMAccessTemplateList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMAccessTemplateRequest = TypedDict(
+    'PAMAccessTemplateRequest',
+    {
+        'max_ttl_seconds': int,
+        'name': str,
+        'reason': str,
+        'required_approvals': int,
+        'revision': int,
+    },
+    total=False,
+)
+
 PAMApprovalRequest = TypedDict(
     'PAMApprovalRequest',
     {
@@ -11514,6 +11558,63 @@ PAMApprovalRequest = TypedDict(
         'subject': str,
         'target_id': str,
         'target_type': str,
+    },
+    total=False,
+)
+
+PAMEmergencyGrant = TypedDict(
+    'PAMEmergencyGrant',
+    {
+        'expires_at': str,
+        'opened_at': str,
+        'reason': str,
+        'responder': str,
+        'review': dict[str, Any],
+        'role': str,
+        'session_id': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+PAMEmergencyGrantList = TypedDict(
+    'PAMEmergencyGrantList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMEmergencyResponders = TypedDict(
+    'PAMEmergencyResponders',
+    {
+        'subjects': list[str],
+    },
+    total=False,
+)
+
+PAMEmergencyReviewRequest = TypedDict(
+    'PAMEmergencyReviewRequest',
+    {
+        'notes': str,
+        'outcome': str,
+    },
+    total=False,
+)
+
+PAMEmergencySessionRequest = TypedDict(
+    'PAMEmergencySessionRequest',
+    {
+        'method': str,
+        'payload_base64': str,
+        'reason': str,
+        'role': str,
+        'ssh_principal': str,
+        'ssh_public_key': str,
+        'target_id': str,
+        'target_type': str,
+        'ttl_seconds': int,
     },
     total=False,
 )
@@ -11619,6 +11720,7 @@ PAMSession = TypedDict(
         'attestation': dict[str, Any],
         'audit': dict[str, Any],
         'delivery': str,
+        'emergency': dict[str, Any],
         'ended_at': str,
         'expires_at': str,
         'gateway': dict[str, Any],
@@ -11658,6 +11760,7 @@ PAMSessionActivationRequest = TypedDict(
         'ssh_public_key': str,
         'target_id': str,
         'target_type': str,
+        'template_id': str,
         'ttl_seconds': int,
     },
     total=False,
@@ -11684,6 +11787,7 @@ PAMSessionRequest = TypedDict(
         'ssh_public_key': str,
         'target_id': str,
         'target_type': str,
+        'template_id': str,
         'ttl_seconds': int,
     },
     total=False,
@@ -11707,6 +11811,7 @@ PAMTarget = TypedDict(
         'enabled': bool,
         'gateway_address': str,
         'gateway_agent_id': str,
+        'health': dict[str, Any],
         'host': str,
         'host_key_fingerprints': list[str],
         'id': str,

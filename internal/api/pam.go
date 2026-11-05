@@ -138,6 +138,26 @@ type PAMTarget struct {
 	// HostKeyFingerprints pin the host keys the gateway accepts from an SSH
 	// target (SHA256:...); a gateway-bound SSH target names at least one.
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
+	// Health (A258) is the last read-only sign-in check of the credential a
+	// provider-backed target's provider holds; absent before its first check.
+	Health *PAMAccountHealth `json:"health,omitempty"`
+}
+
+// PAMAccountHealth is a brokered account's credential health (A258).
+type PAMAccountHealth struct {
+	Status       string     `json:"status"`
+	Attempts     int        `json:"attempts"`
+	CheckedAt    time.Time  `json:"checked_at"`
+	FailingSince *time.Time `json:"failing_since,omitempty"`
+	// NotRetried says the server judged and refused the credential: no
+	// scheduled check signs in with it again until it changes.
+	NotRetried bool `json:"not_retried"`
+}
+
+// PAMAccountHealthChecker checks one brokered account's credential now
+// (A258); the served PAM broker implements it beside PAMService.
+type PAMAccountHealthChecker interface {
+	CheckPAMAccountHealth(ctx context.Context, tenantID, targetType, id string) (PAMTarget, error)
 }
 
 // WithPAM wires the served PAM broker. When unset, routes fail closed with 503.
@@ -158,6 +178,7 @@ type PAMSessionRequest struct {
 	TTLSeconds        int64
 	SSHPublicKey      []byte
 	SSHPrincipal      string
+	TemplateID        string
 }
 
 type pamSessionJSON struct {
@@ -173,6 +194,10 @@ type pamSessionJSON struct {
 	TTLSeconds        int64  `json:"ttl_seconds"`
 	SSHPublicKey      string `json:"ssh_public_key,omitempty"`
 	SSHPrincipal      string `json:"ssh_principal,omitempty"`
+	// TemplateID names an access template (A258): its reason is recorded,
+	// its approvals raise the quorum and its maximum length bounds the
+	// session.
+	TemplateID string `json:"template_id,omitempty"`
 }
 
 // PAMApprovalRequest is the non-secret result of proposing one exact privileged
@@ -238,6 +263,9 @@ type PAMSession struct {
 	GatewayEnd     *PAMGatewayEnd `json:"gateway_end,omitempty"`
 	UncertainUntil *time.Time     `json:"uncertain_until,omitempty"`
 	Audit          map[string]any `json:"audit,omitempty"`
+	// Emergency (A258) marks a session a named responder opened without
+	// approval, with its post-incident review.
+	Emergency *PAMEmergencyGrant `json:"emergency,omitempty"`
 }
 
 // PAMGatewayEnd is how and when the gateway ended a session: "deadline" or
@@ -367,6 +395,7 @@ func decodePAMSessionRequest(r *http.Request) (PAMSessionRequest, error) {
 		Role: strings.TrimSpace(body.Role), Reason: strings.TrimSpace(body.Reason),
 		Method: strings.TrimSpace(body.Method), Payload: payload, TTLSeconds: body.TTLSeconds,
 		SSHPublicKey: []byte(strings.TrimSpace(body.SSHPublicKey)), SSHPrincipal: strings.TrimSpace(body.SSHPrincipal),
+		TemplateID: strings.TrimSpace(body.TemplateID),
 	}, nil
 }
 

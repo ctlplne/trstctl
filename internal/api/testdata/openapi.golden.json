@@ -38427,6 +38427,103 @@
         ],
         "type": "object"
       },
+      "PAMAccessTemplate": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "saved_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "reason",
+          "required_approvals",
+          "max_ttl_seconds",
+          "revision",
+          "saved_at"
+        ],
+        "type": "object"
+      },
+      "PAMAccessTemplateDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "PAMAccessTemplateList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMAccessTemplate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMAccessTemplateRequest": {
+        "properties": {
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "revision": {
+            "description": "the revision being replaced (PUT only)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "reason",
+          "required_approvals",
+          "max_ttl_seconds"
+        ],
+        "type": "object"
+      },
       "PAMApprovalRequest": {
         "properties": {
           "approval_count": {
@@ -38495,6 +38592,178 @@
           "approval_count",
           "required_approvals",
           "expires_at"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencyGrant": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "responder": {
+            "type": "string"
+          },
+          "review": {
+            "properties": {
+              "notes": {
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "justified",
+                  "unjustified"
+                ],
+                "type": "string"
+              },
+              "reviewed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "reviewer": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "reviewed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "type": "object"
+          },
+          "role": {
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "responder",
+          "reason",
+          "target_type",
+          "target_id",
+          "role",
+          "opened_at",
+          "expires_at",
+          "review"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencyGrantList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMEmergencyGrant"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencyResponders": {
+        "properties": {
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "subjects"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencyReviewRequest": {
+        "properties": {
+          "notes": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "justified",
+              "unjustified"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencySessionRequest": {
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "payload_base64": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ssh_principal": {
+            "type": "string"
+          },
+          "ssh_public_key": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "clickhouse",
+              "kubernetes",
+              "mongodb",
+              "mysql",
+              "postgres",
+              "redis",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "description": "at most 3600: an emergency session lasts an hour at most",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "role",
+          "reason",
+          "method",
+          "payload_base64"
         ],
         "type": "object"
       },
@@ -38758,6 +39027,9 @@
             ],
             "type": "string"
           },
+          "emergency": {
+            "$ref": "#/components/schemas/PAMEmergencyGrant"
+          },
           "ended_at": {
             "format": "date-time",
             "type": "string"
@@ -38929,6 +39201,11 @@
             ],
             "type": "string"
           },
+          "template_id": {
+            "description": "the access template the request named (A258)",
+            "format": "uuid",
+            "type": "string"
+          },
           "ttl_seconds": {
             "type": "integer"
           }
@@ -39001,6 +39278,11 @@
             ],
             "type": "string"
           },
+          "template_id": {
+            "description": "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session",
+            "format": "uuid",
+            "type": "string"
+          },
           "ttl_seconds": {
             "type": "integer"
           }
@@ -39052,6 +39334,46 @@
           },
           "gateway_agent_id": {
             "type": "string"
+          },
+          "health": {
+            "properties": {
+              "attempts": {
+                "description": "sign-ins the check took (more than one only when no sign-in exchange took place)",
+                "type": "integer"
+              },
+              "checked_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "failing_since": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "not_retried": {
+                "description": "the server judged and refused the credential: it is not tried again until it changes or an operator checks it now",
+                "type": "boolean"
+              },
+              "status": {
+                "description": "the last read-only sign-in check of the credential the target's provider holds (A258)",
+                "enum": [
+                  "healthy",
+                  "rejected",
+                  "expired",
+                  "locked",
+                  "unreachable",
+                  "error",
+                  "not_supported"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "attempts",
+              "checked_at",
+              "not_retried"
+            ],
+            "type": "object"
           },
           "host": {
             "type": "string"
@@ -55836,6 +56158,310 @@
         "x-trstctl-permission": "access:write"
       }
     },
+    "/api/v1/access/emergency-sessions": {
+      "get": {
+        "operationId": "listPAMEmergencyGrants",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMEmergencyGrantList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List emergency access grants, newest first, with their post-incident reviews",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "openPAMEmergencySession",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMEmergencySessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Open a privileged session at once as a named responder: every approver is notified, it ends at its short deadline and requires a post-incident review",
+        "x-trstctl-permission": "access:sessions.open",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/emergency-sessions/{id}/review": {
+      "post": {
+        "operationId": "reviewPAMEmergencyGrant",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMEmergencyReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMEmergencyGrant"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record an emergency grant's post-incident review; its responder cannot review it",
+        "x-trstctl-permission": "access:approve"
+      }
+    },
+    "/api/v1/access/emergency/responders": {
+      "get": {
+        "operationId": "listPAMEmergencyResponders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMEmergencyResponders"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the named responders who may open emergency access",
+        "x-trstctl-permission": "access:read"
+      },
+      "put": {
+        "operationId": "setPAMEmergencyResponders",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMEmergencyResponders"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMEmergencyResponders"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace the named responders who may open emergency access",
+        "x-trstctl-permission": "access:write"
+      }
+    },
     "/api/v1/access/members": {
       "get": {
         "operationId": "listMembers",
@@ -58246,6 +58872,393 @@
           }
         ],
         "summary": "Disable a tenant privileged access target for new sessions",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/targets/{target_type}/{id}/health-check": {
+      "post": {
+        "operationId": "checkPAMTargetHealth",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "a provider-backed target type",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sign in once now with the credential a provider-backed target's provider holds, changing nothing, and record the result (A258)",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/templates": {
+      "get": {
+        "operationId": "listPAMTemplates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccessTemplateList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List access templates: the reason, approvals and maximum length a session request can take from one",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "createPAMTemplate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMAccessTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccessTemplate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an access template",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/templates/{id}": {
+      "delete": {
+        "operationId": "deletePAMTemplate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccessTemplateDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an access template; requests naming it are refused from then on",
+        "x-trstctl-permission": "access:targets.write"
+      },
+      "get": {
+        "operationId": "getPAMTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccessTemplate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an access template",
+        "x-trstctl-permission": "access:read"
+      },
+      "put": {
+        "operationId": "updatePAMTemplate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMAccessTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccessTemplate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an access template at the revision you read; requests already under review keep what they were reviewed with",
         "x-trstctl-permission": "access:targets.write"
       }
     },

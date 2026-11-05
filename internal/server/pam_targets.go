@@ -158,6 +158,21 @@ func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
 }
 
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
+	target, err := s.getPAMTarget(ctx, tenantID, targetType, id)
+	if err != nil || !isPAMDatabaseType(targetType) {
+		return target, err
+	}
+	health, err := s.store.ListPAMAccountHealth(ctx, tenantID)
+	if err != nil {
+		return api.PAMTarget{}, err
+	}
+	if h, ok := health[[2]string{target.TargetType, target.ID}]; ok {
+		target.Health = healthView(h)
+	}
+	return target, nil
+}
+
+func (s *pamService) getPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
 	switch {
 	case isPAMDatabaseType(targetType):
 		if t := s.databases[pamDatabaseID{tenantID, targetType, id}]; t != nil {
@@ -202,6 +217,15 @@ func (s *pamService) ListPAMTargets(ctx context.Context, tenantID string) ([]api
 		}
 		return out[i].TargetType < out[j].TargetType
 	})
+	health, err := s.store.ListPAMAccountHealth(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if h, ok := health[[2]string{out[i].TargetType, out[i].ID}]; ok {
+			out[i].Health = healthView(h)
+		}
+	}
 	return out, nil
 }
 

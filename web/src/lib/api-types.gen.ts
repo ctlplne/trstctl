@@ -8294,6 +8294,34 @@ export interface OwnershipResolveInput {
   resolution: string;
 }
 
+export interface PAMAccessTemplate {
+  id: string;
+  max_ttl_seconds: number;
+  name: string;
+  reason: string;
+  required_approvals: number;
+  revision: number;
+  saved_at: string;
+  saved_by?: string;
+}
+
+export interface PAMAccessTemplateDeleted {
+  deleted: boolean;
+  id: string;
+}
+
+export interface PAMAccessTemplateList {
+  items: PAMAccessTemplate[];
+}
+
+export interface PAMAccessTemplateRequest {
+  max_ttl_seconds: number;
+  name: string;
+  reason: string;
+  required_approvals: number;
+  revision?: number;
+}
+
 export interface PAMApprovalRequest {
   approval_count: number;
   approval_request_id: string;
@@ -8306,6 +8334,43 @@ export interface PAMApprovalRequest {
   subject: string;
   target_id: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+}
+
+export interface PAMEmergencyGrant {
+  expires_at: string;
+  opened_at: string;
+  reason: string;
+  responder: string;
+  review: { notes?: string; outcome?: "justified" | "unjustified"; reviewed_at?: string; reviewer?: string; status: "pending" | "reviewed" };
+  role: string;
+  session_id: string;
+  target_id: string;
+  target_type: string;
+}
+
+export interface PAMEmergencyGrantList {
+  items: PAMEmergencyGrant[];
+}
+
+export interface PAMEmergencyResponders {
+  subjects: string[];
+}
+
+export interface PAMEmergencyReviewRequest {
+  notes: string;
+  outcome: "justified" | "unjustified";
+}
+
+export interface PAMEmergencySessionRequest {
+  method: string;
+  payload_base64: string;
+  reason: string;
+  role: string;
+  ssh_principal?: string;
+  ssh_public_key?: string;
+  target_id: string;
+  target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  ttl_seconds?: number;
 }
 
 export interface PAMPostgresCredential {
@@ -8375,6 +8440,7 @@ export interface PAMSession {
   attestation?: Attestation;
   audit?: Record<string, unknown>;
   delivery?: "direct" | "gateway";
+  emergency?: PAMEmergencyGrant;
   ended_at?: string;
   expires_at: string;
   gateway?: { address: string; agent_id: string; ca_pem?: string; spiffe_id: string; ticket?: string };
@@ -8410,6 +8476,7 @@ export interface PAMSessionActivationRequest {
   ssh_public_key?: string;
   target_id: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  template_id?: string;
   ttl_seconds?: number;
 }
 
@@ -8428,6 +8495,7 @@ export interface PAMSessionRequest {
   ssh_public_key?: string;
   target_id: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+  template_id?: string;
   ttl_seconds?: number;
 }
 
@@ -8443,6 +8511,7 @@ export interface PAMTarget {
   enabled: boolean;
   gateway_address?: string;
   gateway_agent_id?: string;
+  health?: { attempts: number; checked_at: string; failing_since?: string; not_retried: boolean; status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" };
   host?: string;
   host_key_fingerprints?: string[];
   id: string;

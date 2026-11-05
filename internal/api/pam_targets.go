@@ -97,6 +97,28 @@ func (a *API) getPAMTarget(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, item)
 }
 
+// checkPAMTargetHealth signs in once now with the credential a target's
+// provider holds (A258): after an operator repairs an account, a credential
+// the server refused before is tried again.
+//
+//trstctl:mutation
+func (a *API) checkPAMTargetHealth(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		checker, ok := a.pam.(PAMAccountHealthChecker)
+		if a.pam == nil || !ok {
+			return 0, nil, ErrPAMUnavailable
+		}
+		item, err := checker.CheckPAMAccountHealth(ctx, tenantID, r.PathValue("target_type"), r.PathValue("id"))
+		if errors.Is(err, store.ErrPAMTargetNotFound) {
+			return 0, nil, errStatus(http.StatusNotFound, "PAM target not found")
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, item, nil
+	})
+}
+
 //trstctl:mutation
 func (a *API) disablePAMTarget(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {

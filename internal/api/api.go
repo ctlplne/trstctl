@@ -1454,6 +1454,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/access/targets", opID: "listPAMTargets", summary: "List tenant and operator privileged access targets", handler: a.listPAMTargets, resSchema: "PAMTargetList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/targets", opID: "registerPAMTarget", summary: "Register an immutable tenant privileged access target", handler: a.registerPAMTarget, reqSchema: "PAMTargetRequest", resSchema: "PAMTarget", successCode: "201", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "GET", path: "/api/v1/access/targets/{target_type}/{id}", opID: "getPAMTarget", summary: "Get one privileged access target", handler: a.getPAMTarget, pathParams: []param{pathString("target_type", "postgres or ssh"), pathString("id", "target id")}, resSchema: "PAMTarget", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/targets/{target_type}/{id}/health-check", opID: "checkPAMTargetHealth", summary: "Sign in once now with the credential a provider-backed target's provider holds, changing nothing, and record the result (A258)", handler: a.checkPAMTargetHealth, pathParams: []param{pathString("target_type", "a provider-backed target type"), pathString("id", "target id")}, resSchema: "PAMTarget", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "POST", path: "/api/v1/access/targets/{target_type}/{id}/disable", opID: "disablePAMTarget", summary: "Disable a tenant privileged access target for new sessions", handler: a.disablePAMTarget, pathParams: []param{pathString("target_type", "postgres or ssh"), pathString("id", "target id")}, reqSchema: "PAMTargetDisableRequest", resSchema: "PAMTarget", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "POST", path: "/api/v1/access/session-requests", opID: "requestPAMSession", summary: "Request a reviewed privileged access session", handler: a.requestPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMApprovalRequest", successCode: "202", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "GET", path: "/api/v1/access/session-requests/{id}", opID: "getPAMRequestProgress", summary: "Read the current approval progress of one's own privileged access request", handler: a.getPAMRequestProgress, pathParams: idPath, resSchema: "PAMRequestProgress", successCode: "200", perm: authz.AccessSessionsOpen},
@@ -1716,6 +1717,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.slackAppRoutes()...)          // see slack_app.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.accessBundleRoutes()...)    // see access_bundles.go
+	routes = append(routes, a.pamTemplateRoutes()...)     // see pam_templates.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
 	routes = append(routes, a.switchingWaveRoutes()...)   // see switching_waves.go
 	routes = append(routes, a.adcsDecisionRoutes()...)    // see adcs_decisions.go

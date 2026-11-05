@@ -5835,6 +5835,7 @@ func componentSchemas() map[string]*Schema {
 		"ttl_seconds":    {Type: "integer"},
 		"ssh_public_key": str(),
 		"ssh_principal":  str(),
+		"template_id":    {Type: "string", Format: "uuid", Description: "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session"},
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
 		"id": str(), "target_type": {Type: "string", Enum: []string{"clickhouse", "kubernetes", "mongodb", "mysql", "postgres", "redis", "ssh"}},
@@ -5854,6 +5855,14 @@ func componentSchemas() map[string]*Schema {
 		"disabled_reason": str(), "disabled_at": timestamp(),
 		"gateway_agent_id": str(), "gateway_address": str(),
 		"host_key_fingerprints": {Type: "array", Items: str()},
+		"health": object(map[string]*Schema{
+			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
+				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},
+			"attempts":      {Type: "integer", Description: "sign-ins the check took (more than one only when no sign-in exchange took place)"},
+			"checked_at":    timestamp(),
+			"failing_since": timestamp(),
+			"not_retried":   {Type: "boolean", Description: "the server judged and refused the credential: it is not tried again until it changes or an operator checks it now"},
+		}, "status", "attempts", "checked_at", "not_retried"),
 	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
@@ -5861,6 +5870,7 @@ func componentSchemas() map[string]*Schema {
 		"target_id":   str(), "role": str(), "reason": str(), "method": str(),
 		"payload_base64": str(), "ttl_seconds": {Type: "integer"},
 		"ssh_public_key": str(), "ssh_principal": str(),
+		"template_id": {Type: "string", Format: "uuid", Description: "the access template the request named (A258)"},
 	}, "request_id", "approval_request_id", "intent_digest", "target_type", "target_id", "role", "method", "payload_base64")
 	pamApprovalRequest := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
@@ -5899,7 +5909,21 @@ func componentSchemas() map[string]*Schema {
 			"ended": {Type: "string", Enum: []string{"deadline", "recalled"}}, "ended_at": timestamp(),
 		}, "ended", "ended_at"),
 		"uncertain_until": {Type: "string", Format: "date-time", Description: "A revoked or terminated gateway session whose gateway has not reported its end may still serve connections until this time, its native deadline (A255)."},
+		"emergency":       ref("PAMEmergencyGrant"),
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
+	// A258: access templates and emergency access.
+	pamTemplate := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
+		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
+	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "revision", "saved_at")
+	pamEmergencyGrant := object(map[string]*Schema{
+		"session_id": uuid(), "responder": str(), "reason": str(), "target_type": str(), "target_id": str(), "role": str(),
+		"opened_at": timestamp(), "expires_at": timestamp(),
+		"review": object(map[string]*Schema{
+			"status": {Type: "string", Enum: []string{"pending", "reviewed"}}, "reviewer": str(),
+			"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str(), "reviewed_at": timestamp(),
+		}, "status"),
+	}, "session_id", "responder", "reason", "target_type", "target_id", "role", "opened_at", "expires_at", "review")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")
@@ -8784,7 +8808,24 @@ func componentSchemas() map[string]*Schema {
 		"PAMApprovalRequest":             pamApprovalRequest,
 		"PAMRequestProgress":             pamRequestProgress,
 		"PAMSession":                     pamSession,
-		"PAMSessionRevocationRequest":    object(map[string]*Schema{"reason": str()}, "reason"),
+		"PAMAccessTemplate":              pamTemplate,
+		"PAMAccessTemplateList":          object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMAccessTemplate")}}, "items"),
+		"PAMAccessTemplateRequest": object(map[string]*Schema{
+			"name": str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
+			"revision": {Type: "integer", Description: "the revision being replaced (PUT only)"},
+		}, "name", "reason", "required_approvals", "max_ttl_seconds"),
+		"PAMAccessTemplateDeleted": object(map[string]*Schema{"id": uuid(), "deleted": {Type: "boolean"}}, "id", "deleted"),
+		"PAMEmergencyResponders":   object(map[string]*Schema{"subjects": {Type: "array", Items: str()}}, "subjects"),
+		"PAMEmergencyGrant":        pamEmergencyGrant,
+		"PAMEmergencySessionRequest": object(map[string]*Schema{
+			"target_type": {Type: "string", Enum: []string{"clickhouse", "kubernetes", "mongodb", "mysql", "postgres", "redis", "ssh"}},
+			"target_id":   str(), "role": str(), "reason": str(), "method": str(), "payload_base64": str(),
+			"ttl_seconds":    {Type: "integer", Description: "at most 3600: an emergency session lasts an hour at most"},
+			"ssh_public_key": str(), "ssh_principal": str(),
+		}, "target_type", "target_id", "role", "reason", "method", "payload_base64"),
+		"PAMEmergencyGrantList":       object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMEmergencyGrant")}}, "items"),
+		"PAMEmergencyReviewRequest":   object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
+		"PAMSessionRevocationRequest": object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMRecording": object(map[string]*Schema{
 			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
 			"chunks": {Type: "integer"}, "bytes": {Type: "integer"}, "started_at": timestamp(), "last_chunk_at": timestamp(),

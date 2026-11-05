@@ -95,8 +95,11 @@ type PAMConfig struct {
 	// RecordingRetention keeps sealed gateway session recordings this long
 	// (A255); zero keeps them.
 	RecordingRetention time.Duration
-	Attestors          []attest.Attestor
-	PostgresTargets    []PAMPostgresTarget
+	// HealthInterval is how often each brokered account's stored credential
+	// is signed in with (A258); zero is the default, an hour.
+	HealthInterval  time.Duration
+	Attestors       []attest.Attestor
+	PostgresTargets []PAMPostgresTarget
 	// DatabaseTargets are provider-backed targets of the other database
 	// types (A256), each reached only through its access gateway.
 	DatabaseTargets []PAMDatabaseTarget
@@ -172,6 +175,10 @@ type pamService struct {
 	// recordingRetention deletes sealed ones past it (zero keeps them).
 	recordings         *pamRecordings
 	recordingRetention time.Duration
+	// healthInterval spaces each brokered account's credential sign-in
+	// checks, and health is their schedule (A258).
+	healthInterval time.Duration
+	health         *pamHealth
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -287,8 +294,16 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if d.RecordingObjects != nil && d.RecordingSigner != nil && (d.TenantCrypto != nil || d.KEK != nil) {
 		recordings = &pamRecordings{objects: d.RecordingObjects, access: d.TenantCrypto, legacy: d.KEK, signer: d.RecordingSigner}
 	}
+	healthInterval := cfg.HealthInterval
+	if healthInterval <= 0 {
+		healthInterval = time.Hour
+	}
+	health, err := newPAMHealth()
+	if err != nil {
+		return nil, err
+	}
 	return &pamService{
-		recordings: recordings, recordingRetention: cfg.RecordingRetention,
+		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
@@ -479,6 +494,10 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 	if _, err := uuid.Parse(req.RequestID); err != nil {
 		return api.PAMApprovalRequest{}, fmt.Errorf("%w: request_id must be a UUID", api.ErrPAMInvalid)
 	}
+	req, requiredApprovals, templateRefs, err := s.withTemplate(ctx, tenantID, req)
+	if err != nil {
+		return api.PAMApprovalRequest{}, err
+	}
 	if err := s.validate(ctx, tenantID, req.RequestID, requester, req); err != nil {
 		return api.PAMApprovalRequest{}, err
 	}
@@ -502,7 +521,7 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 		"pam-attestor:" + att.Method,
 		"pam-subject:" + att.Subject,
 		"pam-ttl-seconds:" + fmt.Sprint(int64(s.ttl(req.TTLSeconds)/time.Second)),
-	}, targetEvidence...)
+	}, append(targetEvidence, templateRefs...)...)
 	approval, err := s.orch.EnsureOperationApprovalRequest(ctx, tenantID, orchestrator.OperationApprovalIntent{
 		ResourceKind: "pam", ResourceID: "pam:" + req.RequestID,
 		ResourceName: req.TargetType + "/" + req.TargetID + ":" + req.Role,
@@ -510,7 +529,7 @@ func (s *pamService) RequestPAMSession(ctx context.Context, tenantID, requester 
 		FromState: "attested", ToState: "active", TargetVersion: 0,
 		Reason:            req.Reason,
 		EvidenceRefs:      evidenceRefs,
-		RequiredApprovals: s.requiredApprovals, TTL: s.approvalTTL,
+		RequiredApprovals: requiredApprovals, TTL: s.approvalTTL,
 	})
 	if err != nil {
 		return api.PAMApprovalRequest{}, err
@@ -740,6 +759,10 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 }
 
 func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKey, requester string, req api.PAMSessionRequest) (api.PAMSession, error) {
+	req, _, _, err := s.withTemplate(ctx, tenantID, req)
+	if err != nil {
+		return api.PAMSession{}, err
+	}
 	if err := s.validate(ctx, tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
 	}
@@ -926,6 +949,12 @@ func (s *pamService) GetPAMSession(ctx context.Context, tenantID, id string) (ap
 		// A254: how to reach the session's gateway, never its ticket.
 		session.Gateway = s.gatewayDeliveryForRead(ctx, tenantID, rec)
 	}
+	if grant, err := s.store.GetPAMEmergencyGrant(ctx, tenantID, id); err == nil {
+		view := emergencyView(grant)
+		session.Emergency = &view
+	} else if !errors.Is(err, store.ErrPAMEmergencyGrantNotFound) {
+		return api.PAMSession{}, err
+	}
 	return session, nil
 }
 
@@ -946,6 +975,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		_ = s.expireOnce(ctx)
+		s.reconcileEmergencyNotices(ctx)
 		s.ensureGatewayJobs(ctx)
 		s.sealIdleRecordings(ctx)
 		s.deleteExpiredRecordings(ctx)
@@ -1500,6 +1530,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.RecordingRetention)); err == nil {
 		out.RecordingRetention = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.HealthCheckInterval)); err == nil {
+		out.HealthInterval = d
 	}
 	for _, target := range c.PostgresTargets {
 		out.PostgresTargets = append(out.PostgresTargets, PAMPostgresTarget{

@@ -2378,6 +2378,13 @@ which is required: such a session is delivered only through its gateway, which s
 the session's own user or account. The tenant registration endpoint takes the same
 fields.
 
+`pam.health_check_interval` (a duration; default `1h`) is how often the credential each
+provider-backed target's provider holds is signed in with, read-only (A258). Checks are
+spread over the interval by each target's name. A credential the server refused, or reported
+expired or locked, is not signed in with again until it changes (or an operator runs
+`trstctl-cli access targets health-check <type> <id>`), so a check never adds to an
+account's failed sign-ins. Each target's health shows on `GET /api/v1/access/targets`.
+
 Kubernetes targets (A256) are `pam.kubernetes_targets` entries with the same fields and no
 `target_type`: each names a Kubernetes dynamic-secret provider (its roles bind the
 session's service account) and the gateway, which is required. A session's token lives at

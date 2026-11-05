@@ -282,6 +282,9 @@ var TenantScopedTables = []string{
 	"incident_closures",
 	// A255: session recording chunks, then their recordings; no foreign keys.
 	"pam_session_recording_chunks", "pam_session_recordings",
+	// A258: credential health, templates, responders and emergency grants;
+	// no foreign keys.
+	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

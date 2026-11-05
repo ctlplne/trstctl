@@ -342,6 +342,12 @@ const (
 	EventPAMRecordingLegalHold                    = "pam.session.recording_legal_hold"
 	EventPAMRecordingDeleted                      = "pam.session.recording_deleted"
 	EventPAMRecordingRead                         = "pam.session.recording_read"
+	EventPAMAccountHealthChecked                  = "pam.account.health_checked"
+	EventPAMTemplateSaved                         = "pam.template.saved"
+	EventPAMTemplateDeleted                       = "pam.template.deleted"
+	EventPAMEmergencyRespondersSet                = "pam.emergency.responders_set"
+	EventPAMEmergencyOpened                       = "pam.emergency.opened"
+	EventPAMEmergencyReviewed                     = "pam.emergency.reviewed"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4407,6 +4413,68 @@ type PAMSessionGatewayEnded struct {
 	EndedAt     time.Time `json:"ended_at"`
 }
 
+// PAMAccountHealthChecked records one sign-in check of the credential a
+// brokered account's provider holds (A258): its outcome class and how many
+// sign-ins it took, never the credential.
+type PAMAccountHealthChecked struct {
+	TargetType string    `json:"target_type"`
+	TargetID   string    `json:"target_id"`
+	ProviderID string    `json:"provider_id"`
+	Status     string    `json:"status"`
+	Attempts   int       `json:"attempts"`
+	CheckedAt  time.Time `json:"checked_at"`
+}
+
+// PAMTemplateSaved records an access template at a revision (A258).
+type PAMTemplateSaved struct {
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Reason            string    `json:"reason"`
+	RequiredApprovals int       `json:"required_approvals"`
+	MaxTTLSeconds     int       `json:"max_ttl_seconds"`
+	Revision          int64     `json:"revision"`
+	Actor             string    `json:"actor"`
+	At                time.Time `json:"at"`
+}
+
+// PAMTemplateDeleted records an access template's deletion (A258).
+type PAMTemplateDeleted struct {
+	ID    string    `json:"id"`
+	Actor string    `json:"actor"`
+	At    time.Time `json:"at"`
+}
+
+// PAMEmergencyRespondersSet records a tenant's whole list of named
+// emergency responders (A258).
+type PAMEmergencyRespondersSet struct {
+	Subjects []string  `json:"subjects"`
+	Actor    string    `json:"actor"`
+	At       time.Time `json:"at"`
+}
+
+// PAMEmergencyOpened records a session a named responder opened without
+// waiting for approval; its post-incident review is pending (A258).
+type PAMEmergencyOpened struct {
+	SessionID  string    `json:"session_id"`
+	Responder  string    `json:"responder"`
+	Reason     string    `json:"reason"`
+	TargetType string    `json:"target_type"`
+	TargetID   string    `json:"target_id"`
+	Role       string    `json:"role"`
+	OpenedAt   time.Time `json:"opened_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+// PAMEmergencyReviewed records an emergency grant's post-incident review by
+// someone other than its responder (A258).
+type PAMEmergencyReviewed struct {
+	SessionID string    `json:"session_id"`
+	Reviewer  string    `json:"reviewer"`
+	Outcome   string    `json:"outcome"`
+	Notes     string    `json:"notes"`
+	At        time.Time `json:"at"`
+}
+
 // PAMRecordingLegalHold places or releases a legal hold on a recording.
 type PAMRecordingLegalHold struct {
 	ID     string    `json:"id"`
@@ -5042,6 +5110,12 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMRecordingLegalHold:                    {1: true},
 	EventPAMRecordingDeleted:                      {1: true},
 	EventPAMRecordingRead:                         {1: true},
+	EventPAMAccountHealthChecked:                  {1: true},
+	EventPAMTemplateSaved:                         {1: true},
+	EventPAMTemplateDeleted:                       {1: true},
+	EventPAMEmergencyRespondersSet:                {1: true},
+	EventPAMEmergencyOpened:                       {1: true},
+	EventPAMEmergencyReviewed:                     {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8379,6 +8453,68 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMSessionGatewayEndedTx(ctx, tx, e.TenantID, pl.ID, pl.Ended, pl.EndedAt)
+	case EventPAMAccountHealthChecked:
+		var pl PAMAccountHealthChecked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		switch pl.Status {
+		case "healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported":
+		default:
+			return fmt.Errorf("projections: %s has an unknown status", e.Type)
+		}
+		if pl.TargetType == "" || pl.TargetID == "" || pl.ProviderID == "" || pl.Attempts < 0 || pl.CheckedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMAccountHealthCheckedTx(ctx, tx, e.TenantID, store.PAMAccountHealth{TargetType: pl.TargetType,
+			TargetID: pl.TargetID, ProviderID: pl.ProviderID, Status: pl.Status, Attempts: pl.Attempts, CheckedAt: pl.CheckedAt})
+	case EventPAMTemplateSaved:
+		var pl PAMTemplateSaved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.Reason == "" || pl.RequiredApprovals < 1 || pl.MaxTTLSeconds < 1 || pl.Revision < 1 || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
+			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMTemplateDeleted:
+		var pl PAMTemplateDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMTemplateDeletedTx(ctx, tx, e.TenantID, pl.ID, pl.At)
+	case EventPAMEmergencyRespondersSet:
+		var pl PAMEmergencyRespondersSet
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMEmergencyRespondersSetTx(ctx, tx, e.TenantID, pl.Subjects, pl.Actor, pl.At)
+	case EventPAMEmergencyOpened:
+		var pl PAMEmergencyOpened
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.SessionID == "" || pl.Responder == "" || pl.TargetType == "" || pl.TargetID == "" || pl.OpenedAt.IsZero() || !pl.ExpiresAt.After(pl.OpenedAt) {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMEmergencyOpenedTx(ctx, tx, e.TenantID, store.PAMEmergencyGrant{SessionID: pl.SessionID, Responder: pl.Responder,
+			Reason: pl.Reason, TargetType: pl.TargetType, TargetID: pl.TargetID, Role: pl.Role, OpenedAt: pl.OpenedAt, ExpiresAt: pl.ExpiresAt})
+	case EventPAMEmergencyReviewed:
+		var pl PAMEmergencyReviewed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.SessionID == "" || pl.Reviewer == "" || pl.At.IsZero() || (pl.Outcome != "justified" && pl.Outcome != "unjustified") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMEmergencyReviewedTx(ctx, tx, e.TenantID, pl.SessionID, pl.Reviewer, pl.Outcome, pl.Notes, pl.At)
 	case EventPAMRecordingLegalHold:
 		var pl PAMRecordingLegalHold
 		if err := decode(e, &pl); err != nil {

@@ -121,7 +121,9 @@ func OpenMySQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
 	}
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, errors.New("dynsecret mysql: ping admin connection failed")
+		// The class (refused, expired, locked, unreachable) carries no
+		// credential; the credential health check reads it (A258).
+		return nil, fmt.Errorf("dynsecret mysql: ping admin connection failed: %w", classifyMySQLSignIn(err))
 	}
 	return db, nil
 }
@@ -202,7 +204,7 @@ func OpenMongoAdmin(ctx context.Context, adminURI []byte) (*MongoDriverAdmin, er
 	}
 	if err := client.Ping(ctx, nil); err != nil {
 		_ = client.Disconnect(context.Background())
-		return nil, errors.New("dynsecret mongodb: ping failed")
+		return nil, fmt.Errorf("dynsecret mongodb: ping failed: %w", classifyMongoSignIn(err))
 	}
 	return &MongoDriverAdmin{client: client}, nil
 }

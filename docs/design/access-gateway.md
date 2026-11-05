@@ -262,6 +262,35 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   for its accounts, but it can reach whatever its host can. MCP traffic never flows through
   the gateway or the launcher.
 
+## Credential health, access templates and emergency access (A258)
+
+- **Credential health.** A brokered account is a provider-backed target: the credential its
+  provider holds signs in at the target. Once per `pam.health_check_interval` (default an
+  hour), at a slot its name spreads over the interval, the control plane signs in with that
+  credential, read from its references at that moment, and changes nothing (PostgreSQL,
+  MySQL and ClickHouse run `SELECT 1`; Redis `AUTH` and `PING`; MongoDB a ping; Kubernetes
+  reads the API server's discovery document). The outcome class (healthy, rejected, expired,
+  locked, unreachable, error) is recorded as `pam.account.health_checked` and shows on the
+  target. SSH targets hold no credential: each session's certificate is minted for it.
+- **Never a lockout.** A sign-in the server judged and refused (rejected, expired, locked) is
+  not repeated with the same credential. The worker keeps a keyed digest of the credential it
+  refused and signs in again only when the stored credential changes, or when an operator
+  checks the account now (`POST /api/v1/access/targets/{type}/{id}/health-check`, at most once
+  a minute). A check that never reached a sign-in exchange (dial, TLS, a timeout) is retried
+  twice in its slot. After a restart a failing account's current credential is taken as the
+  refused one. Each credential value is therefore refused at most once.
+- **Access templates.** A template sets the reason a session request records (the
+  requester's note follows it), the approvals it needs (never fewer than the deployment's)
+  and its maximum length. The request and the open both apply it, so the reviewed command
+  binds them: a template changed or deleted after the review no longer opens the session.
+- **Emergency access.** A named responder (a person on the tenant's list, never a bundle run
+  or a token minted for someone else) opens a session at once, without the quorum, through
+  the same targets and gateways. The grant (`pam.emergency.opened`) and a critical notice on
+  the approval channels every approver already watches are recorded before anything is
+  granted; a reconciler re-queues a notice a crash left out. The session lasts at most an
+  hour. Its post-incident review stays pending until someone other than the responder,
+  holding `access:approve`, records it (justified or unjustified, with notes), once.
+
 ## Failure modes
 
 - **Control-plane restart mid-session** — the session row, its events and its job row are
@@ -296,6 +325,8 @@ deliberate grant.
 | An agent asking for an account its task was not given | A run reaches only the accounts its bundles delegate; any other request or open is refused with 403. |
 | An agent's credential leaking through its environment, output or logs | The agent never holds one: the launcher keeps the tickets, the gateway signs in, and the command's environment holds no control-plane token. |
 | A compromised agent | One call revoking its identity revokes the runs that act as it and ends its live sessions. |
+| A health check pushing an account into lockout | A refused credential is signed in with once; the next sign-in waits for a new credential or an operator's check. |
+| A forged emergency grant | Only a named person opens one; the normal open still needs its approvals; the grant and its notice are recorded first; the responder cannot review it. |
 | A gateway impersonator | The CLI verifies the gateway's serving certificate against the tenant's agent CA for the host it dialed and requires the gateway agent's exact SPIFFE ID; the control plane signs a gateway's certificate only for hosts its own bindings declare. |
 
 ## Status
@@ -315,4 +346,5 @@ agent launcher) is served: `TestServedAgentLauncherA257` launches an agent with 
 as it, and the agent completes a database task through the gateway with no credential in its
 environment, its output, the launcher's output or the gateway's log; an account its bundle
 does not delegate is refused; and one call revoking its identity revokes its run and ends its
-live session. Credential health checks and emergency access (A258) come next.
+live session. A258 (credential health, access templates and emergency access) is served:
+`TestServedCredentialHealthNeverLocksOutA258` and `TestServedTemplatesAndEmergencyAccessA258`.

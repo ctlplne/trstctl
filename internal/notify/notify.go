@@ -95,6 +95,10 @@ const (
 	// KindApprovalRequest marks a privileged action waiting for a distinct
 	// approver. It contains routing metadata only, never credential material.
 	KindApprovalRequest = "approval.requested"
+	// KindEmergencyAccess marks a privileged session a named responder opened
+	// without waiting for approval (A258). It goes to the approval channels,
+	// so every approver hears of it, and names no credential.
+	KindEmergencyAccess = "access.emergency_opened"
 	// KindCAHorizon marks a CA authority crossing into a tighter expiry band
 	// (H5). Replacing a trust anchor is a quarters-long program, so this fires
 	// years ahead and again at each tightening.

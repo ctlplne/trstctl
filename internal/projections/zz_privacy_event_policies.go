@@ -1021,6 +1021,30 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMRecordingDeleted, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/objects", opaque), privacyRule("/deleted_at", opaque),
 		),
+		{EventPAMAccountHealthChecked, 1}: privacyRules(
+			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/provider_id", opaque),
+			privacyRule("/status", opaque), privacyRule("/attempts", opaque), privacyRule("/checked_at", opaque),
+		),
+		{EventPAMTemplateSaved, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/name", clear), privacyRule("/reason", clear),
+			privacyRule("/required_approvals", opaque), privacyRule("/max_ttl_seconds", opaque), privacyRule("/revision", opaque),
+			privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMTemplateDeleted, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMEmergencyRespondersSet, 1}: privacyRules(
+			privacyRule("/subjects/*", exact), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMEmergencyOpened, 1}: privacyRules(
+			privacyRule("/session_id", opaque), privacyRule("/responder", exact), privacyRule("/reason", clear),
+			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/role", opaque),
+			privacyRule("/opened_at", opaque), privacyRule("/expires_at", opaque),
+		),
+		{EventPAMEmergencyReviewed, 1}: privacyRules(
+			privacyRule("/session_id", opaque), privacyRule("/reviewer", exact), privacyRule("/outcome", opaque),
+			privacyRule("/notes", clear), privacyRule("/at", opaque),
+		),
 		{EventPAMRecordingRead, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/mode", opaque), privacyRule("/at", opaque),
 		),
@@ -1609,6 +1633,12 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMRecordingLegalHold, 1}:                                                      privacyPayloadShape[PAMRecordingLegalHold](),
 		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
 		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
+		{EventPAMAccountHealthChecked, 1}:                                                    privacyPayloadShape[PAMAccountHealthChecked](),
+		{EventPAMTemplateSaved, 1}:                                                           privacyPayloadShape[PAMTemplateSaved](),
+		{EventPAMTemplateDeleted, 1}:                                                         privacyPayloadShape[PAMTemplateDeleted](),
+		{EventPAMEmergencyRespondersSet, 1}:                                                  privacyPayloadShape[PAMEmergencyRespondersSet](),
+		{EventPAMEmergencyOpened, 1}:                                                         privacyPayloadShape[PAMEmergencyOpened](),
+		{EventPAMEmergencyReviewed, 1}:                                                       privacyPayloadShape[PAMEmergencyReviewed](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),
