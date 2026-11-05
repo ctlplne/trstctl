@@ -353,6 +353,9 @@
 
 ### Fixed
 
+- Signed third-party scan artifacts accept binary RSA and ECDSA signatures whose first or
+  last byte is whitespace. Only base64 text loses surrounding whitespace; changed artifacts
+  and incomplete signatures remain refused.
 - With `TRSTCTL_MIGRATE_AUTO=false` the startup gate counted core migrations only: an extension
   family's new migration passed it and was applied at startup, and `--migrate-status` did not
   list it. Both now read every migration source (A246).

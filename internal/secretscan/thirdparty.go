@@ -111,14 +111,22 @@ func VerifyThirdPartyArtifactSignature(cfg ThirdPartyScanConfig, artifactPath st
 	if err != nil {
 		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: read signature: %w", err)
 	}
-	sig := bytes.TrimSpace(sigRaw)
-	if decoded, decodeErr := base64.StdEncoding.DecodeString(string(sig)); decodeErr == nil && len(decoded) > 0 {
-		sig = decoded
-	}
-	if err := boundarycrypto.VerifyMessage(block.Bytes, content, sig); err != nil {
+	if err := verifyDetachedArtifactSignature(block.Bytes, content, sigRaw); err != nil {
 		return ArtifactSignatureEvidence{}, fmt.Errorf("secretscan: artifact signature verification failed: %w", err)
 	}
 	return ArtifactSignatureEvidence{Verified: true, SignerKeySHA256: boundarycrypto.SHA256Hex(block.Bytes)}, nil
+}
+
+// verifyDetachedArtifactSignature accepts base64 text or the exact binary
+// signature. Only the text candidate may have surrounding whitespace removed:
+// an RSA or ECDSA signature can itself begin or end with a whitespace byte.
+func verifyDetachedArtifactSignature(publicDER, content, signature []byte) error {
+	if decoded, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(signature))); err == nil && len(decoded) > 0 {
+		if err := boundarycrypto.VerifyMessage(publicDER, content, decoded); err == nil {
+			return nil
+		}
+	}
+	return boundarycrypto.VerifyMessage(publicDER, content, signature)
 }
 
 type ThirdPartyTarget struct {

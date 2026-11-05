@@ -2146,7 +2146,8 @@ runner. Raw CI logs, registry exports, chat transcripts, and issue exports stay 
 trstctl storage; events record only provider, artifact kind, rule id, file, line,
 scanner version, and credential-ref. When the provider signs its export, add
 `signature_path` (a detached RSA or ECDSA signature over the artifact bytes, raw or
-base64) and `signer_public_key_pem`: trstctl verifies the signature before the scanner
+base64) and `signer_public_key_pem`. Raw signature bytes are read exactly as supplied;
+only base64 text may have surrounding whitespace. trstctl verifies the signature before the scanner
 opens the artifact, fails the run without scanning when it does not verify, and stamps
 every finding with `signature_verified` and the signer key's SHA-256. Set
 `require_signature` on sources that must never scan an unsigned export; the ingest is
