@@ -25,6 +25,7 @@ type PAMCheckoutRequest struct {
 	TargetID   string `json:"target_id"`
 	Reason     string `json:"reason"`
 	TTLSeconds int    `json:"ttl_seconds"`
+	TemplateID string `json:"template_id,omitempty"`
 }
 
 // PAMCheckoutRevealRequest reveals an approved check-out with the approval's

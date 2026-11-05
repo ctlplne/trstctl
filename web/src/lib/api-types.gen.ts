@@ -8299,6 +8299,7 @@ export interface PAMAccessTemplate {
   max_ttl_seconds: number;
   name: string;
   reason: string;
+  require_recording: boolean;
   required_approvals: number;
   revision: number;
   saved_at: string;
@@ -8318,6 +8319,7 @@ export interface PAMAccessTemplateRequest {
   max_ttl_seconds: number;
   name: string;
   reason: string;
+  require_recording?: boolean;
   required_approvals: number;
   revision?: number;
 }
@@ -8363,6 +8365,7 @@ export interface PAMCheckoutRequest {
   request_id: string;
   target_id: string;
   target_type: "postgres" | "mysql";
+  template_id?: string;
   ttl_seconds: number;
 }
 
@@ -8511,6 +8514,31 @@ export interface PAMEmergencySessionRequest {
   target_id: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
   ttl_seconds?: number;
+}
+
+export interface PAMFolder {
+  description?: string;
+  name: string;
+  revision: number;
+  saved_at: string;
+  saved_by?: string;
+  targets: number;
+  template_id: string;
+}
+
+export interface PAMFolderDeleted {
+  deleted: boolean;
+  name: string;
+}
+
+export interface PAMFolderList {
+  items: PAMFolder[];
+}
+
+export interface PAMFolderRequest {
+  description?: string;
+  revision?: number;
+  template_id: string;
 }
 
 export interface PAMImportedAccount {
@@ -8683,6 +8711,7 @@ export interface PAMTarget {
   disabled_by?: string;
   disabled_reason?: string;
   enabled: boolean;
+  folder?: string;
   gateway_address?: string;
   gateway_agent_id?: string;
   health?: { attempts: number; checked_at: string; failing_since?: string; not_retried: boolean; status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" };
@@ -8702,6 +8731,10 @@ export interface PAMTargetDisableRequest {
   reason: string;
 }
 
+export interface PAMTargetFolderRequest {
+  folder: string;
+}
+
 export interface PAMTargetList {
   items: PAMTarget[];
   next_cursor?: string;
@@ -8710,6 +8743,7 @@ export interface PAMTargetList {
 export interface PAMTargetRequest {
   account_secret?: string;
   allowed_roles?: string[];
+  folder?: string;
   gateway_address?: string;
   gateway_agent_id?: string;
   host?: string;

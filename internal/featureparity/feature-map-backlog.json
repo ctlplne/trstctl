@@ -474,7 +474,7 @@
                         "service_account discovery sources require AD/on-prem plus cloud service-account observations and record metadata-only CAP-NHI-03 findings.",
                         "served_state=served",
                         "backend_status=served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, continuous monitoring rollup, and CAP-NHI-03 service-account findings",
-                        "F4: /api/v1/adcs/ca-database ingests certutil rows a domain-joined relay collected from a CA database and serves the per-CA disposition breakdown (issued, pending approval, revoked, denied, failed, unknown, unparsed) \u2014 lifecycle visibility issuance alone cannot show, with pending kept distinct from failed and unparsable rows counted as rejected rather than dropped."
+                        "F4: /api/v1/adcs/ca-database ingests certutil rows a domain-joined relay collected from a CA database and serves the per-CA disposition breakdown (issued, pending approval, revoked, denied, failed, unknown, unparsed) — lifecycle visibility issuance alone cannot show, with pending kept distinct from failed and unparsable rows counted as rejected rather than dropped."
                     ],
                     "refs": [
                         "internal/api/discovery.go",
@@ -4128,7 +4128,7 @@
                         "AUD-40: /api/v1/migrations/runs freezes one reviewed signer-backed authority, exact public trust anchor, target revision, agent, predecessor, and verification endpoint; signed trust receipts license successor issuance and signed live receipts license wave advancement, while any failed cohort queues newest-first inverse actions.",
                         "served_state=served",
                         "backend_status=served",
-                        "B6: /api/v1/edge/segments and /api/v1/edge/delegations serve the constrained edge sub-CA \u2014 per-segment opt-in with pinned TPM attestation roots, an attested CSR mint in the isolated signer with name constraints taken from the segment's policy (path length zero, 30-day ceiling), revocation that also lands in the parent CA's issued ledger for OCSP/CRL, and reconciliation of locally issued leaves with out-of-constraint reports recorded as violations."
+                        "B6: /api/v1/edge/segments and /api/v1/edge/delegations serve the constrained edge sub-CA — per-segment opt-in with pinned TPM attestation roots, an attested CSR mint in the isolated signer with name constraints taken from the segment's policy (path length zero, 30-day ceiling), revocation that also lands in the parent CA's issued ledger for OCSP/CRL, and reconciliation of locally issued leaves with out-of-constraint reports recorded as violations."
                     ],
                     "refs": [
                         "internal/server/ca_hierarchy.go",
@@ -4962,7 +4962,7 @@
             "priority": 21,
             "served_state": "served",
             "backend_status": "served for trstctl hierarchy plus signed network-relay CRL/OCSP endpoint monitoring, validating multi-issuer relay-local CRL/OCSP caches, full/sharded/delta CRL distribution artifacts, outbox-backed CT precert+cert log submission, and CAP-REV-05 rogue/non-compliant certificate posture",
-            "current_frontend_mapping": "Certificates \u2192 CRL & CT begins with one three-step Revocation center that configures a managed X.509 identity and RFC 5280 reason, loads the effect-free version-bound server plan plus served graph impact, shows signed CRL/OCSP and CRL-publication posture, requires typed confirmation, executes through the existing lifecycle authority, and links to Audit/Graph proof. The same workspace retains endpoint health, rogue/non-compliant posture, CRL distribution, and CT queueing; Protocols retains per-segment/per-issuer relay-local cache evidence.",
+            "current_frontend_mapping": "Certificates → CRL & CT begins with one three-step Revocation center that configures a managed X.509 identity and RFC 5280 reason, loads the effect-free version-bound server plan plus served graph impact, shows signed CRL/OCSP and CRL-publication posture, requires typed confirmation, executes through the existing lifecycle authority, and links to Audit/Graph proof. The same workspace retains endpoint health, rogue/non-compliant posture, CRL distribution, and CT queueing; Protocols retains per-segment/per-issuer relay-local cache evidence.",
             "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
             "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, signed endpoint and per-segment cache freshness with unknown-before-observation states, audit link, CRL distribution, rogue/non-compliant posture, and CT queueing; served tests prove AUD-38 monitoring, AUD-39 multi-issuer local CRL/OCSP clients and signed projection, CAP-REV-05 detection, and CAP-REV-06 CT delivery.",
             "source_docs": [
@@ -5074,9 +5074,9 @@
                         "Certificates page renders the served CRL distribution status, full CRL link, shard count, delta base link, and freshness window.",
                         "Certificates page renders the CT submission form and calls api.submitCertificateTransparency with certificate_pem, precertificate_pem, chain_pem, logs, and allow_private_endpoint.",
                         "Certificates page renders CAP-REV-05 summary counts, rogue/non-compliant finding rows, severity, recommendations, and projection evidence refs from api.rogueCertificates.",
-                        "Certificates \u2192 CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy.",
-                        "Certificates \u2192 CRL & CT begins with a three-step Revocation center that binds managed identity, RFC 5280 reason, exact effect-free server plan, lifecycle version, graph blast radius, propagation posture, typed confirmation, and Audit/Graph proof into one operator journey.",
-                        "Protocols \u2192 Revocation cache by segment renders signed relay-local CRL/OCSP metadata per segment/issuer with fresh, stale, empty, error, and unobserved states."
+                        "Certificates → CRL & CT renders each signed relay CRL/OCSP observation with freshness status, signature evidence, relay identity, evidence digest, nextUpdate, and explicit unknown-before-observation copy.",
+                        "Certificates → CRL & CT begins with a three-step Revocation center that binds managed identity, RFC 5280 reason, exact effect-free server plan, lifecycle version, graph blast radius, propagation posture, typed confirmation, and Audit/Graph proof into one operator journey.",
+                        "Protocols → Revocation cache by segment renders signed relay-local CRL/OCSP metadata per segment/issuer with fresh, stale, empty, error, and unobserved states."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -8453,7 +8453,7 @@
             "priority": 26,
             "served_state": "conditional",
             "backend_status": "conditional: served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
-            "current_frontend_mapping": "Workloads & Machines \u2192 Agents provides one guided configure \u2192 effect-free preview \u2192 one-time mint \u2192 observe \u2192 revoke/offboard lifecycle. The preview publishes the exact public address, TLS name, renewal path, and verified-mTLS authentication boundary before any secret exists.",
+            "current_frontend_mapping": "Workloads & Machines → Agents provides one guided configure → effect-free preview → one-time mint → observe → revoke/offboard lifecycle. The preview publishes the exact public address, TLS name, renewal path, and verified-mTLS authentication boundary before any secret exists.",
             "target_gui_mapping": "Keep the complete embedded enrollment lifecycle in Agents: select identity and signed role, review exact bootstrap and renewal readiness, mint once, observe certificate-bound fleet evidence, and recover through replacement, revocation, or offboarding.",
             "acceptance_test": "Preview creates no token, changes no agent state, and calls no signer; preview and direct mint both fail closed when the public connection or verified-mTLS renewal lifecycle is unavailable; served tests bootstrap once, reject token replay, renew only with the current verified client certificate, reject missing/untrusted/expired peers, and UI tests cover one-time visibility plus recovery guidance.",
             "source_docs": [
@@ -8500,7 +8500,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Workloads & Machines \u2192 Agents provides one guided configure \u2192 effect-free preview \u2192 one-time mint \u2192 observe \u2192 revoke/offboard lifecycle.",
+                        "current_frontend_mapping: Workloads & Machines → Agents provides one guided configure → effect-free preview → one-time mint → observe → revoke/offboard lifecycle.",
                         "The preview displays exact address, TLS name, renewal readiness/path/authentication, required permission, the no-token boundary, blockers, and safe recovery before mutation."
                     ],
                     "refs": [
@@ -14495,13 +14495,15 @@
                 "/api/v1/access/targets/{target_type}/{id}/disable",
                 "internal/approval",
                 "internal/server/ephemeral.go",
-                "internal/server/pam.go"
+                "internal/server/pam.go",
+                "internal/server/pam_folders.go"
             ],
             "source_frontend": [
                 "web/src/pages/RequestCredential.tsx",
                 "web/src/pages/Approvals.tsx",
                 "web/src/pages/Identities.tsx",
-                "web/src/pages/PAMTargetsPanel.tsx"
+                "web/src/pages/PAMTargetsPanel.tsx",
+                "web/src/pages/PAMFoldersPanel.tsx"
             ],
             "status": "closed",
             "notes": "Qualified as a complete F33 vertical slice on implementation candidate 6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8. The requester gets an effect-free exact preview and cannot approve or mint their own request. A distinct approver reviews the bound owner, profile, purpose, decision window, immutable request ID, and audit link in one dialog; approval itself mints nothing and reveals the separate deterministic prepare/issue/complete path. A failed issue remains approved and retries under the same identity and idempotency key. The attested ephemeral path separately proves m-of-n approval, transactional notification intent, bounded TTL, and one-time short-lived issuance.",
@@ -14581,7 +14583,11 @@
                 "revealPAMCheckout",
                 "checkInPAMCheckout",
                 "listPAMCheckouts",
-                "getPAMCheckout"
+                "getPAMCheckout",
+                "listPAMFolders",
+                "savePAMFolder",
+                "deletePAMFolder",
+                "setPAMTargetFolder"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14664,7 +14670,11 @@
                 "access emergency set-responders",
                 "access emergency open",
                 "access emergency list",
-                "access emergency review"
+                "access emergency review",
+                "access folders list",
+                "access folders save",
+                "access folders delete",
+                "access targets folder"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -21019,7 +21029,7 @@
             ],
             "source_frontend": [],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence. COMPETE-044 update: trstctl-cli scale orchestration now reads the served CAP-SCALE-01 posture from /api/v1/scale/orchestration. COMPETE-045 update: trstctl-cli scale ha-issuance now reads the served CAP-SCALE-02 regional HA issuance posture from /api/v1/scale/ha-issuance. Test evidence includes CLI/API parity tests plus the focused CAP-SCALE-01 and CAP-SCALE-02 API/model tests. A2 sweep: added the CLI parity that A1 (operations jobs) and B4 (acme eab list/disable/enable) owed but never paid \u2014 each served route now has the operator command TestEveryAPIOperationHasACLICommand requires.",
+            "notes": "Closed by route-level feature-map evidence. COMPETE-044 update: trstctl-cli scale orchestration now reads the served CAP-SCALE-01 posture from /api/v1/scale/orchestration. COMPETE-045 update: trstctl-cli scale ha-issuance now reads the served CAP-SCALE-02 regional HA issuance posture from /api/v1/scale/ha-issuance. Test evidence includes CLI/API parity tests plus the focused CAP-SCALE-01 and CAP-SCALE-02 API/model tests. A2 sweep: added the CLI parity that A1 (operations jobs) and B4 (acme eab list/disable/enable) owed but never paid — each served route now has the operator command TestEveryAPIOperationHasACLICommand requires.",
             "api_surface": [],
             "api_na": "N/A: CLI is a client surface; REST/OpenAPI coverage is tracked by F10.",
             "cli_surface": [
@@ -23137,8 +23147,8 @@
                             "CLI command: graph crypto-readiness actions create",
                             "CLI command: graph crypto-readiness export",
                             "CLI command: graph query",
-                        "CLI command: graph who-can-reach",
-                        "CLI command: graph path"
+                            "CLI command: graph who-can-reach",
+                            "CLI command: graph path"
                         ]
                     }
                 },

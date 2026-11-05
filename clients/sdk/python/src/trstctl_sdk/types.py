@@ -11507,6 +11507,7 @@ PAMAccessTemplate = TypedDict(
         'max_ttl_seconds': int,
         'name': str,
         'reason': str,
+        'require_recording': bool,
         'required_approvals': int,
         'revision': int,
         'saved_at': str,
@@ -11538,6 +11539,7 @@ PAMAccessTemplateRequest = TypedDict(
         'max_ttl_seconds': int,
         'name': str,
         'reason': str,
+        'require_recording': bool,
         'required_approvals': int,
         'revision': int,
     },
@@ -11599,6 +11601,7 @@ PAMCheckoutRequest = TypedDict(
         'request_id': str,
         'target_id': str,
         'target_type': str,
+        'template_id': str,
         'ttl_seconds': int,
     },
     total=False,
@@ -11827,6 +11830,47 @@ PAMEmergencySessionRequest = TypedDict(
         'target_id': str,
         'target_type': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+PAMFolder = TypedDict(
+    'PAMFolder',
+    {
+        'description': str,
+        'name': str,
+        'revision': int,
+        'saved_at': str,
+        'saved_by': str,
+        'targets': int,
+        'template_id': str,
+    },
+    total=False,
+)
+
+PAMFolderDeleted = TypedDict(
+    'PAMFolderDeleted',
+    {
+        'deleted': bool,
+        'name': str,
+    },
+    total=False,
+)
+
+PAMFolderList = TypedDict(
+    'PAMFolderList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMFolderRequest = TypedDict(
+    'PAMFolderRequest',
+    {
+        'description': str,
+        'revision': int,
+        'template_id': str,
     },
     total=False,
 )
@@ -12071,6 +12115,7 @@ PAMTarget = TypedDict(
         'disabled_by': str,
         'disabled_reason': str,
         'enabled': bool,
+        'folder': str,
         'gateway_address': str,
         'gateway_agent_id': str,
         'health': dict[str, Any],
@@ -12096,6 +12141,14 @@ PAMTargetDisableRequest = TypedDict(
     total=False,
 )
 
+PAMTargetFolderRequest = TypedDict(
+    'PAMTargetFolderRequest',
+    {
+        'folder': str,
+    },
+    total=False,
+)
+
 PAMTargetList = TypedDict(
     'PAMTargetList',
     {
@@ -12110,6 +12163,7 @@ PAMTargetRequest = TypedDict(
     {
         'account_secret': str,
         'allowed_roles': list[str],
+        'folder': str,
         'gateway_address': str,
         'gateway_agent_id': str,
         'host': str,

@@ -22,10 +22,13 @@ type PAMAccessTemplate struct {
 	ID, Name, Reason  string
 	RequiredApprovals int
 	MaxTTLSeconds     int
-	Revision          int64
-	SavedBy           string
-	SavedAt           time.Time
-	DeletedAt         *time.Time
+	// RequireRecording (A261 part 3) refuses a session through the template
+	// that would not be recorded, and every check-out.
+	RequireRecording bool
+	Revision         int64
+	SavedBy          string
+	SavedAt          time.Time
+	DeletedAt        *time.Time
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting
@@ -41,11 +44,12 @@ type PAMEmergencyGrant struct {
 	ReviewedAt                   *time.Time
 }
 
-const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, revision, saved_by, saved_at, deleted_at`
+const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, revision, saved_by, saved_at, deleted_at`
 
 func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 	var t PAMAccessTemplate
-	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.Revision, &t.SavedBy, &t.SavedAt, &t.DeletedAt)
+	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.Revision, &t.SavedBy, &t.SavedAt,
+		&t.DeletedAt)
 	return t, err
 }
 
@@ -54,14 +58,15 @@ func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 // brought back.
 func (s *Store) ApplyPAMTemplateSavedTx(ctx context.Context, tx pgx.Tx, tenantID string, t PAMAccessTemplate) error {
 	_, err := tx.Exec(ctx, `
-		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, revision, saved_by, saved_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, require_recording, revision,
+		    saved_by, saved_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		    name = EXCLUDED.name, reason = EXCLUDED.reason, required_approvals = EXCLUDED.required_approvals,
-		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, revision = EXCLUDED.revision,
+		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, require_recording = EXCLUDED.require_recording, revision = EXCLUDED.revision,
 		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at
 		  WHERE cur.revision < EXCLUDED.revision AND cur.deleted_at IS NULL`,
-		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC())
+		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording)
 	return err
 }
 

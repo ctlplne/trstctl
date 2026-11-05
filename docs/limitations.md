@@ -8887,7 +8887,7 @@ without review and a responder reviewing their own grant.
 What comes next:
 - Lockout-aware checks of directory accounts (with the Active Directory account type, A263).
 - Notifying approvers by name; today the notice goes to the approval channels they watch.
-- Template folders and auto-approval rules (A261).
+- Auto-approval rules (A261); account folders and their templates are served below.
 
 ## Browser sessions (A259) — served
 
@@ -8966,12 +8966,12 @@ scans sources, imports selected accounts after review and dismisses one (compone
 axe clean).
 
 What comes next:
-- Folders as objects with their template applied to every account in them (A261).
+- Auto-approval rules (A261); registered account folders apply their templates as described below.
 
-## Brokered-account lifecycle (A261) — parts 1 and 2 of 3: vaulted accounts and check-outs
+## Brokered-account lifecycle (A261) — vaulted accounts, check-outs and folder templates
 
-Status: vaulted accounts, their scheduled rotation and check-outs served; auto-approval rules
-with folder templates (part 3) come next, and A261 stays open until they land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
+Status: vaulted accounts, their scheduled rotation, check-outs and folder templates served; auto-approval rules
+come next, and A261 stays open until they land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
 are delivered through its gateway signed in as the account that application secret holds,
 read when the gateway claims the session, so nobody receives the credential and nothing is
 minted per session. The secret is an A240 static credential: its provider must rotate the
@@ -9010,8 +9010,27 @@ vaulted account, reveals the approved credential once in a dialog that forgets i
 and checks in the caller's own (component tests, axe clean). CLI: `access checkouts
 request|reveal|checkin|list|get`.
 
+Account folders apply a saved access template to every registered target in the folder.
+Save one with `PUT /api/v1/access/folders/{name}` (`template_id`, optional `description`,
+and `revision` when replacing it); list them with `GET /api/v1/access/folders`. Register a
+target with `folder`, or move one with `POST /api/v1/access/targets/{type}/{id}/folder`.
+Requests inherit the template's reason prefix, approval count and maximum lifetime; naming
+another template is refused (422). The folder and template revisions are bound into the
+review. A policy change requires a fresh review before opening or revealing the credential.
+
+Templates accept `require_recording` (false for existing templates). When true, only sessions
+bound to a gateway with recording storage configured can be requested or opened; direct
+sessions and every credential check-out are refused (422). Folder deletion requires its
+current `revision` query parameter and no registered targets, including disabled targets;
+stale revisions and occupied folders return 409. Folder membership and deletion share a
+tenant-scoped database fence across replicas; contention returns 503 for a retry.
+`TestServedFolderTemplatesApplyToEveryAccountA261` proves inheritance on two targets,
+override refusals, recording enforcement, counts, revision conflicts and empty-only deletion
+through the served HTTP routes. The console manages folders, membership and recording rules;
+CLI: `access folders list|save|delete`, `access targets folder`.
+
 What comes next:
-- Auto-approval rules and folders whose template applies to every account in them (part 3).
+- Auto-approval rules (the remaining part 3).
 - A check-in while another rotation of the same account is in flight is refused (409), and at
   the deadline the expiry worker retries on each tick (every 30 seconds by default); adopting
   the in-flight rotation when it started after the reveal would end the check-out at once.

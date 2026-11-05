@@ -454,6 +454,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List account folders: the access template every account in each takes */
+        get: operations["listPAMFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/folders/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Create an account folder, or replace one at the revision read; a policy change requires a fresh access review */
+        put: operations["savePAMFolder"];
+        post?: never;
+        /** Delete an empty account folder at the revision you read */
+        delete: operations["deletePAMFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/members": {
         parameters: {
             query?: never;
@@ -1050,6 +1085,23 @@ export interface paths {
         put?: never;
         /** Disable a tenant privileged access target for new sessions */
         post: operations["disablePAMTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/targets/{target_type}/{id}/folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a tenant privileged access target into a folder, whose template its requests take, or out of one */
+        post: operations["setPAMTargetFolder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21379,6 +21431,8 @@ export interface components {
             max_ttl_seconds: number;
             name: string;
             reason: string;
+            /** @description refuses a session through the template that would not be recorded, and every check-out (A261 part 3) */
+            require_recording: boolean;
             required_approvals: number;
             revision: number;
             /** Format: date-time */
@@ -21397,6 +21451,8 @@ export interface components {
             max_ttl_seconds: number;
             name: string;
             reason: string;
+            /** @description refuse an unrecorded session and every check-out through the template */
+            require_recording?: boolean;
             required_approvals: number;
             /** @description the revision being replaced (PUT only) */
             revision?: number;
@@ -21452,6 +21508,11 @@ export interface components {
             target_id: string;
             /** @enum {string} */
             target_type: "postgres" | "mysql";
+            /**
+             * Format: uuid
+             * @description optional access template; a target folder's template cannot be overridden
+             */
+            template_id?: string;
             /** @description how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session */
             ttl_seconds: number;
         };
@@ -21673,6 +21734,35 @@ export interface components {
             /** @description at most 3600: an emergency session lasts an hour at most */
             ttl_seconds?: number;
         };
+        PAMFolder: {
+            description?: string;
+            name: string;
+            revision: number;
+            /** Format: date-time */
+            saved_at: string;
+            saved_by?: string;
+            /** @description registered targets in the folder */
+            targets: number;
+            /** Format: uuid */
+            template_id: string;
+        };
+        PAMFolderDeleted: {
+            deleted: boolean;
+            name: string;
+        };
+        PAMFolderList: {
+            items: components["schemas"]["PAMFolder"][];
+        };
+        PAMFolderRequest: {
+            description?: string;
+            /** @description the revision being replaced; omit to create */
+            revision?: number;
+            /**
+             * Format: uuid
+             * @description the access template every account in the folder takes
+             */
+            template_id: string;
+        };
         PAMImportedAccount: {
             /** Format: uuid */
             approval_request_id: string;
@@ -21889,6 +21979,7 @@ export interface components {
             disabled_by?: string;
             disabled_reason?: string;
             enabled: boolean;
+            folder?: string;
             gateway_address?: string;
             gateway_agent_id?: string;
             health?: {
@@ -21923,6 +22014,10 @@ export interface components {
         PAMTargetDisableRequest: {
             reason: string;
         };
+        PAMTargetFolderRequest: {
+            /** @description the folder to move the target into; empty moves it out */
+            folder: string;
+        };
         PAMTargetList: {
             items: components["schemas"]["PAMTarget"][];
             next_cursor?: string;
@@ -21931,6 +22026,8 @@ export interface components {
             /** @description A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role. */
             account_secret?: string;
             allowed_roles?: string[];
+            /** @description A folder (A261 part 3) whose access template the target's session requests and check-outs take. */
+            folder?: string;
             /** @description host:port where clients reach the gateway (A254). */
             gateway_address?: string;
             /**
@@ -27706,6 +27803,139 @@ export interface operations {
             };
         };
     };
+    listPAMFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMFolderList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savePAMFolder: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description folder name: 1-64 lowercase letters, digits, - or _ */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMFolder"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deletePAMFolder: {
+        parameters: {
+            query?: {
+                /** @description the folder's revision you read */
+                revision?: number;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description folder name: 1-64 lowercase letters, digits, - or _ */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMFolderDeleted"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listMembers: {
         parameters: {
             query?: {
@@ -29530,6 +29760,56 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PAMTargetDisableRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    setPAMTargetFolder: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description registered target type */
+                target_type: string;
+                /** @description target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMTargetFolderRequest"];
             };
         };
         responses: {

@@ -346,6 +346,9 @@ const (
 	EventPAMAccountHealthChecked                  = "pam.account.health_checked"
 	EventPAMTemplateSaved                         = "pam.template.saved"
 	EventPAMTemplateDeleted                       = "pam.template.deleted"
+	EventPAMFolderSaved                           = "pam.folder.saved"
+	EventPAMFolderDeleted                         = "pam.folder.deleted"
+	EventPAMTargetFolderSet                       = "pam.target.folder_set"
 	EventPAMEmergencyRespondersSet                = "pam.emergency.responders_set"
 	EventPAMEmergencyOpened                       = "pam.emergency.opened"
 	EventPAMEmergencyReviewed                     = "pam.emergency.reviewed"
@@ -4384,6 +4387,8 @@ type PAMTargetRegistered struct {
 	// AccountSecret names the application secret holding the vaulted
 	// account a database target's sessions sign in as (A261).
 	AccountSecret string `json:"account_secret,omitempty"`
+	// Folder names the folder the target was registered into (A261 part 3).
+	Folder string `json:"folder,omitempty"`
 }
 
 // PAMRecordingChunkStored records one sealed chunk of a gateway session's
@@ -4438,14 +4443,47 @@ type PAMAccountHealthChecked struct {
 
 // PAMTemplateSaved records an access template at a revision (A258).
 type PAMTemplateSaved struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Reason            string    `json:"reason"`
-	RequiredApprovals int       `json:"required_approvals"`
-	MaxTTLSeconds     int       `json:"max_ttl_seconds"`
-	Revision          int64     `json:"revision"`
-	Actor             string    `json:"actor"`
-	At                time.Time `json:"at"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Reason            string `json:"reason"`
+	RequiredApprovals int    `json:"required_approvals"`
+	MaxTTLSeconds     int    `json:"max_ttl_seconds"`
+	// RequireRecording (A261 part 3) refuses an unrecorded session and every
+	// check-out through the template.
+	RequireRecording bool      `json:"require_recording,omitempty"`
+	Revision         int64     `json:"revision"`
+	Actor            string    `json:"actor"`
+	At               time.Time `json:"at"`
+}
+
+// PAMFolderSaved records an account folder at a revision: the access
+// template every account in it takes (A261 part 3).
+type PAMFolderSaved struct {
+	Name        string    `json:"name"`
+	TemplateID  string    `json:"template_id"`
+	Description string    `json:"description"`
+	Revision    int64     `json:"revision"`
+	Actor       string    `json:"actor"`
+	At          time.Time `json:"at"`
+}
+
+// PAMFolderDeleted records an empty account folder's deletion (A261 part 3).
+type PAMFolderDeleted struct {
+	Name     string    `json:"name"`
+	Revision int64     `json:"revision"`
+	Actor    string    `json:"actor"`
+	At       time.Time `json:"at"`
+}
+
+// PAMTargetFolderSet records a registered target moved into a folder, or out
+// of one when Folder is empty (A261 part 3).
+type PAMTargetFolderSet struct {
+	TargetType string    `json:"target_type"`
+	ID         string    `json:"id"`
+	Folder     string    `json:"folder"`
+	Previous   string    `json:"previous"`
+	Actor      string    `json:"actor"`
+	At         time.Time `json:"at"`
 }
 
 // PAMTemplateDeleted records an access template's deletion (A258).
@@ -5220,6 +5258,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMAccountHealthChecked:                  {1: true},
 	EventPAMTemplateSaved:                         {1: true},
 	EventPAMTemplateDeleted:                       {1: true},
+	EventPAMFolderSaved:                           {1: true},
+	EventPAMFolderDeleted:                         {1: true},
+	EventPAMTargetFolderSet:                       {1: true},
 	EventPAMEmergencyRespondersSet:                {1: true},
 	EventPAMEmergencyOpened:                       {1: true},
 	EventPAMEmergencyReviewed:                     {1: true},
@@ -8532,7 +8573,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
 			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
 			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
-			HostKeyFingerprints: pl.HostKeyFingerprints, AccountSecret: pl.AccountSecret,
+			HostKeyFingerprints: pl.HostKeyFingerprints, AccountSecret: pl.AccountSecret, Folder: pl.Folder,
 		})
 	case EventPAMRecordingChunkStored:
 		var pl PAMRecordingChunkStored
@@ -8591,7 +8632,36 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
-			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording,
+			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMFolderSaved:
+		var pl PAMFolderSaved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Name == "" || pl.TemplateID == "" || pl.Revision < 1 || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMFolderSavedTx(ctx, tx, e.TenantID, store.PAMFolder{Name: pl.Name, TemplateID: pl.TemplateID,
+			Description: pl.Description, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMFolderDeleted:
+		var pl PAMFolderDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Name == "" || pl.Revision < 1 || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMFolderDeletedTx(ctx, tx, e.TenantID, pl.Name, pl.Revision, pl.At)
+	case EventPAMTargetFolderSet:
+		var pl PAMTargetFolderSet
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMTargetFolderSetTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.Folder)
 	case EventPAMTemplateDeleted:
 		var pl PAMTemplateDeleted
 		if err := decode(e, &pl); err != nil {

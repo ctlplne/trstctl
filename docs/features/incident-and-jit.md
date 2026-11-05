@@ -518,6 +518,24 @@ An account whose rotation mints a new principal (rather than switching between t
 changing one in place) can be checked out only after its first rotation, so what is revealed is
 always something a rotation can retire.
 
+Group account targets into folders to give them the same access policy. The folder's
+template supplies the reason, number of approvals and longest session; requests cannot
+substitute another template. A template with `require_recording: true` refuses unrecorded
+sessions and all credential check-outs, including after a policy changes during review.
+
+```sh
+trstctl-cli access folders save production -f folder.json   # {"template_id":"..."}
+trstctl-cli access folders list
+trstctl-cli access targets folder postgres orders-db -f membership.json  # {"folder":"production"}
+trstctl-cli access folders save production -f updated-folder.json  # include the revision read
+trstctl-cli access folders delete production --revision 2   # only after moving its targets out
+```
+
+The console's account folders panel lists the saved templates, target counts and membership.
+It can change a template's recording rule at its read revision. Create templates with
+`access templates create`; use `require_recording` in its JSON body. Recording requires the
+gateway, object store, tenant sealing and audit signing configuration described below. Existing template approvals from before this policy binding must be requested again after upgrade.
+
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
 bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;

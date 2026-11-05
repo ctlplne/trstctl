@@ -2,6 +2,12 @@
 
 ### Added
 
+- Account folders apply one access template to every registered target's session requests and
+  check-outs. Requests cannot select another template, and changed policy revisions require a new
+  review. Templates can require recording, refusing direct sessions and credential check-outs.
+  The console manages folders, membership and recording rules; CLI `access folders` and
+  `access targets folder` use the same tenant-scoped, event-sourced API.
+
 - Access gateway, PostgreSQL (A254 part 1): a PAM PostgreSQL target can be bound to a gateway-role agent
   (`gateway_agent_id`, `gateway_address`); a session to it returns a one-time ticket and the gateway's identity,
   never the credential. The gateway (`trstctl-agent --access-gateway-listen`, new `gateway` role) claims the

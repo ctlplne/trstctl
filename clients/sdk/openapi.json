@@ -38442,6 +38442,10 @@
           "reason": {
             "type": "string"
           },
+          "require_recording": {
+            "description": "refuses a session through the template that would not be recorded, and every check-out (A261 part 3)",
+            "type": "boolean"
+          },
           "required_approvals": {
             "type": "integer"
           },
@@ -38462,6 +38466,7 @@
           "reason",
           "required_approvals",
           "max_ttl_seconds",
+          "require_recording",
           "revision",
           "saved_at"
         ],
@@ -38507,6 +38512,10 @@
           },
           "reason": {
             "type": "string"
+          },
+          "require_recording": {
+            "description": "refuse an unrecorded session and every check-out through the template",
+            "type": "boolean"
           },
           "required_approvals": {
             "type": "integer"
@@ -38700,6 +38709,11 @@
               "postgres",
               "mysql"
             ],
+            "type": "string"
+          },
+          "template_id": {
+            "description": "optional access template; a target folder's template cannot be overridden",
+            "format": "uuid",
             "type": "string"
           },
           "ttl_seconds": {
@@ -39456,6 +39470,91 @@
         ],
         "type": "object"
       },
+      "PAMFolder": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "saved_by": {
+            "type": "string"
+          },
+          "targets": {
+            "description": "registered targets in the folder",
+            "type": "integer"
+          },
+          "template_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "template_id",
+          "targets",
+          "revision",
+          "saved_at"
+        ],
+        "type": "object"
+      },
+      "PAMFolderDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "PAMFolderList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMFolder"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMFolderRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "revision": {
+            "description": "the revision being replaced; omit to create",
+            "type": "integer"
+          },
+          "template_id": {
+            "description": "the access template every account in the folder takes",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id"
+        ],
+        "type": "object"
+      },
       "PAMImportedAccount": {
         "properties": {
           "approval_request_id": {
@@ -40165,6 +40264,9 @@
           "enabled": {
             "type": "boolean"
           },
+          "folder": {
+            "type": "string"
+          },
           "gateway_address": {
             "type": "string"
           },
@@ -40281,6 +40383,18 @@
         ],
         "type": "object"
       },
+      "PAMTargetFolderRequest": {
+        "properties": {
+          "folder": {
+            "description": "the folder to move the target into; empty moves it out",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "type": "object"
+      },
       "PAMTargetList": {
         "properties": {
           "items": {
@@ -40309,6 +40423,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "folder": {
+            "description": "A folder (A261 part 3) whose access template the target's session requests and check-outs take.",
+            "type": "string"
           },
           "gateway_address": {
             "description": "host:port where clients reach the gateway (A254).",
@@ -58455,6 +58573,203 @@
         "x-trstctl-permission": "access:write"
       }
     },
+    "/api/v1/access/folders": {
+      "get": {
+        "operationId": "listPAMFolders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMFolderList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List account folders: the access template every account in each takes",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/folders/{name}": {
+      "delete": {
+        "operationId": "deletePAMFolder",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "folder name: 1-64 lowercase letters, digits, - or _",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the folder's revision you read",
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMFolderDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an empty account folder at the revision you read",
+        "x-trstctl-permission": "access:targets.write"
+      },
+      "put": {
+        "operationId": "savePAMFolder",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "folder name: 1-64 lowercase letters, digits, - or _",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMFolder"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an account folder, or replace one at the revision read; a policy change requires a fresh access review",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
     "/api/v1/access/members": {
       "get": {
         "operationId": "listMembers",
@@ -61352,6 +61667,92 @@
           }
         ],
         "summary": "Disable a tenant privileged access target for new sessions",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/targets/{target_type}/{id}/folder": {
+      "post": {
+        "operationId": "setPAMTargetFolder",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "registered target type",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMTargetFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Move a tenant privileged access target into a folder, whose template its requests take, or out of one",
         "x-trstctl-permission": "access:targets.write"
       }
     },

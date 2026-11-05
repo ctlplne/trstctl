@@ -2776,6 +2776,35 @@ describe("CLI-parity client methods (S3.3)", () => {
 
   const cases: ParityCase[] = [
     { name: "pamSessions", call: () => api.pamSessions({ limit: 5 }), method: "GET", path: "/api/v1/access/sessions?limit=5" },
+    { name: "pamFolders", call: () => api.pamFolders(), method: "GET", path: "/api/v1/access/folders" },
+    {
+      name: "savePAMFolder",
+      call: () => api.savePAMFolder("prod/one", { template_id: "template-id", revision: 2 }),
+      method: "PUT",
+      path: "/api/v1/access/folders/prod%2Fone",
+    },
+    { name: "deletePAMFolder", call: () => api.deletePAMFolder("prod/one", 2), method: "DELETE", path: "/api/v1/access/folders/prod%2Fone?revision=2" },
+    {
+      name: "setPAMTargetFolder",
+      call: () => api.setPAMTargetFolder("postgres", "orders/one", "prod"),
+      method: "POST",
+      path: "/api/v1/access/targets/postgres/orders%2Fone/folder",
+    },
+    { name: "pamTemplates", call: () => api.pamTemplates(), method: "GET", path: "/api/v1/access/templates" },
+    {
+      name: "updatePAMTemplate",
+      call: () =>
+        api.updatePAMTemplate("template/one", {
+          name: "production",
+          reason: "Incident",
+          required_approvals: 3,
+          max_ttl_seconds: 60,
+          require_recording: true,
+          revision: 4,
+        }),
+      method: "PUT",
+      path: "/api/v1/access/templates/template%2Fone",
+    },
     { name: "pamTargets", call: () => api.pamTargets(), method: "GET", path: "/api/v1/access/targets" },
     { name: "pamTarget", call: () => api.pamTarget("ssh", "edge/1"), method: "GET", path: "/api/v1/access/targets/ssh/edge%2F1" },
     {

@@ -59,6 +59,19 @@ func (s *Server) DisablePAMTarget(ctx context.Context, tenantID, targetType, id,
 }
 
 func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor string, target api.PAMTarget) (api.PAMTarget, error) {
+	var result api.PAMTarget
+	err := s.store.WithPAMCatalogLock(ctx, tenantID, func() error {
+		if err := s.requirePAMFolder(ctx, tenantID, target.Folder); err != nil {
+			return err
+		}
+		var err error
+		result, err = s.registerPAMTarget(ctx, tenantID, actor, target)
+		return err
+	})
+	return result, err
+}
+
+func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor string, target api.PAMTarget) (api.PAMTarget, error) {
 	if _, err := uuid.Parse(tenantID); err != nil || actor == "" || !pamTargetNameOK(target.ID) {
 		return api.PAMTarget{}, fmt.Errorf("%w: tenant, actor, and a lowercase target id are required", api.ErrPAMInvalid)
 	}
@@ -121,7 +134,7 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 	payload := projections.PAMTargetRegistered{TargetType: target.TargetType, ID: target.ID,
 		ProviderID: target.ProviderID, AllowedRoles: roles, Host: target.Host, Port: target.Port,
 		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
-		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...), AccountSecret: target.AccountSecret}
+		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...), AccountSecret: target.AccountSecret, Folder: target.Folder}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-target:"+tenantID+":"+target.TargetType+":"+target.ID)).String()
 	if err := s.appendCanonicalPAMTarget(ctx, tenantID, id, projections.EventPAMTargetRegistered, payload); err != nil {
 		return api.PAMTarget{}, err
@@ -155,7 +168,7 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		RegisteredAt: &rec.RegisteredAt, DisabledBy: rec.DisabledBy,
 		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt,
 		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints,
-		AccountSecret: rec.AccountSecret}
+		AccountSecret: rec.AccountSecret, Folder: rec.Folder}
 }
 
 // operatorDatabaseTarget and operatorSSHTarget are the reads of

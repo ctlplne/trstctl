@@ -687,7 +687,7 @@ trstctl-cli access agent --account postgres/orders-db:readonly --reason "nightly
 a provider-backed target's provider holds, read-only, and prints the target with its health
 (A258); use it after repairing an account the scheduled checks found failing (they never
 retry a refused credential on their own). `access templates list|create|get|update|delete`
-keep access templates (`{"name", "reason", "required_approvals", "max_ttl_seconds"}`); a
+keep access templates (`{"name", "reason", "required_approvals", "max_ttl_seconds", "require_recording"}`); a
 session request names one with `template_id`. `access emergency set-responders -f` names
 the emergency responders (`{"subjects": [...]}`), `access emergency open -f` opens emergency
 access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
@@ -1610,3 +1610,12 @@ call with that `idempotency_key` argument, which the bridge sends as the
 result schema with its tool list; the bridge gives it to the client as every tool's
 `outputSchema`, passes each tool's description, and returns each result as
 `structuredContent` alongside its JSON text.
+
+
+Account folders: `access folders list`, `access folders save <name> -f <body.json>`
+(`template_id`, optional `description`, and the read `revision` for an update), and
+`access folders delete <name> --revision <revision>` (empty folders only).
+`access targets folder <target_type> <id> -f <body.json>` moves a registered target
+with `{"folder":"name"}` or removes its membership with `{"folder":""}`.
+Every mutation accepts an idempotency key. Folder templates apply automatically to
+session requests and check-outs; required recording refuses direct sessions and check-outs.

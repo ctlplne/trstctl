@@ -27,6 +27,8 @@ type pamTargetRequest struct {
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
 	// AccountSecret makes a database target vaulted (A261).
 	AccountSecret string `json:"account_secret,omitempty"`
+	// Folder places the target in a folder (A261 part 3).
+	Folder string `json:"folder,omitempty"`
 }
 
 //trstctl:mutation
@@ -49,6 +51,7 @@ func (a *API) registerPAMTarget(w http.ResponseWriter, r *http.Request) {
 			Host: strings.TrimSpace(body.Host), Port: body.Port, Principals: body.Principals,
 			GatewayAgentID: strings.TrimSpace(body.GatewayAgentID), GatewayAddress: strings.TrimSpace(body.GatewayAddress),
 			HostKeyFingerprints: body.HostKeyFingerprints, AccountSecret: strings.TrimSpace(body.AccountSecret),
+			Folder: strings.TrimSpace(body.Folder),
 		})
 		if err != nil {
 			return 0, nil, err

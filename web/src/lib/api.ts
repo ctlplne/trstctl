@@ -513,6 +513,12 @@ import type {
   PAMSessionActivationRequest,
   PAMSessionList,
   PAMSessionRequest,
+  PAMFolder,
+  PAMFolderList,
+  PAMFolderRequest,
+  PAMAccessTemplate,
+  PAMAccessTemplateList,
+  PAMAccessTemplateRequest,
   PAMTarget,
   PAMTargetList,
   PAMDiscoverySource,
@@ -2531,6 +2537,12 @@ export interface Api {
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
+  pamFolders(): Promise<PAMFolderList>;
+  savePAMFolder(name: string, input: PAMFolderRequest, idempotencyKey?: string): Promise<PAMFolder>;
+  deletePAMFolder(name: string, revision: number, idempotencyKey?: string): Promise<unknown>;
+  setPAMTargetFolder(targetType: string, id: string, folder: string, idempotencyKey?: string): Promise<PAMTarget>;
+  pamTemplates(): Promise<PAMAccessTemplateList>;
+  updatePAMTemplate(id: string, input: PAMAccessTemplateRequest, idempotencyKey?: string): Promise<PAMAccessTemplate>;
   pamTargets(): Promise<PAMTargetList>;
   pamTarget(targetType: string, id: string): Promise<PAMTarget>;
   registerPAMTarget(input: PAMTargetRequest, idempotencyKey?: string): Promise<PAMTarget>;
@@ -3440,6 +3452,15 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions: (options) => req<PAMSessionList>(`/api/v1/access/sessions${pageQueryString(options)}`),
+  pamFolders: () => req<PAMFolderList>("/api/v1/access/folders"),
+  savePAMFolder: (name, input, idempotencyKey) => mutate<PAMFolder>("PUT", `/api/v1/access/folders/${encodeURIComponent(name)}`, input, idempotencyKey),
+  deletePAMFolder: (name, revision, idempotencyKey) =>
+    mutate("DELETE", `/api/v1/access/folders/${encodeURIComponent(name)}?revision=${revision}`, undefined, idempotencyKey),
+  setPAMTargetFolder: (targetType, id, folder, idempotencyKey) =>
+    mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/folder`, { folder }, idempotencyKey),
+  pamTemplates: () => req<PAMAccessTemplateList>("/api/v1/access/templates"),
+  updatePAMTemplate: (id, input, idempotencyKey) =>
+    mutate<PAMAccessTemplate>("PUT", `/api/v1/access/templates/${encodeURIComponent(id)}`, input, idempotencyKey),
   pamTargets: () => req<PAMTargetList>("/api/v1/access/targets"),
   pamTarget: (targetType, id) => req<PAMTarget>(`/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}`),
   registerPAMTarget: (input, idempotencyKey) => mutate<PAMTarget>("POST", "/api/v1/access/targets", input, idempotencyKey),
@@ -3909,3 +3930,5 @@ export function identityState(i: Identity): string {
   if (i.terminal_pending) return i.terminal_target_state === "retired" ? "retirement_pending" : "revocation_pending";
   return i.status ?? "";
 }
+
+export type { PAMFolder, PAMFolderList, PAMFolderRequest, PAMAccessTemplate, PAMAccessTemplateList, PAMAccessTemplateRequest } from "./api-types.gen";

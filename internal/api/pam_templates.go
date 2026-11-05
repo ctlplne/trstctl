@@ -19,14 +19,17 @@ import (
 // request records, the approvals it needs (never fewer than the
 // deployment's) and the longest session it allows.
 type PAMAccessTemplate struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Reason            string    `json:"reason"`
-	RequiredApprovals int       `json:"required_approvals"`
-	MaxTTLSeconds     int       `json:"max_ttl_seconds"`
-	Revision          int64     `json:"revision"`
-	SavedBy           string    `json:"saved_by,omitempty"`
-	SavedAt           time.Time `json:"saved_at"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Reason            string `json:"reason"`
+	RequiredApprovals int    `json:"required_approvals"`
+	MaxTTLSeconds     int    `json:"max_ttl_seconds"`
+	// RequireRecording (A261 part 3) refuses a session through the template
+	// that would not be recorded, and every check-out.
+	RequireRecording bool      `json:"require_recording"`
+	Revision         int64     `json:"revision"`
+	SavedBy          string    `json:"saved_by,omitempty"`
+	SavedAt          time.Time `json:"saved_at"`
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting

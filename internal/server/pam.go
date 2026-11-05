@@ -618,19 +618,24 @@ func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, reques
 	if err != nil {
 		return "", err
 	}
+	_, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
+	if err != nil {
+		return "", err
+	}
 	command := struct {
 		TenantID, RequestID, Requester, TargetType, TargetID, Role, Reason             string
 		Method, PayloadDigest, SSHPublicKeyDigest, SSHPrincipal, Subject, TargetDigest string
 		Selectors                                                                      []string
 		Claims                                                                         map[string]string
 		TTLSeconds                                                                     int64
+		PolicyRefs                                                                     []string `json:",omitempty"`
 	}{
 		TenantID: tenantID, RequestID: req.RequestID, Requester: requester,
 		TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, Reason: req.Reason,
 		Method: req.Method, PayloadDigest: crypto.SHA256Hex(req.Payload),
 		SSHPublicKeyDigest: crypto.SHA256Hex(req.SSHPublicKey), SSHPrincipal: req.SSHPrincipal,
 		Subject: att.Subject, Selectors: att.Selectors, Claims: att.Claims, TargetDigest: targetDigest,
-		TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second),
+		TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second), PolicyRefs: policyRefs,
 	}
 	raw, err := json.Marshal(command)
 	if err != nil {

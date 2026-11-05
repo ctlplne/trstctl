@@ -15,6 +15,7 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 
 const targetSchema = z
   .object({
+    folder: z.string().trim(),
     id: z
       .string()
       .trim()
@@ -41,7 +42,16 @@ const targetSchema = z
     }
   });
 type TargetForm = z.infer<typeof targetSchema>;
-const emptyTarget: TargetForm = { id: "", target_type: "postgres", provider_id: "", allowed_roles: "readonly", host: "", port: "22", principals: "" };
+const emptyTarget: TargetForm = {
+  folder: "",
+  id: "",
+  target_type: "postgres",
+  provider_id: "",
+  allowed_roles: "readonly",
+  host: "",
+  port: "22",
+  principals: "",
+};
 function splitList(value: string): string[] {
   return value
     .split(",")
@@ -58,6 +68,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation();
   const [formOpen, setFormOpen] = useState(false);
   const query = useApiQuery(["pam-targets"], api.pamTargets, { retry: false });
+  const folders = useApiQuery(["pam-folders"], api.pamFolders, { enabled: formOpen, retry: false });
   const providers = useApiQuery(["dynamic-secret-providers"], api.dynamicSecretProviders, { enabled: formOpen, retry: false });
   const queryClient = useQueryClient();
   const [disableTarget, setDisableTarget] = useState<PAMTarget | null>(null);
@@ -84,6 +95,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
       form.target_type === "postgres"
         ? { id: form.id, target_type: "postgres", provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
         : { id: form.id, target_type: "ssh", host: form.host, port: Number(form.port), principals: splitList(form.principals) };
+    if (form.folder) input.folder = form.folder;
     setBusy(true);
     setError(null);
     try {
@@ -234,6 +246,17 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
             <Select {...register("target_type")}>
               <option value="postgres">{t("admin.access.postgresql")}</option>
               <option value="ssh">{t("admin.access.ssh")}</option>
+            </Select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("admin.access.folders.name")}
+            <Select {...register("folder")} disabled={!!folders.error}>
+              <option value="">{t("admin.access.folders.none")}</option>
+              {folders.data?.items.map((folder) => (
+                <option key={folder.name} value={folder.name}>
+                  {folder.name}
+                </option>
+              ))}
             </Select>
           </label>
           {targetType === "postgres" ? (

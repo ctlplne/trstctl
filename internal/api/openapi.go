@@ -5845,6 +5845,7 @@ func componentSchemas() map[string]*Schema {
 		"gateway_agent_id":      {Type: "string", Format: "uuid", Description: "The gateway-role agent that serves this target (A254); set with gateway_address."},
 		"gateway_address":       {Type: "string", Description: "host:port where clients reach the gateway (A254)."},
 		"host_key_fingerprints": {Type: "array", Items: str(), Description: "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight."},
+		"folder":                {Type: "string", Description: "A folder (A261 part 3) whose access template the target's session requests and check-outs take."},
 		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
@@ -5855,7 +5856,7 @@ func componentSchemas() map[string]*Schema {
 		"registered_by": str(), "registered_at": timestamp(), "disabled_by": str(),
 		"disabled_reason": str(), "disabled_at": timestamp(),
 		"gateway_agent_id": str(), "gateway_address": str(),
-		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(),
+		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(), "folder": str(),
 		"health": object(map[string]*Schema{
 			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
 				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},
@@ -5917,7 +5918,8 @@ func componentSchemas() map[string]*Schema {
 	pamTemplate := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
 		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
-	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "revision", "saved_at")
+		"require_recording": {Type: "boolean", Description: "refuses a session through the template that would not be recorded, and every check-out (A261 part 3)"},
+	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "require_recording", "revision", "saved_at")
 	pamDiscoveredAccountInfo := map[string]*Schema{
 		"key": str(), "name": str(),
 		"kind":       {Type: "string", Enum: []string{"local_user", "database_role", "database_user", "sql_login", "directory_user"}},
@@ -8834,7 +8836,8 @@ func componentSchemas() map[string]*Schema {
 		"PAMAccessTemplateList":          object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMAccessTemplate")}}, "items"),
 		"PAMAccessTemplateRequest": object(map[string]*Schema{
 			"name": str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
-			"revision": {Type: "integer", Description: "the revision being replaced (PUT only)"},
+			"require_recording": {Type: "boolean", Description: "refuse an unrecorded session and every check-out through the template"},
+			"revision":          {Type: "integer", Description: "the revision being replaced (PUT only)"},
 		}, "name", "reason", "required_approvals", "max_ttl_seconds"),
 		"PAMAccessTemplateDeleted": object(map[string]*Schema{"id": uuid(), "deleted": {Type: "boolean"}}, "id", "deleted"),
 		"PAMEmergencyResponders":   object(map[string]*Schema{"subjects": {Type: "array", Items: str()}}, "subjects"),
@@ -8882,6 +8885,7 @@ func componentSchemas() map[string]*Schema {
 		"PAMImportedAccountList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
 		"PAMCheckoutRequest": object(map[string]*Schema{
 			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql"}}, "target_id": str(), "reason": str(),
+			"template_id": {Type: "string", Format: "uuid", Description: "optional access template; a target folder's template cannot be overridden"},
 			"ttl_seconds": {Type: "integer", Description: "how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session"},
 		}, "request_id", "target_type", "target_id", "reason", "ttl_seconds"),
 		"PAMCheckoutRevealRequest": object(map[string]*Schema{
@@ -8900,6 +8904,19 @@ func componentSchemas() map[string]*Schema {
 		}, "request_id", "target_type", "target_id", "provider_id", "account_secret", "secret_version", "requested_by", "reason",
 			"approval_request_id", "revealed_at", "expires_at", "status"),
 		"PAMCheckoutList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMCheckout")}}, "items"),
+		"PAMFolder": object(map[string]*Schema{
+			"name": str(), "template_id": uuid(), "description": str(),
+			"targets":  {Type: "integer", Description: "registered targets in the folder"},
+			"revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
+		}, "name", "template_id", "targets", "revision", "saved_at"),
+		"PAMFolderList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMFolder")}}, "items"),
+		"PAMFolderRequest": object(map[string]*Schema{
+			"template_id": {Type: "string", Format: "uuid", Description: "the access template every account in the folder takes"},
+			"description": str(),
+			"revision":    {Type: "integer", Description: "the revision being replaced; omit to create"},
+		}, "template_id"),
+		"PAMFolderDeleted":       object(map[string]*Schema{"name": str(), "deleted": {Type: "boolean"}}, "name", "deleted"),
+		"PAMTargetFolderRequest": object(map[string]*Schema{"folder": {Type: "string", Description: "the folder to move the target into; empty moves it out"}}, "folder"),
 		"PAMCheckoutReveal": object(map[string]*Schema{
 			"checkout":   ref("PAMCheckout"),
 			"credential": {Type: "string", Description: "the vaulted account's credential, shown once; checking in or the deadline rotates it"},

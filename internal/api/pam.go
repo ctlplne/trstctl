@@ -146,6 +146,9 @@ type PAMTarget struct {
 	// through its gateway signed in as that account, with no per-session
 	// lease. An A240 static rotation keeps the secret current.
 	AccountSecret string `json:"account_secret,omitempty"`
+	// Folder (A261 part 3) names the folder whose template the target's
+	// requests take.
+	Folder string `json:"folder,omitempty"`
 }
 
 // PAMAccountHealth is a brokered account's credential health (A258).

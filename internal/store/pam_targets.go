@@ -34,31 +34,42 @@ type PAMTarget struct {
 	// account a database target's sessions sign in as; empty leases per
 	// session.
 	AccountSecret string
+	// Folder (A261 part 3) names the folder the target belongs to, whose
+	// access template its requests take; empty for none.
+	Folder string
 }
 
 const pamTargetColumns = `tenant_id::text, target_type, id, provider_id, allowed_roles,
     host, port, principals, enabled, registered_by, registered_at,
-    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints, account_secret`
+    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints, account_secret, folder`
 
 func scanPAMTarget(row pgx.Row) (PAMTarget, error) {
 	var rec PAMTarget
 	err := row.Scan(&rec.TenantID, &rec.TargetType, &rec.ID, &rec.ProviderID,
 		&rec.AllowedRoles, &rec.Host, &rec.Port, &rec.Principals, &rec.Enabled,
 		&rec.RegisteredBy, &rec.RegisteredAt, &rec.DisabledBy, &rec.DisabledReason, &rec.DisabledAt,
-		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints, &rec.AccountSecret)
+		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints, &rec.AccountSecret, &rec.Folder)
 	return rec, err
 }
 
 func (s *Store) ApplyPAMTargetRegisteredTx(ctx context.Context, tx pgx.Tx, rec PAMTarget) error {
 	_, err := tx.Exec(ctx, `INSERT INTO pam_targets
         (tenant_id, target_type, id, provider_id, allowed_roles, host, port,
-         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints, account_secret)
+         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints, account_secret, folder)
 		 VALUES ($1::uuid,$2,$3,$4,COALESCE($5::text[], '{}'::text[]),$6,$7,
-		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]),$14)
+		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]),$14,$15)
         ON CONFLICT (tenant_id,target_type,id) DO NOTHING`,
 		rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, rec.AllowedRoles,
 		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress, rec.HostKeyFingerprints,
-		rec.AccountSecret)
+		rec.AccountSecret, rec.Folder)
+	return err
+}
+
+// ApplyPAMTargetFolderSetTx projects pam.target.folder_set: a registered
+// target moved into a folder, or out of one (folder empty).
+func (s *Store) ApplyPAMTargetFolderSetTx(ctx context.Context, tx pgx.Tx, tenantID, targetType, id, folder string) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_targets SET folder = $4 WHERE tenant_id = $1::uuid AND target_type = $2 AND id = $3`,
+		tenantID, targetType, id, folder)
 	return err
 }
 

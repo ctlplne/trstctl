@@ -1254,6 +1254,48 @@ export const messages = {
     defaultMessage: "Close",
     description: "Action that closes the currently open operational workflow.",
   },
+  "admin.access.folders.panelHeading": {
+    defaultMessage: "Account folders and recording policies",
+    description: "Distinct accessible name for the account policy section.",
+  },
+  "admin.access.folders.selectTemplate": { defaultMessage: "Select an access template", description: "Required account folder access template selection." },
+  "admin.access.folders.heading": { defaultMessage: "Account folders", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.help": {
+    defaultMessage:
+      "A folder applies its access template to every account in it. A request cannot substitute a different template. Move an account explicitly to change its policy.",
+    description: "Account folder policy and recording workflow.",
+  },
+  "admin.access.folders.name": { defaultMessage: "Folder name", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.template": { defaultMessage: "Access template", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.accounts": { defaultMessage: "Accounts", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.none": { defaultMessage: "None", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.templateHelp": {
+    defaultMessage:
+      "Create templates with access templates create in the CLI. Select one here to apply its reason, approval count, session limit and recording rule.",
+    description: "Account folder policy and recording workflow.",
+  },
+  "admin.access.folders.save": { defaultMessage: "Save folder", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.edit": { defaultMessage: "Edit folder", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.delete": { defaultMessage: "Delete empty folder", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.cancel": { defaultMessage: "Cancel folder edit", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.saved": {
+    defaultMessage: "Account policy saved. New requests use the current policy; changed policies require a new review.",
+    description: "Account folder policy and recording workflow.",
+  },
+  "admin.access.folders.failed": { defaultMessage: "Account policy could not be saved", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.recording": { defaultMessage: "Template recording rules", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.recordingHelp": {
+    defaultMessage:
+      "Required recording permits only gateway sessions with recording storage configured. Direct sessions and credential check-outs are refused.",
+    description: "Account folder policy and recording workflow.",
+  },
+  "admin.access.folders.required": { defaultMessage: "Recording required", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.optional": { defaultMessage: "Recording optional", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.requireRecording": { defaultMessage: "Require recording", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.allowUnrecorded": { defaultMessage: "Allow unrecorded access", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.membership": { defaultMessage: "Account folder membership", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.forTarget": { defaultMessage: "Folder for {target}", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.move": { defaultMessage: "Move account", description: "Account folder policy and recording workflow." },
   "admin.access.pamUnavailableTitle": {
     defaultMessage: "Privileged access sessions are unavailable",
     description: "Unavailable-state heading when privileged access sessions cannot be loaded.",

@@ -283,7 +283,12 @@ import (
 // Version 93 carries A261's check-outs: without them a restored store would
 // lose which vaulted credentials were revealed and must still be rotated
 // while its covered offset skipped their events.
-const SnapshotFormatVersion = 93
+// Version 94 carries A261's folders, each registered target's folder and each
+// template's recording rule: without them a restored store would drop the
+// template every account in a folder takes, and let a request skip the
+// recording its template requires, while its covered offset skipped their
+// events.
+const SnapshotFormatVersion = 94
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -386,6 +391,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_imported_accounts",
 	// Format 93: A261's check-outs of vaulted accounts.
 	"pam_checkouts",
+	// Format 94: A261's account folders.
+	"pam_folders",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -753,6 +760,7 @@ SELECT jsonb_build_object(
   'pam_discovered_accounts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_discovered_accounts t),
   'pam_imported_accounts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_imported_accounts t),
   'pam_checkouts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_checkouts t),
+  'pam_folders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_folders t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

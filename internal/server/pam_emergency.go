@@ -5,7 +5,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -46,7 +45,7 @@ var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 	return api.PAMAccessTemplate{ID: t.ID, Name: t.Name, Reason: t.Reason, RequiredApprovals: t.RequiredApprovals,
-		MaxTTLSeconds: t.MaxTTLSeconds, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
+		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
 }
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
@@ -95,7 +94,7 @@ func (s *pamService) SavePAMTemplate(ctx context.Context, tenantID, actor string
 		}
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMTemplateSaved, projections.PAMTemplateSaved{ID: t.ID, Name: t.Name,
-		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, Revision: revision,
+		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, Revision: revision,
 		Actor: actor, At: s.clock().UTC()}); err != nil {
 		return api.PAMAccessTemplate{}, err
 	}
@@ -138,16 +137,17 @@ func (s *pamService) DeletePAMTemplate(ctx context.Context, tenantID, id, actor 
 // (with the requester's note after it), its maximum length, and the quorum it
 // asks for. A template changed or deleted after the review no longer opens.
 func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.PAMSessionRequest) (api.PAMSessionRequest, int, []string, error) {
-	if req.TemplateID == "" {
-		return req, s.requiredApprovals, nil, nil
-	}
-	t, err := s.store.GetPAMTemplate(ctx, tenantID, req.TemplateID)
-	if errors.Is(err, store.ErrPAMTemplateNotFound) {
-		return req, 0, nil, fmt.Errorf("%w: access template %s does not exist", api.ErrPAMInvalid, req.TemplateID)
-	}
+	t, refs, recorded, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
 	if err != nil {
 		return req, 0, nil, err
 	}
+	if t == nil {
+		return req, s.requiredApprovals, refs, nil
+	}
+	if t.RequireRecording && !recorded {
+		return req, 0, nil, fmt.Errorf("%w: this template requires a recorded gateway session and configured recording storage", api.ErrPAMInvalid)
+	}
+	req.TemplateID = t.ID
 	reason := t.Reason
 	if note := strings.TrimSpace(req.Reason); note != "" {
 		reason += ": " + note
@@ -158,7 +158,7 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 		req.TTLSeconds = min(maxTTL, int64(s.ttl(req.TTLSeconds)/time.Second))
 	}
 	return req, max(s.requiredApprovals, t.RequiredApprovals),
-		[]string{fmt.Sprintf("pam-template:%s@%d", t.Name, t.Revision)}, nil
+		refs, nil
 }
 
 func (s *pamService) SetPAMEmergencyResponders(ctx context.Context, tenantID, actor string, subjects []string) ([]string, error) {
@@ -204,6 +204,12 @@ func (s *pamService) OpenPAMEmergencySession(ctx context.Context, tenantID, idem
 	}
 	if !slices.Contains(responders, responder) {
 		return api.PAMSession{}, fmt.Errorf("%w: %s is not a named emergency responder", api.ErrPAMRejected, responder)
+	}
+	// Emergency authority skips the ordinary quorum, never the account's
+	// required recording or lifetime policy.
+	req, _, _, err = s.withTemplate(ctx, tenantID, req)
+	if err != nil {
+		return api.PAMSession{}, err
 	}
 	if err := s.validate(ctx, tenantID, idempotencyKey, responder, req); err != nil {
 		return api.PAMSession{}, err

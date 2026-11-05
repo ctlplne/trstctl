@@ -1720,6 +1720,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.pamTemplateRoutes()...)     // see pam_templates.go
 	routes = append(routes, a.pamDiscoveryRoutes()...)    // see pam_discovery.go
 	routes = append(routes, a.pamCheckoutRoutes()...)     // see pam_checkouts.go
+	routes = append(routes, a.pamFolderRoutes()...)       // see pam_folders.go
 	routes = append(routes, a.pamBrowserRoutes()...)      // see pam_browser.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
 	routes = append(routes, a.switchingWaveRoutes()...)   // see switching_waves.go

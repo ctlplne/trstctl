@@ -127,7 +127,26 @@ func (s *pamService) vaultedAccount(ctx context.Context, tenantID, targetType, a
 }
 
 func (s *pamService) RequestPAMCheckout(ctx context.Context, tenantID, requester string, req api.PAMCheckoutRequest) (api.PAMCheckoutReview, error) {
+	template, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
+	if err != nil {
+		return api.PAMCheckoutReview{}, err
+	}
+	requiredApprovals := s.requiredApprovals
 	reason := strings.TrimSpace(req.Reason)
+	if template != nil {
+		if template.RequireRecording {
+			return api.PAMCheckoutReview{}, fmt.Errorf("%w: this template requires recording; a check-out cannot be recorded", api.ErrPAMInvalid)
+		}
+		if reason != "" {
+			reason = template.Reason + ": " + reason
+		} else {
+			reason = template.Reason
+		}
+		requiredApprovals = max(requiredApprovals, template.RequiredApprovals)
+		if req.TTLSeconds > template.MaxTTLSeconds {
+			req.TTLSeconds = template.MaxTTLSeconds
+		}
+	}
 	ttl := time.Duration(req.TTLSeconds) * time.Second
 	switch {
 	case requester == "":
@@ -161,8 +180,8 @@ func (s *pamService) RequestPAMCheckout(ctx context.Context, tenantID, requester
 		ResourceKind: "pam_checkout", ResourceID: "pam-checkout:" + req.RequestID, ResourceName: req.TargetType + "/" + req.TargetID,
 		Action: "reveal", Requester: requester, FromState: "vaulted", ToState: "revealed", Reason: reason,
 		EvidenceRefs: []string{"pam-checkout-sha256:" + digest, "pam-checkout-target:" + req.TargetType + "/" + req.TargetID,
-			"pam-checkout-account:" + target.cfg.AccountSecret, "pam-checkout-ttl:" + strconv.Itoa(req.TTLSeconds)},
-		RequiredApprovals: s.requiredApprovals, TTL: s.approvalTTL,
+			"pam-checkout-account:" + target.cfg.AccountSecret, "pam-checkout-ttl:" + strconv.Itoa(req.TTLSeconds), "pam-checkout-template:" + req.TemplateID, pamCheckoutPolicyRef(policyRefs)},
+		RequiredApprovals: requiredApprovals, TTL: s.approvalTTL,
 	})
 	if err != nil {
 		return api.PAMCheckoutReview{}, err
@@ -207,6 +226,31 @@ func (s *pamService) RevealPAMCheckout(ctx context.Context, tenantID, requester,
 	target, err := s.checkoutTarget(ctx, tenantID, targetType, targetID)
 	if err != nil {
 		return nil, err
+	}
+	// Re-read the folder and template before revealing: a policy changed
+	// after review requires a fresh review, and recording can never be bypassed.
+	requestedTemplate := ""
+	for _, ref := range approval.EvidenceRefs {
+		if v, ok := strings.CutPrefix(ref, "pam-checkout-template:"); ok {
+			requestedTemplate = v
+		}
+	}
+	template, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, targetType, targetID, requestedTemplate)
+	if err != nil {
+		return nil, err
+	}
+	if template != nil && template.RequireRecording {
+		return nil, fmt.Errorf("%w: this template requires recording; a check-out cannot be recorded", api.ErrPAMInvalid)
+	}
+	matchedPolicy := containsExactString(approval.EvidenceRefs, pamCheckoutPolicyRef(policyRefs))
+	legacyPolicy := true
+	for _, ref := range approval.EvidenceRefs {
+		if strings.HasPrefix(ref, "pam-checkout-policy:") {
+			legacyPolicy = false
+		}
+	}
+	if !matchedPolicy && (!legacyPolicy || len(policyRefs) != 0) {
+		return nil, fmt.Errorf("%w: the folder or template changed since review; request a new review", api.ErrPAMRejected)
 	}
 	digest, err := pamCheckoutDigest(requestID, targetType, targetID, target.cfg.ProviderID, target.cfg.AccountSecret, approval.Reason,
 		requester, ttlSeconds)
@@ -400,4 +444,9 @@ func (s *Server) GetPAMCheckout(ctx context.Context, tenantID, requestID string)
 		return api.PAMCheckout{}, api.ErrPAMUnavailable
 	}
 	return s.pam.GetPAMCheckout(ctx, tenantID, requestID)
+}
+
+func pamCheckoutPolicyRef(refs []string) string {
+	raw, _ := json.Marshal(refs)
+	return "pam-checkout-policy:" + crypto.SHA256Hex(raw)
 }
