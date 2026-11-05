@@ -1185,6 +1185,18 @@ func groupRuntimeEntries(manifest Manifest, selectedID string, selectionActive b
 	return groups
 }
 
+// runtimeGroupOutcome names how a group's proof ended, for its progress
+// line.
+func runtimeGroupOutcome(execution *runtimeTestExecution) string {
+	switch {
+	case execution.skipped:
+		return "skipped"
+	case execution.failed || !execution.passed:
+		return "failed"
+	}
+	return "passed"
+}
+
 func cleanupRuntimeExecutions(executions map[string]*runtimeTestExecution) {
 	for _, execution := range executions {
 		if execution == nil {
@@ -1208,11 +1220,18 @@ func runRuntimeProof(ctx context.Context, repo string, entry Entry, profileName 
 	if execution == nil {
 		var err error
 		began := time.Now()
+		name := strings.ReplaceAll(key, "\x00", " ")
+		// Progress goes to stderr as it happens (CI-L51): a shard cancelled at
+		// its job timeout still shows which groups finished, how long each
+		// took, and which one was running.
+		_, _ = fmt.Fprintf(os.Stderr, ">> runtime group %s: started %s\n", name, began.UTC().Format(time.RFC3339))
 		execution, err = executeRuntimeTest(ctx, repo, profileName, profile, launched, substrate, group, runner)
 		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, ">> runtime group %s: did not run after %.0fs\n", name, time.Since(began).Seconds())
 			return checkEvidence{Detail: err.Error()}
 		}
 		execution.elapsed = time.Since(began)
+		_, _ = fmt.Fprintf(os.Stderr, ">> runtime group %s: %s in %.0fs\n", name, runtimeGroupOutcome(execution), execution.elapsed.Seconds())
 		cache[key] = execution
 	}
 	if execution.skipped {

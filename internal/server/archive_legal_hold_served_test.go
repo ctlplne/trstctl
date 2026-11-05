@@ -130,6 +130,17 @@ func TestServedArchiveLegalHoldIsSetInTheBucketAndReadBack(t *testing.T) {
 	if got := r.hold208(t, ignored.ID); got.Status != "pending" {
 		t.Fatalf("an unapplied hold reads %+v", got)
 	}
+	// Once the bucket honors it, the retried hold applies. Holds share one
+	// ordered outbox lane per receiver, so the next hold waits behind this one
+	// until it settles (CI-L50: on a slow runner its retry was not yet due
+	// when the next hold's drain ran, and that hold still read pending).
+	objects.mu.Lock()
+	objects.ignore = false
+	objects.mu.Unlock()
+	a201Await(t, "the retried hold applies once the bucket honors it", func() bool {
+		r.drain(t)
+		return r.hold208(t, ignored.ID).Status == "applied"
+	})
 
 	// A bucket without Object Lock: the hold fails with the reason.
 	objects.mu.Lock()

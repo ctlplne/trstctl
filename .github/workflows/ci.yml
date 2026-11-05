@@ -877,7 +877,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -938,7 +938,7 @@ jobs:
         run: scripts/ci/route-docker-host-to-loopback.sh
 
       - name: Run this shard of the shipped-binary Definition-of-Done census
-        run: make dod-census-shard DOD_SHARD=${{ matrix.shard }} DOD_SHARDS=3
+        run: make dod-census-shard DOD_SHARD=${{ matrix.shard }} DOD_SHARDS=4
 
       - name: Upload the shard receipt
         if: always()
@@ -1030,7 +1030,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge the shards into the shipped-binary Definition-of-Done census
-        run: make dod-census-merge DOD_SHARDS=3
+        run: make dod-census-merge DOD_SHARDS=4
 
       - name: Verify journey served badges against the fresh census
         run: make journey-census-check

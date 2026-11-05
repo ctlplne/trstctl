@@ -2405,7 +2405,7 @@ not this file.
 | `tools/dodcensus/runtime.go:225` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:439` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime.go:1141` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/dodcensus/runtime.go:1476` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/dodcensus/runtime.go:1495` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:99` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:714` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/runtime_runner.go:853` | developer tool reading the repo paths it is pointed at (CWE-22) |
