@@ -6490,6 +6490,12 @@ export const messages = {
     defaultMessage: "Enter at least one role configured on this provider.",
     description: "Gateway provider role validation.",
   },
+  "admin.access.gcpAPI": { defaultMessage: "Google Cloud API account", description: "A263 gateway-only service-account API target." },
+  "admin.access.gcpAPIProof": {
+    defaultMessage:
+      "Stand-in proof: the gateway uploads a session key, exchanges a scoped service-account assertion, and holds the API token. Deleting the key stops new grants; existing tokens keep their native expiry. Human console sign-in is separate.",
+    description: "Service-account gateway proof and native token expiry limit.",
+  },
   "admin.access.awsAPI": { defaultMessage: "AWS API with STS", description: "A263 gateway-only cloud account type." },
   "admin.access.awsAPIProof": {
     defaultMessage:

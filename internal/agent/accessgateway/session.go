@@ -41,6 +41,7 @@ const (
 	TargetSSH        = "ssh"
 	TargetSnowflake  = "snowflake"
 	TargetAWS        = "aws"
+	TargetGCP        = "gcp"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -52,7 +53,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP:
 		return true
 	}
 	return false
@@ -61,7 +62,7 @@ func RedeemsCredential(targetType string) bool {
 // HTTPUpstream reports whether a session type is spoken to over HTTP and
 // names its upstream in the job (its credential names no address).
 func HTTPUpstream(targetType string) bool {
-	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake || targetType == TargetAWS
+	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake || targetType == TargetAWS || targetType == TargetGCP
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -70,16 +71,19 @@ func HTTPUpstream(targetType string) bool {
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
-	AWSService      string              `json:"aws_service,omitempty"`
-	AWSRegion       string              `json:"aws_region,omitempty"`
-	CommandPolicy   *accessrules.Policy `json:"command_policy,omitempty"`
-	SessionID       string              `json:"session_id"`
-	TargetType      string              `json:"target_type"`
-	TargetID        string              `json:"target_id"`
-	ExpiresAt       time.Time           `json:"expires_at"`
-	TicketDigest    string              `json:"ticket_digest"`
-	CredentialRef   string              `json:"credential_ref,omitempty"`
-	RequiredAgentID string              `json:"required_agent_id"`
+	OAuthTokenEndpoint string              `json:"oauth_token_endpoint,omitempty"`
+	OAuthScopes        []string            `json:"oauth_scopes,omitempty"`
+	OAuthSubject       string              `json:"oauth_subject,omitempty"`
+	AWSService         string              `json:"aws_service,omitempty"`
+	AWSRegion          string              `json:"aws_region,omitempty"`
+	CommandPolicy      *accessrules.Policy `json:"command_policy,omitempty"`
+	SessionID          string              `json:"session_id"`
+	TargetType         string              `json:"target_type"`
+	TargetID           string              `json:"target_id"`
+	ExpiresAt          time.Time           `json:"expires_at"`
+	TicketDigest       string              `json:"ticket_digest"`
+	CredentialRef      string              `json:"credential_ref,omitempty"`
+	RequiredAgentID    string              `json:"required_agent_id"`
 	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
 	// (SHA256:...) route an SSH session; they are public facts.
 	SSHAddress             string   `json:"ssh_address,omitempty"`
@@ -146,6 +150,23 @@ func ValidateSessionIntent(in SessionIntent) error {
 	} else if in.AWSService != "" || in.AWSRegion != "" {
 		return errors.New("accessgateway: non-AWS session cannot carry AWS scope")
 	}
+	if in.TargetType == TargetGCP {
+		u, err := url.Parse(in.OAuthTokenEndpoint)
+		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || in.OAuthSubject == "" || len(in.OAuthSubject) > 320 || strings.ContainsAny(in.OAuthSubject, " \t\r\n") || len(in.OAuthScopes) == 0 || len(in.OAuthScopes) > 16 {
+			return errors.New("accessgateway: Google Cloud session needs a fixed OAuth binding")
+		}
+		seen := map[string]bool{}
+		for _, scope := range in.OAuthScopes {
+			u, err := url.Parse(scope)
+			if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(scope) > 256 || strings.ContainsAny(scope, " \t\r\n") || seen[scope] {
+				return errors.New("accessgateway: invalid OAuth scope")
+			}
+			seen[scope] = true
+		}
+	} else if in.OAuthTokenEndpoint != "" || len(in.OAuthScopes) != 0 || in.OAuthSubject != "" {
+		return errors.New("accessgateway: non-OAuth session cannot carry OAuth scope")
+	}
+
 	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {
 		return err
 	}

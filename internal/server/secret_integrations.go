@@ -220,6 +220,7 @@ type configuredDynamicProvider struct {
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
 	if cfg.Gateway != nil {
 		gateway := *cfg.Gateway
+		gateway.Scopes = append([]string(nil), cfg.Gateway.Scopes...)
 		cfg.Gateway = &gateway
 	}
 
@@ -313,7 +314,7 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 // empty endpoint.
 func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Context) (string, []byte, string, error) {
 	switch p.cfg.Type {
-	case "aws-sts":
+	case "aws-sts", "gcp-iam":
 		if p.cfg.Gateway == nil {
 			return "", nil, "", errors.New("cloud provider has no gateway endpoint")
 		}
@@ -1887,4 +1888,12 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayAWS() (string, string, e
 		return "", "", errors.New("provider has no AWS gateway binding")
 	}
 	return p.cfg.Gateway.Service, p.cfg.Gateway.Region, nil
+}
+
+// DynamicSecretGatewayOAuth returns only reviewed public routing and authority.
+func (p *configuredDynamicProvider) DynamicSecretGatewayOAuth() (string, []string, string, error) {
+	if p.cfg.Type != "gcp-iam" || p.cfg.Gateway == nil {
+		return "", nil, "", errors.New("provider has no Google Cloud gateway binding")
+	}
+	return p.cfg.Gateway.TokenEndpoint, append([]string(nil), p.cfg.Gateway.Scopes...), p.cfg.ServiceAccount, nil
 }

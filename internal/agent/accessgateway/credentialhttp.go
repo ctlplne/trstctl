@@ -84,11 +84,16 @@ func credentialHTTPRoundTrip(ctx context.Context, request *http.Request, body []
 	for _, name := range []string{"Authorization", "Proxy-Authorization", "X-Snowflake-Authorization-Token-Type", "X-Amz-Security-Token", "Cookie", "Connection", "Proxy-Connection", "Keep-Alive", "Transfer-Encoding", "TE", "Trailer", "Upgrade", "Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Idempotency-Key", "X-Idempotency-Key", "Expect"} {
 		out.Header.Del(name)
 	}
-	auth, err := authorize(out)
+	var auth *secret.Buffer
+	if authorize != nil {
+		auth, err = authorize(out)
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer auth.Destroy()
+	if auth != nil {
+		defer auth.Destroy()
+	}
 	var wire bytes.Buffer
 	if err := out.Write(&wire); err != nil {
 		return nil, err
@@ -98,11 +103,25 @@ func credentialHTTPRoundTrip(ctx context.Context, request *http.Request, body []
 	if split < 0 {
 		return nil, errors.New("accessgateway: invalid serialized credential request")
 	}
-	err = auth.Use(func(headers []byte) error {
-		parts := net.Buffers{wire.Bytes()[:split], []byte("\r\n"), headers, wire.Bytes()[split:]}
-		_, err := parts.WriteTo(conn)
-		return err
+	// Serialization may contain an OAuth assertion in its body. Move the whole
+	// wire image into locked memory and wipe the scratch before network I/O.
+	held, err := secret.NewFrom(wire.Bytes())
+	secret.Wipe(wire.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	err = held.Use(func(wireBytes []byte) error {
+		if auth == nil {
+			_, err := conn.Write(wireBytes)
+			return err
+		}
+		return auth.Use(func(headers []byte) error {
+			parts := net.Buffers{wireBytes[:split], []byte("\r\n"), headers, wireBytes[split:]}
+			_, err := parts.WriteTo(conn)
+			return err
+		})
 	})
+	held.Destroy()
 	if err != nil {
 		return nil, err
 	}

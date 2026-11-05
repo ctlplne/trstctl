@@ -19,3 +19,10 @@ func TestAWSClientLineRequiresReviewedSigningScope(t *testing.T) {
 		}
 	}
 }
+
+func TestGCPClientLineCarriesNoNativeCredential(t *testing.T) {
+	line, err := gatewayClientLine("gcp", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8000}, "", "", "")
+	if err != nil || line != "curl --fail-with-body http://127.0.0.1:8000/<API-path>" {
+		t.Fatal("GCP client command needs a credential or omits the tunnel")
+	}
+}

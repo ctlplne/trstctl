@@ -91,11 +91,13 @@ func (c AWSHoneyAccountConfig) PollIntervalDuration() (time.Duration, error) {
 // tenant. Type is one of the eight built-ins. Fields not used by that type must be
 // left empty; validation rejects incomplete entries before the server starts.
 // DynamicSecretGatewayConfig pins where a brokered cloud account can call.
-// These are public routing facts, covered by the provider's revision digest.
+// These are public routing facts, covered by the provider's reviewed configuration identity.
 type DynamicSecretGatewayConfig struct {
-	Endpoint string `json:"endpoint"`
-	Service  string `json:"service"`
-	Region   string `json:"region"`
+	Endpoint      string   `json:"endpoint"`
+	Service       string   `json:"service,omitempty"`
+	Region        string   `json:"region,omitempty"`
+	TokenEndpoint string   `json:"token_endpoint,omitempty"`
+	Scopes        []string `json:"scopes,omitempty"`
 }
 
 type DynamicSecretProviderConfig struct {
@@ -791,14 +793,41 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		}
 	}
 	if c.Gateway != nil {
-		if c.Type != "aws-sts" {
-			errs = append(errs, fmt.Errorf("%s gateway is supported only for aws-sts", where))
-		}
-		if c.Gateway.Service != "s3" && c.Gateway.Service != "sts" {
-			errs = append(errs, fmt.Errorf("%s gateway service must be s3 or sts", where))
-		}
-		if !awsHoneyRegion.MatchString(c.Gateway.Region) {
-			errs = append(errs, fmt.Errorf("%s gateway region must be explicit", where))
+		switch c.Type {
+		case "aws-sts":
+			if c.Gateway.Service != "s3" && c.Gateway.Service != "sts" {
+				errs = append(errs, fmt.Errorf("%s gateway service must be s3 or sts", where))
+			}
+			if !awsHoneyRegion.MatchString(c.Gateway.Region) {
+				errs = append(errs, fmt.Errorf("%s gateway region must be explicit", where))
+			}
+			if c.Gateway.TokenEndpoint != "" || len(c.Gateway.Scopes) != 0 {
+				errs = append(errs, fmt.Errorf("%s AWS gateway cannot carry OAuth scope", where))
+			}
+		case "gcp-iam":
+			if c.Gateway.Service != "" || c.Gateway.Region != "" {
+				errs = append(errs, fmt.Errorf("%s OAuth gateway cannot carry AWS scope", where))
+			}
+			if err := validateSecretIntegrationEndpoint(c.Gateway.TokenEndpoint, c.AllowInsecureLoopback); err != nil {
+				errs = append(errs, fmt.Errorf("%s gateway token_endpoint: %w", where, err))
+			}
+			u, err := url.Parse(c.Gateway.TokenEndpoint)
+			if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+				errs = append(errs, fmt.Errorf("%s gateway token_endpoint must be a fixed URL without credentials or query", where))
+			}
+			if len(c.Gateway.Scopes) == 0 || len(c.Gateway.Scopes) > 16 {
+				errs = append(errs, fmt.Errorf("%s gateway needs one to sixteen explicit OAuth scopes", where))
+			}
+			seen := map[string]bool{}
+			for _, scope := range c.Gateway.Scopes {
+				u, err := url.Parse(scope)
+				if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(scope) > 256 || strings.ContainsAny(scope, " \t\r\n") || seen[scope] {
+					errs = append(errs, fmt.Errorf("%s gateway has an invalid or duplicate OAuth scope", where))
+				}
+				seen[scope] = true
+			}
+		default:
+			errs = append(errs, fmt.Errorf("%s gateway is supported only for aws-sts or gcp-iam", where))
 		}
 		if err := validateSecretIntegrationEndpoint(c.Gateway.Endpoint, c.AllowInsecureLoopback); err != nil {
 			errs = append(errs, fmt.Errorf("%s gateway endpoint: %w", where, err))

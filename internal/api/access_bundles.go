@@ -48,7 +48,7 @@ const (
 
 // accessBundleTargetTypes are the PAM target types a bundle may delegate
 // (A257).
-var accessBundleTargetTypes = []string{"aws", "clickhouse", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}
+var accessBundleTargetTypes = []string{"aws", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}
 
 // accessBundleName is a PAM target ID or role name a bundle may name.
 var accessBundleName = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)

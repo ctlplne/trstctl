@@ -170,6 +170,8 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 			commandGroup = "s3api"
 		}
 		return fmt.Sprintf("aws --no-sign-request --endpoint-url http://%s:%d --region %s %s <operation>", local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
+	case "gcp":
+		return fmt.Sprintf("curl --fail-with-body http://%s:%d/<API-path>", local.IP, local.Port), nil
 	case "snowflake":
 		return fmt.Sprintf("curl http://%s:%d/api/v2/statements -H 'Content-Type: application/json' --data-binary '{\"statement\":\"SELECT 1\"}'", local.IP, local.Port), nil
 	case "clickhouse":

@@ -213,6 +213,34 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 				return accessgateway.SessionIntent{}, errors.New("AWS account has no gateway signing scope")
 			}
 		}
+		if rec.TargetType == pamTargetGCP {
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			found := false
+			for _, provider := range s.providers.ForTenant(rec.TenantID) {
+				if provider == nil || provider.Name() != target.cfg.ProviderID {
+					continue
+				}
+				binding, ok := provider.(interface {
+					DynamicSecretGatewayOAuth() (string, []string, string, error)
+				})
+				if !ok {
+					continue
+				}
+				intent.OAuthTokenEndpoint, intent.OAuthScopes, intent.OAuthSubject, err = binding.DynamicSecretGatewayOAuth()
+				if err != nil {
+					return accessgateway.SessionIntent{}, err
+				}
+				found = true
+				break
+			}
+			if !found {
+				return accessgateway.SessionIntent{}, errors.New("server: Google Cloud account has no gateway OAuth scope")
+			}
+		}
+
 		return intent, nil
 	}
 	target, err := s.sshTarget(ctx, rec.TenantID, rec.TargetID)

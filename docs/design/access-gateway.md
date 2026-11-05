@@ -835,3 +835,61 @@ Track B. Packaged-deployment partition/restart qualification is unverified.
 
 Protocol references: AWS [SigV4 canonicalization and temporary credentials](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html)
 and [temporary-credential use](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html).
+
+
+## Google Cloud API accounts (A263, strict stand-in proof)
+
+A `gcp` target uses the existing prepared-key `gcp-iam` provider. Bind a narrowly
+scoped service account and a gateway before approving a session. The provider
+uploads the session's public key through its durable issuance outbox; only the
+exact gateway can redeem the sealed private key. Add this provider attachment:
+
+```json
+"gateway": {
+  "endpoint": "https://storage.googleapis.com",
+  "token_endpoint": "https://oauth2.googleapis.com/token",
+  "scopes": ["https://www.googleapis.com/auth/devstorage.read_only"]
+}
+```
+
+The API origin has no user information, path, query or fragment. The token URL
+and one to sixteen explicit scopes are copied into the reviewed provider binding
+and session job. The credential's `token_uri` and client headers never select the
+destination or authority. There is no `sub` claim or user impersonation. A target
+without the OAuth binding is refused before approval. Register it in the console
+or through the API with `target_type: "gcp"`, provider, allowed roles and gateway.
+Use `trstctl access sessions connect <id> --ticket-file <file>`, then the printed
+stock curl command with the required API path. The client holds no cloud key or
+token; this is API access with a service account, and does not implement gcloud's
+login state or human Cloud Console sign-in.
+
+The gateway signs an RS256 assertion capped at one hour and the session deadline,
+exchanges it at the fixed token endpoint, and holds the returned bearer token in
+locked memory. Assertion, key and token scratch are wiped; serialized credential
+requests are locked before network writes. Token responses are bounded to 64 KiB
+and a positive native lifetime of at most one hour. A connection refreshes an
+expired token while its session remains active. API requests have a 64 KiB header
+and 1 MiB body bound. HTTPS verifies the target certificate; explicitly enabled
+loopback HTTP is for the lab. Client bearer, API-key and forwarding authentication
+is removed. Recordings exclude raw auth headers and mask exact held credentials
+before text conversion, alongside the existing known-token masks.
+
+Termination closes the gateway's live connections and durably deletes the exact
+uploaded key. **Deleting a service-account key does not revoke an access token
+already minted from it.** That token retains its native expiry; the gateway's
+shorter deadline limits local use only. New keys may take a minute to propagate.
+A rejected grant returns HTTP 503 with a propagation/scope retry instruction;
+the gateway neither substitutes another identity nor retries without a bound.
+Operations permitted to mint other credentials still require native IAM limits.
+
+`TestServedGatewayGCPServiceAccountA263` uses a strict IAM upload/delete, RSA JWT,
+OAuth and scoped-resource stand-in, real PostgreSQL/NATS and stock curl. It checks
+API registration, tenant/role/ticket refusals, client custody, credential-free API
+read, live recall, exact key deletion, rejection of a new grant, and the same
+issued token's residual access followed by its native expiry. The recording is
+masked, sealed and verified. This does not qualify live Google Cloud, native
+gcloud, human console sign-in, or packaged restart/partition and recording
+retention/tamper behavior for this type.
+
+Native contracts: [service-account OAuth](https://developers.google.com/identity/protocols/oauth2/service-account)
+and [service-account key lifecycle](https://docs.cloud.google.com/iam/docs/keys-create-delete).

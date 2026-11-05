@@ -185,6 +185,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),
 			value("project", "Project", "Google Cloud project that owns the service account.", true),
 			value("service_account", "Service account", "Email of the narrowly scoped service account.", true),
+			value("gateway", "Gateway API binding", "Optional gateway-only account: endpoint is a fixed HTTPS API origin; token_endpoint is the fixed OAuth token URL; scopes is a nonempty array of explicit HTTPS scopes. Strict IAM/OAuth/API stand-in and stock curl proof only. Key deletion stops new grants, while issued access tokens retain native expiry. Human console sign-in is separate.", false),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Google access-token reference.", true),
 			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 		)},

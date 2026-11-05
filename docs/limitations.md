@@ -9133,3 +9133,15 @@ See [MongoDB rule scope](design/access-gateway.md#mongodb-command-name-guardrail
 ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
+
+
+### Google Cloud API accounts (A263, stand-in proof)
+
+Gateway-only `gcp` targets now use prepared `gcp-iam` service-account keys and a
+reviewed API origin, OAuth token URL and explicit scopes. Stock curl uses the
+credential-free ticket tunnel. The strict IAM/OAuth/resource stand-in proves
+scoped access, tenant/role/ticket refusal, recall, exact key deletion, masked and
+verified recording, and residual token access followed by native expiry. Deleting
+a key does not revoke tokens already minted from it. Live Google Cloud, native
+gcloud, human console login and packaged restart/partition/recording-retention
+qualification are unverified. See the [configuration and exact proof limits](design/access-gateway.md#google-cloud-api-accounts-a263-strict-stand-in-proof).

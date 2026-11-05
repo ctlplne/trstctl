@@ -4689,6 +4689,7 @@
                   "enum": [
                     "aws",
                     "clickhouse",
+                    "gcp",
                     "kubernetes",
                     "mongodb",
                     "mysql",
@@ -5357,6 +5358,7 @@
                         "enum": [
                           "aws",
                           "clickhouse",
+                          "gcp",
                           "kubernetes",
                           "mongodb",
                           "mysql",
@@ -5651,6 +5653,7 @@
                   "enum": [
                     "aws",
                     "clickhouse",
+                    "gcp",
                     "kubernetes",
                     "mongodb",
                     "mysql",
@@ -38598,6 +38601,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",
@@ -40220,6 +40224,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",
@@ -41111,6 +41116,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",
@@ -41190,6 +41196,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",
@@ -41345,6 +41352,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",
@@ -41458,6 +41466,7 @@
             "enum": [
               "aws",
               "clickhouse",
+              "gcp",
               "kubernetes",
               "mongodb",
               "mysql",

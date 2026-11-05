@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2629 annotated sites across 31 rules. Each row is
+2633 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1426` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1427` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1155,10 +1155,12 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (45 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (48 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
+| `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/dynsecret/auth0.go:108` | the rotated client secret is this provider's output: the outbox seals it and only the secret's readers open it (CWE-200) |
 | `internal/dynsecret/auth0.go:193` | client credentials go to the tenant's token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/aws_cache_users.go:170` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1202,6 +1204,7 @@ not this file.
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
+| `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
@@ -1318,7 +1321,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (342 sites)
+### G204 — CWE-78 OS command injection (343 sites)
 
 | Location | Reason |
 |---|---|
@@ -1540,7 +1543,8 @@ not this file.
 | `internal/server/pam_gateway_aws_served_test.go:195` | fixed command inspects only AWS variables in the test-owned CLI container (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:337` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:342` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2710,7 +2714,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (34 sites)
+### G702 — CWE-78 OS command injection (taint) (35 sites)
 
 | Location | Reason |
 |---|---|
@@ -2732,6 +2736,7 @@ not this file.
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |

@@ -97,11 +97,16 @@ func recordAWS(rec *connRecorder, material *awsGatewayMaterial, kind string, hea
 // maskAWSHead copies only a bounded recording head. Returned bytes contain no
 // complete injected credential or truncated suffix that could finish one.
 func maskAWSHead(credential awssignin.Credentials, head []byte, size int) []byte {
+	return maskCredentialHead(head, size, credential.AccessKeyID, credential.SecretAccessKey, credential.SessionToken)
+}
+
+func maskCredentialHead(head []byte, size int, literals ...[]byte) []byte {
 	head = head[:min(len(head), clickhouseRecordBytes)]
-
 	masked := bytes.Clone(head)
-
-	for _, literal := range [][]byte{credential.AccessKeyID, credential.SecretAccessKey, credential.SessionToken} {
+	for _, literal := range literals {
+		if len(literal) == 0 {
+			continue
+		}
 		replaced := bytes.ReplaceAll(masked, literal, []byte("[masked:credential]"))
 		secret.Wipe(masked)
 		masked = replaced

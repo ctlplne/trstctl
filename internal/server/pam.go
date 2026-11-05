@@ -45,6 +45,7 @@ const (
 	pamTargetK8s       = "kubernetes"
 	pamTargetSnowflake = "snowflake"
 	pamTargetAWS       = "aws"
+	pamTargetGCP       = "gcp"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -65,10 +66,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetK8s:       "kubernetes",
 	pamTargetSnowflake: "snowflake",
 	pamTargetAWS:       "aws-sts",
+	pamTargetGCP:       "gcp-iam",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -436,6 +438,19 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 					return nil, fmt.Errorf("server: AWS target %q provider needs a configured gateway endpoint/service/region", target.ID)
 				}
 			}
+			if target.TargetType == pamTargetGCP {
+				binding, ok := provider.(interface {
+					DynamicSecretGatewayOAuth() (string, []string, string, error)
+				})
+				if !ok {
+					return nil, fmt.Errorf("server: Google Cloud target %q provider has no OAuth binding", target.ID)
+				}
+				tokenEndpoint, scopes, subject, err := binding.DynamicSecretGatewayOAuth()
+				if err != nil || tokenEndpoint == "" || len(scopes) == 0 || subject == "" {
+					return nil, fmt.Errorf("server: Google Cloud target %q provider needs a configured gateway origin, token endpoint and scopes", target.ID)
+				}
+			}
+
 			providerRevision = profile.DynamicSecretConfigurationRevision()
 			if providerRevision == "" {
 				return nil, fmt.Errorf("server: PAM target %q provider has no configuration revision", target.ID)
