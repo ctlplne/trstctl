@@ -10,6 +10,14 @@ import { CAHierarchy } from "@/pages/CAHierarchy";
 import { ToastProvider } from "@/components/ToastProvider";
 import { AppQueryProvider } from "@/lib/query";
 
+// Operators paste PEM blocks, ceremony IDs and signatures; typing them one key
+// at a time re-renders this page once per character, which on a loaded CI
+// runner took a test past its time limit (CI-L30).
+async function paste(user: ReturnType<typeof userEvent.setup>, field: HTMLElement, value: string) {
+  await user.click(field);
+  await user.paste(value);
+}
+
 vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { tenant_id: "tenant-a", subject: "eval-admin" } }) }));
 
 const { apiMock } = vi.hoisted(() => ({
@@ -788,7 +796,7 @@ describe("CA hierarchy and custody surface", () => {
 
     await user.click(await screen.findByRole("button", { name: "Create root CA" }));
     const dialog = await screen.findByRole("dialog", { name: "Create root CA" });
-    await user.type(within(dialog).getByLabelText(/Ceremony ID/), "ceremony-reviewed-root");
+    await paste(user, within(dialog).getByLabelText(/Ceremony ID/), "ceremony-reviewed-root");
     await user.click(within(dialog).getByRole("button", { name: "Create root CA" }));
 
     await waitFor(() =>
@@ -864,7 +872,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(within(await screen.findByRole("dialog", { name: "QA Issuing CA" })).getByRole("button", { name: /Issue leaf/ }));
     const dialog = await screen.findByRole("dialog", { name: /Issue leaf from QA Issuing CA/ });
     expect(within(dialog).getByLabelText("TTL seconds")).toHaveValue(2592000);
-    await user.type(within(dialog).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBtest\n-----END CERTIFICATE REQUEST-----");
+    await paste(user, within(dialog).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBtest\n-----END CERTIFICATE REQUEST-----");
     await user.click(within(dialog).getByRole("button", { name: "Issue leaf certificate" }));
 
     await waitFor(() =>
@@ -1083,7 +1091,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.type(within(issueRegion).getByLabelText("Profile name"), "web-server");
     await user.clear(within(issueRegion).getByLabelText("TTL days"));
     await user.type(within(issueRegion).getByLabelText("TTL days"), "7");
-    await user.type(within(issueRegion).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----");
+    await paste(user, within(issueRegion).getByLabelText("CSR PEM"), "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----");
 
     await user.click(within(issueRegion).getByRole("button", { name: "Issue through external CA" }));
 
@@ -1379,7 +1387,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("No ceremony loaded")).toBeInTheDocument();
     const lifecycle = screen.getByRole("heading", { name: "CA key ceremony" }).closest("section");
     expect(lifecycle).not.toBeNull();
-    await user.type(within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
+    await paste(user, within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
     await user.click(screen.getByRole("button", { name: "Load ceremony" }));
 
     await waitFor(() => expect(apiMock.caCeremony).toHaveBeenCalledWith(id));
@@ -1411,7 +1419,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
     const lifecycle = screen.getByRole("heading", { name: "CA key ceremony" }).closest("section");
     expect(lifecycle).not.toBeNull();
-    await user.type(within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
+    await paste(user, within(lifecycle!).getByLabelText("Find ceremony by ID"), id);
     await user.click(screen.getByRole("button", { name: "Load ceremony" }));
     await user.click(await screen.findByRole("button", { name: "Cancel ceremony" }));
     const dialog = await screen.findByRole("dialog", { name: "Cancel pending ceremony" });
@@ -1661,13 +1669,13 @@ describe("CA hierarchy and custody surface", () => {
     });
     renderCAHierarchy();
 
-    await user.type(await screen.findByLabelText("Offline root certificate PEM"), "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----");
+    await paste(user, await screen.findByLabelText("Offline root certificate PEM"), "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----");
     expect(screen.queryByText(/trstctl offline root proof of possession v1/)).not.toBeInTheDocument();
     const ceremonyID = "3f2a9c1e-7b4d-4e8a-9c0f-5d6e7f809a1b";
-    await user.type(screen.getByLabelText("Root ceremony ID"), ceremonyID);
+    await paste(user, screen.getByLabelText("Root ceremony ID"), ceremonyID);
     expect(screen.getByText(/trstctl offline root proof of possession v1/)).toHaveTextContent(ceremonyID);
 
-    await user.type(screen.getByLabelText("Possession signature (optional)"), "MEUCIQ==");
+    await paste(user, screen.getByLabelText("Possession signature (optional)"), "MEUCIQ==");
     await user.click(screen.getByRole("button", { name: "Import offline root" }));
     await waitFor(() =>
       expect(apiMock.importOfflineRootCA).toHaveBeenCalledWith(expect.objectContaining({ ceremony_id: ceremonyID, possession_signature: "MEUCIQ==" })),
@@ -1680,7 +1688,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
 
     const rootPEM = "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
-    await user.type(await screen.findByLabelText("Offline root certificate PEM"), rootPEM);
+    await paste(user, await screen.findByLabelText("Offline root certificate PEM"), rootPEM);
     await user.click(screen.getByRole("button", { name: "Start offline-root ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
@@ -1727,7 +1735,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(csrTextArea.value).toContain("BEGIN CERTIFICATE REQUEST");
 
     const intermediatePEM = "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----";
-    await user.type(screen.getByLabelText("Offline-signed intermediate PEM"), intermediatePEM);
+    await paste(user, screen.getByLabelText("Offline-signed intermediate PEM"), intermediatePEM);
     await user.click(screen.getByRole("button", { name: "Import offline-signed intermediate" }));
     await waitFor(() =>
       expect(apiMock.importOfflineIntermediateCA).toHaveBeenCalledWith(
@@ -1751,7 +1759,7 @@ describe("CA hierarchy and custody surface", () => {
     const chainPEM = "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
     await user.clear(await screen.findByLabelText("Signer handle"));
     await user.type(screen.getByLabelText("Signer handle"), "customer-existing-ca");
-    await user.type(screen.getByLabelText("Existing CA chain PEM"), chainPEM);
+    await paste(user, screen.getByLabelText("Existing CA chain PEM"), chainPEM);
     await user.selectOptions(screen.getByLabelText("Registered parent authority"), "ca-registered-root");
     await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
@@ -1793,7 +1801,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByLabelText("Signer handle")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import existing CA" })).not.toBeInTheDocument();
     const rootPEM = "-----BEGIN CERTIFICATE-----\nEXISTINGROOT\n-----END CERTIFICATE-----";
-    await user.type(screen.getByLabelText("Existing CA chain PEM"), rootPEM);
+    await paste(user, screen.getByLabelText("Existing CA chain PEM"), rootPEM);
     await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
 
@@ -1824,7 +1832,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
     const issuerPEM = "-----BEGIN CERTIFICATE-----\nISSUER\n-----END CERTIFICATE-----";
     const signedChain = "-----BEGIN CERTIFICATE-----\nCHILD\n-----END CERTIFICATE-----\n" + issuerPEM;
-    await user.type(await screen.findByLabelText("External issuer chain PEM"), issuerPEM);
+    await paste(user, await screen.findByLabelText("External issuer chain PEM"), issuerPEM);
     await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
     await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
     await waitFor(() =>
@@ -1846,7 +1854,7 @@ describe("CA hierarchy and custody surface", () => {
       ),
     );
     expect(((await screen.findByLabelText("Public CSR to sign externally")) as HTMLTextAreaElement).value).toContain("PUBLIC CSR");
-    await user.type(screen.getByLabelText("Signed child CA certificate plus issuer chain PEM"), signedChain);
+    await paste(user, screen.getByLabelText("Signed child CA certificate plus issuer chain PEM"), signedChain);
     await user.click(screen.getByRole("button", { name: "Import existing CA" }));
     await waitFor(() =>
       expect(apiMock.importExistingCA).toHaveBeenCalledWith(
