@@ -70,19 +70,28 @@ test("AUD-66 identity advancement observes state and reaches each transition onc
   const transitions = [];
   const request = async (method, _path, body, key) => {
     if (method === "GET") return { id: "identity-1", status };
-    transitions.push({ to: body.to, key });
+    transitions.push({ to: body.to, key, csr: body.subject_csr_pem });
     status = body.to;
     return { id: "identity-1", status };
   };
   let polls = 0;
+  const csrs = [];
+  const csr = (name) => {
+    csrs.push(name);
+    return `CSR for ${name}`;
+  };
   const item = { key: "edge", name: "edge.example", targetState: "deployed", connector: "envoy", daysAgo: 10 };
-  await advanceIdentity(item, { id: "identity-1" }, 1, request, async () => { polls += 1; });
+  await advanceIdentity(item, { id: "identity-1" }, 1, request, async () => { polls += 1; }, csr);
   assert.deepEqual(transitions.map((transition) => transition.to), ["issued", "deployed"]);
   assert.equal(new Set(transitions.map((transition) => transition.key)).size, 2);
+  // The demo tenant's control-plane key generation is off: issuance carries
+  // the seed's own request, and only issuance does.
+  assert.deepEqual(transitions.map((transition) => transition.csr), ["CSR for edge.example", undefined]);
+  assert.deepEqual(csrs, ["edge.example"]);
   assert.equal(polls, 1);
 
   transitions.length = 0;
-  await advanceIdentity(item, { id: "identity-1" }, 1, request, async () => { polls += 1; });
+  await advanceIdentity(item, { id: "identity-1" }, 1, request, async () => { polls += 1; }, csr);
   assert.deepEqual(transitions, []);
   assert.equal(polls, 2);
 });

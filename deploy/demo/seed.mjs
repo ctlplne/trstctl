@@ -808,19 +808,21 @@ async function ensureIdentity(item, ownerID, issuerID, identityItems) {
   return created;
 }
 
-async function advanceIdentity(item, identity, minimumCertificates, request = api, poll = pollCertificates) {
+async function advanceIdentity(item, identity, minimumCertificates, request = api, poll = pollCertificates, csr = subjectCSR) {
   const terminal = new Set(["revoked", "retired"]);
   let current = await request("GET", `/api/v1/identities/${identity.id}`);
   if (terminal.has(current.status) && current.status !== item.targetState) {
     throw new Error(`identity ${item.name} is ${current.status}; cannot converge it to ${item.targetState}`);
   }
   if (current.status === "requested" || current.status === "pending") {
+    const issueCSR = csr(item.name);
     current = await transitionIdentityIfNeeded(
       identity.id,
       "issued",
       `demo seed: issue signer-backed certificate observed ${item.daysAgo} days ago`,
-      stableKey(`identity-${item.key}-issue`),
+      csrKey(`identity-${item.key}-issue`, issueCSR),
       request,
+      { subject_csr_pem: issueCSR },
     );
   }
   if (item.targetState !== "issued") {
@@ -1126,6 +1128,35 @@ async function readCA() {
   throw new Error(`demo issuing CA did not appear at ${path}`);
 }
 
+// The demo tenant is new, so its control-plane key generation is off (owner
+// decision 2026-10-24: a new tenant starts with it off) and the seed brings
+// its own certificate requests, as a new deployment does. openssl makes a
+// P-256 key it discards at once and prints only the request.
+function subjectCSR(commonName) {
+  return `${run("openssl", [
+    "req",
+    "-new",
+    "-newkey",
+    "ec",
+    "-pkeyopt",
+    "ec_paramgen_curve:P-256",
+    "-nodes",
+    "-keyout",
+    "/dev/null",
+    "-subj",
+    `/CN=${commonName}`,
+    "-addext",
+    `subjectAltName=DNS:${commonName}`,
+  ])}\n`;
+}
+
+// csrKey names an idempotency key after the request it carries: a re-run
+// after an interruption makes a new request, and a key reused with a
+// different request is refused.
+function csrKey(name, csr) {
+  return stableKey(`${name}-${createHash("sha256").update(csr).digest("hex").slice(0, 16)}`);
+}
+
 function makeSelfSignedCert(commonName, days) {
   const dir = mkdtempSync(join(tmpdir(), "trstctl-demo-cert-"));
   try {
@@ -1165,7 +1196,7 @@ async function pollCertificates(minimum) {
   throw new Error(`certificate inventory did not reach ${minimum} rows`);
 }
 
-async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey, request = api) {
+async function transitionIdentityIfNeeded(identityID, targetState, reason, idemKey, request = api, extra = {}) {
   const current = await request("GET", `/api/v1/identities/${identityID}`);
   if (current?.status === targetState) {
     return current;
@@ -1174,6 +1205,7 @@ async function transitionIdentityIfNeeded(identityID, targetState, reason, idemK
     return await request("POST", `/api/v1/identities/${identityID}/transitions`, {
       to: targetState,
       reason,
+      ...extra,
     }, idemKey);
   } catch (error) {
     // Issuance and connector workers can advance the event-sourced projection
@@ -1260,10 +1292,11 @@ async function main() {
     value: stableDemoValue("breakglass-share"),
     ttl_seconds: 86400,
   }, stableKey("secret-share-breakglass"));
+  const dbClientCSR = subjectCSR("db-client.demo.trstctl.local");
   await api("POST", "/api/v1/secrets/pki", {
-    common_name: "db-client.demo.trstctl.local",
+    csr_pem: dbClientCSR,
     ttl_seconds: 3600,
-  }, stableKey("secret-pki-db-client"));
+  }, csrKey("secret-pki-db-client", dbClientCSR));
 
   await api("POST", "/api/v1/transit/keys", { name: "payments-data", kind: "aead" }, stableKey("transit-payments-aead"), [409]);
   const encrypted = await api("POST", "/api/v1/transit/encrypt", {
