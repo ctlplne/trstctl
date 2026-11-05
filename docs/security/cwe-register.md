@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2642 annotated sites across 31 rules. Each row is
+2647 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1794,7 +1794,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (678 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (683 sites)
 
 | Location | Reason |
 |---|---|
@@ -2149,6 +2149,11 @@ not this file.
 | `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_test.go:114` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:75` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:82` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:89` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:128` | test-owned unique filename beneath fixed lab account home (CWE-22) |
+| `internal/crypto/rdp/process_linux.go:20` | operator-installed helper; absolute regular protected executable, executed by this open FD (CWE-22) |
 | `internal/crypto/samltest/material_test.go:57` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
@@ -2765,7 +2770,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (136 sites)
+### G703 — CWE-22 Path traversal (taint) (137 sites)
 
 | Location | Reason |
 |---|---|
@@ -2810,6 +2815,7 @@ not this file.
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
+| `internal/crypto/rdp/process_linux.go:20` | operator-installed helper; absolute regular protected executable, executed by this open FD (CWE-22) |
 | `internal/dynsecret/windows_accounts_lab_test.go:45` | runner-provided lab path (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/kmip/pykmip_tenants_test.go:72` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
