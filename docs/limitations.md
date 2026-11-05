@@ -9120,6 +9120,11 @@ waiting, disconnect cancellation and same-login INVOKER-procedure bypass proofs.
 Wire prepared execution, SQL prepared controls, nonempty query attributes and
 LOAD DATA are explicitly refused; oversized/fragmented input closes the stream.
 See [MySQL rule scope](design/access-gateway.md#mysql-text-query-guardrails-a262).
-Redis, MongoDB and ClickHouse rule paths remain unbuilt; their configuration is rejected.
+Redis command-name rules have local served direct refusal, distinct-human waiting,
+disconnect cancellation and same-login EVAL bypass proofs. Keys, values and script
+bodies are not predicates. Transactions and unknown command classes are refused;
+ruled frames have explicit argument/byte limits and bounded input capacity.
+See [Redis rule scope](design/access-gateway.md#redis-command-name-guardrails-a262).
+MongoDB and ClickHouse rule paths remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.

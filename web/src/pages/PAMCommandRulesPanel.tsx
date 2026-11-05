@@ -112,11 +112,50 @@ const mysqlOperations = [
   "UPDATE",
   "USE",
 ] as const;
-const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations };
-const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations] as const;
+const redisOperations = [
+  "APPEND",
+  "DECR",
+  "DECRBY",
+  "DEL",
+  "EVAL",
+  "EVALSHA",
+  "EXPIRE",
+  "FCALL",
+  "FCALL_RO",
+  "GET",
+  "GETDEL",
+  "HDEL",
+  "HGET",
+  "HMGET",
+  "HMSET",
+  "HSET",
+  "INCR",
+  "INCRBY",
+  "LPOP",
+  "LPUSH",
+  "MGET",
+  "MSET",
+  "PERSIST",
+  "PEXPIRE",
+  "RENAME",
+  "RENAMENX",
+  "RPOP",
+  "RPUSH",
+  "SADD",
+  "SET",
+  "SREM",
+  "SISMEMBER",
+  "SMEMBERS",
+  "TTL",
+  "UNLINK",
+  "ZADD",
+  "ZREM",
+] as const;
+const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations, redis: redisOperations };
+const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations] as const;
 const schema = z
   .object({
-    protocol: z.enum(["postgres", "ssh", "mysql"]),
+    protocol: z.enum(["postgres", "ssh", "mysql", "redis"]),
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
@@ -371,11 +410,14 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                 {(control) => (
                   <Select
                     {...control}
-                    {...register("protocol", { onChange: (event) => setValue("operations", [event.target.value === "ssh" ? "rm" : "DROP"]) })}
+                    {...register("protocol", {
+                      onChange: (event) => setValue("operations", [event.target.value === "ssh" ? "rm" : event.target.value === "redis" ? "DEL" : "DROP"]),
+                    })}
                   >
                     <option value="postgres">{t("admin.access.postgresql")}</option>
                     <option value="ssh">{t("admin.access.ssh")}</option>
                     <option value="mysql">{t("admin.access.rules.mysql")}</option>
+                    <option value="redis">{t("admin.access.rules.redis")}</option>
                   </Select>
                 )}
               </Field>

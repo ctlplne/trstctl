@@ -51,7 +51,7 @@ var errRedisInline = errors.New("accessgateway: the Redis client sent an inline 
 // connection's login — AUTH, HELLO with AUTH, RESET — is never forwarded, so
 // the connection keeps the session's user and nothing else. The client never
 // receives the credential.
-func serveRedis(ctx context.Context, client net.Conn, credential []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
+func serveRedis(ctx context.Context, client net.Conn, credential []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
 	signInCtx, cancel := context.WithDeadline(ctx, earliest(deadline, time.Now().Add(30*time.Second)))
 	defer cancel()
 	server, err := redissignin.SignIn(signInCtx, credential, redissignin.Options{Dial: dial})
@@ -70,6 +70,9 @@ func serveRedis(ctx context.Context, client net.Conn, credential []byte, deadlin
 			}
 			rec.event("redis", "command", c.text.String(), 0)
 		}
+	}
+	if len(guards) > 0 && guards[0] != nil {
+		return relayRedisRuleCommands(ctx, client, server, guards[0], rec, recordCommand)
 	}
 	var relayErr error
 	done := make(chan struct{}, 2)

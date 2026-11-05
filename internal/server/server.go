@@ -2527,7 +2527,7 @@ func (s *Server) configurePAMSurface(d Deps) error {
 	}
 	svc, err := newPAMService(pamDeps{
 		Config: d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
-		CommandRuleJobKinds: map[string]bool{accessgateway.KindSessionMySQLRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionMySQLRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionSSHRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionSSHRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil},
+		CommandRuleJobKinds: map[string]bool{accessgateway.KindSessionRedisRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRedisRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionMySQLRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionMySQLRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionSSHRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionSSHRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil},
 		Audit:               attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
 		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,
 		AgentCAPEM: func() []byte {

@@ -130,10 +130,11 @@ export const messages = {
       "A matching review rule holds this command until independent reviewers decide or its deadline expires. Closing cancels a held command; a command already forwarded may have run.",
     description: "SSH command guardrail control.",
   },
+  "admin.access.rules.redis": { defaultMessage: "Redis", description: "Redis target protocol name." },
   "admin.access.rules.mysql": { defaultMessage: "MySQL", description: "MySQL target protocol name." },
   "admin.access.rules.protocolHelp": {
     defaultMessage:
-      "PostgreSQL or MySQL statements, or SSH exec requests. SSH rules require a complete command. MySQL rules currently refuse wire prepared statements and query attributes with values.",
+      "PostgreSQL or MySQL statements, Redis command names, or SSH exec requests. SSH rules require a complete command. MySQL rules refuse opaque prepared execution; Redis rules refuse transactions and unsupported commands.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {

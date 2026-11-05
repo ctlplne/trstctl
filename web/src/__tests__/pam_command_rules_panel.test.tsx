@@ -175,3 +175,26 @@ it("offers MySQL operation classes with a protocol-bound exact preview", async (
     ),
   );
 });
+
+it("reviews a Redis command class with no key or value predicate", async () => {
+  const user = userEvent.setup();
+  mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access template" }), template.id);
+  await user.type(within(dialog).getByRole("textbox", { name: "Rule name" }), "Review Redis deletion");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Protocol" }), "redis");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  const choices = await within(dialog).findByRole("listbox", { name: "Operation names" });
+  expect(within(choices).queryByRole("option", { name: "DROP" })).not.toBeInTheDocument();
+  expect((within(choices).getByRole("option", { name: "DEL" }) as HTMLOptionElement).selected).toBe(true);
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Save reviewed rule" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(
+      template.id,
+      expect.objectContaining({ command_rules: [expect.objectContaining({ protocol: "redis", operations: ["DEL"] })] }),
+      expect.any(String),
+    ),
+  );
+});

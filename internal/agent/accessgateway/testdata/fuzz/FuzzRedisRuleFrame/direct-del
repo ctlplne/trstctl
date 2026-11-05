@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n")

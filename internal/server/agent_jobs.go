@@ -130,6 +130,7 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindMDMCheckIn: true,
 	// A254: one brokered access session, held by its gateway until the
 	// deadline or a recall.
+	relay.KindAccessGatewayRedisRulesSession: true,
 	relay.KindAccessGatewaySession:           true,
 	relay.KindAccessGatewayRulesSession:      true,
 	relay.KindAccessGatewaySSHRulesSession:   true,
@@ -1028,7 +1029,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM check-in result needs a terminal executed report")
 		}
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
-	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession:
+	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession:
 		// A254: the gateway reports how a session ended; the session itself
 		// is ended by its deadline and revocation, not by this report. A255:
 		// the report is recorded, acknowledging a termination.

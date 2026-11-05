@@ -118,7 +118,7 @@ func (a *agentService) UploadSessionRecording(ctx context.Context, req *transpor
 		return nil, status.Error(codes.InvalidArgument, "job_id, attempt, seq and a chunk of at most 1 MiB are required")
 	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
-	job, held, err := a.store.GetGatewayJobForRecording(ctx, info.TenantID, agentID, req.JobID, req.Attempt, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession)
+	job, held, err := a.store.GetGatewayJobForRecording(ctx, info.TenantID, agentID, req.JobID, req.Attempt, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "load job: %v", err)
 	}

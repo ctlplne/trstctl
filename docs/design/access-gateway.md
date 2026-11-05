@@ -418,7 +418,7 @@ Enable `access.gateway.session.rules.v1` explicitly in
 before a rule-bearing session opens. An old gateway cannot claim this kind;
 a policy under the ordinary session kind is refused before credential redemption.
 SSH exec and MySQL text-query guardrails use separate enforcing job kinds below.
-Redis, MongoDB and ClickHouse remain unsupported for rules and are rejected when configuring
+MongoDB and ClickHouse remain unsupported for rules and are rejected when configuring
 one. Their ordinary sessions retain their existing behavior.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
@@ -580,3 +580,48 @@ Use database privileges and controlled stored programs for containment.
 Protocol references: MySQL's [COM_QUERY envelope](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html),
 [prepared execution](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html)
 and [executable comments](https://dev.mysql.com/doc/refman/8.4/en/comments.html).
+
+
+## Redis command-name guardrails (A262)
+
+Enable `access.gateway.session.rules.redis.v1` in
+`agent_channel.claimable_job_kinds`, upgrade the bound gateway and wait for its
+executor report. In the template wizard choose **Redis** and a known command name,
+such as `DEL`, `UNLINK`, `SET` or `EVAL`; the template API uses `protocol: "redis"`.
+The gateway checks a complete command before forwarding it, including when
+recording is disabled. Human review uses the same distinct quorum, frozen template
+revision and short deadline as the other command guards. Repeated identical
+commands are separate occurrences and cannot reuse a prior review.
+
+Only the public command class, identifiers and digests reach rule matching and
+review. Keys, values, script bodies and authentication material are excluded from
+those facts. AUTH, RESET and HELLO with AUTH are refused outside command-policy
+evaluation. Scripts and function bodies are not parsed as a series of commands.
+An `EVAL` script that invokes `DEL` bypasses a direct `DEL` rule when the same login
+has both permissions; the served proof demonstrates this on the real target with
+independent key readback. Match the script/function wrapper classes as well when
+appropriate; use Redis ACLs for containment.
+
+This ruled path accepts canonical RESP arrays of bulk strings, at most 1024
+arguments and 1 MiB for a complete frame. Inline commands, unsupported framing,
+unknown command classes and transactions are refused. MULTI/EXEC/DISCARD/WATCH/
+UNWATCH end the stream after recording refusal, before a later pipeline tail can
+execute with different semantics outside its intended transaction. Ordinary
+unruled sessions retain their existing protocol support.
+
+A separate bounded reader detects disconnect during human review. It reserves
+the full 1 MiB frame allowance after the array header and before allocating a
+body, then wipes/releases it after use. The shared 4 MiB target and 8 MiB protocol
+budgets therefore allow at most four started frames per target and eight per
+protocol; the queue also has a fixed frame limit. Saturation ends the connection
+with a bounded best-effort RESP BUSY error. A connection failure can leave earlier
+already-forwarded effects uncertain; cancellation cannot undo those effects.
+
+Normal refusal replaces the original command with a fixed invalid command in the
+same upstream wire order. A pipelined GET / refused DEL / GET produces its two
+real value replies around the error, preserving the key. An authorization record
+permits forwarding and never claims successful target execution.
+
+Protocol references: Redis [RESP](https://redis.io/docs/latest/develop/reference/protocol-spec/),
+[transactions](https://redis.io/docs/latest/develop/using-commands/transactions/)
+and [Lua scripting](https://redis.io/docs/latest/develop/programmability/eval-intro/).

@@ -84,8 +84,8 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 		if !utf8.ValidString(r.Name) || utf8.RuneCountInString(r.Name) < 1 || utf8.RuneCountInString(r.Name) > 80 || strings.ContainsFunc(r.Name, unicode.IsControl) {
 			return nil, errors.New("command rules: name must be 1-80 characters without control characters")
 		}
-		if r.Protocol != "postgres" && r.Protocol != "ssh" && r.Protocol != "mysql" {
-			return nil, errors.New("command rules: choose a supported enforcing protocol: postgres, mysql or ssh")
+		if r.Protocol != "postgres" && r.Protocol != "ssh" && r.Protocol != "mysql" && r.Protocol != "redis" {
+			return nil, errors.New("command rules: choose a supported enforcing protocol: postgres, mysql, redis or ssh")
 		}
 		switch r.Effect {
 		case EffectBlock:
@@ -295,6 +295,9 @@ func OperationNames(protocol string) []string {
 	if protocol == "ssh" {
 		return slices.Clone(sshOperationNames)
 	}
+	if protocol == "redis" {
+		return slices.Clone(redisOperationNames)
+	}
 	if protocol == "mysql" {
 		return slices.Clone(mysqlOperationNames)
 	}
@@ -304,6 +307,9 @@ func OperationNames(protocol string) []string {
 	return nil
 }
 func KnownOperation(protocol, operation string) bool {
+	if protocol == "redis" {
+		return slices.Contains(redisOperationNames, operation)
+	}
 	if protocol == "ssh" {
 		return slices.Contains(sshOperationNames, operation)
 	}
@@ -313,11 +319,12 @@ func KnownOperation(protocol, operation string) bool {
 	return protocol == "postgres" && knownPostgresRuleOperation(operation)
 }
 func KnownAnyOperation(operation string) bool {
-	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(mysqlOperationNames, operation)
+	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(mysqlOperationNames, operation) || slices.Contains(redisOperationNames, operation)
 }
 func AllOperationNames() []string {
 	out := append(PostgresOperationNames(), sshOperationNames...)
 	out = append(out, mysqlOperationNames...)
+	out = append(out, redisOperationNames...)
 	slices.Sort(out)
 	return slices.Compact(out)
 }
