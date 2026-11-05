@@ -717,3 +717,47 @@ proof, not a hosted-service qualification.
 Protocol references: ClickHouse [HTTP query framing and authentication](https://clickhouse.com/docs/concepts/features/interfaces/http),
 [SQL syntax](https://clickhouse.com/docs/reference/syntax), and
 [ALTER DELETE and synchronous mutation settings](https://clickhouse.com/docs/reference/statements/alter/delete).
+
+
+## Snowflake SQL API accounts (A263, stand-in proof)
+
+Register a `snowflake` target with its dynamic key-pair provider, allowed provider
+roles, `gateway_agent_id` and `gateway_address`. The console registration form
+accepts those references and identifies this as stand-in proof. A provider is
+configured with its account, SQL API endpoint and administrator key reference;
+the existing dynamic-secret outbox creates and grants a fresh user for each
+approved session. This target cannot use direct credential delivery. Session jobs
+carry only endpoint/authority references; only their exact gateway can redeem the
+sealed credential. Rules for other protocols cannot be silently attached here.
+
+Run `trstctl access sessions connect <session-id> --ticket-file <file>` and use the
+printed curl command. Send ordinary SQL API JSON such as
+`{"statement":"SELECT CURRENT_ROLE()"}`. The client needs no Snowflake password,
+key file or bearer token. The gateway strips client authentication and cookies,
+then signs a fresh RS256 key-pair JWT expiring no later than the session. Its key
+and token use locked, wiped buffers; the bearer bytes are serialized directly,
+rather than retained as an immutable HTTP header string. Production upstreams use
+verified HTTPS. HTTP is accepted only for the explicitly configured loopback lab.
+
+This transport forwards SQL API submission, status, result-partition and cancel
+paths under `/api/v2/statements`; it does not implement the SnowSQL wire protocol
+or a browser-console login. Each request has a 64 KiB header bound and 1 MiB body
+bound. Target requests use separate connections, close after the response and
+cancel with their session. Requests/responses enter the existing masked, encrypted
+recording and signed manifest. Termination recalls the gateway job, closes client
+connections, and uses the provider's durable disable/drop operation. Closing a
+request alone does not prove an already submitted asynchronous statement stopped;
+use statement cancellation and confirm native status. Live cancellation and
+account behavior remain a Track B proof.
+
+`TestServedGatewaySnowflakeSQLAPISessionsA263` uses stock curl and the existing SQL
+API stand-in with real RSA signature verification, key registration and user
+removal. It exercises role and direct-login refusal, client-auth replacement,
+wrong tenant/ticket, client file/output custody, termination, session expiry,
+masked recording and signed verification. General partition/restart, recording
+authorization/tamper/retention and the final paired-image replay are separately
+owed at FINISH; this entry does not claim those checks have run for this candidate.
+A live Snowflake account is unverified.
+
+Contract references: Snowflake [SQL API key-pair authentication](https://docs.snowflake.com/en/developer-guide/sql-api/authenticating)
+and [statement submission, status and cancellation](https://docs.snowflake.com/en/developer-guide/sql-api/reference).

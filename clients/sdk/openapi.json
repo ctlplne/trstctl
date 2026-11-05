@@ -4693,6 +4693,7 @@
                     "mysql",
                     "postgres",
                     "redis",
+                    "snowflake",
                     "ssh"
                   ],
                   "type": "string"
@@ -5359,6 +5360,7 @@
                           "mysql",
                           "postgres",
                           "redis",
+                          "snowflake",
                           "ssh"
                         ],
                         "type": "string"
@@ -5651,6 +5653,7 @@
                     "mysql",
                     "postgres",
                     "redis",
+                    "snowflake",
                     "ssh"
                   ],
                   "type": "string"
@@ -38596,6 +38599,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"
@@ -40216,6 +40220,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"
@@ -41099,6 +41104,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"
@@ -41176,6 +41182,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"
@@ -41329,6 +41336,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"
@@ -41440,6 +41448,7 @@
               "mysql",
               "postgres",
               "redis",
+              "snowflake",
               "ssh"
             ],
             "type": "string"

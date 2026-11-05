@@ -84,3 +84,37 @@ it("lists a gateway-served Redis target by its provider and roles", async () => 
   expect(screen.getByText("tenant-redis")).toBeInTheDocument();
   expect(screen.getByText("redis-writer")).toBeInTheDocument();
 });
+
+it("requires a gateway for a Snowflake stand-in account and submits only references", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "warehouse");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "snowflake");
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "tenant-snowflake");
+  const roles = within(form).getByRole("textbox", { name: "Allowed roles or principals" });
+  await user.clear(roles);
+  await user.type(roles, "analyst");
+  expect(within(form).getByText(/proven against a stand-in/)).toBeInTheDocument();
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  expect(apiMock.registerPAMTarget).not.toHaveBeenCalled();
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "warehouse",
+        target_type: "snowflake",
+        provider_id: "tenant-snowflake",
+        allowed_roles: ["analyst"],
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});

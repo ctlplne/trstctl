@@ -36,13 +36,14 @@ import (
 )
 
 const (
-	pamTargetPostgres = "postgres"
-	pamTargetSSH      = "ssh"
-	pamTargetRedis    = "redis"
-	pamTargetMySQL    = "mysql"
-	pamTargetMongo    = "mongodb"
-	pamTargetCH       = "clickhouse"
-	pamTargetK8s      = "kubernetes"
+	pamTargetPostgres  = "postgres"
+	pamTargetSSH       = "ssh"
+	pamTargetRedis     = "redis"
+	pamTargetMySQL     = "mysql"
+	pamTargetMongo     = "mongodb"
+	pamTargetCH        = "clickhouse"
+	pamTargetK8s       = "kubernetes"
+	pamTargetSnowflake = "snowflake"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -55,16 +56,17 @@ const (
 // PostgreSQL targets may hand the requester that login; every other type is
 // served only through an access gateway, which signs in with it itself.
 var pamDatabaseProviderTypes = map[string]string{
-	pamTargetPostgres: "postgresql",
-	pamTargetRedis:    "redis",
-	pamTargetMySQL:    "mysql",
-	pamTargetMongo:    "mongodb",
-	pamTargetCH:       "clickhouse",
-	pamTargetK8s:      "kubernetes",
+	pamTargetPostgres:  "postgresql",
+	pamTargetRedis:     "redis",
+	pamTargetMySQL:     "mysql",
+	pamTargetMongo:     "mongodb",
+	pamTargetCH:        "clickhouse",
+	pamTargetK8s:       "kubernetes",
+	pamTargetSnowflake: "snowflake",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.

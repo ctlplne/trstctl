@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"account\":\"lab\",\"user\":\"scoped\",\"private_key\":\"invalid-key\"}")

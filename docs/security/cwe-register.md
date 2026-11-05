@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2626 annotated sites across 31 rules. Each row is
+2627 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1318,7 +1318,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (339 sites)
+### G204 — CWE-78 OS command injection (340 sites)
 
 | Location | Reason |
 |---|---|
@@ -1538,7 +1538,7 @@ not this file.
 | `internal/server/pam_discovery_served_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:326` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:332` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1548,6 +1548,7 @@ not this file.
 | `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:28` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_snowflake_served_test.go:100` | stock curl against the test-owned gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:259` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:294` | the stock ssh client against the test's own sshd (CWE-78) |
 | `internal/server/pam_gateway_ssh_served_test.go:314` | the stock ssh client against the test's own tunnel (CWE-78) |
@@ -2707,7 +2708,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (33 sites)
+### G702 — CWE-78 OS command injection (taint) (34 sites)
 
 | Location | Reason |
 |---|---|
@@ -2734,6 +2735,7 @@ not this file.
 | `internal/server/pam_gateway_mongo_served_test.go:142` | the stock mongosh against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_snowflake_served_test.go:100` | stock curl against the test-owned gateway tunnel (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |

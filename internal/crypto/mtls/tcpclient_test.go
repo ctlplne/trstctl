@@ -5,6 +5,7 @@ package mtls_test
 import (
 	"context"
 	"encoding/pem"
+	"net"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -33,5 +34,29 @@ func TestDialVerifiedTCPPinsCAAndServerIdentity(t *testing.T) {
 	if conn, err := mtls.DialVerifiedTCP(context.Background(), addr, "example.com", []byte("not a CA")); err == nil {
 		_ = conn.Close()
 		t.Fatal("invalid Redis CA accepted")
+	}
+}
+
+func TestVerifiedClientConnectionRejectsWrongPeerBeforeApplicationBytes(t *testing.T) {
+	server := httptest.NewTLSServer(nil)
+	defer server.Close()
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	address := strings.TrimPrefix(server.URL, "https://")
+	for _, tc := range []struct {
+		name    string
+		ca      []byte
+		allowed bool
+	}{{"example.com", ca, true}, {"wrong.example", ca, false}, {"example.com", nil, false}, {"example.com", []byte("not a CA"), false}, {"", ca, false}} {
+		conn, err := net.Dial("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		secured, err := mtls.VerifyClientConnection(context.Background(), conn, tc.name, tc.ca)
+		if secured != nil {
+			_ = secured.Close()
+		}
+		if (err == nil) != tc.allowed {
+			t.Fatalf("TLS identity %q accepted=%v, want %v", tc.name, err == nil, tc.allowed)
+		}
 	}
 }

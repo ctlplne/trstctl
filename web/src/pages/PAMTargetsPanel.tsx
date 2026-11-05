@@ -8,6 +8,7 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog } from "@/components/Dialog";
@@ -20,19 +21,29 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake"]),
     provider_id: z.string().trim(),
+    gateway_agent_id: z.string().trim(),
+    gateway_address: z.string().trim(),
     allowed_roles: z.string().trim(),
     host: z.string().trim(),
     port: z.string().trim(),
     principals: z.string().trim(),
   })
   .superRefine((value, ctx) => {
-    if (value.target_type === "postgres") {
+    if (value.target_type !== "ssh") {
       if (!value.provider_id) ctx.addIssue({ code: "custom", path: ["provider_id"], message: translateNow("admin.access.providerRequired") });
       const roles = splitList(value.allowed_roles);
-      if (roles.length === 0 || roles.some((role) => role !== "readonly" && role !== "writer"))
-        ctx.addIssue({ code: "custom", path: ["allowed_roles"], message: translateNow("admin.access.rolesHelp") });
+      if (roles.length === 0 || (value.target_type === "postgres" && roles.some((role) => role !== "readonly" && role !== "writer")))
+        ctx.addIssue({
+          code: "custom",
+          path: ["allowed_roles"],
+          message: translateNow(value.target_type === "postgres" ? "admin.access.rolesHelp" : "admin.access.providerRolesRequired"),
+        });
+      if (value.target_type === "snowflake") {
+        if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
+        if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });
+      }
     } else {
       if (!value.host || /[\s/@]/.test(value.host)) ctx.addIssue({ code: "custom", path: ["host"], message: translateNow("admin.access.hostRequired") });
       const port = Number(value.port);
@@ -47,6 +58,8 @@ const emptyTarget: TargetForm = {
   id: "",
   target_type: "postgres",
   provider_id: "",
+  gateway_agent_id: "",
+  gateway_address: "",
   allowed_roles: "readonly",
   host: "",
   port: "22",
@@ -92,10 +105,12 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
 
   async function createTarget(form: TargetForm) {
     const input: PAMTargetRequest =
-      form.target_type === "postgres"
-        ? { id: form.id, target_type: "postgres", provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
+      form.target_type !== "ssh"
+        ? { id: form.id, target_type: form.target_type, provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
         : { id: form.id, target_type: "ssh", host: form.host, port: Number(form.port), principals: splitList(form.principals) };
     if (form.folder) input.folder = form.folder;
+    if (form.gateway_agent_id) input.gateway_agent_id = form.gateway_agent_id;
+    if (form.gateway_address) input.gateway_address = form.gateway_address;
     setBusy(true);
     setError(null);
     try {
@@ -246,6 +261,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
             <Select {...register("target_type")}>
               <option value="postgres">{t("admin.access.postgresql")}</option>
               <option value="ssh">{t("admin.access.ssh")}</option>
+              <option value="snowflake">{t("admin.access.snowflake")}</option>
             </Select>
           </label>
           <label className="grid gap-1 text-sm">
@@ -259,16 +275,16 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               ))}
             </Select>
           </label>
-          {targetType === "postgres" ? (
+          {targetType !== "ssh" ? (
             <>
               <label className="grid gap-1 text-sm">
-                {t("admin.access.providerId")}
+                {t(targetType === "snowflake" ? "admin.access.accountProviderId" : "admin.access.providerId")}
                 <Input {...register("provider_id")} list="pam-postgres-providers" aria-invalid={!!errors.provider_id} />
                 {errors.provider_id ? <span role="alert">{t("admin.access.providerRequired")}</span> : null}
               </label>
               <datalist id="pam-postgres-providers">
                 {providers.data?.configured_providers
-                  .filter((provider) => provider.type === "postgresql" && provider.ready)
+                  .filter((provider) => provider.type === (targetType === "postgres" ? "postgresql" : "snowflake") && provider.ready)
                   .map((provider) => (
                     <option key={provider.id} value={provider.id}>
                       {provider.label}
@@ -278,7 +294,9 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <label className="grid gap-1 text-sm">
                 {t("admin.access.allowedRoles")}
                 <Input {...register("allowed_roles")} aria-invalid={!!errors.allowed_roles} />
-                {errors.allowed_roles ? <span role="alert">{t("admin.access.rolesHelp")}</span> : null}
+                {errors.allowed_roles ? (
+                  <span role="alert">{t(targetType === "postgres" ? "admin.access.rolesHelp" : "admin.access.providerRolesRequired")}</span>
+                ) : null}
               </label>
             </>
           ) : (
@@ -300,6 +318,21 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               </label>
             </>
           )}
+          {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
+          <Field
+            label={t("admin.access.gatewayAgent")}
+            required={targetType === "snowflake"}
+            error={errors.gateway_agent_id ? t("admin.access.gatewayRequired") : undefined}
+          >
+            {(control) => <Input {...control} {...register("gateway_agent_id")} />}
+          </Field>
+          <Field
+            label={t("admin.access.gatewayAddress")}
+            required={targetType === "snowflake"}
+            error={errors.gateway_address ? t("admin.access.gatewayRequired") : undefined}
+          >
+            {(control) => <Input {...control} {...register("gateway_address")} />}
+          </Field>
           <p className="text-caption text-muted-foreground">{t("admin.access.targetRetryHelp")}</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>

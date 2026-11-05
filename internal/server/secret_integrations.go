@@ -308,7 +308,7 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 // empty endpoint.
 func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Context) (string, []byte, string, error) {
 	switch p.cfg.Type {
-	case "clickhouse":
+	case "clickhouse", "snowflake":
 		return p.cfg.Endpoint, nil, "", nil
 	case "kubernetes":
 		var caPEM []byte

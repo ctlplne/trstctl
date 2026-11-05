@@ -6485,7 +6485,24 @@ export const messages = {
   "admin.access.targetEnabled": { defaultMessage: "Enabled", description: "PAM target active status." },
   "admin.access.targetDisabledStatus": { defaultMessage: "Disabled", description: "PAM target disabled status." },
   "admin.access.providerId": { defaultMessage: "PostgreSQL provider ID", description: "Tenant-bound dynamic-secret provider reference." },
-  "admin.access.providerRequired": { defaultMessage: "Choose an existing PostgreSQL provider.", description: "PAM provider validation." },
+  "admin.access.accountProviderId": { defaultMessage: "Account provider ID", description: "Tenant-bound dynamic provider." },
+  "admin.access.providerRolesRequired": {
+    defaultMessage: "Enter at least one role configured on this provider.",
+    description: "Gateway provider role validation.",
+  },
+  "admin.access.snowflake": { defaultMessage: "Snowflake SQL API", description: "A263 gateway account type." },
+  "admin.access.snowflakeProof": {
+    defaultMessage:
+      "SQL API access is proven against a stand-in. Configure a Snowflake key-pair provider and bind a gateway. Live Snowflake and SnowSQL wire sessions are unverified.",
+    description: "A263 evidence limits.",
+  },
+  "admin.access.gatewayAgent": { defaultMessage: "Gateway agent ID", description: "Gateway binding on a privileged target." },
+  "admin.access.gatewayAddress": { defaultMessage: "Gateway address (host:port)", description: "Gateway binding on a privileged target." },
+  "admin.access.gatewayRequired": {
+    defaultMessage: "This target needs a gateway agent and its host:port address.",
+    description: "Gateway binding validation.",
+  },
+  "admin.access.providerRequired": { defaultMessage: "Choose an existing provider of the selected type.", description: "PAM provider validation." },
   "admin.access.rolesHelp": { defaultMessage: "Enter readonly, writer, or both separated by a comma.", description: "PAM PostgreSQL role allowlist help." },
   "admin.access.sshHost": { defaultMessage: "SSH host", description: "PAM SSH target host." },
   "admin.access.sshPort": { defaultMessage: "SSH port", description: "PAM SSH target TCP port." },

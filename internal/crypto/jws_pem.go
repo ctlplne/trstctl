@@ -69,3 +69,19 @@ func SignRSASHA256WithPEMKey(privateKeyPEM, message []byte) ([]byte, error) {
 	}
 	return signer.SignDigest(SHA256Sum(message), SignOptions{Hash: SHA256, RSAPadding: RSAPKCS1v15})
 }
+
+// SignJWTWithPEMKeyBytes is the byte-backed API for gateway authentication.
+// The parsed private key is locked during signing and destroyed before return.
+func SignJWTWithPEMKeyBytes(privateKeyPEM []byte, kid string, claims any) ([]byte, error) {
+	block, rest := pem.Decode(bytes.TrimSpace(privateKeyPEM))
+	if block == nil || len(bytes.TrimSpace(rest)) != 0 || len(block.Headers) != 0 {
+		return nil, errors.New("crypto: the JWT signing key must be one unencrypted PEM block")
+	}
+	defer secret.Wipe(block.Bytes)
+	signer, err := lockedRetainedHostSigner(block)
+	if err != nil {
+		return nil, err
+	}
+	defer signer.Destroy()
+	return SignJWTBytes(signer, kid, claims)
+}

@@ -39,6 +39,7 @@ const (
 	TargetKubernetes = "kubernetes"
 	TargetRedis      = "redis"
 	TargetSSH        = "ssh"
+	TargetSnowflake  = "snowflake"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -50,7 +51,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake:
 		return true
 	}
 	return false
@@ -59,7 +60,7 @@ func RedeemsCredential(targetType string) bool {
 // HTTPUpstream reports whether a session type is spoken to over HTTP and
 // names its upstream in the job (its credential names no address).
 func HTTPUpstream(targetType string) bool {
-	return targetType == TargetClickHouse || targetType == TargetKubernetes
+	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -129,7 +130,7 @@ func ValidateSessionIntent(in SessionIntent) error {
 	case in.SessionID == "" || in.TargetID == "" || in.RequiredAgentID == "":
 		return errors.New("accessgateway: a session needs its id, target and gateway")
 	case !RedeemsCredential(in.TargetType) && in.TargetType != TargetSSH:
-		return errors.New("accessgateway: a session is postgres, mysql, mongodb, clickhouse, redis, kubernetes or ssh")
+		return errors.New("accessgateway: a session is postgres, mysql, mongodb, clickhouse, redis, kubernetes, snowflake or ssh")
 	case len(in.TicketDigest) != 64 || strings.Trim(in.TicketDigest, "0123456789abcdef") != "":
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():

@@ -42,9 +42,19 @@ func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 // signing key is a DigestSigner, so the private key may live in the isolated
 // signer (AN-4). The JOSE alg is derived from the signer's algorithm.
 func SignJWT(signer DigestSigner, kid string, claims any) (string, error) {
-	alg, hash, coord, err := joseParams(signer.Algorithm())
+	token, err := SignJWTBytes(signer, kid, claims)
 	if err != nil {
 		return "", err
+	}
+	defer secret.Wipe(token)
+	return string(token), nil
+}
+
+// SignJWTBytes returns a wipeable compact JWT for byte-backed credential paths.
+func SignJWTBytes(signer DigestSigner, kid string, claims any) ([]byte, error) {
+	alg, hash, coord, err := joseParams(signer.Algorithm())
+	if err != nil {
+		return nil, err
 	}
 	header := map[string]string{"alg": alg, "typ": "JWT"}
 	if kid != "" {
@@ -52,25 +62,34 @@ func SignJWT(signer DigestSigner, kid string, claims any) (string, error) {
 	}
 	hb, err := json.Marshal(header)
 	if err != nil {
-		return "", fmt.Errorf("crypto: marshal JWT header: %w", err)
+		return nil, fmt.Errorf("crypto: marshal JWT header: %w", err)
 	}
 	cb, err := json.Marshal(claims)
 	if err != nil {
-		return "", fmt.Errorf("crypto: marshal JWT claims: %w", err)
+		return nil, fmt.Errorf("crypto: marshal JWT claims: %w", err)
 	}
-	signingInput := b64url(hb) + "." + b64url(cb)
-	digest := hashBytes(hash, []byte(signingInput))
+	defer secret.Wipe(hb)
+	defer secret.Wipe(cb)
+	signingInput := make([]byte, 0, base64.RawURLEncoding.EncodedLen(len(hb))+1+base64.RawURLEncoding.EncodedLen(len(cb)))
+	signingInput = base64.RawURLEncoding.AppendEncode(signingInput, hb)
+	signingInput = append(signingInput, '.')
+	signingInput = base64.RawURLEncoding.AppendEncode(signingInput, cb)
+	defer secret.Wipe(signingInput)
+	digest := hashBytes(hash, signingInput)
 	raw, err := signer.SignDigest(digest, SignOptions{Hash: hash, RSAPadding: RSAPKCS1v15})
 	if err != nil {
-		return "", fmt.Errorf("crypto: sign JWT: %w", err)
+		return nil, fmt.Errorf("crypto: sign JWT: %w", err)
 	}
 	if strings.HasPrefix(alg, "ES") {
 		raw, err = ecdsaDERtoJOSE(raw, coord)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	}
-	return signingInput + "." + b64url(raw), nil
+	defer secret.Wipe(raw)
+	out := append([]byte(nil), signingInput...)
+	out = append(out, '.')
+	return base64.RawURLEncoding.AppendEncode(out, raw), nil
 }
 
 // VerifyJWT verifies a compact JWS against the matching key in jwks (selected by

@@ -158,6 +158,8 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 			return "", fmt.Errorf("write kubeconfig: %w", err)
 		}
 		return fmt.Sprintf("kubectl --kubeconfig %s get pods", kubeconfig), nil
+	case "snowflake":
+		return fmt.Sprintf("curl http://%s:%d/api/v2/statements -H 'Content-Type: application/json' --data-binary '{\"statement\":\"SELECT 1\"}'", local.IP, local.Port), nil
 	case "clickhouse":
 		// ClickHouse's HTTP interface: the gateway signs each request in as
 		// the session's user; the client sends no credential.

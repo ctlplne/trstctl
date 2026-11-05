@@ -35,7 +35,7 @@ type snowflakeSQLAPIStandIn struct {
 	disabled map[string]bool
 }
 
-func newSnowflakeSQLAPIStandIn(t *testing.T, adminSPKI []byte) (*snowflakeSQLAPIStandIn, *httptest.Server) {
+func newSnowflakeSQLAPIStandIn(t *testing.T, adminSPKI []byte, queries ...func(http.ResponseWriter, *http.Request, string)) (*snowflakeSQLAPIStandIn, *httptest.Server) {
 	t.Helper()
 	sf := &snowflakeSQLAPIStandIn{keys: map[string]string{"TRSTCTL_ADMIN": base64.StdEncoding.EncodeToString(adminSPKI)}, disabled: map[string]bool{}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +70,10 @@ func newSnowflakeSQLAPIStandIn(t *testing.T, adminSPKI []byte) (*snowflakeSQLAPI
 		var in struct{ Statement string }
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		if issuer[1] != "TRSTCTL_ADMIN" {
+			if len(queries) > 0 {
+				queries[0](w, r, in.Statement)
+				return
+			}
 			reply(http.StatusOK, "090001") // the leased user's own query
 			return
 		}
