@@ -37,6 +37,9 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 	if observation.Phase == "command" && intent.TargetType != "redis" {
 		return accessrules.Decision{}, fmt.Errorf("%w: command phase differs from protocol", api.ErrPAMInvalid)
 	}
+	if observation.Phase == "document" && intent.TargetType != "mongodb" {
+		return accessrules.Decision{}, fmt.Errorf("%w: document phase differs from protocol", api.ErrPAMInvalid)
+	}
 	id := accessrules.ActionID(intent.SessionID, observation.ConnectionID, jobID, attempt, observation.Ordinal)
 	if key != id {
 		return accessrules.Decision{}, fmt.Errorf("%w: action key differs", api.ErrPAMInvalid)
@@ -54,7 +57,7 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 			return accessrules.Decision{}, fmt.Errorf("%w: other-policy rule", api.ErrPAMInvalid)
 		}
 	}
-	if observation.Phase == "query" || observation.Phase == "bind" || observation.Phase == "exec" || observation.Phase == "command" {
+	if observation.Phase == "query" || observation.Phase == "bind" || observation.Phase == "exec" || observation.Phase == "command" || observation.Phase == "document" {
 		if !reflect.DeepEqual(accessrules.Match(intent.CommandPolicy, observation.Operations), observation.RuleIDs) || !reflect.DeepEqual(accessrules.MatchedOperations(intent.CommandPolicy, observation.Operations), observation.Operations) {
 			return accessrules.Decision{}, fmt.Errorf("%w: operation facts do not match the named rules", api.ErrPAMInvalid)
 		}

@@ -555,7 +555,9 @@ use complete commands and refuse interactive shells and subsystems. MySQL text
 rules require `access.gateway.session.rules.mysql.v1`; opaque prepared execution
 is refused in ruled sessions. Redis command-name rules require
 `access.gateway.session.rules.redis.v1`; ruled Redis sessions refuse transactions
-and unsupported commands. MongoDB and ClickHouse do not yet accept command rules. Reviewers see known operation classes,
+and unsupported commands. MongoDB command-name rules require
+`access.gateway.session.rules.mongodb.v1`; ruled sessions refuse transactions and
+opaque encodings. ClickHouse does not yet accept command rules. Reviewers see known operation classes,
 rule IDs and digests; statement text, arguments, bound values and sign-in material
 are excluded. Dynamic SQL, nested SSH interpreters and Redis script/function bodies can bypass these checks; they are guardrails,
 and database privileges provide containment. An authorization record does not

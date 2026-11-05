@@ -9125,6 +9125,11 @@ disconnect cancellation and same-login EVAL bypass proofs. Keys, values and scri
 bodies are not predicates. Transactions and unknown command classes are refused;
 ruled frames have explicit argument/byte limits and bounded input capacity.
 See [Redis rule scope](design/access-gateway.md#redis-command-name-guardrails-a262).
-MongoDB and ClickHouse rule paths remain unbuilt; their configuration is rejected.
+MongoDB command-name rules have local served deletion refusal, distinct-human
+waiting, disconnect cancellation and a same-login findAndModify removal bypass,
+with independent document readback. Document values and alias effects are not
+predicates; transaction and opaque encoding modes are explicitly refused.
+See [MongoDB rule scope](design/access-gateway.md#mongodb-command-name-guardrails-a262).
+ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.

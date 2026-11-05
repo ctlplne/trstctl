@@ -525,9 +525,14 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetMongo:
+		guard, err := g.commandConnection(s)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: command enforcement unavailable", s.intent.SessionID)
+			return
+		}
 		uri := s.credential()
 		defer secret.Wipe(uri)
-		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+		if err := serveMongo(ctx, conn, uri, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetClickHouse:

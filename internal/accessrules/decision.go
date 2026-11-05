@@ -68,7 +68,7 @@ func ValidateObservation(o Observation) error {
 		return errors.New("command rules: invalid action observation")
 	}
 	switch o.Phase {
-	case "query", "bind", "exec", "command":
+	case "query", "bind", "exec", "command", "document":
 		if len(o.Operations) < 1 || len(o.Operations) > MaxOperations || !slices.IsSorted(o.Operations) {
 			return errors.New("command rules: invalid operation facts")
 		}
@@ -79,6 +79,9 @@ func ValidateObservation(o Observation) error {
 			}
 			if o.Phase == "command" {
 				known = KnownOperation("redis", op)
+			}
+			if o.Phase == "document" {
+				known = KnownOperation("mongodb", op)
 			}
 			if !known || i > 0 && op == o.Operations[i-1] {
 				return errors.New("command rules: unknown or duplicate operation fact")
@@ -106,7 +109,7 @@ func ValidateDecision(d Decision) error {
 	if err := ValidateObservation(d.Observation); err != nil {
 		return err
 	}
-	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh" && d.Protocol != "mysql" && d.Protocol != "redis") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
+	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh" && d.Protocol != "mysql" && d.Protocol != "redis" && d.Protocol != "mongodb") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
 		return errors.New("command rules: invalid bound decision")
 	}
 	if d.Phase == "exec" && d.Protocol != "ssh" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" && d.Protocol != "mysql" {
@@ -114,6 +117,9 @@ func ValidateDecision(d Decision) error {
 	}
 	if d.Phase == "command" && d.Protocol != "redis" {
 		return errors.New("command rules: command phase differs from protocol")
+	}
+	if d.Phase == "document" && d.Protocol != "mongodb" {
+		return errors.New("command rules: document phase differs from protocol")
 	}
 	for _, op := range d.Operations {
 		if !KnownOperation(d.Protocol, op) {
@@ -160,7 +166,7 @@ func ValidateDecision(d Decision) error {
 // review uses the largest quorum and shortest lifetime. Control uncertainty is
 // always refused and cannot be approved into an uninspected command.
 func ReviewRequirement(p *Policy, o Observation) (int, int) {
-	if p == nil || (o.Phase != "query" && o.Phase != "bind" && o.Phase != "exec" && o.Phase != "command") {
+	if p == nil || (o.Phase != "query" && o.Phase != "bind" && o.Phase != "exec" && o.Phase != "command" && o.Phase != "document") {
 		return 0, 0
 	}
 	quorum, ttl := 0, 46

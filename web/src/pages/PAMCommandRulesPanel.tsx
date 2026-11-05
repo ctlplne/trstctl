@@ -151,11 +151,48 @@ const redisOperations = [
   "ZADD",
   "ZREM",
 ] as const;
-const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations, redis: redisOperations };
-const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations] as const;
+const mongoOperations = [
+  "aggregate",
+  "atlasversion",
+  "buildinfo",
+  "bulkwrite",
+  "collmod",
+  "collstats",
+  "connectionstatus",
+  "count",
+  "create",
+  "createindexes",
+  "dbstats",
+  "delete",
+  "distinct",
+  "drop",
+  "dropdatabase",
+  "dropindexes",
+  "endsessions",
+  "explain",
+  "find",
+  "findandmodify",
+  "getmore",
+  "getparameter",
+  "insert",
+  "killcursors",
+  "listcollections",
+  "listdatabases",
+  "listindexes",
+  "ping",
+  "renamecollection",
+  "rolesinfo",
+  "serverstatus",
+  "update",
+  "usersinfo",
+  "validate",
+  "whatsmyuri",
+] as const;
+const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations, redis: redisOperations, mongodb: mongoOperations };
+const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations, ...mongoOperations] as const;
 const schema = z
   .object({
-    protocol: z.enum(["postgres", "ssh", "mysql", "redis"]),
+    protocol: z.enum(["postgres", "ssh", "mysql", "redis", "mongodb"]),
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
@@ -411,13 +448,17 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                   <Select
                     {...control}
                     {...register("protocol", {
-                      onChange: (event) => setValue("operations", [event.target.value === "ssh" ? "rm" : event.target.value === "redis" ? "DEL" : "DROP"]),
+                      onChange: (event) =>
+                        setValue("operations", [
+                          event.target.value === "ssh" ? "rm" : event.target.value === "redis" ? "DEL" : event.target.value === "mongodb" ? "delete" : "DROP",
+                        ]),
                     })}
                   >
                     <option value="postgres">{t("admin.access.postgresql")}</option>
                     <option value="ssh">{t("admin.access.ssh")}</option>
                     <option value="mysql">{t("admin.access.rules.mysql")}</option>
                     <option value="redis">{t("admin.access.rules.redis")}</option>
+                    <option value="mongodb">{t("admin.access.rules.mongodb")}</option>
                   </Select>
                 )}
               </Field>

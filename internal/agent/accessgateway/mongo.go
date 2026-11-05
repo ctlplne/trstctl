@@ -48,7 +48,7 @@ var errMongoMessage = errors.New("accessgateway: the MongoDB client sent a messa
 // speculative sign-in and compression offer are removed; compressed and
 // legacy messages end the connection. The client never receives the
 // credential.
-func serveMongo(ctx context.Context, client net.Conn, credential []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
+func serveMongo(ctx context.Context, client net.Conn, credential []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
 	signInCtx, cancel := context.WithDeadline(ctx, earliest(deadline, time.Now().Add(30*time.Second)))
 	defer cancel()
 	server, err := mongosignin.SignIn(signInCtx, credential, mongosignin.Options{Dial: dial})
@@ -58,6 +58,9 @@ func serveMongo(ctx context.Context, client net.Conn, credential []byte, deadlin
 	defer func() { _ = server.Close() }()
 	_ = server.SetDeadline(deadline)
 	relay := &mongoRelay{client: client, rec: rec}
+	if len(guards) > 0 && guards[0] != nil {
+		return relayMongoRuleCommands(ctx, client, server, relay, guards[0])
+	}
 	var relayErr error
 	done := make(chan struct{}, 2)
 	go func() { relayErr = relay.requests(server, client); _ = server.Close(); done <- struct{}{} }()

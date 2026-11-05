@@ -12,8 +12,10 @@ const KindAccessGatewayMySQLRulesSession = "access.gateway.session.rules.mysql.v
 
 const KindAccessGatewayRedisRulesSession = "access.gateway.session.rules.redis.v1"
 
+const KindAccessGatewayMongoRulesSession = "access.gateway.session.rules.mongodb.v1"
+
 func IsCommandRulesSession(kind string) bool {
-	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession || kind == KindAccessGatewayMySQLRulesSession || kind == KindAccessGatewayRedisRulesSession
+	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession || kind == KindAccessGatewayMySQLRulesSession || kind == KindAccessGatewayRedisRulesSession || kind == KindAccessGatewayMongoRulesSession
 }
 
 func IsAccessGatewaySession(kind string) bool {

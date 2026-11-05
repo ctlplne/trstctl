@@ -418,7 +418,7 @@ Enable `access.gateway.session.rules.v1` explicitly in
 before a rule-bearing session opens. An old gateway cannot claim this kind;
 a policy under the ordinary session kind is refused before credential redemption.
 SSH exec and MySQL text-query guardrails use separate enforcing job kinds below.
-MongoDB and ClickHouse remain unsupported for rules and are rejected when configuring
+ClickHouse remains unsupported for rules and are rejected when configuring
 one. Their ordinary sessions retain their existing behavior.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
@@ -625,3 +625,50 @@ permits forwarding and never claims successful target execution.
 Protocol references: Redis [RESP](https://redis.io/docs/latest/develop/reference/protocol-spec/),
 [transactions](https://redis.io/docs/latest/develop/using-commands/transactions/)
 and [Lua scripting](https://redis.io/docs/latest/develop/programmability/eval-intro/).
+
+
+## MongoDB command-name guardrails (A262)
+
+Enable `access.gateway.session.rules.mongodb.v1` in
+`agent_channel.claimable_job_kinds`, upgrade the bound gateway and wait for its
+executor report. Choose **MongoDB** in the template wizard, or use
+`protocol: "mongodb"` and known lowercase command classes through the template
+API. For example, `delete` and `findandmodify` are distinct selectors. Rules use
+the same frozen revision, block precedence, independent human quorum and short
+review deadline as the other command guards. Recording is optional.
+
+Inspection happens after the gateway's SCRAM sign-in. The classifier receives the
+command document's first field name; only its known public class, IDs and digests
+reach matching, human review and action evidence. Document values, filters,
+sequence documents and the injected credential are not predicates or review
+previews. Client sign-in commands never enter rule evaluation. The existing
+handshake removes speculative authentication and compression offers before
+forwarding; a legacy OP_QUERY is accepted only for that sanitized handshake.
+
+A complete client message is limited to 1 MiB, with a shared target/protocol byte
+reservation before body allocation and a bounded disconnect-aware queue.
+Compressed messages, other legacy operations, checksum/opaque flag modes,
+unknown command classes and transactions are unsupported in ruled sessions.
+Transaction fields cause refusal and stream termination before later queued
+requests can run outside their intended transaction. Ordinary sessions retain
+their existing protocol support. Normal unacknowledged messages remain on the
+same guarded command path; a refused one has source evidence but no synchronous
+reply, matching the client's choice of unacknowledged operation. Consult session
+actions rather than treating lack of an error reply as target success.
+
+A refusal returns a fixed `TRSTCTL_COMMAND_REFUSED` error with the original
+request's responseTo correlation. It cannot be confused with a target permission
+error. A pending action stays unsent; two distinct approvals release its exact
+occurrence. Disconnect cancels it and later votes cannot cause the abandoned
+action to run. Authorization permits forwarding, not a claim of target execution.
+
+Equivalent effects can use different commands. A `findAndModify` request with
+`remove: true` bypasses a rule naming only `delete`. The served proof uses the
+same owned login's remove authority, verifies the document remains after refused
+delete, then verifies it disappears through that alias. Aggregation pipelines
+and command wrappers need their own selectors; these are guardrails. Target
+privileges provide containment. The stock shell's observed `atlasVersion`
+request is a public command class; forwarding it does not qualify a hosted service.
+
+Protocol references: MongoDB [wire-message correlation and OP_MSG](https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/)
+and [findAndModify removal](https://www.mongodb.com/docs/manual/reference/command/findandmodify/).

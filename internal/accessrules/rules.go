@@ -84,8 +84,8 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 		if !utf8.ValidString(r.Name) || utf8.RuneCountInString(r.Name) < 1 || utf8.RuneCountInString(r.Name) > 80 || strings.ContainsFunc(r.Name, unicode.IsControl) {
 			return nil, errors.New("command rules: name must be 1-80 characters without control characters")
 		}
-		if r.Protocol != "postgres" && r.Protocol != "ssh" && r.Protocol != "mysql" && r.Protocol != "redis" {
-			return nil, errors.New("command rules: choose a supported enforcing protocol: postgres, mysql, redis or ssh")
+		if r.Protocol != "postgres" && r.Protocol != "ssh" && r.Protocol != "mysql" && r.Protocol != "redis" && r.Protocol != "mongodb" {
+			return nil, errors.New("command rules: choose a supported enforcing protocol: postgres, mysql, redis, mongodb or ssh")
 		}
 		switch r.Effect {
 		case EffectBlock:
@@ -105,7 +105,7 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 		ops := make([]string, 0, len(r.Operations))
 		for _, op := range r.Operations {
 			op = strings.TrimSpace(op)
-			if r.Protocol == "ssh" {
+			if r.Protocol == "ssh" || r.Protocol == "mongodb" {
 				op = strings.ToLower(op)
 			} else {
 				op = strings.ToUpper(op)
@@ -292,6 +292,9 @@ func MatchedOperations(p *Policy, operations []string) []string {
 var sshOperationNames = []string{"bash", "chmod", "chown", "chpasswd", "command", "dd", "env", "exec", "iptables", "kill", "mkfs", "mount", "nft", "node", "passwd", "perl", "python", "python3", "reboot", "rm", "rmdir", "ruby", "scp", "sftp", "sh", "ssh", "su", "sudo", "systemctl", "umount", "useradd", "userdel"}
 
 func OperationNames(protocol string) []string {
+	if protocol == "mongodb" {
+		return slices.Clone(mongoOperationNames)
+	}
 	if protocol == "ssh" {
 		return slices.Clone(sshOperationNames)
 	}
@@ -307,6 +310,9 @@ func OperationNames(protocol string) []string {
 	return nil
 }
 func KnownOperation(protocol, operation string) bool {
+	if protocol == "mongodb" {
+		return slices.Contains(mongoOperationNames, operation)
+	}
 	if protocol == "redis" {
 		return slices.Contains(redisOperationNames, operation)
 	}
@@ -319,12 +325,13 @@ func KnownOperation(protocol, operation string) bool {
 	return protocol == "postgres" && knownPostgresRuleOperation(operation)
 }
 func KnownAnyOperation(operation string) bool {
-	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(mysqlOperationNames, operation) || slices.Contains(redisOperationNames, operation)
+	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(mysqlOperationNames, operation) || slices.Contains(redisOperationNames, operation) || slices.Contains(mongoOperationNames, operation)
 }
 func AllOperationNames() []string {
 	out := append(PostgresOperationNames(), sshOperationNames...)
 	out = append(out, mysqlOperationNames...)
 	out = append(out, redisOperationNames...)
+	out = append(out, mongoOperationNames...)
 	slices.Sort(out)
 	return slices.Compact(out)
 }

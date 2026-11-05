@@ -228,7 +228,7 @@ func TestSessionIntentValidationA254(t *testing.T) {
 	if ValidateSessionIntent(routed) == nil {
 		t.Fatal("a PostgreSQL session carrying SSH routing was accepted")
 	}
-	if got := ClaimableKinds(); len(got) != 5 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules {
+	if got := ClaimableKinds(); len(got) != 6 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules || got[5] != KindSessionMongoRules {
 		t.Fatalf("the gateway claims %v", got)
 	}
 }
