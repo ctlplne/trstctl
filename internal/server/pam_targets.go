@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -75,14 +76,25 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 		}
 		if _, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: target.TargetType, TenantID: tenantID, ID: target.ID,
 			ProviderID: target.ProviderID, AllowedRoles: target.AllowedRoles,
-			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress}); err != nil {
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress, AccountSecret: target.AccountSecret}); err != nil {
 			return api.PAMTarget{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
+		}
+		if target.AccountSecret != "" {
+			// The vaulted account's secret must be readable now.
+			if s.secretReader == nil {
+				return api.PAMTarget{}, fmt.Errorf("%w: vaulted accounts need the secrets API", api.ErrPAMInvalid)
+			}
+			value, _, err := s.secretReader(ctx, tenantID, target.AccountSecret)
+			if err != nil {
+				return api.PAMTarget{}, fmt.Errorf("%w: account secret %q is not readable: %v", api.ErrPAMInvalid, target.AccountSecret, err)
+			}
+			secret.Wipe(value)
 		}
 	case target.TargetType == pamTargetSSH:
 		if _, ok := s.sshTargets[key]; ok {
 			return api.PAMTarget{}, fmt.Errorf("%w: operator-configured target already exists", api.ErrPAMTargetConflict)
 		}
-		if target.ProviderID != "" || len(target.AllowedRoles) != 0 {
+		if target.ProviderID != "" || len(target.AllowedRoles) != 0 || target.AccountSecret != "" {
 			return api.PAMTarget{}, fmt.Errorf("%w: SSH target has database-only fields", api.ErrPAMInvalid)
 		}
 		if strings.ContainsAny(target.Host, "/@ \t\r\n") {
@@ -109,7 +121,7 @@ func (s *pamService) RegisterPAMTarget(ctx context.Context, tenantID, actor stri
 	payload := projections.PAMTargetRegistered{TargetType: target.TargetType, ID: target.ID,
 		ProviderID: target.ProviderID, AllowedRoles: roles, Host: target.Host, Port: target.Port,
 		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
-		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...)}
+		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...), AccountSecret: target.AccountSecret}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-target:"+tenantID+":"+target.TargetType+":"+target.ID)).String()
 	if err := s.appendCanonicalPAMTarget(ctx, tenantID, id, projections.EventPAMTargetRegistered, payload); err != nil {
 		return api.PAMTarget{}, err
@@ -142,7 +154,8 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		Enabled: rec.Enabled, Source: "tenant", RegisteredBy: rec.RegisteredBy,
 		RegisteredAt: &rec.RegisteredAt, DisabledBy: rec.DisabledBy,
 		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt,
-		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints}
+		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints,
+		AccountSecret: rec.AccountSecret}
 }
 
 // operatorDatabaseTarget and operatorSSHTarget are the reads of
@@ -268,7 +281,7 @@ func (s *pamService) databaseTarget(ctx context.Context, tenantID, targetType, i
 		return nil, fmt.Errorf("%w: %s target %q is disabled", api.ErrPAMRejected, targetType, id)
 	}
 	target, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: targetType, TenantID: tenantID, ID: id, ProviderID: rec.ProviderID,
-		AllowedRoles: rec.AllowedRoles, GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress})
+		AllowedRoles: rec.AllowedRoles, GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, AccountSecret: rec.AccountSecret})
 	if err != nil {
 		return nil, fmt.Errorf("%w: registered %s target %q is no longer valid: %v", api.ErrPAMRejected, targetType, id, err)
 	}
@@ -309,4 +322,14 @@ func (s *pamService) sshTarget(ctx context.Context, tenantID, id string) (PAMSSH
 		return PAMSSHTarget{}, fmt.Errorf("%w: registered ssh target %q is no longer valid: %v", api.ErrPAMRejected, id, err)
 	}
 	return targets[pamTargetID{tenantID, id}], nil
+}
+
+// pamVaultedRef prefixes a vaulted session's backend reference: the
+// application secret holding the account it signs in as (A261).
+const pamVaultedRef = "secret:"
+
+// isPAMVaultedSession reports whether a database session signs in as a
+// vaulted account rather than a per-session lease (A261).
+func isPAMVaultedSession(rec store.PAMSession) bool {
+	return isPAMDatabaseType(rec.TargetType) && strings.HasPrefix(rec.BackendRef, pamVaultedRef)
 }

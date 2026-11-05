@@ -8627,6 +8627,7 @@ export interface PAMSessionRevocationRequest {
 }
 
 export interface PAMTarget {
+  account_secret?: string;
   allowed_roles?: string[];
   disabled_at?: string;
   disabled_by?: string;
@@ -8657,6 +8658,7 @@ export interface PAMTargetList {
 }
 
 export interface PAMTargetRequest {
+  account_secret?: string;
   allowed_roles?: string[];
   gateway_address?: string;
   gateway_agent_id?: string;

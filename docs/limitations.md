@@ -8967,6 +8967,29 @@ axe clean).
 
 What comes next:
 - Folders as objects with their template applied to every account in them (A261).
+
+## Brokered-account lifecycle (A261) — part 1 of 3: vaulted accounts through the gateway
+
+Status: vaulted accounts and their scheduled rotation served; check-out (part 2) and
+auto-approval rules with folder templates (part 3) come next, and A261 stays open until they
+land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
+are delivered through its gateway signed in as the account that application secret holds,
+read when the gateway claims the session, so nobody receives the credential and nothing is
+minted per session. The secret is an A240 static credential: its provider must rotate the
+secret's role as a static credential (one account in place, or an account pair), and that role
+is the target's only allowed role. A rotation schedule on the secret (`provider` the
+target's provider, `key` the secret) rotates the account on its interval.
+`TestServedVaultedAccountRotatesThroughTheGatewayA261` proves it on PostgreSQL through the
+gateway: a vaulted target allowing another role, or naming an unreadable secret, is refused;
+a session signs in as the first account and the requester holds no credential; the scheduled
+rotation completes (the two-user engine stages the other account and retires the first); a
+session opened afterwards signs in as the new account, and the database refuses the old
+credential.
+
+What comes next:
+- Approved reveal or check-out, rotated after check-in or at expiry (part 2); auto-approval
+  rules and folders whose template applies to every account in them (part 3).
+- Vaulted accounts on the other database types the gateway serves.
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
   unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an
   `AuthorizedKeysFile` elsewhere) are not read; Windows hosts' local administrators.

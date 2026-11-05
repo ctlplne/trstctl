@@ -1203,3 +1203,21 @@ func splitCertKeyPEM(bundle []byte) (certPEM, keyPEM []byte) {
 	}
 	return certPEM, keyPEM
 }
+
+// CurrentApplicationSecret reads an application secret's current value and
+// version for the control plane itself: a vaulted PAM account's gateway
+// sign-in (A261). The caller wipes the value.
+func (a *API) CurrentApplicationSecret(ctx context.Context, tenantID, name string) ([]byte, int, error) {
+	if a.secrets == nil {
+		return nil, 0, errors.New("api: the secrets API is not enabled")
+	}
+	rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+	if err != nil {
+		return nil, 0, err
+	}
+	plain, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, name))
+	if err != nil {
+		return nil, 0, err
+	}
+	return plain, rec.Version, nil
+}

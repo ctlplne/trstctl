@@ -5845,6 +5845,7 @@ func componentSchemas() map[string]*Schema {
 		"gateway_agent_id":      {Type: "string", Format: "uuid", Description: "The gateway-role agent that serves this target (A254); set with gateway_address."},
 		"gateway_address":       {Type: "string", Description: "host:port where clients reach the gateway (A254)."},
 		"host_key_fingerprints": {Type: "array", Items: str(), Description: "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight."},
+		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
 		"id": str(), "target_type": {Type: "string", Enum: []string{"clickhouse", "kubernetes", "mongodb", "mysql", "postgres", "redis", "ssh"}},
@@ -5854,7 +5855,7 @@ func componentSchemas() map[string]*Schema {
 		"registered_by": str(), "registered_at": timestamp(), "disabled_by": str(),
 		"disabled_reason": str(), "disabled_at": timestamp(),
 		"gateway_agent_id": str(), "gateway_address": str(),
-		"host_key_fingerprints": {Type: "array", Items: str()},
+		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(),
 		"health": object(map[string]*Schema{
 			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
 				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},

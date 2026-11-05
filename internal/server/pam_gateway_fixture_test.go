@@ -55,6 +55,8 @@ type gatewayFixture struct {
 	// requester opens sessions; operator registers targets and terminates;
 	// auditor reads and exports recordings.
 	requester, reviewerOne, reviewerTwo, operator, auditor string
+	// vaultDSN is the vaulted account's starting DSN (opts.vaulted).
+	vaultDSN string
 }
 
 type gatewayFixtureOptions struct {
@@ -73,6 +75,11 @@ type gatewayFixtureOptions struct {
 	// kubernetes adds the Kubernetes target "k8s-gw" (A256), bound to the
 	// gateway, served by this provider ("pam-k8s-provider", role operator).
 	kubernetes DynamicSecretProviderRegistry
+	// vaulted (A261) serves the secrets API and adds the provider
+	// "pam-pg-vault", whose role db/orders rotates the PostgreSQL accounts
+	// orders_app_a and orders_app_b as a static credential; vaultDSN is
+	// orders_app_a's starting DSN.
+	vaulted bool
 	// agentBroker serves the AI agent broker, so a test can issue an agent
 	// identity and revoke it in one call (A257).
 	agentBroker bool
@@ -96,6 +103,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	seedPAMPostgresTable(t, pgDSN)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
+	if opts.vaulted {
+		_, f.vaultDSN = provisionTwoUserTarget(t, pgDSN)
+	}
 	var redisProviders, mysqlProviders, mongoProviders, clickhouseProviders DynamicSecretProviderRegistry
 	if opts.redis {
 		f.redisID, redisProviders = startPAMRedis(t)
@@ -122,6 +132,16 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	f.h = newRoleHarnessWithDeps(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
+		if opts.vaulted {
+			d.EnableSecretsAPI = true
+			vault := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "pam-pg-vault", Type: "postgresql",
+				AdminDSNRef: adminDSNRef, Database: "postgres", Schema: "app", UsernamePrefix: "trstctl", AllowedRoles: []string{twoUserRole},
+				MaxTTL: time.Hour.String(), AllowStaticRotation: true,
+				RotationAccounts: map[string][]string{twoUserRole: {twoUserAccountA, twoUserAccountB}}}
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant],
+				newConfiguredDynamicProvider(vault, map[string]bool{twoUserRole: true}, time.Hour,
+					integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}, nil))
+		}
 		var databaseTargets []PAMDatabaseTarget
 		if opts.redis {
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], redisProviders.ForTenant(servedTestTenant)...)

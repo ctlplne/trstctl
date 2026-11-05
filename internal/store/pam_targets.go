@@ -30,30 +30,35 @@ type PAMTarget struct {
 	// HostKeyFingerprints (A254) pin the SSH host keys a gateway accepts from
 	// an SSH target (SHA256:...).
 	HostKeyFingerprints []string
+	// AccountSecret (A261) names the application secret holding the vaulted
+	// account a database target's sessions sign in as; empty leases per
+	// session.
+	AccountSecret string
 }
 
 const pamTargetColumns = `tenant_id::text, target_type, id, provider_id, allowed_roles,
     host, port, principals, enabled, registered_by, registered_at,
-    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints`
+    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints, account_secret`
 
 func scanPAMTarget(row pgx.Row) (PAMTarget, error) {
 	var rec PAMTarget
 	err := row.Scan(&rec.TenantID, &rec.TargetType, &rec.ID, &rec.ProviderID,
 		&rec.AllowedRoles, &rec.Host, &rec.Port, &rec.Principals, &rec.Enabled,
 		&rec.RegisteredBy, &rec.RegisteredAt, &rec.DisabledBy, &rec.DisabledReason, &rec.DisabledAt,
-		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints)
+		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints, &rec.AccountSecret)
 	return rec, err
 }
 
 func (s *Store) ApplyPAMTargetRegisteredTx(ctx context.Context, tx pgx.Tx, rec PAMTarget) error {
 	_, err := tx.Exec(ctx, `INSERT INTO pam_targets
         (tenant_id, target_type, id, provider_id, allowed_roles, host, port,
-         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints)
+         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints, account_secret)
 		 VALUES ($1::uuid,$2,$3,$4,COALESCE($5::text[], '{}'::text[]),$6,$7,
-		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]))
+		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]),$14)
         ON CONFLICT (tenant_id,target_type,id) DO NOTHING`,
 		rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, rec.AllowedRoles,
-		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress, rec.HostKeyFingerprints)
+		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress, rec.HostKeyFingerprints,
+		rec.AccountSecret)
 	return err
 }
 

@@ -39943,6 +39943,9 @@
       },
       "PAMTarget": {
         "properties": {
+          "account_secret": {
+            "type": "string"
+          },
           "allowed_roles": {
             "items": {
               "type": "string"
@@ -40097,6 +40100,10 @@
       },
       "PAMTargetRequest": {
         "properties": {
+          "account_secret": {
+            "description": "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role.",
+            "type": "string"
+          },
           "allowed_roles": {
             "items": {
               "type": "string"

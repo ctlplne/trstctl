@@ -141,6 +141,11 @@ type PAMTarget struct {
 	// Health (A258) is the last read-only sign-in check of the credential a
 	// provider-backed target's provider holds; absent before its first check.
 	Health *PAMAccountHealth `json:"health,omitempty"`
+	// AccountSecret (A261) names the application secret holding one account's
+	// current credential: a vaulted database target's sessions are delivered
+	// through its gateway signed in as that account, with no per-session
+	// lease. An A240 static rotation keeps the secret current.
+	AccountSecret string `json:"account_secret,omitempty"`
 }
 
 // PAMAccountHealth is a brokered account's credential health (A258).

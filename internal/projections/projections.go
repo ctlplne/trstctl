@@ -4379,6 +4379,9 @@ type PAMTargetRegistered struct {
 	// HostKeyFingerprints pin the host keys a gateway accepts from an SSH
 	// target (A254).
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
+	// AccountSecret names the application secret holding the vaulted
+	// account a database target's sessions sign in as (A261).
+	AccountSecret string `json:"account_secret,omitempty"`
 }
 
 // PAMRecordingChunkStored records one sealed chunk of a gateway session's
@@ -8498,7 +8501,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
 			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
 			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
-			HostKeyFingerprints: pl.HostKeyFingerprints,
+			HostKeyFingerprints: pl.HostKeyFingerprints, AccountSecret: pl.AccountSecret,
 		})
 	case EventPAMRecordingChunkStored:
 		var pl PAMRecordingChunkStored

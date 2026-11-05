@@ -21753,6 +21753,7 @@ export interface components {
             reason: string;
         };
         PAMTarget: {
+            account_secret?: string;
             allowed_roles?: string[];
             /** Format: date-time */
             disabled_at?: string;
@@ -21798,6 +21799,8 @@ export interface components {
             next_cursor?: string;
         };
         PAMTargetRequest: {
+            /** @description A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role. */
+            account_secret?: string;
             allowed_roles?: string[];
             /** @description host:port where clients reach the gateway (A254). */
             gateway_address?: string;

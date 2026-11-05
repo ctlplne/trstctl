@@ -94,6 +94,11 @@
   refusal with its SQLSTATE) run by the control plane through the session's gateway, which signs in, records and masks.
   The console's "Open in the browser" now covers both target types; "Open database console" shows the SQL console.
   OpenAPI census 735 -> 736.
+- Brokered-account lifecycle, part 1 (A261): a PostgreSQL or MySQL PAM target registered with `account_secret` is
+  vaulted — its sessions go through its gateway signed in as the account that application secret holds (read when the
+  gateway claims the session), so nobody receives the credential and nothing is minted per session. The secret is an
+  A240 static credential its provider rotates; a rotation schedule rotates it, and sessions opened afterwards sign in
+  with the new credential while the old one is refused. Migration 0401 (`pam_targets.account_secret`).
 - Privileged account discovery, part 2 (A260 served): Active Directory users through the LDAP provider (transitive
   members of the groups that administer the domain, protected users); staged accounts are imported into a folder only
   after independent review (`/api/v1/access/discovery/imports`, applied with the approval; refused when an account

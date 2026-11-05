@@ -998,7 +998,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/host", opaque), privacyRule("/port", opaque),
 			privacyRule("/principals", opaque), privacyRule("/registered_by", exact),
 			privacyRule("/gateway_agent_id", opaque), privacyRule("/gateway_address", opaque),
-			privacyRule("/host_key_fingerprints", opaque),
+			privacyRule("/host_key_fingerprints", opaque), privacyRule("/account_secret", opaque),
 		),
 		{EventPAMRecordingChunkStored, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/gateway_agent_id", opaque), privacyRule("/ord", opaque),

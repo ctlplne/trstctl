@@ -492,6 +492,15 @@ trstctl-cli access discovery import apply <request-id> -f import-with-approval.j
 trstctl-cli access accounts --folder db-admins
 ```
 
+A shared privileged account can be vaulted instead of leased (A261): keep its credential in
+an application secret that an A240 static rotation maintains, and register the PostgreSQL or
+MySQL target with `account_secret` naming it (its only allowed role is that secret's role,
+and it must be bound to a gateway). Its sessions sign in as that account through the gateway;
+the requester never sees the credential. Schedule the secret's rotation as for any static
+secret (`POST /api/v1/secrets/rotation-schedules` with the target's provider and the secret);
+sessions opened after a rotation sign in with the new credential, and the old one stops
+working.
+
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
 bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;

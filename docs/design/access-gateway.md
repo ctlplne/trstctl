@@ -323,6 +323,18 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   records the stream as for kubectl.
 - **Reach.** The control plane must reach the gateway's address; a gateway it cannot reach
   serves the CLI only.
+
+## Vaulted accounts (A261)
+
+- A database target with `account_secret` is vaulted: when its gateway claims a session, the
+  control plane hands it the application secret's current value (a DSN for the account) in
+  place of a per-session lease, so a rotation between a session's open and its claim is
+  honored. Revoking or ending the session removes nothing at the database: the gateway's
+  recall ends its connections, and the account remains for the next session.
+- The secret is kept current by A240's static rotation through the target's provider (the
+  target's only role is the secret's role); a two-user rotation stages the other account and
+  retires the first, so a session opened afterwards signs in as the new account and the old
+  credential is refused.
 - **Console.** Request privileged session → "Open in the browser" (an SSH request then sends
   no key: the gateway makes its own); once the session is open, "Open terminal" shows an SSH
   session in xterm.js, loaded on demand, with screen-reader mode on, "Open database

@@ -25,6 +25,8 @@ type pamTargetRequest struct {
 	GatewayAddress string `json:"gateway_address,omitempty"`
 	// HostKeyFingerprints pin a gateway-bound SSH target's host keys.
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
+	// AccountSecret makes a database target vaulted (A261).
+	AccountSecret string `json:"account_secret,omitempty"`
 }
 
 //trstctl:mutation
@@ -46,7 +48,7 @@ func (a *API) registerPAMTarget(w http.ResponseWriter, r *http.Request) {
 			ProviderID: strings.TrimSpace(body.ProviderID), AllowedRoles: body.AllowedRoles,
 			Host: strings.TrimSpace(body.Host), Port: body.Port, Principals: body.Principals,
 			GatewayAgentID: strings.TrimSpace(body.GatewayAgentID), GatewayAddress: strings.TrimSpace(body.GatewayAddress),
-			HostKeyFingerprints: body.HostKeyFingerprints,
+			HostKeyFingerprints: body.HostKeyFingerprints, AccountSecret: strings.TrimSpace(body.AccountSecret),
 		})
 		if err != nil {
 			return 0, nil, err

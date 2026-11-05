@@ -238,6 +238,19 @@ func (s *pamService) gatewaySessionCredential(ctx context.Context, tenantID, ses
 	if !isPAMDatabaseType(rec.TargetType) || rec.BackendRef == "" {
 		return nil, errors.New("gateway session has no lease to redeem")
 	}
+	if name, ok := strings.CutPrefix(rec.BackendRef, pamVaultedRef); ok {
+		// A261: the vaulted account's current credential, read when the
+		// gateway claims the session (a rotation since the session opened
+		// is honored).
+		if s.secretReader == nil {
+			return nil, errors.New("gateway session's vaulted account needs the secrets API")
+		}
+		value, _, err := s.secretReader(ctx, tenantID, name)
+		if err != nil {
+			return nil, errors.New("gateway session's vaulted account secret is unavailable")
+		}
+		return value, nil
+	}
 	lifecycle, err := s.databaseLifecycle(tenantID)
 	if err != nil {
 		return nil, err

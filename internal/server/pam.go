@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -118,6 +119,9 @@ type PAMDatabaseTarget struct {
 	AllowedRoles   []string
 	GatewayAgentID string
 	GatewayAddress string
+	// AccountSecret (A261) names the application secret holding the vaulted
+	// account the target's sessions sign in as through its gateway.
+	AccountSecret string
 }
 
 type PAMPostgresTarget struct {
@@ -184,6 +188,8 @@ type pamService struct {
 	// discovery marks the privileged account discovery sources being
 	// scanned (A260).
 	discovery *pamDiscovery
+	// secretReader reads a vaulted target's account secret (A261).
+	secretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -241,6 +247,9 @@ type pamDeps struct {
 	// recordings (A255); either unset leaves sessions unrecorded.
 	RecordingObjects objectstore.Store
 	RecordingSigner  *jose.SigningKey
+	// SecretReader reads an application secret's current value: a vaulted
+	// target's account (A261). Nil when the secrets API is not served.
+	SecretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
 }
 
 func newPAMService(d pamDeps) (*pamService, error) {
@@ -316,7 +325,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
-		targetDeps: d, agentCAPEM: d.AgentCAPEM,
+		targetDeps: d, agentCAPEM: d.AgentCAPEM, secretReader: d.SecretReader,
 	}, nil
 }
 
@@ -356,9 +365,23 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 		if target.TargetType != pamTargetPostgres && (target.GatewayAgentID == "" || target.GatewayAddress == "") {
 			return nil, fmt.Errorf("server: PAM %s target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", kind, target.ID)
 		}
+		if target.AccountSecret != "" {
+			// A261: a vaulted account signs in only through the gateway, and
+			// its one role is the secret's: the static rotation keeping it
+			// current runs as that role.
+			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL {
+				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL or MySQL", kind, target.ID)
+			}
+			if target.GatewayAgentID == "" || target.GatewayAddress == "" {
+				return nil, fmt.Errorf("server: vaulted PAM target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", target.ID)
+			}
+			if len(target.AllowedRoles) != 1 || target.AllowedRoles[0] != target.AccountSecret {
+				return nil, fmt.Errorf("server: vaulted PAM target %q allows exactly one role, its account secret %q", target.ID, target.AccountSecret)
+			}
+		}
 		roles := make(map[string]struct{}, len(target.AllowedRoles))
 		for _, role := range target.AllowedRoles {
-			if target.TargetType == pamTargetPostgres && role != "readonly" && role != "writer" {
+			if target.TargetType == pamTargetPostgres && target.AccountSecret == "" && role != "readonly" && role != "writer" {
 				return nil, fmt.Errorf("server: PAM postgres target %q has unsupported role %q", target.ID, role)
 			}
 			if strings.TrimSpace(role) == "" {
@@ -397,6 +420,13 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 			for role := range roles {
 				if !providerRoles[role] {
 					return nil, fmt.Errorf("server: PAM target %q role %q is not enabled on its provider", target.ID, role)
+				}
+			}
+			if target.AccountSecret != "" {
+				static, ok := provider.(dynsecret.StaticRotationProvider)
+				if !ok || !static.AllowsStaticRotation(target.AccountSecret) {
+					return nil, fmt.Errorf("server: vaulted PAM target %q: provider %q does not rotate %q as a static credential", target.ID,
+						target.ProviderID, target.AccountSecret)
 				}
 			}
 			matched = true
@@ -1124,6 +1154,9 @@ func (s *pamService) appendSSHRecoveryEvent(ctx context.Context, item store.PAMS
 
 func (s *pamService) revokeSession(ctx context.Context, rec store.PAMSession) error {
 	switch {
+	case isPAMVaultedSession(rec):
+		// A261: a vaulted account has no per-session lease to remove; the
+		// gateway's recall ends the session's connections.
 	case isPAMDatabaseType(rec.TargetType):
 		lifecycle, err := s.databaseLifecycle(rec.TenantID)
 		if err != nil {
@@ -1203,6 +1236,14 @@ func (s *pamService) openDatabaseProvider(ctx context.Context, tenantID, idempot
 		// Only a PostgreSQL target hands its login to the requester; the
 		// target builder already refuses any other type without a gateway.
 		return api.PAMSession{}, fmt.Errorf("%w: %s target %q has no access gateway", api.ErrPAMRejected, req.TargetType, req.TargetID)
+	}
+	if target.cfg.AccountSecret != "" {
+		// A261: a vaulted account. The session mints nothing: the gateway
+		// signs in as the account with the secret's current value when it
+		// claims the session, and nobody else ever receives it.
+		return s.startGatewaySession(ctx, tenantID, idempotencyKey, requester, id, now, expiresAt, att, req,
+			gatewayStart{backendRef: pamVaultedRef + target.cfg.AccountSecret, agentID: target.cfg.GatewayAgentID,
+				address: target.cfg.GatewayAddress, undo: func() {}})
 	}
 	lifecycle, err := s.databaseLifecycle(tenantID)
 	if err != nil {
@@ -1331,6 +1372,8 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 
 func (s *pamService) expireSession(ctx context.Context, rec store.PAMSession) error {
 	switch {
+	case isPAMVaultedSession(rec):
+		// A261: nothing was minted for a vaulted account's session.
 	case isPAMDatabaseType(rec.TargetType):
 		lifecycle, err := s.databaseLifecycle(rec.TenantID)
 		if err != nil {

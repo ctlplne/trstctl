@@ -11991,6 +11991,7 @@ PAMSessionRevocationRequest = TypedDict(
 PAMTarget = TypedDict(
     'PAMTarget',
     {
+        'account_secret': str,
         'allowed_roles': list[str],
         'disabled_at': str,
         'disabled_by': str,
@@ -12033,6 +12034,7 @@ PAMTargetList = TypedDict(
 PAMTargetRequest = TypedDict(
     'PAMTargetRequest',
     {
+        'account_secret': str,
         'allowed_roles': list[str],
         'gateway_address': str,
         'gateway_agent_id': str,
