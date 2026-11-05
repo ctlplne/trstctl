@@ -291,6 +291,27 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   hour. Its post-incident review stays pending until someone other than the responder,
   holding `access:approve`, records it (justified or unjustified, with notes), once.
 
+## Browser sessions (A259)
+
+- **The control plane is the browser's client.** A session opened with `"browser": true` hands
+  its one-time ticket to the control plane, which keeps it in locked memory, bound to the
+  person who opened it, until the session's deadline. The open's reply, and its idempotent
+  replay, carries no ticket: the browser never holds a ticket or a credential.
+- **Terminals.** For an SSH session the control plane dials the session's gateway with the
+  CLI's verified TLS (the agent CA and the gateway agent's SPIFFE ID), presents the ticket and
+  opens a shell over SSH with no client key: the gateway admits by ticket, serves SSH with the
+  host key it named over that connection (pinned for the handshake), signs in to the target
+  itself, and records and masks as for any session. The browser reads the terminal's output by
+  long-polling (`GET .../terminals/{id}/output?from=&wait=`, at most 25 s, a 1 MiB backlog;
+  a reader that falls behind is told the output was truncated) and types in idempotent
+  batches. Only the session's opener can use its terminals, two at most. Revocation,
+  termination or the deadline ends the gateway connection and with it the terminal.
+- **Reach.** The control plane must reach the gateway's address; a gateway it cannot reach
+  serves the CLI only.
+- **Console.** Request privileged session → SSH → "Open in the browser" sends no key (the
+  gateway makes its own); once the session is open, "Open terminal" shows it in xterm.js,
+  loaded on demand, with screen-reader mode on.
+
 ## Failure modes
 
 - **Control-plane restart mid-session** — the session row, its events and its job row are
@@ -326,6 +347,7 @@ deliberate grant.
 | An agent's credential leaking through its environment, output or logs | The agent never holds one: the launcher keeps the tickets, the gateway signs in, and the command's environment holds no control-plane token. |
 | A compromised agent | One call revoking its identity revokes the runs that act as it and ends its live sessions. |
 | A health check pushing an account into lockout | A refused credential is signed in with once; the next sign-in waits for a new credential or an operator's check. |
+| A browser-side compromise | The browser holds no ticket or credential; a stolen page drives the open terminal only while it lasts, as its opener. |
 | A forged emergency grant | Only a named person opens one; the normal open still needs its approvals; the grant and its notice are recorded first; the responder cannot review it. |
 | A gateway impersonator | The CLI verifies the gateway's serving certificate against the tenant's agent CA for the host it dialed and requires the gateway agent's exact SPIFFE ID; the control plane signs a gateway's certificate only for hosts its own bindings declare. |
 

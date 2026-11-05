@@ -516,6 +516,8 @@ import type {
   PAMTarget,
   PAMTargetList,
   PAMTargetRequest,
+  PAMTerminal,
+  PAMTerminalOutput,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -1487,6 +1489,8 @@ export type {
   PAMTarget,
   PAMTargetList,
   PAMTargetRequest,
+  PAMTerminal,
+  PAMTerminalOutput,
   PKISecret,
   PKISecretPreview,
   PKISecretRequest,
@@ -2504,6 +2508,11 @@ export interface Api {
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   revokePAMSession(id: string, reason: string, idempotencyKey?: string): Promise<PAMSession>;
+  openPAMTerminal(sessionID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
+  readPAMTerminal(sessionID: string, terminalID: string, from: number, waitSeconds: number): Promise<PAMTerminalOutput>;
+  writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
+  resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
+  closePAMTerminal(sessionID: string, terminalID: string, idempotencyKey?: string): Promise<PAMTerminal>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -3397,6 +3406,33 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
   revokePAMSession: (id, reason, idempotencyKey) =>
     mutate<PAMSession>("POST", `/api/v1/access/sessions/${encodeURIComponent(id)}/revoke`, { reason }, idempotencyKey),
+  openPAMTerminal: (sessionID, size, idempotencyKey) =>
+    mutate<PAMTerminal>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals`, size, idempotencyKey),
+  readPAMTerminal: (sessionID, terminalID, from, waitSeconds) =>
+    req<PAMTerminalOutput>(
+      `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/output?from=${from}&wait=${waitSeconds}`,
+    ),
+  writePAMTerminal: (sessionID, terminalID, data, idempotencyKey) =>
+    mutate<PAMTerminal>(
+      "POST",
+      `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/input`,
+      { data },
+      idempotencyKey,
+    ),
+  resizePAMTerminal: (sessionID, terminalID, size, idempotencyKey) =>
+    mutate<PAMTerminal>(
+      "POST",
+      `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/resize`,
+      size,
+      idempotencyKey,
+    ),
+  closePAMTerminal: (sessionID, terminalID, idempotencyKey) =>
+    mutate<PAMTerminal>(
+      "DELETE",
+      `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}`,
+      undefined,
+      idempotencyKey,
+    ),
   acmeDNS01ProviderConfig: (id) => req<ACMEDNS01ProviderConfig>(`/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`),
   createACMEDNS01ProviderConfig: (input) => mutate<ACMEDNS01ProviderConfig>("POST", "/api/v1/acme/dns-01/provider-configs", input),
   updateACMEDNS01ProviderConfig: (id, input) => mutate<ACMEDNS01ProviderConfig>("PUT", `/api/v1/acme/dns-01/provider-configs/${encodeURIComponent(id)}`, input),

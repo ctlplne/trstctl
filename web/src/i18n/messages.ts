@@ -5662,6 +5662,33 @@ export const messages = {
     description: "Qualified PAM revocation completion state.",
   },
   "admin.access.revokeFailed": { defaultMessage: "Could not request revocation", description: "PAM revoke mutation failure title." },
+  "admin.access.openInBrowser": {
+    defaultMessage: "Open in the browser (the control plane keeps the session's ticket)",
+    description: "PAM activation checkbox: open an SSH gateway session for the browser terminal (A259).",
+  },
+  "admin.access.openTerminal": { defaultMessage: "Open terminal", description: "Button opening a browser terminal on a privileged SSH session (A259)." },
+  "admin.access.terminal.title": { defaultMessage: "Terminal", description: "Heading of the browser terminal on a privileged session (A259)." },
+  "admin.access.terminal.close": { defaultMessage: "Close terminal", description: "Button closing the browser terminal; the session stays open (A259)." },
+  "admin.access.terminal.opening": {
+    defaultMessage: "Opening the terminal through the session's gateway…",
+    description: "Browser terminal status while the control plane opens the shell (A259).",
+  },
+  "admin.access.terminal.open": {
+    defaultMessage: "Connected. The gateway signs in for you and records the session.",
+    description: "Browser terminal status once the shell is open (A259).",
+  },
+  "admin.access.terminal.ended": {
+    defaultMessage: "The session ended.",
+    description: "Browser terminal status after the session ended without an exit status (A259).",
+  },
+  "admin.access.terminal.exited": {
+    defaultMessage: "The shell exited with status {status}.",
+    description: "Browser terminal status after the shell exited; status is its exit status (A259).",
+  },
+  "admin.access.terminal.failed": {
+    defaultMessage: "The terminal could not be opened: {error}",
+    description: "Browser terminal status when opening or reading failed; error is the server's message (A259).",
+  },
   "admin.access.revocationFailure": { defaultMessage: "Target removal failure", description: "PAM provider removal failure classification." },
   "admin.access.revocationFailedAt": { defaultMessage: "Removal failed at", description: "PAM provider removal failure timestamp." },
   "admin.access.revocationFailedHelp": {

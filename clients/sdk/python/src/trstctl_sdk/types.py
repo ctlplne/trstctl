@@ -11750,6 +11750,7 @@ PAMSessionActivationRequest = TypedDict(
     'PAMSessionActivationRequest',
     {
         'approval_request_id': str,
+        'browser': bool,
         'intent_digest': str,
         'method': str,
         'payload_base64': str,
@@ -11856,6 +11857,46 @@ PAMTargetRequest = TypedDict(
         'principals': list[str],
         'provider_id': str,
         'target_type': str,
+    },
+    total=False,
+)
+
+PAMTerminal = TypedDict(
+    'PAMTerminal',
+    {
+        'cols': int,
+        'id': str,
+        'rows': int,
+        'session_id': str,
+    },
+    total=False,
+)
+
+PAMTerminalInput = TypedDict(
+    'PAMTerminalInput',
+    {
+        'data': str,
+    },
+    total=False,
+)
+
+PAMTerminalOutput = TypedDict(
+    'PAMTerminalOutput',
+    {
+        'closed': bool,
+        'data': str,
+        'exit_status': int,
+        'next': int,
+        'truncated': bool,
+    },
+    total=False,
+)
+
+PAMTerminalRequest = TypedDict(
+    'PAMTerminalRequest',
+    {
+        'cols': int,
+        'rows': int,
     },
     total=False,
 )

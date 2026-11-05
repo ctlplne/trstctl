@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow, Num } from "@/components/typography";
+import { BrowserTerminal } from "@/components/access/BrowserTerminal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -51,9 +52,12 @@ const pamFormSchema = z
       .refine((value) => value === "" || (/^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value))), translateNow("admin.access.ttlPositiveInteger")),
     ssh_principal: z.string().trim(),
     ssh_public_key: z.string().trim(),
+    // A259: an SSH session through a gateway, opened for the browser
+    // terminal; the gateway makes its own key, so none is sent.
+    browser: z.boolean(),
   })
   .superRefine((value, ctx) => {
-    if (value.target_type === "ssh" && !value.ssh_public_key) {
+    if (value.target_type === "ssh" && !value.browser && !value.ssh_public_key) {
       ctx.addIssue({ code: "custom", path: ["ssh_public_key"], message: translateNow("admin.access.sshKeyRequired") });
     }
   });
@@ -70,6 +74,7 @@ const defaultPAMSessionForm: PAMSessionFormState = {
   ttl_seconds: "",
   ssh_principal: "",
   ssh_public_key: "",
+  browser: false,
 };
 
 /** /admin/access — an answer-first access journey. The default page reads only
@@ -136,6 +141,7 @@ export function AdminAccess() {
   const [pamExact, setPAMExact] = useState<PAMSessionRequest | null>(null);
   const [pamPending, setPAMPending] = useState<PAMApprovalRequest | null>(null);
   const [pamCreated, setPAMCreated] = useState<PAMSession | null>(null);
+  const [pamBrowser, setPAMBrowser] = useState(false);
   const [pamCopied, setPAMCopied] = useState(false);
   const updatePAMSession = useCallback(
     (next: PAMSession) => {
@@ -387,6 +393,7 @@ export function AdminAccess() {
     setPAMExact(null);
     setPAMPending(null);
     setPAMCreated(null);
+    setPAMBrowser(false);
     setPAMCopied(false);
   }
 
@@ -407,8 +414,9 @@ export function AdminAccess() {
         ...(form.reason ? { reason: form.reason } : {}),
         ...(form.ttl_seconds ? { ttl_seconds: ttl } : {}),
         ...(form.target_type === "ssh" && form.ssh_principal ? { ssh_principal: form.ssh_principal } : {}),
-        ...(form.target_type === "ssh" ? { ssh_public_key: form.ssh_public_key } : {}),
+        ...(form.target_type === "ssh" && !form.browser ? { ssh_public_key: form.ssh_public_key } : {}),
       };
+      setPAMBrowser(form.target_type === "ssh" && form.browser);
       setPAMExact(input);
       setPAMPending(await api.requestPAMSession(input, `pam-request:${requestID}`));
     } catch (err) {
@@ -428,6 +436,7 @@ export function AdminAccess() {
           ...pamExact,
           approval_request_id: pamPending.approval_request_id,
           intent_digest: pamPending.intent_digest,
+          ...(pamBrowser ? { browser: true } : {}),
         },
         `pam-activate:${pamExact.request_id}`,
       );
@@ -1066,6 +1075,7 @@ export function AdminAccess() {
           error={pamFormError}
           pending={pamPending}
           created={pamCreated}
+          browser={pamBrowser}
           copied={pamCopied}
           returnFocusRef={pamTriggerRef}
           onClose={closePAMDialog}
@@ -1282,6 +1292,7 @@ function PAMFormDialog({
   error,
   pending,
   created,
+  browser,
   copied,
   returnFocusRef,
   onClose,
@@ -1296,6 +1307,7 @@ function PAMFormDialog({
   error: string | null;
   pending: PAMApprovalRequest | null;
   created: PAMSession | null;
+  browser: boolean;
   copied: boolean;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
@@ -1307,6 +1319,7 @@ function PAMFormDialog({
 }) {
   const { t } = useTranslation();
   const [showCredential, setShowCredential] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const review = useApiQuery(["pam-request-progress", pending?.approval_request_id], () => api.pamRequestProgress(pending?.approval_request_id ?? ""), {
     enabled: !!pending && !created,
     retry: false,
@@ -1338,6 +1351,7 @@ function PAMFormDialog({
     defaultValues: defaultPAMSessionForm,
   });
   const targetType = useWatch({ control, name: "target_type" });
+  const browserChosen = useWatch({ control, name: "browser" });
   useEffect(() => {
     if (created) reset(defaultPAMSessionForm);
   }, [created, reset]);
@@ -1374,6 +1388,15 @@ function PAMFormDialog({
             </span>
           </DetailRow>
           <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(created.expires_at, formatPolicy)}</DetailRow>
+          {browser && created.target_type === "ssh" ? (
+            terminalOpen ? (
+              <BrowserTerminal sessionID={created.id} onClose={() => setTerminalOpen(false)} />
+            ) : (
+              <Button type="button" size="sm" onClick={() => setTerminalOpen(true)}>
+                {t("admin.access.openTerminal")}
+              </Button>
+            )
+          ) : null}
           <Button type="button" size="sm" variant="outline" onClick={() => setShowCredential((visible) => !visible)}>
             {showCredential ? t("admin.access.hideCredential") : t("admin.access.revealCredential")}
           </Button>
@@ -1491,9 +1514,15 @@ function PAMFormDialog({
               <FormField label={t("admin.access.sshPrincipal")}>
                 <Input {...register("ssh_principal")} />
               </FormField>
-              <FormField label={translateNow("source.ssh.public.key.c9be6a369e")} hint={errors.ssh_public_key?.message}>
-                <Textarea className="min-h-24 font-mono text-xs" {...register("ssh_public_key")} aria-invalid={Boolean(errors.ssh_public_key)} />
-              </FormField>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("browser")} />
+                {t("admin.access.openInBrowser")}
+              </label>
+              {browserChosen ? null : (
+                <FormField label={translateNow("source.ssh.public.key.c9be6a369e")} hint={errors.ssh_public_key?.message}>
+                  <Textarea className="min-h-24 font-mono text-xs" {...register("ssh_public_key")} aria-invalid={Boolean(errors.ssh_public_key)} />
+                </FormField>
+              )}
             </>
           ) : null}
           <FormField label={t("admin.access.payloadBase64")} hint={errors.payload_base64?.message}>

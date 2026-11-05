@@ -8466,6 +8466,7 @@ export interface PAMSession {
 
 export interface PAMSessionActivationRequest {
   approval_request_id: string;
+  browser?: boolean;
   intent_digest: string;
   method: string;
   payload_base64: string;
@@ -8544,6 +8545,30 @@ export interface PAMTargetRequest {
   principals?: string[];
   provider_id?: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
+}
+
+export interface PAMTerminal {
+  cols?: number;
+  id: string;
+  rows?: number;
+  session_id: string;
+}
+
+export interface PAMTerminalInput {
+  data: string;
+}
+
+export interface PAMTerminalOutput {
+  closed?: boolean;
+  data: string;
+  exit_status?: number;
+  next: number;
+  truncated?: boolean;
+}
+
+export interface PAMTerminalRequest {
+  cols: number;
+  rows: number;
 }
 
 export interface PKISecret {

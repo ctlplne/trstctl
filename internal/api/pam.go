@@ -179,6 +179,9 @@ type PAMSessionRequest struct {
 	SSHPublicKey      []byte
 	SSHPrincipal      string
 	TemplateID        string
+	// Browser is set on an open for the browser (A259); it is not part of
+	// the reviewed command.
+	Browser bool
 }
 
 type pamSessionJSON struct {
@@ -198,6 +201,9 @@ type pamSessionJSON struct {
 	// its approvals raise the quorum and its maximum length bounds the
 	// session.
 	TemplateID string `json:"template_id,omitempty"`
+	// Browser (A259) opens the session for the browser: the control plane
+	// keeps its ticket and the reply carries none.
+	Browser bool `json:"browser,omitempty"`
 }
 
 // PAMApprovalRequest is the non-secret result of proposing one exact privileged
@@ -396,6 +402,7 @@ func decodePAMSessionRequest(r *http.Request) (PAMSessionRequest, error) {
 		Method: strings.TrimSpace(body.Method), Payload: payload, TTLSeconds: body.TTLSeconds,
 		SSHPublicKey: []byte(strings.TrimSpace(body.SSHPublicKey)), SSHPrincipal: strings.TrimSpace(body.SSHPrincipal),
 		TemplateID: strings.TrimSpace(body.TemplateID),
+		Browser:    body.Browser,
 	}, nil
 }
 
@@ -432,6 +439,14 @@ func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			opErr = err
 			return 0, nil, err
+		}
+		if req.Browser {
+			// A259: the control plane keeps a browser session's ticket for
+			// its opener; the reply, and its cached replay, carry none.
+			if err := a.holdBrowserTicket(tenantID, principal.Subject, &session); err != nil {
+				opErr = err
+				return 0, nil, err
+			}
 		}
 		return http.StatusCreated, &session, nil
 	})

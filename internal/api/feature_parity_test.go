@@ -375,9 +375,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// and its verification (714), then playing back, exporting and holding a
 	// recording and terminating a session (719). A258 adds checking a
 	// brokered account's credential now, access templates and emergency
-	// access (730).
-	if len(out) != 730 {
-		t.Fatalf("OpenAPI operationIds = %d, want 730", len(out))
+	// access (730). A259 adds browser terminals: open, read, type, resize and
+	// close (735).
+	if len(out) != 735 {
+		t.Fatalf("OpenAPI operationIds = %d, want 735", len(out))
 	}
 	return out
 }

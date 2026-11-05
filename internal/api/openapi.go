@@ -5871,6 +5871,7 @@ func componentSchemas() map[string]*Schema {
 		"payload_base64": str(), "ttl_seconds": {Type: "integer"},
 		"ssh_public_key": str(), "ssh_principal": str(),
 		"template_id": {Type: "string", Format: "uuid", Description: "the access template the request named (A258)"},
+		"browser":     {Type: "boolean", Description: "open the session for the browser (A259): the control plane keeps its ticket and the reply carries none"},
 	}, "request_id", "approval_request_id", "intent_digest", "target_type", "target_id", "role", "method", "payload_base64")
 	pamApprovalRequest := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
@@ -8823,8 +8824,16 @@ func componentSchemas() map[string]*Schema {
 			"ttl_seconds":    {Type: "integer", Description: "at most 3600: an emergency session lasts an hour at most"},
 			"ssh_public_key": str(), "ssh_principal": str(),
 		}, "target_type", "target_id", "role", "reason", "method", "payload_base64"),
-		"PAMEmergencyGrantList":       object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMEmergencyGrant")}}, "items"),
-		"PAMEmergencyReviewRequest":   object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
+		"PAMEmergencyGrantList":     object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMEmergencyGrant")}}, "items"),
+		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
+		"PAMTerminalRequest":        object(map[string]*Schema{"cols": {Type: "integer"}, "rows": {Type: "integer"}}, "cols", "rows"),
+		"PAMTerminal":               object(map[string]*Schema{"id": uuid(), "session_id": uuid(), "cols": {Type: "integer"}, "rows": {Type: "integer"}}, "id", "session_id"),
+		"PAMTerminalInput":          object(map[string]*Schema{"data": {Type: "string", Format: "byte", Description: "the keystrokes, standard base64"}}, "data"),
+		"PAMTerminalOutput": object(map[string]*Schema{
+			"data": {Type: "string", Format: "byte", Description: "output from the requested offset, standard base64"},
+			"next": {Type: "integer", Description: "the offset to read from next"}, "truncated": {Type: "boolean"},
+			"closed": {Type: "boolean", Description: "the shell ended; no more output will come"}, "exit_status": {Type: "integer"},
+		}, "data", "next"),
 		"PAMSessionRevocationRequest": object(map[string]*Schema{"reason": str()}, "reason"),
 		"PAMRecording": object(map[string]*Schema{
 			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},

@@ -83,6 +83,12 @@
   approval channels and the grant's post-incident review stays pending until someone else with `access:approve` records
   it. Migration 0398 (credential health, templates, responders, emergency grants), snapshot format 90, OpenAPI census
   719 -> 730, CLI census 786 -> 797.
+- Browser sessions, part 1 (A259): a session opened with `"browser": true` leaves its ticket with the control plane
+  (locked memory, bound to its opener, until its deadline) and the reply carries none. For an SSH session the control plane
+  opens a shell through the session's gateway (`POST /api/v1/access/sessions/{id}/terminals`; output by long-poll, typed
+  input in idempotent batches, resize, close), and the console shows it in a terminal (xterm.js, loaded on demand, with
+  screen-reader mode) from Request privileged session → "Open in the browser". The gateway still signs in, records and
+  masks. OpenAPI census 730 -> 735.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

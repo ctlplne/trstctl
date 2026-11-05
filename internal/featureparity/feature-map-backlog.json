@@ -14559,7 +14559,12 @@
                 "setPAMEmergencyResponders",
                 "openPAMEmergencySession",
                 "listPAMEmergencyGrants",
-                "reviewPAMEmergencyGrant"
+                "reviewPAMEmergencyGrant",
+                "openPAMTerminal",
+                "readPAMTerminalOutput",
+                "writePAMTerminalInput",
+                "resizePAMTerminal",
+                "closePAMTerminal"
             ],
             "api_na": "",
             "cli_surface": [
