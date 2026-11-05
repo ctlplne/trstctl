@@ -1465,7 +1465,7 @@ function seedCompletionSummary({ url, tenant, plannedEvents, owners, certificate
     "",
     "trstctl demo seed complete",
     `  URL: ${url}`,
-    "  Browser login: click Sign in with SSO, then use demo-admin@trstctl.local",
+    "  Browser login: click Sign in with SSO, then use eval-admin and its generated operator credentials (see README.md)",
     `  Tenant: ${tenant}`,
     `  Planned 180-day history events: ${plannedEvents}`,
     `  Owners: ${owners}`,

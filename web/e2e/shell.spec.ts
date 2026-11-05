@@ -27,7 +27,7 @@ test("mobile shell groups account and preferences into one menu", async ({ page 
 
   const menu = page.getByRole("dialog", { name: "Account and preferences" });
   await expect(menu).toBeVisible();
-  await expect(menu).toContainText("demo-admin@trstctl.local");
+  await expect(menu).toContainText("eval-admin@trstctl.local");
   await expect(menu.getByRole("combobox", { name: "Language" })).toBeVisible();
   await expect(menu.getByRole("button", { name: /Theme:/ })).toBeVisible();
   await expect(menu.getByRole("button", { name: "Open keyboard shortcuts" })).toBeVisible();
