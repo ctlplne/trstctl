@@ -8715,7 +8715,7 @@ What comes next (A255 and on):
   expired lease is refused, so the gateway ends the session's connections and re-claims
   the session (a new attempt and, for SSH, a new key and certificate). Keeping live
   connections across a long partition is a lead.
-- The engineer access items after browser sessions (A260–A263).
+- The engineer access items after privileged account discovery (A261–A263).
 
 ## Session recordings and live termination (A255) — served
 
@@ -8918,3 +8918,35 @@ What comes next:
   the other types are reached with their stock clients), and pod and container pickers listed
   from the cluster (today the operator types the names).
 - Gateways the control plane cannot reach (a reverse tunnel over the agent channel).
+
+## Privileged account discovery (A260) — part 1 of 2: read-only scans
+
+Status: scans served; review and import (part 2), with Active Directory against the Samba
+stand-in, come next, and A260 stays open until they land. A discovery source is one of the
+tenant's dynamic-secret providers (`PUT /api/v1/access/discovery/sources/{provider_id}`, on
+demand or every `interval_seconds` of an hour or more); a scan reads its target through the
+provider's administrator connection and stages the privileged accounts with what makes each
+privileged: PostgreSQL roles (superuser, createrole, createdb, replication, bypassrls,
+membership of a superuser or a powerful predefined role, database ownership), MySQL accounts
+(administration privileges, global and dynamic, or write access to the grant tables), SQL
+Server logins (a fixed server role that administers the server, or CONTROL SERVER) and a
+Linux or Unix host's local accounts (uid 0, an administrators' group, a sudoers rule naming
+the account, its group or a user alias) with their authorized keys' fingerprints. A scan
+runs in a read-only transaction or as one fixed read-only command, never reads a password,
+and leaves out the provider's own leased accounts. Each run records what changed since the
+source's previous complete scan; a target that cannot be reached fails its run with a class
+and changes nothing staged. `TestServedPrivilegedAccountDiscoveryA260` proves it on
+PostgreSQL 16, MySQL 8.4 and a Debian host: the seeded privileged accounts, and no plain
+ones, are staged with their privileges; the targets' account tables (pg_authid and its
+memberships, mysql.user and global_grants, the passwd, group, shadow, sudoers and
+authorized_keys files) hash the same before and after; a re-scan after the targets change
+shows the accounts added, removed and changed; the scheduler scans a due source and not
+before; an unreachable target fails `unreachable`; another tenant sees nothing.
+`TestServedPrivilegedAccountDiscoverySQLServerA260` runs on the x86 SQL Server lab job.
+
+What comes next:
+- Review and import into a folder with a template, granting nothing (part 2), and Active
+  Directory discovery against the Samba stand-in (its live proof is a Track B row).
+- A host's sudo rights when the administrator cannot read the sudoers files are reported
+  unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an
+  `AuthorizedKeysFile` elsewhere) are not read; Windows hosts' local administrators.

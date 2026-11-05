@@ -161,6 +161,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the privileged accounts discovery has staged */
+        get: operations["listPAMDiscoveredAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List discovery runs, newest first */
+        get: operations["listPAMDiscoveryRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a discovery run with the accounts it found added, removed or changed */
+        get: operations["getPAMDiscoveryRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the providers whose targets privileged account discovery scans, with each one's last run */
+        get: operations["listPAMDiscoverySources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/sources/{provider_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Scan a provider's target for privileged accounts on demand, or every interval_seconds (at least an hour); read-only */
+        put: operations["savePAMDiscoverySource"];
+        post?: never;
+        /** Stop scanning a provider's target; its runs and staged accounts stay */
+        delete: operations["deletePAMDiscoverySource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/sources/{provider_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan a source's target now, read-only, and stage the privileged accounts it finds */
+        post: operations["runPAMDiscovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/emergency-sessions": {
         parameters: {
             query?: never;
@@ -21179,6 +21282,115 @@ export interface components {
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
         };
+        PAMDiscoveredAccount: {
+            /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
+            details?: {
+                [key: string]: string;
+            };
+            disabled: boolean;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: uuid */
+            id: string;
+            key: string;
+            /** @enum {string} */
+            kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+            /** Format: date-time */
+            last_seen_at: string;
+            name: string;
+            /** @description what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin */
+            privileges: string[];
+            provider_id: string;
+            /** Format: date-time */
+            removed_at?: string;
+            /** @enum {string} */
+            status: "staged" | "imported" | "dismissed";
+        };
+        PAMDiscoveredAccountList: {
+            items: components["schemas"]["PAMDiscoveredAccount"][];
+        };
+        PAMDiscoveryChange: {
+            account: {
+                /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
+                details?: {
+                    [key: string]: string;
+                };
+                disabled: boolean;
+                key: string;
+                /** @enum {string} */
+                kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+                name: string;
+                /** @description what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin */
+                privileges: string[];
+            };
+            /** @enum {string} */
+            change: "added" | "removed" | "changed";
+        };
+        PAMDiscoveryRun: {
+            accounts: number;
+            added: number;
+            changed: number;
+            /** @description on a single run's read: accounts added, removed or changed since the source's previous complete scan */
+            changes?: components["schemas"]["PAMDiscoveryChange"][];
+            /** @enum {string} */
+            failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
+            /** Format: date-time */
+            finished_at: string;
+            /** Format: uuid */
+            id: string;
+            provider_id: string;
+            removed: number;
+            /** @description the principal who ran it, or scheduler */
+            requested_by: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {string} */
+            status: "completed" | "failed";
+        };
+        PAMDiscoveryRunList: {
+            items: components["schemas"]["PAMDiscoveryRun"][];
+        };
+        PAMDiscoverySource: {
+            /** @description 0 scans on demand only; otherwise at least 3600 */
+            interval_seconds: number;
+            last_run?: {
+                accounts: number;
+                added: number;
+                changed: number;
+                /** @description on a single run's read: accounts added, removed or changed since the source's previous complete scan */
+                changes?: components["schemas"]["PAMDiscoveryChange"][];
+                /** @enum {string} */
+                failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
+                /** Format: date-time */
+                finished_at: string;
+                /** Format: uuid */
+                id: string;
+                provider_id: string;
+                removed: number;
+                /** @description the principal who ran it, or scheduler */
+                requested_by: string;
+                /** Format: date-time */
+                started_at: string;
+                /** @enum {string} */
+                status: "completed" | "failed";
+            };
+            provider_id: string;
+            provider_type: string;
+            /** Format: date-time */
+            saved_at: string;
+            saved_by?: string;
+        };
+        PAMDiscoverySourceDeleted: {
+            deleted: boolean;
+            provider_id: string;
+        };
+        PAMDiscoverySourceList: {
+            items: components["schemas"]["PAMDiscoverySource"][];
+        };
+        PAMDiscoverySourceRequest: {
+            /** @description 0 scans on demand only; otherwise at least 3600 */
+            interval_seconds: number;
+        };
         PAMEmergencyGrant: {
             /** Format: date-time */
             expires_at: string;
@@ -26301,6 +26513,308 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessBundleGrantChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMDiscoveredAccounts: {
+        parameters: {
+            query?: {
+                /** @description only this source's accounts */
+                provider_id?: string;
+                /** @description staged, imported or dismissed */
+                status?: string;
+                /** @description also accounts the last scan no longer found */
+                include_removed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveredAccountList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMDiscoveryRuns: {
+        parameters: {
+            query?: {
+                /** @description only this source's runs */
+                provider_id?: string;
+                /** @description at most this many (default 50, at most 500) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveryRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMDiscoveryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveryRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMDiscoverySources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoverySourceList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savePAMDiscoverySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description the dynamic-secret provider's ID */
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMDiscoverySourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoverySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deletePAMDiscoverySource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description the dynamic-secret provider's ID */
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoverySourceDeleted"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runPAMDiscovery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description the dynamic-secret provider's ID */
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveryRun"];
                 };
             };
             /** @description client error */

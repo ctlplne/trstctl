@@ -43,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/ownership"
+	"trstctl.com/trstctl/internal/pamdiscovery"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/privacyref"
 	"trstctl.com/trstctl/internal/revcacheposture"
@@ -348,6 +349,9 @@ const (
 	EventPAMEmergencyRespondersSet                = "pam.emergency.responders_set"
 	EventPAMEmergencyOpened                       = "pam.emergency.opened"
 	EventPAMEmergencyReviewed                     = "pam.emergency.reviewed"
+	EventPAMDiscoverySourceSaved                  = "pam.discovery.source_saved"
+	EventPAMDiscoverySourceDeleted                = "pam.discovery.source_deleted"
+	EventPAMDiscoveryRunCompleted                 = "pam.discovery.run_completed"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4475,6 +4479,40 @@ type PAMEmergencyReviewed struct {
 	At        time.Time `json:"at"`
 }
 
+// PAMDiscoverySourceSaved records a privileged account discovery source
+// (A260): a dynamic-secret provider whose target is scanned on demand, or
+// every interval when it is not zero.
+type PAMDiscoverySourceSaved struct {
+	ProviderID      string    `json:"provider_id"`
+	ProviderType    string    `json:"provider_type"`
+	IntervalSeconds int       `json:"interval_seconds"`
+	Actor           string    `json:"actor"`
+	At              time.Time `json:"at"`
+}
+
+// PAMDiscoverySourceDeleted records a discovery source's deletion (A260); its
+// runs and staged accounts stay.
+type PAMDiscoverySourceDeleted struct {
+	ProviderID string    `json:"provider_id"`
+	Actor      string    `json:"actor"`
+	At         time.Time `json:"at"`
+}
+
+// PAMDiscoveryRunCompleted records one scan of a discovery source (A260): the
+// privileged accounts it found, or the class of why it could not scan
+// (failure). A completed run's accounts replace the source's staged view; a
+// failed one changes none.
+type PAMDiscoveryRunCompleted struct {
+	RunID       string                 `json:"run_id"`
+	ProviderID  string                 `json:"provider_id"`
+	Status      string                 `json:"status"`
+	Failure     string                 `json:"failure,omitempty"`
+	RequestedBy string                 `json:"requested_by"`
+	StartedAt   time.Time              `json:"started_at"`
+	FinishedAt  time.Time              `json:"finished_at"`
+	Accounts    []pamdiscovery.Account `json:"accounts"`
+}
+
 // PAMRecordingLegalHold places or releases a legal hold on a recording.
 type PAMRecordingLegalHold struct {
 	ID     string    `json:"id"`
@@ -5116,6 +5154,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMEmergencyRespondersSet:                {1: true},
 	EventPAMEmergencyOpened:                       {1: true},
 	EventPAMEmergencyReviewed:                     {1: true},
+	EventPAMDiscoverySourceSaved:                  {1: true},
+	EventPAMDiscoverySourceDeleted:                {1: true},
+	EventPAMDiscoveryRunCompleted:                 {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8515,6 +8556,44 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMEmergencyReviewedTx(ctx, tx, e.TenantID, pl.SessionID, pl.Reviewer, pl.Outcome, pl.Notes, pl.At)
+	case EventPAMDiscoverySourceSaved:
+		var pl PAMDiscoverySourceSaved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ProviderID == "" || pl.ProviderType == "" || pl.Actor == "" || pl.At.IsZero() || pl.IntervalSeconds < 0 ||
+			(pl.IntervalSeconds > 0 && pl.IntervalSeconds < 3600) {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMDiscoverySourceSavedTx(ctx, tx, e.TenantID, store.PAMDiscoverySource{ProviderID: pl.ProviderID,
+			ProviderType: pl.ProviderType, IntervalSeconds: pl.IntervalSeconds, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMDiscoverySourceDeleted:
+		var pl PAMDiscoverySourceDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ProviderID == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMDiscoverySourceDeletedTx(ctx, tx, e.TenantID, pl.ProviderID, pl.At)
+	case EventPAMDiscoveryRunCompleted:
+		var pl PAMDiscoveryRunCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" || pl.ProviderID == "" || pl.RequestedBy == "" || pl.StartedAt.IsZero() || pl.FinishedAt.IsZero() ||
+			(pl.Status != "completed" && pl.Status != "failed") || (pl.Status == "failed" && (pl.Failure == "" || len(pl.Accounts) > 0)) ||
+			len(pl.Accounts) > pamdiscovery.MaxAccounts {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		for _, a := range pl.Accounts {
+			if a.Key == "" || a.Name == "" || a.Kind == "" || len(a.Privileges) == 0 {
+				return fmt.Errorf("projections: incomplete %s", e.Type)
+			}
+		}
+		return p.store.ApplyPAMDiscoveryRunTx(ctx, tx, e.TenantID, store.PAMDiscoveryRun{ID: pl.RunID, ProviderID: pl.ProviderID,
+			Status: pl.Status, Failure: pl.Failure, StartedAt: pl.StartedAt, FinishedAt: pl.FinishedAt, RequestedBy: pl.RequestedBy},
+			pamdiscovery.Normalize(pl.Accounts))
 	case EventPAMRecordingLegalHold:
 		var pl PAMRecordingLegalHold
 		if err := decode(e, &pl); err != nil {

@@ -1528,6 +1528,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// A258: each brokered account's stored credential is signed in
 			// with once per interval, read-only.
 			startRuntimeWorker(workCtx, srv.RunPAMAccountHealth),
+			startRuntimeWorker(workCtx, srv.RunPAMAccountDiscovery),
 			// Q6: decoy database logins are checked for use on the leader.
 			startRuntimeWorker(workCtx, srv.RunDecoyLoginWatch),
 			// G2: what each dynamic-secret lease reaches is read from its target.

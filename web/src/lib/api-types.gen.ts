@@ -8336,6 +8336,71 @@ export interface PAMApprovalRequest {
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
+export interface PAMDiscoveredAccount {
+  details?: Record<string, unknown>;
+  disabled: boolean;
+  first_seen_at: string;
+  id: string;
+  key: string;
+  kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+  last_seen_at: string;
+  name: string;
+  privileges: string[];
+  provider_id: string;
+  removed_at?: string;
+  status: "staged" | "imported" | "dismissed";
+}
+
+export interface PAMDiscoveredAccountList {
+  items: PAMDiscoveredAccount[];
+}
+
+export interface PAMDiscoveryChange {
+  account: { details?: Record<string, unknown>; disabled: boolean; key: string; kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user"; name: string; privileges: string[] };
+  change: "added" | "removed" | "changed";
+}
+
+export interface PAMDiscoveryRun {
+  accounts: number;
+  added: number;
+  changed: number;
+  changes?: PAMDiscoveryChange[];
+  failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
+  finished_at: string;
+  id: string;
+  provider_id: string;
+  removed: number;
+  requested_by: string;
+  started_at: string;
+  status: "completed" | "failed";
+}
+
+export interface PAMDiscoveryRunList {
+  items: PAMDiscoveryRun[];
+}
+
+export interface PAMDiscoverySource {
+  interval_seconds: number;
+  last_run?: { accounts: number; added: number; changed: number; changes?: PAMDiscoveryChange[]; failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many"; finished_at: string; id: string; provider_id: string; removed: number; requested_by: string; started_at: string; status: "completed" | "failed" };
+  provider_id: string;
+  provider_type: string;
+  saved_at: string;
+  saved_by?: string;
+}
+
+export interface PAMDiscoverySourceDeleted {
+  deleted: boolean;
+  provider_id: string;
+}
+
+export interface PAMDiscoverySourceList {
+  items: PAMDiscoverySource[];
+}
+
+export interface PAMDiscoverySourceRequest {
+  interval_seconds: number;
+}
+
 export interface PAMEmergencyGrant {
   expires_at: string;
   opened_at: string;

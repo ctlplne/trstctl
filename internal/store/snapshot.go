@@ -273,7 +273,11 @@ import (
 // restored store would show every failing account as never checked and lose
 // every template, responder and pending post-incident review while its
 // covered offset skipped their events.
-const SnapshotFormatVersion = 90
+// Version 91 carries A260's privileged account discovery: without its
+// sources, runs, run changes and staged accounts a restored store would scan
+// nothing on schedule and show every account a re-scan finds as new while
+// its covered offset skipped their events.
+const SnapshotFormatVersion = 91
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -370,6 +374,9 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 90: A258's brokered account credential health, access
 	// templates, emergency responders and emergency grants.
 	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
+	// Format 91: A260's privileged account discovery sources, runs, run
+	// changes and staged accounts.
+	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -731,6 +738,10 @@ SELECT jsonb_build_object(
   'pam_access_templates', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_access_templates t),
   'pam_emergency_responders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_emergency_responders t),
   'pam_emergency_grants', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_emergency_grants t),
+  'pam_discovery_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_discovery_sources t),
+  'pam_discovery_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_discovery_runs t),
+  'pam_discovery_run_changes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_discovery_run_changes t),
+  'pam_discovered_accounts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_discovered_accounts t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

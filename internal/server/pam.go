@@ -181,6 +181,9 @@ type pamService struct {
 	health         *pamHealth
 	// browser holds browser sessions' tickets and terminals (A259).
 	browser *pamBrowser
+	// discovery marks the privileged account discovery sources being
+	// scanned (A260).
+	discovery *pamDiscovery
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -305,7 +308,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		return nil, err
 	}
 	return &pamService{
-		browser:    newPAMBrowser(),
+		browser: newPAMBrowser(), discovery: newPAMDiscovery(),
 		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,

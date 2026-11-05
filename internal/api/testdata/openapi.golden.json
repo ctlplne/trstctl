@@ -38595,6 +38595,390 @@
         ],
         "type": "object"
       },
+      "PAMDiscoveredAccount": {
+        "properties": {
+          "details": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential",
+            "type": "object"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "local_user",
+              "database_role",
+              "database_user",
+              "sql_login",
+              "directory_user"
+            ],
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "privileges": {
+            "description": "what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "removed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "staged",
+              "imported",
+              "dismissed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "key",
+          "name",
+          "kind",
+          "privileges",
+          "disabled",
+          "first_seen_at",
+          "last_seen_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveredAccountList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDiscoveredAccount"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveryChange": {
+        "properties": {
+          "account": {
+            "properties": {
+              "details": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential",
+                "type": "object"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "local_user",
+                  "database_role",
+                  "database_user",
+                  "sql_login",
+                  "directory_user"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "privileges": {
+                "description": "what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "kind",
+              "privileges",
+              "disabled"
+            ],
+            "type": "object"
+          },
+          "change": {
+            "enum": [
+              "added",
+              "removed",
+              "changed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "change",
+          "account"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveryRun": {
+        "properties": {
+          "accounts": {
+            "type": "integer"
+          },
+          "added": {
+            "type": "integer"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "changes": {
+            "description": "on a single run's read: accounts added, removed or changed since the source's previous complete scan",
+            "items": {
+              "$ref": "#/components/schemas/PAMDiscoveryChange"
+            },
+            "type": "array"
+          },
+          "failure": {
+            "enum": [
+              "unreachable",
+              "rejected",
+              "expired",
+              "locked",
+              "error",
+              "not_supported",
+              "too_many"
+            ],
+            "type": "string"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "removed": {
+            "type": "integer"
+          },
+          "requested_by": {
+            "description": "the principal who ran it, or scheduler",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "status",
+          "requested_by",
+          "started_at",
+          "finished_at",
+          "accounts",
+          "added",
+          "removed",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveryRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDiscoveryRun"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoverySource": {
+        "properties": {
+          "interval_seconds": {
+            "description": "0 scans on demand only; otherwise at least 3600",
+            "type": "integer"
+          },
+          "last_run": {
+            "properties": {
+              "accounts": {
+                "type": "integer"
+              },
+              "added": {
+                "type": "integer"
+              },
+              "changed": {
+                "type": "integer"
+              },
+              "changes": {
+                "description": "on a single run's read: accounts added, removed or changed since the source's previous complete scan",
+                "items": {
+                  "$ref": "#/components/schemas/PAMDiscoveryChange"
+                },
+                "type": "array"
+              },
+              "failure": {
+                "enum": [
+                  "unreachable",
+                  "rejected",
+                  "expired",
+                  "locked",
+                  "error",
+                  "not_supported",
+                  "too_many"
+                ],
+                "type": "string"
+              },
+              "finished_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "provider_id": {
+                "type": "string"
+              },
+              "removed": {
+                "type": "integer"
+              },
+              "requested_by": {
+                "description": "the principal who ran it, or scheduler",
+                "type": "string"
+              },
+              "started_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "completed",
+                  "failed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "provider_id",
+              "status",
+              "requested_by",
+              "started_at",
+              "finished_at",
+              "accounts",
+              "added",
+              "removed",
+              "changed"
+            ],
+            "type": "object"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "provider_type": {
+            "type": "string"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "saved_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "provider_type",
+          "interval_seconds",
+          "saved_at"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoverySourceDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "provider_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoverySourceList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDiscoverySource"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoverySourceRequest": {
+        "properties": {
+          "interval_seconds": {
+            "description": "0 scans on demand only; otherwise at least 3600",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
       "PAMEmergencyGrant": {
         "properties": {
           "expires_at": {
@@ -56318,6 +56702,458 @@
         ],
         "summary": "Remove one grant of an access bundle and return the principal's effective authority after the change",
         "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/discovery/accounts": {
+      "get": {
+        "operationId": "listPAMDiscoveredAccounts",
+        "parameters": [
+          {
+            "description": "only this source's accounts",
+            "in": "query",
+            "name": "provider_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "staged, imported or dismissed",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "also accounts the last scan no longer found",
+            "in": "query",
+            "name": "include_removed",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveredAccountList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the privileged accounts discovery has staged",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/runs": {
+      "get": {
+        "operationId": "listPAMDiscoveryRuns",
+        "parameters": [
+          {
+            "description": "only this source's runs",
+            "in": "query",
+            "name": "provider_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "at most this many (default 50, at most 500)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveryRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List discovery runs, newest first",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/runs/{id}": {
+      "get": {
+        "operationId": "getPAMDiscoveryRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveryRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a discovery run with the accounts it found added, removed or changed",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/sources": {
+      "get": {
+        "operationId": "listPAMDiscoverySources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoverySourceList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the providers whose targets privileged account discovery scans, with each one's last run",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/sources/{provider_id}": {
+      "delete": {
+        "operationId": "deletePAMDiscoverySource",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the dynamic-secret provider's ID",
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoverySourceDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Stop scanning a provider's target; its runs and staged accounts stay",
+        "x-trstctl-permission": "access:targets.write"
+      },
+      "put": {
+        "operationId": "savePAMDiscoverySource",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the dynamic-secret provider's ID",
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMDiscoverySourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoverySource"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Scan a provider's target for privileged accounts on demand, or every interval_seconds (at least an hour); read-only",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/sources/{provider_id}/runs": {
+      "post": {
+        "operationId": "runPAMDiscovery",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the dynamic-secret provider's ID",
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveryRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Scan a source's target now, read-only, and stage the privileged accounts it finds",
+        "x-trstctl-permission": "access:targets.write"
       }
     },
     "/api/v1/access/emergency-sessions": {

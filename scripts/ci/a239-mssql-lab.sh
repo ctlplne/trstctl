@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # A239 lab: the SQL Server (mssql) and Azure SQL (azure-sql, contained database
-# users) dynamic-secret providers against SQL Server 2022 Developer Edition,
+# users) dynamic-secret providers, and A260's privileged login discovery,
+# against SQL Server 2022 Developer Edition,
 # mcr.microsoft.com/mssql/server 2022-CU27-ubuntu-22.04 (16.0.4295.3) pinned by
 # digest. The image is x86_64 only, so this runs on an x86 Linux host: the
 # ubuntu-latest CI job (owner decisions 2026-11-02). The Developer Edition's
@@ -55,14 +56,15 @@ echo ">> lab ready on 127.0.0.1:$port (orders, payments, orders_contained); the 
 status=0
 TRSTCTL_A239_MSSQL_DSN_FILE="$lab/dsn" TRSTCTL_A239_MSSQL_CONTAINED_DSN_FILE="$lab/contained-dsn" TRSTCTL_A239_MSSQL_CONTAINER="$NAME" \
 TRSTCTL_A240_MSSQL_INITIAL_PASSWORD="$app_a" \
-  go test -count=1 -timeout 25m -run '^(TestServedDynamic(SQLServerLogin|AzureSQLContainedUser)AgainstSQLServerA239|TestServedSQLServerTwoUserStaticRotationKeepsGrantsA240)$' -v ./internal/server/ \
+  go test -count=1 -timeout 25m -run '^(TestServedDynamic(SQLServerLogin|AzureSQLContainedUser)AgainstSQLServerA239|TestServedSQLServerTwoUserStaticRotationKeepsGrantsA240|TestServedPrivilegedAccountDiscoverySQLServerA260)$' -v ./internal/server/ \
   | tee "$lab/test.log" || status=$?
-for test in TestServedDynamicSQLServerLoginAgainstSQLServerA239 TestServedDynamicAzureSQLContainedUserAgainstSQLServerA239 TestServedSQLServerTwoUserStaticRotationKeepsGrantsA240; do
+for test in TestServedDynamicSQLServerLoginAgainstSQLServerA239 TestServedDynamicAzureSQLContainedUserAgainstSQLServerA239 TestServedSQLServerTwoUserStaticRotationKeepsGrantsA240 TestServedPrivilegedAccountDiscoverySQLServerA260; do
   grep -q -- "--- PASS: $test " "$lab/test.log" || { echo "a239-mssql-lab: $test did not run and pass"; status=1; }
 done
 left="$(sqlcmd -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.server_principals WHERE name LIKE 'trstctl[_]%'")"
+discovery_left="$(sqlcmd -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.server_principals WHERE name LIKE 'a260[_]%'")"
 left_contained="$(sqlcmd -d orders_contained -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.database_principals WHERE name LIKE 'trstctl[_]%'")"
 pair="$(sqlcmd -d orders -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.database_principals dp JOIN sys.server_principals sp ON sp.sid = dp.sid WHERE dp.name IN ('orders_app_a', 'orders_app_b') AND sp.is_disabled = 0 AND IS_ROLEMEMBER('db_datareader', dp.name) = 1")"
-echo ">> leased logins left: $left; leased contained users left: $left_contained; two-user logins enabled and members: $pair"
-[[ "$left" == 0 && "$left_contained" == 0 && "$pair" == 2 ]] || status=1
+echo ">> leased logins left: $left; leased contained users left: $left_contained; two-user logins enabled and members: $pair; discovery logins left: $discovery_left"
+[[ "$left" == 0 && "$left_contained" == 0 && "$pair" == 2 && "$discovery_left" == 0 ]] || status=1
 exit "$status"

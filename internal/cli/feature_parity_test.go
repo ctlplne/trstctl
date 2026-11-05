@@ -418,9 +418,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `access templates list|create|get|update|delete` and `access emergency
 	// responders|set-responders|open|list|review`. A259 adds `access sessions
 	// terminal-open|terminal-output|terminal-input|terminal-resize|
-	// terminal-close` and `access sessions query`.
-	if len(out) != 803 {
-		t.Fatalf("CLI commands = %d, want 803", len(out))
+	// terminal-close` and `access sessions query`. A260 adds `access discovery
+	// sources list|save|delete`, `access discovery scan`, `access discovery
+	// runs list|get` and `access discovery accounts`.
+	if len(out) != 810 {
+		t.Fatalf("CLI commands = %d, want 810", len(out))
 	}
 	return out
 }

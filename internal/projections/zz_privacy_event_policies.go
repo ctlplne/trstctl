@@ -1045,6 +1045,22 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/session_id", opaque), privacyRule("/reviewer", exact), privacyRule("/outcome", opaque),
 			privacyRule("/notes", clear), privacyRule("/at", opaque),
 		),
+		{EventPAMDiscoverySourceSaved, 1}: privacyRules(
+			privacyRule("/provider_id", opaque), privacyRule("/provider_type", opaque), privacyRule("/interval_seconds", opaque),
+			privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMDiscoverySourceDeleted, 1}: privacyRules(
+			privacyRule("/provider_id", opaque), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		// The accounts are the target's own (local users, database roles),
+		// not trstctl principals: their names are opaque values here.
+		{EventPAMDiscoveryRunCompleted, 1}: privacyRules(
+			privacyRule("/run_id", opaque), privacyRule("/provider_id", opaque), privacyRule("/status", opaque),
+			privacyRule("/failure", opaque), privacyRule("/requested_by", exact), privacyRule("/started_at", opaque),
+			privacyRule("/finished_at", opaque), privacyRule("/accounts/*/key", opaque), privacyRule("/accounts/*/name", opaque),
+			privacyRule("/accounts/*/kind", opaque), privacyRule("/accounts/*/privileges/*", opaque),
+			privacyRule("/accounts/*/disabled", opaque), privacyRule("/accounts/*/details/*", opaque),
+		),
 		{EventPAMRecordingRead, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/mode", opaque), privacyRule("/at", opaque),
 		),
@@ -1639,6 +1655,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMEmergencyRespondersSet, 1}:                                                  privacyPayloadShape[PAMEmergencyRespondersSet](),
 		{EventPAMEmergencyOpened, 1}:                                                         privacyPayloadShape[PAMEmergencyOpened](),
 		{EventPAMEmergencyReviewed, 1}:                                                       privacyPayloadShape[PAMEmergencyReviewed](),
+		{EventPAMDiscoverySourceSaved, 1}:                                                    privacyPayloadShape[PAMDiscoverySourceSaved](),
+		{EventPAMDiscoverySourceDeleted, 1}:                                                  privacyPayloadShape[PAMDiscoverySourceDeleted](),
+		{EventPAMDiscoveryRunCompleted, 1}:                                                   privacyPayloadShape[PAMDiscoveryRunCompleted](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),

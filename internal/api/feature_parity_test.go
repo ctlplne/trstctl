@@ -376,9 +376,11 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// recording and terminating a session (719). A258 adds checking a
 	// brokered account's credential now, access templates and emergency
 	// access (730). A259 adds browser terminals: open, read, type, resize and
-	// close (735), then the database console's run (736).
-	if len(out) != 736 {
-		t.Fatalf("OpenAPI operationIds = %d, want 736", len(out))
+	// close (735), then the database console's run (736). A260 adds privileged
+	// account discovery's sources list, save and delete, its run, its runs list
+	// and read, and its staged accounts (743).
+	if len(out) != 743 {
+		t.Fatalf("OpenAPI operationIds = %d, want 743", len(out))
 	}
 	return out
 }

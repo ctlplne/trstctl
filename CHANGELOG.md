@@ -94,6 +94,13 @@
   refusal with its SQLSTATE) run by the control plane through the session's gateway, which signs in, records and masks.
   The console's "Open in the browser" now covers both target types; "Open database console" shows the SQL console.
   OpenAPI census 735 -> 736.
+- Privileged account discovery, part 1 (A260): a dynamic-secret provider becomes a discovery source
+  (`/api/v1/access/discovery/sources`, on demand or every hour or more); a scan reads its target read-only through the
+  provider's administrator connection and stages the privileged PostgreSQL roles, MySQL accounts, SQL Server logins or
+  Linux/Unix local accounts (with sudo rights and authorized keys' fingerprints), each with what makes it privileged,
+  and records what changed since the previous scan (`/api/v1/access/discovery/runs`, `/accounts`). Discovery grants
+  nothing. Migration 0399, snapshot format 91, OpenAPI census 736 -> 743, CLI census 803 -> 810 (`access discovery
+  sources list|save|delete`, `scan`, `runs list|get`, `accounts`).
 - Browser sessions, part 3 (A259 served): a Kubernetes session opened for the browser gets a terminal in a pod. The
   terminal request names a namespace, a pod and optionally a container and command (default `sh`); the control plane
   opens the exec through the session's gateway (WebSocket `v5.channel.k8s.io`), which adds the session's own token, so

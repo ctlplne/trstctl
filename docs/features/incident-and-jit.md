@@ -470,6 +470,20 @@ optional container) opens a terminal in the pod as the session's service account
 close) and `POST /api/v1/access/sessions/{id}/queries`. The control plane must reach the
 gateway's address; only the opener can use a session's terminals.
 
+Privileged accounts the gateway does not broker yet can be found first (A260). Make one of
+the tenant's dynamic-secret providers a discovery source and scan it: the scan reads the
+target read-only through the provider's administrator connection and lists its privileged
+accounts — PostgreSQL roles, MySQL accounts, SQL Server logins, or a Linux or Unix host's
+local accounts with their sudo rights and authorized keys' fingerprints — with what makes
+each one privileged. Each scan records what changed since the previous one, so a re-scan
+shows new administrators and removed ones. Discovery grants nothing.
+
+```bash
+echo '{"interval_seconds": 86400}' | trstctl-cli access discovery sources save orders-pg -f -
+trstctl-cli access discovery scan orders-pg
+trstctl-cli access discovery accounts --provider_id orders-pg
+```
+
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
 bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;

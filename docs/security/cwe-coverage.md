@@ -52,7 +52,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-22 | 814 | [cwe-register.md](cwe-register.md) |
 | CWE-798 | 596 | [cwe-register.md](cwe-register.md) |
 | CWE-190 | 423 | [cwe-register.md](cwe-register.md) |
-| CWE-78 | 360 | [cwe-register.md](cwe-register.md) |
+| CWE-78 | 361 | [cwe-register.md](cwe-register.md) |
 | CWE-276 | 231 | [cwe-register.md](cwe-register.md) |
 | CWE-1004 | 48 | [cwe-register.md](cwe-register.md) |
 | CWE-200 | 45 | [cwe-register.md](cwe-register.md) |
@@ -61,8 +61,8 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-328 | 29 | [cwe-register.md](cwe-register.md) |
 | CWE-367 | 26 | [cwe-register.md](cwe-register.md) |
 | CWE-400 | 21 | [cwe-register.md](cwe-register.md) |
+| CWE-? | 17 | [cwe-register.md](cwe-register.md) |
 | CWE-79 | 16 | [cwe-register.md](cwe-register.md) |
-| CWE-? | 16 | [cwe-register.md](cwe-register.md) |
 | CWE-88 | 13 | [cwe-register.md](cwe-register.md) |
 | CWE-295 | 9 | [cwe-register.md](cwe-register.md) |
 | CWE-118 | 5 | [cwe-register.md](cwe-register.md) |

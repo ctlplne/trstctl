@@ -11562,6 +11562,107 @@ PAMApprovalRequest = TypedDict(
     total=False,
 )
 
+PAMDiscoveredAccount = TypedDict(
+    'PAMDiscoveredAccount',
+    {
+        'details': dict[str, Any],
+        'disabled': bool,
+        'first_seen_at': str,
+        'id': str,
+        'key': str,
+        'kind': str,
+        'last_seen_at': str,
+        'name': str,
+        'privileges': list[str],
+        'provider_id': str,
+        'removed_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMDiscoveredAccountList = TypedDict(
+    'PAMDiscoveredAccountList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMDiscoveryChange = TypedDict(
+    'PAMDiscoveryChange',
+    {
+        'account': dict[str, Any],
+        'change': str,
+    },
+    total=False,
+)
+
+PAMDiscoveryRun = TypedDict(
+    'PAMDiscoveryRun',
+    {
+        'accounts': int,
+        'added': int,
+        'changed': int,
+        'changes': list[dict[str, Any]],
+        'failure': str,
+        'finished_at': str,
+        'id': str,
+        'provider_id': str,
+        'removed': int,
+        'requested_by': str,
+        'started_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMDiscoveryRunList = TypedDict(
+    'PAMDiscoveryRunList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMDiscoverySource = TypedDict(
+    'PAMDiscoverySource',
+    {
+        'interval_seconds': int,
+        'last_run': dict[str, Any],
+        'provider_id': str,
+        'provider_type': str,
+        'saved_at': str,
+        'saved_by': str,
+    },
+    total=False,
+)
+
+PAMDiscoverySourceDeleted = TypedDict(
+    'PAMDiscoverySourceDeleted',
+    {
+        'deleted': bool,
+        'provider_id': str,
+    },
+    total=False,
+)
+
+PAMDiscoverySourceList = TypedDict(
+    'PAMDiscoverySourceList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMDiscoverySourceRequest = TypedDict(
+    'PAMDiscoverySourceRequest',
+    {
+        'interval_seconds': int,
+    },
+    total=False,
+)
+
 PAMEmergencyGrant = TypedDict(
     'PAMEmergencyGrant',
     {

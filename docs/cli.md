@@ -1569,7 +1569,10 @@ session's recording live (`recordings:read`); `access sessions terminate`, `reco
 shell, or for a Kubernetes session an exec in the pod the body names), `terminal-output`
 (`--from`, `--wait`), `terminal-input`, `terminal-resize` and `terminal-close`, and
 `access sessions query` runs SQL on a PostgreSQL session; the console's terminal and
-database console use the same calls.
+database console use the same calls. Privileged account discovery (A260): `access discovery
+sources list|save|delete` names the providers whose targets are scanned, `access discovery
+scan <provider-id>` scans one now, `access discovery runs list|get` shows what each scan
+found added, removed or changed, and `access discovery accounts` lists the staged accounts.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

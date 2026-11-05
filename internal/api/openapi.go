@@ -5917,6 +5917,26 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
 		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
 	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "revision", "saved_at")
+	pamDiscoveredAccountInfo := map[string]*Schema{
+		"key": str(), "name": str(),
+		"kind":       {Type: "string", Enum: []string{"local_user", "database_role", "database_user", "sql_login", "directory_user"}},
+		"privileges": {Type: "array", Items: str(), Description: "what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin"},
+		"disabled":   {Type: "boolean"},
+		"details":    {Type: "object", AdditionalProperties: str(), Description: "bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential"},
+	}
+	pamDiscoveredAccount := map[string]*Schema{"id": uuid(), "provider_id": str(), "first_seen_at": timestamp(), "last_seen_at": timestamp(),
+		"removed_at": timestamp(), "status": {Type: "string", Enum: []string{"staged", "imported", "dismissed"}}}
+	for k, v := range pamDiscoveredAccountInfo {
+		pamDiscoveredAccount[k] = v
+	}
+	pamDiscoveryRun := object(map[string]*Schema{
+		"id": uuid(), "provider_id": str(), "status": {Type: "string", Enum: []string{"completed", "failed"}},
+		"failure":      {Type: "string", Enum: []string{"unreachable", "rejected", "expired", "locked", "error", "not_supported", "too_many"}},
+		"requested_by": {Type: "string", Description: "the principal who ran it, or scheduler"},
+		"started_at":   timestamp(), "finished_at": timestamp(),
+		"accounts": {Type: "integer"}, "added": {Type: "integer"}, "removed": {Type: "integer"}, "changed": {Type: "integer"},
+		"changes": {Type: "array", Items: ref("PAMDiscoveryChange"), Description: "on a single run's read: accounts added, removed or changed since the source's previous complete scan"},
+	}, "id", "provider_id", "status", "requested_by", "started_at", "finished_at", "accounts", "added", "removed", "changed")
 	pamEmergencyGrant := object(map[string]*Schema{
 		"session_id": uuid(), "responder": str(), "reason": str(), "target_type": str(), "target_id": str(), "role": str(),
 		"opened_at": timestamp(), "expires_at": timestamp(),
@@ -8824,7 +8844,22 @@ func componentSchemas() map[string]*Schema {
 			"ttl_seconds":    {Type: "integer", Description: "at most 3600: an emergency session lasts an hour at most"},
 			"ssh_public_key": str(), "ssh_principal": str(),
 		}, "target_type", "target_id", "role", "reason", "method", "payload_base64"),
-		"PAMEmergencyGrantList":     object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMEmergencyGrant")}}, "items"),
+		"PAMEmergencyGrantList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMEmergencyGrant")}}, "items"),
+		"PAMDiscoverySource": object(map[string]*Schema{
+			"provider_id": str(), "provider_type": str(),
+			"interval_seconds": {Type: "integer", Description: "0 scans on demand only; otherwise at least 3600"},
+			"saved_by":         str(), "saved_at": timestamp(), "last_run": pamDiscoveryRun,
+		}, "provider_id", "provider_type", "interval_seconds", "saved_at"),
+		"PAMDiscoverySourceList":    object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMDiscoverySource")}}, "items"),
+		"PAMDiscoverySourceRequest": object(map[string]*Schema{"interval_seconds": {Type: "integer", Description: "0 scans on demand only; otherwise at least 3600"}}, "interval_seconds"),
+		"PAMDiscoverySourceDeleted": object(map[string]*Schema{"provider_id": str(), "deleted": {Type: "boolean"}}, "provider_id", "deleted"),
+		"PAMDiscoveryRun":           pamDiscoveryRun,
+		"PAMDiscoveryRunList":       object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMDiscoveryRun")}}, "items"),
+		"PAMDiscoveryChange": object(map[string]*Schema{
+			"change": {Type: "string", Enum: []string{"added", "removed", "changed"}}, "account": object(pamDiscoveredAccountInfo, "key", "name", "kind", "privileges", "disabled"),
+		}, "change", "account"),
+		"PAMDiscoveredAccount":      object(pamDiscoveredAccount, "id", "provider_id", "key", "name", "kind", "privileges", "disabled", "first_seen_at", "last_seen_at", "status"),
+		"PAMDiscoveredAccountList":  object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMDiscoveredAccount")}}, "items"),
 		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
 		"PAMQueryRequest":           object(map[string]*Schema{"sql": {Type: "string", Description: "one SQL text (up to 64 KiB); the last statement's result is returned"}}, "sql"),
 		"PAMQueryResult": object(map[string]*Schema{
