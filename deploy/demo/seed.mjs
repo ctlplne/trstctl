@@ -1332,6 +1332,7 @@ async function main() {
   for (let i = 0; i < 20; i += 1) {
     try {
       managedKey = await api("POST", "/api/v1/managed-keys", {
+        provider: "aws",
         algorithm: "RSA-2048",
       }, stableKey("managed-key-rsa"));
       break;
