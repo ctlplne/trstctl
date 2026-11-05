@@ -196,7 +196,7 @@ export function ChangeSets() {
           <div className="flex flex-wrap items-end gap-4">
             <Field label={t("changes.template.label")} controlId="change-template">
               {(control) => (
-                <Select {...control} defaultValue="onboard" onChange={(event) => loadTemplate(event.target.value)}>
+                <Select {...control} className="truncate" defaultValue="onboard" onChange={(event) => loadTemplate(event.target.value)}>
                   <option value="blank">{t("changes.template.blank")}</option>
                   <option value="onboard">{t("changes.template.onboard")}</option>
                   <option value="grant">{t("changes.template.grant")}</option>

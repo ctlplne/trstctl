@@ -2,6 +2,9 @@
 
 ### Added
 
+- The Change sets template selector truncates its closed label within the field in WebKit,
+  keeping mobile pages within their viewport while retaining every full option name.
+
 - Automatic access approvals can match exact target/folder scope, authenticated roles, a local
   time window, a whole-reason ticket pattern and a maximum lifetime. Rules record a policy vote
   and matched facts; nonmatches keep human review. Console review, revisioned API and CLI edits
