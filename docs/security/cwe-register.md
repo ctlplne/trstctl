@@ -938,7 +938,7 @@ not this file.
 | `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/pam_browser.go:264` | offsets within the ring, at most 1 MiB apart (CWE-190) |
+| `internal/server/pam_browser.go:269` | offsets within the ring, at most 1 MiB apart (CWE-190) |
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
 | `internal/server/pam_health.go:91` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |

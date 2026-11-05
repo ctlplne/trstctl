@@ -89,6 +89,11 @@
   input in idempotent batches, resize, close), and the console shows it in a terminal (xterm.js, loaded on demand, with
   screen-reader mode) from Request privileged session → "Open in the browser". The gateway still signs in, records and
   masks. OpenAPI census 730 -> 735.
+- Browser sessions, part 2 (A259): a PostgreSQL session opened for the browser gets a database console (`POST
+  /api/v1/access/sessions/{id}/queries`, idempotent; the last result's columns and at most 1,000 rows, or the database's
+  refusal with its SQLSTATE) run by the control plane through the session's gateway, which signs in, records and masks.
+  The console's "Open in the browser" now covers both target types; "Open database console" shows the SQL console.
+  OpenAPI census 735 -> 736.
 - Cloud KMS keys and load-balancer TLS policies (X4): a `cloud_kms_key` discovery source with the `aws-kms` provider
   lists every key in a Region through the read-only `ListKeys`, `DescribeKey` and `GetKeyRotationStatus` calls, with
   its type and size from the key spec, usage, state, manager, origin and automatic-rotation status (`enabled`,

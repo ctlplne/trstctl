@@ -1,0 +1,64 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { axe } from "vitest-axe";
+import { SqlConsole } from "@/components/access/SqlConsole";
+
+// A259 part 2: the database console runs SQL through the control plane, shows
+// the last result's rows (NULL stays NULL), the database's own refusal, and
+// never holds a ticket or a credential.
+
+const { apiMock } = vi.hoisted(() => ({ apiMock: { runPAMQuery: vi.fn() } }));
+
+vi.mock("@/lib/api", async (original) => {
+  const actual = await original<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
+
+afterEach(() => vi.clearAllMocks());
+
+describe("database console", () => {
+  it("runs SQL and shows the rows, NULLs and the database's refusals", async () => {
+    const user = userEvent.setup();
+    apiMock.runPAMQuery
+      .mockResolvedValueOnce({ columns: ["id", "note"], rows: [["1", null]], command_tag: "SELECT 1" })
+      .mockResolvedValueOnce({ columns: [], rows: [], error: { code: "42501", message: "permission denied for table pam_smoke" } });
+    const view = render(<SqlConsole sessionID="s-1" onClose={() => undefined} />);
+    const sql = screen.getByRole("textbox", { name: "SQL" });
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+
+    await user.type(sql, "SELECT id, note FROM pam_smoke");
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 row SELECT 1"));
+    expect(apiMock.runPAMQuery).toHaveBeenCalledWith("s-1", "SELECT id, note FROM pam_smoke", expect.stringMatching(/^pam-query:s-1:/));
+    const table = screen.getByRole("table", { name: "Result of the last statement" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["id", "note"]);
+    expect(
+      within(table)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent),
+    ).toEqual(["1", "NULL"]);
+    expect(await axe(view.container)).toHaveNoViolations();
+
+    await user.clear(sql);
+    await user.type(sql, "INSERT INTO pam_smoke VALUES (2)");
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("The database refused it (42501): permission denied for table pam_smoke"));
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    const keys = apiMock.runPAMQuery.mock.calls.map((call) => call[2]);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it("says when the console could not run the SQL", async () => {
+    const user = userEvent.setup();
+    apiMock.runPAMQuery.mockRejectedValue(new Error("the session's connection ended"));
+    render(<SqlConsole sessionID="s-2" onClose={() => undefined} />);
+    await user.type(screen.getByRole("textbox", { name: "SQL" }), "SELECT 1");
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("The console could not run it: the session's connection ended"));
+  });
+});

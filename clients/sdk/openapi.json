@@ -38782,6 +38782,66 @@
         ],
         "type": "object"
       },
+      "PAMQueryRequest": {
+        "properties": {
+          "sql": {
+            "description": "one SQL text (up to 64 KiB); the last statement's result is returned",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "type": "object"
+      },
+      "PAMQueryResult": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command_tag": {
+            "type": "string"
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "description": "the database's SQLSTATE",
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "rows": {
+            "description": "at most 1000 rows; a cell beyond 4 KiB is cut and marked",
+            "items": {
+              "items": {
+                "description": "a cell; null is SQL NULL",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "columns",
+          "rows"
+        ],
+        "type": "object"
+      },
       "PAMRecording": {
         "properties": {
           "bytes": {
@@ -58133,6 +58193,84 @@
         ],
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/queries": {
+      "post": {
+        "operationId": "runPAMQuery",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMQueryResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows",
+        "x-trstctl-permission": "access:sessions.open",
         "x-trstctl-sensitive-response": true
       }
     },

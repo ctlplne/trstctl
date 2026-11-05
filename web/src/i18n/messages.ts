@@ -5664,7 +5664,40 @@ export const messages = {
   "admin.access.revokeFailed": { defaultMessage: "Could not request revocation", description: "PAM revoke mutation failure title." },
   "admin.access.openInBrowser": {
     defaultMessage: "Open in the browser (the control plane keeps the session's ticket)",
-    description: "PAM activation checkbox: open an SSH gateway session for the browser terminal (A259).",
+    description: "PAM activation checkbox: open a gateway session for the browser terminal or database console (A259).",
+  },
+  "admin.access.openConsole": {
+    defaultMessage: "Open database console",
+    description: "Button opening a browser database console on a privileged PostgreSQL session (A259).",
+  },
+  "admin.access.console.title": { defaultMessage: "Database console", description: "Heading of the browser database console on a privileged session (A259)." },
+  "admin.access.console.close": { defaultMessage: "Close console", description: "Button closing the database console; the session stays open (A259)." },
+  "admin.access.console.sql": { defaultMessage: "SQL", description: "Label of the SQL text area in the database console (A259)." },
+  "admin.access.console.run": { defaultMessage: "Run", description: "Button running the SQL in the database console (A259)." },
+  "admin.access.console.running": {
+    defaultMessage: "Running through the session's gateway…",
+    description: "Database console status while a statement runs (A259).",
+  },
+  "admin.access.console.failed": {
+    defaultMessage: "The console could not run it: {error}",
+    description: "Database console status when the call failed; error is the server's message (A259).",
+  },
+  "admin.access.console.refused": {
+    defaultMessage: "The database refused it ({code}): {message}",
+    description: "Database console status when the database refused the statement; code is the SQLSTATE (A259).",
+  },
+  "admin.access.console.rows": {
+    defaultMessage: "{count, plural, one {# row} other {# rows}} {tag}",
+    description: "Database console status after a statement; count is the rows shown, tag the command tag (A259).",
+  },
+  "admin.access.console.caption": {
+    defaultMessage: "Result of the last statement",
+    description: "Screen-reader caption of the database console's result table (A259).",
+  },
+  "admin.access.console.null": { defaultMessage: "NULL", description: "How the database console shows an SQL NULL cell; SQL keyword stays literal (A259)." },
+  "admin.access.console.truncated": {
+    defaultMessage: "Only the first 1,000 rows are shown; longer cells are cut.",
+    description: "Database console note when the result was bounded (A259).",
   },
   "admin.access.openTerminal": { defaultMessage: "Open terminal", description: "Button opening a browser terminal on a privileged SSH session (A259)." },
   "admin.access.terminal.title": { defaultMessage: "Terminal", description: "Heading of the browser terminal on a privileged session (A259)." },

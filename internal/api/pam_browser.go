@@ -38,6 +38,23 @@ type PAMTerminalOutput struct {
 	ExitStatus *int   `json:"exit_status,omitempty"`
 }
 
+// PAMQueryResult is one SQL text's last result on a database console (part
+// 2): its columns and rows (a NULL cell is null), bounded; or the server's
+// error, which is a result, not a failure of the call.
+type PAMQueryResult struct {
+	Columns    []string       `json:"columns"`
+	Rows       [][]*string    `json:"rows"`
+	CommandTag string         `json:"command_tag,omitempty"`
+	Truncated  bool           `json:"truncated,omitempty"`
+	Error      *PAMQueryError `json:"error,omitempty"`
+}
+
+// PAMQueryError is the database's own refusal of a statement.
+type PAMQueryError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // PAMBrowserBridge serves browser sessions; the served broker implements it.
 type PAMBrowserBridge interface {
 	HoldBrowserTicket(tenantID, sessionID, opener string, delivery PAMGatewayDelivery, ticket []byte, expires time.Time) error
@@ -46,6 +63,7 @@ type PAMBrowserBridge interface {
 	WritePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, data []byte) error
 	ResizePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string, cols, rows int) error
 	ClosePAMTerminal(ctx context.Context, tenantID, sessionID, terminalID, principal string) error
+	RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (PAMQueryResult, error)
 }
 
 func (a *API) pamBrowserRoutes() []route {
@@ -56,6 +74,7 @@ func (a *API) pamBrowserRoutes() []route {
 		{method: "GET", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/output", opID: "readPAMTerminalOutput", summary: "Read a terminal's output from an offset; wait long-polls for output still to come", handler: a.readPAMTerminal, pathParams: terminal, query: []param{{name: "from", typ: "integer", desc: "offset to read from (the previous read's next)"}, {name: "wait", typ: "integer", desc: "seconds to wait for output, at most 25"}}, resSchema: "PAMTerminalOutput", successCode: "200", sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/input", opID: "writePAMTerminalInput", summary: "Type into a terminal; a retried request with the same Idempotency-Key types nothing twice", handler: a.writePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalInput", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "POST", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}/resize", opID: "resizePAMTerminal", summary: "Change a terminal's size", handler: a.resizePAMTerminal, pathParams: terminal, reqSchema: "PAMTerminalRequest", resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
+		{method: "POST", path: "/api/v1/access/sessions/{id}/queries", opID: "runPAMQuery", summary: "Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows", handler: a.runPAMQuery, pathParams: session, reqSchema: "PAMQueryRequest", resSchema: "PAMQueryResult", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 		{method: "DELETE", path: "/api/v1/access/sessions/{id}/terminals/{terminal_id}", opID: "closePAMTerminal", summary: "End a terminal; the session stays open", handler: a.closePAMTerminal, pathParams: terminal, resSchema: "PAMTerminal", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 	}
 }
@@ -202,5 +221,26 @@ func (a *API) closePAMTerminal(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, PAMTerminal{ID: r.PathValue("terminal_id"), SessionID: r.PathValue("id")}, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) runPAMQuery(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		bridge, err := a.browserBridge()
+		if err != nil {
+			return 0, nil, err
+		}
+		var body struct {
+			SQL string `json:"sql"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		result, err := bridge.RunPAMQuery(ctx, tenantID, r.PathValue("id"), principalSubject(ctx), body.SQL)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, result, nil
 	})
 }

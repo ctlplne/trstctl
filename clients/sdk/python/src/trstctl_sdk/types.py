@@ -11628,6 +11628,26 @@ PAMPostgresCredential = TypedDict(
     total=False,
 )
 
+PAMQueryRequest = TypedDict(
+    'PAMQueryRequest',
+    {
+        'sql': str,
+    },
+    total=False,
+)
+
+PAMQueryResult = TypedDict(
+    'PAMQueryResult',
+    {
+        'columns': list[str],
+        'command_tag': str,
+        'error': dict[str, Any],
+        'rows': list[list[str]],
+        'truncated': bool,
+    },
+    total=False,
+)
+
 PAMRecording = TypedDict(
     'PAMRecording',
     {

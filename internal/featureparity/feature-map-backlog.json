@@ -14564,7 +14564,8 @@
                 "readPAMTerminalOutput",
                 "writePAMTerminalInput",
                 "resizePAMTerminal",
-                "closePAMTerminal"
+                "closePAMTerminal",
+                "runPAMQuery"
             ],
             "api_na": "",
             "cli_surface": [

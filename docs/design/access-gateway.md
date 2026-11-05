@@ -306,11 +306,19 @@ job with gateway sessions to the accounts its task is delegated, and no credenti
   a reader that falls behind is told the output was truncated) and types in idempotent
   batches. Only the session's opener can use its terminals, two at most. Revocation,
   termination or the deadline ends the gateway connection and with it the terminal.
+- **Database console.** For a PostgreSQL session the control plane keeps one connection
+  through the gateway for the opener (admitted by the ticket; the gateway answers as
+  PostgreSQL and signs in upstream as the session's login) and runs one SQL text at a time
+  (`POST .../sessions/{id}/queries`, idempotent): the reply holds the last result's columns
+  and at most 1,000 rows (a cell beyond 4 KiB is cut and marked), or the database's own
+  refusal with its SQLSTATE. The gateway records each statement and its bounded result as for
+  a stock client.
 - **Reach.** The control plane must reach the gateway's address; a gateway it cannot reach
   serves the CLI only.
-- **Console.** Request privileged session → SSH → "Open in the browser" sends no key (the
-  gateway makes its own); once the session is open, "Open terminal" shows it in xterm.js,
-  loaded on demand, with screen-reader mode on.
+- **Console.** Request privileged session → "Open in the browser" (an SSH request then sends
+  no key: the gateway makes its own); once the session is open, "Open terminal" shows an SSH
+  session in xterm.js, loaded on demand, with screen-reader mode on, and "Open database
+  console" a PostgreSQL session's SQL console with its result table.
 
 ## Failure modes
 

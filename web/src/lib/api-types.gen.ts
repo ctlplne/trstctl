@@ -8378,6 +8378,18 @@ export interface PAMPostgresCredential {
   username: string;
 }
 
+export interface PAMQueryRequest {
+  sql: string;
+}
+
+export interface PAMQueryResult {
+  columns: string[];
+  command_tag?: string;
+  error?: { code: string; message: string };
+  rows: string[][];
+  truncated?: boolean;
+}
+
 export interface PAMRecording {
   bytes: number;
   chain_head: string;

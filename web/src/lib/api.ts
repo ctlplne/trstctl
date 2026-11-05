@@ -516,6 +516,7 @@ import type {
   PAMTarget,
   PAMTargetList,
   PAMTargetRequest,
+  PAMQueryResult,
   PAMTerminal,
   PAMTerminalOutput,
   PKISecret,
@@ -1489,6 +1490,7 @@ export type {
   PAMTarget,
   PAMTargetList,
   PAMTargetRequest,
+  PAMQueryResult,
   PAMTerminal,
   PAMTerminalOutput,
   PKISecret,
@@ -2513,6 +2515,7 @@ export interface Api {
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
   closePAMTerminal(sessionID: string, terminalID: string, idempotencyKey?: string): Promise<PAMTerminal>;
+  runPAMQuery(sessionID: string, sql: string, idempotencyKey?: string): Promise<PAMQueryResult>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -3426,6 +3429,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       size,
       idempotencyKey,
     ),
+  runPAMQuery: (sessionID, sql, idempotencyKey) =>
+    mutate<PAMQueryResult>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/queries`, { sql }, idempotencyKey),
   closePAMTerminal: (sessionID, terminalID, idempotencyKey) =>
     mutate<PAMTerminal>(
       "DELETE",

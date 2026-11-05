@@ -542,6 +542,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run SQL on your PostgreSQL session opened for the browser; the gateway signs in, records and masks, and the reply holds the last result's rows */
+        post: operations["runPAMQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/recording": {
         parameters: {
             query?: never;
@@ -21213,6 +21230,22 @@ export interface components {
             dsn: string;
             username: string;
         };
+        PAMQueryRequest: {
+            /** @description one SQL text (up to 64 KiB); the last statement's result is returned */
+            sql: string;
+        };
+        PAMQueryResult: {
+            columns: string[];
+            command_tag?: string;
+            error?: {
+                /** @description the database's SQLSTATE */
+                code: string;
+                message: string;
+            };
+            /** @description at most 1000 rows; a cell beyond 4 KiB is cut and marked */
+            rows: string[][];
+            truncated?: boolean;
+        };
         PAMRecording: {
             bytes: number;
             chain_head: string;
@@ -27522,6 +27555,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runPAMQuery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMQueryResult"];
                 };
             };
             /** @description client error */

@@ -14,6 +14,7 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow, Num } from "@/components/typography";
 import { BrowserTerminal } from "@/components/access/BrowserTerminal";
+import { SqlConsole } from "@/components/access/SqlConsole";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -416,7 +417,7 @@ export function AdminAccess() {
         ...(form.target_type === "ssh" && form.ssh_principal ? { ssh_principal: form.ssh_principal } : {}),
         ...(form.target_type === "ssh" && !form.browser ? { ssh_public_key: form.ssh_public_key } : {}),
       };
-      setPAMBrowser(form.target_type === "ssh" && form.browser);
+      setPAMBrowser(form.browser);
       setPAMExact(input);
       setPAMPending(await api.requestPAMSession(input, `pam-request:${requestID}`));
     } catch (err) {
@@ -1397,6 +1398,15 @@ function PAMFormDialog({
               </Button>
             )
           ) : null}
+          {browser && created.target_type === "postgres" ? (
+            terminalOpen ? (
+              <SqlConsole sessionID={created.id} onClose={() => setTerminalOpen(false)} />
+            ) : (
+              <Button type="button" size="sm" onClick={() => setTerminalOpen(true)}>
+                {t("admin.access.openConsole")}
+              </Button>
+            )
+          ) : null}
           <Button type="button" size="sm" variant="outline" onClick={() => setShowCredential((visible) => !visible)}>
             {showCredential ? t("admin.access.hideCredential") : t("admin.access.revealCredential")}
           </Button>
@@ -1509,15 +1519,15 @@ function PAMFormDialog({
               <Input type="number" min={1} {...register("ttl_seconds")} aria-invalid={Boolean(errors.ttl_seconds)} />
             </FormField>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...register("browser")} />
+            {t("admin.access.openInBrowser")}
+          </label>
           {targetType === "ssh" ? (
             <>
               <FormField label={t("admin.access.sshPrincipal")}>
                 <Input {...register("ssh_principal")} />
               </FormField>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register("browser")} />
-                {t("admin.access.openInBrowser")}
-              </label>
               {browserChosen ? null : (
                 <FormField label={translateNow("source.ssh.public.key.c9be6a369e")} hint={errors.ssh_public_key?.message}>
                   <Textarea className="min-h-24 font-mono text-xs" {...register("ssh_public_key")} aria-invalid={Boolean(errors.ssh_public_key)} />

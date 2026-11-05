@@ -8889,19 +8889,24 @@ What comes next:
 - Notifying approvers by name; today the notice goes to the approval channels they watch.
 - Template folders and auto-approval rules (A261).
 
-## Browser sessions (A259) — part 1 of 3: SSH terminal
+## Browser sessions (A259) — parts 1–2 of 3: SSH terminal and database console
 
-Status: SSH served; the database console (part 2) and Kubernetes exec (part 3) come next,
-and A259 stays open until they land. A session opened with `"browser": true` leaves its
+Status: SSH and PostgreSQL served; Kubernetes exec (part 3) comes next, and A259 stays open
+until it lands. A session opened with `"browser": true` leaves its
 ticket with the control plane, which opens an SSH shell through the session's gateway for its
 opener; the console shows it in a terminal (Request privileged session → SSH → "Open in the
 browser" → "Open terminal"). `TestServedBrowserTerminalA259` proves it through the gateway:
 the open's reply carries no ticket; a command typed in the terminal runs and its output comes
 back; the gateway records it; another principal can neither open nor read the terminal; a
-termination ends it and it takes no more input. The console tests prove the terminal sends
-what is typed in idempotent batches, closes its terminal on leaving, never holds a ticket, and
-passes the axe accessibility check.
+termination ends it and it takes no more input. `TestServedBrowserDatabaseConsoleA259`
+proves the database console: a read answers with its rows, a write the read-only login may
+not make comes back as the database's refusal (SQLSTATE 42501), a NULL stays null, the
+gateway records the statements, no reply carries the login's password, nobody else can
+query, and termination ends the console. The console tests prove the terminal sends what is
+typed in idempotent batches and closes on leaving, the SQL console shows rows, NULLs and
+refusals, neither holds a ticket, and both pass the axe accessibility check.
 
 What comes next:
-- The database console (part 2) and Kubernetes exec (part 3).
+- Kubernetes exec (part 3); a MySQL, MongoDB or Redis console (today the database console
+  serves PostgreSQL sessions; the other types are reached with their stock clients).
 - Gateways the control plane cannot reach (a reverse tunnel over the agent channel).

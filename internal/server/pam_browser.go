@@ -73,11 +73,13 @@ type pamBrowser struct {
 	mu        sync.Mutex
 	tickets   map[pamBrowserKey]*pamBrowserTicket
 	terminals map[string]*pamTerminal
+	consoles  map[pamBrowserKey]*pamConsole
 	dial      func(ctx context.Context, addr string, caPEM []byte, spiffeID string) (net.Conn, error)
 }
 
 func newPAMBrowser() *pamBrowser {
-	return &pamBrowser{tickets: map[pamBrowserKey]*pamBrowserTicket{}, terminals: map[string]*pamTerminal{}, dial: mtls.GatewayDial}
+	return &pamBrowser{tickets: map[pamBrowserKey]*pamBrowserTicket{}, terminals: map[string]*pamTerminal{},
+		consoles: map[pamBrowserKey]*pamConsole{}, dial: mtls.GatewayDial}
 }
 
 // HoldBrowserTicket keeps a browser session's ticket for its opener.
@@ -152,7 +154,8 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 }
 
 // admitAtGateway presents the session's ticket on a verified connection to
-// its gateway and returns the SSH host key the gateway serves it with.
+// its gateway and returns the SSH host key the gateway serves it with (none
+// for a database session).
 func admitAtGateway(conn net.Conn, sessionID string, ticket *secret.Buffer) (string, error) {
 	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
 		return "", err
@@ -174,8 +177,10 @@ func admitAtGateway(conn net.Conn, sessionID string, ticket *secret.Buffer) (str
 		return "", fmt.Errorf("the session's gateway did not answer: %w", err)
 	}
 	answer = strings.TrimSpace(answer)
+	// An SSH session's gateway names its host key after OK; a database
+	// session's answers OK alone.
 	key, ok := strings.CutPrefix(answer, "OK ")
-	if !ok {
+	if !ok && answer != "OK" {
 		return "", fmt.Errorf("the session's gateway refused the connection: %s", strings.TrimPrefix(answer, "DENY "))
 	}
 	if err := conn.SetDeadline(time.Time{}); err != nil {
@@ -343,6 +348,10 @@ func (s *pamService) sweepBrowser(now time.Time) {
 				delete(s.browser.terminals, id)
 			}
 		}
+		if console := s.browser.consoles[key]; console != nil {
+			_ = console.conn.Close(context.Background())
+			delete(s.browser.consoles, key)
+		}
 	}
 }
 
@@ -388,4 +397,11 @@ func (s *Server) ClosePAMTerminal(ctx context.Context, tenantID, sessionID, term
 		return api.ErrPAMUnavailable
 	}
 	return s.pam.ClosePAMTerminal(ctx, tenantID, sessionID, terminalID, principal)
+}
+
+func (s *Server) RunPAMQuery(ctx context.Context, tenantID, sessionID, principal, sql string) (api.PAMQueryResult, error) {
+	if s.pam == nil {
+		return api.PAMQueryResult{}, api.ErrPAMUnavailable
+	}
+	return s.pam.RunPAMQuery(ctx, tenantID, sessionID, principal, sql)
 }

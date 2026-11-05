@@ -826,6 +826,8 @@ public final class OpenApiSchemas {
       "PAMEmergencyReviewRequest",
       "PAMEmergencySessionRequest",
       "PAMPostgresCredential",
+      "PAMQueryRequest",
+      "PAMQueryResult",
       "PAMRecording",
       "PAMRecordingExport",
       "PAMRecordingFrames",
