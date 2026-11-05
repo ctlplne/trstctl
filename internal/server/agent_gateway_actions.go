@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/accessrules"
-	"trstctl.com/trstctl/internal/agent/accessgateway"
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -44,7 +44,7 @@ func (a *agentService) EvaluateGatewayAction(ctx context.Context, req *transport
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "could not load the held session job; retry the same action")
 	}
-	if !held || job.ClaimAttempts != req.Attempt || job.RequiredAgentID != agentID || job.Destination != accessgateway.KindSessionRules {
+	if !held || job.ClaimAttempts != req.Attempt || job.RequiredAgentID != agentID || !relay.IsCommandRulesSession(job.Destination) {
 		return nil, status.Error(codes.PermissionDenied, "this agent does not hold that policy-bearing session at that attempt")
 	}
 	decision, err := a.evaluatePAMCommand(ctx, info.TenantID, agentID, job.Payload, req.JobID, req.Attempt, req.IdempotencyKey, req.Observation, req.Cancel)

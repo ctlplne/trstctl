@@ -19,8 +19,9 @@ func (s *pamService) requireCommandRuleGateway(ctx context.Context, tenantID str
 	if err := accessrules.ValidatePolicy(req.ResolvedCommandPolicy, req.TargetType); err != nil {
 		return fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
 	}
-	if !s.commandRuleJobsEnabled {
-		return fmt.Errorf("%w: enable %s in agent_channel.claimable_job_kinds before opening a rule-bearing session", api.ErrPAMInvalid, accessgateway.KindSessionRules)
+	kind := accessgateway.KindForPolicy(req.ResolvedCommandPolicy)
+	if !s.commandRuleJobKinds[kind] {
+		return fmt.Errorf("%w: enable %s in agent_channel.claimable_job_kinds before opening a rule-bearing session", api.ErrPAMInvalid, kind)
 	}
 	target, err := s.getPAMTarget(ctx, tenantID, req.TargetType, req.TargetID)
 	if err != nil {
@@ -37,8 +38,9 @@ func (s *pamService) requireCommandRuleGateway(ctx context.Context, tenantID str
 	if agent.ExecutorsReportedAt == nil || json.Unmarshal(agent.Executors, &report) != nil || report.PendingReportError != "" {
 		return fmt.Errorf("%w: the named gateway has not reported a usable command-rule executor; upgrade it and wait for its heartbeat", api.ErrPAMInvalid)
 	}
+	requiredKind := kind
 	for _, kind := range report.Kinds {
-		if kind.Kind == accessgateway.KindSessionRules && len(kind.MissingFlags) == 0 {
+		if kind.Kind == requiredKind && len(kind.MissingFlags) == 0 {
 			return nil
 		}
 	}

@@ -23,12 +23,13 @@ import (
 // session the pod (and optionally the container and command, default sh) to
 // exec into.
 type PAMTerminalRequest struct {
-	Cols      int      `json:"cols"`
-	Rows      int      `json:"rows"`
-	Namespace string   `json:"namespace,omitempty"`
-	Pod       string   `json:"pod,omitempty"`
-	Container string   `json:"container,omitempty"`
-	Command   []string `json:"command,omitempty"`
+	SSHCommand string   `json:"ssh_command,omitempty"`
+	Cols       int      `json:"cols"`
+	Rows       int      `json:"rows"`
+	Namespace  string   `json:"namespace,omitempty"`
+	Pod        string   `json:"pod,omitempty"`
+	Container  string   `json:"container,omitempty"`
+	Command    []string `json:"command,omitempty"`
 }
 
 // PAMTerminal is a shell on a browser session.

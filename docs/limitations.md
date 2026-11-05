@@ -9108,6 +9108,13 @@ readback, repeat Bind reviews, deny/expiry/disconnect, and a dynamic-SQL bypass.
 Rules also work without recording and never send statement text, values or sign-in
 material to the matcher or control plane. They are lexical guardrails, with the
 [bounds and bypasses documented](design/access-gateway.md#postgresql-command-guardrails-a262-first-protocol).
-SSH and the other database rule paths remain unbuilt in this first part; their rule
-configuration is rejected. Exact-image replay and deferred gates are owed. No
-whole-platform qualification follows from the local PostgreSQL subset.
+SSH rules guard complete exec requests and refuse interactive shell, subsystem
+and environment requests in ruled sessions. Direct file-removal blocking,
+distinct-human waiting, disconnect cancellation and a same-login nested-shell
+bypass have local served proofs. The browser sends a complete SSH command through
+the same guard; its pending HTTP request can be canceled. Scripts, wrappers,
+substitutions and input after an interactive program starts are not contained.
+See [SSH guardrails and bypasses](design/access-gateway.md#ssh-exec-guardrails-a262).
+Other database rule paths remain unbuilt; their rule configuration is rejected.
+Exact-image replay and deferred gates are owed. These local proofs do not qualify
+the whole platform.

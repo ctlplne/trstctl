@@ -73,7 +73,7 @@ describe("browser terminal", () => {
 
     const view = render(<BrowserTerminal sessionID="s-1" onClose={() => undefined} />);
     await waitFor(() => expect(decoded()).toContain("alice@host:~$ "));
-    expect(apiMock.openPAMTerminal).toHaveBeenCalledWith("s-1", { cols: 100, rows: 30 }, expect.stringMatching(/^pam-terminal:s-1:/));
+    expect(apiMock.openPAMTerminal).toHaveBeenCalledWith("s-1", { cols: 100, rows: 30 }, expect.stringMatching(/^pam-terminal:s-1:/), expect.any(AbortSignal));
     expect(screen.getByRole("status")).toHaveTextContent("Connected. The gateway signs in for you and records the session.");
 
     fake.typed?.("echo browser-$((40+2))\r");
@@ -116,6 +116,7 @@ describe("browser terminal", () => {
         "s-3",
         { cols: 100, rows: 30, namespace: "team-a", pod: "web-0", container: "app" },
         expect.stringMatching(/^pam-terminal:s-3:/),
+        expect.any(AbortSignal),
       ),
     );
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Connected. The gateway signs in for you and records the session."));
@@ -124,4 +125,21 @@ describe("browser terminal", () => {
     expect(apiMock.closePAMTerminal).toHaveBeenCalledWith("s-3", "t-3");
     expect(screen.getByRole("textbox", { name: "Namespace" })).toHaveValue("team-a");
   });
+});
+
+it("sends a complete SSH exec request and cancels it on unmount before startup", async () => {
+  apiMock.openPAMTerminal.mockImplementation(() => new Promise(() => undefined));
+  const view = render(<BrowserTerminal sessionID="s-ssh" sshCommand="rm /owned/file" onClose={() => undefined} />);
+  await waitFor(() =>
+    expect(apiMock.openPAMTerminal).toHaveBeenCalledWith(
+      "s-ssh",
+      { cols: 100, rows: 30, ssh_command: "rm /owned/file" },
+      expect.any(String),
+      expect.any(AbortSignal),
+    ),
+  );
+  const signal = apiMock.openPAMTerminal.mock.calls[0][3] as AbortSignal;
+  expect(signal.aborted).toBe(false);
+  view.unmount();
+  expect(signal.aborted).toBe(true);
 });

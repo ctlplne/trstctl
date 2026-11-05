@@ -84,8 +84,8 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 		if !utf8.ValidString(r.Name) || utf8.RuneCountInString(r.Name) < 1 || utf8.RuneCountInString(r.Name) > 80 || strings.ContainsFunc(r.Name, unicode.IsControl) {
 			return nil, errors.New("command rules: name must be 1-80 characters without control characters")
 		}
-		if r.Protocol != "postgres" {
-			return nil, errors.New("command rules: this build enforces PostgreSQL rules; other protocols are not supported yet")
+		if r.Protocol != "postgres" && r.Protocol != "ssh" {
+			return nil, errors.New("command rules: choose a supported enforcing protocol: postgres or ssh")
 		}
 		switch r.Effect {
 		case EffectBlock:
@@ -104,9 +104,14 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 		}
 		ops := make([]string, 0, len(r.Operations))
 		for _, op := range r.Operations {
-			op = strings.ToUpper(strings.TrimSpace(op))
-			if !knownPostgresRuleOperation(op) {
-				return nil, errors.New("command rules: choose a supported PostgreSQL operation name")
+			op = strings.TrimSpace(op)
+			if r.Protocol == "ssh" {
+				op = strings.ToLower(op)
+			} else {
+				op = strings.ToUpper(op)
+			}
+			if !KnownOperation(r.Protocol, op) {
+				return nil, errors.New("command rules: choose a supported operation for this protocol")
 			}
 			ops = append(ops, op)
 		}
@@ -169,7 +174,7 @@ func Match(p *Policy, operations []string) []string {
 	var ids []string
 	for _, r := range p.Rules {
 		for _, op := range operations {
-			if knownPostgresOperation(op) && slices.Contains(r.Operations, op) {
+			if KnownOperation(r.Protocol, op) && slices.Contains(r.Operations, op) {
 				ids = append(ids, r.ID)
 				break
 			}
@@ -270,7 +275,7 @@ func MatchedOperations(p *Policy, operations []string) []string {
 	}
 	out := []string{}
 	for _, op := range operations {
-		if !knownPostgresRuleOperation(op) {
+		if !KnownAnyOperation(op) {
 			continue
 		}
 		for _, r := range p.Rules {
@@ -282,4 +287,30 @@ func MatchedOperations(p *Policy, operations []string) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+var sshOperationNames = []string{"bash", "chmod", "chown", "chpasswd", "command", "dd", "env", "exec", "iptables", "kill", "mkfs", "mount", "nft", "node", "passwd", "perl", "python", "python3", "reboot", "rm", "rmdir", "ruby", "scp", "sftp", "sh", "ssh", "su", "sudo", "systemctl", "umount", "useradd", "userdel"}
+
+func OperationNames(protocol string) []string {
+	if protocol == "ssh" {
+		return slices.Clone(sshOperationNames)
+	}
+	if protocol == "postgres" {
+		return PostgresOperationNames()
+	}
+	return nil
+}
+func KnownOperation(protocol, operation string) bool {
+	if protocol == "ssh" {
+		return slices.Contains(sshOperationNames, operation)
+	}
+	return protocol == "postgres" && knownPostgresRuleOperation(operation)
+}
+func KnownAnyOperation(operation string) bool {
+	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation)
+}
+func AllOperationNames() []string {
+	out := append(PostgresOperationNames(), sshOperationNames...)
+	slices.Sort(out)
+	return out
 }

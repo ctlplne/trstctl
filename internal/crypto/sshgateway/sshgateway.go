@@ -152,6 +152,18 @@ var clientRequests = []string{"pty-req", "env", "shell", "exec", "subsystem", "w
 // client or the target goes away; the caller closes the client connection to
 // end it early (revocation, deadline).
 func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey, up Upstream, rec Recorder) error {
+	return ServeGuarded(ctx, client, host, key, up, rec, nil)
+}
+
+// RequestGuard evaluates a post-authentication session request. Its payload is
+// borrowed for this call only. A false answer refuses it before target forwarding.
+type RequestGuard struct {
+	Inspect func(context.Context, string, []byte) bool
+	Reserve func(int) (func(), bool)
+}
+
+// ServeGuarded adds a separate guard per channel. Nil preserves ordinary SSH.
+func ServeGuarded(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey, up Upstream, rec Recorder, guards func() *RequestGuard) error {
 	signer := key.certified()
 	if signer == nil {
 		return errors.New("sshgateway: the session key is not certified")
@@ -180,16 +192,28 @@ func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey,
 	}()
 	var relays sync.WaitGroup
 	next := 0
+	slots := make(chan struct{}, 32)
 	for nc := range channels {
 		if nc.ChannelType() != "session" {
 			_ = nc.Reject(ssh.Prohibited, "the access gateway relays sessions only")
+			continue
+		}
+		select {
+		case slots <- struct{}{}:
+		default:
+			_ = nc.Reject(ssh.ResourceShortage, "the access gateway channel capacity is full")
 			continue
 		}
 		relays.Add(1)
 		next++
 		go func(ch int) {
 			defer relays.Done()
-			relaySession(nc, upstream, ch, rec)
+			defer func() { <-slots }()
+			var guard *RequestGuard
+			if guards != nil {
+				guard = guards()
+			}
+			relaySession(ctx, nc, upstream, ch, rec, guard)
 		}(next)
 	}
 	// The client is gone: end the target connection, then the relays.
@@ -252,7 +276,7 @@ func pinnedHostKey(fingerprints []string) ssh.HostKeyCallback {
 // relaySession bridges one client session channel to a new upstream one: the
 // data both ways, the client's allowed requests up and the target's requests
 // (exit-status, exit-signal) down, then the close. rec sees all of it.
-func relaySession(nc ssh.NewChannel, upstream *ssh.Client, ch int, rec Recorder) {
+func relaySession(ctx context.Context, nc ssh.NewChannel, upstream *ssh.Client, ch int, rec Recorder, guard *RequestGuard) {
 	up, upRequests, err := upstream.OpenChannel("session", nc.ExtraData())
 	if err != nil {
 		var refused *ssh.OpenChannelError
@@ -272,7 +296,11 @@ func relaySession(nc ssh.NewChannel, upstream *ssh.Client, ch int, rec Recorder)
 	// not closed between the target's answer and the client receiving it.
 	var replying sync.Mutex
 	go func() {
-		forwardRequests(downRequests, up, &replying, func(kind string) bool { return slices.Contains(clientRequests, kind) }, recordRequest(rec, ch, "client"))
+		if guard == nil {
+			forwardRequests(downRequests, up, &replying, func(kind string) bool { return slices.Contains(clientRequests, kind) }, recordRequest(rec, ch, "client"))
+		} else {
+			forwardGuardedRequests(ctx, downRequests, up, down, &replying, guard, recordRequest(rec, ch, "client"))
+		}
 		// The client closed its channel: close the target's, so a process
 		// that outlives its input does not hold the relay open.
 		_ = up.Close()

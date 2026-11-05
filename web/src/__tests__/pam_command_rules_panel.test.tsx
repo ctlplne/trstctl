@@ -127,3 +127,26 @@ it("shows a held action deadline and an exact approval link without claiming exe
   expect(screen.getByText(/it does not prove target execution/)).toBeInTheDocument();
   expect(await axe(view.container)).toHaveNoViolations();
 });
+
+it("keeps SSH selectors separate and reviews the exact direct-command rule", async () => {
+  const user = userEvent.setup();
+  mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access template" }), template.id);
+  await user.type(within(dialog).getByRole("textbox", { name: "Rule name" }), "Review direct removal");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Protocol" }), "ssh");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  const selectors = await within(dialog).findByRole("listbox", { name: "Operation names" });
+  expect(within(selectors).queryByRole("option", { name: "DROP" })).not.toBeInTheDocument();
+  await user.selectOptions(selectors, ["rm"]);
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Save reviewed rule" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(
+      template.id,
+      expect.objectContaining({ command_rules: [expect.objectContaining({ protocol: "ssh", operations: ["rm"], effect: "block" })] }),
+      expect.any(String),
+    ),
+  );
+});

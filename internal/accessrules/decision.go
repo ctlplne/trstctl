@@ -68,12 +68,16 @@ func ValidateObservation(o Observation) error {
 		return errors.New("command rules: invalid action observation")
 	}
 	switch o.Phase {
-	case "query", "bind":
+	case "query", "bind", "exec":
 		if len(o.Operations) < 1 || len(o.Operations) > MaxOperations || !slices.IsSorted(o.Operations) {
 			return errors.New("command rules: invalid operation facts")
 		}
 		for i, op := range o.Operations {
-			if !knownPostgresRuleOperation(op) || i > 0 && op == o.Operations[i-1] {
+			known := KnownOperation("postgres", op)
+			if o.Phase == "exec" {
+				known = KnownOperation("ssh", op)
+			}
+			if !known || i > 0 && op == o.Operations[i-1] {
 				return errors.New("command rules: unknown or duplicate operation fact")
 			}
 		}
@@ -99,8 +103,11 @@ func ValidateDecision(d Decision) error {
 	if err := ValidateObservation(d.Observation); err != nil {
 		return err
 	}
-	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || d.Protocol != "postgres" || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
+	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
 		return errors.New("command rules: invalid bound decision")
+	}
+	if d.Phase == "exec" && d.Protocol != "ssh" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" {
+		return errors.New("command rules: phase differs from decision protocol")
 	}
 	if d.Status == StatusBlocked {
 		if d.ReviewExpiresAt != nil || (d.Reason != "matched_rule" && d.Reason != "unsupported_control" && d.Reason != "uninspectable") {
@@ -142,7 +149,7 @@ func ValidateDecision(d Decision) error {
 // review uses the largest quorum and shortest lifetime. Control uncertainty is
 // always refused and cannot be approved into an uninspected command.
 func ReviewRequirement(p *Policy, o Observation) (int, int) {
-	if p == nil || (o.Phase != "query" && o.Phase != "bind") {
+	if p == nil || (o.Phase != "query" && o.Phase != "bind" && o.Phase != "exec") {
 		return 0, 0
 	}
 	quorum, ttl := 0, 46

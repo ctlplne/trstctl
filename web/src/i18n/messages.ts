@@ -117,12 +117,25 @@ export const messages = {
     defaultMessage: "Saving changes the template revision. No target command runs during this setup.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
-  "admin.access.rules.postgresOnly": {
-    defaultMessage: "This rule editor supports PostgreSQL. Other gateway protocols will not accept this policy.",
+  "admin.access.rules.protocol": { defaultMessage: "Protocol", description: "SSH command guardrail control." },
+  "admin.access.rules.sshCommand": { defaultMessage: "SSH command", description: "SSH command guardrail control." },
+  "admin.access.rules.sshRun": { defaultMessage: "Run command", description: "SSH command guardrail control." },
+  "admin.access.rules.sshHelp": {
+    defaultMessage:
+      "The guard checks direct program names in this exec request. Nested shells, scripts, aliases and input to an interactive program can bypass it. Use target permissions for containment.",
+    description: "SSH command guardrail control.",
+  },
+  "admin.access.rules.sshWaiting": {
+    defaultMessage:
+      "A matching review rule holds this command until independent reviewers decide or its deadline expires. Closing cancels a held command; a command already forwarded may have run.",
+    description: "SSH command guardrail control.",
+  },
+  "admin.access.rules.protocolHelp": {
+    defaultMessage: "PostgreSQL statements or SSH exec requests. SSH rules refuse interactive shell and subsystem requests; use a complete command.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {
-    defaultMessage: "Select one or more known SQL operation names. Arguments, quoted values and injected sign-in material are excluded.",
+    defaultMessage: "Select one or more known operation names. Arguments, quoted values and injected sign-in material are excluded.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.enabled": { defaultMessage: "Enabled", description: "Gateway command guardrail configuration or durable action evidence." },

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2618 annotated sites across 31 rules. Each row is
+2619 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -723,7 +723,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (423 sites)
+### G115 — CWE-190 Integer overflow or wraparound (424 sites)
 
 | Location | Reason |
 |---|---|
@@ -831,6 +831,7 @@ not this file.
 | `internal/crypto/signauth.go:76` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/ssh.go:69` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
 | `internal/crypto/ssh.go:70` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
+| `internal/crypto/sshgateway/guard_test.go:18` | bounded by MaxExecCommandBytes (CWE-190) |
 | `internal/crypto/sshgateway/sshgateway.go:96` | an OpenSSH certificate's valid-before is a Unix time (CWE-190) |
 | `internal/crypto/sshgateway/sshgateway_test.go:115` | present-day Unix times are positive (CWE-190) |
 | `internal/crypto/sshkeys/certificate.go:112` | clamped to maxCertificateUnix above (CWE-190) |
@@ -939,7 +940,7 @@ not this file.
 | `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/pam_browser.go:303` | offsets within the ring, at most 1 MiB apart (CWE-190) |
+| `internal/server/pam_browser.go:337` | offsets within the ring, at most 1 MiB apart (CWE-190) |
 | `internal/server/pam_browser_kube.go:182` | a 7-bit length below 126 (CWE-190) |
 | `internal/server/pam_browser_kube.go:185` | a 16-bit length under 1<<16 (CWE-190) |
 | `internal/server/pam_browser_kube.go:188` | a payload length, never negative (CWE-190) |
@@ -2116,7 +2117,7 @@ not this file.
 | `internal/crypto/mtls/signer.go:109` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:267` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/parserfuzz_audit_test.go:268` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/alias_test.go:139` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |

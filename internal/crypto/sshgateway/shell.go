@@ -4,6 +4,7 @@ package sshgateway
 
 import (
 	"errors"
+
 	"fmt"
 	"io"
 	"net"
@@ -31,6 +32,19 @@ type Shell struct {
 // OpenShell starts a shell with a pseudo-terminal of cols x rows over conn,
 // accepting only the gateway host key hostKey (an authorized_keys line).
 func OpenShell(conn net.Conn, hostKey string, cols, rows int) (*Shell, error) {
+	return openProgram(conn, hostKey, cols, rows, nil)
+}
+
+// OpenCommand sends one complete exec request. It never wraps it in another
+// interpreter, which would hide its direct command from the gateway guard.
+func OpenCommand(conn net.Conn, hostKey string, cols, rows int, command []byte) (*Shell, error) {
+	if len(command) == 0 || len(command) > MaxExecCommandBytes {
+		return nil, errors.New("sshgateway: command must be 1-65536 bytes")
+	}
+	return openProgram(conn, hostKey, cols, rows, command)
+}
+
+func openProgram(conn net.Conn, hostKey string, cols, rows int, command []byte) (*Shell, error) {
 	if cols < 1 || rows < 1 || cols > 1000 || rows > 1000 {
 		return nil, errors.New("sshgateway: terminal size must be 1-1000 columns and rows")
 	}
@@ -68,8 +82,13 @@ func OpenShell(conn net.Conn, hostKey string, cols, rows int) (*Shell, error) {
 	// With a pseudo-terminal the target merges standard error into the
 	// terminal's output; anything sent on the session's stderr is dropped.
 	session.Stderr = io.Discard
-	if err := session.Shell(); err != nil {
-		return fail(fmt.Errorf("sshgateway: shell: %w", err))
+	if command == nil {
+		err = session.Shell()
+	} else {
+		err = session.Start(string(command))
+	}
+	if err != nil {
+		return fail(fmt.Errorf("sshgateway: program: %w", err))
 	}
 	go func() {
 		shell.exit = session.Wait()

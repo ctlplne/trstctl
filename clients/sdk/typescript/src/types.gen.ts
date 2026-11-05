@@ -21669,7 +21669,7 @@ export interface components {
             message_digest: string;
             /** Format: date-time */
             observed_at: string;
-            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
             ordinal: number;
             phase: string;
             policy_digest: string;
@@ -21705,10 +21705,10 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** @description Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched */
-            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            /** @description Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded */
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
             /** @enum {string} */
-            protocol: "postgres";
+            protocol: "postgres" | "ssh";
             /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
@@ -21942,10 +21942,10 @@ export interface components {
             effect: "block" | "require_approval";
             /** Format: uuid */
             id: string;
-            /** @description Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched */
-            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            /** @description Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded */
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
             /** @enum {string} */
-            protocol: "postgres";
+            protocol: "postgres" | "ssh";
             /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
@@ -22273,6 +22273,8 @@ export interface components {
             /** @description Kubernetes sessions: the pod to exec into */
             pod?: string;
             rows: number;
+            /** @description SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence. */
+            ssh_command?: string;
         };
         PKISecret: {
             certificate: string;

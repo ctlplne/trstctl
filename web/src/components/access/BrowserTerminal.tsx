@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/i18n/I18nProvider";
 
+import { PAMCommandActions } from "@/components/access/PAMCommandActions";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
@@ -39,7 +40,19 @@ function encodeBase64(text: string): string {
 
 export type PodExec = { namespace: string; pod: string; container?: string };
 
-export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: string; exec?: PodExec; onClose: () => void }) {
+export function BrowserTerminal({
+  sessionID,
+  exec,
+  sshCommand,
+  commandRules = false,
+  onClose,
+}: {
+  sessionID: string;
+  exec?: PodExec;
+  sshCommand?: string;
+  commandRules?: boolean;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const namespace = exec?.namespace;
   const pod = exec?.pod;
@@ -51,6 +64,7 @@ export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: strin
 
   useEffect(() => {
     let stopped = false;
+    const opening = new AbortController();
     let terminal: XtermTerminal | null = null;
     let terminalID: string | null = null;
     let pending = "";
@@ -72,8 +86,14 @@ export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: strin
         terminal.open(host.current);
         const opened = await api.openPAMTerminal(
           sessionID,
-          { cols: COLS, rows: ROWS, ...(namespace && pod ? { namespace, pod, ...(container ? { container } : {}) } : {}) },
+          {
+            cols: COLS,
+            rows: ROWS,
+            ...(sshCommand ? { ssh_command: sshCommand } : {}),
+            ...(namespace && pod ? { namespace, pod, ...(container ? { container } : {}) } : {}),
+          },
           `pam-terminal:${sessionID}:${crypto.randomUUID()}`,
+          opening.signal,
         );
         if (stopped) {
           void api.closePAMTerminal(sessionID, opened.id).catch(() => undefined);
@@ -107,11 +127,12 @@ export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: strin
     })();
     return () => {
       stopped = true;
+      opening.abort();
       if (flushTimer) clearTimeout(flushTimer);
       if (terminalID) void api.closePAMTerminal(sessionID, terminalID).catch(() => undefined);
       terminal?.dispose();
     };
-  }, [sessionID, namespace, pod, container]);
+  }, [sessionID, namespace, pod, container, sshCommand]);
 
   return (
     <section aria-labelledby={`pam-terminal-${sessionID}`} className="grid gap-2">
@@ -134,6 +155,12 @@ export function BrowserTerminal({ sessionID, exec, onClose }: { sessionID: strin
                 : t("admin.access.terminal.exited", { status: exitStatus })
               : t("admin.access.terminal.failed", { error: error ?? "" })}
       </p>
+      {commandRules ? (
+        <>
+          <p>{t("admin.access.rules.sshWaiting")}</p>
+          <PAMCommandActions sessionID={sessionID} live={state === "opening" || state === "open"} />
+        </>
+      ) : null}
       <div ref={host} data-testid="pam-terminal" className="overflow-auto rounded-panel border border-border bg-black p-2" />
     </section>
   );

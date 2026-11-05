@@ -22,8 +22,9 @@ import (
 
 const (
 	// KindSession is the agent job one gateway session rides on.
-	KindSession      = relay.KindAccessGatewaySession
-	KindSessionRules = relay.KindAccessGatewayRulesSession
+	KindSession         = relay.KindAccessGatewaySession
+	KindSessionRules    = relay.KindAccessGatewayRulesSession
+	KindSessionSSHRules = relay.KindAccessGatewaySSHRulesSession
 	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
 	// TargetRedis, TargetKubernetes and TargetSSH are the session types the
 	// gateway serves.
@@ -98,7 +99,7 @@ type SessionReport struct {
 
 // ClaimableKinds is what the gateway's own claim loop asks for. Sessions are
 // held for their whole lifetime, so they never enter the shared relay pool.
-func ClaimableKinds() []string { return []string{KindSession, KindSessionRules} }
+func ClaimableKinds() []string { return []string{KindSession, KindSessionRules, KindSessionSSHRules} }
 
 // JobKey is the one outbox key a session's job carries.
 func JobKey(sessionID string) string { return "pam-gateway:" + sessionID }
@@ -174,6 +175,9 @@ func ValidateSessionIntent(in SessionIntent) error {
 // KindForPolicy keeps unruled sessions compatible with their existing wire kind.
 func KindForPolicy(p *accessrules.Policy) string {
 	if p != nil {
+		if len(p.Rules) > 0 && p.Rules[0].Protocol == "ssh" {
+			return KindSessionSSHRules
+		}
 		return KindSessionRules
 	}
 	return KindSession

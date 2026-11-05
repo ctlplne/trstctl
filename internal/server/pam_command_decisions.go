@@ -31,6 +31,9 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 	if err := accessrules.ValidateObservation(observation); err != nil {
 		return accessrules.Decision{}, fmt.Errorf("%w: invalid observation", api.ErrPAMInvalid)
 	}
+	if (observation.Phase == "exec" && intent.TargetType != "ssh") || ((observation.Phase == "query" || observation.Phase == "bind") && intent.TargetType != "postgres") {
+		return accessrules.Decision{}, fmt.Errorf("%w: phase differs from protocol", api.ErrPAMInvalid)
+	}
 	id := accessrules.ActionID(intent.SessionID, observation.ConnectionID, jobID, attempt, observation.Ordinal)
 	if key != id {
 		return accessrules.Decision{}, fmt.Errorf("%w: action key differs", api.ErrPAMInvalid)
@@ -48,7 +51,7 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 			return accessrules.Decision{}, fmt.Errorf("%w: other-policy rule", api.ErrPAMInvalid)
 		}
 	}
-	if observation.Phase == "query" || observation.Phase == "bind" {
+	if observation.Phase == "query" || observation.Phase == "bind" || observation.Phase == "exec" {
 		if !reflect.DeepEqual(accessrules.Match(intent.CommandPolicy, observation.Operations), observation.RuleIDs) || !reflect.DeepEqual(accessrules.MatchedOperations(intent.CommandPolicy, observation.Operations), observation.Operations) {
 			return accessrules.Decision{}, fmt.Errorf("%w: operation facts do not match the named rules", api.ErrPAMInvalid)
 		}

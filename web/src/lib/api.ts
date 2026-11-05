@@ -2579,7 +2579,7 @@ export interface Api {
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
   openPAMSession(input: PAMSessionActivationRequest, idempotencyKey?: string): Promise<PAMSession>;
   revokePAMSession(id: string, reason: string, idempotencyKey?: string): Promise<PAMSession>;
-  openPAMTerminal(sessionID: string, request: PAMTerminalRequest, idempotencyKey?: string): Promise<PAMTerminal>;
+  openPAMTerminal(sessionID: string, request: PAMTerminalRequest, idempotencyKey?: string, signal?: AbortSignal): Promise<PAMTerminal>;
   readPAMTerminal(sessionID: string, terminalID: string, from: number, waitSeconds: number): Promise<PAMTerminalOutput>;
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
@@ -3526,8 +3526,13 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   openPAMSession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/sessions", input, idempotencyKey),
   revokePAMSession: (id, reason, idempotencyKey) =>
     mutate<PAMSession>("POST", `/api/v1/access/sessions/${encodeURIComponent(id)}/revoke`, { reason }, idempotencyKey),
-  openPAMTerminal: (sessionID, request, idempotencyKey) =>
-    mutate<PAMTerminal>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals`, request, idempotencyKey),
+  openPAMTerminal: (sessionID, request, idempotencyKey = newIdempotencyKey(), signal) =>
+    req<PAMTerminal>(`/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(request),
+      signal,
+    }),
   readPAMTerminal: (sessionID, terminalID, from, waitSeconds) =>
     req<PAMTerminalOutput>(
       `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/terminals/${encodeURIComponent(terminalID)}/output?from=${from}&wait=${waitSeconds}`,

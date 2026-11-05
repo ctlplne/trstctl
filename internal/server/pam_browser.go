@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -88,12 +90,13 @@ type pamBrowser struct {
 	mu        sync.Mutex
 	tickets   map[pamBrowserKey]*pamBrowserTicket
 	terminals map[string]*pamTerminal
+	opening   map[pamBrowserKey]int
 	consoles  map[pamBrowserKey]*pamConsole
 	dial      func(ctx context.Context, addr string, caPEM []byte, spiffeID string) (net.Conn, error)
 }
 
 func newPAMBrowser() *pamBrowser {
-	return &pamBrowser{tickets: map[pamBrowserKey]*pamBrowserTicket{}, terminals: map[string]*pamTerminal{},
+	return &pamBrowser{tickets: map[pamBrowserKey]*pamBrowserTicket{}, terminals: map[string]*pamTerminal{}, opening: map[pamBrowserKey]int{},
 		consoles: map[pamBrowserKey]*pamConsole{}, dial: mtls.GatewayDial}
 }
 
@@ -130,6 +133,12 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 		!s.clock().Before(rec.ExpiresAt) {
 		return api.PAMTerminal{}, fmt.Errorf("%w: a terminal needs an active SSH or Kubernetes session through a gateway", api.ErrPAMRejected)
 	}
+	if req.SSHCommand != "" && (rec.TargetType != pamTargetSSH || len(req.SSHCommand) > accessrules.MaxSSHCommandBytes || !utf8.ValidString(req.SSHCommand) || strings.IndexByte(req.SSHCommand, 0) >= 0) {
+		return api.PAMTerminal{}, fmt.Errorf("%w: SSH command must be valid text of at most 65536 bytes on an SSH session", api.ErrPAMInvalid)
+	}
+	if rec.TargetType == pamTargetSSH && rec.CommandPolicy != nil && strings.TrimSpace(req.SSHCommand) == "" {
+		return api.PAMTerminal{}, fmt.Errorf("%w: this session requires a complete SSH exec command; interactive shell and subsystem requests are refused", api.ErrPAMInvalid)
+	}
 	if rec.TargetType == pamTargetK8s {
 		if !kubeName.MatchString(req.Namespace) || !kubeName.MatchString(req.Pod) || (req.Container != "" && !kubeName.MatchString(req.Container)) {
 			return api.PAMTerminal{}, fmt.Errorf("%w: a Kubernetes terminal names a namespace, a pod and optionally a container", api.ErrPAMInvalid)
@@ -143,13 +152,28 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 	}
 	s.browser.mu.Lock()
 	held := s.browser.tickets[pamBrowserKey{tenantID, sessionID}]
-	open := 0
+	browserKey := pamBrowserKey{tenantID, sessionID}
+	open := s.browser.opening[browserKey]
 	for _, t := range s.browser.terminals {
 		if t.tenantID == tenantID && t.sessionID == sessionID {
 			open++
 		}
 	}
+	admitted := held != nil && held.opener == principal && open < pamTerminalsPerSession
+	if admitted {
+		s.browser.opening[browserKey]++
+	}
 	s.browser.mu.Unlock()
+	if admitted {
+		defer func() {
+			s.browser.mu.Lock()
+			s.browser.opening[browserKey]--
+			if s.browser.opening[browserKey] == 0 {
+				delete(s.browser.opening, browserKey)
+			}
+			s.browser.mu.Unlock()
+		}()
+	}
 	switch {
 	case held == nil:
 		return api.PAMTerminal{}, fmt.Errorf("%w: the session was not opened for the browser", api.ErrPAMRejected)
@@ -164,6 +188,8 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 	if err != nil {
 		return api.PAMTerminal{}, fmt.Errorf("%w: the session's gateway: %v", api.ErrPAMRejected, err)
 	}
+	stopClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopClose()
 	hostKey, err := admitAtGateway(conn, sessionID, held.ticket)
 	if err != nil {
 		_ = conn.Close()
@@ -172,12 +198,20 @@ func (s *pamService) OpenPAMTerminal(ctx context.Context, tenantID, sessionID, p
 	var shell pamShell
 	if rec.TargetType == pamTargetK8s {
 		shell, err = openKubeExec(conn, req.Namespace, req.Pod, req.Container, req.Command, cols, rows)
+	} else if req.SSHCommand != "" {
+		command := []byte(req.SSHCommand)
+		shell, err = sshgateway.OpenCommand(conn, hostKey, cols, rows, command)
+		secret.Wipe(command)
 	} else {
 		shell, err = sshgateway.OpenShell(conn, hostKey, cols, rows)
 	}
 	if err != nil {
 		_ = conn.Close()
 		return api.PAMTerminal{}, fmt.Errorf("%w: %v", api.ErrPAMRejected, err)
+	}
+	if !stopClose() || ctx.Err() != nil {
+		_ = shell.Close()
+		return api.PAMTerminal{}, ctx.Err()
 	}
 	t := &pamTerminal{id: uuid.NewString(), tenantID: tenantID, sessionID: sessionID, opener: principal, shell: shell, signal: make(chan struct{})}
 	s.browser.mu.Lock()

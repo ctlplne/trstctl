@@ -15,7 +15,7 @@ import { api, type PAMAccessTemplate, type PAMCommandRule } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 // Operation names are public configuration, never arbitrary shell/SQL tokens.
-const operations = [
+const postgresOperations = [
   "ALTER",
   "ANALYZE",
   "BEGIN",
@@ -46,19 +46,59 @@ const operations = [
   "VACUUM",
   "WITH",
 ] as const;
-const schema = z.object({
-  templateID: z.string().uuid(),
-  name: z.string().trim().min(1).max(80),
-  operations: z.array(z.enum(operations)).min(1).max(32),
-  effect: z.enum(["block", "require_approval"]),
-  enabled: z.boolean(),
-  quorum: z.coerce.number().int().min(1).max(3),
-  ttl: z.coerce.number().int().min(5).max(45),
-});
+const sshOperations = [
+  "bash",
+  "chmod",
+  "chown",
+  "chpasswd",
+  "command",
+  "dd",
+  "env",
+  "exec",
+  "iptables",
+  "kill",
+  "mkfs",
+  "mount",
+  "nft",
+  "node",
+  "passwd",
+  "perl",
+  "python",
+  "python3",
+  "reboot",
+  "rm",
+  "rmdir",
+  "ruby",
+  "scp",
+  "sftp",
+  "sh",
+  "ssh",
+  "su",
+  "sudo",
+  "systemctl",
+  "umount",
+  "useradd",
+  "userdel",
+] as const;
+const operations = [...postgresOperations, ...sshOperations] as const;
+const schema = z
+  .object({
+    protocol: z.enum(["postgres", "ssh"]),
+    templateID: z.string().uuid(),
+    name: z.string().trim().min(1).max(80),
+    operations: z.array(z.enum(operations)).min(1).max(32),
+    effect: z.enum(["block", "require_approval"]),
+    enabled: z.boolean(),
+    quorum: z.coerce.number().int().min(1).max(3),
+    ttl: z.coerce.number().int().min(5).max(45),
+  })
+  .refine((v) => v.operations.every((op) => (v.protocol === "ssh" ? (sshOperations as readonly string[]) : postgresOperations).includes(op)), {
+    path: ["operations"],
+  });
 type Form = z.input<typeof schema>;
 type Values = z.output<typeof schema>;
 type Saved = { template: PAMAccessTemplate; rule: PAMCommandRule };
-const defaults: Form = { templateID: "", name: "", operations: ["DROP"], effect: "block", enabled: true, quorum: 2, ttl: 30 };
+const defaults: Form = { protocol: "postgres", templateID: "", name: "", operations: ["DROP"], effect: "block", enabled: true, quorum: 2, ttl: 30 };
 
 /** A template edit affects new sessions. Existing sessions keep their reviewed snapshot. */
 export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
@@ -85,6 +125,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
     control,
     formState: { errors },
   } = useForm<Form, unknown, Values>({ resolver: zodResolver(schema), defaultValues: defaults });
+  const protocol = useWatch({ control, name: "protocol" });
   const effect = useWatch({ control, name: "effect" });
   const rows: Saved[] = (templates.data?.items ?? []).flatMap((template) => (template.command_rules ?? []).map((rule) => ({ template, rule })));
   const begin = (row?: Saved) => {
@@ -99,6 +140,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
     reset(
       row
         ? {
+            protocol: row.rule.protocol,
             templateID: row.template.id,
             name: row.rule.name,
             operations: row.rule.operations as Values["operations"],
@@ -130,7 +172,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
       id: ruleID,
       name: v.name,
       enabled: v.enabled,
-      protocol: "postgres",
+      protocol: v.protocol,
       operations: v.operations,
       effect: v.effect,
       ...(v.effect === "require_approval" ? { required_approvals: v.quorum, review_ttl_seconds: v.ttl } : {}),
@@ -197,6 +239,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
         columns={[
           { id: "template", header: t("admin.access.folders.template"), cell: (r) => r.template.name },
           { id: "name", header: t("admin.access.rules.name"), cell: (r) => r.rule.name },
+          { id: "protocol", header: t("admin.access.rules.protocol"), cell: (r) => r.rule.protocol },
           { id: "operations", header: t("admin.access.rules.operations"), cell: (r) => r.rule.operations.join(", ") },
           {
             id: "effect",
@@ -291,7 +334,18 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
               <Field label={t("admin.access.rules.name")} required error={errors.name ? invalid : undefined}>
                 {(control) => <Input {...control} {...register("name")} />}
               </Field>
-              <p>{t("admin.access.rules.postgresOnly")}</p>
+              <Field label={t("admin.access.rules.protocol")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    {...register("protocol", { onChange: (event) => setValue("operations", [event.target.value === "ssh" ? "rm" : "DROP"]) })}
+                  >
+                    <option value="postgres">{t("admin.access.postgresql")}</option>
+                    <option value="ssh">{t("admin.access.ssh")}</option>
+                  </Select>
+                )}
+              </Field>
+              <p>{t("admin.access.rules.protocolHelp")}</p>
             </div>
           ) : step === 1 ? (
             <div className="grid gap-3">
@@ -303,7 +357,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
               >
                 {(control) => (
                   <Select {...control} multiple {...register("operations")}>
-                    {operations.map((op) => (
+                    {(protocol === "ssh" ? sshOperations : postgresOperations).map((op) => (
                       <option key={op} value={op}>
                         {op}
                       </option>

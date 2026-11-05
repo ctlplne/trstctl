@@ -535,8 +535,18 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetSSH:
-		if err := sshgateway.Serve(ctx, conn, host, s.sshKey, sshgateway.Upstream{Address: s.intent.SSHAddress,
-			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}, sshRecorder(rec)); err != nil {
+		var guards func() *sshgateway.RequestGuard
+		if s.intent.CommandPolicy != nil {
+			guards = func() *sshgateway.RequestGuard {
+				c, err := g.commandConnection(s)
+				if err != nil {
+					return &sshgateway.RequestGuard{Inspect: func(context.Context, string, []byte) bool { return false }, Reserve: func(int) (func(), bool) { return nil, false }}
+				}
+				return &sshgateway.RequestGuard{Inspect: c.sshRequest, Reserve: c.reserveFrame}
+			}
+		}
+		if err := sshgateway.ServeGuarded(ctx, conn, host, s.sshKey, sshgateway.Upstream{Address: s.intent.SSHAddress,
+			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}, sshRecorder(rec), guards); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	}

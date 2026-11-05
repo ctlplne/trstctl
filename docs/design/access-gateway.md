@@ -417,9 +417,9 @@ Enable `access.gateway.session.rules.v1` explicitly in
 `--access-gateway-listen` enabled. The gateway must report the enforcing job kind
 before a rule-bearing session opens. An old gateway cannot claim this kind;
 a policy under the ordinary session kind is refused before credential redemption.
-This first rule format accepts PostgreSQL only. SSH and the other database
-protocols remain unsupported for rules and are rejected when configuring one.
-Their ordinary sessions retain their existing behavior.
+SSH exec guardrails use a separate enforcing job kind, described below. The other
+database protocols remain unsupported for rules and are rejected when configuring
+one. Their ordinary sessions retain their existing behavior.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
 `operations`, and `effect: "block"` or `"require_approval"`. A review rule also
@@ -488,3 +488,50 @@ rejected duplicate Parse cache poisoning, two distinct human votes, self-review
 refusal, denial, expiry, disconnect, late-vote refusal and the documented bypass.
 These are local source proofs. Exact installed-image replay, broader protocol
 coverage and the deferred qualification gates remain owed.
+
+
+## SSH exec guardrails (A262)
+
+Enable `access.gateway.session.rules.ssh.v1` in
+`agent_channel.claimable_job_kinds`, upgrade the bound gateway, and wait for its
+executor report before opening a session with SSH rules. A PostgreSQL-only rule
+gateway cannot claim this SSH job kind. In the template wizard choose **SSH** and
+a direct program name such as `rm`, `chmod` or `systemctl`. API rules use
+`protocol: "ssh"` and lowercase selectors; `block` and `require_approval` retain
+the same precedence, independent quorum and short deadline as PostgreSQL rules.
+
+The guard checks each complete SSH `exec` request before forwarding it. It
+recognizes ordinary direct command positions, path basenames, quoting, escapes,
+assignments, batches and pipelines. Arguments and quoted nested programs never
+become operation facts. Uninspectable frames and here-documents are refused.
+A ruled session refuses interactive `shell`, `subsystem` and `env` requests;
+it does not pretend to filter keystrokes in an interactive shell. Ordinary SSH
+sessions retain their interactive terminal and subsystem support.
+
+A stock client can use `trstctl-cli access connect SESSION_ID` and the printed SSH
+command, adding its remote command. A browser session presents an **SSH command**
+form. The existing terminal endpoint accepts `ssh_command` (a complete command,
+up to 64 KiB), then returns the command's output and exit status. A matching review
+rule holds startup while the action list shows the exact occurrence, deadline and
+approval link. Closing during review cancels the held action. Closing after
+forwarding cannot undo an action that may already have run. Closing stdin alone
+is not cancellation: stock exec clients commonly do that before a command ends.
+
+This is a guardrail, not shell containment. `sh -c 'rm /owned/file'` hides `rm`
+inside an argument and bypasses an `rm` rule; the same real target login is used
+in the served bypass proof. Scripts, aliases, functions, command substitutions,
+dynamically constructed program names, wrappers such as `sudo` or `env`, and
+commands typed into an already started interactive program can also evade a
+specific direct selector. Operators can add interpreter/wrapper selectors, but
+only target permissions, restricted accounts and an appropriate target execution
+environment provide containment. Program stdin is data, not another command
+review input. An authorization record proves permission to forward the occurrence,
+not successful target execution.
+
+The target certificate/key and upstream sign-in never pass through this callback.
+The control plane receives only configured public operation classes, rule/session
+identifiers and digests. Channel count, queued requests, frame bytes and review
+calls are bounded; queued frames reserve the shared target/protocol byte budget
+before entering the queue. A disconnect cancels review without waiting for the
+human deadline. Refused requests leave a fixed recording marker rather than a
+recorded claim that the original command executed.

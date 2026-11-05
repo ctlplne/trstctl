@@ -12363,6 +12363,7 @@ PAMTerminalRequest = TypedDict(
         'namespace': str,
         'pod': str,
         'rows': int,
+        'ssh_command': str,
     },
     total=False,
 )

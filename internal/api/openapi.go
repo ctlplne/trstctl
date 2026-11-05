@@ -8966,7 +8966,7 @@ func componentSchemas() map[string]*Schema {
 			"command_tag": str(), "truncated": {Type: "boolean"},
 			"error": object(map[string]*Schema{"code": {Type: "string", Description: "the database's SQLSTATE"}, "message": str()}, "code", "message"),
 		}, "columns", "rows"),
-		"PAMTerminalRequest": object(map[string]*Schema{"cols": {Type: "integer"}, "rows": {Type: "integer"},
+		"PAMTerminalRequest": object(map[string]*Schema{"ssh_command": {Type: "string", Description: "SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence."}, "cols": {Type: "integer"}, "rows": {Type: "integer"},
 			"namespace": {Type: "string", Description: "Kubernetes sessions: the pod's namespace"}, "pod": {Type: "string", Description: "Kubernetes sessions: the pod to exec into"},
 			"container": {Type: "string", Description: "Kubernetes sessions: the container (default: the pod's only one)"},
 			"command":   {Type: "array", Items: str(), Description: "Kubernetes sessions: the command to run (default sh), at most 16 arguments"},

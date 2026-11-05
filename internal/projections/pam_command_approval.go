@@ -50,7 +50,7 @@ func ValidatePAMCommandApprovalRequested(p ApprovalRequested) error {
 	if len(ops) < 1 || len(ops) > accessrules.MaxOperations || !slices.IsSorted(ops) {
 		return invalid
 	}
-	known := accessrules.PostgresOperationNames()
+	known := accessrules.AllOperationNames()
 	for i, op := range ops {
 		if !slices.Contains(known, op) || i > 0 && op == ops[i-1] {
 			return invalid

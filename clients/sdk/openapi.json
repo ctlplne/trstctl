@@ -39111,7 +39111,39 @@
                 "TRUNCATE",
                 "UPDATE",
                 "VACUUM",
-                "WITH"
+                "WITH",
+                "bash",
+                "chmod",
+                "chown",
+                "chpasswd",
+                "command",
+                "dd",
+                "env",
+                "exec",
+                "iptables",
+                "kill",
+                "mkfs",
+                "mount",
+                "nft",
+                "node",
+                "passwd",
+                "perl",
+                "python",
+                "python3",
+                "reboot",
+                "rm",
+                "rmdir",
+                "ruby",
+                "scp",
+                "sftp",
+                "sh",
+                "ssh",
+                "su",
+                "sudo",
+                "systemctl",
+                "umount",
+                "useradd",
+                "userdel"
               ],
               "type": "string"
             },
@@ -39261,7 +39293,7 @@
             "type": "string"
           },
           "operations": {
-            "description": "Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched",
+            "description": "Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded",
             "items": {
               "enum": [
                 "ALTER",
@@ -39292,7 +39324,39 @@
                 "TRUNCATE",
                 "UPDATE",
                 "VACUUM",
-                "WITH"
+                "WITH",
+                "bash",
+                "chmod",
+                "chown",
+                "chpasswd",
+                "command",
+                "dd",
+                "env",
+                "exec",
+                "iptables",
+                "kill",
+                "mkfs",
+                "mount",
+                "nft",
+                "node",
+                "passwd",
+                "perl",
+                "python",
+                "python3",
+                "reboot",
+                "rm",
+                "rmdir",
+                "ruby",
+                "scp",
+                "sftp",
+                "sh",
+                "ssh",
+                "su",
+                "sudo",
+                "systemctl",
+                "umount",
+                "useradd",
+                "userdel"
               ],
               "type": "string"
             },
@@ -39300,7 +39364,8 @@
           },
           "protocol": {
             "enum": [
-              "postgres"
+              "postgres",
+              "ssh"
             ],
             "type": "string"
           },
@@ -40083,7 +40148,7 @@
             "type": "string"
           },
           "operations": {
-            "description": "Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched",
+            "description": "Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded",
             "items": {
               "enum": [
                 "ALTER",
@@ -40114,7 +40179,39 @@
                 "TRUNCATE",
                 "UPDATE",
                 "VACUUM",
-                "WITH"
+                "WITH",
+                "bash",
+                "chmod",
+                "chown",
+                "chpasswd",
+                "command",
+                "dd",
+                "env",
+                "exec",
+                "iptables",
+                "kill",
+                "mkfs",
+                "mount",
+                "nft",
+                "node",
+                "passwd",
+                "perl",
+                "python",
+                "python3",
+                "reboot",
+                "rm",
+                "rmdir",
+                "ruby",
+                "scp",
+                "sftp",
+                "sh",
+                "ssh",
+                "su",
+                "sudo",
+                "systemctl",
+                "umount",
+                "useradd",
+                "userdel"
               ],
               "type": "string"
             },
@@ -40122,7 +40219,8 @@
           },
           "protocol": {
             "enum": [
-              "postgres"
+              "postgres",
+              "ssh"
             ],
             "type": "string"
           },
@@ -41162,6 +41260,10 @@
           },
           "rows": {
             "type": "integer"
+          },
+          "ssh_command": {
+            "description": "SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence.",
+            "type": "string"
           }
         },
         "required": [

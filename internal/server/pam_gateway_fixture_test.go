@@ -140,7 +140,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	}
 	kinds := []string{relay.KindAccessGatewaySession}
 	if opts.commandRules {
-		kinds = append(kinds, relay.KindAccessGatewayRulesSession)
+		kinds = append(kinds, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession)
 	}
 	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, kinds, eventOptions, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
@@ -199,7 +199,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	h := f.h
 	beat := &transport.HeartbeatRequest{AgentID: h.agent, Version: "a255", Status: "active"}
 	if opts.commandRules {
-		beat.Executors = &transport.ExecutorReport{Version: "a262", Kinds: []transport.ExecutorKind{{Kind: relay.KindAccessGatewaySession}, {Kind: relay.KindAccessGatewayRulesSession}}}
+		beat.Executors = &transport.ExecutorReport{Version: "a262", Kinds: []transport.ExecutorKind{{Kind: relay.KindAccessGatewaySession}, {Kind: relay.KindAccessGatewayRulesSession}, {Kind: relay.KindAccessGatewaySSHRulesSession}}}
 	}
 	if _, err := h.client.Heartbeat(context.Background(), beat); err != nil {
 		t.Fatal(err)

@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow, Num } from "@/components/typography";
+import { SSHCommandConsole } from "@/components/access/SSHCommandConsole";
 import { BrowserTerminal } from "@/components/access/BrowserTerminal";
 import { PodTerminal } from "@/components/access/PodTerminal";
 import { SqlConsole } from "@/components/access/SqlConsole";
@@ -1410,7 +1411,9 @@ function PAMFormDialog({
           </DetailRow>
           <DetailRow term={t("admin.access.expires")}>{formatOptionalDate(created.expires_at, formatPolicy)}</DetailRow>
           {browser && created.target_type === "ssh" ? (
-            terminalOpen ? (
+            created.command_policy?.rules.length ? (
+              <SSHCommandConsole sessionID={created.id} />
+            ) : terminalOpen ? (
               <BrowserTerminal sessionID={created.id} onClose={() => setTerminalOpen(false)} />
             ) : (
               <Button type="button" size="sm" onClick={() => setTerminalOpen(true)}>
