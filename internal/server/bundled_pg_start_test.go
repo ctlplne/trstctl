@@ -100,6 +100,34 @@ func TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp(t *tes
 	}
 }
 
+// CI-L47: an archive directory outside the cache root, read-only, is the
+// archive's source; the authenticated fixture reaches its initializer from it
+// with nothing downloaded.
+func TestBundledPostgresArchiveDirIsAReadOnlySource(t *testing.T) {
+	root, _ := bundledPGTestRoot(t)
+	t.Setenv("TMPDIR", root)
+	source := t.TempDir()
+	setBundledPGFixturePin(t, bundledPGHarmlessArchive)
+	if err := os.WriteFile(bundledPGCacheArchive(source), bundledPGHarmlessArchive, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(source, 0500); err != nil { // #nosec G302 -- the source is read-only, as a mount another user owns would be (CWE-732)
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(source, 0700) }) // #nosec G302 -- let TempDir remove it (CWE-732)
+	t.Setenv("TRSTCTL_BUNDLED_PG_ARCHIVE_DIR", source)
+	if got := bundledPGArchiveDir(root); got != source {
+		t.Fatalf("archive dir = %q, want %q", got, source)
+	}
+	_, stop, err := startBundledPostgres(config.Postgres{DataDir: filepath.Join(root, "data"), Port: bundledPGTestPort(t)})
+	if err == nil || stop != nil || !strings.Contains(err.Error(), "verified harmless fixture") || !strings.Contains(err.Error(), "exit status 86") {
+		t.Fatalf("the archive dir's fixture did not reach the initializer: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "trstctl-pg-bin")); !os.IsNotExist(err) {
+		t.Fatalf("the cache root's own archive source was used or created: %v", err)
+	}
+}
+
 // A real committed pin must reject a mismatched archive before an adjacent
 // cached executable can run. This path needs no network or synthetic pin.
 func TestBundledPostgresRejectsMismatchedArchiveBeforeCachedInit(t *testing.T) {

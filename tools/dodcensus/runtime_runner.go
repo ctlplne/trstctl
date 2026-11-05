@@ -516,6 +516,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 		"--mount", "type=bind,src="+groupFile+",dst=/etc/group,readonly",
 	)
 	dockerArgs = append(dockerArgs, runtimeRunnerScratchArgs(receiptDir, uid, gid)...)
+	dockerArgs = append(dockerArgs, runtimeRunnerPGArchiveArgs(filepath.Join(os.TempDir(), "trstctl-pg-bin"))...)
 	dockerArgs = append(dockerArgs, runtimeRunnerGoEnvironment(profile, cacheDir)...)
 	dockerArgs = append(dockerArgs,
 		"--env", "DOCKER_HOST=unix:///var/run/docker.sock",
@@ -611,6 +612,26 @@ func runtimeRunnerScratchArgs(receiptDir string, uid, gid uint32) []string {
 		"--env", dodproof.RuntimeExecRootEnv + "=" + dodproof.RuntimeExecDir,
 	}
 }
+
+// runtimeRunnerPGArchiveArgs offers the host's cached bundled-PostgreSQL
+// archive (scripts/ci/seed-bundled-pg-archive.sh puts the CI cache's copy at
+// $TMPDIR/trstctl-pg-bin) to the proof process as a read-only archive source.
+// Without it every census shard downloaded the archive from the Maven mirror,
+// and parallel shards drew HTTP 429 (CI-L47). The process authenticates the
+// archive against the committed SHA-256 and trusts nothing else in it.
+func runtimeRunnerPGArchiveArgs(hostDir string) []string {
+	info, err := os.Lstat(hostDir)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	return []string{
+		"--mount", "type=bind,src=" + hostDir + ",dst=" + runtimeRunnerPGArchiveDir + ",readonly",
+		"--env", "TRSTCTL_BUNDLED_PG_ARCHIVE_DIR=" + runtimeRunnerPGArchiveDir,
+	}
+}
+
+// runtimeRunnerPGArchiveDir is where the proof process sees that archive.
+const runtimeRunnerPGArchiveDir = "/dod-pg-archive"
 
 func runtimeRunnerGoEnvironment(profile BuildProfile, cacheDir string) []string {
 	values := []string{

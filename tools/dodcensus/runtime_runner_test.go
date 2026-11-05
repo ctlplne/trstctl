@@ -135,6 +135,29 @@ func TestRuntimeRunnerScratchMountsBoundedTmpfsAndShortReceiptAlias(t *testing.T
 	}
 }
 
+// CI-L47: the host's cached PostgreSQL archive is offered read-only, and only
+// when it exists.
+func TestRuntimeRunnerOffersTheHostPGArchiveReadOnly(t *testing.T) {
+	if got := runtimeRunnerPGArchiveArgs(filepath.Join(t.TempDir(), "absent")); got != nil {
+		t.Fatalf("an absent archive dir was mounted: %v", got)
+	}
+	dir := t.TempDir()
+	want := []string{
+		"--mount", "type=bind,src=" + dir + ",dst=/dod-pg-archive,readonly",
+		"--env", "TRSTCTL_BUNDLED_PG_ARCHIVE_DIR=/dod-pg-archive",
+	}
+	if got := runtimeRunnerPGArchiveArgs(dir); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("archive args = %v, want exact %v", got, want)
+	}
+	file := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := runtimeRunnerPGArchiveArgs(file); got != nil {
+		t.Fatalf("a file was mounted as the archive dir: %v", got)
+	}
+}
+
 func TestRuntimeRunnerGoEnvironmentIsClosedAndOffline(t *testing.T) {
 	profile := BuildProfile{CGOEnabled: "0", GOOS: "linux", GOARCH: "amd64"}
 	got := runtimeRunnerGoEnvironment(profile, "/private/cache")

@@ -68,7 +68,7 @@ func startBundledPostgresWith(cfg config.Postgres, extraParams map[string]string
 	}
 
 	cacheRoot := bundledPGCacheRoot()
-	legacyArchive := bundledPGCacheArchive(filepath.Join(cacheRoot, "trstctl-pg-bin"))
+	legacyArchive := bundledPGCacheArchive(bundledPGArchiveDir(cacheRoot))
 	cache, err := embeddedpostgres.OpenVerifiedCache(cacheRoot, "trstctl-pg-archives", identity.OS+"-"+identity.Arch+"-"+string(identity.Version)+"-"+identity.SHA256)
 	if err != nil {
 		return "", "", nil, err
@@ -137,6 +137,20 @@ func bundledPGCacheRoot() string {
 		return root
 	}
 	return os.TempDir()
+}
+
+// bundledPGArchiveDir is where an existing archive is looked for before any
+// download: TRSTCTL_BUNDLED_PG_ARCHIVE_DIR, or trstctl-pg-bin under the cache
+// root. The archive there is read, authenticated against the committed
+// SHA-256 and copied into the verified cache; nothing in the directory is
+// trusted, so it may be a read-only mount another user owns (CI-L47: the DoD
+// runner offers the host's cached archive this way instead of every census
+// shard downloading it).
+func bundledPGArchiveDir(cacheRoot string) string {
+	if dir := os.Getenv("TRSTCTL_BUNDLED_PG_ARCHIVE_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(cacheRoot, "trstctl-pg-bin")
 }
 
 // bundledPGArchiveIdentity is the served trust authority. Empty or unsupported

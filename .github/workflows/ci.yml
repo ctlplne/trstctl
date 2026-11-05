@@ -3228,3 +3228,14 @@ jobs:
         if: failure()
         working-directory: .
         run: docker compose -f deploy/demo/docker-compose.yml logs --no-color --tail=300
+
+      - name: Demo seed diagnostic on failure
+        # CI-L46: the seed keeps its logs credential-free and writes its
+        # failure, redacted and bounded (deploy/demo/seed.mjs
+        # redactSeedDiagnostic), to its mode-0600 seed-state volume. Read it
+        # back as the seed's own uid with the seed image's node.
+        if: failure()
+        working-directory: .
+        run: |
+          docker compose -f deploy/demo/docker-compose.yml run --rm --no-deps --entrypoint node demo-seed \
+            -e "const fs=require('fs'),f='/seed-state/last-error.txt';process.stdout.write(fs.existsSync(f)?fs.readFileSync(f,'utf8'):'no seed diagnostic recorded\n')" || true
