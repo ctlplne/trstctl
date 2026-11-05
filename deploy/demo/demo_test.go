@@ -1059,7 +1059,7 @@ func TestDemoSeedCheckModeCoversHistoryAndSurfaces(t *testing.T) {
 func TestDemoSeedPreparesTruthfulConnectorPitchTargets(t *testing.T) {
 	body := read(t, "seed.mjs")
 	for _, want := range []string{
-		`const seedVersion = "demo-seed-v3"`,
+		`const seedVersion = "demo-seed-v4"`,
 		`name: "Apache payments web tier (prepared, not contacted)"`,
 		`name: "IIS customer portal (prepared, not contacted)"`,
 		`name: "F5 edge HA pair (prepared, API-double proof only)"`,

@@ -13,8 +13,8 @@ if (!["https:", "http:"].includes(serverURL.protocol) || serverURL.username || s
 const server = serverURL.origin;
 const demoURL = process.env.TRSTCTL_DEMO_URL || "https://127.0.0.1:9443";
 const bootstrapTokenFile = process.env.TRSTCTL_DEMO_BOOTSTRAP_TOKEN_FILE || "/seed-state/bootstrap.token";
-const seedVersion = "demo-seed-v3";
-const migratableSeedVersions = new Set(["demo-seed-v1", "demo-seed-v2"]);
+const seedVersion = "demo-seed-v4";
+const migratableSeedVersions = new Set(["demo-seed-v1", "demo-seed-v2", "demo-seed-v3"]);
 const seedCheckpointSubject = "trstctl-demo-seed-checkpoint";
 const seedDiagnosticFile = "/seed-state/last-error.txt";
 const demoDiscoverySegment = {
@@ -149,7 +149,10 @@ function buildDemoHistory() {
     { key: "mobile-mdm", ownerKey: "mobile", name: "mdm-scep.demo.trstctl.local", targetState: "deployed", profile: "scep-intune-mobile-7d", protocol: "scep", deployment: "intune/profile/mobile-mdm", connector: "intune", daysAgo: 84 },
     { key: "iot-est-gateway", ownerKey: "iot", name: "iot-est-gateway.demo.trstctl.local", targetState: "deployed", profile: "est-serverkeygen-iot-24h", protocol: "est", deployment: "factory-floor/gateway-17", connector: "caddy", daysAgo: 63 },
     { key: "warehouse-mtls", ownerKey: "data", name: "warehouse-mtls.demo.trstctl.local", targetState: "deployed", profile: "service-mtls-30d", protocol: "acme", deployment: "warehouse/envoy/mtls", connector: "envoy", daysAgo: 41 },
-    { key: "shadow-cleanup", ownerKey: "security", name: "shadow-cleanup.demo.trstctl.local", targetState: "revoked", profile: "acme-trust-authenticated-90d", protocol: "acme", deployment: "secops/remediation/shadow-cleanup", connector: "shell-ca", daysAgo: 16, revocationReason: "privilegeWithdrawn" },
+    // The seed issues every identity through the API, so each is bound to a
+    // profile that permits API enrollment; acme-trust-authenticated-90d
+    // permits ACME only and refuses it (v4).
+    { key: "shadow-cleanup", ownerKey: "security", name: "shadow-cleanup.demo.trstctl.local", targetState: "revoked", profile: "service-mtls-30d", protocol: "acme", deployment: "secops/remediation/shadow-cleanup", connector: "shell-ca", daysAgo: 16, revocationReason: "privilegeWithdrawn" },
     { key: "apache-pitch", ownerKey: "payments", name: "apache-payments.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "apache-payments:/etc/apache2/tls", preparedConnector: "apache", daysAgo: 42 },
     { key: "iis-pitch", ownerKey: "platform", name: "iis-portal.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "iis-portal:WebHosting/*:443", preparedConnector: "iis", daysAgo: 35 },
     { key: "f5-pitch", ownerKey: "edge", name: "edge.demo.trstctl.local", targetState: "issued", profile: "service-mtls-30d", protocol: "acme", deployment: "f5-edge:/Common/demo-edge-clientssl", preparedConnector: "f5", daysAgo: 29 },
