@@ -501,6 +501,23 @@ secret (`POST /api/v1/secrets/rotation-schedules` with the target's provider and
 sessions opened after a rotation sign in with the new credential, and the old one stops
 working.
 
+When someone needs the vaulted credential itself, check it out. The request names the
+target, a reason and how long the credential may live; reviewers other than the requester
+approve it, and then the requester reveals it once (the console shows it in a dialog that
+forgets it when closed). Checking it in rotates the account so the revealed credential stops
+working; if nobody checks it in, its deadline does the same:
+
+```sh
+trstctl-cli access checkouts request -f checkout.json      # {"request_id": ..., "target_type": "postgres",
+                                                            #  "target_id": "orders-vault", "reason": ..., "ttl_seconds": 900}
+trstctl-cli access checkouts reveal <request-id> -f approval.json   # {"approval_request_id": ..., "intent_digest": ...}
+trstctl-cli access checkouts checkin <request-id>
+```
+
+An account whose rotation mints a new principal (rather than switching between two accounts or
+changing one in place) can be checked out only after its first rotation, so what is revealed is
+always something a rotation can retire.
+
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`
 (A257). Give the agent's access bundle the accounts its task needs (`access_targets` on the
 bundle, with `access:sessions.open`), grant the bundle to the agent's ID and mint it a run;

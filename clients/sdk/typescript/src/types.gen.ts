@@ -178,6 +178,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/checkouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List check-outs of vaulted accounts, newest first */
+        get: operations["listPAMCheckouts"];
+        put?: never;
+        /** Request independent review of checking out a vaulted account's credential */
+        post: operations["requestPAMCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/checkouts/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a check-out */
+        get: operations["getPAMCheckout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/checkouts/{request_id}/checkin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check a check-out in (your own with access:sessions.open; anyone's with access:write): the account is rotated so the revealed credential stops working */
+        post: operations["checkInPAMCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/checkouts/{request_id}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal an approved check-out's credential once to its requester; checking in or its deadline rotates it */
+        post: operations["revealPAMCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/accounts": {
         parameters: {
             query?: never;
@@ -21350,6 +21419,66 @@ export interface components {
             /** @enum {string} */
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
         };
+        PAMCheckout: {
+            account_secret: string;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            ended_at?: string;
+            ended_by?: string;
+            /** Format: date-time */
+            expires_at: string;
+            provider_id: string;
+            reason: string;
+            /** Format: uuid */
+            request_id: string;
+            requested_by: string;
+            /** Format: date-time */
+            revealed_at: string;
+            rotation_command_id?: string;
+            secret_version: number;
+            /** @enum {string} */
+            status: "revealed" | "checked_in" | "expired";
+            target_id: string;
+            target_type: string;
+        };
+        PAMCheckoutList: {
+            items: components["schemas"]["PAMCheckout"][];
+        };
+        PAMCheckoutRequest: {
+            reason: string;
+            /** Format: uuid */
+            request_id: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "postgres" | "mysql";
+            /** @description how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session */
+            ttl_seconds: number;
+        };
+        PAMCheckoutReveal: {
+            checkout: components["schemas"]["PAMCheckout"];
+            /** @description the vaulted account's credential, shown once; checking in or the deadline rotates it */
+            credential: string;
+        };
+        PAMCheckoutRevealRequest: {
+            /** Format: uuid */
+            approval_request_id: string;
+            /** @description the approval's intent digest */
+            intent_digest: string;
+        };
+        PAMCheckoutReview: {
+            approval_count: number;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+            required_approvals: number;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+        };
         PAMDiscoveredAccount: {
             /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
             details?: {
@@ -26688,6 +26817,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessBundleGrantChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMCheckouts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCheckoutList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestPAMCheckout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCheckoutReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMCheckout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCheckout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    checkInPAMCheckout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCheckout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revealPAMCheckout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMCheckoutRevealRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCheckoutReveal"];
                 };
             };
             /** @description client error */

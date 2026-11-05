@@ -5897,6 +5897,136 @@ export const messages = {
     defaultMessage: "Close",
     description: "Button closing a discovery dialog (A260).",
   },
+  "admin.access.checkout.heading": {
+    defaultMessage: "Vaulted account check-outs",
+    description: "Heading of the vaulted-account check-out panel (A261).",
+  },
+  "admin.access.checkout.description": {
+    defaultMessage:
+      "A check-out shows a vaulted account's credential once to its requester after review by others. Checking it in, or its deadline passing, rotates the account so the revealed credential stops working.",
+    description: "Description of the check-out panel (A261).",
+  },
+  "admin.access.checkout.failed": {
+    defaultMessage: "The check-out action failed",
+    description: "Error title in the check-out panel (A261).",
+  },
+  "admin.access.checkout.loading": {
+    defaultMessage: "Loading check-outs",
+    description: "Loading state of the check-out list (A261).",
+  },
+  "admin.access.checkout.none": {
+    defaultMessage: "No check-outs yet",
+    description: "Empty state of the check-out list (A261).",
+  },
+  "admin.access.checkout.noVaulted": {
+    defaultMessage: "No vaulted accounts are registered",
+    description: "Shown when no vaulted target can be checked out (A261).",
+  },
+  "admin.access.checkout.table": {
+    defaultMessage: "Check-outs",
+    description: "Accessible name of the check-out table (A261).",
+  },
+  "admin.access.checkout.requestHeading": {
+    defaultMessage: "Check out a vaulted account",
+    description: "Accessible name of the check-out request form (A261).",
+  },
+  "admin.access.checkout.account": {
+    defaultMessage: "Account",
+    description: "Column and field label for the vaulted account (A261).",
+  },
+  "admin.access.checkout.chooseAccount": {
+    defaultMessage: "Choose a vaulted account",
+    description: "Placeholder option of the vaulted account picker (A261).",
+  },
+  "admin.access.checkout.accountOption": {
+    defaultMessage: "{target} ({kind}, {account})",
+    description: "A vaulted account in the picker: target, type and account secret (A261).",
+  },
+  "admin.access.checkout.reason": {
+    defaultMessage: "Reason",
+    description: "Reason field of a check-out request (A261).",
+  },
+  "admin.access.checkout.lifetime": {
+    defaultMessage: "Lifetime",
+    description: "Lifetime field of a check-out request (A261).",
+  },
+  "admin.access.checkout.minutes": {
+    defaultMessage: "{minutes, plural, one {# minute} other {# minutes}}",
+    description: "A check-out lifetime option (A261).",
+  },
+  "admin.access.checkout.requestReview": {
+    defaultMessage: "Request review",
+    description: "Button requesting a check-out's review (A261).",
+  },
+  "admin.access.checkout.requested": {
+    defaultMessage: "Check-out requested: waiting for {count, plural, one {# approval} other {# approvals}} from reviewers other than you.",
+    description: "Notice after a check-out is requested (A261).",
+  },
+  "admin.access.checkout.awaitingReview": {
+    defaultMessage:
+      "Waiting for {count, plural, one {# approval} other {# approvals}} from reviewers other than you. Reveal the credential once approved; it is shown once.",
+    description: "Status of a requested check-out (A261).",
+  },
+  "admin.access.checkout.reveal": {
+    defaultMessage: "Reveal credential",
+    description: "Button revealing an approved check-out's credential (A261).",
+  },
+  "admin.access.checkout.cancel": {
+    defaultMessage: "Set aside",
+    description: "Button hiding a pending check-out request (A261).",
+  },
+  "admin.access.checkout.requestedBy": {
+    defaultMessage: "Requested by",
+    description: "Column of the check-out table (A261).",
+  },
+  "admin.access.checkout.state": {
+    defaultMessage: "State",
+    description: "Column of the check-out table (A261).",
+  },
+  "admin.access.checkout.actions": {
+    defaultMessage: "Actions",
+    description: "Column of the check-out table (A261).",
+  },
+  "admin.access.checkout.stateRevealed": {
+    defaultMessage: "Revealed; rotates at {deadline} unless checked in first",
+    description: "State of a revealed check-out (A261).",
+  },
+  "admin.access.checkout.statePastDeadline": {
+    defaultMessage: "Past its deadline; rotation pending",
+    description: "State of a check-out past its deadline that is not yet ended (A261).",
+  },
+  "admin.access.checkout.stateCheckedIn": {
+    defaultMessage: "Checked in by {actor}; account rotated",
+    description: "State of a checked-in check-out (A261).",
+  },
+  "admin.access.checkout.stateExpired": {
+    defaultMessage: "Reached its deadline; account rotated",
+    description: "State of an expired check-out (A261).",
+  },
+  "admin.access.checkout.checkIn": {
+    defaultMessage: "Check in {target}",
+    description: "Button checking a check-out in (A261).",
+  },
+  "admin.access.checkout.checkedInNotice": {
+    defaultMessage: "Checked in {target}: the account is being rotated so the revealed credential stops working.",
+    description: "Notice after a check-in (A261).",
+  },
+  "admin.access.checkout.revealTitle": {
+    defaultMessage: "Credential for {target}",
+    description: "Title of the dialog showing a revealed credential (A261).",
+  },
+  "admin.access.checkout.revealDescription": {
+    defaultMessage: "Shown once. Checking in, or the deadline at {deadline}, rotates the account so this credential stops working.",
+    description: "Description of the revealed-credential dialog (A261).",
+  },
+  "admin.access.checkout.credentialLabel": {
+    defaultMessage: "credential",
+    description: "Accessible name of the revealed credential for its copy button (A261).",
+  },
+  "admin.access.checkout.close": {
+    defaultMessage: "Close",
+    description: "Button closing the revealed-credential dialog (A261).",
+  },
   "admin.access.openTerminal": {
     defaultMessage: "Open terminal",
     description: "Button opening a browser terminal on a privileged SSH session or in a pod on a Kubernetes session (A259).",

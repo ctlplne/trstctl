@@ -354,6 +354,8 @@ const (
 	EventPAMDiscoveryRunCompleted                 = "pam.discovery.run_completed"
 	EventPAMDiscoveryImported                     = "pam.discovery.imported"
 	EventPAMDiscoveryDismissed                    = "pam.discovery.dismissed"
+	EventPAMCheckoutRevealed                      = "pam.checkout.revealed"
+	EventPAMCheckoutEnded                         = "pam.checkout.ended"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4553,6 +4555,33 @@ type PAMDiscoveryDismissed struct {
 	At         time.Time `json:"at"`
 }
 
+// PAMCheckoutRevealed records a vaulted account's credential revealed once to
+// its requester after independent review (A261 part 2); it consumes the
+// approval and never carries the credential.
+type PAMCheckoutRevealed struct {
+	RequestID     string                     `json:"request_id"`
+	TargetType    string                     `json:"target_type"`
+	TargetID      string                     `json:"target_id"`
+	ProviderID    string                     `json:"provider_id"`
+	AccountSecret string                     `json:"account_secret"`
+	SecretVersion int                        `json:"secret_version"`
+	Reason        string                     `json:"reason"`
+	ExpiresAt     time.Time                  `json:"expires_at"`
+	Approval      store.OperationApprovalUse `json:"approval"`
+	Actor         string                     `json:"actor"`
+	At            time.Time                  `json:"at"`
+}
+
+// PAMCheckoutEnded records a check-out checked in or past its deadline, with
+// the rotation queued to retire the revealed credential (A261 part 2).
+type PAMCheckoutEnded struct {
+	RequestID         string    `json:"request_id"`
+	Status            string    `json:"status"`
+	RotationCommandID string    `json:"rotation_command_id"`
+	Actor             string    `json:"actor"`
+	At                time.Time `json:"at"`
+}
+
 // PAMRecordingLegalHold places or releases a legal hold on a recording.
 type PAMRecordingLegalHold struct {
 	ID     string    `json:"id"`
@@ -5199,6 +5228,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMDiscoveryRunCompleted:                 {1: true},
 	EventPAMDiscoveryImported:                     {1: true},
 	EventPAMDiscoveryDismissed:                    {1: true},
+	EventPAMCheckoutRevealed:                      {1: true},
+	EventPAMCheckoutEnded:                         {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8659,6 +8690,31 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				Kind: a.Kind, Privileges: a.Privileges})
 		}
 		return p.store.ApplyPAMDiscoveryImportedTx(ctx, tx, e.TenantID, imp)
+	case EventPAMCheckoutRevealed:
+		var pl PAMCheckoutRevealed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || pl.TargetType == "" || pl.TargetID == "" || pl.ProviderID == "" || pl.AccountSecret == "" || pl.SecretVersion < 1 || pl.Reason == "" ||
+			pl.Actor == "" || pl.At.IsZero() || pl.ExpiresAt.IsZero() || pl.Approval.ResourceKind != "pam_checkout" ||
+			pl.Approval.ResourceID != "pam-checkout:"+pl.RequestID || pl.Approval.Action != "reveal" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time); err != nil {
+			return err
+		}
+		return p.store.ApplyPAMCheckoutRevealedTx(ctx, tx, e.TenantID, store.PAMCheckout{RequestID: pl.RequestID, TargetType: pl.TargetType,
+			TargetID: pl.TargetID, ProviderID: pl.ProviderID, AccountSecret: pl.AccountSecret, SecretVersion: pl.SecretVersion, RequestedBy: pl.Actor, Reason: pl.Reason,
+			ApprovalRequestID: pl.Approval.RequestID, RevealedAt: pl.At, ExpiresAt: pl.ExpiresAt})
+	case EventPAMCheckoutEnded:
+		var pl PAMCheckoutEnded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || (pl.Status != "checked_in" && pl.Status != "expired") || pl.RotationCommandID == "" || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMCheckoutEndedTx(ctx, tx, e.TenantID, pl.RequestID, pl.Status, pl.Actor, pl.RotationCommandID, pl.At)
 	case EventPAMDiscoveryDismissed:
 		var pl PAMDiscoveryDismissed
 		if err := decode(e, &pl); err != nil {

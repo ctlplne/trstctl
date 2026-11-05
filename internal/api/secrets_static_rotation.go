@@ -640,3 +640,90 @@ func staticRotationLiveRef(cmd store.SecretStaticRotationCommand) string {
 	}
 	return ""
 }
+
+// vaultedAccountRotationKey is the static rotation idempotency key of one
+// check-out (A261 part 2): its check-in and its deadline queue one command.
+func vaultedAccountRotationKey(requestID string) string { return "pam-checkout:" + requestID }
+
+// vaultedAccountPredecessor is the credential a vaulted account's next
+// rotation retires: the live one the last command left, else — before any
+// rotation — the account its secret signs in as now (a two-account role), or
+// nothing to name when issuing the successor itself invalidates the
+// predecessor (an in-place, single-phase role). A role whose rotation mints a
+// new principal cannot retire a credential it did not mint, so a check-out
+// of it waits for its first rotation.
+func (a *API) vaultedAccountPredecessor(ctx context.Context, tenantID, providerID, key, currentAccount string) (string, error) {
+	provider, _, err := a.staticRotationProvider(tenantID, providerID, key)
+	if err != nil {
+		return "", err
+	}
+	latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, key)
+	switch {
+	case err != nil:
+		return "", err
+	case found && !latest.Terminal():
+		return "", errStatus(http.StatusConflict, staticRotationInFlightDetail)
+	case found && latest.Phase == store.SecretStaticRotationRollbackFailed:
+		return "", errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
+	}
+	if live := staticRotationLiveRef(latest); found && live != "" {
+		return live, nil
+	}
+	if pair, ok := staticRotationTwoUserAccounts(provider, key); ok {
+		if currentAccount != pair[0] && currentAccount != pair[1] {
+			return "", errStatus(http.StatusConflict, fmt.Sprintf(staticRotationTwoUserOldRefDetail, pair[0], pair[1]))
+		}
+		return currentAccount, nil
+	}
+	if staticRotationPhase(provider, key) == dynsecret.RotationSinglePhase {
+		return staticRotationNoPredecessor, nil
+	}
+	return "", errStatus(http.StatusConflict, "this vaulted account has not been rotated yet: its first rotation must run before a check-out, so checking in can retire what was revealed")
+}
+
+// CheckVaultedAccountRotation says whether a check-out of a vaulted account
+// could be retired by a rotation now.
+func (a *API) CheckVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount string) error {
+	if a.secrets == nil {
+		return errStatus(http.StatusServiceUnavailable, staticRotationProviderUnavailableDetail)
+	}
+	_, err := a.vaultedAccountPredecessor(ctx, tenantID, providerID, key, currentAccount)
+	return err
+}
+
+// QueueVaultedAccountRotation queues the static rotation that retires a
+// check-out's revealed credential (A261 part 2), at its check-in or deadline,
+// and returns the command's ID. The check-out names the command: a retry, or
+// the deadline racing a check-in, finds the one command already queued.
+func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error) {
+	if a.secrets == nil {
+		return "", errStatus(http.StatusServiceUnavailable, staticRotationProviderUnavailableDetail)
+	}
+	idempotencyKey := vaultedAccountRotationKey(requestID)
+	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	id := applicationSecretMutationEventID(tenantID, epoch, key, "static-rotate", crypto.SHA256Hex([]byte(idempotencyKey)))
+	if existing, err := a.store.GetSecretStaticRotationCommand(ctx, tenantID, id); err == nil {
+		return existing.ID, nil
+	} else if !errors.Is(err, store.ErrSecretStaticRotationCommandNotFound) {
+		return "", err
+	}
+	oldRef, err := a.vaultedAccountPredecessor(ctx, tenantID, providerID, key, currentAccount)
+	if err != nil {
+		return "", err
+	}
+	req := secretRotationRequest{Provider: providerID, Key: key, OldRef: oldRef, AcknowledgeSinglePhase: true}
+	_, binding, err := a.applicationSecretRequestBinding(tenantID, idempotencyKey, "pam-checkout", "WORKER",
+		"/api/v1/access/checkouts/"+requestID+"/checkin", "static-rotate", staticRotationSurface, key, req)
+	if err != nil {
+		return "", err
+	}
+	cmd, err := a.queueStaticSecretRotation(ctx, tenantID, idempotencyKey, binding, "", req)
+	if err != nil {
+		return "", err
+	}
+	a.auditSecret(ctx, "secret.rotation.queued", tenantID, key, 0)
+	return cmd.ID, nil
+}

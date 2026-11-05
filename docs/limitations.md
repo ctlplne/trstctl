@@ -8968,11 +8968,10 @@ axe clean).
 What comes next:
 - Folders as objects with their template applied to every account in them (A261).
 
-## Brokered-account lifecycle (A261) — part 1 of 3: vaulted accounts through the gateway
+## Brokered-account lifecycle (A261) — parts 1 and 2 of 3: vaulted accounts and check-outs
 
-Status: vaulted accounts and their scheduled rotation served; check-out (part 2) and
-auto-approval rules with folder templates (part 3) come next, and A261 stays open until they
-land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
+Status: vaulted accounts, their scheduled rotation and check-outs served; auto-approval rules
+with folder templates (part 3) come next, and A261 stays open until they land. A PostgreSQL or MySQL target registered with `account_secret` is vaulted: its sessions
 are delivered through its gateway signed in as the account that application secret holds,
 read when the gateway claims the session, so nobody receives the credential and nothing is
 minted per session. The secret is an A240 static credential: its provider must rotate the
@@ -8986,9 +8985,39 @@ rotation completes (the two-user engine stages the other account and retires the
 session opened afterwards signs in as the new account, and the database refuses the old
 credential.
 
+A check-out (part 2) is for the emergency when someone needs the vaulted account's credential
+itself. `POST /api/v1/access/checkouts` (target, reason, a lifetime of 60 seconds up to the
+broker's longest session) asks for independent review through the operation approval engine;
+the reviewers see the target, its account secret, the reason and the lifetime, and the
+requester cannot approve it. Once approved, only its requester reveals the credential —
+`POST /api/v1/access/checkouts/{id}/reveal` with the approval's exact ID and intent digest —
+and it is shown once: the reveal's event (`pam.checkout.revealed`, in the audit log) consumes
+the approval and records the secret version shown, never the credential, and a second reveal
+is refused. Checking it in (`.../checkin`, the requester's own with `access:sessions.open`,
+anyone's with `access:write`) queues the A240 static rotation that retires the revealed
+credential, and the expiry worker does the same at the deadline (`pam.checkout.ended`, status
+`checked_in` or `expired`, with the rotation's command). A check-out is refused before review
+when no rotation could retire what it would reveal: an account whose rotation mints a new
+principal must have been rotated once, so the credential it reveals is one the engine minted.
+`TestServedCheckoutRevealsOnceAndRotatesA261` proves it on PostgreSQL: an out-of-range
+lifetime and an unreviewed reveal are refused, the requester cannot approve it and a bystander
+cannot reveal or check it in; the reveal returns the account's current credential (which signs
+in) once, a second reveal is refused, and the audit record names the check-out without the
+credential; checking in rotates the account and the database refuses the revealed credential;
+a second check-out not checked in is untouched before its deadline and rotated after it, its
+revealed credential refused too. The console's access page lists check-outs, requests one for a
+vaulted account, reveals the approved credential once in a dialog that forgets it when closed
+and checks in the caller's own (component tests, axe clean). CLI: `access checkouts
+request|reveal|checkin|list|get`.
+
 What comes next:
-- Approved reveal or check-out, rotated after check-in or at expiry (part 2); auto-approval
-  rules and folders whose template applies to every account in them (part 3).
+- Auto-approval rules and folders whose template applies to every account in them (part 3).
+- A check-in while another rotation of the same account is in flight is refused (409), and at
+  the deadline the expiry worker retries on each tick (every 30 seconds by default); adopting
+  the in-flight rotation when it started after the reveal would end the check-out at once.
+- A check-out whose rotation cannot be queued (its provider removed or no longer rotating the
+  role) stays revealed past its deadline, shown as "rotation pending"; it is not yet raised as
+  an alert.
 - Vaulted accounts on the other database types the gateway serves.
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
   unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an

@@ -190,6 +190,8 @@ type pamService struct {
 	discovery *pamDiscovery
 	// secretReader reads a vaulted target's account secret (A261).
 	secretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
+	// rotation retires a check-out's revealed credential (A261 part 2).
+	rotation pamAccountRotation
 	// Fault injection for the gap after signing and before the session event.
 	// Production leaves this nil; a served test forces the crash edge.
 	afterSSHSign func([]byte, uint64) error
@@ -250,6 +252,10 @@ type pamDeps struct {
 	// SecretReader reads an application secret's current value: a vaulted
 	// target's account (A261). Nil when the secrets API is not served.
 	SecretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
+	// AccountRotation queues the static rotation that retires a check-out's
+	// revealed credential (A261 part 2). Unset when the secrets API is not
+	// served.
+	AccountRotation pamAccountRotation
 }
 
 func newPAMService(d pamDeps) (*pamService, error) {
@@ -325,7 +331,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		sshTargets: sshTargets, sshCA: d.SSHCA, sshProtocol: d.SSHProtocol, defaultTTL: defaultTTL,
 		maxTTL: maxTTL, expiryInterval: expiryInterval, clock: clock,
 		orch: d.Orch, approvalTTL: approvalTTL, requiredApprovals: requiredApprovals,
-		targetDeps: d, agentCAPEM: d.AgentCAPEM, secretReader: d.SecretReader,
+		targetDeps: d, agentCAPEM: d.AgentCAPEM, secretReader: d.SecretReader, rotation: d.AccountRotation,
 	}, nil
 }
 
@@ -1016,6 +1022,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 		s.ensureGatewayJobs(ctx)
 		s.sealIdleRecordings(ctx)
 		s.deleteExpiredRecordings(ctx)
+		s.expireCheckouts(ctx, s.clock().UTC())
 		select {
 		case <-ctx.Done():
 			return

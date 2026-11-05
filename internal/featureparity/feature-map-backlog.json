@@ -14576,7 +14576,12 @@
                 "requestPAMDiscoveryImport",
                 "applyPAMDiscoveryImport",
                 "dismissPAMDiscoveredAccount",
-                "listPAMImportedAccounts"
+                "listPAMImportedAccounts",
+                "requestPAMCheckout",
+                "revealPAMCheckout",
+                "checkInPAMCheckout",
+                "listPAMCheckouts",
+                "getPAMCheckout"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14645,6 +14650,11 @@
                 "access discovery import apply",
                 "access discovery dismiss",
                 "access accounts",
+                "access checkouts request",
+                "access checkouts reveal",
+                "access checkouts checkin",
+                "access checkouts list",
+                "access checkouts get",
                 "access templates list",
                 "access templates create",
                 "access templates get",

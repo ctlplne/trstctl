@@ -422,8 +422,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// sources list|save|delete`, `access discovery scan`, `access discovery
 	// runs list|get` and `access discovery accounts`, then `access discovery
 	// import request|apply`, `access discovery dismiss` and `access accounts`.
-	if len(out) != 814 {
-		t.Fatalf("CLI commands = %d, want 814", len(out))
+	// A261 adds `access checkouts request|reveal|checkin|list|get`.
+	if len(out) != 819 {
+		t.Fatalf("CLI commands = %d, want 819", len(out))
 	}
 	return out
 }

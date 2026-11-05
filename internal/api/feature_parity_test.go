@@ -380,8 +380,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// account discovery's sources list, save and delete, its run, its runs list
 	// and read, and its staged accounts (743), then requesting and applying an
 	// import, dismissing a staged account and the imported accounts (747).
-	if len(out) != 747 {
-		t.Fatalf("OpenAPI operationIds = %d, want 747", len(out))
+	// A261 adds vaulted-account check-outs: request, reveal, check in, list
+	// and read (752).
+	if len(out) != 752 {
+		t.Fatalf("OpenAPI operationIds = %d, want 752", len(out))
 	}
 	return out
 }

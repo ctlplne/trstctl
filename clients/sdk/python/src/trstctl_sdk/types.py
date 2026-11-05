@@ -11562,6 +11562,80 @@ PAMApprovalRequest = TypedDict(
     total=False,
 )
 
+PAMCheckout = TypedDict(
+    'PAMCheckout',
+    {
+        'account_secret': str,
+        'approval_request_id': str,
+        'ended_at': str,
+        'ended_by': str,
+        'expires_at': str,
+        'provider_id': str,
+        'reason': str,
+        'request_id': str,
+        'requested_by': str,
+        'revealed_at': str,
+        'rotation_command_id': str,
+        'secret_version': int,
+        'status': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+PAMCheckoutList = TypedDict(
+    'PAMCheckoutList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMCheckoutRequest = TypedDict(
+    'PAMCheckoutRequest',
+    {
+        'reason': str,
+        'request_id': str,
+        'target_id': str,
+        'target_type': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+PAMCheckoutReveal = TypedDict(
+    'PAMCheckoutReveal',
+    {
+        'checkout': dict[str, Any],
+        'credential': str,
+    },
+    total=False,
+)
+
+PAMCheckoutRevealRequest = TypedDict(
+    'PAMCheckoutRevealRequest',
+    {
+        'approval_request_id': str,
+        'intent_digest': str,
+    },
+    total=False,
+)
+
+PAMCheckoutReview = TypedDict(
+    'PAMCheckoutReview',
+    {
+        'approval_count': int,
+        'approval_request_id': str,
+        'expires_at': str,
+        'intent_digest': str,
+        'request_id': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
 PAMDiscoveredAccount = TypedDict(
     'PAMDiscoveredAccount',
     {

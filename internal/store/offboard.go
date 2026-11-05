@@ -289,6 +289,8 @@ var TenantScopedTables = []string{
 	// accounts; no foreign keys.
 	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",
 	"pam_imported_accounts",
+	// A261: check-outs of vaulted accounts; no foreign keys.
+	"pam_checkouts",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

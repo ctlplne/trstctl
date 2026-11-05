@@ -893,6 +893,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// pam.discovery.imported and pam.discovery.dismissed.
 	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",
 	"pam_imported_accounts",
+	// A261: projected from pam.checkout.revealed and pam.checkout.ended.
+	"pam_checkouts",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

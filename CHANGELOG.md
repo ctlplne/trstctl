@@ -99,6 +99,12 @@
   gateway claims the session), so nobody receives the credential and nothing is minted per session. The secret is an
   A240 static credential its provider rotates; a rotation schedule rotates it, and sessions opened afterwards sign in
   with the new credential while the old one is refused. Migration 0401 (`pam_targets.account_secret`).
+- Brokered-account lifecycle, part 2 (A261): check-outs of vaulted accounts. `POST /api/v1/access/checkouts` requests
+  independent review; once approved its requester reveals the account's current credential once
+  (`/api/v1/access/checkouts/{request_id}/reveal`, audited as `pam.checkout.revealed`, a second reveal refused);
+  checking it in (`.../checkin`) or its deadline queues the static rotation that retires the revealed credential. The
+  console's access page gains a check-out panel. Migration 0402 (`pam_checkouts`), snapshot format 93, OpenAPI census
+  747 -> 752, CLI census 814 -> 819 (`access checkouts request|reveal|checkin|list|get`).
 - Privileged account discovery, part 2 (A260 served): Active Directory users through the LDAP provider (transitive
   members of the groups that administer the domain, protected users); staged accounts are imported into a folder only
   after independent review (`/api/v1/access/discovery/imports`, applied with the approval; refused when an account

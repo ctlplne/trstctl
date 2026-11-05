@@ -523,6 +523,12 @@ import type {
   PAMDiscoveryImportRequest,
   PAMDiscoveryImportReview,
   PAMImportedAccountList,
+  PAMCheckout,
+  PAMCheckoutList,
+  PAMCheckoutRequest,
+  PAMCheckoutReveal,
+  PAMCheckoutRevealRequest,
+  PAMCheckoutReview,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1506,6 +1512,12 @@ export type {
   PAMDiscoveryImportRequest,
   PAMDiscoveryImportReview,
   PAMImportedAccountList,
+  PAMCheckout,
+  PAMCheckoutList,
+  PAMCheckoutRequest,
+  PAMCheckoutReveal,
+  PAMCheckoutRevealRequest,
+  PAMCheckoutReview,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2531,6 +2543,10 @@ export interface Api {
   applyPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMImportedAccountList>;
   dismissPAMDiscoveredAccount(id: string, reason: string, idempotencyKey?: string): Promise<PAMDiscoveredAccount>;
   pamImportedAccounts(folder?: string): Promise<PAMImportedAccountList>;
+  pamCheckouts(): Promise<PAMCheckoutList>;
+  requestPAMCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMCheckoutReview>;
+  revealPAMCheckout(requestID: string, input: PAMCheckoutRevealRequest, idempotencyKey?: string): Promise<PAMCheckoutReveal>;
+  checkInPAMCheckout(requestID: string, idempotencyKey?: string): Promise<PAMCheckout>;
   pamSession(id: string): Promise<PAMSession>;
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
@@ -3452,6 +3468,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   dismissPAMDiscoveredAccount: (id, reason, idempotencyKey) =>
     mutate<PAMDiscoveredAccount>("POST", `/api/v1/access/discovery/accounts/${encodeURIComponent(id)}/dismiss`, { reason }, idempotencyKey),
   pamImportedAccounts: (folder) => req<PAMImportedAccountList>(`/api/v1/access/accounts${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
+  pamCheckouts: () => req<PAMCheckoutList>("/api/v1/access/checkouts"),
+  requestPAMCheckout: (input, idempotencyKey) => mutate<PAMCheckoutReview>("POST", "/api/v1/access/checkouts", input, idempotencyKey),
+  revealPAMCheckout: (requestID, input, idempotencyKey) =>
+    mutate<PAMCheckoutReveal>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/reveal`, input, idempotencyKey),
+  checkInPAMCheckout: (requestID, idempotencyKey) =>
+    mutate<PAMCheckout>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/checkin`, undefined, idempotencyKey),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
   pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),

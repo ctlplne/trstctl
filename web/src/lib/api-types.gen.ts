@@ -8336,6 +8336,56 @@ export interface PAMApprovalRequest {
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
 }
 
+export interface PAMCheckout {
+  account_secret: string;
+  approval_request_id: string;
+  ended_at?: string;
+  ended_by?: string;
+  expires_at: string;
+  provider_id: string;
+  reason: string;
+  request_id: string;
+  requested_by: string;
+  revealed_at: string;
+  rotation_command_id?: string;
+  secret_version: number;
+  status: "revealed" | "checked_in" | "expired";
+  target_id: string;
+  target_type: string;
+}
+
+export interface PAMCheckoutList {
+  items: PAMCheckout[];
+}
+
+export interface PAMCheckoutRequest {
+  reason: string;
+  request_id: string;
+  target_id: string;
+  target_type: "postgres" | "mysql";
+  ttl_seconds: number;
+}
+
+export interface PAMCheckoutReveal {
+  checkout: PAMCheckout;
+  credential: string;
+}
+
+export interface PAMCheckoutRevealRequest {
+  approval_request_id: string;
+  intent_digest: string;
+}
+
+export interface PAMCheckoutReview {
+  approval_count: number;
+  approval_request_id: string;
+  expires_at: string;
+  intent_digest: string;
+  request_id: string;
+  required_approvals: number;
+  status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+}
+
 export interface PAMDiscoveredAccount {
   details?: Record<string, unknown>;
   disabled: boolean;

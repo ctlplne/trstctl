@@ -2542,6 +2542,20 @@ func (s *Server) configurePAMSurface(d Deps) error {
 			}
 			return s.api.CurrentApplicationSecret(ctx, tenantID, name)
 		},
+		AccountRotation: pamAccountRotation{
+			check: func(ctx context.Context, tenantID, providerID, key, currentAccount string) error {
+				if s.api == nil {
+					return errors.New("server: the secrets API is not served")
+				}
+				return s.api.CheckVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount)
+			},
+			queue: func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error) {
+				if s.api == nil {
+					return "", errors.New("server: the secrets API is not served")
+				}
+				return s.api.QueueVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount, requestID)
+			},
+		},
 	})
 	if err != nil {
 		return err

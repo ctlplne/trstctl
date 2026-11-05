@@ -38595,6 +38595,206 @@
         ],
         "type": "object"
       },
+      "PAMCheckout": {
+        "properties": {
+          "account_secret": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ended_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ended_by": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "revealed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rotation_command_id": {
+            "type": "string"
+          },
+          "secret_version": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "revealed",
+              "checked_in",
+              "expired"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "target_type",
+          "target_id",
+          "provider_id",
+          "account_secret",
+          "secret_version",
+          "requested_by",
+          "reason",
+          "approval_request_id",
+          "revealed_at",
+          "expires_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PAMCheckoutList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMCheckout"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMCheckoutRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "mysql"
+            ],
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "description": "how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "target_type",
+          "target_id",
+          "reason",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "PAMCheckoutReveal": {
+        "properties": {
+          "checkout": {
+            "$ref": "#/components/schemas/PAMCheckout"
+          },
+          "credential": {
+            "description": "the vaulted account's credential, shown once; checking in or the deadline rotates it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkout",
+          "credential"
+        ],
+        "type": "object"
+      },
+      "PAMCheckoutRevealRequest": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "description": "the approval's intent digest",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_request_id",
+          "intent_digest"
+        ],
+        "type": "object"
+      },
+      "PAMCheckoutReview": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "consumed",
+              "superseded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "status",
+          "approval_count",
+          "required_approvals",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "PAMDiscoveredAccount": {
         "properties": {
           "details": {
@@ -56959,6 +57159,322 @@
         ],
         "summary": "Remove one grant of an access bundle and return the principal's effective authority after the change",
         "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/checkouts": {
+      "get": {
+        "operationId": "listPAMCheckouts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCheckoutList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List check-outs of vaulted accounts, newest first",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "requestPAMCheckout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCheckoutReview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request independent review of checking out a vaulted account's credential",
+        "x-trstctl-permission": "access:sessions.open"
+      }
+    },
+    "/api/v1/access/checkouts/{request_id}": {
+      "get": {
+        "operationId": "getPAMCheckout",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCheckout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a check-out",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/checkouts/{request_id}/checkin": {
+      "post": {
+        "operationId": "checkInPAMCheckout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCheckout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Check a check-out in (your own with access:sessions.open; anyone's with access:write): the account is rotated so the revealed credential stops working",
+        "x-trstctl-permission": "access:sessions.open"
+      }
+    },
+    "/api/v1/access/checkouts/{request_id}/reveal": {
+      "post": {
+        "operationId": "revealPAMCheckout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMCheckoutRevealRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCheckoutReveal"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Reveal an approved check-out's credential once to its requester; checking in or its deadline rotates it",
+        "x-trstctl-permission": "access:sessions.open",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/access/discovery/accounts": {

@@ -8879,7 +8879,31 @@ func componentSchemas() map[string]*Schema {
 			"folder": str(), "template_id": {Type: "string", Format: "uuid"}, "reason": str(), "request_id": uuid(), "approval_request_id": uuid(),
 			"imported_by": str(), "imported_at": timestamp(),
 		}, "id", "provider_id", "key", "name", "kind", "privileges", "folder", "reason", "request_id", "approval_request_id", "imported_by", "imported_at"),
-		"PAMImportedAccountList":    object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
+		"PAMImportedAccountList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
+		"PAMCheckoutRequest": object(map[string]*Schema{
+			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql"}}, "target_id": str(), "reason": str(),
+			"ttl_seconds": {Type: "integer", Description: "how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session"},
+		}, "request_id", "target_type", "target_id", "reason", "ttl_seconds"),
+		"PAMCheckoutRevealRequest": object(map[string]*Schema{
+			"approval_request_id": uuid(), "intent_digest": {Type: "string", Description: "the approval's intent digest"},
+		}, "approval_request_id", "intent_digest"),
+		"PAMCheckoutReview": object(map[string]*Schema{
+			"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
+			"status":         {Type: "string", Enum: []string{"pending", "approved", "denied", "expired", "consumed", "superseded"}},
+			"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"}, "expires_at": timestamp(),
+		}, "request_id", "approval_request_id", "intent_digest", "status", "approval_count", "required_approvals", "expires_at"),
+		"PAMCheckout": object(map[string]*Schema{
+			"request_id": uuid(), "target_type": str(), "target_id": str(), "provider_id": str(), "account_secret": str(), "secret_version": {Type: "integer"},
+			"requested_by": str(), "reason": str(), "approval_request_id": uuid(), "revealed_at": timestamp(), "expires_at": timestamp(),
+			"status":   {Type: "string", Enum: []string{"revealed", "checked_in", "expired"}},
+			"ended_at": timestamp(), "ended_by": str(), "rotation_command_id": str(),
+		}, "request_id", "target_type", "target_id", "provider_id", "account_secret", "secret_version", "requested_by", "reason",
+			"approval_request_id", "revealed_at", "expires_at", "status"),
+		"PAMCheckoutList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMCheckout")}}, "items"),
+		"PAMCheckoutReveal": object(map[string]*Schema{
+			"checkout":   ref("PAMCheckout"),
+			"credential": {Type: "string", Description: "the vaulted account's credential, shown once; checking in or the deadline rotates it"},
+		}, "checkout", "credential"),
 		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
 		"PAMQueryRequest":           object(map[string]*Schema{"sql": {Type: "string", Description: "one SQL text (up to 64 KiB); the last statement's result is returned"}}, "sql"),
 		"PAMQueryResult": object(map[string]*Schema{
