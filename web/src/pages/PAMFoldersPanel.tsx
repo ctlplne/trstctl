@@ -1,3 +1,4 @@
+import { PAMCommandRulesPanel } from "@/pages/PAMCommandRulesPanel";
 import { useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -226,6 +227,7 @@ export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
           ]}
         />
       ) : null}
+      <PAMCommandRulesPanel canManage={canManage} />
     </section>
   );
 }

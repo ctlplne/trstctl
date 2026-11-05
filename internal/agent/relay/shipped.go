@@ -281,6 +281,11 @@ func ShippedJobKinds() []ShippedJobKind {
 			// A254: one brokered access session, held by a gateway-role agent
 			// until its deadline; the session's credential is redeemed into
 			// the gateway's locked memory and never leaves it.
+			Kind:  KindAccessGatewayRulesSession,
+			Flags: []string{"--access-gateway-listen"},
+			Roles: []string{mtls.AgentRoleGateway},
+		},
+		{
 			Kind:  KindAccessGatewaySession,
 			Flags: []string{"--access-gateway-listen"},
 			Roles: []string{mtls.AgentRoleGateway},

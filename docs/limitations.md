@@ -9098,3 +9098,16 @@ Remaining limits:
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
   unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an
   `AuthorizedKeysFile` elsewhere) are not read; Windows hosts' local administrators.
+
+
+## PostgreSQL command guardrails (A262, partial protocol coverage)
+
+PostgreSQL template rules can block direct operations or hold each query/binding
+for distinct-human review. Local served proofs cover refusal with independent
+readback, repeat Bind reviews, deny/expiry/disconnect, and a dynamic-SQL bypass.
+Rules also work without recording and never send statement text, values or sign-in
+material to the matcher or control plane. They are lexical guardrails, with the
+[bounds and bypasses documented](design/access-gateway.md#postgresql-command-guardrails-a262-first-protocol).
+SSH and the other database rule paths remain unbuilt in this first part; their rule
+configuration is rejected. Exact-image replay and deferred gates are owed. No
+whole-platform qualification follows from the local PostgreSQL subset.

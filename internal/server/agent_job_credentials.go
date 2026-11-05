@@ -82,7 +82,7 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 		}
 	}
-	if job.Destination == relay.KindAccessGatewaySession &&
+	if relay.IsAccessGatewaySession(job.Destination) &&
 		(job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, mtls.AgentRoleGateway)) {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}

@@ -44,6 +44,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"github.com/jackc/pgx/v5"
@@ -275,6 +276,7 @@ type agentService struct {
 	// storeRecordingChunk takes one chunk of a held session's recording
 	// (A255) and reports whether the recording is closed.
 	storeRecordingChunk func(ctx context.Context, tenantID, agentID string, payload []byte, attempt, seq int, chunk []byte, final bool) (bool, error)
+	evaluatePAMCommand  func(context.Context, string, string, []byte, int64, int, string, accessrules.Observation, bool) (accessrules.Decision, error)
 	// recordGatewaySessionEnded records a gateway's report that it ended a
 	// session (A255).
 	recordGatewaySessionEnded func(ctx context.Context, tenantID string, payload []byte, detail string, attempt int) error
@@ -402,19 +404,24 @@ type agentService struct {
 // a fleet heartbeat or renewal wave cannot consume unrelated API/protocol/outbox
 // capacity.
 type bulkheadedAgentService struct {
-	next    agentChannelService
-	pool    *bulkhead.Pool
-	metrics *agentChannelMetrics
+	commandPool *bulkhead.Pool
+	next        agentChannelService
+	pool        *bulkhead.Pool
+	metrics     *agentChannelMetrics
 }
 
-func newBulkheadedAgentService(next agentChannelService, pool *bulkhead.Pool, metrics *agentChannelMetrics) (agentChannelService, error) {
+func newBulkheadedAgentService(next agentChannelService, pool *bulkhead.Pool, metrics *agentChannelMetrics, commandPools ...*bulkhead.Pool) (agentChannelService, error) {
 	if next == nil {
 		return nil, errors.New("server: agent channel service is nil")
 	}
 	if pool == nil {
 		return nil, errors.New("server: agent channel enabled but agent bulkhead is not configured")
 	}
-	return &bulkheadedAgentService{next: next, pool: pool, metrics: metrics}, nil
+	var commandPool *bulkhead.Pool
+	if len(commandPools) > 0 {
+		commandPool = commandPools[0]
+	}
+	return &bulkheadedAgentService{next: next, pool: pool, commandPool: commandPool, metrics: metrics}, nil
 }
 
 func (b *bulkheadedAgentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {

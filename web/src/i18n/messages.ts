@@ -10,6 +10,178 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.rules.elapsed": {
+    defaultMessage: "Review deadline elapsed; no current authorization",
+    description: "Derived expiry without inventing a terminal command event.",
+  },
+  "admin.access.rules.unavailable": {
+    defaultMessage: "Decision unavailable",
+    description: "Unknown command decision is never presented as completed or authorized.",
+  },
+  "admin.access.rules.heading": { defaultMessage: "Command guardrails", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.help": {
+    defaultMessage:
+      "Choose direct PostgreSQL operations to block or hold for independent human review. These rules are guardrails; they cannot contain a determined user.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.actions": {
+    defaultMessage: "Session command decisions",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.evidenceHelp": {
+    defaultMessage:
+      "Decisions contain rule identifiers and digests, never statement text or bound values. Authorized means the gateway may forward one occurrence; it does not prove target execution.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.pending": {
+    defaultMessage: "Waiting for independent review",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.authorized": {
+    defaultMessage: "Authorized to forward",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.blocked": { defaultMessage: "Blocked", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.denied": { defaultMessage: "Review denied", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.expired": { defaultMessage: "Review expired", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.canceled": { defaultMessage: "Action canceled", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.deadline": { defaultMessage: "Review ends at {at}", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.decision": { defaultMessage: "Gateway decision", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.occurrence": { defaultMessage: "Occurrence", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.exactEvidence": {
+    defaultMessage: "Exact action evidence",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.actionID": { defaultMessage: "Action ID", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.ruleIDs": { defaultMessage: "Matched rule IDs", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.messageDigest": { defaultMessage: "Action digest", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.policyDigest": {
+    defaultMessage: "Frozen policy digest",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.sourceEvent": { defaultMessage: "Source event", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.observed": { defaultMessage: "First observed", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.decisionTime": {
+    defaultMessage: "Decision time and reason",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.review": { defaultMessage: "Human review", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.openReview": {
+    defaultMessage: "Open exact review in a new tab",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.noReview": {
+    defaultMessage: "Human review not requested",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.newest": { defaultMessage: "Newest actions", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.older": { defaultMessage: "Older actions", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.queryCanceled": {
+    defaultMessage: "Query request canceled. Check the action and target before retrying: an already forwarded statement may have run.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.cancelQuery": { defaultMessage: "Cancel query", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.savedRules": {
+    defaultMessage: "Saved command rules",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.name": { defaultMessage: "Rule name", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.operations": { defaultMessage: "Operation names", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.effect": { defaultMessage: "Rule effect", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.block": { defaultMessage: "Block", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.requireReview": {
+    defaultMessage: "Require human approval",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.disabled": { defaultMessage: "Disabled", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.reviewLimits": {
+    defaultMessage: " \u00b7 {count} reviewers \u00b7 {seconds}s",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.add": { defaultMessage: "Add command rule", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.scopeStep": { defaultMessage: "Choose the template", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.scopeHelp": {
+    defaultMessage: "The template determines which new sessions receive this rule.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.ruleStep": { defaultMessage: "Choose the guardrail", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.ruleHelp": {
+    defaultMessage: "Match operation names and choose refusal or independent human review.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.reviewStep": {
+    defaultMessage: "Review the exact edit",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.reviewHelp": {
+    defaultMessage: "Saving changes the template revision. No target command runs during this setup.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.postgresOnly": {
+    defaultMessage: "This rule editor supports PostgreSQL. Other gateway protocols will not accept this policy.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.operationsHelp": {
+    defaultMessage: "Select one or more known SQL operation names. Arguments, quoted values and injected sign-in material are excluded.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.enabled": { defaultMessage: "Enabled", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.quorum": {
+    defaultMessage: "Distinct human reviewers",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.quorumHelp": {
+    defaultMessage:
+      "Choose 1\u20133 reviewers. The session requester cannot approve their own action. Session automatic-approval rules do not approve commands.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.reviewSeconds": {
+    defaultMessage: "Review deadline in seconds",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.secondsHelp": {
+    defaultMessage: "Choose 5\u201345 seconds. The session deadline can shorten the wait. Expiry refuses the held action.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.newSessions": {
+    defaultMessage:
+      "This edit applies to new sessions. Existing sessions keep their exact reviewed template revision; terminate one to end its existing authority.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.privacy": {
+    defaultMessage: "Reviewers see matched operation classes, rule IDs and an action digest. They do not review statement text, arguments or bound values.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.bypass": {
+    defaultMessage: "Dynamic SQL inside stored programs or quoted bodies can bypass lexical operation rules. Use database privileges for containment.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.exactEdit": {
+    defaultMessage: "Exact template revision and rule",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.save": { defaultMessage: "Save reviewed rule", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.saved": {
+    defaultMessage: "Command rules saved. New sessions use the updated template.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.invalid": {
+    defaultMessage: "Choose a valid value within the stated bounds.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.failed": {
+    defaultMessage: "Command rule change failed",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.removeHeading": {
+    defaultMessage: "Remove this command guardrail?",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+  "admin.access.rules.removeHelp": {
+    defaultMessage: "Remove {name} from new sessions. Existing sessions keep their frozen rule; terminate them if that authority must end.",
+    description: "Gateway command guardrail configuration or durable action evidence.",
+  },
+
   "admin.access.auto.id": { defaultMessage: "Rule ID", description: "Stable automatic approval rule audit identifier." },
   "admin.access.auto.revision": { defaultMessage: "Revision read", description: "Exact rule revision bound to a policy edit." },
   "admin.access.auto.heading": { defaultMessage: "Automatic access approvals", description: "Automatic access approval policy workflow." },

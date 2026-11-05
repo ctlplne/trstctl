@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -135,6 +136,9 @@ func (s *pamService) RequestPAMCheckout(ctx context.Context, tenantID, requester
 	requiredApprovals := s.requiredApprovals
 	reason := strings.TrimSpace(req.Reason)
 	if template != nil {
+		if accessrules.ForTarget(template.ID, template.Revision, template.CommandRules, req.TargetType) != nil {
+			return api.PAMCheckoutReview{}, fmt.Errorf("%w: this template requires command rules; a revealed credential bypasses the gateway", api.ErrPAMInvalid)
+		}
 		if template.RequireRecording {
 			return api.PAMCheckoutReview{}, fmt.Errorf("%w: this template requires recording; a check-out cannot be recorded", api.ErrPAMInvalid)
 		}
@@ -239,6 +243,9 @@ func (s *pamService) RevealPAMCheckout(ctx context.Context, tenantID, requester,
 	template, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, targetType, targetID, requestedTemplate)
 	if err != nil {
 		return nil, err
+	}
+	if template != nil && accessrules.ForTarget(template.ID, template.Revision, template.CommandRules, targetType) != nil {
+		return nil, fmt.Errorf("%w: command rules cannot be enforced after credential reveal", api.ErrPAMInvalid)
 	}
 	if template != nil && template.RequireRecording {
 		return nil, fmt.Errorf("%w: this template requires recording; a check-out cannot be recorded", api.ErrPAMInvalid)

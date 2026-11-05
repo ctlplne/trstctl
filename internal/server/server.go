@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/agent/transport"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
@@ -2526,7 +2527,8 @@ func (s *Server) configurePAMSurface(d Deps) error {
 	}
 	svc, err := newPAMService(pamDeps{
 		Config: d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
-		Audit: attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
+		CommandRuleJobsEnabled: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil,
+		Audit:                  attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
 		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,
 		AgentCAPEM: func() []byte {
 			if len(s.agentCACertDER) == 0 {
@@ -2603,6 +2605,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		signGatewayServerCSR:      s.signGatewayServerCSR,
 		signGatewaySSHKey:         s.pamSignGatewaySSHKey(),
 		storeRecordingChunk:       s.pamStoreRecordingChunk(),
+		evaluatePAMCommand:        s.pamEvaluateCommand(),
 		recordGatewaySessionEnded: s.pamRecordGatewaySessionEnded(),
 		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
 		// read on the Connectors page. Control-plane previews write the same
@@ -2642,7 +2645,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		reconcileEdgeJournal: s.reconcileEdgeJournal,
 		renewEdgeDelegation:  s.renewEdgeDelegation,
 	}
-	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
+	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics, s.bulk.Pool(bulkhead.SubsystemGatewayCommands))
 	if err != nil {
 		return err
 	}

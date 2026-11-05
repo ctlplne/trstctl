@@ -288,7 +288,10 @@ import (
 // template every account in a folder takes, and let a request skip the
 // recording its template requires, while its covered offset skipped their
 // events.
-const SnapshotFormatVersion = 95
+// Version 95 carries A261 automatic approval rules and their frozen evaluations.
+// Version 96 carries command rules, frozen session policies and command actions;
+// restoring an older shape must not skip those authority-bearing source events.
+const SnapshotFormatVersion = 96
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -394,6 +397,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 94: A261's account folders.
 	"pam_folders",
 	"pam_auto_approval_rules",
+	"pam_command_actions",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -763,6 +767,7 @@ SELECT jsonb_build_object(
   'pam_checkouts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_checkouts t),
   'pam_folders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_folders t),
   'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
+  'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

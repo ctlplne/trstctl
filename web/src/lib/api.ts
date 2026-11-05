@@ -508,6 +508,10 @@ import type {
   OwnershipExceptionRequest,
   OwnershipExceptionRevokeRequest,
   PAMApprovalRequest,
+  PAMCommandAction,
+  PAMCommandActionList,
+  PAMCommandRule,
+  PAMCommandPolicy,
   PAMRequestProgress,
   PAMSession,
   PAMSessionActivationRequest,
@@ -1506,6 +1510,10 @@ export type {
   OwnershipAttribution,
   OwnershipAttributionItem,
   PAMApprovalRequest,
+  PAMCommandAction,
+  PAMCommandActionList,
+  PAMCommandRule,
+  PAMCommandPolicy,
   PAMRequestProgress,
   PAMSession,
   PAMSessionActivationRequest,
@@ -2565,6 +2573,7 @@ export interface Api {
   requestPAMCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMCheckoutReview>;
   revealPAMCheckout(requestID: string, input: PAMCheckoutRevealRequest, idempotencyKey?: string): Promise<PAMCheckoutReveal>;
   checkInPAMCheckout(requestID: string, idempotencyKey?: string): Promise<PAMCheckout>;
+  pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
   pamSession(id: string): Promise<PAMSession>;
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
@@ -2575,7 +2584,7 @@ export interface Api {
   writePAMTerminal(sessionID: string, terminalID: string, data: string, idempotencyKey?: string): Promise<PAMTerminal>;
   resizePAMTerminal(sessionID: string, terminalID: string, size: { cols: number; rows: number }, idempotencyKey?: string): Promise<PAMTerminal>;
   closePAMTerminal(sessionID: string, terminalID: string, idempotencyKey?: string): Promise<PAMTerminal>;
-  runPAMQuery(sessionID: string, sql: string, idempotencyKey?: string): Promise<PAMQueryResult>;
+  runPAMQuery(sessionID: string, sql: string, idempotencyKey?: string, signal?: AbortSignal): Promise<PAMQueryResult>;
   acmeDNS01ProviderConfig(id: string): Promise<ACMEDNS01ProviderConfig>;
   createACMEDNS01ProviderConfig(input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
   updateACMEDNS01ProviderConfig(id: string, input: ACMEDNS01ProviderConfigRequest): Promise<ACMEDNS01ProviderConfig>;
@@ -3506,6 +3515,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PAMCheckoutReveal>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/reveal`, input, idempotencyKey),
   checkInPAMCheckout: (requestID, idempotencyKey) =>
     mutate<PAMCheckout>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/checkin`, undefined, idempotencyKey),
+  pamCommandActions: (id, options) =>
+    req<PAMCommandActionList>(
+      `/api/v1/access/sessions/${encodeURIComponent(id)}/actions?limit=50${options?.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`,
+      { signal: options?.signal },
+    ),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
   pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),
@@ -3532,8 +3546,13 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       size,
       idempotencyKey,
     ),
-  runPAMQuery: (sessionID, sql, idempotencyKey) =>
-    mutate<PAMQueryResult>("POST", `/api/v1/access/sessions/${encodeURIComponent(sessionID)}/queries`, { sql }, idempotencyKey),
+  runPAMQuery: (sessionID, sql, idempotencyKey = newIdempotencyKey(), signal) =>
+    req<PAMQueryResult>(`/api/v1/access/sessions/${encodeURIComponent(sessionID)}/queries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ sql }),
+      signal,
+    }),
   closePAMTerminal: (sessionID, terminalID, idempotencyKey) =>
     mutate<PAMTerminal>(
       "DELETE",

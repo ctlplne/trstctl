@@ -852,6 +852,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bounded command-rule decisions for a session, without statement text, arguments or credentials */
+        get: operations["listPAMCommandActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/queries": {
         parameters: {
             query?: never;
@@ -21461,6 +21478,7 @@ export interface components {
             resolution: string;
         };
         PAMAccessTemplate: {
+            command_rules?: components["schemas"]["PAMCommandRule"][];
             /** Format: uuid */
             id: string;
             max_ttl_seconds: number;
@@ -21483,6 +21501,7 @@ export interface components {
             items: components["schemas"]["PAMAccessTemplate"][];
         };
         PAMAccessTemplateRequest: {
+            command_rules?: components["schemas"]["PAMCommandRule"][];
             max_ttl_seconds: number;
             name: string;
             reason: string;
@@ -21626,6 +21645,74 @@ export interface components {
             required_approvals: number;
             /** @enum {string} */
             status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+        };
+        PAMCommandAction: {
+            approval_intent_digest?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
+            attempt: number;
+            /** Format: uuid */
+            connection_id: string;
+            /**
+             * Format: date-time
+             * @description time of the durable gateway decision; authorized does not claim target execution
+             */
+            decided_at: string;
+            /**
+             * @description Current view of the recorded decision; an elapsed pending deadline never grants authority and does not invent a terminal event
+             * @enum {string}
+             */
+            effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "review_deadline_elapsed";
+            /** Format: uuid */
+            id: string;
+            job_id: number;
+            message_digest: string;
+            /** Format: date-time */
+            observed_at: string;
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            ordinal: number;
+            phase: string;
+            policy_digest: string;
+            protocol: string;
+            /** @enum {string} */
+            reason: "matched_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
+            /** Format: date-time */
+            review_expires_at?: string;
+            rule_ids: string[];
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            source_event_id: string;
+            /** @enum {string} */
+            status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled";
+        };
+        PAMCommandActionList: {
+            items: components["schemas"]["PAMCommandAction"][];
+            next_cursor?: string;
+        };
+        PAMCommandPolicy: {
+            rules: components["schemas"]["PAMFrozenCommandRule"][];
+            /** Format: uuid */
+            template_id: string;
+            template_revision: number;
+            /** @description frozen command policy format, currently 1 */
+            version: number;
+        };
+        PAMCommandRule: {
+            /** @enum {string} */
+            effect: "block" | "require_approval";
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched */
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            /** @enum {string} */
+            protocol: "postgres";
+            /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
+            required_approvals?: number;
+            /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
+            review_ttl_seconds?: number;
         };
         PAMDiscoveredAccount: {
             /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
@@ -21850,6 +21937,20 @@ export interface components {
              */
             template_id: string;
         };
+        PAMFrozenCommandRule: {
+            /** @enum {string} */
+            effect: "block" | "require_approval";
+            /** Format: uuid */
+            id: string;
+            /** @description Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched */
+            operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+            /** @enum {string} */
+            protocol: "postgres";
+            /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
+            required_approvals?: number;
+            /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
+            review_ttl_seconds?: number;
+        };
         PAMImportedAccount: {
             /** Format: uuid */
             approval_request_id: string;
@@ -21961,6 +22062,7 @@ export interface components {
         PAMSession: {
             attestation?: components["schemas"]["Attestation"];
             audit?: Record<string, never>;
+            command_policy?: components["schemas"]["PAMCommandPolicy"];
             /** @enum {string} */
             delivery?: "direct" | "gateway";
             emergency?: components["schemas"]["PAMEmergencyGrant"];
@@ -29183,6 +29285,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMCommandActions: {
+        parameters: {
+            query?: {
+                /** @description page size, 1-100; default 50 */
+                limit?: number;
+                /** @description next_cursor from the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMCommandActionList"];
                 };
             };
             /** @description client error */

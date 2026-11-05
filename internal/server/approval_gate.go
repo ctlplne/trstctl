@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -240,6 +241,19 @@ func (r storeApprovalRecorder) ValidateApprovalRequest(ctx context.Context, tena
 		decision.ExpectedResourceID != "" && decision.ExpectedResourceID != request.ResourceID ||
 		decision.ExpectedAction != "" && decision.ExpectedAction != request.Action {
 		return api.ApprovalRequestRecord{}, store.ErrApprovalDigestMismatch
+	}
+	if request.ResourceKind == "pam_command" {
+		id, ok := strings.CutPrefix(request.ResourceID, "pam-command:")
+		if !ok {
+			return api.ApprovalRequestRecord{}, store.ErrApprovalDrifted
+		}
+		action, err := r.store.GetPAMCommandAction(ctx, tenantID, id)
+		if err != nil {
+			return api.ApprovalRequestRecord{}, err
+		}
+		if action.Status != "pending" || action.ReviewExpiresAt == nil || !time.Now().Before(*action.ReviewExpiresAt) {
+			return api.ApprovalRequestRecord{}, store.ErrApprovalDrifted
+		}
 	}
 	return approvalRequestRecord(request), nil
 }

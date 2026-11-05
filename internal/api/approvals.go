@@ -425,6 +425,8 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.KeysApprove, action == ManagedKeyActionRotate || action == ManagedKeyActionRevoke || action == ManagedKeyActionZeroize
 	case "pam":
 		return authz.AccessApprove, action == "activate"
+	case "pam_command":
+		return authz.AccessApprove, action == "execute"
 	case "pam_checkout":
 		// A261: revealing a vaulted account's credential is reviewed by those
 		// who approve privileged access.

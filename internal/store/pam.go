@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -64,24 +65,29 @@ type PAMSession struct {
 	// that the session ended (deadline or recalled).
 	GatewayEndedAt *time.Time
 	GatewayEnded   string
+	CommandPolicy  *accessrules.Policy
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
 // idempotent on (tenant_id,id).
 func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSession) error {
+	policyJSON, err := encodePAMCommandPolicy(p.CommandPolicy, p.TargetType)
+	if err != nil {
+		return err
+	}
 	if p.Audit == nil {
 		p.Audit = json.RawMessage(`{}`)
 	}
-	_, err := tx.Exec(ctx,
+	_, err = tx.Exec(ctx,
 		`INSERT INTO pam_sessions
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal)
+		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
 		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
-		         $20, $21, NULLIF($22,'')::uuid, $23, $24)
+		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -104,11 +110,12 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        delivery = EXCLUDED.delivery,
 		        gateway_agent_id = EXCLUDED.gateway_agent_id,
 		        gateway_ticket_digest = EXCLUDED.gateway_ticket_digest,
-		        ssh_principal = EXCLUDED.ssh_principal`,
+		        ssh_principal = EXCLUDED.ssh_principal,
+ command_policy = EXCLUDED.command_policy`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
 		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
-		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -163,7 +170,7 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended
+		        gateway_ended_at, gateway_ended, command_policy
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -186,7 +193,7 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended
+		        gateway_ended_at, gateway_ended, command_policy
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -225,7 +232,7 @@ func (s *Store) ListLivePAMSessionsRequestedBy(ctx context.Context, tenantID str
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended
+		        gateway_ended_at, gateway_ended, command_policy
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND status = 'active' AND requested_by = ANY($2::text[])
 			  ORDER BY started_at, id
@@ -260,7 +267,7 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended
+		        gateway_ended_at, gateway_ended, command_policy
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -295,7 +302,7 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended
+		        gateway_ended_at, gateway_ended, command_policy
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -319,13 +326,14 @@ type pamScanner interface {
 
 func scanPAMSession(row pamScanner, out *PAMSession) error {
 	var serial int64
+	var policyJSON []byte
 	if err := row.Scan(
 		&out.TenantID, &out.ID, &out.TargetType, &out.TargetID, &out.Role, &out.Status,
 		&out.Subject, &out.RequestedBy, &out.Reason, &out.AttestationID, &out.BackendRef, &out.SSHKeyID,
 		&serial, &out.IdempotencyKey, &out.Audit, &out.Attestation, &out.StartedAt, &out.ExpiresAt, &out.EndedAt,
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
-		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal, &out.GatewayEndedAt, &out.GatewayEnded,
+		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal, &out.GatewayEndedAt, &out.GatewayEnded, &policyJSON,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows
@@ -336,6 +344,11 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		return fmt.Errorf("store: pam session %s has negative ssh serial", out.ID)
 	}
 	out.SSHSerial = uint64(serial)
+	policy, err := decodePAMCommandPolicy(policyJSON, out.TargetType)
+	if err != nil {
+		return err
+	}
+	out.CommandPolicy = policy
 	return nil
 }
 
@@ -373,7 +386,7 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — the PAM expiry worker checks every tenant's active gateway sessions for a queued job, as it lists due sessions across tenants (ListDuePAMSessions); each job is then queued under its own tenant's RLS context.
 		`SELECT tenant_id::text, id::text, target_type, target_id, expires_at,
-		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal
+		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal, command_policy
 		   FROM pam_sessions
 		  WHERE delivery = 'gateway' AND status = 'active' AND expires_at > $1
 		  ORDER BY expires_at, id
@@ -384,10 +397,16 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 	defer rows.Close()
 	for rows.Next() {
 		var p PAMSession
-		if err := rows.Scan(&p.TenantID, &p.ID, &p.TargetType, &p.TargetID, &p.ExpiresAt, &p.GatewayAgentID, &p.GatewayTicketDigest, &p.SSHPrincipal); err != nil {
+		var policyJSON []byte
+		if err := rows.Scan(&p.TenantID, &p.ID, &p.TargetType, &p.TargetID, &p.ExpiresAt, &p.GatewayAgentID, &p.GatewayTicketDigest, &p.SSHPrincipal, &policyJSON); err != nil {
 			return nil, err
 		}
 		p.Delivery = "gateway"
+		policy, err := decodePAMCommandPolicy(policyJSON, p.TargetType)
+		if err != nil {
+			return nil, err
+		}
+		p.CommandPolicy = policy
 		out = append(out, p)
 	}
 	return out, rows.Err()

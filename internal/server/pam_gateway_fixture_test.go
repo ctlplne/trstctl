@@ -61,6 +61,8 @@ type gatewayFixture struct {
 }
 
 type gatewayFixtureOptions struct {
+	// commandRules advertises the real current gateway executor and enables its versioned job kind.
+	commandRules bool
 	// duplicateWindow shortens only this fixture's broker deduplication window.
 	duplicateWindow    time.Duration
 	recordingRetention time.Duration
@@ -103,7 +105,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	}
 	pgDSN, stopPG := startPAMPostgres(t)
 	t.Cleanup(stopPG)
-	seedPAMPostgresTable(t, pgDSN)
+	seedPAMPostgresTable(t, pgDSN, opts.commandRules)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
 	if opts.vaulted {
@@ -136,7 +138,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	if opts.duplicateWindow > 0 {
 		eventOptions = append(eventOptions, events.WithDuplicateWindowForTesting(opts.duplicateWindow))
 	}
-	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewaySession}, eventOptions, func(d *Deps) {
+	kinds := []string{relay.KindAccessGatewaySession}
+	if opts.commandRules {
+		kinds = append(kinds, relay.KindAccessGatewayRulesSession)
+	}
+	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, kinds, eventOptions, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
 		if opts.vaulted {
@@ -191,7 +197,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 		}
 	})
 	h := f.h
-	if _, err := h.client.Heartbeat(context.Background(), &transport.HeartbeatRequest{AgentID: h.agent, Version: "a255", Status: "active"}); err != nil {
+	beat := &transport.HeartbeatRequest{AgentID: h.agent, Version: "a255", Status: "active"}
+	if opts.commandRules {
+		beat.Executors = &transport.ExecutorReport{Version: "a262", Kinds: []transport.ExecutorKind{{Kind: relay.KindAccessGatewaySession}, {Kind: relay.KindAccessGatewayRulesSession}}}
+	}
+	if _, err := h.client.Heartbeat(context.Background(), beat); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

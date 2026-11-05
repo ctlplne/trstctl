@@ -553,6 +553,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "sessions", "request-status"}, Method: "GET", Path: "/api/v1/access/session-requests/{id}", Summary: "Read the current approval progress of your privileged access request"},
 	{Name: []string{"access", "sessions", "open"}, Method: "POST", Path: "/api/v1/access/sessions", Body: bodyFile, Summary: "Activate one approved privileged access session"},
 	{Name: []string{"access", "sessions", "get"}, Method: "GET", Path: "/api/v1/access/sessions/{id}", Summary: "Get a privileged access session"},
+	{Name: []string{"access", "sessions", "actions"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/actions", Query: []string{"limit", "cursor"}, Summary: "List command-rule decisions and exact human-review links without statement text or bound values"},
 	{Name: []string{"access", "sessions", "revoke"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/revoke", Body: bodyFile, Summary: "Request early revocation of a privileged access session"},
 	{Name: []string{"access", "sessions", "terminate"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/terminate", Body: bodyFile, Summary: "End another principal's live gateway session"},
 	{Name: []string{"access", "sessions", "recording"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording", Summary: "Get a gateway session's recording index"},

@@ -30,7 +30,7 @@ const (
 // session's parameters, key data and readiness and relays the protocol both
 // ways until either side closes or the deadline passes. The client never
 // receives the DSN.
-func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
+func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
 	params, err := readClientStartup(client)
 	if err != nil {
 		return err
@@ -63,6 +63,9 @@ func servePostgres(ctx context.Context, client net.Conn, dsn []byte, deadline ti
 	ready = append(ready, pgMessage('Z', []byte{upstream.TxStatus})...)
 	if _, err := client.Write(ready); err != nil {
 		return err
+	}
+	if len(guards) > 0 && guards[0] != nil {
+		return relayPostgresCommands(ctx, client, server, guards[0], rec)
 	}
 	done := make(chan struct{}, 2)
 	if rec == nil {

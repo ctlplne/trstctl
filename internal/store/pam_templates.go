@@ -4,8 +4,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -24,6 +26,7 @@ type PAMAccessTemplate struct {
 	MaxTTLSeconds     int
 	// RequireRecording (A261 part 3) refuses a session through the template
 	// that would not be recorded, and every check-out.
+	CommandRules     []accessrules.Rule
 	RequireRecording bool
 	Revision         int64
 	SavedBy          string
@@ -44,12 +47,12 @@ type PAMEmergencyGrant struct {
 	ReviewedAt                   *time.Time
 }
 
-const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, revision, saved_by, saved_at, deleted_at`
+const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, revision, saved_by, saved_at, deleted_at, command_rules`
 
 func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 	var t PAMAccessTemplate
 	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.Revision, &t.SavedBy, &t.SavedAt,
-		&t.DeletedAt)
+		&t.DeletedAt, &t.CommandRules)
 	return t, err
 }
 
@@ -57,16 +60,24 @@ func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 // revision. An older revision changes nothing, and a deleted template is not
 // brought back.
 func (s *Store) ApplyPAMTemplateSavedTx(ctx context.Context, tx pgx.Tx, tenantID string, t PAMAccessTemplate) error {
-	_, err := tx.Exec(ctx, `
+	rules := t.CommandRules
+	if rules == nil {
+		rules = []accessrules.Rule{}
+	}
+	rawRules, err := json.Marshal(rules)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
 		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, require_recording, revision,
-		    saved_by, saved_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9)
+		    saved_by, saved_at, command_rules)
+		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		    name = EXCLUDED.name, reason = EXCLUDED.reason, required_approvals = EXCLUDED.required_approvals,
 		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, require_recording = EXCLUDED.require_recording, revision = EXCLUDED.revision,
-		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at
+		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at, command_rules = EXCLUDED.command_rules
 		  WHERE cur.revision < EXCLUDED.revision AND cur.deleted_at IS NULL`,
-		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording)
+		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording, rawRules)
 	return err
 }
 

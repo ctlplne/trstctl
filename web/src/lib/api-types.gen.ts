@@ -8295,6 +8295,7 @@ export interface OwnershipResolveInput {
 }
 
 export interface PAMAccessTemplate {
+  command_rules?: PAMCommandRule[];
   id: string;
   max_ttl_seconds: number;
   name: string;
@@ -8316,6 +8317,7 @@ export interface PAMAccessTemplateList {
 }
 
 export interface PAMAccessTemplateRequest {
+  command_rules?: PAMCommandRule[];
   max_ttl_seconds: number;
   name: string;
   reason: string;
@@ -8434,6 +8436,53 @@ export interface PAMCheckoutReview {
   request_id: string;
   required_approvals: number;
   status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+}
+
+export interface PAMCommandAction {
+  approval_intent_digest?: string;
+  approval_request_id?: string;
+  attempt: number;
+  connection_id: string;
+  decided_at: string;
+  effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "review_deadline_elapsed";
+  id: string;
+  job_id: number;
+  message_digest: string;
+  observed_at: string;
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+  ordinal: number;
+  phase: string;
+  policy_digest: string;
+  protocol: string;
+  reason: "matched_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
+  review_expires_at?: string;
+  rule_ids: string[];
+  session_id: string;
+  source_event_id: string;
+  status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled";
+}
+
+export interface PAMCommandActionList {
+  items: PAMCommandAction[];
+  next_cursor?: string;
+}
+
+export interface PAMCommandPolicy {
+  rules: PAMFrozenCommandRule[];
+  template_id: string;
+  template_revision: number;
+  version: number;
+}
+
+export interface PAMCommandRule {
+  effect: "block" | "require_approval";
+  enabled: boolean;
+  id: string;
+  name: string;
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+  protocol: "postgres";
+  required_approvals?: number;
+  review_ttl_seconds?: number;
 }
 
 export interface PAMDiscoveredAccount {
@@ -8588,6 +8637,15 @@ export interface PAMFolderRequest {
   template_id: string;
 }
 
+export interface PAMFrozenCommandRule {
+  effect: "block" | "require_approval";
+  id: string;
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH")[];
+  protocol: "postgres";
+  required_approvals?: number;
+  review_ttl_seconds?: number;
+}
+
 export interface PAMImportedAccount {
   approval_request_id: string;
   folder: string;
@@ -8686,6 +8744,7 @@ export interface PAMSSHCredential {
 export interface PAMSession {
   attestation?: Attestation;
   audit?: Record<string, unknown>;
+  command_policy?: PAMCommandPolicy;
   delivery?: "direct" | "gateway";
   emergency?: PAMEmergencyGrant;
   ended_at?: string;

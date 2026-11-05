@@ -15,13 +15,15 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
 const (
 	// KindSession is the agent job one gateway session rides on.
-	KindSession = relay.KindAccessGatewaySession
+	KindSession      = relay.KindAccessGatewaySession
+	KindSessionRules = relay.KindAccessGatewayRulesSession
 	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
 	// TargetRedis, TargetKubernetes and TargetSSH are the session types the
 	// gateway serves.
@@ -61,13 +63,14 @@ func HTTPUpstream(targetType string) bool {
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
-	SessionID       string    `json:"session_id"`
-	TargetType      string    `json:"target_type"`
-	TargetID        string    `json:"target_id"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	TicketDigest    string    `json:"ticket_digest"`
-	CredentialRef   string    `json:"credential_ref,omitempty"`
-	RequiredAgentID string    `json:"required_agent_id"`
+	CommandPolicy   *accessrules.Policy `json:"command_policy,omitempty"`
+	SessionID       string              `json:"session_id"`
+	TargetType      string              `json:"target_type"`
+	TargetID        string              `json:"target_id"`
+	ExpiresAt       time.Time           `json:"expires_at"`
+	TicketDigest    string              `json:"ticket_digest"`
+	CredentialRef   string              `json:"credential_ref,omitempty"`
+	RequiredAgentID string              `json:"required_agent_id"`
 	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
 	// (SHA256:...) route an SSH session; they are public facts.
 	SSHAddress             string   `json:"ssh_address,omitempty"`
@@ -95,7 +98,7 @@ type SessionReport struct {
 
 // ClaimableKinds is what the gateway's own claim loop asks for. Sessions are
 // held for their whole lifetime, so they never enter the shared relay pool.
-func ClaimableKinds() []string { return []string{KindSession} }
+func ClaimableKinds() []string { return []string{KindSession, KindSessionRules} }
 
 // JobKey is the one outbox key a session's job carries.
 func JobKey(sessionID string) string { return "pam-gateway:" + sessionID }
@@ -124,6 +127,9 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
+	}
+	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {
+		return err
 	}
 	if RedeemsCredential(in.TargetType) {
 		if in.CredentialRef != CredentialRef(in.SessionID) {
@@ -163,4 +169,15 @@ func ValidateSessionIntent(in SessionIntent) error {
 		}
 	}
 	return nil
+}
+
+// KindForPolicy keeps unruled sessions compatible with their existing wire kind.
+func KindForPolicy(p *accessrules.Policy) string {
+	if p != nil {
+		return KindSessionRules
+	}
+	return KindSession
+}
+func MatchesSessionJob(kind string, in SessionIntent) bool {
+	return kind == KindForPolicy(in.CommandPolicy)
 }

@@ -147,6 +147,8 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("OwnerRemediationQueue", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:ownerRemediationSummaryFor"),
 	evidence("OwnerRemediationRun", "status", eventProjectionPredicate, "internal/api/owner_remediation.go:API.acceptedOwnerRemediationRuns"),
 	evidence("PAMApprovalRequest", "status", operationApprovalPredicate, "internal/server/pam.go:pamService.RequestPAMSession"),
+	evidence("PAMCommandAction", "status", predicate(evidenceEventProjection, "blocked and pending require the exact held occurrence source event; authorized additionally consumes its matching distinct-human approval in the same projection transaction; denied, expired and canceled are terminal review outcomes. None claims successful target execution."), "internal/store/pam_command_actions.go:Store.ApplyPAMCommandBlockedTx"),
+	evidence("PAMCommandAction", "effective_status", predicate(evidenceObservation, "copied from the recorded gateway decision except pending past its immutable review deadline becomes review_deadline_elapsed; this view cannot create authorization or claim a terminal source event"), "internal/server/pam_command_action_view.go:pamService.ListPAMCommandActions"),
 	evidence("PAMDiscoveredAccount", "status", eventProjectionPredicate, "internal/store/pam_discovery.go:Store.ApplyPAMDiscoveryRunTx"),
 	evidence("PAMDiscoveryRun", "status", eventProjectionPredicate, "internal/store/pam_discovery.go:Store.ApplyPAMDiscoveryRunTx"),
 	evidence("PAMDiscoveryImportReview", "status", operationApprovalPredicate, "internal/server/pam_discovery_import.go:pamService.RequestPAMDiscoveryImport"),

@@ -30,7 +30,12 @@ describe("database console", () => {
     await user.type(sql, "SELECT id, note FROM pam_smoke");
     await user.click(screen.getByRole("button", { name: "Run" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 row SELECT 1"));
-    expect(apiMock.runPAMQuery).toHaveBeenCalledWith("s-1", "SELECT id, note FROM pam_smoke", expect.stringMatching(/^pam-query:s-1:/));
+    expect(apiMock.runPAMQuery).toHaveBeenCalledWith(
+      "s-1",
+      "SELECT id, note FROM pam_smoke",
+      expect.stringMatching(/^pam-query:s-1:/),
+      expect.any(AbortSignal),
+    );
     const table = screen.getByRole("table", { name: "Result of the last statement" });
     expect(
       within(table)
@@ -61,4 +66,27 @@ describe("database console", () => {
     await user.click(screen.getByRole("button", { name: "Run" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("The console could not run it: the session's connection ended"));
   });
+});
+
+it("aborts the actual held HTTP query on cancel and on unmount", async () => {
+  const user = userEvent.setup();
+  let signal: AbortSignal | undefined;
+  apiMock.runPAMQuery.mockImplementation(
+    (_session, _sql, _key, abort: AbortSignal) =>
+      new Promise((_resolve, reject) => {
+        signal = abort;
+        abort.addEventListener("abort", () => reject(new DOMException("Canceled", "AbortError")), { once: true });
+      }),
+  );
+  const view = render(<SqlConsole sessionID="cancel-session" onClose={() => undefined} />);
+  await user.type(screen.getByRole("textbox", { name: "SQL" }), "DROP TABLE held");
+  await user.click(screen.getByRole("button", { name: "Run" }));
+  expect(signal?.aborted).toBe(false);
+  await user.click(screen.getByRole("button", { name: "Cancel query" }));
+  expect(signal?.aborted).toBe(true);
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Query request canceled"));
+  await user.click(screen.getByRole("button", { name: "Run" }));
+  expect(signal?.aborted).toBe(false);
+  view.unmount();
+  expect(signal?.aborted).toBe(true);
 });

@@ -311,6 +311,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodSignGatewayServerCertificate, Handler: signGatewayServerCertificateHandler},
 		{MethodName: methodSignJobSSHKey, Handler: signJobSSHKeyHandler},
 		{MethodName: methodUploadSessionRecording, Handler: uploadSessionRecordingHandler},
+		{MethodName: methodEvaluateGatewayAction, Handler: evaluateGatewayActionHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},

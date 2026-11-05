@@ -14499,7 +14499,9 @@
                 "internal/server/pam_folders.go",
                 "/api/v1/access/auto-approval-rules",
                 "/api/v1/access/auto-approval-rules/{id}",
-                "internal/server/pam_auto_evaluation.go"
+                "internal/server/pam_auto_evaluation.go",
+                "internal/server/pam_command_reviews.go",
+                "/api/v1/access/sessions/{id}/actions"
             ],
             "source_frontend": [
                 "web/src/pages/RequestCredential.tsx",
@@ -14507,7 +14509,9 @@
                 "web/src/pages/Identities.tsx",
                 "web/src/pages/PAMTargetsPanel.tsx",
                 "web/src/pages/PAMFoldersPanel.tsx",
-                "web/src/pages/PAMAutoApprovalPanel.tsx"
+                "web/src/pages/PAMAutoApprovalPanel.tsx",
+                "web/src/pages/PAMCommandRulesPanel.tsx",
+                "web/src/components/access/PAMCommandActions.tsx"
             ],
             "status": "closed",
             "notes": "Qualified as a complete F33 vertical slice on implementation candidate 6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8. The requester gets an effect-free exact preview and cannot approve or mint their own request. A distinct approver reviews the bound owner, profile, purpose, decision window, immutable request ID, and audit link in one dialog; approval itself mints nothing and reveals the separate deterministic prepare/issue/complete path. A failed issue remains approved and retries under the same identity and idempotency key. The attested ephemeral path separately proves m-of-n approval, transactional notification intent, bounded TTL, and one-time short-lived issuance.",
@@ -14594,7 +14598,8 @@
                 "setPAMTargetFolder",
                 "listPAMAutoApprovalRules",
                 "savePAMAutoApprovalRule",
-                "deletePAMAutoApprovalRule"
+                "deletePAMAutoApprovalRule",
+                "listPAMCommandActions"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14684,7 +14689,8 @@
                 "access targets folder",
                 "access auto-approval-rules list",
                 "access auto-approval-rules save",
-                "access auto-approval-rules delete"
+                "access auto-approval-rules delete",
+                "access sessions actions"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -14736,7 +14742,8 @@
                         "CLI command: ephemeral approve",
                         "CLI command: access sessions open",
                         "CLI command: access sessions list",
-                        "CLI command: access sessions get"
+                        "CLI command: access sessions get",
+                        "CLI command: access sessions actions"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -14759,7 +14766,8 @@
                         "OpenAPI operationId: getPAMRequestProgress",
                         "OpenAPI operationId: openPAMSession",
                         "OpenAPI operationId: listPAMSessions",
-                        "OpenAPI operationId: getPAMSession"
+                        "OpenAPI operationId: getPAMSession",
+                        "OpenAPI operationId: listPAMCommandActions"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -14777,7 +14785,8 @@
                         "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
                         "internal/server/pam_served_test.go proves a tenant-attested PAM request waits for independent quorum, binds the exact reviewed target and command, then opens real Postgres and sshd-backed sessions, audits them, and expires them.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+                        "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
+                        "internal/server/pam_command_rules_served_test.go proves PostgreSQL command blocking, distinct-human waiting, denial, review expiry, disconnect refusal and the documented dynamic-SQL bypass with real gateway traffic; authorization is distinct from target completion."
                     ],
                     "refs": [
                         "internal/server/issuance_request_served_test.go",

@@ -760,7 +760,7 @@ func wirePAMPostgresProvider(d *Deps, adminDSNRef string, maxTTL time.Duration) 
 	d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
 }
 
-func seedPAMPostgresTable(t *testing.T, dsn string) {
+func seedPAMPostgresTable(t *testing.T, dsn string, commandProbe ...bool) {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -771,6 +771,14 @@ func seedPAMPostgresTable(t *testing.T, dsn string) {
 	if _, err := conn.Exec(ctx, `CREATE TABLE public.pam_smoke (id int PRIMARY KEY); INSERT INTO public.pam_smoke VALUES (1);`); err != nil {
 		t.Fatalf("seed target postgres: %v", err)
 	}
+	if len(commandProbe) > 0 && commandProbe[0] {
+		// Only this disposable target's public counter receives UPDATE. It lets an
+		// independent gateway connection observe an effect after the caller exits.
+		if _, err := conn.Exec(ctx, `CREATE TABLE public.a262_counter(value integer NOT NULL); INSERT INTO public.a262_counter VALUES(1); GRANT SELECT,UPDATE ON public.a262_counter TO PUBLIC`); err != nil {
+			t.Fatalf("seed command-rule probe: %v", err)
+		}
+	}
+
 }
 
 func pamPostgresRoleValidUntil(t *testing.T, adminDSN, username string) time.Time {

@@ -68,7 +68,7 @@ func (a *agentService) acceptLateTerminalReceipt(ctx context.Context, info mtls.
 	// can report, so the gateway's report that it ended the session arrives
 	// here. It is that session's termination acknowledgement: recorded once
 	// it matches the job this agent held at this attempt.
-	if destination == relay.KindAccessGatewaySession && strings.TrimSpace(req.Outcome) == transport.JobOutcomeExecuted &&
+	if relay.IsAccessGatewaySession(destination) && strings.TrimSpace(req.Outcome) == transport.JobOutcomeExecuted &&
 		a.recordGatewaySessionEnded != nil {
 		payload, key, err := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
 		if err != nil {

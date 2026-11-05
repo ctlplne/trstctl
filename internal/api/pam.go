@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
@@ -174,19 +175,24 @@ func WithPAM(svc PAMService) Option {
 }
 
 type PAMSessionRequest struct {
-	RequestID         string
-	ApprovalRequestID string
-	IntentDigest      string
-	TargetType        string
-	TargetID          string
-	Role              string
-	Reason            string
-	Method            string
-	Payload           []byte
-	TTLSeconds        int64
-	SSHPublicKey      []byte
-	SSHPrincipal      string
-	TemplateID        string
+	// Resolved metadata is filled by the server; the HTTP request type cannot supply it.
+	ResolvedCommandPolicy  *accessrules.Policy
+	ResolvedTemplateRefs   []string
+	TemplateResolved       bool
+	OriginalTemplateReason string
+	RequestID              string
+	ApprovalRequestID      string
+	IntentDigest           string
+	TargetType             string
+	TargetID               string
+	Role                   string
+	Reason                 string
+	Method                 string
+	Payload                []byte
+	TTLSeconds             int64
+	SSHPublicKey           []byte
+	SSHPrincipal           string
+	TemplateID             string
 	// Browser is set on an open for the browser (A259); it is not part of
 	// the reviewed command.
 	Browser bool
@@ -243,22 +249,23 @@ type PAMRequestProgress struct {
 }
 
 type PAMSession struct {
-	ID                    string     `json:"id"`
-	TargetID              string     `json:"target_id"`
-	TargetType            string     `json:"target_type"`
-	Role                  string     `json:"role"`
-	Status                string     `json:"status"`
-	Subject               string     `json:"subject"`
-	RequestedBy           string     `json:"requested_by"`
-	Reason                string     `json:"reason,omitempty"`
-	StartedAt             time.Time  `json:"started_at"`
-	ExpiresAt             time.Time  `json:"expires_at"`
-	EndedAt               *time.Time `json:"ended_at,omitempty"`
-	RevocationRequestedBy string     `json:"revocation_requested_by,omitempty"`
-	RevocationReason      string     `json:"revocation_reason,omitempty"`
-	RevocationRequestedAt *time.Time `json:"revocation_requested_at,omitempty"`
-	RevocationFailure     string     `json:"revocation_failure,omitempty"`
-	RevocationFailedAt    *time.Time `json:"revocation_failed_at,omitempty"`
+	CommandPolicy         *accessrules.Policy `json:"command_policy,omitempty"`
+	ID                    string              `json:"id"`
+	TargetID              string              `json:"target_id"`
+	TargetType            string              `json:"target_type"`
+	Role                  string              `json:"role"`
+	Status                string              `json:"status"`
+	Subject               string              `json:"subject"`
+	RequestedBy           string              `json:"requested_by"`
+	Reason                string              `json:"reason,omitempty"`
+	StartedAt             time.Time           `json:"started_at"`
+	ExpiresAt             time.Time           `json:"expires_at"`
+	EndedAt               *time.Time          `json:"ended_at,omitempty"`
+	RevocationRequestedBy string              `json:"revocation_requested_by,omitempty"`
+	RevocationReason      string              `json:"revocation_reason,omitempty"`
+	RevocationRequestedAt *time.Time          `json:"revocation_requested_at,omitempty"`
+	RevocationFailure     string              `json:"revocation_failure,omitempty"`
+	RevocationFailedAt    *time.Time          `json:"revocation_failed_at,omitempty"`
 	// Older sessions did not retain verified facts. Omit their attestation
 	// instead of presenting a zero verification time as evidence.
 	Attestation *attest.Attestation    `json:"attestation,omitempty"`

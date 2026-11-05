@@ -159,6 +159,10 @@ const (
 	EventAWSHoneyScanPage                   = "honeytoken.aws.scan_page"
 	EventAWSHoneyTokenRearmed               = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                  = "pam.session.started"
+	EventPAMCommandBlocked                  = "pam.command.blocked"
+	EventPAMCommandApprovalRequested        = "pam.command.approval_requested"
+	EventPAMCommandReviewRequested          = "pam.command.review_requested"
+	EventPAMCommandReviewDecided            = "pam.command.review_decided"
 	EventPAMSessionActivationRequested      = "pam.session.activation_requested"
 	EventPAMSSHSigningRecoveryRequested     = "pam.session.ssh_signing_recovery_requested"
 	EventPAMSSHSigningRecovered             = "pam.session.ssh_signing_recovered"
@@ -395,6 +399,8 @@ var ledger = []FeatureEvent{
 	}},
 
 	// F33 — Just-in-time privileged access sessions.
+	// Gateway checks continue the exact outbox-backed admitted session job.
+	{"F33", "Just-in-time issuance with approval flows", "evaluate_pam_command", "openPAMSession", []string{EventPAMCommandBlocked, EventPAMCommandReviewRequested, EventPAMCommandApprovalRequested, EventPAMCommandReviewDecided}},
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
 	{"F33", "Just-in-time issuance with approval flows", "activate_pam_session", "openPAMSession", []string{EventPAMSessionActivationRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "recover_pam_ssh_signing", "openPAMSession", []string{EventPAMSSHSigningRecoveryRequested, EventPAMSSHSigningRecovered}},

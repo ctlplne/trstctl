@@ -47,6 +47,7 @@ type Config struct {
 
 // Gateway holds the sessions this agent serves.
 type Gateway struct {
+	commands commandBudget
 	cfg      Config
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -186,9 +187,15 @@ func (g *Gateway) claim(ctx context.Context) {
 
 func (g *Gateway) start(ctx context.Context, job relay.Job) {
 	var intent SessionIntent
-	if err := json.Unmarshal(job.Payload, &intent); err != nil || ValidateSessionIntent(intent) != nil {
+	if err := json.Unmarshal(job.Payload, &intent); err != nil || ValidateSessionIntent(intent) != nil || !MatchesSessionJob(job.Kind, intent) {
 		g.report(ctx, job, relay.OutcomeFailed, "job payload is not a gateway session")
 		return
+	}
+	if intent.CommandPolicy != nil {
+		if _, ok := g.cfg.Channel.(ActionReviewer); !ok {
+			g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "policy_unavailable", 0))
+			return
+		}
 	}
 	if !g.cfg.Now().Before(intent.ExpiresAt) {
 		g.report(ctx, job, relay.OutcomeFailed, sessionReport(intent.SessionID, "deadline", 0))
@@ -487,7 +494,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 	case TargetPostgres:
 		dsn := s.credential()
 		defer secret.Wipe(dsn)
-		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+		guard, err := g.commandConnection(s)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: command enforcement unavailable", s.intent.SessionID)
+			return
+		}
+		if err := servePostgres(ctx, conn, dsn, s.intent.ExpiresAt, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetRedis:

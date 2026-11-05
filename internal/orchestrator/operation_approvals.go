@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -152,12 +153,17 @@ func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenan
 			if err != nil {
 				return err
 			}
+			if intent.ResourceKind == "pam_command" {
+				if err := projections.ValidatePAMCommandApprovalRequested(payload); err != nil {
+					return err
+				}
+			}
 			raw, err := json.Marshal(payload)
 			if err != nil {
 				return err
 			}
 			ev, err = o.log.Append(ctx, events.Event{
-				ID: requestID, Type: projections.EventApprovalRequested,
+				ID: requestID, Type: operationApprovalRequestedEventType(intent.ResourceKind),
 				TenantID: tenantID, Data: raw,
 			})
 			if err != nil {
@@ -244,13 +250,27 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 	applyDecision := func(ctx context.Context) error {
 		return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 			var (
-				identity         store.Identity
-				identityVersion  uint64
-				secretVersion    int
-				secretExists     bool
-				secretShapeValid = true
+				identity          store.Identity
+				identityVersion   uint64
+				secretVersion     int
+				secretExists      bool
+				secretShapeValid  = true
+				varCommandAction  store.PAMCommandAction
+				commandShapeValid = true
 			)
 			switch preview.ResourceKind {
+			case "pam_command":
+				id, ok := strings.CutPrefix(preview.ResourceID, "pam-command:")
+				commandShapeValid = ok && id != ""
+				if commandShapeValid {
+					var lockErr error
+					varCommandAction, lockErr = o.store.GetPAMCommandActionForUpdateTx(ctx, tx, tenantID, id)
+					if errors.Is(lockErr, pgx.ErrNoRows) {
+						commandShapeValid = false
+					} else if lockErr != nil {
+						return lockErr
+					}
+				}
 			case "identity":
 				var lockErr error
 				identity, identityVersion, lockErr = o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, preview.ResourceID, true)
@@ -393,6 +413,8 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 			}
 			targetDrifted := false
 			switch request.ResourceKind {
+			case "pam_command":
+				targetDrifted = !commandShapeValid || varCommandAction.Status != "pending" || varCommandAction.ReviewExpiresAt == nil || !now.Before(*varCommandAction.ReviewExpiresAt) || request.Action != "execute" || !slices.Contains(request.EvidenceRefs, "pam-action:"+varCommandAction.ID) || !slices.Contains(request.EvidenceRefs, "pam-message-sha256:"+varCommandAction.MessageDigest)
 			case "identity":
 				targetDrifted = identity.Status != request.FromState || identityVersion != request.TargetVersion
 			case "secret":
@@ -594,7 +616,7 @@ func validateCanonicalOperationApprovalRequestEvent(
 	requestID string,
 ) (projections.ApprovalRequested, error) {
 	if err := validateOperationApprovalEventEnvelope(event, tenantID, requestID,
-		projections.EventApprovalRequested); err != nil {
+		operationApprovalRequestedEventType(intent.ResourceKind)); err != nil {
 		return projections.ApprovalRequested{}, fmt.Errorf("%w: canonical operation approval request envelope differs", err)
 	}
 	if err := validateOperationApprovalBoundActor(event.Actor, tenantID, intent.Requester); err != nil {
@@ -840,4 +862,11 @@ func operationApprovalIntentDigest(tenantID string, request projections.Approval
 		return "", err
 	}
 	return "sha256:" + crypto.SHA256Hex(raw), nil
+}
+
+func operationApprovalRequestedEventType(kind string) string {
+	if kind == "pam_command" {
+		return projections.EventPAMCommandApprovalRequested
+	}
+	return projections.EventApprovalRequested
 }

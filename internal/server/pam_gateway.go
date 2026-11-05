@@ -41,7 +41,7 @@ func (r *relayCredentialResolver) resolveGatewaySession(ctx context.Context, ten
 		return redeemedMaterial{}, errors.New("access gateway sessions are not served")
 	}
 	var intent accessgateway.SessionIntent
-	if err := json.Unmarshal(job.Payload, &intent); err != nil || accessgateway.ValidateSessionIntent(intent) != nil {
+	if err := json.Unmarshal(job.Payload, &intent); err != nil || accessgateway.ValidateSessionIntent(intent) != nil || !accessgateway.MatchesSessionJob(job.Destination, intent) {
 		return redeemedMaterial{}, errors.New("gateway job payload is not a session")
 	}
 	if intent.RequiredAgentID != job.RequiredAgentID {
@@ -77,7 +77,7 @@ func validateGatewaySessionReport(payload []byte, detail string) error {
 	switch {
 	case report.SessionID != intent.SessionID:
 		return errors.New("gateway session report names another session")
-	case report.Ended != "deadline" && report.Ended != "recalled" && report.Ended != "credential_unavailable":
+	case report.Ended != "deadline" && report.Ended != "recalled" && report.Ended != "credential_unavailable" && report.Ended != "policy_unavailable":
 		return fmt.Errorf("gateway session report ended %q is not a known ending", report.Ended)
 	case report.Connections < 0:
 		return errors.New("gateway session report counts no connections")
@@ -155,7 +155,7 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 		return err
 	}
 	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{TenantID: tenantID, Destination: accessgateway.KindSession,
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{TenantID: tenantID, Destination: accessgateway.KindForPolicy(intent.CommandPolicy),
 			IdempotencyKey: accessgateway.JobKey(intent.SessionID), Payload: payload,
 			RequiredAgentRole: mtls.AgentRoleGateway, RequiredAgentID: intent.RequiredAgentID})
 		return err
@@ -173,7 +173,7 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSession) (accessgateway.SessionIntent, error) {
 	intent := accessgateway.SessionIntent{SessionID: rec.ID, TargetType: rec.TargetType, TargetID: rec.TargetID,
 		ExpiresAt: rec.ExpiresAt, TicketDigest: rec.GatewayTicketDigest, RequiredAgentID: rec.GatewayAgentID,
-		Record: s.recordings != nil}
+		Record: s.recordings != nil, CommandPolicy: rec.CommandPolicy}
 	if rec.TargetType != pamTargetSSH {
 		intent.CredentialRef = accessgateway.CredentialRef(rec.ID)
 		if accessgateway.HTTPUpstream(rec.TargetType) {
@@ -320,7 +320,7 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 		return api.PAMSession{}, err
 	}
 	rec := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, ExpiresAt: expiresAt,
-		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal}
+		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: payload.CommandPolicy}
 	if intent, err := s.gatewaySessionIntent(ctx, rec); err == nil {
 		_ = s.enqueueGatewaySession(ctx, tenantID, intent)
 	}

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -45,7 +46,7 @@ var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 	return api.PAMAccessTemplate{ID: t.ID, Name: t.Name, Reason: t.Reason, RequiredApprovals: t.RequiredApprovals,
-		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
+		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
 }
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
@@ -57,6 +58,11 @@ func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
 // SavePAMTemplate creates a template (no ID) or replaces one at the revision
 // the caller read.
 func (s *pamService) SavePAMTemplate(ctx context.Context, tenantID, actor string, t api.PAMAccessTemplate) (api.PAMAccessTemplate, error) {
+	var saved api.PAMAccessTemplate
+	err := s.store.WithPAMCatalogLock(ctx, tenantID, func() error { var err error; saved, err = s.savePAMTemplate(ctx, tenantID, actor, t); return err })
+	return saved, err
+}
+func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string, t api.PAMAccessTemplate) (api.PAMAccessTemplate, error) {
 	t.Name, t.Reason = strings.TrimSpace(t.Name), strings.TrimSpace(t.Reason)
 	switch {
 	case actor == "":
@@ -71,6 +77,11 @@ func (s *pamService) SavePAMTemplate(ctx context.Context, tenantID, actor string
 	case t.MaxTTLSeconds < 60 || time.Duration(t.MaxTTLSeconds)*time.Second > s.maxTTL:
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: max_ttl_seconds must be 60-%d", api.ErrPAMInvalid, int(s.maxTTL/time.Second))
 	}
+	rules, err := accessrules.CanonicalRules(t.CommandRules)
+	if err != nil {
+		return api.PAMAccessTemplate{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
+	}
+	t.CommandRules = rules
 	revision := int64(1)
 	if t.ID == "" {
 		t.ID = uuid.NewString()
@@ -94,7 +105,7 @@ func (s *pamService) SavePAMTemplate(ctx context.Context, tenantID, actor string
 		}
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMTemplateSaved, projections.PAMTemplateSaved{ID: t.ID, Name: t.Name,
-		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, Revision: revision,
+		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: revision,
 		Actor: actor, At: s.clock().UTC()}); err != nil {
 		return api.PAMAccessTemplate{}, err
 	}
@@ -126,6 +137,9 @@ func (s *pamService) GetPAMTemplate(ctx context.Context, tenantID, id string) (a
 }
 
 func (s *pamService) DeletePAMTemplate(ctx context.Context, tenantID, id, actor string) error {
+	return s.store.WithPAMCatalogLock(ctx, tenantID, func() error { return s.deletePAMTemplate(ctx, tenantID, id, actor) })
+}
+func (s *pamService) deletePAMTemplate(ctx context.Context, tenantID, id, actor string) error {
 	if _, err := s.store.GetPAMTemplate(ctx, tenantID, id); err != nil {
 		return err
 	}
@@ -137,12 +151,27 @@ func (s *pamService) DeletePAMTemplate(ctx context.Context, tenantID, id, actor 
 // (with the requester's note after it), its maximum length, and the quorum it
 // asks for. A template changed or deleted after the review no longer opens.
 func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.PAMSessionRequest) (api.PAMSessionRequest, int, []string, error) {
+	if req.TemplateResolved {
+		req.Reason = req.OriginalTemplateReason
+	}
+	req.OriginalTemplateReason = req.Reason
+	req.ResolvedCommandPolicy = nil
+	req.ResolvedTemplateRefs = nil
+	req.TemplateResolved = false
 	t, refs, recorded, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
 	if err != nil {
 		return req, 0, nil, err
 	}
+	req.ResolvedTemplateRefs = append([]string{}, refs...)
+	req.TemplateResolved = true
 	if t == nil {
 		return req, s.requiredApprovals, refs, nil
+	}
+	req.ResolvedCommandPolicy = accessrules.ForTarget(t.ID, t.Revision, t.CommandRules, req.TargetType)
+	if req.ResolvedCommandPolicy != nil {
+		if err := s.requireCommandRuleGateway(ctx, tenantID, req); err != nil {
+			return req, 0, nil, err
+		}
 	}
 	if t.RequireRecording && !recorded {
 		return req, 0, nil, fmt.Errorf("%w: this template requires a recorded gateway session and configured recording storage", api.ErrPAMInvalid)

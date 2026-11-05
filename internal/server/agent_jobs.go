@@ -130,7 +130,8 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindMDMCheckIn: true,
 	// A254: one brokered access session, held by its gateway until the
 	// deadline or a recall.
-	relay.KindAccessGatewaySession: true,
+	relay.KindAccessGatewaySession:      true,
+	relay.KindAccessGatewayRulesSession: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -1025,7 +1026,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM check-in result needs a terminal executed report")
 		}
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
-	case relay.KindAccessGatewaySession:
+	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession:
 		// A254: the gateway reports how a session ended; the session itself
 		// is ended by its deadline and revocation, not by this report. A255:
 		// the report is recorded, acknowledging a termination.
@@ -1366,7 +1367,7 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// A254: a gateway session that could not be held (its credential was not
 	// redeemable, its deadline passed) is never retried: a new session is a
 	// new approval.
-	if claim.Destination == relay.KindAccessGatewaySession {
+	if relay.IsAccessGatewaySession(claim.Destination) {
 		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on

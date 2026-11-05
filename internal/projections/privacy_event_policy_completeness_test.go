@@ -500,7 +500,7 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 		{name: "profile author", eventType: EventProfileCreated, version: ProfileEventSchemaVersion,
 			data:   completePrivacyFixture[ProfileVersioned](t, `{"created_by":"privacy-policy-subject","name":"active-profile","spec":{}}`),
 			decode: decodePrivacyFixture[ProfileVersioned], wantPlaceholder: true},
-		{name: "pam start", eventType: EventPAMSessionStarted, version: 1,
+		{name: "pam start", eventType: EventPAMSessionStarted, version: PAMCommandRulesEventSchemaVersion,
 			data:   completePrivacyFixture[PAMSessionStarted](t, `{"subject":"privacy-policy-subject","requested_by":"privacy-policy-subject","reason":"for privacy-policy-subject","attestation":{"subject":"privacy-policy-subject","selectors":["privacy-policy-subject"],"claims":{"actor":"privacy-policy-subject"}},"audit":{"operator":"privacy-policy-subject"}}`),
 			decode: decodePrivacyFixture[PAMSessionStarted], wantPlaceholder: true,
 			want: []string{`"reason":""`, `"attestation":{}`, `"audit":{}`}},

@@ -1721,15 +1721,16 @@ func (a *API) routes() []route {
 	routes = append(routes, a.pamDiscoveryRoutes()...)        // see pam_discovery.go
 	routes = append(routes, a.pamCheckoutRoutes()...)         // see pam_checkouts.go
 	routes = append(routes, a.pamAutoApprovalRuleRoutes()...) // see pam_auto_approval_rules.go
-	routes = append(routes, a.pamFolderRoutes()...)           // see pam_folders.go
-	routes = append(routes, a.pamBrowserRoutes()...)          // see pam_browser.go
-	routes = append(routes, a.switchingImportRoutes()...)     // see switching_imports.go
-	routes = append(routes, a.switchingWaveRoutes()...)       // see switching_waves.go
-	routes = append(routes, a.adcsDecisionRoutes()...)        // see adcs_decisions.go
-	routes = append(routes, a.mdmCheckInRoutes()...)          // see mdm_check_ins.go
-	routes = append(routes, a.factoryBatchRoutes()...)        // see factory_batches.go
-	routes = append(routes, a.incidentCloseRoutes()...)       // see incident_close.go
-	routes = append(routes, a.keyVaultDisableRoutes()...)     // see key_vault_disable.go
+	routes = append(routes, a.pamCommandRuleRoutes()...)
+	routes = append(routes, a.pamFolderRoutes()...)       // see pam_folders.go
+	routes = append(routes, a.pamBrowserRoutes()...)      // see pam_browser.go
+	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go
+	routes = append(routes, a.switchingWaveRoutes()...)   // see switching_waves.go
+	routes = append(routes, a.adcsDecisionRoutes()...)    // see adcs_decisions.go
+	routes = append(routes, a.mdmCheckInRoutes()...)      // see mdm_check_ins.go
+	routes = append(routes, a.factoryBatchRoutes()...)    // see factory_batches.go
+	routes = append(routes, a.incidentCloseRoutes()...)   // see incident_close.go
+	routes = append(routes, a.keyVaultDisableRoutes()...) // see key_vault_disable.go
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)
 	return append(routes, a.licensedRouteRegistry()...)

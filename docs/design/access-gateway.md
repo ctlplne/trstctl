@@ -400,3 +400,91 @@ environment, its output, the launcher's output or the gateway's log; an account 
 does not delegate is refused; and one call revoking its identity revokes its run and ends its
 live session. A258 (credential health, access templates and emergency access) is served:
 `TestServedCredentialHealthNeverLocksOutA258` and `TestServedTemplatesAndEmergencyAccessA258`.
+
+## PostgreSQL command guardrails (A262, first protocol)
+
+A template can block a known PostgreSQL operation or hold it for human approval.
+These rules also work with session recording turned off. Configure them in the
+account folders panel's **Command guardrails** wizard, or replace a template's
+`command_rules` through the existing revisioned template API. A folder applies
+its template to every account in it. Editing a template changes new sessions;
+an existing session keeps the exact revision that its activation approved.
+Terminate that session when its existing authority must end. Credential check-out
+is refused when the applicable template requires gateway command rules.
+
+Enable `access.gateway.session.rules.v1` explicitly in
+`agent_channel.claimable_job_kinds`, upgrade the bound gateway, and keep its
+`--access-gateway-listen` enabled. The gateway must report the enforcing job kind
+before a rule-bearing session opens. An old gateway cannot claim this kind;
+a policy under the ordinary session kind is refused before credential redemption.
+This first rule format accepts PostgreSQL only. SSH and the other database
+protocols remain unsupported for rules and are rejected when configuring one.
+Their ordinary sessions retain their existing behavior.
+
+Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
+`operations`, and `effect: "block"` or `"require_approval"`. A review rule also
+requires `required_approvals` (1–3 distinct humans) and `review_ttl_seconds`
+(5–45 seconds). The session deadline can shorten that wait. A matching block wins;
+otherwise matching review rules use the largest quorum and shortest deadline.
+Session auto-approval rules do not vote on commands. The original requester cannot
+approve their own command, even if they also hold `access:approve`.
+
+The gateway inspects post-authentication traffic locally. Its matcher and control
+plane receive only known matched operation names, rule UUIDs, a connection and
+occurrence identity, and one-way message/policy digests. They receive no statement
+text, parameters, password, DSN or private key. Review is of an operation class
+and the exact occurrence's digest; it is **not** review of arguments or a complete
+statement preview. One simple-query occurrence can contain several statements.
+The whole batch waits or is refused together. A prepared statement's new Bind is
+a new occurrence, checked before upstream planning or parameter conversion. It
+needs fresh approval on each binding. Cursor fetches resume the same bound query;
+a binding whose unused approval expires must be replaced by a fresh Bind.
+
+The source records `pam.command.blocked` or `pam.command.review_requested`, then
+the human request as `pam.command.approval_requested`, and a terminal
+`pam.command.review_decided`. The command approval's evidence has a closed public
+vocabulary, so identity erasure preserves those facts and keeps consumption aligned
+with the canonical request. Its approved grant is consumed in the same projection
+transaction as the authorization. A retry compares the retained source event,
+including beyond the broker's duplicate window. It cannot change an occurrence's
+message, policy, connection, job or attempt. A historical grant does not authorize
+a session that is ending or ended.
+
+Read decisions with `GET /api/v1/access/sessions/{id}/actions` or
+`trstctl-cli access sessions actions SESSION_UUID --limit 50`. The result pages by
+first-observed time and ID. `status` is the recorded source decision;
+`effective_status: "review_deadline_elapsed"` means a pending row's deadline
+passed without claiming a terminal event. `authorized` means permission to
+forward at that time, not successful target execution. The SQL console shows
+pending review, its precise deadline, exact approval links and **Cancel query**.
+Canceling or closing the client stops a held occurrence. Cancellation cannot undo
+a statement already forwarded; check the target before retrying.
+
+When source/audit service or capacity is unavailable, the gateway refuses rather
+than forwarding without a durable decision. The fixed refusal marker includes the
+public action ID. An offline local refusal log is not a durable source receipt.
+The source has its own bounded command pool (four workers, queue 16), separate from
+heartbeat and API work. The gateway limits each protocol to eight decision waits
+and 8 MiB of held frames, and each target to four waits and 4 MiB. It reserves bytes
+before allocating, caps a connection's input queue at 64 frames, statement text at
+1 MiB, complete frontend frames at 1 MiB plus 8192 bytes, Bind parameter/format
+counts at 1024, and statement/portal caches at 128 each. Unknown or oversized guarded
+framing is refused. Guarded Parse/Bind/Close exchanges wait for real backend
+acknowledgments and add Flush round trips. Throughput qualification remains owed.
+
+These are lexical guardrails. Comments, ordinary case changes and batches do not
+hide a direct blocked keyword; quoted values and identifiers are not commands.
+Stored procedures, functions and dynamic SQL can disguise an operation. The served
+proof executes `DO $$ BEGIN EXECUTE 'TRUNCATE ...'; END $$` with the same login:
+the direct TRUNCATE is refused, while the disguised operation succeeds. Database
+privileges provide containment. SQL-level PREPARE/EXECUTE and FunctionCall are
+unsupported controls on guarded connections and are always refused; use the
+ordinary wire prepared-statement protocol instead. COPY payload data is not
+classified as SQL and is excluded from command evidence.
+
+Current source proofs use a real PostgreSQL target, the mTLS gateway channel and
+owned session jobs: direct refusal and readback, repeated prepared bindings,
+rejected duplicate Parse cache poisoning, two distinct human votes, self-review
+refusal, denial, expiry, disconnect, late-vote refusal and the documented bypass.
+These are local source proofs. Exact installed-image replay, broader protocol
+coverage and the deferred qualification gates remain owed.

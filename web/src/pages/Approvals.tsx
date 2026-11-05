@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Info } from "lucide-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAuth } from "@/auth/AuthProvider";
@@ -41,6 +41,10 @@ const profileApprovalsQueryKey = ["profile-edit-approvals"] as const;
 
 export function Approvals() {
   const { formatDate, t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const linkedRequest = searchParams.get("request");
+  const openedLink = useRef<string | null>(null);
+
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const canReadGeneral = ["certs:issue", "secrets:write", "keys:approve", "access:approve"].some((permission) => hasPermission(user, permission));
@@ -111,6 +115,15 @@ export function Approvals() {
     setNotice(null);
     setReviewDialogOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (!linkedRequest || openedLink.current === linkedRequest || requests.loading || !canReadGeneral) return;
+    const exact = rows.find((row) => row.id === linkedRequest);
+    if (exact) {
+      openedLink.current = linkedRequest;
+      openReview(exact);
+    }
+  }, [linkedRequest, requests.loading, canReadGeneral, rows, openReview]);
 
   const closeIssuanceReview = useCallback(() => {
     setIssuanceReviewOpen(false);

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/store"
@@ -26,10 +27,11 @@ type PAMAccessTemplate struct {
 	MaxTTLSeconds     int    `json:"max_ttl_seconds"`
 	// RequireRecording (A261 part 3) refuses a session through the template
 	// that would not be recorded, and every check-out.
-	RequireRecording bool      `json:"require_recording"`
-	Revision         int64     `json:"revision"`
-	SavedBy          string    `json:"saved_by,omitempty"`
-	SavedAt          time.Time `json:"saved_at"`
+	RequireRecording bool               `json:"require_recording"`
+	CommandRules     []accessrules.Rule `json:"command_rules,omitempty"`
+	Revision         int64              `json:"revision"`
+	SavedBy          string             `json:"saved_by,omitempty"`
+	SavedAt          time.Time          `json:"saved_at"`
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting

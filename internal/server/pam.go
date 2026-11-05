@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -149,28 +150,29 @@ type PAMSSHTarget struct {
 }
 
 type pamService struct {
-	store             *store.Store
-	log               *events.Log
-	projector         *projections.Projector
-	audit             auditsink.Auditor
-	attestors         []attest.Attestor
-	databases         map[pamDatabaseID]*pamDatabaseTarget
-	providers         DynamicSecretProviderRegistry
-	kek               seal.KeyWrapper
-	outbox            *orchestrator.Outbox
-	wakeOutbox        func()
-	tenantCrypto      tenantseal.Access
-	sshTargets        map[pamTargetID]PAMSSHTarget
-	sshCA             *sshca.CA
-	sshProtocol       *sshProtocol
-	defaultTTL        time.Duration
-	maxTTL            time.Duration
-	expiryInterval    time.Duration
-	clock             func() time.Time
-	orch              *orchestrator.Orchestrator
-	approvalTTL       time.Duration
-	requiredApprovals int
-	targetDeps        pamDeps
+	commandRuleJobsEnabled bool
+	store                  *store.Store
+	log                    *events.Log
+	projector              *projections.Projector
+	audit                  auditsink.Auditor
+	attestors              []attest.Attestor
+	databases              map[pamDatabaseID]*pamDatabaseTarget
+	providers              DynamicSecretProviderRegistry
+	kek                    seal.KeyWrapper
+	outbox                 *orchestrator.Outbox
+	wakeOutbox             func()
+	tenantCrypto           tenantseal.Access
+	sshTargets             map[pamTargetID]PAMSSHTarget
+	sshCA                  *sshca.CA
+	sshProtocol            *sshProtocol
+	defaultTTL             time.Duration
+	maxTTL                 time.Duration
+	expiryInterval         time.Duration
+	clock                  func() time.Time
+	orch                   *orchestrator.Orchestrator
+	approvalTTL            time.Duration
+	requiredApprovals      int
+	targetDeps             pamDeps
 	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
 	// certificate against (A254); nil when no agent channel is served.
 	agentCAPEM func() []byte
@@ -231,19 +233,20 @@ type pamTargetID struct {
 }
 
 type pamDeps struct {
-	Config       PAMConfig
-	Store        *store.Store
-	Log          *events.Log
-	SSHCA        *sshca.CA
-	SSHProtocol  *sshProtocol
-	Audit        auditsink.Auditor
-	Clock        func() time.Time
-	Providers    DynamicSecretProviderRegistry
-	KEK          seal.KeyWrapper
-	Outbox       *orchestrator.Outbox
-	WakeOutbox   func()
-	TenantCrypto tenantseal.Access
-	Orch         *orchestrator.Orchestrator
+	CommandRuleJobsEnabled bool
+	Config                 PAMConfig
+	Store                  *store.Store
+	Log                    *events.Log
+	SSHCA                  *sshca.CA
+	SSHProtocol            *sshProtocol
+	Audit                  auditsink.Auditor
+	Clock                  func() time.Time
+	Providers              DynamicSecretProviderRegistry
+	KEK                    seal.KeyWrapper
+	Outbox                 *orchestrator.Outbox
+	WakeOutbox             func()
+	TenantCrypto           tenantseal.Access
+	Orch                   *orchestrator.Orchestrator
 	// AgentCAPEM is the agent CA a client verifies a gateway against (A254).
 	AgentCAPEM func() []byte
 	// RecordingObjects and RecordingSigner store and sign gateway session
@@ -324,7 +327,8 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		return nil, err
 	}
 	return &pamService{
-		browser: newPAMBrowser(), discovery: newPAMDiscovery(),
+		commandRuleJobsEnabled: d.CommandRuleJobsEnabled,
+		browser:                newPAMBrowser(), discovery: newPAMDiscovery(),
 		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
@@ -620,9 +624,13 @@ func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, reques
 	if err != nil {
 		return "", err
 	}
-	_, policyRefs, _, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
-	if err != nil {
-		return "", err
+	policyRefs := req.ResolvedTemplateRefs
+	if !req.TemplateResolved {
+		var err error
+		_, policyRefs, _, err = s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
+		if err != nil {
+			return "", err
+		}
 	}
 	command := struct {
 		TenantID, RequestID, Requester, TargetType, TargetID, Role, Reason             string
@@ -630,14 +638,15 @@ func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, reques
 		Selectors                                                                      []string
 		Claims                                                                         map[string]string
 		TTLSeconds                                                                     int64
-		PolicyRefs                                                                     []string `json:",omitempty"`
+		PolicyRefs                                                                     []string            `json:",omitempty"`
+		CommandPolicy                                                                  *accessrules.Policy `json:",omitempty"`
 	}{
 		TenantID: tenantID, RequestID: req.RequestID, Requester: requester,
 		TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, Reason: req.Reason,
 		Method: req.Method, PayloadDigest: crypto.SHA256Hex(req.Payload),
 		SSHPublicKeyDigest: crypto.SHA256Hex(req.SSHPublicKey), SSHPrincipal: req.SSHPrincipal,
 		Subject: att.Subject, Selectors: att.Selectors, Claims: att.Claims, TargetDigest: targetDigest,
-		TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second), PolicyRefs: policyRefs,
+		TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second), PolicyRefs: policyRefs, CommandPolicy: req.ResolvedCommandPolicy,
 	}
 	raw, err := json.Marshal(command)
 	if err != nil {
@@ -785,7 +794,7 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		// extension is refused and it closes the session's connections —
 		// while the upstream credential's revocation proceeds as for any
 		// session.
-		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindSession, accessgateway.JobKey(id), at); err != nil {
+		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindForPolicy(rec.CommandPolicy), accessgateway.JobKey(id), at); err != nil {
 			return api.PAMSession{}, err
 		}
 	}
@@ -861,7 +870,16 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 }
 
 func (s *pamService) activatePAMSession(ctx context.Context, tenantID, idempotencyKey, requester, id string, verifier *attest.Verifier, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
-	now, err := s.authorizeActivation(ctx, tenantID, idempotencyKey, requester, id, req, att)
+	var now time.Time
+	err := s.store.WithPAMCatalogLock(ctx, tenantID, func() error {
+		var err error
+		req, _, _, err = s.withTemplate(ctx, tenantID, req)
+		if err != nil {
+			return err
+		}
+		now, err = s.authorizeActivation(ctx, tenantID, idempotencyKey, requester, id, req, att)
+		return err
+	})
 	if err != nil {
 		return api.PAMSession{}, err
 	}
@@ -1133,7 +1151,7 @@ func (s *pamService) appendSSHSessionStarted(ctx context.Context, tenantID, sess
 	}
 	e, err := s.log.Append(ctx, events.Event{
 		ID: pamSSHStartedEventID(tenantID, sessionID), Type: projections.EventPAMSessionStarted,
-		TenantID: tenantID, Data: data,
+		TenantID: tenantID, Data: data, SchemaVersion: projections.PAMCommandRulesEventSchemaVersion,
 	})
 	if err != nil {
 		return err
@@ -1370,7 +1388,7 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 		audit = data
 	}
 	session := api.PAMSession{
-		ID: id, TargetID: req.TargetID, TargetType: req.TargetType, Role: req.Role,
+		ID: id, TargetID: req.TargetID, TargetType: req.TargetType, Role: req.Role, CommandPolicy: req.ResolvedCommandPolicy,
 		Status: api.PAMSessionStatusActive, Subject: att.Subject, RequestedBy: requester,
 		Reason: req.Reason, StartedAt: now, ExpiresAt: expiresAt, Attestation: &att,
 		Audit: jsonMap(audit),
@@ -1380,7 +1398,7 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 		Status: api.PAMSessionStatusActive, Subject: att.Subject, RequestedBy: requester,
 		Reason: req.Reason, AttestationID: att.ID, Attestation: &att, BackendRef: backendRef, SSHKeyID: sshKeyID,
 		SSHSerial: sshSerial, IdempotencyKey: idempotencyKey, Audit: audit,
-		StartedAt: now, ExpiresAt: expiresAt, ApprovalRequestID: req.ApprovalRequestID,
+		StartedAt: now, ExpiresAt: expiresAt, ApprovalRequestID: req.ApprovalRequestID, CommandPolicy: req.ResolvedCommandPolicy,
 	}
 }
 
@@ -1421,7 +1439,11 @@ func (s *pamService) appendProject(ctx context.Context, tenantID, eventType stri
 	if err != nil {
 		return err
 	}
-	e, err := s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data})
+	version := events.DefaultSchemaVersion
+	if eventType == projections.EventPAMTemplateSaved || eventType == projections.EventPAMSessionStarted {
+		version = projections.PAMCommandRulesEventSchemaVersion
+	}
+	e, err := s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data, SchemaVersion: version})
 	if err != nil {
 		return err
 	}
@@ -1522,7 +1544,7 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		}
 	}
 	return api.PAMSession{
-		ID: rec.ID, TargetID: rec.TargetID, TargetType: rec.TargetType, Role: rec.Role,
+		ID: rec.ID, TargetID: rec.TargetID, TargetType: rec.TargetType, Role: rec.Role, CommandPolicy: rec.CommandPolicy,
 		Status: rec.Status, Subject: rec.Subject, RequestedBy: rec.RequestedBy, Reason: rec.Reason,
 		StartedAt: rec.StartedAt, ExpiresAt: rec.ExpiresAt, EndedAt: rec.EndedAt,
 		RevocationRequestedBy: rec.RevocationRequestedBy, RevocationReason: rec.RevocationReason,

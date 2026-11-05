@@ -64,6 +64,9 @@ const (
 	// pool prevents reconnect storms or synchronized renewal waves from consuming API,
 	// protocol, outbox, query, policy, or signing workers.
 	SubsystemAgent = "agent"
+	// Gateway decisions have their own bounded workers so a slow audit spine
+	// cannot occupy heartbeat, renewal or session-lease extension workers.
+	SubsystemGatewayCommands = "gateway_commands"
 	// SubsystemCBOM is the bounded pool for served cryptographic inventory scans.
 	// A tenant scanning a large estate can perform network handshakes and file reads,
 	// so CBOM work stays isolated from API CRUD, heavy graph/risk reads, protocols,
@@ -132,6 +135,7 @@ func DefaultConfigs() []Config {
 		// in from every host; renewal is signer-backed. The queue absorbs short fleet
 		// jitter while workers cap database/event/signer pressure.
 		{Name: SubsystemAgent, Workers: 16, Queue: 1024},
+		{Name: SubsystemGatewayCommands, Workers: 4, Queue: 16},
 		// The CBOM scan pool (AN-7): TLS handshakes and host-config walks can be
 		// slower than normal API work, so a few workers with a bounded queue keep scan
 		// bursts from starving risk/graph/API traffic.

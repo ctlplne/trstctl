@@ -1421,7 +1421,7 @@ function PAMFormDialog({
           {browser && created.target_type === "kubernetes" ? <PodTerminal sessionID={created.id} /> : null}
           {browser && created.target_type === "postgres" ? (
             terminalOpen ? (
-              <SqlConsole sessionID={created.id} onClose={() => setTerminalOpen(false)} />
+              <SqlConsole sessionID={created.id} commandRules={!!created.command_policy?.rules.length} onClose={() => setTerminalOpen(false)} />
             ) : (
               <Button type="button" size="sm" onClick={() => setTerminalOpen(true)}>
                 {t("admin.access.openConsole")}

@@ -166,7 +166,7 @@ func (s *Store) ListOpenPAMRecordings(ctx context.Context, before time.Time, lim
 // at this attempt and has not reported. A recalled or lapsed claim still
 // qualifies: its gateway flushes the session's last recording chunks before it
 // reports. A newer claim (another attempt) does not.
-func (s *Store) GetGatewayJobForRecording(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, destination string) (AgentJobForRedemption, bool, error) {
+func (s *Store) GetGatewayJobForRecording(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, destinations ...string) (AgentJobForRedemption, bool, error) {
 	var out AgentJobForRedemption
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -176,9 +176,9 @@ func (s *Store) GetGatewayJobForRecording(ctx context.Context, tenantID, agentID
 			  WHERE tenant_id = $1 AND id = $2
 			    AND claimed_by_agent_id = $3::uuid
 			    AND claim_attempts = $4
-			    AND destination = $5
+			    AND destination = ANY($5)
 			    AND claim_completed_at IS NULL`,
-			tenantID, jobID, agentID, attempt, destination).
+			tenantID, jobID, agentID, attempt, destinations).
 			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts, &out.RequiredAgentID)
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil

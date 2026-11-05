@@ -38429,6 +38429,12 @@
       },
       "PAMAccessTemplate": {
         "properties": {
+          "command_rules": {
+            "items": {
+              "$ref": "#/components/schemas/PAMCommandRule"
+            },
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -38504,6 +38510,12 @@
       },
       "PAMAccessTemplateRequest": {
         "properties": {
+          "command_rules": {
+            "items": {
+              "$ref": "#/components/schemas/PAMCommandRule"
+            },
+            "type": "array"
+          },
           "max_ttl_seconds": {
             "type": "integer"
           },
@@ -39017,6 +39029,297 @@
           "approval_count",
           "required_approvals",
           "expires_at"
+        ],
+        "type": "object"
+      },
+      "PAMCommandAction": {
+        "properties": {
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "connection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "decided_at": {
+            "description": "time of the durable gateway decision; authorized does not claim target execution",
+            "format": "date-time",
+            "type": "string"
+          },
+          "effective_status": {
+            "description": "Current view of the recorded decision; an elapsed pending deadline never grants authority and does not invent a terminal event",
+            "enum": [
+              "blocked",
+              "pending",
+              "authorized",
+              "denied",
+              "expired",
+              "canceled",
+              "review_deadline_elapsed"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "job_id": {
+            "type": "integer"
+          },
+          "message_digest": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "enum": [
+                "ALTER",
+                "ANALYZE",
+                "BEGIN",
+                "CALL",
+                "CLUSTER",
+                "COMMENT",
+                "COMMIT",
+                "COPY",
+                "CREATE",
+                "DELETE",
+                "DISCARD",
+                "DO",
+                "DROP",
+                "EXPLAIN",
+                "GRANT",
+                "INSERT",
+                "LOCK",
+                "MERGE",
+                "REFRESH",
+                "REINDEX",
+                "RESET",
+                "REVOKE",
+                "ROLLBACK",
+                "SELECT",
+                "SET",
+                "TRUNCATE",
+                "UPDATE",
+                "VACUUM",
+                "WITH"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "policy_digest": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "matched_rule",
+              "unsupported_control",
+              "uninspectable",
+              "review_required",
+              "review_approved",
+              "review_denied",
+              "review_expired",
+              "client_canceled",
+              "session_ended"
+            ],
+            "type": "string"
+          },
+          "review_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rule_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_event_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "blocked",
+              "pending",
+              "authorized",
+              "denied",
+              "expired",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "job_id",
+          "attempt",
+          "protocol",
+          "connection_id",
+          "ordinal",
+          "phase",
+          "rule_ids",
+          "message_digest",
+          "policy_digest",
+          "operations",
+          "effective_status",
+          "status",
+          "reason",
+          "decided_at",
+          "observed_at",
+          "source_event_id"
+        ],
+        "type": "object"
+      },
+      "PAMCommandActionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMCommandAction"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMCommandPolicy": {
+        "properties": {
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/PAMFrozenCommandRule"
+            },
+            "type": "array"
+          },
+          "template_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "template_revision": {
+            "type": "integer"
+          },
+          "version": {
+            "description": "frozen command policy format, currently 1",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "template_id",
+          "template_revision",
+          "rules"
+        ],
+        "type": "object"
+      },
+      "PAMCommandRule": {
+        "properties": {
+          "effect": {
+            "enum": [
+              "block",
+              "require_approval"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operations": {
+            "description": "Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched",
+            "items": {
+              "enum": [
+                "ALTER",
+                "ANALYZE",
+                "BEGIN",
+                "CALL",
+                "CLUSTER",
+                "COMMENT",
+                "COMMIT",
+                "COPY",
+                "CREATE",
+                "DELETE",
+                "DISCARD",
+                "DO",
+                "DROP",
+                "EXPLAIN",
+                "GRANT",
+                "INSERT",
+                "LOCK",
+                "MERGE",
+                "REFRESH",
+                "REINDEX",
+                "RESET",
+                "REVOKE",
+                "ROLLBACK",
+                "SELECT",
+                "SET",
+                "TRUNCATE",
+                "UPDATE",
+                "VACUUM",
+                "WITH"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "protocol": {
+            "enum": [
+              "postgres"
+            ],
+            "type": "string"
+          },
+          "required_approvals": {
+            "description": "require_approval only: 1-3 distinct humans; requester cannot approve",
+            "type": "integer"
+          },
+          "review_ttl_seconds": {
+            "description": "require_approval only: 5-45 seconds; session expiry can shorten this deadline",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "operations",
+          "effect",
+          "name",
+          "enabled"
         ],
         "type": "object"
       },
@@ -39766,6 +40069,80 @@
         ],
         "type": "object"
       },
+      "PAMFrozenCommandRule": {
+        "properties": {
+          "effect": {
+            "enum": [
+              "block",
+              "require_approval"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "operations": {
+            "description": "Known operation names, such as DROP, TRUNCATE or DELETE; quoted values are not matched",
+            "items": {
+              "enum": [
+                "ALTER",
+                "ANALYZE",
+                "BEGIN",
+                "CALL",
+                "CLUSTER",
+                "COMMENT",
+                "COMMIT",
+                "COPY",
+                "CREATE",
+                "DELETE",
+                "DISCARD",
+                "DO",
+                "DROP",
+                "EXPLAIN",
+                "GRANT",
+                "INSERT",
+                "LOCK",
+                "MERGE",
+                "REFRESH",
+                "REINDEX",
+                "RESET",
+                "REVOKE",
+                "ROLLBACK",
+                "SELECT",
+                "SET",
+                "TRUNCATE",
+                "UPDATE",
+                "VACUUM",
+                "WITH"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "protocol": {
+            "enum": [
+              "postgres"
+            ],
+            "type": "string"
+          },
+          "required_approvals": {
+            "description": "require_approval only: 1-3 distinct humans; requester cannot approve",
+            "type": "integer"
+          },
+          "review_ttl_seconds": {
+            "description": "require_approval only: 5-45 seconds; session expiry can shorten this deadline",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "operations",
+          "effect"
+        ],
+        "type": "object"
+      },
       "PAMImportedAccount": {
         "properties": {
           "approval_request_id": {
@@ -40158,6 +40535,9 @@
           },
           "audit": {
             "type": "object"
+          },
+          "command_policy": {
+            "$ref": "#/components/schemas/PAMCommandPolicy"
           },
           "delivery": {
             "enum": [
@@ -60767,6 +61147,80 @@
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/actions": {
+      "get": {
+        "operationId": "listPAMCommandActions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "page size, 1-100; default 50",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "next_cursor from the previous page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMCommandActionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List bounded command-rule decisions for a session, without statement text, arguments or credentials",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/sessions/{id}/queries": {

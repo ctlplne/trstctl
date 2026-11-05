@@ -11503,6 +11503,7 @@ OwnershipResolveInput = TypedDict(
 PAMAccessTemplate = TypedDict(
     'PAMAccessTemplate',
     {
+        'command_rules': list[dict[str, Any]],
         'id': str,
         'max_ttl_seconds': int,
         'name': str,
@@ -11536,6 +11537,7 @@ PAMAccessTemplateList = TypedDict(
 PAMAccessTemplateRequest = TypedDict(
     'PAMAccessTemplateRequest',
     {
+        'command_rules': list[dict[str, Any]],
         'max_ttl_seconds': int,
         'name': str,
         'reason': str,
@@ -11702,6 +11704,69 @@ PAMCheckoutReview = TypedDict(
         'request_id': str,
         'required_approvals': int,
         'status': str,
+    },
+    total=False,
+)
+
+PAMCommandAction = TypedDict(
+    'PAMCommandAction',
+    {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'attempt': int,
+        'connection_id': str,
+        'decided_at': str,
+        'effective_status': str,
+        'id': str,
+        'job_id': int,
+        'message_digest': str,
+        'observed_at': str,
+        'operations': list[str],
+        'ordinal': int,
+        'phase': str,
+        'policy_digest': str,
+        'protocol': str,
+        'reason': str,
+        'review_expires_at': str,
+        'rule_ids': list[str],
+        'session_id': str,
+        'source_event_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMCommandActionList = TypedDict(
+    'PAMCommandActionList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMCommandPolicy = TypedDict(
+    'PAMCommandPolicy',
+    {
+        'rules': list[dict[str, Any]],
+        'template_id': str,
+        'template_revision': int,
+        'version': int,
+    },
+    total=False,
+)
+
+PAMCommandRule = TypedDict(
+    'PAMCommandRule',
+    {
+        'effect': str,
+        'enabled': bool,
+        'id': str,
+        'name': str,
+        'operations': list[str],
+        'protocol': str,
+        'required_approvals': int,
+        'review_ttl_seconds': int,
     },
     total=False,
 )
@@ -11942,6 +12007,19 @@ PAMFolderRequest = TypedDict(
     total=False,
 )
 
+PAMFrozenCommandRule = TypedDict(
+    'PAMFrozenCommandRule',
+    {
+        'effect': str,
+        'id': str,
+        'operations': list[str],
+        'protocol': str,
+        'required_approvals': int,
+        'review_ttl_seconds': int,
+    },
+    total=False,
+)
+
 PAMImportedAccount = TypedDict(
     'PAMImportedAccount',
     {
@@ -12090,6 +12168,7 @@ PAMSession = TypedDict(
     {
         'attestation': dict[str, Any],
         'audit': dict[str, Any],
+        'command_policy': dict[str, Any],
         'delivery': str,
         'emergency': dict[str, Any],
         'ended_at': str,

@@ -13,10 +13,12 @@ import (
 	"log/slog"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
 
@@ -345,6 +347,9 @@ const (
 	EventPAMRecordingRead                         = "pam.session.recording_read"
 	EventPAMAccountHealthChecked                  = "pam.account.health_checked"
 	EventPAMTemplateSaved                         = "pam.template.saved"
+	EventPAMCommandBlocked                        = "pam.command.blocked"
+	EventPAMCommandReviewRequested                = "pam.command.review_requested"
+	EventPAMCommandReviewDecided                  = "pam.command.review_decided"
 	EventPAMTemplateDeleted                       = "pam.template.deleted"
 	EventPAMFolderSaved                           = "pam.folder.saved"
 	EventPAMFolderDeleted                         = "pam.folder.deleted"
@@ -4292,7 +4297,10 @@ type AWSHoneyTokenRearmed struct {
 // PAMSessionStarted is the payload of pam.session.started. It carries only
 // session metadata and backend revoke handles; the one-time credential bytes/DSN
 // returned to the caller are intentionally omitted.
+const PAMCommandRulesEventSchemaVersion = 2
+
 type PAMSessionStarted struct {
+	CommandPolicy  *accessrules.Policy `json:"command_policy,omitempty"`
 	ID             string              `json:"id"`
 	TargetType     string              `json:"target_type"`
 	TargetID       string              `json:"target_id"`
@@ -4442,12 +4450,21 @@ type PAMAccountHealthChecked struct {
 }
 
 // PAMTemplateSaved records an access template at a revision (A258).
+// PAMCommandBlocked is immutable occurrence metadata, with no traffic values.
+type PAMCommandBlocked = accessrules.Decision
+type PAMCommandReviewRequested = accessrules.Decision
+type PAMCommandReviewDecided struct {
+	accessrules.Decision
+	Approval *store.OperationApprovalUse `json:"approval,omitempty"`
+}
+
 type PAMTemplateSaved struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Reason            string `json:"reason"`
-	RequiredApprovals int    `json:"required_approvals"`
-	MaxTTLSeconds     int    `json:"max_ttl_seconds"`
+	CommandRules      []accessrules.Rule `json:"command_rules,omitempty"`
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	Reason            string             `json:"reason"`
+	RequiredApprovals int                `json:"required_approvals"`
+	MaxTTLSeconds     int                `json:"max_ttl_seconds"`
 	// RequireRecording (A261 part 3) refuses an unrecorded session and every
 	// check-out through the template.
 	RequireRecording bool      `json:"require_recording,omitempty"`
@@ -5068,6 +5085,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestIssued:                    {1: true},
 	EventFirstIssuanceRetryRequested:              {1: true},
 	EventApprovalRequested:                        {1: true},
+	EventPAMCommandApprovalRequested:              {1: true},
 	EventApprovalDecisionRecorded:                 {1: true},
 	EventApprovalStatusChanged:                    {1: true},
 	EventTicketIntakeConfigured:                   {1: true, 2: true},
@@ -5246,7 +5264,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAWSHoneyScanPage:                         {1: true},
 	EventAWSHoneyTrailObjectScanned:               {1: true},
 	EventAWSHoneyTokenRearmed:                     {1: true},
-	EventPAMSessionStarted:                        {1: true},
+	EventPAMSessionStarted:                        {1: true, PAMCommandRulesEventSchemaVersion: true},
 	EventPAMTargetRegistered:                      {1: true},
 	EventPAMTargetDisabled:                        {1: true},
 	EventPAMRecordingChunkStored:                  {1: true},
@@ -5256,7 +5274,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMRecordingDeleted:                      {1: true},
 	EventPAMRecordingRead:                         {1: true},
 	EventPAMAccountHealthChecked:                  {1: true},
-	EventPAMTemplateSaved:                         {1: true},
+	EventPAMTemplateSaved:                         {1: true, PAMCommandRulesEventSchemaVersion: true},
+	EventPAMCommandBlocked:                        {1: true},
+	EventPAMCommandReviewRequested:                {1: true},
+	EventPAMCommandReviewDecided:                  {1: true},
 	EventPAMTemplateDeleted:                       {1: true},
 	EventPAMAutoApprovalRuleSaved:                 {1: true},
 	EventPAMAutoApprovalRuleDeleted:               {1: true},
@@ -8627,16 +8648,58 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyPAMAccountHealthCheckedTx(ctx, tx, e.TenantID, store.PAMAccountHealth{TargetType: pl.TargetType,
 			TargetID: pl.TargetID, ProviderID: pl.ProviderID, Status: pl.Status, Attempts: pl.Attempts, CheckedAt: pl.CheckedAt})
+	case EventPAMCommandBlocked, EventPAMCommandReviewRequested:
+		var pl PAMCommandBlocked
+		if err := decodeClosedPAMCommand(e, &pl); err != nil {
+			return err
+		}
+		if err := accessrules.ValidateDecision(pl); err != nil {
+			return err
+		}
+		if (e.Type == EventPAMCommandBlocked && pl.Status != accessrules.StatusBlocked) || (e.Type == EventPAMCommandReviewRequested && pl.Status != accessrules.StatusPending) {
+			return fmt.Errorf("projections: command event has an incompatible decision")
+		}
+		if !pl.DecidedAt.Equal(e.Time) {
+			return fmt.Errorf("projections: command decision time differs from its envelope")
+		}
+		return p.store.ApplyPAMCommandBlockedTx(ctx, tx, e.TenantID, store.PAMCommandAction{Decision: pl, SourceEventID: e.ID})
+	case EventPAMCommandReviewDecided:
+		var pl PAMCommandReviewDecided
+		if err := decodeClosedPAMCommand(e, &pl); err != nil {
+			return err
+		}
+		if err := accessrules.ValidateDecision(pl.Decision); err != nil {
+			return err
+		}
+		if pl.Status == accessrules.StatusBlocked || pl.Status == accessrules.StatusPending || !pl.DecidedAt.Equal(e.Time) {
+			return fmt.Errorf("projections: invalid terminal command review")
+		}
+		if (pl.Status == accessrules.StatusAuthorized) != (pl.Approval != nil) {
+			return fmt.Errorf("projections: authorized command must consume its exact human review")
+		}
+		if pl.Approval != nil {
+			if _, err := p.store.GetPAMCommandActionForUpdateTx(ctx, tx, e.TenantID, pl.ID); err != nil {
+				return err
+			}
+			use := *pl.Approval
+			if use.ResourceKind != "pam_command" || use.ResourceID != "pam-command:"+pl.ID || use.Action != "execute" || use.FromState != "held" || use.ToState != "authorized" || use.TargetVersion != 0 || use.RequiredApprovals < 1 || use.RequiredApprovals > 3 || !slices.Contains(use.EvidenceRefs, "pam-action:"+pl.ID) || !slices.Contains(use.EvidenceRefs, "pam-session:"+pl.SessionID) || !slices.Contains(use.EvidenceRefs, "pam-policy-sha256:"+pl.PolicyDigest) || !slices.Contains(use.EvidenceRefs, "pam-message-sha256:"+pl.MessageDigest) {
+				return fmt.Errorf("projections: command review binding differs")
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, use, e.ID, e.Time); err != nil {
+				return err
+			}
+		}
+		return p.store.ApplyPAMCommandBlockedTx(ctx, tx, e.TenantID, store.PAMCommandAction{Decision: pl.Decision, SourceEventID: e.ID})
 	case EventPAMTemplateSaved:
 		var pl PAMTemplateSaved
-		if err := decode(e, &pl); err != nil {
+		if err := decodePAMTemplateVersion(e, &pl); err != nil {
 			return err
 		}
 		if pl.ID == "" || pl.Name == "" || pl.Reason == "" || pl.RequiredApprovals < 1 || pl.MaxTTLSeconds < 1 || pl.Revision < 1 || pl.At.IsZero() {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
-			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording,
+			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, CommandRules: pl.CommandRules,
 			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
 	case EventPAMAutoApprovalRuleSaved:
 		var pl PAMAutoApprovalRuleSaved
@@ -8867,7 +8930,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
-		if err := decode(e, &pl); err != nil {
+		if err := decodePAMSessionVersion(e, &pl); err != nil {
 			return err
 		}
 		if pl.ID == "" || pl.TargetType == "" || pl.TargetID == "" || pl.Status == "" || pl.Subject == "" || pl.ExpiresAt.IsZero() {
@@ -8905,7 +8968,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
-			SSHPrincipal: pl.SSHPrincipal,
+			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

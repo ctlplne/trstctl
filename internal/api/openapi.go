@@ -5896,7 +5896,8 @@ func componentSchemas() map[string]*Schema {
 		"serial": {Type: "integer"}, "valid_before": timestamp(),
 	}, "certificate", "principal", "key_id", "serial", "valid_before")
 	pamSession := object(map[string]*Schema{
-		"id": uuid(), "target_id": str(), "target_type": str(), "role": str(),
+		"command_policy": ref("PAMCommandPolicy"),
+		"id":             uuid(), "target_id": str(), "target_type": str(), "role": str(),
 		"status": str(), "subject": str(), "requested_by": str(), "reason": str(),
 		"started_at": timestamp(), "expires_at": timestamp(), "ended_at": timestamp(),
 		"revocation_requested_by": str(), "revocation_reason": str(), "revocation_requested_at": timestamp(),
@@ -5916,7 +5917,8 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
 	// A258: access templates and emergency access.
 	pamTemplate := object(map[string]*Schema{
-		"id": uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
+		"command_rules": {Type: "array", Items: ref("PAMCommandRule")},
+		"id":            uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
 		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
 		"require_recording": {Type: "boolean", Description: "refuses a session through the template that would not be recorded, and every check-out (A261 part 3)"},
 	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "require_recording", "revision", "saved_at")
@@ -8833,9 +8835,15 @@ func componentSchemas() map[string]*Schema {
 		"PAMRequestProgress":             pamRequestProgress,
 		"PAMSession":                     pamSession,
 		"PAMAccessTemplate":              pamTemplate,
+		"PAMCommandRule":                 pamCommandRuleSchema(false),
+		"PAMFrozenCommandRule":           pamCommandRuleSchema(true),
+		"PAMCommandPolicy":               pamCommandPolicySchema(),
+		"PAMCommandAction":               pamCommandActionSchema(),
+		"PAMCommandActionList":           list("PAMCommandAction"),
 		"PAMAccessTemplateList":          object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMAccessTemplate")}}, "items"),
 		"PAMAccessTemplateRequest": object(map[string]*Schema{
-			"name": str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
+			"command_rules": {Type: "array", Items: ref("PAMCommandRule")},
+			"name":          str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
 			"require_recording": {Type: "boolean", Description: "refuse an unrecorded session and every check-out through the template"},
 			"revision":          {Type: "integer", Description: "the revision being replaced (PUT only)"},
 		}, "name", "reason", "required_approvals", "max_ttl_seconds"),

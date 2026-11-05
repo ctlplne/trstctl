@@ -96,7 +96,7 @@ func (a *agentService) SignJobSSHKey(ctx context.Context, req *transport.SignJob
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "load job: %v", err)
 	}
-	if !held || job.ClaimAttempts != req.Attempt || job.Destination != relay.KindAccessGatewaySession || job.RequiredAgentID != agentID {
+	if !held || job.ClaimAttempts != req.Attempt || !relay.IsAccessGatewaySession(job.Destination) || job.RequiredAgentID != agentID {
 		return nil, status.Error(codes.PermissionDenied, "this agent does not hold that gateway session at that attempt")
 	}
 	certificate, validBefore, err := a.signGatewaySSHKey(ctx, info.TenantID, agentID, job.Payload, req.PublicKey)

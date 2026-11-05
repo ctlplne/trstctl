@@ -536,6 +536,27 @@ It can change a template's recording rule at its read revision. Create templates
 `access templates create`; use `require_recording` in its JSON body. Recording requires the
 gateway, object store, tenant sealing and audit signing configuration described below. Existing template approvals from before this policy binding must be requested again after upgrade.
 
+PostgreSQL sessions can also use **Command guardrails** in that panel. A rule blocks
+known operations such as DROP/TRUNCATE or waits for 1–3 distinct human reviewers for
+5–45 seconds. A matching block wins. Each prepared binding needs its own review;
+the requester and session auto-approval rules cannot supply that review. Rules are
+frozen into each new session's template revision and also work without recording.
+The SQL console shows the held action, deadline, exact approval link and cancel
+control. Session action history is also available through:
+
+```sh
+trstctl-cli access sessions actions SESSION_UUID --limit 50
+```
+
+Enable `access.gateway.session.rules.v1` in `agent_channel.claimable_job_kinds` and
+upgrade the named gateway before using a rule-bearing session. Other gateway
+protocols do not yet accept command rules. Reviewers see known operation classes,
+rule IDs and digests; statement text, arguments, bound values and sign-in material
+are excluded. Dynamic SQL can bypass these lexical checks; they are guardrails,
+and database privileges provide containment. An authorization record does not
+prove that the target executed the action. See the [command rule behavior and
+limits](../design/access-gateway.md#postgresql-command-guardrails-a262-first-protocol).
+
 Automatic approval rules apply to normal session and vaulted check-out requests, never the
 emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
 with `GET /api/v1/access/auto-approval-rules`, or with the CLI:

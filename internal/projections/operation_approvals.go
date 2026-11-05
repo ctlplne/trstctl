@@ -80,10 +80,15 @@ func OperationApprovalStatusEventID(tenantID, requestID, intentDigest, status, r
 
 func (p *Projector) applyOperationApprovalTx(ctx context.Context, tx pgx.Tx, event events.Event) (bool, error) {
 	switch event.Type {
-	case EventApprovalRequested:
+	case EventApprovalRequested, EventPAMCommandApprovalRequested:
 		var payload ApprovalRequested
 		if err := decode(event, &payload); err != nil {
 			return true, err
+		}
+		if event.Type == EventPAMCommandApprovalRequested {
+			if err := ValidatePAMCommandApprovalRequested(payload); err != nil {
+				return true, err
+			}
 		}
 		if err := validateApprovalActor(event, payload.Requester); err != nil {
 			return true, err
