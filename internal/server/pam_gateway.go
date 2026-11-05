@@ -213,7 +213,7 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 				return accessgateway.SessionIntent{}, errors.New("AWS account has no gateway signing scope")
 			}
 		}
-		if rec.TargetType == pamTargetGCP {
+		if rec.TargetType == pamTargetGCP || rec.TargetType == pamTargetAzure {
 			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {
 				return accessgateway.SessionIntent{}, err
@@ -233,6 +233,14 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 				if err != nil {
 					return accessgateway.SessionIntent{}, err
 				}
+				if rec.TargetType == pamTargetAzure {
+					tenant, ok := provider.(interface{ DynamicSecretGatewayAzureTenant() string })
+					if !ok || tenant.DynamicSecretGatewayAzureTenant() == "" {
+						return accessgateway.SessionIntent{}, errors.New("server: Azure gateway has no frozen tenant")
+					}
+					intent.OAuthTenant = tenant.DynamicSecretGatewayAzureTenant()
+				}
+
 				found = true
 				break
 			}

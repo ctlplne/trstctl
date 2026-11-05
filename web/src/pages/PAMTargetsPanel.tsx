@@ -21,7 +21,7 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure"]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -40,7 +40,7 @@ const targetSchema = z
           path: ["allowed_roles"],
           message: translateNow(value.target_type === "postgres" ? "admin.access.rolesHelp" : "admin.access.providerRolesRequired"),
         });
-      if (value.target_type === "snowflake" || value.target_type === "aws" || value.target_type === "gcp") {
+      if (value.target_type === "snowflake" || value.target_type === "aws" || value.target_type === "gcp" || value.target_type === "azure") {
         if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
         if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });
       }
@@ -264,6 +264,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="snowflake">{t("admin.access.snowflake")}</option>
               <option value="aws">{t("admin.access.awsAPI")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
+              <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
           </label>
           <label className="grid gap-1 text-sm">
@@ -289,8 +290,15 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                   .filter(
                     (provider) =>
                       provider.type ===
-                        (targetType === "postgres" ? "postgresql" : targetType === "snowflake" ? "snowflake" : targetType === "gcp" ? "gcp-iam" : "aws-sts") &&
-                      provider.ready,
+                        (targetType === "postgres"
+                          ? "postgresql"
+                          : targetType === "snowflake"
+                            ? "snowflake"
+                            : targetType === "gcp"
+                              ? "gcp-iam"
+                              : targetType === "azure"
+                                ? "azure-entra"
+                                : "aws-sts") && provider.ready,
                   )
                   .map((provider) => (
                     <option key={provider.id} value={provider.id}>
@@ -328,16 +336,17 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "gcp" ? <p>{t("admin.access.gcpAPIProof")}</p> : null}
+          {targetType === "azure" ? <p>{t("admin.access.azureAPIProof")}</p> : null}
           <Field
             label={t("admin.access.gatewayAgent")}
-            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp"}
+            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure"}
             error={errors.gateway_agent_id ? t("admin.access.gatewayRequired") : undefined}
           >
             {(control) => <Input {...control} {...register("gateway_agent_id")} />}
           </Field>
           <Field
             label={t("admin.access.gatewayAddress")}
-            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp"}
+            required={targetType === "snowflake" || targetType === "aws" || targetType === "gcp" || targetType === "azure"}
             error={errors.gateway_address ? t("admin.access.gatewayRequired") : undefined}
           >
             {(control) => <Input {...control} {...register("gateway_address")} />}

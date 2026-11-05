@@ -46,6 +46,7 @@ const (
 	pamTargetSnowflake = "snowflake"
 	pamTargetAWS       = "aws"
 	pamTargetGCP       = "gcp"
+	pamTargetAzure     = "azure"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -67,10 +68,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetSnowflake: "snowflake",
 	pamTargetAWS:       "aws-sts",
 	pamTargetGCP:       "gcp-iam",
+	pamTargetAzure:     "azure-entra",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -438,7 +440,7 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 					return nil, fmt.Errorf("server: AWS target %q provider needs a configured gateway endpoint/service/region", target.ID)
 				}
 			}
-			if target.TargetType == pamTargetGCP {
+			if target.TargetType == pamTargetGCP || target.TargetType == pamTargetAzure {
 				binding, ok := provider.(interface {
 					DynamicSecretGatewayOAuth() (string, []string, string, error)
 				})
@@ -448,6 +450,13 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 				tokenEndpoint, scopes, subject, err := binding.DynamicSecretGatewayOAuth()
 				if err != nil || tokenEndpoint == "" || len(scopes) == 0 || subject == "" {
 					return nil, fmt.Errorf("server: Google Cloud target %q provider needs a configured gateway origin, token endpoint and scopes", target.ID)
+				}
+			}
+
+			if target.TargetType == pamTargetAzure {
+				binding, ok := provider.(interface{ DynamicSecretGatewayAzureTenant() string })
+				if !ok || binding.DynamicSecretGatewayAzureTenant() == "" {
+					return nil, fmt.Errorf("server: Azure target %q needs one fixed tenant", target.ID)
 				}
 			}
 

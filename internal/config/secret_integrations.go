@@ -90,6 +90,8 @@ func (c AWSHoneyAccountConfig) PollIntervalDuration() (time.Duration, error) {
 // DynamicSecretProviderConfig configures one named provider for exactly one
 // tenant. Type is one of the eight built-ins. Fields not used by that type must be
 // left empty; validation rejects incomplete entries before the server starts.
+var azureGatewayTenant = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
+
 // DynamicSecretGatewayConfig pins where a brokered cloud account can call.
 // These are public routing facts, covered by the provider's reviewed configuration identity.
 type DynamicSecretGatewayConfig struct {
@@ -804,7 +806,7 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 			if c.Gateway.TokenEndpoint != "" || len(c.Gateway.Scopes) != 0 {
 				errs = append(errs, fmt.Errorf("%s AWS gateway cannot carry OAuth scope", where))
 			}
-		case "gcp-iam":
+		case "gcp-iam", "azure-entra":
 			if c.Gateway.Service != "" || c.Gateway.Region != "" {
 				errs = append(errs, fmt.Errorf("%s OAuth gateway cannot carry AWS scope", where))
 			}
@@ -826,8 +828,29 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 				}
 				seen[scope] = true
 			}
+			if c.Type == "azure-entra" {
+				authority := c.AuthorityHost
+				if authority == "" {
+					authority = "https://login.microsoftonline.com"
+				}
+				u, err := url.Parse(authority)
+				if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+					errs = append(errs, fmt.Errorf("%s Azure authority_host must be a fixed origin", where))
+				}
+				if !azureGatewayTenant.MatchString(c.AzureTenant) || strings.EqualFold(c.AzureTenant, "common") || strings.EqualFold(c.AzureTenant, "organizations") || strings.EqualFold(c.AzureTenant, "consumers") {
+					errs = append(errs, fmt.Errorf("%s Azure gateway requires one explicit tenant", where))
+				}
+				expected := strings.TrimRight(authority, "/") + "/" + url.PathEscape(c.AzureTenant) + "/oauth2/v2.0/token"
+				if c.Gateway.TokenEndpoint != expected {
+					errs = append(errs, fmt.Errorf("%s Azure gateway token endpoint must match the configured authority and tenant", where))
+				}
+				if len(c.Gateway.Scopes) != 1 || !strings.HasSuffix(c.Gateway.Scopes[0], "/.default") {
+					errs = append(errs, fmt.Errorf("%s Azure gateway requires one explicit resource /.default scope", where))
+				}
+			}
+
 		default:
-			errs = append(errs, fmt.Errorf("%s gateway is supported only for aws-sts or gcp-iam", where))
+			errs = append(errs, fmt.Errorf("%s gateway is supported only for aws-sts, gcp-iam or azure-entra", where))
 		}
 		if err := validateSecretIntegrationEndpoint(c.Gateway.Endpoint, c.AllowInsecureLoopback); err != nil {
 			errs = append(errs, fmt.Errorf("%s gateway endpoint: %w", where, err))

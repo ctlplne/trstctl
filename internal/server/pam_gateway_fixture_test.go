@@ -84,6 +84,7 @@ type gatewayFixtureOptions struct {
 	snowflake DynamicSecretProviderRegistry
 	aws       DynamicSecretProviderRegistry
 	gcp       DynamicSecretProviderRegistry
+	azure     DynamicSecretProviderRegistry
 	// vaulted (A261) serves the secrets API and adds the provider
 	// "pam-pg-vault", whose role db/orders rotates the PostgreSQL accounts
 	// orders_app_a and orders_app_b as a static credential; vaultDSN is
@@ -175,6 +176,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mongodb", TenantID: servedTestTenant, ID: "mongo-gw", ProviderID: "pam-mongo-provider",
 				AllowedRoles: []string{"mongo-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
+		if opts.azure != nil {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], opts.azure.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TenantID: servedTestTenant, ID: "azure-gw", TargetType: "azure", ProviderID: "pam-azure-provider", AllowedRoles: []string{"reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
+
 		if opts.gcp != nil {
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], opts.gcp.ForTenant(servedTestTenant)...)
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "gcp", TenantID: servedTestTenant, ID: "gcp-gw", ProviderID: "pam-gcp-provider", AllowedRoles: []string{"reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})

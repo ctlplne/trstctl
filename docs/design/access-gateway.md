@@ -893,3 +893,62 @@ retention/tamper behavior for this type.
 
 Native contracts: [service-account OAuth](https://developers.google.com/identity/protocols/oauth2/service-account)
 and [service-account key lifecycle](https://docs.cloud.google.com/iam/docs/keys-create-delete).
+
+
+## Azure application API accounts (A263, strict stand-in proof)
+
+An `azure` target uses the existing `azure-entra` application's temporary
+password. Its add/remove operations run through the durable provider outbox; the
+sealed client secret is redeemed only by that session's gateway. Configure one
+API origin and one resource scope on the provider:
+
+```json
+"gateway": {
+  "endpoint": "https://graph.microsoft.com",
+  "token_endpoint": "https://login.microsoftonline.com/TENANT/oauth2/v2.0/token",
+  "scopes": ["https://graph.microsoft.com/.default"]
+}
+```
+
+Replace `TENANT` with the same explicit `azure_tenant_id` as the issuer. The token
+URL must match that tenant and `authority_host` (default
+`https://login.microsoftonline.com`). Shared tenant selectors such as `common`
+are refused. The API origin has no user information, path, query or fragment;
+the scope is one HTTPS resource ending in `/.default`. The provider's reviewed
+configuration freezes origin, authority, application, tenant and scope. User
+impersonation and delegated user permissions are not part of this grant.
+
+Register `target_type: "azure"` in the console or API with the provider, allowed
+roles and gateway. Approve a session, run `trstctl access sessions connect <id>
+--ticket-file <file>`, and use its printed stock curl command with the API path.
+The client receives a gateway ticket and holds no Azure password or access token.
+This does not implement Azure CLI login or human Azure Portal sign-in.
+
+The gateway encodes the client secret directly from locked bytes into a
+client-credentials form, locks the serialized request before network I/O, and
+uses verified HTTPS for token and API endpoints. Client bearer/cookie/API-key and
+auxiliary identity headers are removed. Token responses are bounded to 64 KiB,
+32 KiB of bearer data and a positive `expires_in` of at most 28 hours; local use
+always ends by the session deadline. This accommodates token lifetimes longer
+than one hour without claiming a shorter native lifetime. Tokens are opaque to
+the gateway and are renewed with a new client-credentials grant, without refresh
+tokens. API requests have a 64 KiB header and 1 MiB body bound.
+
+Termination closes the live gateway connections and removes the exact issued
+application password. Already-issued access tokens retain their native expiry;
+password removal is not token revocation. Native application permissions remain
+the authorization boundary, including any ability to mint further credentials.
+Recordings exclude authentication headers and mask the held secret/token before
+text conversion, alongside known-token masks.
+
+`TestServedGatewayAzureApplicationA263` exercises strict Graph add/removePassword,
+OAuth and permission-enforcing resource stand-ins with PostgreSQL/NATS and stock
+curl. It proves API registration, held credentials, exact form encoding with
+special secret bytes, tenant/role/ticket refusals, resource read/permission denial,
+live recall, exact-password removal, new-grant refusal versus residual same-token
+access and native expiry, real session expiry, and a masked sealed verified
+recording. Live Azure, native Azure CLI, human Portal sign-in and packaged
+restart/partition/recording authorization/tamper/retention remain unverified.
+
+Native contracts: [client-credentials grant](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow)
+and [token formats and lifetimes](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens).

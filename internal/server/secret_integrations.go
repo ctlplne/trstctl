@@ -314,7 +314,7 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 // empty endpoint.
 func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Context) (string, []byte, string, error) {
 	switch p.cfg.Type {
-	case "aws-sts", "gcp-iam":
+	case "aws-sts", "gcp-iam", "azure-entra":
 		if p.cfg.Gateway == nil {
 			return "", nil, "", errors.New("cloud provider has no gateway endpoint")
 		}
@@ -1892,8 +1892,20 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayAWS() (string, string, e
 
 // DynamicSecretGatewayOAuth returns only reviewed public routing and authority.
 func (p *configuredDynamicProvider) DynamicSecretGatewayOAuth() (string, []string, string, error) {
-	if p.cfg.Type != "gcp-iam" || p.cfg.Gateway == nil {
-		return "", nil, "", errors.New("provider has no Google Cloud gateway binding")
+	if (p.cfg.Type != "gcp-iam" && p.cfg.Type != "azure-entra") || p.cfg.Gateway == nil {
+		return "", nil, "", errors.New("provider has no cloud OAuth gateway binding")
 	}
-	return p.cfg.Gateway.TokenEndpoint, append([]string(nil), p.cfg.Gateway.Scopes...), p.cfg.ServiceAccount, nil
+	subject := p.cfg.ServiceAccount
+	if p.cfg.Type == "azure-entra" {
+		subject = p.cfg.ApplicationClient
+	}
+	return p.cfg.Gateway.TokenEndpoint, append([]string(nil), p.cfg.Gateway.Scopes...), subject, nil
+}
+
+// DynamicSecretGatewayAzureTenant is public authority, frozen beside the client ID.
+func (p *configuredDynamicProvider) DynamicSecretGatewayAzureTenant() string {
+	if p.cfg.Type != "azure-entra" {
+		return ""
+	}
+	return p.cfg.AzureTenant
 }

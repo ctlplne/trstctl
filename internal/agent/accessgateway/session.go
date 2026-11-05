@@ -12,6 +12,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ const (
 	TargetSnowflake  = "snowflake"
 	TargetAWS        = "aws"
 	TargetGCP        = "gcp"
+	TargetAzure      = "azure"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -53,7 +55,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure:
 		return true
 	}
 	return false
@@ -62,8 +64,10 @@ func RedeemsCredential(targetType string) bool {
 // HTTPUpstream reports whether a session type is spoken to over HTTP and
 // names its upstream in the job (its credential names no address).
 func HTTPUpstream(targetType string) bool {
-	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake || targetType == TargetAWS || targetType == TargetGCP
+	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake || targetType == TargetAWS || targetType == TargetGCP || targetType == TargetAzure
 }
+
+var azureOAuthTenant = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 
 // SessionIntent is the job payload: one session, by reference only. A
 // database session's upstream credential arrives by redemption under
@@ -71,6 +75,7 @@ func HTTPUpstream(targetType string) bool {
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
+	OAuthTenant        string              `json:"oauth_tenant,omitempty"`
 	OAuthTokenEndpoint string              `json:"oauth_token_endpoint,omitempty"`
 	OAuthScopes        []string            `json:"oauth_scopes,omitempty"`
 	OAuthSubject       string              `json:"oauth_subject,omitempty"`
@@ -150,10 +155,10 @@ func ValidateSessionIntent(in SessionIntent) error {
 	} else if in.AWSService != "" || in.AWSRegion != "" {
 		return errors.New("accessgateway: non-AWS session cannot carry AWS scope")
 	}
-	if in.TargetType == TargetGCP {
+	if in.TargetType == TargetGCP || in.TargetType == TargetAzure {
 		u, err := url.Parse(in.OAuthTokenEndpoint)
 		if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || in.OAuthSubject == "" || len(in.OAuthSubject) > 320 || strings.ContainsAny(in.OAuthSubject, " \t\r\n") || len(in.OAuthScopes) == 0 || len(in.OAuthScopes) > 16 {
-			return errors.New("accessgateway: Google Cloud session needs a fixed OAuth binding")
+			return errors.New("accessgateway: cloud session needs a fixed OAuth binding")
 		}
 		seen := map[string]bool{}
 		for _, scope := range in.OAuthScopes {
@@ -163,8 +168,17 @@ func ValidateSessionIntent(in SessionIntent) error {
 			}
 			seen[scope] = true
 		}
-	} else if in.OAuthTokenEndpoint != "" || len(in.OAuthScopes) != 0 || in.OAuthSubject != "" {
+	} else if in.OAuthTokenEndpoint != "" || len(in.OAuthScopes) != 0 || in.OAuthSubject != "" || in.OAuthTenant != "" {
 		return errors.New("accessgateway: non-OAuth session cannot carry OAuth scope")
+	}
+
+	if in.TargetType == TargetAzure {
+		u, _ := url.Parse(in.OAuthTokenEndpoint)
+		if !azureOAuthTenant.MatchString(in.OAuthTenant) || strings.EqualFold(in.OAuthTenant, "common") || strings.EqualFold(in.OAuthTenant, "organizations") || strings.EqualFold(in.OAuthTenant, "consumers") || u.Path != "/"+in.OAuthTenant+"/oauth2/v2.0/token" || len(in.OAuthScopes) != 1 || !strings.HasSuffix(in.OAuthScopes[0], "/.default") {
+			return errors.New("accessgateway: Azure OAuth authority needs one tenant and resource")
+		}
+	} else if in.OAuthTenant != "" {
+		return errors.New("accessgateway: non-Azure session cannot carry an Azure tenant")
 	}
 
 	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {

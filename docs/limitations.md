@@ -9145,3 +9145,16 @@ verified recording, and residual token access followed by native expiry. Deletin
 a key does not revoke tokens already minted from it. Live Google Cloud, native
 gcloud, human console login and packaged restart/partition/recording-retention
 qualification are unverified. See the [configuration and exact proof limits](design/access-gateway.md#google-cloud-api-accounts-a263-strict-stand-in-proof).
+
+
+### Azure application API accounts (A263, stand-in proof)
+
+Gateway-only `azure` targets use temporary `azure-entra` application passwords,
+one fixed tenant/application/resource and a credential-free stock curl tunnel.
+Strict Graph/OAuth/resource stand-ins prove scoped access, special-byte form
+encoding, tenant/role/ticket boundaries, recall, exact-password removal,
+same-token residual access followed by native expiry, session expiry and masked
+verified recording. Removing the password stops new grants; issued access tokens
+retain native expiry. Live Azure, native Azure CLI, human Portal sign-in and
+packaged recovery/recording qualification are unverified. See the
+[configuration and proof limits](design/access-gateway.md#azure-application-api-accounts-a263-strict-stand-in-proof).

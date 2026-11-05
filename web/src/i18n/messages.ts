@@ -6490,6 +6490,12 @@ export const messages = {
     defaultMessage: "Enter at least one role configured on this provider.",
     description: "Gateway provider role validation.",
   },
+  "admin.access.azureAPI": { defaultMessage: "Azure application API account", description: "A263 gateway-only application account." },
+  "admin.access.azureAPIProof": {
+    defaultMessage:
+      "Graph and OAuth stand-in proof: the gateway holds the temporary application password and API token. Removing the password stops new grants; issued tokens keep their native expiry. Live Azure, native Azure CLI and human portal sign-in are unverified.",
+    description: "Azure API proof limits and native token residual lifetime.",
+  },
   "admin.access.gcpAPI": { defaultMessage: "Google Cloud API account", description: "A263 gateway-only service-account API target." },
   "admin.access.gcpAPIProof": {
     defaultMessage:

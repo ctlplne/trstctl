@@ -547,6 +547,13 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
+	case TargetAzure:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		if err := serveAzure(ctx, conn, credential, s.intent, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: Azure relay ended", s.intent.SessionID)
+		}
+
 	case TargetGCP:
 		credential := s.credential()
 		defer secret.Wipe(credential)

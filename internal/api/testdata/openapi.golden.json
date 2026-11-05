@@ -4688,6 +4688,7 @@
                 "target_type": {
                   "enum": [
                     "aws",
+                    "azure",
                     "clickhouse",
                     "gcp",
                     "kubernetes",
@@ -5357,6 +5358,7 @@
                       "target_type": {
                         "enum": [
                           "aws",
+                          "azure",
                           "clickhouse",
                           "gcp",
                           "kubernetes",
@@ -5652,6 +5654,7 @@
                 "target_type": {
                   "enum": [
                     "aws",
+                    "azure",
                     "clickhouse",
                     "gcp",
                     "kubernetes",
@@ -38600,6 +38603,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",
@@ -40223,6 +40227,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",
@@ -41115,6 +41120,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",
@@ -41195,6 +41201,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",
@@ -41351,6 +41358,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",
@@ -41465,6 +41473,7 @@
           "target_type": {
             "enum": [
               "aws",
+              "azure",
               "clickhouse",
               "gcp",
               "kubernetes",

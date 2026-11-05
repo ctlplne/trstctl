@@ -193,6 +193,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("endpoint", "Graph endpoint", "HTTPS Microsoft Graph endpoint.", true),
 			value("application_object_id", "Application object ID", "Object ID of the application receiving the temporary credential.", true),
 			value("application_client_id", "Application client ID", "Client ID returned with the generated credential.", true),
+			value("gateway", "Gateway API binding", "Optional gateway-only API account: fixed endpoint origin, token_endpoint matching authority_host and azure_tenant_id, and one resource /.default scope. Graph/OAuth/scoped API stand-in and stock curl proof only. Removing the application password stops new grants, not already-issued tokens. Human Azure Portal and native Azure CLI are unverified.", false),
 			value("azure_tenant_id", "Azure tenant ID", "Entra tenant containing the application.", true),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Microsoft Graph token reference.", true),
 			value("authority_host", "Authority host", "Optional: the Microsoft identity platform a rotated secret is proven at (default https://login.microsoftonline.com).", false),
