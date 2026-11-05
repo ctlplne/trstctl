@@ -29,7 +29,7 @@ func TestServedPrivilegedAccountDiscoverySQLServerA260(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = admin.Close() }()
+	t.Cleanup(func() { _ = admin.Close() })
 	ctx := context.Background()
 	run := func(statement string) {
 		t.Helper()
@@ -37,16 +37,19 @@ func TestServedPrivilegedAccountDiscoverySQLServerA260(t *testing.T) {
 			t.Fatalf("%s: %v", statement, err)
 		}
 	}
+	t.Cleanup(func() {
+		for _, login := range []string{"a260_secadmin", "a260_control", "a260_plain"} {
+			if _, err := admin.ExecContext(ctx, "IF SUSER_ID('"+login+"') IS NOT NULL DROP LOGIN "+login); err != nil {
+				t.Errorf("remove owned discovery login %s: %v", login, err)
+			}
+		}
+	})
 	run("CREATE LOGIN a260_secadmin WITH PASSWORD = 'A260-secadmin-Pw-1!'")
 	run("ALTER SERVER ROLE securityadmin ADD MEMBER a260_secadmin")
 	run("CREATE LOGIN a260_control WITH PASSWORD = 'A260-control-Pw-1!'")
 	run("GRANT CONTROL SERVER TO a260_control")
 	run("CREATE LOGIN a260_plain WITH PASSWORD = 'A260-plain-Pw-1!'")
-	t.Cleanup(func() {
-		for _, login := range []string{"a260_secadmin", "a260_control", "a260_plain"} {
-			_, _ = admin.ExecContext(ctx, "IF SUSER_ID('"+login+"') IS NOT NULL DROP LOGIN "+login)
-		}
-	})
+
 	// Catalog names and type codes can use different collations. Normalize
 	// the aggregate and ordering explicitly, preserving Unicode login names.
 	logins := func() string {
