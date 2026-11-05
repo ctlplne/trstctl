@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/access/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the privileged accounts imported into folders */
+        get: operations["listPAMImportedAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/activity": {
         parameters: {
             query?: never;
@@ -172,6 +189,57 @@ export interface paths {
         get: operations["listPAMDiscoveredAccounts"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/accounts/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a staged account aside with the reason; a scan that finds it changed stages it again */
+        post: operations["dismissPAMDiscoveredAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request independent review of importing staged accounts into a folder; importing grants nothing */
+        post: operations["requestPAMDiscoveryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/imports/{request_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply an approved import with the approval's exact request ID and intent digest; an account changed since the review is refused */
+        post: operations["applyPAMDiscoveryImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21326,6 +21394,44 @@ export interface components {
             /** @enum {string} */
             change: "added" | "removed" | "changed";
         };
+        PAMDiscoveryDismissRequest: {
+            reason: string;
+        };
+        PAMDiscoveryImportRequest: {
+            /** @description 1-100 staged accounts */
+            account_ids: string[];
+            /**
+             * Format: uuid
+             * @description when applying: the approval's ID
+             */
+            approval_request_id?: string;
+            /** @description 1-64 lowercase letters, digits, - or _ */
+            folder: string;
+            /** @description when applying: the approval's intent digest */
+            intent_digest?: string;
+            reason: string;
+            /** Format: uuid */
+            request_id: string;
+            /**
+             * Format: uuid
+             * @description an access template the folder's accounts will be governed by
+             */
+            template_id?: string;
+        };
+        PAMDiscoveryImportReview: {
+            accounts: number;
+            approval_count: number;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+            required_approvals: number;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+        };
         PAMDiscoveryRun: {
             accounts: number;
             added: number;
@@ -21437,6 +21543,29 @@ export interface components {
             target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
             /** @description at most 3600: an emergency session lasts an hour at most */
             ttl_seconds?: number;
+        };
+        PAMImportedAccount: {
+            /** Format: uuid */
+            approval_request_id: string;
+            folder: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            imported_at: string;
+            imported_by: string;
+            key: string;
+            kind: string;
+            name: string;
+            privileges: string[];
+            provider_id: string;
+            reason: string;
+            /** Format: uuid */
+            request_id: string;
+            /** Format: uuid */
+            template_id?: string;
+        };
+        PAMImportedAccountList: {
+            items: components["schemas"]["PAMImportedAccount"][];
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -25960,6 +26089,49 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPAMImportedAccounts: {
+        parameters: {
+            query?: {
+                /** @description only this folder's accounts */
+                folder?: string;
+                /** @description only this source's accounts */
+                provider_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMImportedAccountList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listAccessActivity: {
         parameters: {
             query?: {
@@ -26558,6 +26730,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveredAccountList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dismissPAMDiscoveredAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMDiscoveryDismissRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveredAccount"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestPAMDiscoveryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMDiscoveryImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMDiscoveryImportReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applyPAMDiscoveryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMDiscoveryImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMImportedAccountList"];
                 };
             };
             /** @description client error */

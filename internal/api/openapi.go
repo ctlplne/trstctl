@@ -8858,8 +8858,27 @@ func componentSchemas() map[string]*Schema {
 		"PAMDiscoveryChange": object(map[string]*Schema{
 			"change": {Type: "string", Enum: []string{"added", "removed", "changed"}}, "account": object(pamDiscoveredAccountInfo, "key", "name", "kind", "privileges", "disabled"),
 		}, "change", "account"),
-		"PAMDiscoveredAccount":      object(pamDiscoveredAccount, "id", "provider_id", "key", "name", "kind", "privileges", "disabled", "first_seen_at", "last_seen_at", "status"),
-		"PAMDiscoveredAccountList":  object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMDiscoveredAccount")}}, "items"),
+		"PAMDiscoveredAccount":     object(pamDiscoveredAccount, "id", "provider_id", "key", "name", "kind", "privileges", "disabled", "first_seen_at", "last_seen_at", "status"),
+		"PAMDiscoveredAccountList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMDiscoveredAccount")}}, "items"),
+		"PAMDiscoveryImportRequest": object(map[string]*Schema{
+			"request_id": uuid(), "account_ids": {Type: "array", Items: uuid(), Description: "1-100 staged accounts"},
+			"folder":      {Type: "string", Description: "1-64 lowercase letters, digits, - or _"},
+			"template_id": {Type: "string", Format: "uuid", Description: "an access template the folder's accounts will be governed by"},
+			"reason":      str(), "approval_request_id": {Type: "string", Format: "uuid", Description: "when applying: the approval's ID"},
+			"intent_digest": {Type: "string", Description: "when applying: the approval's intent digest"},
+		}, "request_id", "account_ids", "folder", "reason"),
+		"PAMDiscoveryImportReview": object(map[string]*Schema{
+			"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
+			"status":         {Type: "string", Enum: []string{"pending", "approved", "denied", "expired", "consumed", "superseded"}},
+			"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"}, "expires_at": timestamp(), "accounts": {Type: "integer"},
+		}, "request_id", "approval_request_id", "intent_digest", "status", "approval_count", "required_approvals", "expires_at", "accounts"),
+		"PAMDiscoveryDismissRequest": object(map[string]*Schema{"reason": str()}, "reason"),
+		"PAMImportedAccount": object(map[string]*Schema{
+			"id": uuid(), "provider_id": str(), "key": str(), "name": str(), "kind": str(), "privileges": {Type: "array", Items: str()},
+			"folder": str(), "template_id": {Type: "string", Format: "uuid"}, "reason": str(), "request_id": uuid(), "approval_request_id": uuid(),
+			"imported_by": str(), "imported_at": timestamp(),
+		}, "id", "provider_id", "key", "name", "kind", "privileges", "folder", "reason", "request_id", "approval_request_id", "imported_by", "imported_at"),
+		"PAMImportedAccountList":    object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
 		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
 		"PAMQueryRequest":           object(map[string]*Schema{"sql": {Type: "string", Description: "one SQL text (up to 64 KiB); the last statement's result is returned"}}, "sql"),
 		"PAMQueryResult": object(map[string]*Schema{

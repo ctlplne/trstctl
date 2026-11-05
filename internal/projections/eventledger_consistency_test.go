@@ -138,6 +138,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMDiscoverySourceSaved:                  "EventPAMDiscoverySourceSaved",
 	projections.EventPAMDiscoverySourceDeleted:                "EventPAMDiscoverySourceDeleted",
 	projections.EventPAMDiscoveryRunCompleted:                 "EventPAMDiscoveryRunCompleted",
+	projections.EventPAMDiscoveryImported:                     "EventPAMDiscoveryImported",
+	projections.EventPAMDiscoveryDismissed:                    "EventPAMDiscoveryDismissed",
 	projections.EventPAMSessionGatewayEnded:                   "EventPAMSessionGatewayEnded",
 	projections.EventPAMRecordingLegalHold:                    "EventPAMRecordingLegalHold",
 	projections.EventPAMRecordingDeleted:                      "EventPAMRecordingDeleted",

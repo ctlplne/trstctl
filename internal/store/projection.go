@@ -889,8 +889,10 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// pam.emergency.reviewed.
 	"pam_account_health", "pam_access_templates", "pam_emergency_responders", "pam_emergency_grants",
 	// A260: projected from pam.discovery.source_saved,
-	// pam.discovery.source_deleted and pam.discovery.run_completed.
+	// pam.discovery.source_deleted, pam.discovery.run_completed,
+	// pam.discovery.imported and pam.discovery.dismissed.
 	"pam_discovery_sources", "pam_discovery_runs", "pam_discovery_run_changes", "pam_discovered_accounts",
+	"pam_imported_accounts",
 	// N2: projected from certificate.key_vault_disable_requested and
 	// certificate.key_vault_disabled.
 	"certificate_key_vault_disables",

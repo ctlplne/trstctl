@@ -14572,7 +14572,11 @@
                 "runPAMDiscovery",
                 "listPAMDiscoveryRuns",
                 "getPAMDiscoveryRun",
-                "listPAMDiscoveredAccounts"
+                "listPAMDiscoveredAccounts",
+                "requestPAMDiscoveryImport",
+                "applyPAMDiscoveryImport",
+                "dismissPAMDiscoveredAccount",
+                "listPAMImportedAccounts"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14637,6 +14641,10 @@
                 "access discovery runs list",
                 "access discovery runs get",
                 "access discovery accounts",
+                "access discovery import request",
+                "access discovery import apply",
+                "access discovery dismiss",
+                "access accounts",
                 "access templates list",
                 "access templates create",
                 "access templates get",

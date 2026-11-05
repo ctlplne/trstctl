@@ -475,13 +475,21 @@ the tenant's dynamic-secret providers a discovery source and scan it: the scan r
 target read-only through the provider's administrator connection and lists its privileged
 accounts — PostgreSQL roles, MySQL accounts, SQL Server logins, or a Linux or Unix host's
 local accounts with their sudo rights and authorized keys' fingerprints — with what makes
-each one privileged. Each scan records what changed since the previous one, so a re-scan
-shows new administrators and removed ones. Discovery grants nothing.
+each one privileged (Active Directory users too, through the LDAP provider). Each scan
+records what changed since the previous one, so a re-scan shows new administrators and
+removed ones. Discovery grants nothing. Import the accounts to manage into a folder: the
+import is reviewed by people other than you, then you apply it with the approval; it is
+refused if an account changed since the review, and it grants nothing either. Dismiss one
+you will not manage, with the reason; it returns when a scan finds it changed. The console
+has the same flow under Access → Sessions and access keys → Privileged account discovery.
 
 ```bash
 echo '{"interval_seconds": 86400}' | trstctl-cli access discovery sources save orders-pg -f -
 trstctl-cli access discovery scan orders-pg
 trstctl-cli access discovery accounts --provider_id orders-pg
+trstctl-cli access discovery import request -f import.json   # reviewers approve it
+trstctl-cli access discovery import apply <request-id> -f import-with-approval.json
+trstctl-cli access accounts --folder db-admins
 ```
 
 An agent or a CI job gets its accounts the same way, through `trstctl-cli access agent`

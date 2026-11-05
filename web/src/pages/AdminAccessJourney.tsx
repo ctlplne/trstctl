@@ -37,6 +37,7 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
+import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -839,6 +840,9 @@ export function AdminAccess() {
               </section>
               {pamRows ? (
                 <PAMTargetsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
+              ) : null}
+              {pamRows ? (
+                <PAMDiscoveryPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
               ) : null}
             </div>
           ) : null}

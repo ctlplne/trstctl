@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2614 annotated sites across 31 rules. Each row is
+2618 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (596 sites)
+### G101 — CWE-798 Use of hardcoded credentials (597 sites)
 
 | Location | Reason |
 |---|---|
@@ -530,6 +530,7 @@ not this file.
 | `internal/server/operations_ledger_served_test.go:46` | fabricated test-only credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:247` | fabricated test-only credential (CWE-798) |
 | `internal/server/operations_ledger_served_test.go:366` | fabricated test-only credential (CWE-798) |
+| `internal/server/pam_discovery_ad_served_test.go:35` | fabricated password of a throwaway test domain (CWE-798) |
 | `internal/server/protocols_certbot_aud73_test.go:18` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:59` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:188` | fabricated secret reference, never raw credential material (CWE-798) |
@@ -901,10 +902,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6928` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6945` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6958` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6992` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6967` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6984` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6997` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7031` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1075,8 +1076,8 @@ not this file.
 | `internal/store/pam.go:111` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:735` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:815` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1028` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1042` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1030` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1044` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1096,8 +1097,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:762` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:782` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:767` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:787` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1296,7 +1297,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4201` | closed test table list above |
+| `internal/store/migration_content_test.go:4202` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -1313,7 +1314,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (332 sites)
+### G204 — CWE-78 OS command injection (335 sites)
 
 | Location | Reason |
 |---|---|
@@ -1523,6 +1524,9 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
+| `internal/server/pam_discovery_ad_served_test.go:32` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_served_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |

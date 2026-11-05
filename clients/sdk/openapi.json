@@ -38748,6 +38748,111 @@
         ],
         "type": "object"
       },
+      "PAMDiscoveryDismissRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveryImportRequest": {
+        "properties": {
+          "account_ids": {
+            "description": "1-100 staged accounts",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "approval_request_id": {
+            "description": "when applying: the approval's ID",
+            "format": "uuid",
+            "type": "string"
+          },
+          "folder": {
+            "description": "1-64 lowercase letters, digits, - or _",
+            "type": "string"
+          },
+          "intent_digest": {
+            "description": "when applying: the approval's intent digest",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "template_id": {
+            "description": "an access template the folder's accounts will be governed by",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "account_ids",
+          "folder",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMDiscoveryImportReview": {
+        "properties": {
+          "accounts": {
+            "type": "integer"
+          },
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "consumed",
+              "superseded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "status",
+          "approval_count",
+          "required_approvals",
+          "expires_at",
+          "accounts"
+        ],
+        "type": "object"
+      },
       "PAMDiscoveryRun": {
         "properties": {
           "accounts": {
@@ -39148,6 +39253,86 @@
           "reason",
           "method",
           "payload_base64"
+        ],
+        "type": "object"
+      },
+      "PAMImportedAccount": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "imported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported_by": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "privileges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "template_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "key",
+          "name",
+          "kind",
+          "privileges",
+          "folder",
+          "reason",
+          "request_id",
+          "approval_request_id",
+          "imported_by",
+          "imported_at"
+        ],
+        "type": "object"
+      },
+      "PAMImportedAccountList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMImportedAccount"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -55802,6 +55987,71 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/access/accounts": {
+      "get": {
+        "operationId": "listPAMImportedAccounts",
+        "parameters": [
+          {
+            "description": "only this folder's accounts",
+            "in": "query",
+            "name": "folder",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only this source's accounts",
+            "in": "query",
+            "name": "provider_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMImportedAccountList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the privileged accounts imported into folders",
+        "x-trstctl-permission": "access:read"
+      }
+    },
     "/api/v1/access/activity": {
       "get": {
         "operationId": "listAccessActivity",
@@ -56775,6 +57025,228 @@
         ],
         "summary": "List the privileged accounts discovery has staged",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/accounts/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissPAMDiscoveredAccount",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMDiscoveryDismissRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveredAccount"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Set a staged account aside with the reason; a scan that finds it changed stages it again",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/imports": {
+      "post": {
+        "operationId": "requestPAMDiscoveryImport",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMDiscoveryImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMDiscoveryImportReview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request independent review of importing staged accounts into a folder; importing grants nothing",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/imports/{request_id}/apply": {
+      "post": {
+        "operationId": "applyPAMDiscoveryImport",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMDiscoveryImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMImportedAccountList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply an approved import with the approval's exact request ID and intent digest; an account changed since the review is refused",
+        "x-trstctl-permission": "access:targets.write"
       }
     },
     "/api/v1/access/discovery/runs": {

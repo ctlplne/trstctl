@@ -515,6 +515,14 @@ import type {
   PAMSessionRequest,
   PAMTarget,
   PAMTargetList,
+  PAMDiscoverySource,
+  PAMDiscoverySourceList,
+  PAMDiscoveryRun,
+  PAMDiscoveredAccount,
+  PAMDiscoveredAccountList,
+  PAMDiscoveryImportRequest,
+  PAMDiscoveryImportReview,
+  PAMImportedAccountList,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1490,6 +1498,14 @@ export type {
   PAMSessionRequest,
   PAMTarget,
   PAMTargetList,
+  PAMDiscoverySource,
+  PAMDiscoverySourceList,
+  PAMDiscoveryRun,
+  PAMDiscoveredAccount,
+  PAMDiscoveredAccountList,
+  PAMDiscoveryImportRequest,
+  PAMDiscoveryImportReview,
+  PAMImportedAccountList,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2507,6 +2523,14 @@ export interface Api {
   pamTarget(targetType: string, id: string): Promise<PAMTarget>;
   registerPAMTarget(input: PAMTargetRequest, idempotencyKey?: string): Promise<PAMTarget>;
   disablePAMTarget(targetType: string, id: string, reason: string, idempotencyKey?: string): Promise<PAMTarget>;
+  pamDiscoverySources(): Promise<PAMDiscoverySourceList>;
+  savePAMDiscoverySource(providerID: string, intervalSeconds: number, idempotencyKey?: string): Promise<PAMDiscoverySource>;
+  runPAMDiscovery(providerID: string, idempotencyKey?: string): Promise<PAMDiscoveryRun>;
+  pamDiscoveredAccounts(options?: { providerID?: string; status?: string }): Promise<PAMDiscoveredAccountList>;
+  requestPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMDiscoveryImportReview>;
+  applyPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMImportedAccountList>;
+  dismissPAMDiscoveredAccount(id: string, reason: string, idempotencyKey?: string): Promise<PAMDiscoveredAccount>;
+  pamImportedAccounts(folder?: string): Promise<PAMImportedAccountList>;
   pamSession(id: string): Promise<PAMSession>;
   requestPAMSession(input: PAMSessionRequest, idempotencyKey?: string): Promise<PAMApprovalRequest>;
   pamRequestProgress(approvalId: string): Promise<PAMRequestProgress>;
@@ -3405,6 +3429,29 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   registerPAMTarget: (input, idempotencyKey) => mutate<PAMTarget>("POST", "/api/v1/access/targets", input, idempotencyKey),
   disablePAMTarget: (targetType, id, reason, idempotencyKey) =>
     mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/disable`, { reason }, idempotencyKey),
+  pamDiscoverySources: () => req<PAMDiscoverySourceList>("/api/v1/access/discovery/sources"),
+  savePAMDiscoverySource: (providerID, intervalSeconds, idempotencyKey) =>
+    mutate<PAMDiscoverySource>(
+      "PUT",
+      `/api/v1/access/discovery/sources/${encodeURIComponent(providerID)}`,
+      { interval_seconds: intervalSeconds },
+      idempotencyKey,
+    ),
+  runPAMDiscovery: (providerID, idempotencyKey) =>
+    mutate<PAMDiscoveryRun>("POST", `/api/v1/access/discovery/sources/${encodeURIComponent(providerID)}/runs`, undefined, idempotencyKey),
+  pamDiscoveredAccounts: (options) => {
+    const query = new URLSearchParams();
+    if (options?.providerID) query.set("provider_id", options.providerID);
+    if (options?.status) query.set("status", options.status);
+    const qs = query.toString();
+    return req<PAMDiscoveredAccountList>(`/api/v1/access/discovery/accounts${qs ? `?${qs}` : ""}`);
+  },
+  requestPAMDiscoveryImport: (input, idempotencyKey) => mutate<PAMDiscoveryImportReview>("POST", "/api/v1/access/discovery/imports", input, idempotencyKey),
+  applyPAMDiscoveryImport: (input, idempotencyKey) =>
+    mutate<PAMImportedAccountList>("POST", `/api/v1/access/discovery/imports/${encodeURIComponent(input.request_id)}/apply`, input, idempotencyKey),
+  dismissPAMDiscoveredAccount: (id, reason, idempotencyKey) =>
+    mutate<PAMDiscoveredAccount>("POST", `/api/v1/access/discovery/accounts/${encodeURIComponent(id)}/dismiss`, { reason }, idempotencyKey),
+  pamImportedAccounts: (folder) => req<PAMImportedAccountList>(`/api/v1/access/accounts${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),
   requestPAMSession: (input, idempotencyKey) => mutate<PAMApprovalRequest>("POST", "/api/v1/access/session-requests", input, idempotencyKey),
   pamRequestProgress: (approvalId) => req<PAMRequestProgress>(`/api/v1/access/session-requests/${encodeURIComponent(approvalId)}`),

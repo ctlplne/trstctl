@@ -94,6 +94,13 @@
   refusal with its SQLSTATE) run by the control plane through the session's gateway, which signs in, records and masks.
   The console's "Open in the browser" now covers both target types; "Open database console" shows the SQL console.
   OpenAPI census 735 -> 736.
+- Privileged account discovery, part 2 (A260 served): Active Directory users through the LDAP provider (transitive
+  members of the groups that administer the domain, protected users); staged accounts are imported into a folder only
+  after independent review (`/api/v1/access/discovery/imports`, applied with the approval; refused when an account
+  changed since its review) and importing grants nothing; a staged account can be dismissed with a reason
+  (`/api/v1/access/discovery/accounts/{id}/dismiss`); `GET /api/v1/access/accounts` lists imported accounts. The
+  console's access page gains a discovery panel. Migration 0400, snapshot format 92, OpenAPI census 743 -> 747, CLI
+  census 810 -> 814 (`access discovery import request|apply`, `access discovery dismiss`, `access accounts`).
 - Privileged account discovery, part 1 (A260): a dynamic-secret provider becomes a discovery source
   (`/api/v1/access/discovery/sources`, on demand or every hour or more); a scan reads its target read-only through the
   provider's administrator connection and stages the privileged PostgreSQL roles, MySQL accounts, SQL Server logins or

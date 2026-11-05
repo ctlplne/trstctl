@@ -8919,17 +8919,19 @@ What comes next:
   from the cluster (today the operator types the names).
 - Gateways the control plane cannot reach (a reverse tunnel over the agent channel).
 
-## Privileged account discovery (A260) — part 1 of 2: read-only scans
+## Privileged account discovery (A260) — served
 
-Status: scans served; review and import (part 2), with Active Directory against the Samba
-stand-in, come next, and A260 stays open until they land. A discovery source is one of the
+Status: served; Active Directory is proven against the Samba stand-in (its live directory
+proof is a Track B row). A discovery source is one of the
 tenant's dynamic-secret providers (`PUT /api/v1/access/discovery/sources/{provider_id}`, on
 demand or every `interval_seconds` of an hour or more); a scan reads its target through the
 provider's administrator connection and stages the privileged accounts with what makes each
 privileged: PostgreSQL roles (superuser, createrole, createdb, replication, bypassrls,
 membership of a superuser or a powerful predefined role, database ownership), MySQL accounts
 (administration privileges, global and dynamic, or write access to the grant tables), SQL
-Server logins (a fixed server role that administers the server, or CONTROL SERVER) and a
+Server logins (a fixed server role that administers the server, or CONTROL SERVER), Active
+Directory users (members, through nested groups, of the groups that administer the domain,
+and users AD marks protected) and a
 Linux or Unix host's local accounts (uid 0, an administrators' group, a sudoers rule naming
 the account, its group or a user alias) with their authorized keys' fingerprints. A scan
 runs in a read-only transaction or as one fixed read-only command, never reads a password,
@@ -8943,10 +8945,28 @@ authorized_keys files) hash the same before and after; a re-scan after the targe
 shows the accounts added, removed and changed; the scheduler scans a due source and not
 before; an unreachable target fails `unreachable`; another tenant sees nothing.
 `TestServedPrivilegedAccountDiscoverySQLServerA260` runs on the x86 SQL Server lab job.
+`TestServedActiveDirectoryDiscoveryA260` proves the directory on a Samba domain controller:
+direct and nested Domain Admins members and a disabled Backup Operators member are staged,
+a plain user is not, the scan changes no membership, and a re-scan after a nested member is
+removed shows it removed.
+
+Staged accounts are imported into a folder, with an optional access template, only after
+independent review (`POST /api/v1/access/discovery/imports`, then
+`POST .../imports/{request_id}/apply` with the approval): reviewers other than the
+requester see the folder and every account with its privileges, and the import is refused
+when an account changed since its review. Importing grants nothing. A staged account can be
+dismissed with a reason; a scan that finds it changed stages it again.
+`TestServedPrivilegedAccountImportA260` proves it on PostgreSQL: an unreviewed import and the
+requester's own approval are refused; after two reviews the accounts are in the folder and
+marked imported, and a repeated apply answers the same; the database's roles hash the same,
+no PAM target is registered and no session exists; an account changed since its review is
+refused; a dismissed account returns to staged when it changes; another tenant sees none of
+it. The console's privileged account discovery panel (Access → Sessions and access keys)
+scans sources, imports selected accounts after review and dismisses one (component tests,
+axe clean).
 
 What comes next:
-- Review and import into a folder with a template, granting nothing (part 2), and Active
-  Directory discovery against the Samba stand-in (its live proof is a Track B row).
+- Folders as objects with their template applied to every account in them (A261).
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
   unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an
   `AuthorizedKeysFile` elsewhere) are not read; Windows hosts' local administrators.

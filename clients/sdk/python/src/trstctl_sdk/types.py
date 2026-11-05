@@ -11598,6 +11598,43 @@ PAMDiscoveryChange = TypedDict(
     total=False,
 )
 
+PAMDiscoveryDismissRequest = TypedDict(
+    'PAMDiscoveryDismissRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+PAMDiscoveryImportRequest = TypedDict(
+    'PAMDiscoveryImportRequest',
+    {
+        'account_ids': list[str],
+        'approval_request_id': str,
+        'folder': str,
+        'intent_digest': str,
+        'reason': str,
+        'request_id': str,
+        'template_id': str,
+    },
+    total=False,
+)
+
+PAMDiscoveryImportReview = TypedDict(
+    'PAMDiscoveryImportReview',
+    {
+        'accounts': int,
+        'approval_count': int,
+        'approval_request_id': str,
+        'expires_at': str,
+        'intent_digest': str,
+        'request_id': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
 PAMDiscoveryRun = TypedDict(
     'PAMDiscoveryRun',
     {
@@ -11716,6 +11753,34 @@ PAMEmergencySessionRequest = TypedDict(
         'target_id': str,
         'target_type': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+PAMImportedAccount = TypedDict(
+    'PAMImportedAccount',
+    {
+        'approval_request_id': str,
+        'folder': str,
+        'id': str,
+        'imported_at': str,
+        'imported_by': str,
+        'key': str,
+        'kind': str,
+        'name': str,
+        'privileges': list[str],
+        'provider_id': str,
+        'reason': str,
+        'request_id': str,
+        'template_id': str,
+    },
+    total=False,
+)
+
+PAMImportedAccountList = TypedDict(
+    'PAMImportedAccountList',
+    {
+        'items': list[dict[str, Any]],
     },
     total=False,
 )

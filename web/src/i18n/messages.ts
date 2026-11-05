@@ -5699,6 +5699,204 @@ export const messages = {
     defaultMessage: "Only the first 1,000 rows are shown; longer cells are cut.",
     description: "Database console note when the result was bounded (A259).",
   },
+  "admin.access.discovery.heading": {
+    defaultMessage: "Privileged account discovery",
+    description: "Heading of the privileged account discovery panel (A260).",
+  },
+  "admin.access.discovery.description": {
+    defaultMessage:
+      "Scan a provider's target read-only for its privileged accounts, then import the ones to manage into a folder after review. Importing grants nothing.",
+    description: "What discovery does and that importing grants nothing (A260).",
+  },
+  "admin.access.discovery.failed": {
+    defaultMessage: "Discovery could not complete that",
+    description: "Error title for a failed discovery action (A260).",
+  },
+  "admin.access.discovery.loading": {
+    defaultMessage: "Loading discovery sources\u2026",
+    description: "Loading state of the discovery panel (A260).",
+  },
+  "admin.access.discovery.noSources": {
+    defaultMessage: "No discovery sources yet. Choose a provider below to scan its target.",
+    description: "Empty state when no provider is a discovery source (A260).",
+  },
+  "admin.access.discovery.sources": {
+    defaultMessage: "Discovery sources",
+    description: "Caption and label of the discovery sources table (A260).",
+  },
+  "admin.access.discovery.provider": {
+    defaultMessage: "Provider",
+    description: "Column and field label: the dynamic-secret provider a source scans (A260).",
+  },
+  "admin.access.discovery.schedule": {
+    defaultMessage: "Schedule",
+    description: "Column and field label: how often a source is scanned (A260).",
+  },
+  "admin.access.discovery.lastRun": {
+    defaultMessage: "Last scan",
+    description: "Column label: the source's last scan (A260).",
+  },
+  "admin.access.discovery.actions": {
+    defaultMessage: "Actions",
+    description: "Column label for row actions in the discovery tables (A260).",
+  },
+  "admin.access.discovery.onDemand": {
+    defaultMessage: "On demand",
+    description: "Schedule of a source scanned only when asked (A260).",
+  },
+  "admin.access.discovery.everyHours": {
+    defaultMessage: "Every {hours, plural, one {hour} other {# hours}}",
+    description: "Schedule of a source scanned on an interval (A260).",
+  },
+  "admin.access.discovery.lastRunCompleted": {
+    defaultMessage: "{accounts, plural, one {# privileged account} other {# privileged accounts}}; {added} added, {removed} removed",
+    description: "The last scan's result (A260).",
+  },
+  "admin.access.discovery.lastRunFailed": {
+    defaultMessage: "Failed: {failure}",
+    description: "The last scan failed; failure is its class, such as unreachable (A260).",
+  },
+  "admin.access.discovery.neverRun": {
+    defaultMessage: "Not scanned yet",
+    description: "A source with no scan yet (A260).",
+  },
+  "admin.access.discovery.scanNow": {
+    defaultMessage: "Scan {provider} now",
+    description: "Button scanning one source now (A260).",
+  },
+  "admin.access.discovery.chooseProvider": {
+    defaultMessage: "Choose a provider",
+    description: "Placeholder option of the provider select (A260).",
+  },
+  "admin.access.discovery.saveSource": {
+    defaultMessage: "Save source",
+    description: "Button making a provider a discovery source (A260).",
+  },
+  "admin.access.discovery.sourceSaved": {
+    defaultMessage: "{provider} is a discovery source.",
+    description: "Notice after saving a discovery source (A260).",
+  },
+  "admin.access.discovery.scanned": {
+    defaultMessage:
+      "Scan of {provider}: {accounts, plural, one {# privileged account} other {# privileged accounts}}, {added} added, {removed} removed, {changed} changed.",
+    description: "Notice after a completed scan (A260).",
+  },
+  "admin.access.discovery.scanFailed": {
+    defaultMessage: "The scan of {provider} failed: {failure}.",
+    description: "Notice after a failed scan; failure is its class (A260).",
+  },
+  "admin.access.discovery.staged": {
+    defaultMessage: "Staged privileged accounts",
+    description: "Heading and caption of the staged accounts table (A260).",
+  },
+  "admin.access.discovery.noStaged": {
+    defaultMessage: "No staged accounts. Scan a source to find its privileged accounts.",
+    description: "Empty state of the staged accounts table (A260).",
+  },
+  "admin.access.discovery.select": {
+    defaultMessage: "Select",
+    description: "Column label of the import selection checkboxes (A260).",
+  },
+  "admin.access.discovery.selectAccount": {
+    defaultMessage: "Select {name} for import",
+    description: "Accessible name of an account's import checkbox (A260).",
+  },
+  "admin.access.discovery.account": {
+    defaultMessage: "Account",
+    description: "Column label: the discovered account (A260).",
+  },
+  "admin.access.discovery.privileges": {
+    defaultMessage: "Privileges",
+    description: "Column label: what makes the account privileged (A260).",
+  },
+  "admin.access.discovery.kind": {
+    defaultMessage: "({kind})",
+    description: "A discovered account's kind, such as database_role; the kind stays literal (A260).",
+  },
+  "admin.access.discovery.kindDisabled": {
+    defaultMessage: "({kind}, disabled)",
+    description: "A discovered account's kind, marked disabled because its target reports it so (A260).",
+  },
+  "admin.access.discovery.dismiss": {
+    defaultMessage: "Dismiss {name}",
+    description: "Button setting a staged account aside (A260).",
+  },
+  "admin.access.discovery.dismissTitle": {
+    defaultMessage: "Dismiss {name}",
+    description: "Title of the dismiss dialog (A260).",
+  },
+  "admin.access.discovery.dismissDescription": {
+    defaultMessage: "A dismissed account leaves the staged list until a scan finds it changed.",
+    description: "What dismissing does (A260).",
+  },
+  "admin.access.discovery.confirmDismiss": {
+    defaultMessage: "Dismiss account",
+    description: "Button confirming a dismissal (A260).",
+  },
+  "admin.access.discovery.dismissed": {
+    defaultMessage: "{name} was dismissed.",
+    description: "Notice after dismissing an account (A260).",
+  },
+  "admin.access.discovery.importSelected": {
+    defaultMessage: "Import {count, plural, one {# selected account} other {# selected accounts}}",
+    description: "Button opening the import dialog (A260).",
+  },
+  "admin.access.discovery.importTitle": {
+    defaultMessage: "Import {count, plural, one {# account} other {# accounts}} into a folder",
+    description: "Title of the import dialog (A260).",
+  },
+  "admin.access.discovery.importDescription": {
+    defaultMessage: "The import is reviewed by people other than you before it applies. It grants nothing: no target, role, session or credential.",
+    description: "What the import's review means and that it grants nothing (A260).",
+  },
+  "admin.access.discovery.folder": {
+    defaultMessage: "Folder",
+    description: "Field and column label: the folder accounts are imported into (A260).",
+  },
+  "admin.access.discovery.templateID": {
+    defaultMessage: "Access template ID (optional)",
+    description: "Optional access template the folder's accounts will be governed by (A260).",
+  },
+  "admin.access.discovery.reason": {
+    defaultMessage: "Reason",
+    description: "Field label: why the import or dismissal is made (A260).",
+  },
+  "admin.access.discovery.requestReview": {
+    defaultMessage: "Request review",
+    description: "Button requesting the import's review (A260).",
+  },
+  "admin.access.discovery.importRequested": {
+    defaultMessage: "Import requested. It waits for {count, plural, one {# approval} other {# approvals}}.",
+    description: "Notice after requesting an import (A260).",
+  },
+  "admin.access.discovery.awaitingReview": {
+    defaultMessage: "Waiting for {count, plural, one {# approval} other {# approvals}} from reviewers other than you. Apply it once approved.",
+    description: "Status of a requested import (A260).",
+  },
+  "admin.access.discovery.applyImport": {
+    defaultMessage: "Apply approved import",
+    description: "Button applying an approved import (A260).",
+  },
+  "admin.access.discovery.imported": {
+    defaultMessage: "Imported {count, plural, one {# account} other {# accounts}} into {folder}.",
+    description: "Notice after applying an import (A260).",
+  },
+  "admin.access.discovery.importedHeading": {
+    defaultMessage: "Imported accounts",
+    description: "Heading and caption of the imported accounts table (A260).",
+  },
+  "admin.access.discovery.noImported": {
+    defaultMessage: "No accounts imported yet.",
+    description: "Empty state of the imported accounts table (A260).",
+  },
+  "admin.access.discovery.importedBy": {
+    defaultMessage: "Imported by",
+    description: "Column label: who applied the import (A260).",
+  },
+  "admin.access.discovery.close": {
+    defaultMessage: "Close",
+    description: "Button closing a discovery dialog (A260).",
+  },
   "admin.access.openTerminal": {
     defaultMessage: "Open terminal",
     description: "Button opening a browser terminal on a privileged SSH session or in a pod on a Kubernetes session (A259).",

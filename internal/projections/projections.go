@@ -352,6 +352,8 @@ const (
 	EventPAMDiscoverySourceSaved                  = "pam.discovery.source_saved"
 	EventPAMDiscoverySourceDeleted                = "pam.discovery.source_deleted"
 	EventPAMDiscoveryRunCompleted                 = "pam.discovery.run_completed"
+	EventPAMDiscoveryImported                     = "pam.discovery.imported"
+	EventPAMDiscoveryDismissed                    = "pam.discovery.dismissed"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
 	EventMachineAuthMethodDisabled                = "secrets.auth_method.disabled"
@@ -4513,6 +4515,41 @@ type PAMDiscoveryRunCompleted struct {
 	Accounts    []pamdiscovery.Account `json:"accounts"`
 }
 
+// PAMDiscoveryImported records an import of staged accounts into a folder
+// (A260 part 2), applied after independent review: the operation approval it
+// consumes. It grants nothing.
+type PAMDiscoveryImported struct {
+	RequestID  string                        `json:"request_id"`
+	Folder     string                        `json:"folder"`
+	TemplateID string                        `json:"template_id,omitempty"`
+	Reason     string                        `json:"reason"`
+	Accounts   []PAMDiscoveryImportedAccount `json:"accounts"`
+	Approval   store.OperationApprovalUse    `json:"approval"`
+	Actor      string                        `json:"actor"`
+	At         time.Time                     `json:"at"`
+}
+
+// PAMDiscoveryImportedAccount is one account an import names, as reviewed.
+type PAMDiscoveryImportedAccount struct {
+	ID         string   `json:"id"`
+	ProviderID string   `json:"provider_id"`
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	Kind       string   `json:"kind"`
+	Privileges []string `json:"privileges"`
+}
+
+// PAMDiscoveryDismissed records a staged account set aside, with why (A260
+// part 2); a scan that finds it changed stages it again.
+type PAMDiscoveryDismissed struct {
+	AccountID  string    `json:"account_id"`
+	ProviderID string    `json:"provider_id"`
+	Key        string    `json:"key"`
+	Reason     string    `json:"reason"`
+	Actor      string    `json:"actor"`
+	At         time.Time `json:"at"`
+}
+
 // PAMRecordingLegalHold places or releases a legal hold on a recording.
 type PAMRecordingLegalHold struct {
 	ID     string    `json:"id"`
@@ -5157,6 +5194,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMDiscoverySourceSaved:                  {1: true},
 	EventPAMDiscoverySourceDeleted:                {1: true},
 	EventPAMDiscoveryRunCompleted:                 {1: true},
+	EventPAMDiscoveryImported:                     {1: true},
+	EventPAMDiscoveryDismissed:                    {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
 	EventPAMSSHSigningRecovered:                   {1: true},
@@ -8594,6 +8633,38 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMDiscoveryRunTx(ctx, tx, e.TenantID, store.PAMDiscoveryRun{ID: pl.RunID, ProviderID: pl.ProviderID,
 			Status: pl.Status, Failure: pl.Failure, StartedAt: pl.StartedAt, FinishedAt: pl.FinishedAt, RequestedBy: pl.RequestedBy},
 			pamdiscovery.Normalize(pl.Accounts))
+	case EventPAMDiscoveryImported:
+		var pl PAMDiscoveryImported
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || pl.Folder == "" || pl.Reason == "" || pl.Actor == "" || pl.At.IsZero() || len(pl.Accounts) == 0 ||
+			len(pl.Accounts) > 100 || pl.Approval.ResourceKind != "pam_import" || pl.Approval.ResourceID != "pam-import:"+pl.RequestID ||
+			pl.Approval.Action != "import" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, pl.Approval, e.ID, e.Time); err != nil {
+			return err
+		}
+		imp := store.PAMDiscoveryImport{RequestID: pl.RequestID, ApprovalRequestID: pl.Approval.RequestID, Folder: pl.Folder,
+			TemplateID: pl.TemplateID, Reason: pl.Reason, ImportedBy: pl.Actor, ImportedAt: pl.At}
+		for _, a := range pl.Accounts {
+			if a.ID == "" || a.ProviderID == "" || a.Key == "" || a.Name == "" || a.Kind == "" {
+				return fmt.Errorf("projections: incomplete %s", e.Type)
+			}
+			imp.Accounts = append(imp.Accounts, store.PAMImportedAccountRef{ID: a.ID, ProviderID: a.ProviderID, Key: a.Key, Name: a.Name,
+				Kind: a.Kind, Privileges: a.Privileges})
+		}
+		return p.store.ApplyPAMDiscoveryImportedTx(ctx, tx, e.TenantID, imp)
+	case EventPAMDiscoveryDismissed:
+		var pl PAMDiscoveryDismissed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.AccountID == "" || pl.ProviderID == "" || pl.Key == "" || pl.Reason == "" || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMDiscoveryDismissedTx(ctx, tx, e.TenantID, pl.ProviderID, pl.Key, pl.Reason, pl.Actor)
 	case EventPAMRecordingLegalHold:
 		var pl PAMRecordingLegalHold
 		if err := decode(e, &pl); err != nil {

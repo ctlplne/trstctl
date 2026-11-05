@@ -20,12 +20,13 @@ import (
 
 // A260: privileged account discovery. A source is one of the tenant's
 // dynamic-secret providers whose administrator connection reads its target's
-// accounts: PostgreSQL roles, MySQL users, SQL Server logins, or a Linux or
-// Unix host's local accounts, sudo rights and authorized keys. A scan is
-// read-only, bounded by pamDiscoveryTimeout, and one per source at a time;
-// its result is one event, whose projection stages the accounts and records
-// what changed since the source's previous complete scan. Discovery grants
-// nothing.
+// accounts: PostgreSQL roles, MySQL users, SQL Server logins, Active
+// Directory users (part 2), or a Linux or Unix host's local accounts, sudo
+// rights and authorized keys. A scan is read-only, bounded by
+// pamDiscoveryTimeout, and one per source at a time; its result is one event,
+// whose projection stages the accounts and records what changed since the
+// source's previous complete scan. Discovery grants nothing; an import into a
+// folder needs independent review and grants nothing either (part 2).
 
 const (
 	pamDiscoveryTimeout     = 2 * time.Minute
@@ -35,7 +36,7 @@ const (
 )
 
 // pamDiscoveryTypes are the provider types whose targets discovery reads.
-var pamDiscoveryTypes = map[string]bool{"postgresql": true, "mysql": true, "mssql": true, "unix": true}
+var pamDiscoveryTypes = map[string]bool{"postgresql": true, "mysql": true, "mssql": true, "unix": true, "ldap": true}
 
 // pamAccountDiscoverer is a provider that can read its target's privileged
 // accounts.
@@ -74,7 +75,7 @@ func (s *pamService) discoverer(tenantID, providerID string) (pamAccountDiscover
 		}
 		d, ok := provider.(pamAccountDiscoverer)
 		if !ok || !pamDiscoveryTypes[d.DynamicSecretProviderType()] {
-			return nil, fmt.Errorf("%w: provider %s cannot list its target's accounts (PostgreSQL, MySQL, SQL Server and Linux or Unix hosts can)",
+			return nil, fmt.Errorf("%w: provider %s cannot list its target's accounts (PostgreSQL, MySQL, SQL Server, Active Directory and Linux or Unix hosts can)",
 				api.ErrPAMInvalid, providerID)
 		}
 		return d, nil

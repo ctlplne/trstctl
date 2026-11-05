@@ -420,9 +420,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// terminal-open|terminal-output|terminal-input|terminal-resize|
 	// terminal-close` and `access sessions query`. A260 adds `access discovery
 	// sources list|save|delete`, `access discovery scan`, `access discovery
-	// runs list|get` and `access discovery accounts`.
-	if len(out) != 810 {
-		t.Fatalf("CLI commands = %d, want 810", len(out))
+	// runs list|get` and `access discovery accounts`, then `access discovery
+	// import request|apply`, `access discovery dismiss` and `access accounts`.
+	if len(out) != 814 {
+		t.Fatalf("CLI commands = %d, want 814", len(out))
 	}
 	return out
 }

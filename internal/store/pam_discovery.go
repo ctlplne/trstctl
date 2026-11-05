@@ -359,3 +359,124 @@ func (s *Store) ListPAMDiscoveredAccounts(ctx context.Context, tenantID, provide
 	})
 	return out, err
 }
+
+// ErrPAMDiscoveredAccountNotFound is a staged account that does not exist.
+var ErrPAMDiscoveredAccountNotFound = errors.New("store: discovered account not found")
+
+// PAMDiscoveryImport is an approved import of staged accounts (A260 part 2).
+type PAMDiscoveryImport struct {
+	RequestID, ApprovalRequestID string
+	Folder, TemplateID, Reason   string
+	ImportedBy                   string
+	ImportedAt                   time.Time
+	Accounts                     []PAMImportedAccountRef
+}
+
+// PAMImportedAccountRef is one account an import names, as reviewed.
+type PAMImportedAccountRef struct {
+	ID, ProviderID, Key, Name, Kind string
+	Privileges                      []string
+}
+
+// PAMImportedAccount is an account imported into a folder.
+type PAMImportedAccount struct {
+	PAMImportedAccountRef
+	Folder, TemplateID, Reason   string
+	RequestID, ApprovalRequestID string
+	ImportedBy                   string
+	ImportedAt                   time.Time
+}
+
+// ApplyPAMDiscoveryImportedTx projects pam.discovery.imported: each account
+// is recorded in its folder and marked imported among the staged accounts.
+// It changes nothing else. Replaying it changes nothing.
+func (s *Store) ApplyPAMDiscoveryImportedTx(ctx context.Context, tx pgx.Tx, tenantID string, imp PAMDiscoveryImport) error {
+	var template any
+	if imp.TemplateID != "" {
+		template = imp.TemplateID
+	}
+	for _, a := range imp.Accounts {
+		privileges, err := json.Marshal(a.Privileges)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO pam_imported_accounts (tenant_id, provider_id, account_key, discovered_account_id, name, kind, privileges, folder,
+			    template_id, reason, import_request_id, approval_request_id, imported_by, imported_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			ON CONFLICT (tenant_id, provider_id, account_key) DO NOTHING`,
+			tenantID, a.ProviderID, a.Key, a.ID, a.Name, a.Kind, privileges, imp.Folder, template, imp.Reason, imp.RequestID,
+			imp.ApprovalRequestID, imp.ImportedBy, imp.ImportedAt.UTC()); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE pam_discovered_accounts SET status = 'imported'
+			WHERE tenant_id = $1 AND provider_id = $2 AND account_key = $3`, tenantID, a.ProviderID, a.Key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ApplyPAMDiscoveryDismissedTx projects pam.discovery.dismissed: a staged
+// account set aside with the reason, until a scan finds it changed.
+func (s *Store) ApplyPAMDiscoveryDismissedTx(ctx context.Context, tx pgx.Tx, tenantID, providerID, key, reason, actor string) error {
+	_, err := tx.Exec(ctx, `UPDATE pam_discovered_accounts SET status = 'dismissed', dismissed_reason = $4, dismissed_by = $5
+		WHERE tenant_id = $1 AND provider_id = $2 AND account_key = $3 AND status = 'staged'`, tenantID, providerID, key, reason, actor)
+	return err
+}
+
+// GetPAMDiscoveredAccount returns a staged account by its ID.
+func (s *Store) GetPAMDiscoveredAccount(ctx context.Context, tenantID, id string) (PAMDiscoveredAccount, error) {
+	var a PAMDiscoveredAccount
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var privileges, details []byte
+		err := tx.QueryRow(ctx, `SELECT id::text, provider_id, account_key, name, kind, privileges, disabled, details,
+		        first_seen_run::text, first_seen_at, last_seen_run::text, last_seen_at, COALESCE(changed_run::text, ''),
+		        COALESCE(removed_run::text, ''), removed_at, status
+		   FROM pam_discovered_accounts WHERE tenant_id = $1 AND id = $2`, tenantID, id).
+			Scan(&a.ID, &a.ProviderID, &a.Account.Key, &a.Account.Name, &a.Account.Kind, &privileges, &a.Account.Disabled, &details,
+				&a.FirstSeenRun, &a.FirstSeenAt, &a.LastSeenRun, &a.LastSeenAt, &a.ChangedRun, &a.RemovedRun, &a.RemovedAt, &a.Status)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(privileges, &a.Account.Privileges); err != nil {
+			return err
+		}
+		return json.Unmarshal(details, &a.Account.Details)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PAMDiscoveredAccount{}, ErrPAMDiscoveredAccountNotFound
+	}
+	return a, err
+}
+
+// ListPAMImportedAccounts lists the tenant's imported accounts, optionally of
+// one folder or source.
+func (s *Store) ListPAMImportedAccounts(ctx context.Context, tenantID, folder, providerID string) ([]PAMImportedAccount, error) {
+	var out []PAMImportedAccount
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT discovered_account_id::text, provider_id, account_key, name, kind, privileges, folder,
+		        COALESCE(template_id::text, ''), reason, import_request_id::text, approval_request_id::text, imported_by, imported_at
+		   FROM pam_imported_accounts
+		  WHERE tenant_id = $1 AND ($2 = '' OR folder = $2) AND ($3 = '' OR provider_id = $3)
+		  ORDER BY folder, provider_id, account_key LIMIT 10000`, tenantID, folder, providerID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a PAMImportedAccount
+			var privileges []byte
+			if err := rows.Scan(&a.ID, &a.ProviderID, &a.Key, &a.Name, &a.Kind, &privileges, &a.Folder, &a.TemplateID, &a.Reason,
+				&a.RequestID, &a.ApprovalRequestID, &a.ImportedBy, &a.ImportedAt); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(privileges, &a.Privileges); err != nil {
+				return err
+			}
+			out = append(out, a)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

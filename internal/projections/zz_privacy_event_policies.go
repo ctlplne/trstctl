@@ -1054,6 +1054,24 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		// The accounts are the target's own (local users, database roles),
 		// not trstctl principals: their names are opaque values here.
+		{EventPAMDiscoveryImported, 1}: privacyRules(
+			privacyRule("/request_id", opaque), privacyRule("/folder", clear), privacyRule("/template_id", opaque),
+			privacyRule("/reason", clear), privacyRule("/accounts/*/id", opaque), privacyRule("/accounts/*/provider_id", opaque),
+			privacyRule("/accounts/*/key", opaque), privacyRule("/accounts/*/name", opaque), privacyRule("/accounts/*/kind", opaque),
+			privacyRule("/accounts/*/privileges/*", opaque),
+			privacyRule("/approval/request_id", opaque), privacyRule("/approval/intent_digest", opaque),
+			privacyRule("/approval/requester", exact), privacyRule("/approval/resource_kind", opaque),
+			privacyRule("/approval/resource_id", opaque), privacyRule("/approval/action", opaque),
+			privacyRule("/approval/from_state", opaque), privacyRule("/approval/to_state", opaque),
+			privacyRule("/approval/target_version", opaque), privacyRule("/approval/required_approvals", opaque),
+			privacyRule("/approval/reason", clear), privacyRule("/approval/evidence_refs/*", clear),
+			privacyRule("/approval/issuance", opaque),
+			privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMDiscoveryDismissed, 1}: privacyRules(
+			privacyRule("/account_id", opaque), privacyRule("/provider_id", opaque), privacyRule("/key", opaque),
+			privacyRule("/reason", clear), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
 		{EventPAMDiscoveryRunCompleted, 1}: privacyRules(
 			privacyRule("/run_id", opaque), privacyRule("/provider_id", opaque), privacyRule("/status", opaque),
 			privacyRule("/failure", opaque), privacyRule("/requested_by", exact), privacyRule("/started_at", opaque),
@@ -1658,6 +1676,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMDiscoverySourceSaved, 1}:                                                    privacyPayloadShape[PAMDiscoverySourceSaved](),
 		{EventPAMDiscoverySourceDeleted, 1}:                                                  privacyPayloadShape[PAMDiscoverySourceDeleted](),
 		{EventPAMDiscoveryRunCompleted, 1}:                                                   privacyPayloadShape[PAMDiscoveryRunCompleted](),
+		{EventPAMDiscoveryImported, 1}:                                                       privacyPayloadShape[PAMDiscoveryImported](),
+		{EventPAMDiscoveryDismissed, 1}:                                                      privacyPayloadShape[PAMDiscoveryDismissed](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),

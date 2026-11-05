@@ -1145,6 +1145,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	395: true, // TestMigration0395KeepsTargetsAndAdmitsClickHouse
 	396: true, // TestMigration0396KeepsTargetsAndAdmitsKubernetes
 	397: true, // TestMigration0397KeepsBundlesWithoutDelegatedAccounts
+	400: true, // TestMigration0400KeepsStagedAccountsUndismissed
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod

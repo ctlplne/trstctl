@@ -80,6 +80,51 @@ type PAMDiscoveredAccount struct {
 	Status      string     `json:"status"`
 }
 
+// PAMDiscoveryImportRequest imports staged accounts into a folder (part 2):
+// requested first for independent review, then applied with the approval's
+// exact request ID and intent digest. An account that changed since the
+// review is refused, and a new request is needed.
+type PAMDiscoveryImportRequest struct {
+	RequestID         string   `json:"request_id"`
+	AccountIDs        []string `json:"account_ids"`
+	Folder            string   `json:"folder"`
+	TemplateID        string   `json:"template_id,omitempty"`
+	Reason            string   `json:"reason"`
+	ApprovalRequestID string   `json:"approval_request_id,omitempty"`
+	IntentDigest      string   `json:"intent_digest,omitempty"`
+}
+
+// PAMDiscoveryImportReview is an import's review: the approval request
+// reviewers decide.
+type PAMDiscoveryImportReview struct {
+	RequestID         string    `json:"request_id"`
+	ApprovalRequestID string    `json:"approval_request_id"`
+	IntentDigest      string    `json:"intent_digest"`
+	Status            string    `json:"status"`
+	ApprovalCount     int       `json:"approval_count"`
+	RequiredApprovals int       `json:"required_approvals"`
+	ExpiresAt         time.Time `json:"expires_at"`
+	Accounts          int       `json:"accounts"`
+}
+
+// PAMImportedAccount is an account imported into a folder. Importing grants
+// nothing: no target, role, session or credential.
+type PAMImportedAccount struct {
+	ID                string    `json:"id"`
+	ProviderID        string    `json:"provider_id"`
+	Key               string    `json:"key"`
+	Name              string    `json:"name"`
+	Kind              string    `json:"kind"`
+	Privileges        []string  `json:"privileges"`
+	Folder            string    `json:"folder"`
+	TemplateID        string    `json:"template_id,omitempty"`
+	Reason            string    `json:"reason"`
+	RequestID         string    `json:"request_id"`
+	ApprovalRequestID string    `json:"approval_request_id"`
+	ImportedBy        string    `json:"imported_by"`
+	ImportedAt        time.Time `json:"imported_at"`
+}
+
 // PAMDiscoveryService is privileged account discovery; the served broker
 // implements it.
 type PAMDiscoveryService interface {
@@ -90,6 +135,10 @@ type PAMDiscoveryService interface {
 	ListPAMDiscoveryRuns(ctx context.Context, tenantID, providerID string, limit int) ([]PAMDiscoveryRun, error)
 	GetPAMDiscoveryRun(ctx context.Context, tenantID, id string) (PAMDiscoveryRun, error)
 	ListPAMDiscoveredAccounts(ctx context.Context, tenantID, providerID, status string, includeRemoved bool) ([]PAMDiscoveredAccount, error)
+	RequestPAMDiscoveryImport(ctx context.Context, tenantID, requester string, req PAMDiscoveryImportRequest) (PAMDiscoveryImportReview, error)
+	ApplyPAMDiscoveryImport(ctx context.Context, tenantID, requester string, req PAMDiscoveryImportRequest) ([]PAMImportedAccount, error)
+	DismissPAMDiscoveredAccount(ctx context.Context, tenantID, actor, id, reason string) (PAMDiscoveredAccount, error)
+	ListPAMImportedAccounts(ctx context.Context, tenantID, folder, providerID string) ([]PAMImportedAccount, error)
 }
 
 func (a *API) pamDiscoveryRoutes() []route {
@@ -101,6 +150,10 @@ func (a *API) pamDiscoveryRoutes() []route {
 		{method: "POST", path: "/api/v1/access/discovery/sources/{provider_id}/runs", opID: "runPAMDiscovery", summary: "Scan a source's target now, read-only, and stage the privileged accounts it finds", handler: a.runPAMDiscovery, pathParams: provider, resSchema: "PAMDiscoveryRun", successCode: "201", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "GET", path: "/api/v1/access/discovery/runs", opID: "listPAMDiscoveryRuns", summary: "List discovery runs, newest first", handler: a.listPAMDiscoveryRuns, query: []param{{name: "provider_id", typ: "string", desc: "only this source's runs"}, {name: "limit", typ: "integer", desc: "at most this many (default 50, at most 500)"}}, resSchema: "PAMDiscoveryRunList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/runs/{id}", opID: "getPAMDiscoveryRun", summary: "Get a discovery run with the accounts it found added, removed or changed", handler: a.getPAMDiscoveryRun, pathParams: []param{pathUUID("id")}, resSchema: "PAMDiscoveryRun", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/discovery/imports", opID: "requestPAMDiscoveryImport", summary: "Request independent review of importing staged accounts into a folder; importing grants nothing", handler: a.requestPAMDiscoveryImport, reqSchema: "PAMDiscoveryImportRequest", resSchema: "PAMDiscoveryImportReview", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "POST", path: "/api/v1/access/discovery/imports/{request_id}/apply", opID: "applyPAMDiscoveryImport", summary: "Apply an approved import with the approval's exact request ID and intent digest; an account changed since the review is refused", handler: a.applyPAMDiscoveryImport, pathParams: []param{pathUUID("request_id")}, reqSchema: "PAMDiscoveryImportRequest", resSchema: "PAMImportedAccountList", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "POST", path: "/api/v1/access/discovery/accounts/{id}/dismiss", opID: "dismissPAMDiscoveredAccount", summary: "Set a staged account aside with the reason; a scan that finds it changed stages it again", handler: a.dismissPAMDiscoveredAccount, pathParams: []param{pathUUID("id")}, reqSchema: "PAMDiscoveryDismissRequest", resSchema: "PAMDiscoveredAccount", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "GET", path: "/api/v1/access/accounts", opID: "listPAMImportedAccounts", summary: "List the privileged accounts imported into folders", handler: a.listPAMImportedAccounts, query: []param{{name: "folder", typ: "string", desc: "only this folder's accounts"}, {name: "provider_id", typ: "string", desc: "only this source's accounts"}}, resSchema: "PAMImportedAccountList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/accounts", opID: "listPAMDiscoveredAccounts", summary: "List the privileged accounts discovery has staged", handler: a.listPAMDiscoveredAccounts, query: []param{{name: "provider_id", typ: "string", desc: "only this source's accounts"}, {name: "status", typ: "string", desc: "staged, imported or dismissed"}, {name: "include_removed", typ: "boolean", desc: "also accounts the last scan no longer found"}}, resSchema: "PAMDiscoveredAccountList", successCode: "200", perm: authz.AccessRead},
 	}
 }
@@ -119,6 +172,8 @@ func pamDiscoveryNotFound(err error) error {
 		return errStatus(http.StatusNotFound, "discovery source not found")
 	case errors.Is(err, store.ErrPAMDiscoveryRunNotFound):
 		return errStatus(http.StatusNotFound, "discovery run not found")
+	case errors.Is(err, store.ErrPAMDiscoveredAccountNotFound):
+		return errStatus(http.StatusNotFound, "discovered account not found")
 	}
 	return err
 }
@@ -267,6 +322,88 @@ func (a *API) listPAMDiscoveredAccounts(w http.ResponseWriter, r *http.Request) 
 		includeRemoved = v
 	}
 	items, err := svc.ListPAMDiscoveredAccounts(r.Context(), tenantID, q.Get("provider_id"), status, includeRemoved)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+//trstctl:mutation
+func (a *API) requestPAMDiscoveryImport(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, err := a.discovery()
+		if err != nil {
+			return 0, nil, err
+		}
+		var body PAMDiscoveryImportRequest
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		review, err := svc.RequestPAMDiscoveryImport(ctx, tenantID, principalSubject(ctx), body)
+		if err != nil {
+			return 0, nil, pamDiscoveryNotFound(err)
+		}
+		return http.StatusAccepted, review, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) applyPAMDiscoveryImport(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, err := a.discovery()
+		if err != nil {
+			return 0, nil, err
+		}
+		var body PAMDiscoveryImportRequest
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if body.RequestID != "" && body.RequestID != r.PathValue("request_id") {
+			return 0, nil, errStatus(http.StatusBadRequest, "request_id in the body differs from the path")
+		}
+		body.RequestID = r.PathValue("request_id")
+		imported, err := svc.ApplyPAMDiscoveryImport(ctx, tenantID, principalSubject(ctx), body)
+		if err != nil {
+			return 0, nil, pamDiscoveryNotFound(err)
+		}
+		return http.StatusOK, map[string]any{"items": imported}, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) dismissPAMDiscoveredAccount(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, err := a.discovery()
+		if err != nil {
+			return 0, nil, err
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		account, err := svc.DismissPAMDiscoveredAccount(ctx, tenantID, principalSubject(ctx), r.PathValue("id"), body.Reason)
+		if err != nil {
+			return 0, nil, pamDiscoveryNotFound(err)
+		}
+		return http.StatusOK, account, nil
+	})
+}
+
+func (a *API) listPAMImportedAccounts(w http.ResponseWriter, r *http.Request) {
+	svc, err := a.discovery()
+	if err != nil {
+		a.writePAMError(w, err)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	items, err := svc.ListPAMImportedAccounts(r.Context(), tenantID, r.URL.Query().Get("folder"), r.URL.Query().Get("provider_id"))
 	if err != nil {
 		a.writeError(w, err)
 		return

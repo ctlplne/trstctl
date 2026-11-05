@@ -8360,6 +8360,31 @@ export interface PAMDiscoveryChange {
   change: "added" | "removed" | "changed";
 }
 
+export interface PAMDiscoveryDismissRequest {
+  reason: string;
+}
+
+export interface PAMDiscoveryImportRequest {
+  account_ids: string[];
+  approval_request_id?: string;
+  folder: string;
+  intent_digest?: string;
+  reason: string;
+  request_id: string;
+  template_id?: string;
+}
+
+export interface PAMDiscoveryImportReview {
+  accounts: number;
+  approval_count: number;
+  approval_request_id: string;
+  expires_at: string;
+  intent_digest: string;
+  request_id: string;
+  required_approvals: number;
+  status: "pending" | "approved" | "denied" | "expired" | "consumed" | "superseded";
+}
+
 export interface PAMDiscoveryRun {
   accounts: number;
   added: number;
@@ -8436,6 +8461,26 @@ export interface PAMEmergencySessionRequest {
   target_id: string;
   target_type: "clickhouse" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "ssh";
   ttl_seconds?: number;
+}
+
+export interface PAMImportedAccount {
+  approval_request_id: string;
+  folder: string;
+  id: string;
+  imported_at: string;
+  imported_by: string;
+  key: string;
+  kind: string;
+  name: string;
+  privileges: string[];
+  provider_id: string;
+  reason: string;
+  request_id: string;
+  template_id?: string;
+}
+
+export interface PAMImportedAccountList {
+  items: PAMImportedAccount[];
 }
 
 export interface PAMPostgresCredential {

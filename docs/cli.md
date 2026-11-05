@@ -1573,6 +1573,10 @@ database console use the same calls. Privileged account discovery (A260): `acces
 sources list|save|delete` names the providers whose targets are scanned, `access discovery
 scan <provider-id>` scans one now, `access discovery runs list|get` shows what each scan
 found added, removed or changed, and `access discovery accounts` lists the staged accounts.
+`access discovery import request` asks for the review of importing staged accounts into a
+folder, `access discovery import apply <request-id>` applies it with the approval's ID and
+intent digest, `access discovery dismiss <account-id>` sets one aside with a reason, and
+`access accounts` lists the imported accounts.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).
