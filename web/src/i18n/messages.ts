@@ -6490,6 +6490,12 @@ export const messages = {
     defaultMessage: "Enter at least one role configured on this provider.",
     description: "Gateway provider role validation.",
   },
+  "admin.access.awsAPI": { defaultMessage: "AWS API with STS", description: "A263 gateway-only cloud account type." },
+  "admin.access.awsAPIProof": {
+    defaultMessage:
+      "The gateway holds temporary STS credentials and signs requests to the configured S3 or STS endpoint. Native API calls use LocalStack; authorization uses a stand-in. Live AWS and console handoff are unverified.",
+    description: "A263 cloud account qualification limits.",
+  },
   "admin.access.snowflake": { defaultMessage: "Snowflake SQL API", description: "A263 gateway account type." },
   "admin.access.snowflakeProof": {
     defaultMessage:

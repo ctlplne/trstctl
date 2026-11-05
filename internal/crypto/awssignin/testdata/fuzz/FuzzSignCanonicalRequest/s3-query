@@ -1,0 +1,4 @@
+go test fuzz v1
+string("bucket/a%20b")
+string("prefix=a+b&tag=z&tag=a")
+[]byte("owned")

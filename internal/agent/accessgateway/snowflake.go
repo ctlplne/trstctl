@@ -2,8 +2,6 @@
 package accessgateway
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -12,14 +10,13 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -67,135 +64,22 @@ func snowflakeJWT(account, user string, key []byte, now, deadline time.Time) ([]
 // snowflakeRoundTrip writes the bearer credential directly as bytes. It never
 // places that secret in http.Header's immutable string storage.
 func snowflakeRoundTrip(ctx context.Context, request *http.Request, body []byte, upstream httpUpstream, account, user string, key *secret.Buffer, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error)) (*http.Response, error) {
-	target, err := url.Parse(upstream.URL)
-	if err != nil || target.Host == "" || target.User != nil || (target.Scheme != "http" && target.Scheme != "https") {
-		return nil, errors.New("accessgateway: invalid Snowflake upstream")
-	}
-	if target.Scheme == "http" {
-		host := target.Hostname()
-		ip := net.ParseIP(host)
-		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return nil, errors.New("accessgateway: Snowflake requires verified HTTPS")
-		}
-	}
-	address := target.Host
-	if target.Port() == "" {
-		port := "443"
-		if target.Scheme == "http" {
-			port = "80"
-		}
-		address = net.JoinHostPort(target.Hostname(), port)
-	}
-	if dial == nil {
-		dial = (&net.Dialer{Timeout: 15 * time.Second}).DialContext
-	}
-	conn, err := dial(ctx, "tcp", address)
-	if err != nil {
-		return nil, err
-	}
-	if target.Scheme == "https" {
-		name := upstream.ServerName
-		if name == "" {
-			name = target.Hostname()
-		}
-		conn, err = mtls.VerifyClientConnection(ctx, conn, name, []byte(upstream.CAPEM))
-		if err != nil {
-			return nil, err
-		}
-	}
-	_ = conn.SetDeadline(deadline)
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	success := false
-	defer func() {
-		if !success {
-			stop()
-			_ = conn.Close()
-		}
-	}()
-	out := request.Clone(ctx)
-	out.URL.Scheme = target.Scheme
-	out.URL.Host = target.Host
-	out.URL.User = nil
-	out.URL.Fragment = ""
-	out.Host = target.Host
-	out.RequestURI = ""
-	out.Close = true
-	out.TransferEncoding = nil
-	out.Trailer = nil
-	out.GetBody = nil
-	out.ContentLength = int64(len(body))
-	out.Body = io.NopCloser(bytes.NewReader(body))
-	for _, name := range strings.Split(out.Header.Get("Connection"), ",") {
-		out.Header.Del(strings.TrimSpace(name))
-	}
-	for _, name := range []string{"Authorization", "Proxy-Authorization", "X-Snowflake-Authorization-Token-Type", "Cookie", "Connection", "Proxy-Connection", "Keep-Alive", "Transfer-Encoding", "TE", "Trailer", "Upgrade", "Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Idempotency-Key", "X-Idempotency-Key", "Expect"} {
-		out.Header.Del(name)
-	}
-	out.Header.Set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
-	var wire bytes.Buffer
-	if err := out.Write(&wire); err != nil {
-		return nil, err
-	}
-	defer secret.Wipe(wire.Bytes())
-	split := bytes.Index(wire.Bytes(), []byte("\r\n\r\n"))
-	if split < 0 {
-		return nil, errors.New("accessgateway: invalid serialized SQL API request")
-	}
-	err = key.Use(func(private []byte) error {
-		token, err := snowflakeJWT(account, user, private, time.Now(), deadline)
-		if err != nil {
-			return err
-		}
-		defer secret.Wipe(token)
-		held, err := secret.NewFrom(token)
-		if err != nil {
-			return err
-		}
-		defer held.Destroy()
-		return held.Use(func(auth []byte) error {
-			parts := net.Buffers{wire.Bytes()[:split], []byte("\r\nAuthorization: Bearer "), auth, wire.Bytes()[split:]}
-			_, err := parts.WriteTo(conn)
+	return credentialHTTPRoundTrip(ctx, request, body, upstream, deadline, dial, func(out *http.Request) (*secret.Buffer, error) {
+		out.Header.Set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
+		var token []byte
+		err := key.Use(func(private []byte) error {
+			var err error
+			token, err = snowflakeJWT(account, user, private, time.Now(), deadline)
 			return err
 		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	limited := &io.LimitedReader{R: conn, N: 64 << 10}
-	reader := bufio.NewReader(limited)
-	var response *http.Response
-	for interim := 0; ; interim++ {
-		response, err = http.ReadResponse(reader, out)
 		if err != nil {
 			return nil, err
 		}
-		if response.StatusCode >= 200 {
-			break
-		}
-		_ = response.Body.Close()
-		if response.StatusCode == http.StatusSwitchingProtocols || interim >= 7 {
-			return nil, errors.New("accessgateway: unsupported SQL API interim response")
-		}
-	}
-	limited.N = 1 << 62
-
-	response.Body = &snowflakeResponseBody{ReadCloser: response.Body, conn: conn, stop: stop}
-	response.Header.Del("Set-Cookie")
-	response.Header.Del("Authorization")
-	success = true
-	return response, nil
-}
-
-type snowflakeResponseBody struct {
-	io.ReadCloser
-	conn net.Conn
-	stop func() bool
-}
-
-func (b *snowflakeResponseBody) Close() error {
-	b.stop()
-	_ = b.conn.Close()
-	return b.ReadCloser.Close()
+		defer secret.Wipe(token)
+		headers := append([]byte("Authorization: Bearer "), token...)
+		defer secret.Wipe(headers)
+		return secret.NewFrom(headers)
+	})
 }
 
 func serveSnowflake(ctx context.Context, client net.Conn, raw []byte, upstream httpUpstream, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
@@ -247,10 +131,19 @@ func serveSnowflake(ctx context.Context, client net.Conn, raw []byte, upstream h
 		_, _ = io.Copy(w, response.Body)
 	})
 	listener := newOneConnListener(client)
-	server := &http.Server{Handler: handler, MaxHeaderBytes: 64 << 10, ReadHeaderTimeout: 30 * time.Second, ReadTimeout: 30 * time.Second, ErrorLog: log.New(io.Discard, "", 0), BaseContext: func(net.Listener) context.Context { return ctx }}
+	var serving sync.WaitGroup
+	server := &http.Server{Handler: handler, MaxHeaderBytes: 64 << 10, ReadHeaderTimeout: 30 * time.Second, ConnState: func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			serving.Add(1)
+		}
+		if state == http.StateClosed || state == http.StateHijacked {
+			serving.Done()
+		}
+	}, ReadTimeout: 30 * time.Second, ErrorLog: log.New(io.Discard, "", 0), BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() { <-listener.closed; _ = server.Close() }()
 	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, errOneConnDone) {
 		return err
 	}
+	serving.Wait()
 	return nil
 }

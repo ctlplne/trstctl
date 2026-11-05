@@ -218,6 +218,11 @@ type configuredDynamicProvider struct {
 // This keeps authority-bearing bytes short-lived and makes every shipped backend
 // constructor part of buildRunDeps' production call graph.
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
+	if cfg.Gateway != nil {
+		gateway := *cfg.Gateway
+		cfg.Gateway = &gateway
+	}
+
 	provider := &configuredDynamicProvider{
 		id: cfg.ID, tenantID: cfg.TenantID, cfg: cfg,
 		allowedRoles: allowed, maxTTL: maxTTL, configurationRevision: uuid.NewString(),
@@ -308,6 +313,11 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 // empty endpoint.
 func (p *configuredDynamicProvider) DynamicSecretGatewayUpstream(ctx context.Context) (string, []byte, string, error) {
 	switch p.cfg.Type {
+	case "aws-sts":
+		if p.cfg.Gateway == nil {
+			return "", nil, "", errors.New("cloud provider has no gateway endpoint")
+		}
+		return p.cfg.Gateway.Endpoint, nil, "", nil
 	case "clickhouse", "snowflake":
 		return p.cfg.Endpoint, nil, "", nil
 	case "kubernetes":
@@ -1869,4 +1879,12 @@ func (p *configuredDynamicProvider) verifyWithBackend(ctx context.Context, crede
 		return "not_available", nil
 	}
 	return "authenticated", err
+}
+
+// DynamicSecretGatewayAWS is the public signing scope frozen in a session job.
+func (p *configuredDynamicProvider) DynamicSecretGatewayAWS() (string, string, error) {
+	if p.cfg.Type != "aws-sts" || p.cfg.Gateway == nil {
+		return "", "", errors.New("provider has no AWS gateway binding")
+	}
+	return p.cfg.Gateway.Service, p.cfg.Gateway.Region, nil
 }

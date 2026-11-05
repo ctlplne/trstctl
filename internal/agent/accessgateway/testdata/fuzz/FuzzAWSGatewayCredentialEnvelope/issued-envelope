@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"access_key_id\":\"ASIAOWNEDTESTIDENTITY\",\"secret_access_key\":\"owned-signing-material\",\"session_token\":\"owned-session-material\",\"expiration\":\"2026-11-05T20:00:00Z\"}")

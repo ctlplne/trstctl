@@ -301,11 +301,13 @@ type PAMGatewayEnd struct {
 // carries exactly SPIFFEID. Ticket admits the client's connections; it is
 // shown once and is not the upstream credential.
 type PAMGatewayDelivery struct {
-	AgentID  string          `json:"agent_id"`
-	Address  string          `json:"address"`
-	SPIFFEID string          `json:"spiffe_id"`
-	CAPEM    string          `json:"ca_pem,omitempty"`
-	Ticket   secretJSONBytes `json:"ticket,omitempty"`
+	AWSService string          `json:"aws_service,omitempty"`
+	AWSRegion  string          `json:"aws_region,omitempty"`
+	AgentID    string          `json:"agent_id"`
+	Address    string          `json:"address"`
+	SPIFFEID   string          `json:"spiffe_id"`
+	CAPEM      string          `json:"ca_pem,omitempty"`
+	Ticket     secretJSONBytes `json:"ticket,omitempty"`
 }
 
 type PAMPostgresCredential struct {

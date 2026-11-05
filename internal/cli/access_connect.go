@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -95,7 +96,7 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 	if kubeconfigPath == "" {
 		kubeconfigPath = *ticketFile + ".kubeconfig"
 	}
-	line, err := gatewayClientLine(targetType, ln.Addr().(*net.TCPAddr), hostKey, knownHostsPath, kubeconfigPath)
+	line, err := gatewayClientLine(targetType, ln.Addr().(*net.TCPAddr), hostKey, knownHostsPath, kubeconfigPath, delivery)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "trstctl:", err)
 		return 1
@@ -130,7 +131,9 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 // own account. An SSH session's gateway host key is first written to
 // knownHosts; a Kubernetes session gets a kubeconfig at kubeconfig that names
 // the tunnel and no user.
-func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHosts, kubeconfig string) (string, error) {
+var awsGatewayCLIRegion = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
+
+func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHosts, kubeconfig string, scopes ...gatewayDelivery) (string, error) {
 	switch targetType {
 	case "ssh":
 		entry := fmt.Sprintf("[%s]:%d %s\n", local.IP, local.Port, hostKey)
@@ -158,6 +161,15 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 			return "", fmt.Errorf("write kubeconfig: %w", err)
 		}
 		return fmt.Sprintf("kubectl --kubeconfig %s get pods", kubeconfig), nil
+	case "aws":
+		if len(scopes) != 1 || (scopes[0].AWSService != "s3" && scopes[0].AWSService != "sts") || !awsGatewayCLIRegion.MatchString(scopes[0].AWSRegion) {
+			return "", errors.New("AWS session signing scope is unavailable; retry reading the reviewed session")
+		}
+		commandGroup := scopes[0].AWSService
+		if commandGroup == "s3" {
+			commandGroup = "s3api"
+		}
+		return fmt.Sprintf("aws --no-sign-request --endpoint-url http://%s:%d --region %s %s <operation>", local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
 	case "snowflake":
 		return fmt.Sprintf("curl http://%s:%d/api/v2/statements -H 'Content-Type: application/json' --data-binary '{\"statement\":\"SELECT 1\"}'", local.IP, local.Port), nil
 	case "clickhouse":
@@ -173,9 +185,11 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 }
 
 type gatewayDelivery struct {
-	Address  string `json:"address"`
-	SPIFFEID string `json:"spiffe_id"`
-	CAPEM    string `json:"ca_pem"`
+	AWSService string `json:"aws_service"`
+	AWSRegion  string `json:"aws_region"`
+	Address    string `json:"address"`
+	SPIFFEID   string `json:"spiffe_id"`
+	CAPEM      string `json:"ca_pem"`
 }
 
 func readGatewayDelivery(ctx context.Context, client *http.Client, server, token, tenant, sessionID string) (gatewayDelivery, string, error) {

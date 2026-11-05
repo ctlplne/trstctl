@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2627 annotated sites across 31 rules. Each row is
+2629 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1416` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1426` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1318,7 +1318,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (340 sites)
+### G204 — CWE-78 OS command injection (342 sites)
 
 | Location | Reason |
 |---|---|
@@ -1536,9 +1536,11 @@ not this file.
 | `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_served_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_gateway_aws_served_test.go:34` | fixed local Docker tool and approved fixture image (CWE-78) |
+| `internal/server/pam_gateway_aws_served_test.go:195` | fixed command inspects only AWS variables in the test-owned CLI container (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:332` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:337` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_mongo_served_test.go:31` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2064,7 +2066,7 @@ not this file.
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/cli/access_agent.go:121` | the operator names their own attestation payload file (CWE-22) |
 | `internal/cli/access_agent_test.go:128` | the file the test's own child wrote in the test's temp dir (CWE-22) |
-| `internal/cli/access_connect.go:60` | the operator names their own ticket file (CWE-22) |
+| `internal/cli/access_connect.go:61` | the operator names their own ticket file (CWE-22) |
 | `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
 | `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
 | `internal/cli/audit_verify.go:203` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |

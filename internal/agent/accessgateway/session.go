@@ -40,6 +40,7 @@ const (
 	TargetRedis      = "redis"
 	TargetSSH        = "ssh"
 	TargetSnowflake  = "snowflake"
+	TargetAWS        = "aws"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -51,7 +52,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS:
 		return true
 	}
 	return false
@@ -60,7 +61,7 @@ func RedeemsCredential(targetType string) bool {
 // HTTPUpstream reports whether a session type is spoken to over HTTP and
 // names its upstream in the job (its credential names no address).
 func HTTPUpstream(targetType string) bool {
-	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake
+	return targetType == TargetClickHouse || targetType == TargetKubernetes || targetType == TargetSnowflake || targetType == TargetAWS
 }
 
 // SessionIntent is the job payload: one session, by reference only. A
@@ -69,6 +70,8 @@ func HTTPUpstream(targetType string) bool {
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
+	AWSService      string              `json:"aws_service,omitempty"`
+	AWSRegion       string              `json:"aws_region,omitempty"`
 	CommandPolicy   *accessrules.Policy `json:"command_policy,omitempty"`
 	SessionID       string              `json:"session_id"`
 	TargetType      string              `json:"target_type"`
@@ -135,6 +138,13 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
+	}
+	if in.TargetType == TargetAWS {
+		if (in.AWSService != "s3" && in.AWSService != "sts") || in.AWSRegion == "" || len(in.AWSRegion) > 64 || strings.ContainsAny(in.AWSRegion, "/ \t\r\n") {
+			return errors.New("accessgateway: AWS session needs a fixed supported signing scope")
+		}
+	} else if in.AWSService != "" || in.AWSRegion != "" {
+		return errors.New("accessgateway: non-AWS session cannot carry AWS scope")
 	}
 	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {
 		return err

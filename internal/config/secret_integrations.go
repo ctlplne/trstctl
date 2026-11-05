@@ -90,10 +90,19 @@ func (c AWSHoneyAccountConfig) PollIntervalDuration() (time.Duration, error) {
 // DynamicSecretProviderConfig configures one named provider for exactly one
 // tenant. Type is one of the eight built-ins. Fields not used by that type must be
 // left empty; validation rejects incomplete entries before the server starts.
+// DynamicSecretGatewayConfig pins where a brokered cloud account can call.
+// These are public routing facts, covered by the provider's revision digest.
+type DynamicSecretGatewayConfig struct {
+	Endpoint string `json:"endpoint"`
+	Service  string `json:"service"`
+	Region   string `json:"region"`
+}
+
 type DynamicSecretProviderConfig struct {
-	TenantID string `json:"tenant_id"`
-	ID       string `json:"id"`
-	Type     string `json:"type"`
+	Gateway  *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
+	TenantID string                      `json:"tenant_id"`
+	ID       string                      `json:"id"`
+	Type     string                      `json:"type"`
 
 	Endpoint    string `json:"endpoint,omitempty"`
 	AdminDSNRef string `json:"admin_dsn_ref,omitempty"`
@@ -779,6 +788,24 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 			if err := validateSecretIntegrationEndpoint(c.AuthorityHost, c.AllowInsecureLoopback); err != nil {
 				errs = append(errs, fmt.Errorf("%s authority_host: %w", where, err))
 			}
+		}
+	}
+	if c.Gateway != nil {
+		if c.Type != "aws-sts" {
+			errs = append(errs, fmt.Errorf("%s gateway is supported only for aws-sts", where))
+		}
+		if c.Gateway.Service != "s3" && c.Gateway.Service != "sts" {
+			errs = append(errs, fmt.Errorf("%s gateway service must be s3 or sts", where))
+		}
+		if !awsHoneyRegion.MatchString(c.Gateway.Region) {
+			errs = append(errs, fmt.Errorf("%s gateway region must be explicit", where))
+		}
+		if err := validateSecretIntegrationEndpoint(c.Gateway.Endpoint, c.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s gateway endpoint: %w", where, err))
+		}
+		endpoint, err := url.Parse(c.Gateway.Endpoint)
+		if err != nil || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") {
+			errs = append(errs, fmt.Errorf("%s gateway endpoint must name only a fixed origin", where))
 		}
 	}
 	if c.Type != "azure-entra" && c.AuthorityHost != "" {

@@ -145,6 +145,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	// N3: the AWS STS issuer's opt-in to end a revoked session early.
 	awsDenyPolicy := value("revoke_with_deny_policy", "Deny revoked sessions",
 		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
+	awsGateway := value("gateway", "Gateway API binding", "Optional gateway-only account attachment: endpoint is a fixed HTTPS origin; service is s3 or sts; region is explicit. API callers get a gateway ticket, not STS key material. LocalStack wire and authorization stand-in are separate qualifications.", false)
 	providers := []dynamicSecretSupportedProvider{
 		{Type: "postgresql", Label: "PostgreSQL", Purpose: "Creates and drops a scoped PostgreSQL login role.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
@@ -169,7 +170,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
-			awsDenyPolicy,
+			awsDenyPolicy, awsGateway,
 		)},
 		{Type: "aws-iam", Label: "AWS STS (legacy aws-iam name)", Purpose: "Compatibility name for the same expiring AssumeRole session issuer; IAM user access keys are not created.", Requirements: dynamicSecretAWSRequirements(
 			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),

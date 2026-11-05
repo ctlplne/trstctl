@@ -1934,7 +1934,7 @@ type PAMDatabaseTarget struct {
 
 // PAMDatabaseTargetTypes are the database kinds a PAM database target may
 // name (A256), each served only through an access gateway.
-var PAMDatabaseTargetTypes = []string{"clickhouse", "mongodb", "mysql", "redis", "snowflake"}
+var PAMDatabaseTargetTypes = []string{"aws", "clickhouse", "mongodb", "mysql", "redis", "snowflake"}
 
 type PAMPostgresTarget struct {
 	TenantID     string   `json:"tenant_id"`

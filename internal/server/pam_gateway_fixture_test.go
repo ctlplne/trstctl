@@ -82,6 +82,7 @@ type gatewayFixtureOptions struct {
 	kubernetes DynamicSecretProviderRegistry
 	// snowflake adds the existing key-pair provider as a gateway-only SQL API target.
 	snowflake DynamicSecretProviderRegistry
+	aws       DynamicSecretProviderRegistry
 	// vaulted (A261) serves the secrets API and adds the provider
 	// "pam-pg-vault", whose role db/orders rotates the PostgreSQL accounts
 	// orders_app_a and orders_app_b as a static credential; vaultDSN is
@@ -172,6 +173,10 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], mongoProviders.ForTenant(servedTestTenant)...)
 			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "mongodb", TenantID: servedTestTenant, ID: "mongo-gw", ProviderID: "pam-mongo-provider",
 				AllowedRoles: []string{"mongo-reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
+		}
+		if opts.aws != nil {
+			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], opts.aws.ForTenant(servedTestTenant)...)
+			databaseTargets = append(databaseTargets, PAMDatabaseTarget{TargetType: "aws", TenantID: servedTestTenant, ID: "aws-gw", ProviderID: "pam-aws-provider", AllowedRoles: []string{"reader"}, GatewayAgentID: gatewayID, GatewayAddress: f.gatewayAddr})
 		}
 		if opts.snowflake != nil {
 			d.TenantDynamicSecretProviders[servedTestTenant] = append(d.TenantDynamicSecretProviders[servedTestTenant], opts.snowflake.ForTenant(servedTestTenant)...)

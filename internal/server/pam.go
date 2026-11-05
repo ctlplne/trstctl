@@ -44,6 +44,7 @@ const (
 	pamTargetCH        = "clickhouse"
 	pamTargetK8s       = "kubernetes"
 	pamTargetSnowflake = "snowflake"
+	pamTargetAWS       = "aws"
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -63,10 +64,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetCH:        "clickhouse",
 	pamTargetK8s:       "kubernetes",
 	pamTargetSnowflake: "snowflake",
+	pamTargetAWS:       "aws-sts",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -421,6 +423,18 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 			})
 			if !ok || profile.DynamicSecretProviderType() != providerType {
 				return nil, fmt.Errorf("server: PAM target %q provider must be %s", target.ID, pamDatabaseKinds[target.TargetType])
+			}
+			if target.TargetType == pamTargetAWS {
+				binding, ok := provider.(interface {
+					DynamicSecretGatewayAWS() (string, string, error)
+				})
+				if !ok {
+					return nil, fmt.Errorf("server: AWS target %q provider has no gateway signing scope", target.ID)
+				}
+				service, region, err := binding.DynamicSecretGatewayAWS()
+				if err != nil || (service != "s3" && service != "sts") || region == "" {
+					return nil, fmt.Errorf("server: AWS target %q provider needs a configured gateway endpoint/service/region", target.ID)
+				}
 			}
 			providerRevision = profile.DynamicSecretConfigurationRevision()
 			if providerRevision == "" {

@@ -4687,6 +4687,7 @@
                 },
                 "target_type": {
                   "enum": [
+                    "aws",
                     "clickhouse",
                     "kubernetes",
                     "mongodb",
@@ -5354,6 +5355,7 @@
                       },
                       "target_type": {
                         "enum": [
+                          "aws",
                           "clickhouse",
                           "kubernetes",
                           "mongodb",
@@ -5647,6 +5649,7 @@
                 },
                 "target_type": {
                   "enum": [
+                    "aws",
                     "clickhouse",
                     "kubernetes",
                     "mongodb",
@@ -38593,6 +38596,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",
@@ -40214,6 +40218,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",
@@ -40949,6 +40954,12 @@
               "agent_id": {
                 "type": "string"
               },
+              "aws_region": {
+                "type": "string"
+              },
+              "aws_service": {
+                "type": "string"
+              },
               "ca_pem": {
                 "type": "string"
               },
@@ -41098,6 +41109,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",
@@ -41176,6 +41188,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",
@@ -41330,6 +41343,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",
@@ -41442,6 +41456,7 @@
           },
           "target_type": {
             "enum": [
+              "aws",
               "clickhouse",
               "kubernetes",
               "mongodb",

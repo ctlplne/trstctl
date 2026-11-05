@@ -186,6 +186,33 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 			}
 			intent.UpstreamURL, intent.UpstreamCAPEM, intent.UpstreamServerName = endpoint, string(caPEM), serverName
 		}
+		if rec.TargetType == pamTargetAWS {
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			found := false
+			for _, provider := range s.providers.ForTenant(rec.TenantID) {
+				if provider == nil || provider.Name() != target.cfg.ProviderID {
+					continue
+				}
+				binding, ok := provider.(interface {
+					DynamicSecretGatewayAWS() (string, string, error)
+				})
+				if !ok {
+					continue
+				}
+				intent.AWSService, intent.AWSRegion, err = binding.DynamicSecretGatewayAWS()
+				if err != nil {
+					return accessgateway.SessionIntent{}, err
+				}
+				found = true
+				break
+			}
+			if !found {
+				return accessgateway.SessionIntent{}, errors.New("AWS account has no gateway signing scope")
+			}
+		}
 		return intent, nil
 	}
 	target, err := s.sshTarget(ctx, rec.TenantID, rec.TargetID)
@@ -361,6 +388,12 @@ func (s *pamService) gatewayDeliveryForRead(ctx context.Context, tenantID string
 	delivery, err := s.gatewayDelivery(ctx, tenantID, rec.GatewayAgentID, address, "")
 	if err != nil {
 		return &api.PAMGatewayDelivery{AgentID: rec.GatewayAgentID, Address: address}
+	}
+	if rec.TargetType == pamTargetAWS {
+		service, region, err := s.store.PAMGatewayAWSScope(ctx, tenantID, rec.ID)
+		if err == nil {
+			delivery.AWSService, delivery.AWSRegion = service, region
+		}
 	}
 	return delivery
 }

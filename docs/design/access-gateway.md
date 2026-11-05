@@ -754,10 +754,84 @@ account behavior remain a Track B proof.
 API stand-in with real RSA signature verification, key registration and user
 removal. It exercises role and direct-login refusal, client-auth replacement,
 wrong tenant/ticket, client file/output custody, termination, session expiry,
-masked recording and signed verification. General partition/restart, recording
-authorization/tamper/retention and the final paired-image replay are separately
-owed at FINISH; this entry does not claim those checks have run for this candidate.
+masked recording and signed verification. Partition/restart recovery and recording authorization/tamper/retention have not
+been requalified for this account type on a packaged deployment.
 A live Snowflake account is unverified.
 
 Contract references: Snowflake [SQL API key-pair authentication](https://docs.snowflake.com/en/developer-guide/sql-api/authenticating)
 and [statement submission, status and cancellation](https://docs.snowflake.com/en/developer-guide/sql-api/reference).
+
+## AWS API accounts with STS (A263, LocalStack and stand-in proof)
+
+An `aws` account uses an existing `aws-sts` provider and always binds a gateway.
+The provider assumes the configured role through its durable issuance outbox; its
+sealed temporary key and session token go only to that session's exact gateway.
+The provider also pins the API origin, signing service and region:
+
+```json
+"gateway": {
+  "endpoint": "https://s3.us-east-1.amazonaws.com",
+  "service": "s3",
+  "region": "us-east-1"
+}
+```
+
+The supported services are currently `s3` and `sts`. A binding names one origin,
+without credentials, a path, query or fragment. Use separate provider attachments
+for different service origins. A requester cannot supply a new upstream host or
+signing scope. The existing provider configuration revision participates in the
+approval; its gateway configuration is copied before review. A target without
+this binding is refused before a request can be approved. The legacy `aws-iam`
+provider name does not enable gateway accounts; use `aws-sts`.
+
+Register the account through the console or API with `target_type: "aws"`, its
+provider ID, allowed roles and gateway binding. Approve the usual session, then
+run `trstctl access sessions connect <id> --ticket-file <file>`. The CLI reads the
+service and region from the original tenant-scoped session outbox intent and
+prints a command such as:
+
+```sh
+aws --no-sign-request --endpoint-url http://127.0.0.1:8000 --region us-east-1 s3api get-object --bucket owned-bucket --key note ./note
+```
+
+`--no-sign-request` applies to the local ticket-authenticated tunnel. The gateway
+replaces client header/query authentication, signs the exact target method,
+path, query, body and required headers with the held STS identity, and sends its
+Authorization and session-token headers directly from locked bytes. The client
+needs no AWS key or token. SDK or CLI operations that mint new credentials still
+need appropriate target IAM restrictions; this gateway does not add containment
+beyond the role's actual permissions. Presigned upstream authentication is removed.
+
+Requests are limited to 64 KiB of headers and 1 MiB of body. The API origin uses
+verified HTTPS; explicit HTTP loopback is for the lab. Upstream response headers
+are bounded, HTTP upgrades are refused, and a session recall closes its live
+connections. Recording masks the exact held key/token bytes before converting
+request or response data to text, including a credential cut by the recording
+head limit. Raw authentication headers are excluded. HTTP handlers finish before
+the connection's key buffers are destroyed.
+
+STS sessions have a native minimum lifetime of 15 minutes. Termination recalls
+the gateway independently of native credential retirement. With the existing
+`revoke_with_deny_policy` opt-in, the provider writes and reads back an inline
+Deny for that exact assumed-role session. Without it, revocation remains pending
+until native expiry. This does not promise that an already submitted operation
+is undone, or that the special `GetCallerIdentity` operation is denied by IAM.
+Console handoff is a separate, still-unverified surface.
+
+`TestServedGatewayAWSSTSAccountA263` creates an actual LocalStack role and S3
+object, obtains native STS leases and uses the stock AWS CLI without credentials
+through the product's API-registered gateway account. Its separately identified
+fixture checks the issued SigV4 signature and the role's one-object read grant,
+then applies the exact session denial after the real IAM Put/Get policy calls.
+The test also calls native STS GetCallerIdentity as its issued role through a
+separate provider-pinned STS gateway target. It independently probes the S3
+credential before and after denial,
+refuses corrupt signatures and unauthenticated/out-of-role calls, closes a live
+connection, checks durable revocation, and verifies sealed recording without the
+issued key material. LocalStack itself does not enforce IAM. The signature code
+also matches the already pinned AWS SDK on public reference inputs. This is
+native wire plus stand-in authorization evidence; live AWS enforcement remains
+Track B. Packaged-deployment partition/restart qualification is unverified.
+
+Protocol references: AWS [SigV4 canonicalization and temporary credentials](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html)
+and [temporary-credential use](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html).

@@ -547,6 +547,13 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
+	case TargetAWS:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
+		if err := serveAWS(ctx, conn, credential, upstream, s.intent.AWSService, s.intent.AWSRegion, s.intent.ExpiresAt, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: AWS relay ended", s.intent.SessionID)
+		}
 	case TargetSnowflake:
 		credential := s.credential()
 		defer secret.Wipe(credential)

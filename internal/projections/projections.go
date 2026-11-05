@@ -4368,7 +4368,7 @@ type PAMSSHSigningRecoveryRequested struct {
 // cluster through a gateway.
 func PAMDatabaseTargetType(targetType string) bool {
 	switch targetType {
-	case "postgres", "clickhouse", "mongodb", "mysql", "redis", "kubernetes", "snowflake":
+	case "postgres", "clickhouse", "mongodb", "mysql", "redis", "kubernetes", "snowflake", "aws":
 		return true
 	}
 	return false
