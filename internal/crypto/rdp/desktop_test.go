@@ -43,6 +43,8 @@ func TestNativeDesktopServed(t *testing.T) {
 		}
 	}()
 	frames := 0
+	blueSeen := false
+	notified := false
 	deadline := time.After(20 * time.Second)
 	done := make(chan error, 1)
 	go func() {
@@ -57,7 +59,15 @@ func TestNativeDesktopServed(t *testing.T) {
 			}
 			if p.Kind == 2 && p.Width == 800 && p.Height == 600 && len(p.Pixels) == 800*600*4 {
 				frames++
-				if frames == 3 {
+				count := 0
+				for i := 0; i < len(p.Pixels); i += 4 {
+					if p.Pixels[i] == 128 && p.Pixels[i+1] == 0 && p.Pixels[i+2] == 0 {
+						count++
+					}
+				}
+				blueSeen = blueSeen || count > 1000
+				if frames >= 3 && blueSeen && !notified {
+					notified = true
 					done <- nil
 				}
 			}
@@ -69,7 +79,7 @@ func TestNativeDesktopServed(t *testing.T) {
 			t.Fatal(err)
 		}
 	case <-deadline:
-		t.Fatal("no bounded desktop frames")
+		t.Fatal("no correctly ordered BGRX desktop frames")
 	}
 	proc := fmt.Sprintf("/proc/%d", s.pid)
 	b, e := os.ReadFile(proc + "/cmdline") // #nosec G304 -- exact child PID created by this test, fixed proc metadata file (CWE-22)

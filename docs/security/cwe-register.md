@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2647 annotated sites across 31 rules. Each row is
+2651 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1327,7 +1327,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (346 sites)
+### G204 — CWE-78 OS command injection (348 sites)
 
 | Location | Reason |
 |---|---|
@@ -1399,6 +1399,8 @@ not this file.
 | `ee/provider/oidc_login_keycloak_test.go:85` | removes the container this test started (CWE-78) |
 | `ee/provider/oidc_login_keycloak_test.go:86` | reads this test's container port (CWE-78) |
 | `ee/provider/oidc_login_keycloak_test.go:103` | this test's container logs (CWE-78) |
+| `internal/agent/desktop/stock_served_test.go:85` | fixed viewer binary and loopback port allocated by this owned listener, no shell or credential arguments (CWE-78) |
+| `internal/agent/desktop/stock_served_test.go:92` | test-built public keyboard/window arguments, fixed tool with no shell or upstream credential (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:189` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/agent/relay/adcsdatabase.go:147` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
@@ -1794,7 +1796,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (683 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (685 sites)
 
 | Location | Reason |
 |---|---|
@@ -1953,6 +1955,8 @@ not this file.
 | `internal/agent/csisecrets/driver_test.go:390` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:120` | the file the driver wrote under this test's temp dir (CWE-22) |
+| `internal/agent/desktop/stock_served_test.go:137` | owned unique task filename under the fixed lab account home (CWE-22) |
+| `internal/agent/desktop/stock_served_test.go:154` | exact child PID and fixed metadata filenames created by this test (CWE-22) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2149,10 +2153,10 @@ not this file.
 | `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_test.go:114` | a fixed test fixture, named by the test itself (CWE-22) |
-| `internal/crypto/rdp/desktop_test.go:75` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
-| `internal/crypto/rdp/desktop_test.go:82` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
-| `internal/crypto/rdp/desktop_test.go:89` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
-| `internal/crypto/rdp/desktop_test.go:128` | test-owned unique filename beneath fixed lab account home (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:85` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:92` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:99` | exact child PID created by this test, fixed proc metadata file (CWE-22) |
+| `internal/crypto/rdp/desktop_test.go:138` | test-owned unique filename beneath fixed lab account home (CWE-22) |
 | `internal/crypto/rdp/process_linux.go:20` | operator-installed helper; absolute regular protected executable, executed by this open FD (CWE-22) |
 | `internal/crypto/samltest/material_test.go:57` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
