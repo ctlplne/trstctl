@@ -73,7 +73,7 @@ func ValidateObservation(o Observation) error {
 			return errors.New("command rules: invalid operation facts")
 		}
 		for i, op := range o.Operations {
-			known := KnownOperation("postgres", op)
+			known := KnownOperation("postgres", op) || KnownOperation("mysql", op)
 			if o.Phase == "exec" {
 				known = KnownOperation("ssh", op)
 			}
@@ -103,11 +103,16 @@ func ValidateDecision(d Decision) error {
 	if err := ValidateObservation(d.Observation); err != nil {
 		return err
 	}
-	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
+	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh" && d.Protocol != "mysql") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
 		return errors.New("command rules: invalid bound decision")
 	}
-	if d.Phase == "exec" && d.Protocol != "ssh" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" {
+	if d.Phase == "exec" && d.Protocol != "ssh" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" && d.Protocol != "mysql" {
 		return errors.New("command rules: phase differs from decision protocol")
+	}
+	for _, op := range d.Operations {
+		if !KnownOperation(d.Protocol, op) {
+			return errors.New("command rules: operation differs from decision protocol")
+		}
 	}
 	if d.Status == StatusBlocked {
 		if d.ReviewExpiresAt != nil || (d.Reason != "matched_rule" && d.Reason != "unsupported_control" && d.Reason != "uninspectable") {

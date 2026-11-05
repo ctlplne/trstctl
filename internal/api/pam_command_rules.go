@@ -64,7 +64,7 @@ func (a *API) listPAMCommandActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func pamCommandRuleSchema(frozen bool) *Schema {
-	properties := map[string]*Schema{"id": uuid(), "protocol": {Type: "string", Enum: []string{"postgres", "ssh"}}, "operations": {Type: "array", Items: &Schema{Type: "string", Enum: accessrules.AllOperationNames()}, Description: "Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded"}, "effect": {Type: "string", Enum: []string{"block", "require_approval"}}}
+	properties := map[string]*Schema{"id": uuid(), "protocol": {Type: "string", Enum: []string{"postgres", "ssh", "mysql"}}, "operations": {Type: "array", Items: &Schema{Type: "string", Enum: accessrules.AllOperationNames()}, Description: "Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded"}, "effect": {Type: "string", Enum: []string{"block", "require_approval"}}}
 	properties["required_approvals"] = &Schema{Type: "integer", Description: "require_approval only: 1-3 distinct humans; requester cannot approve"}
 	properties["review_ttl_seconds"] = &Schema{Type: "integer", Description: "require_approval only: 5-45 seconds; session expiry can shorten this deadline"}
 	required := []string{"id", "protocol", "operations", "effect"}

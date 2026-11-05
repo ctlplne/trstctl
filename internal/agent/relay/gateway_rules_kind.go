@@ -8,8 +8,10 @@ const KindAccessGatewayRulesSession = "access.gateway.session.rules.v1"
 
 const KindAccessGatewaySSHRulesSession = "access.gateway.session.rules.ssh.v1"
 
+const KindAccessGatewayMySQLRulesSession = "access.gateway.session.rules.mysql.v1"
+
 func IsCommandRulesSession(kind string) bool {
-	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession
+	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession || kind == KindAccessGatewayMySQLRulesSession
 }
 
 func IsAccessGatewaySession(kind string) bool {

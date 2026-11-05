@@ -80,10 +80,43 @@ const sshOperations = [
   "useradd",
   "userdel",
 ] as const;
-const operations = [...postgresOperations, ...sshOperations] as const;
+const mysqlOperations = [
+  "ALTER",
+  "ANALYZE",
+  "BEGIN",
+  "CALL",
+  "COMMIT",
+  "CREATE",
+  "DELETE",
+  "DO",
+  "DROP",
+  "EXPLAIN",
+  "FLUSH",
+  "GRANT",
+  "INSERT",
+  "KILL",
+  "LOCK",
+  "OPTIMIZE",
+  "RENAME",
+  "REPAIR",
+  "REPLACE",
+  "RESET",
+  "REVOKE",
+  "ROLLBACK",
+  "SELECT",
+  "SET",
+  "SHOW",
+  "START",
+  "TRUNCATE",
+  "UNLOCK",
+  "UPDATE",
+  "USE",
+] as const;
+const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations };
+const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations] as const;
 const schema = z
   .object({
-    protocol: z.enum(["postgres", "ssh"]),
+    protocol: z.enum(["postgres", "ssh", "mysql"]),
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
@@ -92,7 +125,7 @@ const schema = z
     quorum: z.coerce.number().int().min(1).max(3),
     ttl: z.coerce.number().int().min(5).max(45),
   })
-  .refine((v) => v.operations.every((op) => (v.protocol === "ssh" ? (sshOperations as readonly string[]) : postgresOperations).includes(op)), {
+  .refine((v) => v.operations.every((op) => (operationChoices[v.protocol] as readonly string[]).includes(op)), {
     path: ["operations"],
   });
 type Form = z.input<typeof schema>;
@@ -342,6 +375,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                   >
                     <option value="postgres">{t("admin.access.postgresql")}</option>
                     <option value="ssh">{t("admin.access.ssh")}</option>
+                    <option value="mysql">{t("admin.access.rules.mysql")}</option>
                   </Select>
                 )}
               </Field>
@@ -357,7 +391,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
               >
                 {(control) => (
                   <Select {...control} multiple {...register("operations")}>
-                    {(protocol === "ssh" ? sshOperations : postgresOperations).map((op) => (
+                    {operationChoices[protocol].map((op) => (
                       <option key={op} value={op}>
                         {op}
                       </option>

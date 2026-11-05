@@ -150,3 +150,28 @@ it("keeps SSH selectors separate and reviews the exact direct-command rule", asy
     ),
   );
 });
+
+it("offers MySQL operation classes with a protocol-bound exact preview", async () => {
+  const user = userEvent.setup();
+  mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access template" }), template.id);
+  await user.type(within(dialog).getByRole("textbox", { name: "Rule name" }), "Review MySQL deletion");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Protocol" }), "mysql");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  const choices = await within(dialog).findByRole("listbox", { name: "Operation names" });
+  expect(within(choices).queryByRole("option", { name: "rm" })).not.toBeInTheDocument();
+  expect(within(choices).getByRole("option", { name: "REPLACE" })).toBeInTheDocument();
+  await user.deselectOptions(choices, ["DROP"]);
+  await user.selectOptions(choices, ["DELETE"]);
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Save reviewed rule" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(
+      template.id,
+      expect.objectContaining({ command_rules: [expect.objectContaining({ protocol: "mysql", operations: ["DELETE"] })] }),
+      expect.any(String),
+    ),
+  );
+});

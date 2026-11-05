@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2619 annotated sites across 31 rules. Each row is
+2622 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -723,7 +723,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (424 sites)
+### G115 — CWE-190 Integer overflow or wraparound (426 sites)
 
 | Location | Reason |
 |---|---|
@@ -743,10 +743,12 @@ not this file.
 | `internal/agent/accessgateway/mongo.go:96` | an op code is a small constant (CWE-190) |
 | `internal/agent/accessgateway/mongo.go:176` | bounded by the message it came from (CWE-190) |
 | `internal/agent/accessgateway/mongo.go:387` | a BSON datetime's two's-complement bits (CWE-190) |
-| `internal/agent/accessgateway/mysql.go:562` | bounded by mysqlMaxLenenc just above (CWE-190) |
+| `internal/agent/accessgateway/mysql.go:565` | bounded by mysqlMaxLenenc just above (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:44` | the 3-byte little-endian packet length (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:47` | test strings are under 251 bytes (CWE-190) |
 | `internal/agent/accessgateway/mysql_test.go:74` | one short ERR packet (CWE-190) |
+| `internal/agent/accessgateway/mysqlcommand.go:185` | bounded 24-bit packet length (CWE-190) |
+| `internal/agent/accessgateway/mysqlcommand.go:186` | high byte of bounded 24-bit packet length (CWE-190) |
 | `internal/agent/accessgateway/pgrecord.go:183` | the wire field is a signed length (-1 is NULL) (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:21` | test rows are small (CWE-190) |
 | `internal/agent/accessgateway/pgrecord_test.go:23` | test values are small (CWE-190) |
@@ -1315,7 +1317,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (335 sites)
+### G204 — CWE-78 OS command injection (336 sites)
 
 | Location | Reason |
 |---|---|
@@ -1525,6 +1527,7 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
+| `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:32` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2700,7 +2703,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (29 sites)
+### G702 — CWE-78 OS command injection (taint) (30 sites)
 
 | Location | Reason |
 |---|---|
@@ -2717,6 +2720,7 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |

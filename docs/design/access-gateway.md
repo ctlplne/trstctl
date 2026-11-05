@@ -417,8 +417,8 @@ Enable `access.gateway.session.rules.v1` explicitly in
 `--access-gateway-listen` enabled. The gateway must report the enforcing job kind
 before a rule-bearing session opens. An old gateway cannot claim this kind;
 a policy under the ordinary session kind is refused before credential redemption.
-SSH exec guardrails use a separate enforcing job kind, described below. The other
-database protocols remain unsupported for rules and are rejected when configuring
+SSH exec and MySQL text-query guardrails use separate enforcing job kinds below.
+Redis, MongoDB and ClickHouse remain unsupported for rules and are rejected when configuring
 one. Their ordinary sessions retain their existing behavior.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
@@ -535,3 +535,48 @@ calls are bounded; queued frames reserve the shared target/protocol byte budget
 before entering the queue. A disconnect cancels review without waiting for the
 human deadline. Refused requests leave a fixed recording marker rather than a
 recorded claim that the original command executed.
+
+
+## MySQL text-query guardrails (A262)
+
+Enable `access.gateway.session.rules.mysql.v1` in
+`agent_channel.claimable_job_kinds`, upgrade the bound gateway and wait for its
+executor report. Choose **MySQL** in the template rule wizard, or set
+`protocol: "mysql"` with known uppercase operation selectors through the template
+API. Block/review precedence, distinct-human quorum, exact frozen revision and
+short review deadlines are the same as the PostgreSQL and SSH guards.
+
+The gateway classifies complete post-authentication `COM_QUERY` statements.
+Ordinary comments and quoted values/identifiers are excluded; executable
+`/*!...*/` version comments are inspected conservatively, regardless of the
+server's version. The lexer considers both backslash string-escape modes.
+Operation classes, public identifiers and digests reach command review; statement
+text, query values and the injected sign-in credential do not. Login-change
+requests are refused before command evaluation. Rules work without recording.
+
+This path currently supports text queries, empty query-attribute envelopes,
+`COM_INIT_DB` as the public `USE` operation, `PING` and `QUIT`. Wire prepared
+statements, query attributes with values, SQL-level prepared execution and
+`LOAD DATA` are explicitly refused in a ruled session. No opaque execute is
+silently forwarded. Unsupported one-way controls close the stream because adding
+an unsolicited error packet could corrupt the next response. Guarded frames are
+bounded at 1 MiB of SQL plus the command byte; oversized or fragmented frames end
+the connection. Ordinary unruled sessions retain their existing protocol support.
+
+A bounded reader reserves the shared target/protocol byte budget before allocating
+a command body. It detects client disconnect while an action waits. Refused
+request/response commands are replaced with fixed invalid SQL in the upstream
+wire order, so a local error cannot jump ahead of an earlier pipeline response.
+The refused original is never forwarded. Review authorizes that occurrence only;
+a repeated text query needs a new review. An authorization record does not prove
+target completion. Closing after forwarding cannot undo an already executed query.
+
+Stored program bodies remain a bypass: `CALL app.a262_delete_guardrail()` can
+delete a row even when a direct `DELETE` rule blocks it. The served proof uses an
+INVOKER procedure and the **same** session login, with independent row readback,
+so this is a demonstrated guardrail limit rather than a target-permission denial.
+Use database privileges and controlled stored programs for containment.
+
+Protocol references: MySQL's [COM_QUERY envelope](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query.html),
+[prepared execution](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html)
+and [executable comments](https://dev.mysql.com/doc/refman/8.4/en/comments.html).

@@ -285,6 +285,7 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags: []string{"--access-gateway-listen"},
 			Roles: []string{mtls.AgentRoleGateway},
 		},
+		{Kind: KindAccessGatewayMySQLRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
 		{Kind: KindAccessGatewaySSHRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
 		{
 			Kind:  KindAccessGatewaySession,

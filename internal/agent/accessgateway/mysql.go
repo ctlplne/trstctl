@@ -45,7 +45,7 @@ const (
 // server's OK and relays commands and results. COM_CHANGE_USER, which would
 // sign the connection in as another account, is refused. The client never
 // receives the DSN.
-func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
+func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.Time, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
 	target, err := mysqlsignin.ParseDSN(dsn)
 	if err != nil {
 		return err
@@ -108,6 +108,9 @@ func serveMySQL(ctx context.Context, client net.Conn, dsn []byte, deadline time.
 	relay := &mysqlRelay{client: client, rec: rec,
 		deprecateEOF:    negotiated&mysqlsignin.ClientDeprecateEOF != 0,
 		queryAttributes: negotiated&mysqlsignin.ClientQueryAttributes != 0}
+	if len(guards) > 0 && guards[0] != nil {
+		return relayMySQLCommands(ctx, client, server, relay, guards[0])
+	}
 	done := make(chan struct{}, 2)
 	go func() { _ = relay.commands(server, client); _ = server.Close(); done <- struct{}{} }()
 	go func() { _ = relay.responses(server); _ = client.Close(); done <- struct{}{} }()

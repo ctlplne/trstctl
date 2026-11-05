@@ -9115,6 +9115,11 @@ bypass have local served proofs. The browser sends a complete SSH command throug
 the same guard; its pending HTTP request can be canceled. Scripts, wrappers,
 substitutions and input after an interactive program starts are not contained.
 See [SSH guardrails and bypasses](design/access-gateway.md#ssh-exec-guardrails-a262).
-Other database rule paths remain unbuilt; their rule configuration is rejected.
+MySQL text rules have local served refusal, independent row readback, distinct-human
+waiting, disconnect cancellation and same-login INVOKER-procedure bypass proofs.
+Wire prepared execution, SQL prepared controls, nonempty query attributes and
+LOAD DATA are explicitly refused; oversized/fragmented input closes the stream.
+See [MySQL rule scope](design/access-gateway.md#mysql-text-query-guardrails-a262).
+Redis, MongoDB and ClickHouse rule paths remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.

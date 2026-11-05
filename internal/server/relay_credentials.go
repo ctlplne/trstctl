@@ -109,7 +109,7 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// secret:// reference — same custody as the AD CS bind above: resolved
 		// per attempt, never carried on the queue.
 		return r.resolveJobReferences(ctx, tenantID, job)
-	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession:
+	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession:
 		return r.resolveGatewaySession(ctx, tenantID, job)
 	case "mdm.sync", relay.KindMDMCheckIn:
 		// I5: identical custody for the MDM token; N9's check-in redeems the

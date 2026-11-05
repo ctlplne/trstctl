@@ -551,8 +551,10 @@ trstctl-cli access sessions actions SESSION_UUID --limit 50
 Enable `access.gateway.session.rules.v1` in `agent_channel.claimable_job_kinds` and
 upgrade the named gateway before using a rule-bearing PostgreSQL session. SSH exec
 rules instead require `access.gateway.session.rules.ssh.v1`; ruled SSH sessions
-use complete commands and refuse interactive shells and subsystems. Other gateway
-protocols do not yet accept command rules. Reviewers see known operation classes,
+use complete commands and refuse interactive shells and subsystems. MySQL text
+rules require `access.gateway.session.rules.mysql.v1`; opaque prepared execution
+is refused in ruled sessions. Redis, MongoDB and ClickHouse do not yet accept
+command rules. Reviewers see known operation classes,
 rule IDs and digests; statement text, arguments, bound values and sign-in material
 are excluded. Dynamic SQL, nested SSH interpreters and scripts can bypass these checks; they are guardrails,
 and database privileges provide containment. An authorization record does not

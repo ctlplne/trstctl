@@ -130,8 +130,10 @@ export const messages = {
       "A matching review rule holds this command until independent reviewers decide or its deadline expires. Closing cancels a held command; a command already forwarded may have run.",
     description: "SSH command guardrail control.",
   },
+  "admin.access.rules.mysql": { defaultMessage: "MySQL", description: "MySQL target protocol name." },
   "admin.access.rules.protocolHelp": {
-    defaultMessage: "PostgreSQL statements or SSH exec requests. SSH rules refuse interactive shell and subsystem requests; use a complete command.",
+    defaultMessage:
+      "PostgreSQL or MySQL statements, or SSH exec requests. SSH rules require a complete command. MySQL rules currently refuse wire prepared statements and query attributes with values.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {

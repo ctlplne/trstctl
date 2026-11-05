@@ -8449,7 +8449,7 @@ export interface PAMCommandAction {
   job_id: number;
   message_digest: string;
   observed_at: string;
-  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "FLUSH" | "GRANT" | "INSERT" | "KILL" | "LOCK" | "MERGE" | "OPTIMIZE" | "REFRESH" | "REINDEX" | "RENAME" | "REPAIR" | "REPLACE" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "SHOW" | "START" | "TRUNCATE" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
   ordinal: number;
   phase: string;
   policy_digest: string;
@@ -8479,8 +8479,8 @@ export interface PAMCommandRule {
   enabled: boolean;
   id: string;
   name: string;
-  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
-  protocol: "postgres" | "ssh";
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "FLUSH" | "GRANT" | "INSERT" | "KILL" | "LOCK" | "MERGE" | "OPTIMIZE" | "REFRESH" | "REINDEX" | "RENAME" | "REPAIR" | "REPLACE" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "SHOW" | "START" | "TRUNCATE" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
+  protocol: "postgres" | "ssh" | "mysql";
   required_approvals?: number;
   review_ttl_seconds?: number;
 }
@@ -8640,8 +8640,8 @@ export interface PAMFolderRequest {
 export interface PAMFrozenCommandRule {
   effect: "block" | "require_approval";
   id: string;
-  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "GRANT" | "INSERT" | "LOCK" | "MERGE" | "REFRESH" | "REINDEX" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "TRUNCATE" | "UPDATE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
-  protocol: "postgres" | "ssh";
+  operations: ("ALTER" | "ANALYZE" | "BEGIN" | "CALL" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DELETE" | "DISCARD" | "DO" | "DROP" | "EXPLAIN" | "FLUSH" | "GRANT" | "INSERT" | "KILL" | "LOCK" | "MERGE" | "OPTIMIZE" | "REFRESH" | "REINDEX" | "RENAME" | "REPAIR" | "REPLACE" | "RESET" | "REVOKE" | "ROLLBACK" | "SELECT" | "SET" | "SHOW" | "START" | "TRUNCATE" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "bash" | "chmod" | "chown" | "chpasswd" | "command" | "dd" | "env" | "exec" | "iptables" | "kill" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "python" | "python3" | "reboot" | "rm" | "rmdir" | "ruby" | "scp" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "useradd" | "userdel")[];
+  protocol: "postgres" | "ssh" | "mysql";
   required_approvals?: number;
   review_ttl_seconds?: number;
 }

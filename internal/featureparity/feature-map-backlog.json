@@ -14787,7 +14787,8 @@
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
                         "internal/server/pam_command_rules_served_test.go proves PostgreSQL command blocking, distinct-human waiting, denial, review expiry, disconnect refusal and the documented dynamic-SQL bypass with real gateway traffic; authorization is distinct from target completion.",
-                        "internal/server/pam_command_ssh_served_test.go proves direct SSH command refusal, distinct-human waiting, disconnect cancellation, browser exec/cancellation and the same-login nested-shell bypass. Ruled sessions refuse uninspected interactive shells and subsystems."
+                        "internal/server/pam_command_ssh_served_test.go proves direct SSH command refusal, distinct-human waiting, disconnect cancellation, browser exec/cancellation and the same-login nested-shell bypass. Ruled sessions refuse uninspected interactive shells and subsystems.",
+                        "internal/server/pam_command_mysql_served_test.go proves MySQL text-query blocking including executable comments, distinct-human waiting, disconnect refusal, opaque-control refusal and the same-login stored-program bypass with independent target row readback."
                     ],
                     "refs": [
                         "internal/server/issuance_request_served_test.go",
