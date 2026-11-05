@@ -3213,7 +3213,15 @@ jobs:
         run: scripts/ci/demo-seed-convergence.sh
 
       - name: Shell and full live-route matrix
-        run: npm run e2e -- e2e/shell.spec.ts e2e/live-routes.spec.ts --workers=6
+        working-directory: .
+        run: |
+          set -euo pipefail
+          umask 077
+          e2e_operator_credentials="$(mktemp "$RUNNER_TEMP/trstctl-e2e-operator.XXXXXX")"
+          trap 'rm -f -- "$e2e_operator_credentials"' EXIT
+          docker compose -f deploy/demo/docker-compose.yml run --rm --no-deps --entrypoint node oidc-keys \
+            -e 'const fs=require("node:fs");process.stdout.write(fs.readFileSync("/demo-oidc-credentials/operator-credentials.json"))' > "$e2e_operator_credentials"
+          TRSTCTL_E2E_OPERATOR_CREDENTIALS_FILE="$e2e_operator_credentials" npm --prefix web run e2e -- e2e/shell.spec.ts e2e/live-routes.spec.ts --workers=6
 
       - name: Upload report on failure
         if: failure()

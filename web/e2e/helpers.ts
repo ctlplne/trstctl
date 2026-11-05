@@ -1,9 +1,9 @@
 import { expect, type Page } from "@playwright/test";
+import type { DemoOperatorCredentials } from "./operator-credentials";
 
-/** Sign in through the demo stack's local SSO (one click; the sidecar
- * authenticates automatically) and wait for the shell to be interactive. A
- * pre-authenticated deployment passes straight through. */
-export async function signIn(page: Page): Promise<void> {
+/** Sign in through the demo's real local SSO, using its generated operator
+ * fixture in the untraced setup. A pre-authenticated deployment passes through. */
+export async function signIn(page: Page, credentials?: DemoOperatorCredentials): Promise<void> {
   await page.goto("/");
   const sso = page.getByRole("button", {
     name: /(?:continue|sign in) with sso/i,
@@ -20,6 +20,25 @@ export async function signIn(page: Page): Promise<void> {
   await expect(sso.or(home).first()).toBeVisible({ timeout: 20_000 });
   if (await sso.isVisible().catch(() => false)) {
     await sso.click();
+    const operatorForm = page.getByRole("heading", { level: 1, name: "Evaluation operator sign-in" });
+    await expect(operatorForm.or(home).first()).toBeVisible({ timeout: 20_000 });
+    if (await operatorForm.isVisible()) {
+      if (!credentials) throw new Error("Demo sign-in needs TRSTCTL_E2E_OPERATOR_CREDENTIALS_FILE pointing to the private generated operator file");
+      if (new URL(page.url()).origin !== "http://127.0.0.1:19081")
+        throw new Error("Refusing to send demo credentials outside the configured local evaluation IdP");
+      try {
+        await page.getByLabel("Operator ID", { exact: true }).fill(credentials.subject);
+        await page.getByLabel("Password", { exact: true }).fill(credentials.password);
+        await page.getByRole("button", { name: "Sign in", exact: true }).click();
+        await expect(home).toBeVisible({ timeout: 20_000 });
+      } catch {
+        // The untraced setup owns sign-in. Discard Playwright argument/error
+        // details here so a failed fill cannot print its password in CI.
+        throw new Error("Evaluation operator sign-in failed; check the private fixture and local IdP");
+      } finally {
+        credentials.password = "";
+      }
+    }
   }
   await expect(home).toBeVisible({ timeout: 20_000 });
   // Firefox reports a font request canceled by the next page.goto as a

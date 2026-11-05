@@ -4,7 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * Targets a RUNNING trstctl — by default the seeded demo compose stack
  * (deploy/demo/docker-compose.yml, self-signed TLS on 127.0.0.1:9443, local SSO
- * signs in automatically). The host must match the demo OIDC callback exactly
+ * uses its generated private operator credential fixture). The host must match the demo OIDC callback exactly
  * so the host-scoped pre-login cookie survives the redirect. Point
  * TRSTCTL_E2E_URL elsewhere to run against another
  * deployment. One-time browser setup: `npm run e2e:install`; then

@@ -174,3 +174,26 @@ identifier, tenant, subject, fingerprint, and status match the served schema. Wi
 normal appenders stopped, wrong and missing custody runs must fail with empty stdout
 while exact PostgreSQL tenant/token/registration authority and JetStream event-head
 snapshots remain unchanged.
+
+### Browser integration tests
+
+The browser suite signs in once as `eval-admin` through the real evaluation IdP.
+Copy its generated credentials to a private temporary file; the helper refuses
+public files, symlinks and unexpected IdP origins. The login setup is untraced,
+and each isolated browser context then uses the protected session state.
+
+```bash
+umask 077
+e2e_operator_credentials="$(mktemp)"
+trap 'rm -f -- "$e2e_operator_credentials"' EXIT
+docker compose -f deploy/demo/docker-compose.yml run --rm --no-deps \
+  --entrypoint node oidc-keys \
+  -e 'const fs=require("node:fs");process.stdout.write(fs.readFileSync("/demo-oidc-credentials/operator-credentials.json"))' \
+  > "$e2e_operator_credentials"
+TRSTCTL_E2E_OPERATOR_CREDENTIALS_FILE="$e2e_operator_credentials" npm --prefix web run e2e -- e2e/shell.spec.ts e2e/live-routes.spec.ts
+```
+
+Run this from the repository root after the demo is ready and the Playwright
+browsers are installed. Keep the file and `web/test-results/.auth` out of reports
+and source control. The temporary credential file is removed when the shell exits;
+the suite removes its protected session file at teardown.
