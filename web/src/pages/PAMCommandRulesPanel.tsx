@@ -188,11 +188,49 @@ const mongoOperations = [
   "validate",
   "whatsmyuri",
 ] as const;
-const operationChoices = { postgres: postgresOperations, ssh: sshOperations, mysql: mysqlOperations, redis: redisOperations, mongodb: mongoOperations };
-const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations, ...mongoOperations] as const;
+const clickhouseOperations = [
+  "ALTER",
+  "ATTACH",
+  "BACKUP",
+  "CHECK",
+  "CREATE",
+  "DELETE",
+  "DESCRIBE",
+  "DETACH",
+  "DROP",
+  "EXCHANGE",
+  "EXISTS",
+  "EXPLAIN",
+  "GRANT",
+  "INSERT",
+  "KILL",
+  "MOVE",
+  "OPTIMIZE",
+  "RENAME",
+  "RESTORE",
+  "REVOKE",
+  "SELECT",
+  "SET",
+  "SHOW",
+  "SYSTEM",
+  "TRUNCATE",
+  "UNDROP",
+  "UPDATE",
+  "USE",
+  "WITH",
+] as const;
+const operationChoices = {
+  postgres: postgresOperations,
+  ssh: sshOperations,
+  mysql: mysqlOperations,
+  redis: redisOperations,
+  mongodb: mongoOperations,
+  clickhouse: clickhouseOperations,
+};
+const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations, ...mongoOperations, ...clickhouseOperations] as const;
 const schema = z
   .object({
-    protocol: z.enum(["postgres", "ssh", "mysql", "redis", "mongodb"]),
+    protocol: z.enum(["postgres", "ssh", "mysql", "redis", "mongodb", "clickhouse"]),
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
@@ -459,6 +497,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                     <option value="mysql">{t("admin.access.rules.mysql")}</option>
                     <option value="redis">{t("admin.access.rules.redis")}</option>
                     <option value="mongodb">{t("admin.access.rules.mongodb")}</option>
+                    <option value="clickhouse">{t("admin.access.rules.clickhouse")}</option>
                   </Select>
                 )}
               </Field>

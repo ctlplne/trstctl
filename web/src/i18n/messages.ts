@@ -130,12 +130,13 @@ export const messages = {
       "A matching review rule holds this command until independent reviewers decide or its deadline expires. Closing cancels a held command; a command already forwarded may have run.",
     description: "SSH command guardrail control.",
   },
+  "admin.access.rules.clickhouse": { defaultMessage: "ClickHouse", description: "ClickHouse target protocol name." },
   "admin.access.rules.mongodb": { defaultMessage: "MongoDB", description: "MongoDB target protocol name." },
   "admin.access.rules.redis": { defaultMessage: "Redis", description: "Redis target protocol name." },
   "admin.access.rules.mysql": { defaultMessage: "MySQL", description: "MySQL target protocol name." },
   "admin.access.rules.protocolHelp": {
     defaultMessage:
-      "PostgreSQL or MySQL statements, Redis or MongoDB command names, or SSH exec requests. SSH rules require a complete command. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
+      "PostgreSQL, MySQL or ClickHouse statements, Redis or MongoDB command names, or SSH exec requests. SSH rules require a complete command. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {

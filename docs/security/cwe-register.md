@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2625 annotated sites across 31 rules. Each row is
+2626 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1318,7 +1318,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (338 sites)
+### G204 — CWE-78 OS command injection (339 sites)
 
 | Location | Reason |
 |---|---|
@@ -1528,6 +1528,7 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
+| `internal/server/pam_command_clickhouse_served_test.go:68` | stock curl against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mongo_served_test.go:72` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |
@@ -2706,7 +2707,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (32 sites)
+### G702 — CWE-78 OS command injection (taint) (33 sites)
 
 | Location | Reason |
 |---|---|
@@ -2723,6 +2724,7 @@ not this file.
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_command_clickhouse_served_test.go:68` | stock curl against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mongo_served_test.go:72` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |

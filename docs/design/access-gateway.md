@@ -417,9 +417,8 @@ Enable `access.gateway.session.rules.v1` explicitly in
 `--access-gateway-listen` enabled. The gateway must report the enforcing job kind
 before a rule-bearing session opens. An old gateway cannot claim this kind;
 a policy under the ordinary session kind is refused before credential redemption.
-SSH exec and MySQL text-query guardrails use separate enforcing job kinds below.
-ClickHouse remains unsupported for rules and are rejected when configuring
-one. Their ordinary sessions retain their existing behavior.
+SSH exec, MySQL, Redis, MongoDB and ClickHouse guardrails use separate enforcing
+job kinds below. Unsupported protocols cannot be configured with these rules.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
 `operations`, and `effect: "block"` or `"require_approval"`. A review rule also
@@ -672,3 +671,49 @@ request is a public command class; forwarding it does not qualify a hosted servi
 
 Protocol references: MongoDB [wire-message correlation and OP_MSG](https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/)
 and [findAndModify removal](https://www.mongodb.com/docs/manual/reference/command/findandmodify/).
+
+
+## ClickHouse HTTP SQL guardrails (A262)
+
+Enable `access.gateway.session.rules.clickhouse.v1` in
+`agent_channel.claimable_job_kinds` and confirm the bound agent advertises it.
+Choose **ClickHouse** in the template wizard, or use `protocol: "clickhouse"`
+and uppercase SQL operation names. The gateway combines the URL `query` prefix
+and POST body, including the separating newline, before evaluating a complete
+request. It injects the held target login only after evaluation. Authentication
+headers and the `user`/`password` parameters never enter the classifier or its
+source facts. Action records contain public classes and digests, not SQL text.
+A matching block returns HTTP 403 with `TRSTCTL_COMMAND_REFUSED`; a review holds
+the request for the same independent quorum and deadline described above.
+
+Supported rule-bearing input is a GET or POST to `/`, with at most 64 KiB of
+headers and 1 MiB of combined SQL. Chunked HTTP bodies are fully bounded and
+normalized before forwarding. Ambiguous repeated `query` parameters, compressed
+or multipart input, `decompress`, SQL `FORMAT` data and `EXECUTE` controls are
+refused. These restrictions apply even if no configured operation matches.
+Ordinary sessions keep their existing protocol behavior. Use an unruled session
+only when its separate authorization and target permissions permit it.
+
+Each started request reserves a bounded byte budget before reading its body.
+The reader can detect disconnect behind a complete pipelined request, canceling
+held review without forwarding it. Input capacity exhaustion cancels held work
+and returns HTTP 503 with `TRSTCTL_COMMAND_CAPACITY_FULL` before closing. Replies
+stay in request order. Cancellation cannot undo a request already forwarded.
+The review's `authorized` action state grants forwarding; target success still
+requires the target response and independent readback.
+
+These are lexical guardrails. Quoted values, identifiers and comments do not
+match; functions, dictionaries and other operation classes can produce effects
+outside a chosen selector. The served proof grants the exact same target user
+both TRUNCATE and ALTER DELETE, blocks direct/mixed-case/split TRUNCATE requests,
+and independently checks the row remains. That user's `ALTER TABLE … DELETE`
+then removes it outside a TRUNCATE-only rule. Target grants remain the containment
+boundary. `TestServedClickHouseCommandRuleBlocksAndRecordsA262` proves that limit;
+`TestServedClickHouseCommandReviewWaitsAndCancelsA262` proves two-human release,
+disconnect, pipelined disconnect and structured capacity cancellation against
+the pinned local ClickHouse 24.8 target with stock curl. This is local runtime
+proof, not a hosted-service qualification.
+
+Protocol references: ClickHouse [HTTP query framing and authentication](https://clickhouse.com/docs/concepts/features/interfaces/http),
+[SQL syntax](https://clickhouse.com/docs/reference/syntax), and
+[ALTER DELETE and synchronous mutation settings](https://clickhouse.com/docs/reference/statements/alter/delete).

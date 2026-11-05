@@ -84,6 +84,7 @@ type commandConnection struct {
 	policy                                                  *accessrules.Policy
 	reviewer                                                ActionReviewer
 	ordinal                                                 int64
+	expiresAt                                               time.Time
 }
 
 type commandCheck struct {
@@ -103,7 +104,7 @@ func (g *Gateway) commandConnection(s *session) (*commandConnection, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &commandConnection{gateway: g, sessionID: s.intent.SessionID, target: s.intent.TargetID, protocol: s.intent.TargetType, connectionID: uuid.NewString(), policyDigest: digest, job: s.job, policy: s.intent.CommandPolicy, reviewer: reviewer}, nil
+	return &commandConnection{gateway: g, expiresAt: s.intent.ExpiresAt, sessionID: s.intent.SessionID, target: s.intent.TargetID, protocol: s.intent.TargetType, connectionID: uuid.NewString(), policyDigest: digest, job: s.job, policy: s.intent.CommandPolicy, reviewer: reviewer}, nil
 }
 
 func (c *commandConnection) reserveFrame(size int) (func(), bool) {

@@ -57,7 +57,7 @@ func parseClickHouseCredential(credential []byte) (*clickhouseCredential, error)
 // authentication — and any it sends (a basic-auth header, ClickHouse's user
 // and key headers or user and password parameters) is removed; the gateway
 // signs each request in itself. The client never receives the credential.
-func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, upstream httpUpstream, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder) error {
+func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, upstream httpUpstream, dial func(context.Context, string, string) (net.Conn, error), rec *connRecorder, guards ...*commandConnection) error {
 	user, err := parseClickHouseCredential(credential)
 	if err != nil {
 		return err
@@ -68,19 +68,22 @@ func serveClickHouse(ctx context.Context, client net.Conn, credential []byte, up
 		return err
 	}
 	defer transport.CloseIdleConnections()
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetURL(target)
-			for _, h := range clickhouseClientAuth {
-				r.Out.Header.Del(h)
-			}
-			query := r.Out.URL.Query()
-			query.Del("user")
-			query.Del("password")
-			r.Out.URL.RawQuery = query.Encode()
-			r.Out.Header.Set("X-ClickHouse-User", user.Username)
-			r.Out.Header.Set("X-ClickHouse-Key", string(user.Password))
-		},
+	rewrite := func(r *httputil.ProxyRequest) {
+		r.SetURL(target)
+		for _, h := range clickhouseClientAuth {
+			r.Out.Header.Del(h)
+		}
+		query := r.Out.URL.Query()
+		query.Del("user")
+		query.Del("password")
+		r.Out.URL.RawQuery = query.Encode()
+		r.Out.Header.Set("X-ClickHouse-User", user.Username)
+		r.Out.Header.Set("X-ClickHouse-Key", string(user.Password))
+	}
+	if len(guards) > 0 && guards[0] != nil {
+		return relayClickHouseCommands(ctx, client, transport, guards[0], rec, rewrite)
+	}
+	proxy := &httputil.ReverseProxy{Rewrite: rewrite,
 		Transport: transport,
 		ModifyResponse: func(resp *http.Response) error {
 			if rec == nil {

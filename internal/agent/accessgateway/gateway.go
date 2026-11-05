@@ -536,10 +536,15 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetClickHouse:
+		guard, err := g.commandConnection(s)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: command enforcement unavailable", s.intent.SessionID)
+			return
+		}
 		credential := s.credential()
 		defer secret.Wipe(credential)
 		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
-		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec); err != nil {
+		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
 	case TargetKubernetes:
