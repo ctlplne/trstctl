@@ -1033,20 +1033,21 @@ built against stand-ins of their
 vendors' APIs, made from the vendors' API references, with no live vendor proof yet.
 
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
-configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
+configured `postgresql`, `mysql`, `redis` or `aws-sts` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and
 `ttl_seconds` (required, at most the provider's `max_ttl`) is the new lease's
 lifetime. It runs as the same durable command: **stage** issues the new lease
 through the durable lease lifecycle under an idempotency key derived from the
 command, so a crash resumes the same lease; **cutover** publishes its credential as
 the next secret version; **verify** opens a database session, or authenticates to
-Redis as the lease user and runs `PING`; **retire** revokes the `old_ref` lease and
+Redis as the lease user and runs `PING`, or signs STS `GetCallerIdentity` with the
+new temporary session and matches an allowed configured role; **retire** revokes the `old_ref` lease and
 completes only once the provider confirms the removal (until then the outbox
 retries, and a removal that never completes ends as `retire_pending`). A failed
 verification restores the predecessor and revokes the new lease. The command view
 reports `ttl_seconds` and the new lease's `new_expires_at`, and the console's
-rotation form takes the lease TTL. Rotating a MongoDB, cloud IAM or Kubernetes
-lease is what comes next (`503` today); issue, renew and revoke those leases through
+rotation form takes the lease TTL. Rotating a MongoDB, other cloud IAM or Kubernetes
+lease remains unavailable (`503`); issue, renew and revoke those leases through
 the lease endpoints. Native-store value rotation remains a separate event-sourced
 operation.
 
@@ -2391,3 +2392,14 @@ glossary: [secret](../glossary.md), [envelope encryption](../glossary.md),
 [transit](../glossary.md), [KMIP](../glossary.md)
 
 **Covers:** F37, F38, F39, F63, F64, F65, F66, F67, F68, F58, F60, F80
+
+
+For AWS STS, the credential proof uses locked byte-backed signing headers, a fixed
+STS origin, verified TLS and dial-time private-network controls. A caller from an
+unconfigured role, a mismatched native session, an expired credential, a redirect,
+or an air-gap refusal cannot become an authenticated result. It proves the STS
+identity, not authorization to every resource. Without explicit native session
+deny policy, predecessor revocation remains pending until AWS expiry; it does not
+finish merely because trstctl revoked the lease. Native LocalStack wire/readback
+proof does not qualify live AWS enforcement. The reviewed replacement and workload
+adoption path must separately retire an existing long-lived IAM key.

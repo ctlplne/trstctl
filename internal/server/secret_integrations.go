@@ -1849,6 +1849,8 @@ func (p *configuredDynamicProvider) rotationAccountPairs() map[string][2]string 
 // Other types have no proof here.
 func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, credential []byte) (string, error) {
 	switch strings.TrimSpace(p.cfg.Type) {
+	case "aws-sts":
+		return p.verifySTSLeaseCredential(ctx, credential)
 	case "postgresql":
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":

@@ -219,10 +219,10 @@ func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully
 	requestProps := request["properties"].(map[string]any)
 	providerDescription, _ := requestProps["provider"].(map[string]any)["description"].(string)
 	ttlDescription, _ := requestProps["ttl_seconds"].(map[string]any)["description"].(string)
-	// A201: dynamic-lease rotation is a durable command on the three provider
+	// A201/A264: dynamic-lease rotation is a durable command on the verified provider
 	// types with a credential check, and ttl_seconds is its lease lifetime.
 	if !strings.Contains(providerDescription, "dynamic-lease:<provider> queues a durable dynamic-lease rotation command") ||
-		!strings.Contains(providerDescription, "postgresql, mysql or redis") {
+		!strings.Contains(providerDescription, "postgresql, mysql, redis or aws-sts") {
 		t.Fatalf("rotation provider description=%q, want the dynamic-lease command and its provider types", providerDescription)
 	}
 	if !strings.Contains(ttlDescription, "reject any supplied ttl_seconds with 400") ||

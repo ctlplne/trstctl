@@ -35,7 +35,7 @@ import (
 // resumes the same lease operations instead of creating new ones.
 
 const (
-	dynamicLeaseRotationTypeUnavailableDetail  = "dynamic-lease rotation needs a configured postgresql, mysql or redis dynamic-secret provider whose allowed roles include the secret name"
+	dynamicLeaseRotationTypeUnavailableDetail  = "dynamic-lease rotation needs a configured postgresql, mysql, redis or aws-sts dynamic-secret provider whose allowed roles include the secret name"
 	dynamicLeaseRotationProviderRequiredDetail = "dynamic-lease rotation names its provider as dynamic-lease:<provider>"
 	dynamicLeaseRotationTTLRequiredDetail      = "ttl_seconds is required for dynamic-lease rotation and must be positive"
 	dynamicLeaseRotationOldLeaseDetail         = "old_ref must be none or an active lease of this provider for the role the secret names"
@@ -49,7 +49,7 @@ const (
 
 // dynamicLeaseRotationProviderTypes are the provider types whose lease
 // credential the verify phase can prove.
-var dynamicLeaseRotationProviderTypes = []string{"postgresql", "mysql", "redis"}
+var dynamicLeaseRotationProviderTypes = []string{"postgresql", "mysql", "redis", "aws-sts"}
 
 func isDynamicLeaseRotation(provider string) bool {
 	return strings.HasPrefix(strings.TrimSpace(provider), secretDynamicLeaseRotationPrefix)

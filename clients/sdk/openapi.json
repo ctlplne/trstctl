@@ -51735,7 +51735,7 @@
             "type": "string"
           },
           "provider": {
-            "description": "connector:\u003ctarget\u003e queues a connector rotation; dynamic-lease:\u003cprovider\u003e queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command.",
+            "description": "connector:\u003ctarget\u003e queues a connector rotation; dynamic-lease:\u003cprovider\u003e queues a durable dynamic-lease rotation command on a configured postgresql, mysql, redis or aws-sts provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command.",
             "type": "string"
           },
           "remote_key": {

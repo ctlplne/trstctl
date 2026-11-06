@@ -25015,7 +25015,7 @@ export interface components {
             consumers?: string[];
             key: string;
             old_ref: string;
-            /** @description connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. */
+            /** @description connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql, redis or aws-sts provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. */
             provider: string;
             remote_key?: string;
             /** @description Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports. */

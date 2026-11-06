@@ -40,12 +40,7 @@ func useSessionJSON(raw []byte, now time.Time, use func(awssignin.Credentials) e
 		return errors.New("awsiam: invalid bounded session document")
 	}
 	var document struct {
-		Credentials struct {
-			AccessKeyID     secret.JSONBytes `json:"AccessKeyId"`
-			SecretAccessKey secret.JSONBytes `json:"SecretAccessKey"`
-			SessionToken    secret.JSONBytes `json:"SessionToken"`
-			Expiration      time.Time        `json:"Expiration"`
-		} `json:"Credentials"`
+		Credentials sessionValues `json:"Credentials"`
 	}
 	defer func() {
 		secret.Wipe(document.Credentials.AccessKeyID)
@@ -60,8 +55,18 @@ func useSessionJSON(raw []byte, now time.Time, use func(awssignin.Credentials) e
 	if len(bytes.TrimSpace(raw[decoder.InputOffset():])) != 0 {
 		return errors.New("awsiam: trailing STS session document")
 	}
-	c := document.Credentials
-	if len(c.AccessKeyID) == 0 || len(c.AccessKeyID) > 256 || len(c.SecretAccessKey) == 0 || len(c.SecretAccessKey) > 1024 || len(c.SessionToken) == 0 || len(c.SessionToken) > 32<<10 || !now.Before(c.Expiration) || c.Expiration.After(now.Add(36*time.Hour)) {
+	return borrowSessionValues(document.Credentials, now, 36*time.Hour, use)
+}
+
+type sessionValues struct {
+	AccessKeyID     secret.JSONBytes `json:"AccessKeyId"`
+	SecretAccessKey secret.JSONBytes `json:"SecretAccessKey"`
+	SessionToken    secret.JSONBytes `json:"SessionToken"`
+	Expiration      time.Time        `json:"Expiration"`
+}
+
+func borrowSessionValues(c sessionValues, now time.Time, maxLifetime time.Duration, use func(awssignin.Credentials) error) error {
+	if len(c.AccessKeyID) == 0 || len(c.AccessKeyID) > 256 || len(c.SecretAccessKey) == 0 || len(c.SecretAccessKey) > 1024 || len(c.SessionToken) == 0 || len(c.SessionToken) > 32<<10 || !now.Before(c.Expiration) || c.Expiration.After(now.Add(maxLifetime)) {
 		return errors.New("awsiam: invalid or expired short-lived STS session")
 	}
 	for _, value := range [][]byte{c.AccessKeyID, c.SecretAccessKey, c.SessionToken} {
@@ -84,9 +89,9 @@ func useSessionJSON(raw []byte, now time.Time, use func(awssignin.Credentials) e
 		return err
 	}
 	defer token.Destroy()
-	secret.Wipe(document.Credentials.AccessKeyID)
-	secret.Wipe(document.Credentials.SecretAccessKey)
-	secret.Wipe(document.Credentials.SessionToken)
+	secret.Wipe(c.AccessKeyID)
+	secret.Wipe(c.SecretAccessKey)
+	secret.Wipe(c.SessionToken)
 	return id.Use(func(id []byte) error {
 		return key.Use(func(key []byte) error {
 			return token.Use(func(token []byte) error {

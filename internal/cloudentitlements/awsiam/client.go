@@ -99,12 +99,16 @@ func (s *captureSession) query(ctx context.Context, action string, values url.Va
 			return nil, errors.New("awsiam: operation is outside read-only inventory")
 		}
 	}
+	return s.requestQuery(ctx, action, values, mutation, "iam", "2010-05-08")
+}
+
+func (s *captureSession) requestQuery(ctx context.Context, action string, values url.Values, mutation bool, service, version string) (*element, error) {
 	if s.calls >= 5000 {
 		return nil, errors.New("awsiam: capture call budget exceeded")
 	}
 	s.calls++
 	values.Set("Action", action)
-	values.Set("Version", "2010-05-08")
+	values.Set("Version", version)
 	body := []byte(values.Encode())
 	if len(body) > 64<<10 {
 		return nil, errors.New("awsiam: request exceeds bound")
@@ -120,7 +124,7 @@ func (s *captureSession) query(ctx context.Context, action string, values url.Va
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 	var held *secret.Buffer
 	err = c.cfg.UseCredentials(ctx, func(credential awssignin.Credentials) error {
-		headers, err := awssignin.Sign(request, body, credential, c.cfg.Region, "iam", c.cfg.Now())
+		headers, err := awssignin.Sign(request, body, credential, c.cfg.Region, service, c.cfg.Now())
 		defer secret.Wipe(headers)
 		if err != nil {
 			return err

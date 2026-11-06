@@ -167,3 +167,25 @@ These are historical capture findings. After a verified change, run the source
 again to refresh inventory and graph evidence. Key replacement, repeated workload
 adoption, live AWS enforcement, and GCP/Azure mutation qualification are separate
 requirements and are not implied by a successful native readback.
+
+
+## STS replacement preparation
+
+The existing `aws-sts` dynamic provider can prove a temporary lease by signing
+[GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
+with that lease. Its returned account, assumed-role ARN and native role/session
+ID must agree with an operator-allowed role; IAM role paths do not become STS
+session paths ([AWS identity identifiers](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html)).
+This read needs no IAM permission grant and does not prove resource authorization.
+The separate fixed STS action/version/signing scope shares the bounded, redirect-
+free byte transport; the inventory operation allowlist is still IAM read-only.
+The dynamic lease JSON parser accepts only the four exact expected fields,
+rejects aliases, duplicates, missing session tokens and expired/overlong lifetimes,
+locks decoded fields, and wipes them after the signing callback.
+
+Durable dynamic-lease rotation also accepts `aws-sts`: it publishes a new sealed
+secret version and records an authenticated native identity check. Existing
+predecessor retirement stays pending until the configured native denial mechanism
+or actual native expiry. This prepares a short-lived credential; the separately
+reviewed cloud replacement still has to prove workload adoption and retire the
+captured long-lived IAM key.

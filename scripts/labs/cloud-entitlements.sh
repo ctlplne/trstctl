@@ -20,6 +20,9 @@ trust='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Serv
 read_policy='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::a264-workload/note"}]}'
 aws_native iam create-user --user-name a264-workload >/dev/null
 aws_native iam create-role --role-name a264-reader --assume-role-policy-document "$trust" >/dev/null
+trust_replacement='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::000000000000:root"},"Action":"sts:AssumeRole"}]}'
+aws_native iam create-role --role-name a264-replacement553 --assume-role-policy-document "$trust_replacement" >/dev/null
+aws_native iam put-role-policy --role-name a264-replacement553 --policy-name read-note --policy-document "$read_policy" >/dev/null
 aws_native iam put-user-policy --user-name a264-workload --policy-name direct --policy-document "$read_policy" >/dev/null
 aws_native iam create-policy --policy-name a264-boundary --policy-document "$read_policy" >/dev/null
 aws_native iam put-user-permissions-boundary --user-name a264-workload --permissions-boundary arn:aws:iam::000000000000:policy/a264-boundary >/dev/null
@@ -34,5 +37,5 @@ aws_native iam put-user-policy --user-name a264-change552 --policy-name baseline
 aws_native sts get-session-token --duration-seconds 3600 > "$proof/session.json"
 aws_native --version > "$proof/client-version.txt" 2>&1
 (cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/cloudentitlements/awsiam -run '^TestAWSIAMNativeInventoryA264$' -count=1 -v) | tee "$proof/native.log"
-(cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/server -run '^TestServed(CloudMachineEntitlementCapture|ApprovedCloudKeyRevocation)A264$' -count=1 -v) | tee "$proof/served.log"
+(cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/server -run '^TestServed(CloudMachineEntitlementCapture|ApprovedCloudKeyRevocation|CloudReplacementSTSIdentityProof)A264$' -count=1 -v) | tee "$proof/served.log"
 printf 'Native IAM metadata and served assessment proof retained at %s\n' "$proof"
