@@ -3,9 +3,9 @@
 The first implementation is a pure AWS policy evaluator in
 `internal/cloudentitlements/awspolicy`. It evaluates one action/resource permission
 check against the supplied policy evidence and request context. It makes no
-network or database calls. Inventory collection, activity findings, reviewed
-policy changes/key replacement, graph/review integration and operator interfaces
-are subsequent slices. This package alone does not establish the A264 workflow.
+network or database calls. The read-only IAM collector captures selected workload users and roles. Activity
+findings, reviewed policy changes/key replacement, graph/review integration and
+operator interfaces are subsequent slices. This package alone does not establish the A264 workflow.
 
 ## Evidence and decisions
 
@@ -64,3 +64,35 @@ policies and multi-resource API requirements need explicit capture/modeling befo
 an entire API action can be claimed authorized. A complete CloudTrail record is
 not assumed to contain a complete AWS condition context. Live AWS qualification
 and the complete A264 inventory/remediation journey remain unproven.
+
+## Selected IAM inventory
+
+`internal/cloudentitlements/awsiam` reads explicitly named workload users/roles,
+including user group policies, inline and pinned managed-policy versions,
+permissions boundaries, role trust documents and key creation/last-use metadata.
+It does not infer that every account user is a machine. Each parsed policy has a
+source receipt and SHA-256 digest. Capture is a series of reads, not an atomic
+cloud snapshot; later mutation approval must bind and recheck source evidence.
+
+The collector borrows fresh STS response bytes from an owner-only local file for
+each request. It refuses expired sessions, missing session tokens and shared
+files. Secret signing headers move through locked memory directly to the socket;
+they do not enter Go HTTP header strings. The fixed origin uses verified TLS and
+DNS-time egress checks, with an explicit loopback-only plaintext lab option. No
+redirects or automatic retries occur. The read operation allowlist contains no
+credential creation, policy mutation or revocation calls. Production integration
+must execute the collector through an outbox-backed discovery worker.
+
+At most 256 selected principals, 64 policy receipts per identity, 100 pages and 2048
+members per list, 5000 calls, 8MiB of retained policies/trust and five minutes per capture are accepted. Each call
+has a 30-second limit, 64KiB headers and 4MiB response limit; XML depth/tokens,
+policy bodies and local session files are bounded. A failed policy/group/key read
+does not publish a partially complete identity. Organization SCP/RCP, resource
+policy and activity-log coverage remain unavailable until separately captured.
+
+`bash scripts/labs/cloud-entitlements.sh` uses only the cached pinned LocalStack
+image and stock `awslocal` to seed a disposable fixture. It proves native IAM
+metadata capture, then stops its exact container and retains its private proof
+directory. This is not native AWS permission enforcement or a served UI/API
+workflow. LocalStack does not enforce IAM permissions. No live AWS account,
+key replacement, GCP/Azure inventory or whole A264 completion is claimed here.

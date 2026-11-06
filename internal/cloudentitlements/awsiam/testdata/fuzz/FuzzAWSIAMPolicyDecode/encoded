@@ -1,0 +1,2 @@
+go test fuzz v1
+string("%7B%22Version%22%3A%222012-10-17%22%7D")

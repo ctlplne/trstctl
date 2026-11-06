@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2662 annotated sites across 31 rules. Each row is
+2663 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1749,7 +1749,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (51 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (52 sites)
 
 | Location | Reason |
 |---|---|
@@ -1766,6 +1766,7 @@ not this file.
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/workloadapi/attest.go:145` | a DIRECTORY, not a file. 0700 is the tightest mode that |
+| `internal/cloudentitlements/awsiam/session_file_posix_test.go:21` | deliberate shared-file negative fixture; SessionFile must reject it (CWE-276) |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
 | `internal/crypto/samltest/material_test.go:61` | deliberately unsafe test fixture must be refused |
 | `internal/crypto/secretfile/custody_unix.go:16` | this is a directory; owner execute is required to traverse it, and 0700 grants nothing to group/other (CWE-276) |
@@ -2168,8 +2169,8 @@ not this file.
 | `internal/crypto/rdp/desktop_test.go:138` | test-owned unique filename beneath fixed lab account home (CWE-22) |
 | `internal/crypto/rdp/process_linux.go:83` | operator-installed helper; absolute regular protected executable, executed by this open FD (CWE-22) |
 | `internal/crypto/samltest/material_test.go:57` | test-owned temporary identity file |
-| `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
-| `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
+| `internal/crypto/secretfile/secretfile.go:38` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
+| `internal/crypto/secretfile/secretfile.go:83` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
 | `internal/crypto/sshkeys/certificate_test.go:20` | committed test fixture |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |

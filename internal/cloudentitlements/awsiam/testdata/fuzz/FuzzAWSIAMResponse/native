@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("<GetUserResponse><GetUserResult><User><UserName>workload</UserName></User></GetUserResult></GetUserResponse>")

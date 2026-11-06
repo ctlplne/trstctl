@@ -12,12 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Load reads path after verifying the file and its parent directories are safe
 // for secret material. The returned bytes belong to the caller and must be wiped
 // after use.
-func Load(path string) ([]byte, error) {
+func Load(path string) ([]byte, error) { return load(path, 0) }
+
+func load(path string, limit int) ([]byte, error) {
 	if path == "" {
 		return nil, errors.New("secretfile: path is required")
 	}
@@ -45,6 +49,20 @@ func Load(path string) ([]byte, error) {
 	}
 	if err := validateFile(path, opened); err != nil {
 		return nil, err
+	}
+	if limit > 0 {
+		if opened.Size() > int64(limit) {
+			return nil, errors.New("secretfile: material exceeds byte bound")
+		}
+		raw, err := secret.ReadBounded(f, limit+1)
+		if err != nil {
+			return nil, err
+		}
+		if len(raw) > limit {
+			secret.Wipe(raw)
+			return nil, errors.New("secretfile: material exceeds byte bound")
+		}
+		return raw, nil
 	}
 	return io.ReadAll(f)
 }
