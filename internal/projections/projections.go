@@ -5302,6 +5302,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMDiscoverySourceSaved:                  {1: true},
 	EventPAMDiscoverySourceDeleted:                {1: true},
 	EventPAMDiscoveryRunCompleted:                 {1: true},
+	EventPAMDiscoveryScanQueued:                   {1: true},
 	EventPAMDiscoveryImported:                     {1: true},
 	EventPAMDiscoveryDismissed:                    {1: true},
 	EventPAMCheckoutRevealed:                      {1: true},
@@ -8885,6 +8886,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMDiscoverySourceDeletedTx(ctx, tx, e.TenantID, pl.ProviderID, pl.At)
+	case EventPAMDiscoveryScanQueued:
+		return p.applyPAMDiscoveryScanQueuedTx(ctx, tx, e)
 	case EventPAMDiscoveryRunCompleted:
 		var pl PAMDiscoveryRunCompleted
 		if err := decode(e, &pl); err != nil {

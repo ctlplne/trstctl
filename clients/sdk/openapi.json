@@ -40503,6 +40503,9 @@
             },
             "type": "array"
           },
+          "delivery_status": {
+            "type": "string"
+          },
           "failure": {
             "enum": [
               "unreachable",
@@ -40511,7 +40514,9 @@
               "locked",
               "error",
               "not_supported",
-              "too_many"
+              "too_many",
+              "source_changed",
+              "delivery_failed"
             ],
             "type": "string"
           },
@@ -40539,6 +40544,7 @@
           },
           "status": {
             "enum": [
+              "queued",
               "completed",
               "failed"
             ],
@@ -40551,7 +40557,6 @@
           "status",
           "requested_by",
           "started_at",
-          "finished_at",
           "accounts",
           "added",
           "removed",
@@ -40597,6 +40602,9 @@
                 },
                 "type": "array"
               },
+              "delivery_status": {
+                "type": "string"
+              },
               "failure": {
                 "enum": [
                   "unreachable",
@@ -40605,7 +40613,9 @@
                   "locked",
                   "error",
                   "not_supported",
-                  "too_many"
+                  "too_many",
+                  "source_changed",
+                  "delivery_failed"
                 ],
                 "type": "string"
               },
@@ -40633,6 +40643,7 @@
               },
               "status": {
                 "enum": [
+                  "queued",
                   "completed",
                   "failed"
                 ],
@@ -40645,7 +40656,6 @@
               "status",
               "requested_by",
               "started_at",
-              "finished_at",
               "accounts",
               "added",
               "removed",
@@ -60604,7 +60614,7 @@
           }
         ],
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {

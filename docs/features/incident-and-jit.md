@@ -1201,3 +1201,15 @@ Both mutations require an `Idempotency-Key`; reuse the same key when retrying
 the same request. Each queued intent freezes the native directory identity, exact
 agent and binding revision. A different account, tenant, host or revision cannot
 borrow that intent.
+
+Account discovery scans are asynchronous. A scan request records its durable
+intent and returns HTTP 202; a separate worker contacts the provider. Poll
+`GET /api/v1/access/discovery/runs/{id}` or use
+`trstctl-cli access discovery runs get <run-id>`; a run has no
+`finished_at` until it completes or fails. The console updates the source's
+status and refreshes staged accounts after a successful result arrives.
+`delivery_status` describes the exact read command's current delivery state;
+it is separate from the retained scan result. Changing or deleting a saved source
+before its queued read runs records `source_changed` and performs no provider
+read. Retry against the intended current source with a fresh idempotency key after
+a failed run; replaying the old key returns its original queued receipt.

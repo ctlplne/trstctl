@@ -57,8 +57,12 @@ func TestServedADServiceAccountDiscoveryA267(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		status, raw := secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/runs", operator, "service-discovery-run-"+string(rune('a'+i)), nil)
 		var run apiRunDiscoveryFixture
-		if status != http.StatusCreated || json.Unmarshal(raw, &run) != nil || run.Status != "completed" {
+		if status != http.StatusAccepted || json.Unmarshal(raw, &run) != nil || run.Status != "queued" {
 			t.Fatalf("native discovery run status=%d body=%s", status, raw)
+		}
+		completed := awaitQueuedDiscoveryProofA267(t, h.servedHarness, operator, run.ID)
+		if completed.Status != "completed" {
+			t.Fatalf("native worker scan failed: %+v", completed)
 		}
 		if i == 0 {
 			runID = run.ID

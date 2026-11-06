@@ -1,5 +1,5 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The named table overflow regions need keyboard focus for horizontal scrolling. */
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, type PAMDiscoveredAccount, type PAMDiscoveryImportRequest, type PAMDiscoveryImportReview } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -27,7 +27,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const ids = { provider: useId(), interval: useId(), folder: useId(), template: useId(), reason: useId(), dismiss: useId() };
-  const sources = useApiQuery(["pam-discovery-sources"], api.pamDiscoverySources, { retry: false });
+  const sources = useApiQuery(["pam-discovery-sources"], api.pamDiscoverySources, { retry: false, live: { intervalMs: 5000 } });
   const staged = useApiQuery(["pam-discovered-accounts", "staged"], () => api.pamDiscoveredAccounts({ status: "staged" }), { retry: false });
   const imported = useApiQuery(["pam-imported-accounts"], () => api.pamImportedAccounts(), { retry: false });
   const importedNative = useApiQuery(["pam-discovered-accounts", "imported"], () => api.pamDiscoveredAccounts({ status: "imported" }), {
@@ -35,6 +35,14 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
     retry: false,
   });
   const providers = useApiQuery(["dynamic-secret-providers"], api.dynamicSecretProviders, { enabled: canManage, retry: false });
+  const completedScans = (sources.data?.items ?? [])
+    .filter((s) => s.last_run?.status === "completed")
+    .map((s) => s.last_run!.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ["pam-discovered-accounts", "staged"] });
+  }, [completedScans, queryClient]);
   const [sourceForm, setSourceForm] = useState({ provider: "", interval: 0 });
   const [selected, setSelected] = useState<string[]>([]);
   const [dependentAccount, setDependentAccount] = useState<PAMDiscoveredAccount | null>(null);
@@ -77,15 +85,17 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
   const scan = (providerID: string) =>
     act(async () => {
       const run = await api.runPAMDiscovery(providerID);
-      return run.status === "completed"
-        ? t("admin.access.discovery.scanned", {
-            provider: providerID,
-            accounts: run.accounts,
-            added: run.added,
-            removed: run.removed,
-            changed: run.changed,
-          })
-        : t("admin.access.discovery.scanFailed", { provider: providerID, failure: run.failure ?? "error" });
+      return run.status === "queued"
+        ? t("admin.access.discovery.scanQueued", { provider: providerID, id: run.id })
+        : run.status === "completed"
+          ? t("admin.access.discovery.scanned", {
+              provider: providerID,
+              accounts: run.accounts,
+              added: run.added,
+              removed: run.removed,
+              changed: run.changed,
+            })
+          : t("admin.access.discovery.scanFailed", { provider: providerID, failure: run.failure ?? "error" });
     });
   const requestImport = () =>
     act(async () => {
@@ -170,18 +180,28 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                   </td>
                   <td>
                     {source.last_run
-                      ? source.last_run.status === "completed"
-                        ? t("admin.access.discovery.lastRunCompleted", {
-                            accounts: source.last_run.accounts,
-                            added: source.last_run.added,
-                            removed: source.last_run.removed,
-                          })
-                        : t("admin.access.discovery.lastRunFailed", { failure: source.last_run.failure ?? "error" })
+                      ? source.last_run.status === "queued"
+                        ? source.last_run.delivery_status === "failed"
+                          ? t("admin.access.discovery.deliveryStopped")
+                          : t("admin.access.discovery.scanWaiting", { id: source.last_run.id })
+                        : source.last_run.status === "completed"
+                          ? t("admin.access.discovery.lastRunCompleted", {
+                              accounts: source.last_run.accounts,
+                              added: source.last_run.added,
+                              removed: source.last_run.removed,
+                            })
+                          : t("admin.access.discovery.lastRunFailed", { failure: source.last_run.failure ?? "error" })
                       : t("admin.access.discovery.neverRun")}
                   </td>
                   <td>
                     {canManage ? (
-                      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void scan(source.provider_id)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || source.last_run?.status === "queued"}
+                        onClick={() => void scan(source.provider_id)}
+                      >
                         {t("admin.access.discovery.scanNow", { provider: source.provider_id })}
                       </Button>
                     ) : null}

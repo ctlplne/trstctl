@@ -22103,10 +22103,11 @@ export interface components {
             changed: number;
             /** @description on a single run's read: accounts added, removed or changed since the source's previous complete scan */
             changes?: components["schemas"]["PAMDiscoveryChange"][];
+            delivery_status?: string;
             /** @enum {string} */
-            failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
+            failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many" | "source_changed" | "delivery_failed";
             /** Format: date-time */
-            finished_at: string;
+            finished_at?: string;
             /** Format: uuid */
             id: string;
             provider_id: string;
@@ -22116,7 +22117,7 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             /** @enum {string} */
-            status: "completed" | "failed";
+            status: "queued" | "completed" | "failed";
         };
         PAMDiscoveryRunList: {
             items: components["schemas"]["PAMDiscoveryRun"][];
@@ -22130,10 +22131,11 @@ export interface components {
                 changed: number;
                 /** @description on a single run's read: accounts added, removed or changed since the source's previous complete scan */
                 changes?: components["schemas"]["PAMDiscoveryChange"][];
+                delivery_status?: string;
                 /** @enum {string} */
-                failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
+                failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many" | "source_changed" | "delivery_failed";
                 /** Format: date-time */
-                finished_at: string;
+                finished_at?: string;
                 /** Format: uuid */
                 id: string;
                 provider_id: string;
@@ -22143,7 +22145,7 @@ export interface components {
                 /** Format: date-time */
                 started_at: string;
                 /** @enum {string} */
-                status: "completed" | "failed";
+                status: "queued" | "completed" | "failed";
             };
             provider_id: string;
             provider_type: string;
@@ -28441,7 +28443,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description success */
-            201: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -20,6 +20,7 @@ const (
 	SubsystemOutboxExternalCA          = "outbox.external_ca"
 	SubsystemOutboxConnectors          = "outbox.connectors"
 	SubsystemOutboxCloudMachine        = "outbox.cloud_machine"
+	SubsystemOutboxPAMDiscovery        = "outbox.pam_discovery"
 	SubsystemOutboxSecrets             = "outbox.secrets" // dynamic-secret provider calls
 	SubsystemOutboxSecretSync          = "outbox.secret_sync"
 	SubsystemOutboxManagedKeys         = "outbox.managed_keys"
@@ -102,6 +103,7 @@ func DefaultConfigs() []Config {
 		{Name: SubsystemOutboxConnectors, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxSecrets, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxCloudMachine, Workers: 2, Queue: 64},
+		{Name: SubsystemOutboxPAMDiscovery, Workers: 2, Queue: 64},
 		{Name: SubsystemOutboxSecretSync, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxManagedKeys, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxTransparency, Workers: 4, Queue: 256},

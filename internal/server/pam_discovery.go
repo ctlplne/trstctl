@@ -4,10 +4,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
+	"trstctl.com/trstctl/internal/events"
 
 	"github.com/google/uuid"
 
@@ -44,14 +45,6 @@ type pamAccountDiscoverer interface {
 	DynamicSecretProviderType() string
 	DynamicSecretDiscoverAccounts(ctx context.Context) ([]pamdiscovery.Account, error)
 }
-
-// pamDiscovery marks the sources being scanned, so one runs at a time.
-type pamDiscovery struct {
-	mu      sync.Mutex
-	running map[string]bool
-}
-
-func newPAMDiscovery() *pamDiscovery { return &pamDiscovery{running: map[string]bool{}} }
 
 // DynamicSecretDiscoverAccounts reads the provider's target's privileged
 // accounts through its administrator connection.
@@ -181,46 +174,47 @@ func (s *pamService) RunPAMDiscovery(ctx context.Context, tenantID, actor, provi
 	return s.GetPAMDiscoveryRun(ctx, tenantID, id)
 }
 
-// scan reads one source's target and records the run; it refuses a source
-// already being scanned.
+// scan records a source-bound read intent; the separate outbox worker owns I/O.
 func (s *pamService) scan(ctx context.Context, tenantID, providerID, requestedBy string) (string, error) {
-	key := tenantID + "/" + providerID
-	s.discovery.mu.Lock()
-	if s.discovery.running[key] {
-		s.discovery.mu.Unlock()
-		return "", fmt.Errorf("%w: a scan of %s is running", api.ErrPAMTargetConflict, providerID)
-	}
-	s.discovery.running[key] = true
-	s.discovery.mu.Unlock()
-	defer func() {
-		s.discovery.mu.Lock()
-		delete(s.discovery.running, key)
-		s.discovery.mu.Unlock()
-	}()
-	started := s.clock().UTC()
-	event := projections.PAMDiscoveryRunCompleted{RunID: uuid.NewString(), ProviderID: providerID, Status: "completed",
-		RequestedBy: requestedBy, StartedAt: started, Accounts: []pamdiscovery.Account{}}
-	d, err := s.discoverer(tenantID, providerID)
-	if err == nil {
-		scanCtx, cancel := context.WithTimeout(ctx, pamDiscoveryTimeout)
-		var accounts []pamdiscovery.Account
-		accounts, err = d.DynamicSecretDiscoverAccounts(scanCtx)
-		cancel()
-		if err == nil && len(accounts) > pamdiscovery.MaxAccounts {
-			err = errDiscoveryTooMany
+	var id string
+	err := s.store.WithPAMCatalogLock(ctx, tenantID, func() error {
+		// A previously appended request must become visible before another admission.
+		if err := s.projector.ProjectCatchUp(ctx, s.log); err != nil {
+			return err
 		}
-		if err == nil {
-			event.Accounts = pamdiscovery.Normalize(accounts)
+		source, err := s.store.GetPAMDiscoverySource(ctx, tenantID, providerID)
+		if err != nil {
+			return err
 		}
+		pending, err := s.store.PendingPAMDiscoveryScan(ctx, tenantID, providerID)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return fmt.Errorf("%w: a scan of %s is queued", api.ErrPAMTargetConflict, providerID)
+		}
+		intent := pamdiscovery.ScanIntent{RunID: uuid.NewString(), CompletionEventID: uuid.NewString(), ProviderID: providerID, SourceSavedAt: source.SavedAt.UTC(), RequestedBy: requestedBy, QueuedAt: s.clock().UTC()}
+		if err := intent.Validate(); err != nil {
+			return fmt.Errorf("%w: discovery source metadata is invalid", api.ErrPAMInvalid)
+		}
+		raw, err := json.Marshal(intent)
+		if err != nil {
+			return err
+		}
+		event, err := s.log.Append(ctx, events.Event{ID: intent.RunID, TenantID: tenantID, Type: projections.EventPAMDiscoveryScanQueued, SchemaVersion: 1, Data: raw})
+		if err != nil {
+			return err
+		}
+		if err = s.projector.Apply(ctx, event); err != nil {
+			return err
+		}
+		id = intent.RunID
+		return nil
+	})
+	if err == nil && s.wakeOutbox != nil {
+		s.wakeOutbox()
 	}
-	if err != nil {
-		event.Status, event.Failure = "failed", discoveryFailure(err)
-	}
-	event.FinishedAt = s.clock().UTC()
-	if err := s.appendProject(ctx, tenantID, projections.EventPAMDiscoveryRunCompleted, event); err != nil {
-		return "", err
-	}
-	return event.RunID, nil
+	return id, err
 }
 
 func (s *pamService) ListPAMDiscoveryRuns(ctx context.Context, tenantID, providerID string, limit int) ([]api.PAMDiscoveryRun, error) {
@@ -268,8 +262,12 @@ func accountInfo(a pamdiscovery.Account) api.PAMDiscoveredAccountInfo {
 }
 
 func discoveryRunView(r store.PAMDiscoveryRun) api.PAMDiscoveryRun {
-	view := api.PAMDiscoveryRun{ID: r.ID, ProviderID: r.ProviderID, Status: r.Status, Failure: r.Failure, RequestedBy: r.RequestedBy,
-		StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, Accounts: r.Accounts, Added: r.Added, Removed: r.Removed, Changed: r.Changed}
+	view := api.PAMDiscoveryRun{ID: r.ID, ProviderID: r.ProviderID, Status: r.Status, Failure: r.Failure, DeliveryStatus: r.DeliveryStatus, RequestedBy: r.RequestedBy,
+		StartedAt: r.StartedAt, Accounts: r.Accounts, Added: r.Added, Removed: r.Removed, Changed: r.Changed}
+	if !r.FinishedAt.IsZero() {
+		value := r.FinishedAt
+		view.FinishedAt = &value
+	}
 	for _, c := range r.Changes {
 		view.Changes = append(view.Changes, api.PAMDiscoveryChange{Change: c.Change, Account: accountInfo(c.Account)})
 	}

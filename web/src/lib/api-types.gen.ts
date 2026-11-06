@@ -8703,14 +8703,15 @@ export interface PAMDiscoveryRun {
   added: number;
   changed: number;
   changes?: PAMDiscoveryChange[];
-  failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many";
-  finished_at: string;
+  delivery_status?: string;
+  failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many" | "source_changed" | "delivery_failed";
+  finished_at?: string;
   id: string;
   provider_id: string;
   removed: number;
   requested_by: string;
   started_at: string;
-  status: "completed" | "failed";
+  status: "queued" | "completed" | "failed";
 }
 
 export interface PAMDiscoveryRunList {
@@ -8719,7 +8720,7 @@ export interface PAMDiscoveryRunList {
 
 export interface PAMDiscoverySource {
   interval_seconds: number;
-  last_run?: { accounts: number; added: number; changed: number; changes?: PAMDiscoveryChange[]; failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many"; finished_at: string; id: string; provider_id: string; removed: number; requested_by: string; started_at: string; status: "completed" | "failed" };
+  last_run?: { accounts: number; added: number; changed: number; changes?: PAMDiscoveryChange[]; delivery_status?: string; failure?: "unreachable" | "rejected" | "expired" | "locked" | "error" | "not_supported" | "too_many" | "source_changed" | "delivery_failed"; finished_at?: string; id: string; provider_id: string; removed: number; requested_by: string; started_at: string; status: "queued" | "completed" | "failed" };
   provider_id: string;
   provider_type: string;
   saved_at: string;

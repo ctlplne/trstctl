@@ -354,6 +354,7 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"acme.dns01.present":              bulkhead.SubsystemOutbox,
 		"third-party.destination":         bulkhead.SubsystemOutbox,
 		"cloud.machine.change":            bulkhead.SubsystemOutboxCloudMachine,
+		"pam.discovery.scan":              bulkhead.SubsystemOutboxPAMDiscovery,
 	}
 	for destination, wantPool := range cases {
 		matches := make([]string, 0, 1)

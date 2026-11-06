@@ -296,7 +296,8 @@ import (
 // Version 98 carries exact cloud replacement adoption evidence.
 // Version 99 retains native static-rotation authority and sealed preparation.
 // Version 100 retains exact AD account/host bindings and signed dependent scans.
-const SnapshotFormatVersion = 100
+// Version 101 retains queued provider scan intents and nullable completion times.
+const SnapshotFormatVersion = 101
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

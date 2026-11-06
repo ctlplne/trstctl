@@ -102,10 +102,14 @@ func TestServedActiveDirectoryDiscoveryA260(t *testing.T) {
 		t.Helper()
 		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/discovery/sources/a260-ad/runs", operator, key, nil)
 		var run a260Run
-		if status != http.StatusCreated || json.Unmarshal(body, &run) != nil || run.Status != "completed" {
+		if status != http.StatusAccepted || json.Unmarshal(body, &run) != nil || run.Status != "queued" {
 			t.Fatalf("scan = %d %s", status, body)
 		}
-		return run
+		completed := awaitQueuedDiscoveryProofA267(t, h.servedHarness, operator, run.ID)
+		if completed.Status != "completed" {
+			t.Fatalf("native worker scan failed: %+v", completed)
+		}
+		return completed
 	}
 	listed := func() map[string]a260Account {
 		t.Helper()

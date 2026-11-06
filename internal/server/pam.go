@@ -206,7 +206,6 @@ type pamService struct {
 	browser *pamBrowser
 	// discovery marks the privileged account discovery sources being
 	// scanned (A260).
-	discovery *pamDiscovery
 	// secretReader reads a vaulted target's account secret (A261).
 	secretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
 	// rotation retires a check-out's revealed credential (A261 part 2).
@@ -349,8 +348,8 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled,
 		commandRuleJobKinds:              d.CommandRuleJobKinds,
 		windowsDependentInventoryEnabled: d.WindowsDependentInventoryEnabled,
-		browser:                          newPAMBrowser(), discovery: newPAMDiscovery(),
-		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
+		browser:                          newPAMBrowser(),
+		recordings:                       recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,

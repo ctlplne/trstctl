@@ -2324,6 +2324,18 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		secretIntegrations.staticRotation = s.api.AdvanceStaticSecretRotation
 		secretIntegrations.staticRotationFailure = s.api.FailStaticSecretRotation
 	}
+	secretIntegrations.discoveryScan = func(ctx context.Context, m orchestrator.Message) error {
+		if s.pam == nil {
+			return api.ErrPAMUnavailable
+		}
+		return s.pam.deliverAccountDiscovery(ctx, m)
+	}
+	secretIntegrations.discoveryScanFailure = func(ctx context.Context, m orchestrator.Message) error {
+		if s.pam == nil {
+			return api.ErrPAMUnavailable
+		}
+		return s.pam.failAccountDiscovery(ctx, m)
+	}
 	s.secretIntegrations = secretIntegrations
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {
@@ -3277,6 +3289,7 @@ type outboxDispatchFamily struct {
 
 var outboxDispatchFamilies = func() []outboxDispatchFamily {
 	named := []outboxDispatchFamily{
+		{pool: bulkhead.SubsystemOutboxPAMDiscovery, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"pam.discovery."}}},
 		{pool: bulkhead.SubsystemOutboxCloudMachine, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"cloud.machine."}}},
 		{pool: bulkhead.SubsystemOutboxExternalCA, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"external-ca."}}},
 		{pool: bulkhead.SubsystemOutboxConnectors, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}}},

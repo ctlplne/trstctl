@@ -5942,13 +5942,14 @@ func componentSchemas() map[string]*Schema {
 		pamDiscoveredAccount[k] = v
 	}
 	pamDiscoveryRun := object(map[string]*Schema{
-		"id": uuid(), "provider_id": str(), "status": {Type: "string", Enum: []string{"completed", "failed"}},
-		"failure":      {Type: "string", Enum: []string{"unreachable", "rejected", "expired", "locked", "error", "not_supported", "too_many"}},
-		"requested_by": {Type: "string", Description: "the principal who ran it, or scheduler"},
-		"started_at":   timestamp(), "finished_at": timestamp(),
+		"id": uuid(), "provider_id": str(), "status": {Type: "string", Enum: []string{"queued", "completed", "failed"}},
+		"delivery_status": str(),
+		"failure":         {Type: "string", Enum: []string{"unreachable", "rejected", "expired", "locked", "error", "not_supported", "too_many", "source_changed", "delivery_failed"}},
+		"requested_by":    {Type: "string", Description: "the principal who ran it, or scheduler"},
+		"started_at":      timestamp(), "finished_at": timestamp(),
 		"accounts": {Type: "integer"}, "added": {Type: "integer"}, "removed": {Type: "integer"}, "changed": {Type: "integer"},
 		"changes": {Type: "array", Items: ref("PAMDiscoveryChange"), Description: "on a single run's read: accounts added, removed or changed since the source's previous complete scan"},
-	}, "id", "provider_id", "status", "requested_by", "started_at", "finished_at", "accounts", "added", "removed", "changed")
+	}, "id", "provider_id", "status", "requested_by", "started_at", "accounts", "added", "removed", "changed")
 	pamEmergencyGrant := object(map[string]*Schema{
 		"session_id": uuid(), "responder": str(), "reason": str(), "target_type": str(), "target_id": str(), "role": str(),
 		"opened_at": timestamp(), "expires_at": timestamp(),

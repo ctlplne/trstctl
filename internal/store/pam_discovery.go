@@ -36,6 +36,7 @@ type PAMDiscoverySource struct {
 // PAMDiscoveryRun is one scan of a source.
 type PAMDiscoveryRun struct {
 	ID, ProviderID, Status, Failure string
+	DeliveryStatus                  string
 	StartedAt, FinishedAt           time.Time
 	RequestedBy                     string
 	Accounts, Added, Removed        int
@@ -86,12 +87,26 @@ func (s *Store) ApplyPAMDiscoverySourceDeletedTx(ctx context.Context, tx pgx.Tx,
 // accounts added, changed or no longer found — recorded as the run's
 // changes. Replaying the same run changes nothing.
 func (s *Store) ApplyPAMDiscoveryRunTx(ctx context.Context, tx pgx.Tx, tenantID string, run PAMDiscoveryRun, accounts []pamdiscovery.Account) error {
+	if err := lockPAMDiscoverySourceTx(ctx, tx, tenantID, run.ProviderID); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO pam_discovery_runs (tenant_id, id, provider_id, status, failure, started_at, finished_at, requested_by, accounts)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (tenant_id, id) DO NOTHING`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (tenant_id, id) DO UPDATE SET status=EXCLUDED.status,failure=EXCLUDED.failure,finished_at=EXCLUDED.finished_at,accounts=EXCLUDED.accounts
+ WHERE pam_discovery_runs.tenant_id=$1 AND pam_discovery_runs.status='queued'
+ AND pam_discovery_runs.provider_id=EXCLUDED.provider_id AND pam_discovery_runs.started_at=EXCLUDED.started_at`,
 		tenantID, run.ID, run.ProviderID, run.Status, run.Failure, run.StartedAt.UTC(), run.FinishedAt.UTC(), run.RequestedBy, len(accounts))
-	if err != nil || tag.RowsAffected() == 0 || run.Status != "completed" {
+	if err != nil || tag.RowsAffected() == 0 {
 		return err
+	}
+	// A live dispatcher acknowledges its own lease; source replay retires only
+	// the recreated unclaimed operational intent.
+	if _, err = tx.Exec(ctx, `UPDATE outbox SET status='delivered',delivered_at=COALESCE(delivered_at,$4),worker_id=NULL,lease_until=NULL
+ WHERE tenant_id=$1 AND destination=$2 AND idempotency_key=$3 AND status='pending' AND delivered_at IS NULL AND claimed_by_agent_id IS NULL AND worker_id IS NULL`, tenantID, pamdiscovery.ScanDestination, "pam-discovery:"+run.ID, run.FinishedAt); err != nil {
+		return err
+	}
+	if run.Status != "completed" {
+		return nil
 	}
 	rows, err := tx.Query(ctx, `SELECT account_key, name, kind, privileges, disabled, details FROM pam_discovered_accounts
 		WHERE tenant_id = $1 AND provider_id = $2 AND removed_run IS NULL`, tenantID, run.ProviderID)
@@ -183,12 +198,12 @@ func (s *Store) ApplyPAMDiscoveryRunTx(ctx context.Context, tx pgx.Tx, tenantID 
 	return err
 }
 
-const pamDiscoveryRunColumns = `id::text, provider_id, status, failure, started_at, finished_at, requested_by, accounts, added, removed, changed`
+const pamDiscoveryRunColumns = `id::text, provider_id, status, failure, started_at, COALESCE(finished_at,'0001-01-01 00:00:00+00'::timestamptz), requested_by, accounts, added, removed, changed, COALESCE((SELECT o.status FROM outbox o WHERE o.tenant_id=$1 AND o.tenant_id=pam_discovery_runs.tenant_id AND o.id=pam_discovery_runs.outbox_id AND o.destination='pam.discovery.scan' AND o.idempotency_key='pam-discovery:'||pam_discovery_runs.id::text),'')`
 
 func scanPAMDiscoveryRun(row pgx.Row) (PAMDiscoveryRun, error) {
 	var r PAMDiscoveryRun
 	err := row.Scan(&r.ID, &r.ProviderID, &r.Status, &r.Failure, &r.StartedAt, &r.FinishedAt, &r.RequestedBy, &r.Accounts, &r.Added,
-		&r.Removed, &r.Changed)
+		&r.Removed, &r.Changed, &r.DeliveryStatus)
 	return r, err
 }
 
@@ -269,7 +284,7 @@ func (s *Store) ListPAMDiscoveryRuns(ctx context.Context, tenantID, providerID s
 	var out []PAMDiscoveryRun
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+pamDiscoveryRunColumns+` FROM pam_discovery_runs
-			WHERE tenant_id = $1 AND ($2 = '' OR provider_id = $2) ORDER BY finished_at DESC, id LIMIT $3`, tenantID, providerID, limit)
+			WHERE tenant_id = $1 AND ($2 = '' OR provider_id = $2) ORDER BY started_at DESC, id LIMIT $3`, tenantID, providerID, limit)
 		if err != nil {
 			return err
 		}

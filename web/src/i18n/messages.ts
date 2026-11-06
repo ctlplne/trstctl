@@ -10,6 +10,15 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.discovery.scanQueued": {
+    defaultMessage: "Scan {id} queued for {provider}. Its accounts appear after the provider read completes.",
+    description: "Queued account discovery.",
+  },
+  "admin.access.discovery.scanWaiting": { defaultMessage: "Scan {id} queued; waiting for the provider read.", description: "Queued account discovery." },
+  "admin.access.discovery.deliveryStopped": {
+    defaultMessage: "Discovery delivery stopped. Check the source and dispatcher before retrying.",
+    description: "Queued account discovery.",
+  },
   "admin.access.dependents.delivery": { defaultMessage: "Delivery: {status}", description: "Native host inventory delivery." },
   "admin.access.dependents.deliveryFailed": {
     defaultMessage: "Delivery stopped. Resolve the host or profile failure, then queue a new scan. The retained receipt describes the earlier attempt.",

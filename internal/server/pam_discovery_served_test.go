@@ -207,10 +207,10 @@ func TestServedPrivilegedAccountDiscoveryA260(t *testing.T) {
 		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/discovery/sources/"+provider+"/runs", operator,
 			"a260-scan-"+provider+"-"+time.Now().Format("150405.000000"), nil)
 		var run a260Run
-		if status != http.StatusCreated || json.Unmarshal(body, &run) != nil {
+		if status != http.StatusAccepted || json.Unmarshal(body, &run) != nil {
 			t.Fatalf("scan %s = %d %s", provider, status, body)
 		}
-		return run
+		return awaitQueuedDiscoveryProofA267(t, h.servedHarness, operator, run.ID)
 	}
 	accounts := func(provider string, removed bool) map[string]a260Account {
 		t.Helper()
@@ -355,6 +355,9 @@ func TestServedPrivilegedAccountDiscoveryA260(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.srv.pam.discoveryPass(context.Background())
+	if _, err := h.srv.outbox.Dispatch(t.Context(), h.srv.obHandler); err != nil {
+		t.Fatal(err)
+	}
 	runs := func() []a260Run {
 		status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/discovery/runs?provider_id=a260-mysql", reader, nil)
 		var page struct {
@@ -370,6 +373,9 @@ func TestServedPrivilegedAccountDiscoveryA260(t *testing.T) {
 		t.Fatalf("the due source was not scanned by the scheduler: %+v", listed)
 	}
 	h.srv.pam.discoveryPass(context.Background())
+	if _, err := h.srv.outbox.Dispatch(t.Context(), h.srv.obHandler); err != nil {
+		t.Fatal(err)
+	}
 	if again := runs(); len(again) != 3 {
 		t.Fatalf("the scheduler scanned a source before its interval: %d runs", len(again))
 	}

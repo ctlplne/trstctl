@@ -35,18 +35,19 @@ type PAMDiscoverySource struct {
 // could not scan (failure: unreachable, rejected, expired, locked, error,
 // not_supported, too_many).
 type PAMDiscoveryRun struct {
-	ID          string               `json:"id"`
-	ProviderID  string               `json:"provider_id"`
-	Status      string               `json:"status"`
-	Failure     string               `json:"failure,omitempty"`
-	RequestedBy string               `json:"requested_by"`
-	StartedAt   time.Time            `json:"started_at"`
-	FinishedAt  time.Time            `json:"finished_at"`
-	Accounts    int                  `json:"accounts"`
-	Added       int                  `json:"added"`
-	Removed     int                  `json:"removed"`
-	Changed     int                  `json:"changed"`
-	Changes     []PAMDiscoveryChange `json:"changes,omitempty"`
+	DeliveryStatus string               `json:"delivery_status,omitempty"`
+	ID             string               `json:"id"`
+	ProviderID     string               `json:"provider_id"`
+	Status         string               `json:"status"`
+	Failure        string               `json:"failure,omitempty"`
+	RequestedBy    string               `json:"requested_by"`
+	StartedAt      time.Time            `json:"started_at"`
+	FinishedAt     *time.Time           `json:"finished_at,omitempty"`
+	Accounts       int                  `json:"accounts"`
+	Added          int                  `json:"added"`
+	Removed        int                  `json:"removed"`
+	Changed        int                  `json:"changed"`
+	Changes        []PAMDiscoveryChange `json:"changes,omitempty"`
 }
 
 // PAMDiscoveryChange is one account a run found added, removed or changed.
@@ -147,7 +148,7 @@ func (a *API) pamDiscoveryRoutes() []route {
 		{method: "GET", path: "/api/v1/access/discovery/sources", opID: "listPAMDiscoverySources", summary: "List the providers whose targets privileged account discovery scans, with each one's last run", handler: a.listPAMDiscoverySources, resSchema: "PAMDiscoverySourceList", successCode: "200", perm: authz.AccessRead},
 		{method: "PUT", path: "/api/v1/access/discovery/sources/{provider_id}", opID: "savePAMDiscoverySource", summary: "Scan a provider's target for privileged accounts on demand, or every interval_seconds (at least an hour); read-only", handler: a.savePAMDiscoverySource, pathParams: provider, reqSchema: "PAMDiscoverySourceRequest", resSchema: "PAMDiscoverySource", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "DELETE", path: "/api/v1/access/discovery/sources/{provider_id}", opID: "deletePAMDiscoverySource", summary: "Stop scanning a provider's target; its runs and staged accounts stay", handler: a.deletePAMDiscoverySource, pathParams: provider, resSchema: "PAMDiscoverySourceDeleted", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
-		{method: "POST", path: "/api/v1/access/discovery/sources/{provider_id}/runs", opID: "runPAMDiscovery", summary: "Scan a source's target now, read-only, and stage the privileged accounts it finds", handler: a.runPAMDiscovery, pathParams: provider, resSchema: "PAMDiscoveryRun", successCode: "201", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "POST", path: "/api/v1/access/discovery/sources/{provider_id}/runs", opID: "runPAMDiscovery", summary: "Scan a source's target now, read-only, and stage the privileged accounts it finds", handler: a.runPAMDiscovery, pathParams: provider, resSchema: "PAMDiscoveryRun", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "GET", path: "/api/v1/access/discovery/runs", opID: "listPAMDiscoveryRuns", summary: "List discovery runs, newest first", handler: a.listPAMDiscoveryRuns, query: []param{{name: "provider_id", typ: "string", desc: "only this source's runs"}, {name: "limit", typ: "integer", desc: "at most this many (default 50, at most 500)"}}, resSchema: "PAMDiscoveryRunList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/runs/{id}", opID: "getPAMDiscoveryRun", summary: "Get a discovery run with the accounts it found added, removed or changed", handler: a.getPAMDiscoveryRun, pathParams: []param{pathUUID("id")}, resSchema: "PAMDiscoveryRun", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/discovery/imports", opID: "requestPAMDiscoveryImport", summary: "Request independent review of importing staged accounts into a folder; importing grants nothing", handler: a.requestPAMDiscoveryImport, reqSchema: "PAMDiscoveryImportRequest", resSchema: "PAMDiscoveryImportReview", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
@@ -245,7 +246,7 @@ func (a *API) runPAMDiscovery(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, pamDiscoveryNotFound(err)
 		}
-		return http.StatusCreated, run, nil
+		return http.StatusAccepted, run, nil
 	})
 }
 

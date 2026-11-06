@@ -12071,6 +12071,7 @@ PAMDiscoveryRun = TypedDict(
         'added': int,
         'changed': int,
         'changes': list[dict[str, Any]],
+        'delivery_status': str,
         'failure': str,
         'finished_at': str,
         'id': str,

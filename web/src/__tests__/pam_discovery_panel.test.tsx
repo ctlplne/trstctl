@@ -202,3 +202,46 @@ it("keeps native host inventory reachable after an AD account is imported", asyn
   expect(apiMock.pamServiceDependentHosts).toHaveBeenCalledWith(native.id, "");
   expect(screen.queryByRole("button", { name: "Add host" })).not.toBeInTheDocument();
 });
+
+it("keeps an admitted source scan queued until the provider result is observed", async () => {
+  apiMock.runPAMDiscovery.mockImplementation(async () => {
+    apiMock.pamDiscoverySources.mockResolvedValue({
+      items: [
+        {
+          provider_id: "orders-pg",
+          provider_type: "postgresql",
+          interval_seconds: 0,
+          saved_at: "2026-11-06T00:00:00Z",
+          last_run: {
+            id: "queued-read",
+            provider_id: "orders-pg",
+            status: "queued",
+            requested_by: "operator",
+            started_at: "2026-11-06T00:00:00Z",
+            accounts: 0,
+            added: 0,
+            removed: 0,
+            changed: 0,
+          },
+        },
+      ],
+    });
+    return {
+      id: "queued-read",
+      provider_id: "orders-pg",
+      status: "queued",
+      requested_by: "operator",
+      started_at: "2026-11-06T00:00:00Z",
+      accounts: 0,
+      added: 0,
+      removed: 0,
+      changed: 0,
+    };
+  });
+  mount(true);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /scan.*orders-pg/i }));
+  await screen.findByText(/Scan queued-read queued for orders-pg/);
+  await screen.findByText(/Scan queued-read queued; waiting for the provider read/);
+  expect(screen.getByRole("button", { name: /scan.*orders-pg/i })).toBeDisabled();
+});

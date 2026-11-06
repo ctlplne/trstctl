@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pamdiscovery"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
@@ -34,6 +35,8 @@ import (
 // dispatcher fallback from acknowledging an unknown secret side effect as though
 // it had been delivered.
 type secretIntegrationOutboxDispatcher struct {
+	discoveryScan            func(context.Context, orchestrator.Message) error
+	discoveryScanFailure     func(context.Context, orchestrator.Message) error
 	dynamicProviders         DynamicSecretProviderRegistry
 	awsHoneyAccounts         AWSHoneyAccountRegistry
 	fallbackDynamicProviders []dynsecret.Provider
@@ -183,6 +186,11 @@ func validateCanonicalSecretSyncQueued(ctx context.Context, event events.Event, 
 // the outbox retains it for operator-visible retry instead of marking it done.
 func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orchestrator.Message) (handled bool, err error) {
 	switch {
+	case m.Destination == pamdiscovery.ScanDestination:
+		if d.discoveryScan == nil {
+			return true, errors.New("server: PAM discovery worker unavailable")
+		}
+		return true, d.discoveryScan(ctx, m)
 	case m.Destination == dynamicSecretIssueDestination:
 		err := d.issueDynamicSecret(ctx, m)
 		if d.afterDynamicSecretDelivery != nil {
@@ -226,6 +234,12 @@ func (d *secretIntegrationOutboxDispatcher) dynamicProvidersForTenant(tenantID s
 // in its response body, and neither the event log nor PostgreSQL may retain that
 // text (AN-8).
 func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) (handled bool, err error) {
+	if m.Destination == pamdiscovery.ScanDestination {
+		if d.discoveryScanFailure == nil {
+			return true, errors.New("server: PAM discovery failure worker unavailable")
+		}
+		return true, d.discoveryScanFailure(ctx, m)
+	}
 	const terminal = "external delivery exhausted its retry budget"
 	switch {
 	case m.Destination == store.SecretScopedSyncDeleteDestination:

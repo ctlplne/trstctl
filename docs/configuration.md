@@ -4163,3 +4163,10 @@ The normal approval and ownership-readiness checks still apply. Upgrade relays
 before using named schedules; a report that omits the name can settle only the
 legacy `default` schedule. The provider credential stays a per-attempt vault
 reference, and the control plane never dials either provider.
+
+Privileged account discovery reads use their own bounded
+`outbox.pam_discovery` pool (two workers and a queue of 64 by default).
+A slow directory read does not borrow connector, secret issuance or notification
+workers. A tenant/source admits one queued discovery at a time; HTTP 409 names an
+already pending scan. Read failures are retained on the run with a closed class,
+and the outbox retains delivery progress independently.
