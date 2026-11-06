@@ -12,6 +12,7 @@ import (
 	"net"
 	"strings"
 
+	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/agent/desktop"
 	"trstctl.com/trstctl/internal/crypto/rdp"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -22,7 +23,7 @@ func serveDesktop(parent context.Context, client net.Conn, raw []byte, intent Se
 		return errors.New("accessgateway: desktop route unavailable")
 	}
 	defer secret.Wipe(raw)
-	username, held, err := parseDesktopCredential(raw)
+	username, held, err := parseDesktopCredentialForBinding(raw, *intent.Desktop)
 	secret.Wipe(raw)
 	if err != nil {
 		return err
@@ -129,13 +130,20 @@ func (r *sessionRecorder) writeContext(ctx context.Context, f frame) error {
 }
 
 func parseDesktopCredential(raw []byte) (string, *secret.Buffer, error) {
+	return parseDesktopCredentialForBinding(raw, accessdesktop.Binding{})
+}
+func parseDesktopCredentialForBinding(raw []byte, binding accessdesktop.Binding) (string, *secret.Buffer, error) {
 	var c struct {
+		BindDN   string           `json:"bind_dn"`
 		Username string           `json:"username"`
 		Password secret.JSONBytes `json:"password"`
 	}
 	defer func() { secret.Wipe(c.Password) }()
 	if len(raw) > 64<<10 || json.Unmarshal(raw, &c) != nil || c.Username == "" || len(c.Username) > 128 || strings.ContainsAny(c.Username, "\x00\r\n") || len(c.Password) == 0 || len(c.Password) > 1024 || bytes.IndexByte(c.Password, 0) >= 0 {
 		return "", nil, errors.New("accessgateway: invalid vaulted desktop credential")
+	}
+	if !binding.PermitsAccount(c.BindDN, c.Username) {
+		return "", nil, errors.New("accessgateway: desktop credential does not match its reviewed account")
 	}
 	held, err := secret.NewFrom(c.Password)
 	return c.Username, held, err

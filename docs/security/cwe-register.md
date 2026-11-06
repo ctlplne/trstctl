@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2661 annotated sites across 31 rules. Each row is
+2662 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1455` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1461` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1208,7 +1208,7 @@ not this file.
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
-| `internal/server/pam_desktop_served_test.go:134` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
+| `internal/server/pam_desktop_served_test.go:173` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
 | `internal/server/pam_gateway_aws_console_standin_test.go:122` | native federation protocol returns its owned issued sign-in token (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:110` | owned Graph addPassword protocol fixture; secret response bytes are wiped and held locked (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
@@ -1547,11 +1547,11 @@ not this file.
 | `internal/server/pam_command_mongo_served_test.go:72` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:84` | fixed lab SSH daemon and test-owned configuration; no shell or credential arguments (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:303` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:312` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:378` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:389` | drops only the exact database this test created, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:95` | fixed lab SSH daemon and test-owned configuration; no shell or credential arguments (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:343` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:352` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:418` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:429` | drops only the exact database this test created, no shell (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:32` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1735,7 +1735,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2564` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2999` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3000` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1805,7 +1805,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (686 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (687 sites)
 
 | Location | Reason |
 |---|---|
@@ -2303,7 +2303,8 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:175` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:179` | what the launched agent wrote in the test's temp dir (CWE-22) |
-| `internal/server/pam_desktop_served_test.go:346` | unique owned task file under fixed lab account home (CWE-22) |
+| `internal/server/pam_desktop_served_test.go:168` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
+| `internal/server/pam_desktop_served_test.go:386` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |
@@ -2350,8 +2351,8 @@ not this file.
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:1581` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2926` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3003` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2927` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3004` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
@@ -2599,7 +2600,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3009` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3010` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2784,7 +2785,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (137 sites)
+### G703 — CWE-22 Path traversal (taint) (138 sites)
 
 | Location | Reason |
 |---|---|
@@ -2865,6 +2866,7 @@ not this file.
 | `internal/server/enrollment_relay_served_test.go:54` | the parent test supplies a freshly created public-CA fixture path to this helper process (CWE-22). |
 | `internal/server/pam_agent_launcher_served_test.go:38` | the launched agent writes beside the path its own test named (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:47` | the launched agent writes beside the path its own test named (CWE-22) |
+| `internal/server/pam_desktop_served_test.go:168` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |

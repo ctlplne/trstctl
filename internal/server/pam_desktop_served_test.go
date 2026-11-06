@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -41,6 +42,16 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 		}
 		t.Skip("native Linux desktop served lab not requested")
 	}
+	runNativeDesktopJourney(t, false)
+}
+func TestServedADDesktopA263(t *testing.T) {
+	if os.Getenv("TRSTCTL_AD_DESKTOP_LAB") != "1" {
+		t.Skip("owned Samba-backed desktop not requested")
+	}
+	runNativeDesktopJourney(t, true)
+}
+func runNativeDesktopJourney(t *testing.T, directory bool) {
+	t.Helper()
 	ctx := t.Context()
 	st := nativeDesktopOwnedStore(t)
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -91,6 +102,30 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "pam-desktop", Type: "unix", Addr: "127.0.0.1:2222", AdminUser: "root", PrivateKeyRef: "file:" + keyFile, HostKeyFingerprint: fields[1], AllowedRoles: []string{"desktop/account"}, RoleBindings: map[string]string{"desktop/account": "desktop-proof"}, AllowStaticRotation: true, MaxTTL: "1h"}
+	if directory {
+		pam, err := os.ReadFile("/etc/pam.d/xrdp-sesman")
+		if err != nil || !bytes.Contains(pam, []byte("auth required pam_ldap.so")) || bytes.Contains(pam, []byte("auth required pam_unix.so")) {
+			t.Fatal("AD proof requires LDAP-only target authentication")
+		}
+		state, err := exec.CommandContext(ctx, "/usr/bin/passwd", "-S", "a263-desktop").Output()
+		if err != nil || len(strings.Fields(string(state))) < 2 || strings.Fields(string(state))[1] != "L" {
+			t.Fatal("AD proof requires a locked local password")
+		}
+	}
+	username, fixturePath, bindDN := "desktop-proof", "/run/rdp-password", ""
+	if directory {
+		username, fixturePath, bindDN = "a263-desktop", "/run/ad-desktop-password", "CN=a263-desktop,OU=TrstctlA263,DC=a263,DC=test"
+		admin, err := os.ReadFile("/run/ad-admin-password")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer secret.Wipe(admin)
+		adminPath := filepath.Join(t.TempDir(), "ad-admin")
+		if err = secretfile.Create(adminPath, admin); err != nil {
+			t.Fatal(err)
+		}
+		cfg = config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "pam-desktop", Type: "ldap", DirectoryMode: "active_directory", ADLogonNames: map[string]string{bindDN: username}, Addr: "ad263:636", TLSServerName: "ad263", TLSCARef: "file:/run/ad-ca.pem", BindDN: "CN=Administrator,CN=Users,DC=a263,DC=test", PasswordRef: "file:" + adminPath, UsersDN: "OU=TrstctlA263,DC=a263,DC=test", AllowedRoles: []string{"desktop/account"}, RoleBindings: map[string]string{"desktop/account": bindDN}, AllowStaticRotation: true, MaxTTL: "1h"}
+	}
 	// Decode the public attachment so the pre-feature candidate reaches the API
 	// refusal, rather than failing to compile against a field not yet built.
 	raw, err := json.Marshal(map[string]any{"desktop": map[string]any{"address": "127.0.0.1:3389", "certificate_sha256": strings.TrimSpace(string(pinBytes)), "width": 800, "height": 600, "tls_only": true}})
@@ -114,7 +149,11 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newRoleHarnessNamedWithOwnedStore(t, "role-agent", []string{mtls.AgentRoleGateway}, []string{"access.gateway.session.desktop.v1"}, nil, st, func(d *Deps) {
+	jobKind := accessgateway.KindSessionDesktop
+	if directory {
+		jobKind = accessgateway.KindSessionADDesktop
+	}
+	h := newRoleHarnessNamedWithOwnedStore(t, "role-agent", []string{mtls.AgentRoleGateway}, []string{jobKind}, nil, st, func(d *Deps) {
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		d.ArchiveObjectStore = objects.Open(t)
 		d.AuditSigningKey = audit
@@ -126,15 +165,16 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 		t.Fatal(e)
 	}
 	registrar := seedScopedTokenSubject(t, h.store, h.tenant, "desktop-registrar", "access:read", "access:targets.write", "access:write", "secrets:read", "secrets:write")
-	password, err := os.ReadFile("/run/rdp-password")
+	password, err := os.ReadFile(fixturePath) // #nosec G304 G703 -- one of two fixed owned native fixture credential paths, selected by the test (CWE-22)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer secret.Wipe(password)
 	credential, err := json.Marshal(struct { // #nosec G117 -- byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200)
 		Host, Username string
+		BindDN         string           `json:"bind_dn,omitempty"`
 		Password       secret.JSONBytes `json:"password"`
-	}{Host: "127.0.0.1:2222", Username: "desktop-proof", Password: password})
+	}{Host: "127.0.0.1:2222", Username: username, BindDN: bindDN, Password: password})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +189,7 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/session-requests", registrar, "desktop-wrong-role", badRole); status != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("is not allowed")) {
 		t.Fatalf("actual desktop role denial: %d %s", status, body)
 	}
-	if _, e := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "a263-desktop", Status: "active", Executors: &transport.ExecutorReport{Version: "a263-desktop", Kinds: []transport.ExecutorKind{{Kind: accessgateway.KindSessionDesktop}}}}); e != nil {
+	if _, e := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "a263-desktop", Status: "active", Executors: &transport.ExecutorReport{Version: "a263-desktop", Kinds: []transport.ExecutorKind{{Kind: jobKind}}}}); e != nil {
 		t.Fatal(e)
 	}
 	cert, err := mtls.NewRenewingServerCertificate(h.srv.AgentCACertPEM(), []string{"127.0.0.1"}, func(csr []byte) ([]byte, error) {
@@ -214,7 +254,7 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runDesktopViewerTask(t, ctx, port, password, func(exited <-chan struct{}) {
+	runDesktopViewerTask(t, ctx, port, username, password, func(exited <-chan struct{}) {
 		if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "desktop-terminate", map[string]any{"reason": "desktop proof complete"}); status != http.StatusAccepted {
 			t.Fatalf("terminate desktop: %d %s", status, body)
 		}
@@ -289,7 +329,7 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 
 }
 
-func runDesktopViewerTask(t *testing.T, parent context.Context, port int, password []byte, after func(<-chan struct{})) {
+func runDesktopViewerTask(t *testing.T, parent context.Context, port int, username string, password []byte, after func(<-chan struct{})) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -331,12 +371,12 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, passwo
 	// Wait for the actual user desktop rather than treating RDP transport Ready
 	// as authentication. The independent file is the task's completion evidence.
 	time.Sleep(time.Second)
-	proof := fmt.Sprintf("/home/desktop-proof/approved-gateway-proof-%d", time.Now().UnixNano())
+	proof := fmt.Sprintf("/home/%s/approved-gateway-proof-%d", username, time.Now().UnixNano())
 	defer func() { _ = os.Remove(proof) }()
 	if _, e := tool("windowfocus", window); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := tool("type", "--window", window, "--clearmodifiers", "--delay", "10", "printf approved-desktop-proven > "+proof); e != nil {
+	if _, e := tool("type", "--window", window, "--clearmodifiers", "--delay", "10", "(printf approved-desktop-proven:; id -un) > "+proof); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := tool("key", "--window", window, "Return"); e != nil {
@@ -344,7 +384,7 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, passwo
 	}
 	desktopAwait(t, "approved RDP task readback", func() bool {
 		raw, e := os.ReadFile(proof) // #nosec G304 -- unique owned task file under fixed lab account home (CWE-22)
-		return e == nil && string(raw) == "approved-desktop-proven"
+		return e == nil && string(raw) == "approved-desktop-proven:"+username+"\n"
 	})
 	for _, name := range []string{"cmdline", "environ"} {
 		raw, e := os.ReadFile(fmt.Sprintf("/proc/%d/%s", viewer.Process.Pid, name))

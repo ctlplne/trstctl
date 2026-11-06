@@ -9190,9 +9190,18 @@ closure ends interaction but does not establish target logout. See the
 
 The explicit AD adapter has native Samba stand-in proof for existing-account
 password reset, stock LDAP sign-in, predecessor refusal and lockout-aware checks.
-Its public provider and durable vault rotation are served; approved AD-backed desktop integration is still being built.
+Its public provider, durable vault rotation and approved AD-backed xrdp desktop with signed pixel replay have stand-in proof.
 It conservatively refuses an account with any recorded bad password and does not
 unlock it. A password reset does not end existing LDAP/RDP sessions or Kerberos
 tickets; its observed rejection result covers one DC. No forest replication or
 native Windows qualification is claimed. A failure between the intermediate and
 final password replacements can require administrator recovery.
+
+
+AD-backed desktop proof uses verified LDAP-only PAM and a locked local password;
+it does not qualify a Windows domain join or native NLA login. Account DN/logon
+name bindings are fixed per reviewed role and require the separate AD desktop
+executor. Native directory state checks cover password-rotation verification,
+not cross-session RDP lockout prevention. Existing target sessions/background work
+and Kerberos tickets can survive gateway closure/password reset. Final packaged
+recovery and shared recording-control reproof remain owed.

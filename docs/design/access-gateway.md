@@ -1108,7 +1108,7 @@ Run the owned xrdp lab with `TRSTCTL_DESKTOP_LAB_BASE=<approved-cached-image@sha
 
 The LDAP backend has an explicit `active_directory` mode for existing AD user
 accounts. Public provider configuration and durable vault rotation are served;
-the approved AD-backed desktop journey is the next slice. It does not turn generic `inetOrgPerson` issuance into an AD logon account.
+the approved AD-backed desktop journey is described below. It does not turn generic `inetOrgPerson` issuance into an AD logon account.
 
 The adapter pins verified LDAPS to the configured CA and server name, binds with
 byte-backed credentials, and reads only the exact configured account. It refuses
@@ -1175,5 +1175,45 @@ predecessor preserves the successor that the rotation has already installed.
 two rotations and stock LDAP readback, cross-tenant refusal and no plaintext
 passwords in events. The rerun script now runs this served proof alongside the
 native adapter proof in its isolated domain. This is assisted Samba stand-in
-qualification. Final-image interruption/recovery and the AD-backed approved
-desktop with replay remain owed; ordinary Windows/forest deployment is unverified.
+qualification. Final-image interruption/recovery remains owed; ordinary Windows/forest
+deployment is unverified. The AD-backed desktop proof below is a local stand-in.
+
+
+### Approved AD-backed desktop (A263, Samba and xrdp stand-in)
+
+Add the existing `desktop` route to the explicit AD profile and set
+`ad_logon_names` to a map from every managed account DN to its exact bare RDP
+logon name. Include both members of a configured rotation pair. The `rdp` target
+still names one vaulted `account_secret`, its one allowed role, gateway and fixed
+RDP route/pin. The provider freezes only that role's account identities into the
+session job. The gateway requires the vaulted `bind_dn` and `username` to match
+one frozen identity before starting native authentication. A different role's
+account, changed logon name or missing directory reference is refused.
+
+Enable `access.gateway.session.desktop.ad.v1` in the control plane's
+`agent_channel.claimable_job_kinds`. The named gateway must report this executor
+without missing flags, with its access listener and checked native helper. This
+separate version prevents an older desktop agent from ignoring AD identity fields.
+The existing `access.gateway.session.desktop.v1` continues serving local desktops.
+Live termination recalls both native versions by tenant and persisted session key,
+so changing provider configuration cannot select the wrong recall destination.
+
+The native proof uses Samba AD and xrdp with **LDAP-only PAM authentication**.
+The local Unix password is locked; a limited directory reader locates the account,
+and PAM binds as that account over verified LDAPS. A stock viewer executes a task
+whose independently read file identifies the actual Unix session user. Normal
+approval, tenant/gateway binding, private credential delivery, live termination,
+and signed encrypted pixel replay use the existing served paths. The isolated
+`active-directory.sh` script now reruns native password checks, durable vault
+rotation and this desktop journey. It retains the synthetic replay export and
+public version/policy results, then stops only its own two containers.
+
+This is an LDAP-backed Linux desktop stand-in. It is not a domain-joined Windows
+or NLA qualification. Directory lockout-state inspection currently applies to
+rotation verification; it is not a forest-wide or cross-session RDP lockout
+preflight. Pixel redaction, target logout, surviving background work, current
+Windows/forest interoperability and final paired-image recovery remain outside
+this proof. Shared authorization/recording controls and deferred broad gates
+are owed at FINISH. Docker's default address pools need not be free: the script
+allocates a bounded isolated /28 from 10.254.253.0/24, refusing overlaps; an explicit
+`TRSTCTL_AD_LAB_SUBNET` can select another owned private subnet.

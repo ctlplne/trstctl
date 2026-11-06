@@ -165,6 +165,7 @@ type PAMSSHTarget struct {
 
 type pamService struct {
 	desktopJobEnabled   bool
+	adDesktopJobEnabled bool
 	commandRuleJobKinds map[string]bool
 	store               *store.Store
 	log                 *events.Log
@@ -249,6 +250,7 @@ type pamTargetID struct {
 
 type pamDeps struct {
 	DesktopJobEnabled   bool
+	ADDesktopJobEnabled bool
 	CommandRuleJobKinds map[string]bool
 	Config              PAMConfig
 	Store               *store.Store
@@ -342,7 +344,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{desktopJobEnabled: d.DesktopJobEnabled,
+	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled,
 		commandRuleJobKinds: d.CommandRuleJobKinds,
 		browser:             newPAMBrowser(), discovery: newPAMDiscovery(),
 		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
@@ -445,12 +447,12 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 			}
 			if target.TargetType == pamTargetRDP {
 				source, ok := provider.(interface {
-					DynamicSecretGatewayDesktop() (accessdesktop.Binding, error)
+					DynamicSecretGatewayDesktop(string) (accessdesktop.Binding, error)
 				})
 				if !ok {
 					return nil, fmt.Errorf("server: desktop target %q provider has no reviewed route", target.ID)
 				}
-				binding, err := source.DynamicSecretGatewayDesktop()
+				binding, err := source.DynamicSecretGatewayDesktop(target.AllowedRoles[0])
 				if err != nil || binding.Validate() != nil {
 					return nil, fmt.Errorf("server: desktop target %q needs a valid reviewed route", target.ID)
 				}
@@ -874,8 +876,17 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		// extension is refused and it closes the session's connections —
 		// while the upstream credential's revocation proceeds as for any
 		// session.
-		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindForIntent(accessgateway.SessionIntent{TargetType: rec.TargetType, CommandPolicy: rec.CommandPolicy}), accessgateway.JobKey(id), at); err != nil {
-			return api.PAMSession{}, err
+		kinds := []string{accessgateway.KindForPolicy(rec.CommandPolicy)}
+		if rec.TargetType == pamTargetRDP {
+			// Recall by the persisted session key across both native versions. The
+			// provider may have changed since review; reconstructing its identity
+			// binding here can select the wrong job and leave a live desktop open.
+			kinds = []string{accessgateway.KindSessionDesktop, accessgateway.KindSessionADDesktop}
+		}
+		for _, kind := range kinds {
+			if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, kind, accessgateway.JobKey(id), at); err != nil {
+				return api.PAMSession{}, err
+			}
 		}
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMSessionRevocationRequested, projections.PAMSessionRevocationRequested{

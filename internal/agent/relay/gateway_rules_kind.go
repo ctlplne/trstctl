@@ -23,6 +23,9 @@ func IsCommandRulesSession(kind string) bool {
 // KindAccessGatewayDesktopSession requires the native desktop executor.
 const KindAccessGatewayDesktopSession = "access.gateway.session.desktop.v1"
 
+// KindAccessGatewayADDesktopSession enforces reviewed AD account identities.
+const KindAccessGatewayADDesktopSession = "access.gateway.session.desktop.ad.v1"
+
 func IsAccessGatewaySession(kind string) bool {
-	return kind == KindAccessGatewaySession || kind == KindAccessGatewayDesktopSession || IsCommandRulesSession(kind)
+	return kind == KindAccessGatewaySession || kind == KindAccessGatewayDesktopSession || kind == KindAccessGatewayADDesktopSession || IsCommandRulesSession(kind)
 }

@@ -731,7 +731,7 @@ func readPreface(conn net.Conn) (string, error) {
 func (g *Gateway) claimableKinds() []string {
 	out := ClaimableKinds()
 	if g.cfg.DesktopHelper != "" {
-		out = append(out, KindSessionDesktop)
+		out = append(out, KindSessionDesktop, KindSessionADDesktop)
 	}
 	return out
 }

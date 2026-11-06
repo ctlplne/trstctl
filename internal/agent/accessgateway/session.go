@@ -27,6 +27,7 @@ const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession                = relay.KindAccessGatewaySession
 	KindSessionDesktop         = relay.KindAccessGatewayDesktopSession
+	KindSessionADDesktop       = relay.KindAccessGatewayADDesktopSession
 	KindSessionRules           = relay.KindAccessGatewayRulesSession
 	KindSessionSSHRules        = relay.KindAccessGatewaySSHRulesSession
 	KindSessionMySQLRules      = relay.KindAccessGatewayMySQLRulesSession
@@ -271,7 +272,7 @@ func KindForPolicy(p *accessrules.Policy) string {
 }
 func MatchesSessionJob(kind string, in SessionIntent) bool {
 	if in.TargetType == TargetRDP {
-		return kind == KindSessionDesktop
+		return kind == KindForIntent(in)
 	}
 	return kind == KindForPolicy(in.CommandPolicy)
 }
@@ -279,6 +280,9 @@ func MatchesSessionJob(kind string, in SessionIntent) bool {
 // KindForIntent keeps native desktop work away from legacy gateways.
 func KindForIntent(in SessionIntent) string {
 	if in.TargetType == TargetRDP {
+		if in.Desktop != nil && in.Desktop.AccountKind == "active_directory" {
+			return KindSessionADDesktop
+		}
 		return KindSessionDesktop
 	}
 	return KindForPolicy(in.CommandPolicy)

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"username\":\"approved\",\"bind_dn\":\"CN=approved,OU=services,DC=example,DC=test\",\"password\":\"owned-fuzz\"}")

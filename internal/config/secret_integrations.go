@@ -156,9 +156,10 @@ type DynamicSecretProviderConfig struct {
 	KubernetesTLSServerName string `json:"kubernetes_tls_server_name,omitempty"`
 	// BindDN and UsersDN are the LDAP provider's administrator and the
 	// container its leased entries are created in (A239).
-	DirectoryMode string `json:"directory_mode,omitempty"`
-	BindDN        string `json:"bind_dn,omitempty"`
-	UsersDN       string `json:"users_dn,omitempty"`
+	DirectoryMode string            `json:"directory_mode,omitempty"`
+	ADLogonNames  map[string]string `json:"ad_logon_names,omitempty"`
+	BindDN        string            `json:"bind_dn,omitempty"`
+	UsersDN       string            `json:"users_dn,omitempty"`
 	// TLSCARef pins a private CA and TLSServerName names the certificate the
 	// A239 providers verify; AllowPlaintext permits an unencrypted connection
 	// to a literal loopback or private IP only.
@@ -800,6 +801,9 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		}
 	}
 	if c.Desktop != nil {
+		if c.Desktop.AccountKind != "" || len(c.Desktop.Accounts) != 0 {
+			errs = append(errs, fmt.Errorf("%s desktop account identities are derived from the provider's reviewed AD role, use ad_logon_names", where))
+		}
 		if (c.Type != "unix" && c.Type != "windows" && c.Type != "ldap") || !c.AllowStaticRotation {
 			errs = append(errs, fmt.Errorf("%s desktop needs a static-rotation unix, windows or ldap provider", where))
 		}
@@ -1210,7 +1214,7 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if !tlsProviderTypes[c.Type] && (c.TLSCARef != "" || c.TLSServerName != "" || c.AllowPlaintext) {
 		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
 	}
-	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "" || c.DirectoryMode != "") {
+	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "" || c.DirectoryMode != "" || len(c.ADLogonNames) != 0) {
 		errs = append(errs, fmt.Errorf("%s bind_dn, users_dn and directory_mode are only valid for ldap", where))
 	}
 	if c.Type != "totp" && (c.SeedRef != "" || c.Digits != 0 || c.Period != "" || c.Algorithm != "") {
@@ -2268,6 +2272,33 @@ func validateLDAPProvider(where string, c DynamicSecretProviderConfig) []error {
 		errs = append(errs, fmt.Errorf("%s directory_mode is empty for generic LDAP or active_directory", where))
 	}
 	if c.DirectoryMode == "active_directory" {
+		if c.Desktop != nil {
+			refs := map[string]bool{}
+			for role, dn := range c.RoleBindings {
+				if pair, ok := c.RotationAccounts[role]; ok {
+					for _, ref := range pair {
+						refs[ref] = true
+					}
+				} else {
+					refs[dn] = true
+				}
+			}
+			for ref := range refs {
+				name := c.ADLogonNames[ref]
+				identity := *c.Desktop
+				identity.AccountKind = "active_directory"
+				identity.Accounts = []accessdesktop.BoundAccount{{Reference: ref, Username: name}}
+				if identity.Validate() != nil {
+					errs = append(errs, fmt.Errorf("%s ad_logon_names needs a bare RDP logon name for every bound account", where))
+				}
+			}
+			for ref := range c.ADLogonNames {
+				if !refs[ref] {
+					errs = append(errs, fmt.Errorf("%s ad_logon_names names an account outside the role bindings", where))
+				}
+			}
+		}
+
 		if !c.AllowStaticRotation || c.AllowPlaintext {
 			errs = append(errs, fmt.Errorf("%s active_directory requires allow_static_rotation and verified LDAPS; plaintext is forbidden", where))
 		}
@@ -2295,6 +2326,9 @@ func validateLDAPProvider(where string, c DynamicSecretProviderConfig) []error {
 		if err := validateCredentialRef(c.TLSCARef); err != nil {
 			errs = append(errs, fmt.Errorf("%s tls_ca_ref: %w", where, err))
 		}
+	}
+	if len(c.ADLogonNames) != 0 && (c.DirectoryMode != "active_directory" || c.Desktop == nil) {
+		errs = append(errs, fmt.Errorf("%s ad_logon_names requires an active_directory desktop profile", where))
 	}
 	errs = append(errs, validateProviderTransport(where, c)...)
 	return append(errs, validateRoleBindingsCoverRoles(where, c)...)

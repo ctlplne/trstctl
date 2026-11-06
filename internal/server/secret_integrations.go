@@ -221,6 +221,11 @@ type configuredDynamicProvider struct {
 // constructor part of buildRunDeps' production call graph.
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
 	if cfg.DirectoryMode == "active_directory" {
+		names := make(map[string]string, len(cfg.ADLogonNames))
+		for ref, name := range cfg.ADLogonNames {
+			names[ref] = name
+		}
+		cfg.ADLogonNames = names
 		bindings := make(map[string]string, len(cfg.RoleBindings))
 		for role, dn := range cfg.RoleBindings {
 			bindings[role] = dn
@@ -241,6 +246,7 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 
 	if cfg.Desktop != nil {
 		binding := *cfg.Desktop
+		binding.Accounts = append([]accessdesktop.BoundAccount(nil), binding.Accounts...)
 		cfg.Desktop = &binding
 	}
 	if cfg.Console != nil {
@@ -1953,9 +1959,25 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayConsole() (accessconsole
 }
 
 // DynamicSecretGatewayDesktop returns the reviewed route by value.
-func (p *configuredDynamicProvider) DynamicSecretGatewayDesktop() (accessdesktop.Binding, error) {
+func (p *configuredDynamicProvider) DynamicSecretGatewayDesktop(role string) (accessdesktop.Binding, error) {
 	if p.cfg.Desktop == nil || (p.cfg.Type != "unix" && p.cfg.Type != "windows" && p.cfg.Type != "ldap") || !p.cfg.AllowStaticRotation {
 		return accessdesktop.Binding{}, errors.New("provider needs a reviewed static desktop account binding")
 	}
-	return *p.cfg.Desktop, nil
+	binding := *p.cfg.Desktop
+	binding.Accounts = append([]accessdesktop.BoundAccount(nil), binding.Accounts...)
+	if p.cfg.DirectoryMode == "active_directory" {
+		if !p.allowedRoles[role] {
+			return accessdesktop.Binding{}, errors.New("desktop role is not allowed")
+		}
+		refs := []string{p.cfg.RoleBindings[role]}
+		if pair, ok := p.cfg.RotationAccounts[role]; ok {
+			refs = append([]string(nil), pair...)
+		}
+		binding.AccountKind = "active_directory"
+		binding.Accounts = nil
+		for _, ref := range refs {
+			binding.Accounts = append(binding.Accounts, accessdesktop.BoundAccount{Reference: ref, Username: p.cfg.ADLogonNames[ref]})
+		}
+	}
+	return binding, binding.Validate()
 }

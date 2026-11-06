@@ -264,12 +264,12 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 					continue
 				}
 				source, ok := provider.(interface {
-					DynamicSecretGatewayDesktop() (accessdesktop.Binding, error)
+					DynamicSecretGatewayDesktop(string) (accessdesktop.Binding, error)
 				})
 				if !ok {
 					continue
 				}
-				binding, e := source.DynamicSecretGatewayDesktop()
+				binding, e := source.DynamicSecretGatewayDesktop(rec.Role)
 				if e != nil {
 					return accessgateway.SessionIntent{}, e
 				}

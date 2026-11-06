@@ -40,3 +40,20 @@ func TestDesktopJobsAreNotClaimedWithoutConfiguredNativeHelper(t *testing.T) {
 		}
 	}
 }
+
+func TestADDesktopCannotUseLegacyNativeExecutor(t *testing.T) {
+	raw := []byte(`{"session_id":"ad-session","target_id":"ad-target","target_type":"rdp","required_agent_id":"gateway","expires_at":"2090-01-01T00:00:00Z","ticket_digest":"digest","credential_ref":"credential","desktop":{"address":"desktop.example:3389","certificate_sha256":"abababababababababababababababababababababababababababababababab","width":800,"height":600,"account_kind":"active_directory","accounts":[{"reference":"CN=approved,DC=example,DC=test","username":"approved"}]}}`)
+	var intent SessionIntent
+	if json.Unmarshal(raw, &intent) != nil {
+		t.Fatal("invalid fixture")
+	}
+	intent.TicketDigest = TicketDigest("public-ad-fixture-ticket")
+	intent.CredentialRef = CredentialRef(intent.SessionID)
+	intent.ExpiresAt = time.Now().Add(time.Minute)
+	if err := ValidateSessionIntent(intent); err != nil {
+		t.Fatal("invalid AD session fixture:", err)
+	}
+	if MatchesSessionJob(KindSessionDesktop, intent) || KindForIntent(intent) != "access.gateway.session.desktop.ad.v1" {
+		t.Fatal("a legacy desktop executor can bypass the AD account binding")
+	}
+}
