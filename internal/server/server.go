@@ -1288,6 +1288,10 @@ func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator, s
 // privacy erasure preparation leaves the affected commands fenced and is
 // logged, not fatal; any other failure stops Build.
 func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchestrator.Orchestrator) error {
+	if _, err := orch.ReconcileCloudMachineChanges(ctx); err != nil {
+		return fmt.Errorf("server: recover cloud machine changes: %w", err)
+	}
+
 	if healed, err := orch.ReconcilePendingAgentRemovals(ctx); err != nil {
 		if !errors.Is(err, store.ErrPrivacySubjectErasurePreparationActive) {
 			return fmt.Errorf("server: reconcile agent removal commands: %w", err)
@@ -1619,6 +1623,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	}
 	s.slack = slackApp
 	defaults := s.baseAPIOptions(d, ea)
+	defaults = append(defaults, api.WithCloudMachineChanges(s))
 	if d.AuditSigningKey != nil {
 		defaults = append(defaults, api.WithPQCCampaignClosureSigner(d.AuditSigningKey))
 	}
@@ -3270,6 +3275,7 @@ type outboxDispatchFamily struct {
 
 var outboxDispatchFamilies = func() []outboxDispatchFamily {
 	named := []outboxDispatchFamily{
+		{pool: bulkhead.SubsystemOutboxCloudMachine, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"cloud.machine."}}},
 		{pool: bulkhead.SubsystemOutboxExternalCA, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"external-ca."}}},
 		{pool: bulkhead.SubsystemOutboxConnectors, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}}},
 		{pool: bulkhead.SubsystemOutboxSecrets, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"dynsecret."}}},
@@ -3488,6 +3494,10 @@ func (s *Server) RunApplicationSecretMutationReconciler(ctx context.Context) {
 
 func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 	if s.orch != nil {
+		if _, err := s.orch.ReconcileCloudMachineChanges(ctx); err != nil && s.logger != nil {
+			s.logger.Warn("cloud machine change recovery incomplete", slog.String("error", err.Error()))
+		}
+
 		if healed, err := s.orch.ReconcilePendingAgentRemovals(ctx); err != nil {
 			if s.logger != nil {
 				s.logger.Warn("agent removal recovery sweep incomplete", slog.String("error", err.Error()))

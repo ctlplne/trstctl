@@ -87,17 +87,19 @@ type Escalation struct {
 	Confidence string `json:"confidence"`
 }
 type Assessment struct {
-	CapturedInput Input           `json:"captured_input"`
-	InputSHA256   string          `json:"input_sha256"`
-	Version       int             `json:"version"`
-	Provider      string          `json:"provider"`
-	CollectedAt   time.Time       `json:"collected_at"`
-	Identity      awsiam.Identity `json:"identity"`
-	Evaluations   []Evaluation    `json:"evaluations"`
-	Keys          []KeyFinding    `json:"keys"`
-	Escalation    []Escalation    `json:"self_escalation_candidates"`
-	ActivityStart time.Time       `json:"activity_window_start,omitempty"`
-	ActivityEnd   time.Time       `json:"activity_window_end,omitempty"`
-	RiskScore     int             `json:"risk_score"`
-	Limitations   []string        `json:"limitations"`
+	SourceOrigin      string          `json:"source_origin,omitempty"`
+	SourceFingerprint string          `json:"source_fingerprint,omitempty"`
+	CapturedInput     Input           `json:"captured_input"`
+	InputSHA256       string          `json:"input_sha256"`
+	Version           int             `json:"version"`
+	Provider          string          `json:"provider"`
+	CollectedAt       time.Time       `json:"collected_at"`
+	Identity          awsiam.Identity `json:"identity"`
+	Evaluations       []Evaluation    `json:"evaluations"`
+	Keys              []KeyFinding    `json:"keys"`
+	Escalation        []Escalation    `json:"self_escalation_candidates"`
+	ActivityStart     time.Time       `json:"activity_window_start,omitempty"`
+	ActivityEnd       time.Time       `json:"activity_window_end,omitempty"`
+	RiskScore         int             `json:"risk_score"`
+	Limitations       []string        `json:"limitations"`
 }

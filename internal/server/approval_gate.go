@@ -242,6 +242,15 @@ func (r storeApprovalRecorder) ValidateApprovalRequest(ctx context.Context, tena
 		decision.ExpectedAction != "" && decision.ExpectedAction != request.Action {
 		return api.ApprovalRequestRecord{}, store.ErrApprovalDigestMismatch
 	}
+	if request.ResourceKind == "cloud_machine" {
+		plan, err := r.store.GetCloudMachineChange(ctx, tenantID, request.ResourceID)
+		if err != nil {
+			return api.ApprovalRequestRecord{}, err
+		}
+		if plan.State != "awaiting_approval" || plan.ApprovalRequestID != request.ID || plan.IntentDigest != request.IntentDigest || plan.Intent.Action != request.Action || !time.Now().Before(plan.ExpiresAt) {
+			return api.ApprovalRequestRecord{}, store.ErrApprovalDrifted
+		}
+	}
 	if request.ResourceKind == "pam_command" {
 		id, ok := strings.CutPrefix(request.ResourceID, "pam-command:")
 		if !ok {

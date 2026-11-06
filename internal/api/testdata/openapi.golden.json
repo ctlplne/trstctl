@@ -7535,7 +7535,9 @@
               "delete",
               "managedkey:rotate",
               "managedkey:revoke",
-              "managedkey:zeroize"
+              "managedkey:zeroize",
+              "revoke_key",
+              "tighten_policy"
             ],
             "type": "string"
           },
@@ -15723,6 +15725,245 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "CloudMachineChange": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/CloudMachineChangeIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CloudMachineChangeResult"
+          },
+          "state": {
+            "enum": [
+              "awaiting_approval",
+              "queued",
+              "verified",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "intent",
+          "state",
+          "approval_request_id",
+          "intent_digest",
+          "requested_by",
+          "created_at",
+          "updated_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "CloudMachineChangeIntent": {
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "revoke_key",
+              "tighten_policy"
+            ],
+            "type": "string"
+          },
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "ca_pem": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "finding_fingerprint": {
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "policy_document": {
+            "description": "Exact proposed public IAM policy JSON bytes",
+            "format": "byte",
+            "type": "string"
+          },
+          "policy_name": {
+            "type": "string"
+          },
+          "policy_sha256": {
+            "type": "string"
+          },
+          "principal_arn": {
+            "type": "string"
+          },
+          "principal_id": {
+            "type": "string"
+          },
+          "principal_kind": {
+            "type": "string"
+          },
+          "principal_name": {
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "source_fingerprint": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "writer_session_file_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "source_id",
+          "finding_id",
+          "finding_fingerprint",
+          "source_fingerprint",
+          "principal_arn",
+          "principal_id",
+          "principal_kind",
+          "principal_name",
+          "endpoint",
+          "region",
+          "writer_session_file_ref",
+          "reason",
+          "required_approvals"
+        ],
+        "type": "object"
+      },
+      "CloudMachineChangeList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CloudMachineChange"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
+      "CloudMachineChangeRequest": {
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "revoke_key",
+              "tighten_policy"
+            ],
+            "type": "string"
+          },
+          "evaluation_index": {
+            "type": "integer"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "writer_session_file_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "action",
+          "writer_session_file_ref",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "CloudMachineChangeResult": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "effect_uncertain": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "key_absent": {
+            "type": "boolean"
+          },
+          "policy_matches": {
+            "type": "boolean"
+          },
+          "postcondition": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked_at"
         ],
         "type": "object"
       },
@@ -42561,7 +42802,9 @@
               "delete",
               "managedkey:rotate",
               "managedkey:revoke",
-              "managedkey:zeroize"
+              "managedkey:zeroize",
+              "revoke_key",
+              "tighten_policy"
             ],
             "type": "string"
           },
@@ -42610,7 +42853,8 @@
               "secret",
               "managed_key",
               "code_signing",
-              "ephemeral"
+              "ephemeral",
+              "cloud_machine"
             ],
             "type": "string"
           },
@@ -71696,6 +71940,247 @@
         "summary": "Plan a reviewed configuration change set: validate it, check every object's permission, and list exactly what applying it would do",
         "x-trstctl-permission": "changes:write",
         "x-trstctl-read-only": true
+      }
+    },
+    "/api/v1/cloud-entitlements/changes": {
+      "get": {
+        "operationId": "listCloudMachineChanges",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "finding_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudMachineChangeList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List captured cloud machine change intents and native results",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "proposeCloudMachineChange",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudMachineChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudMachineChange"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Propose one exact reviewed cloud machine change",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/cloud-entitlements/changes/{id}": {
+      "get": {
+        "operationId": "getCloudMachineChange",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudMachineChange"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one cloud machine change and its native postcondition",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/cloud-entitlements/changes/{id}/execute": {
+      "post": {
+        "operationId": "executeCloudMachineChange",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudMachineChange"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Consume exact human approval and queue the captured cloud intent",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/code-signing/identities": {

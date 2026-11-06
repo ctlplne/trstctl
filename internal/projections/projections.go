@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/cloudentitlements/change"
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
 
@@ -5280,6 +5281,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMCommandReviewDecided:                  {1: true},
 	EventPAMTemplateDeleted:                       {1: true},
 	EventPAMAutoApprovalRuleSaved:                 {1: true},
+	EventCloudMachineChangeProposed:               {1: true},
+	EventCloudMachineChangeProgressed:             {1: true},
 	EventPAMAutoApprovalRuleDeleted:               {1: true},
 	EventPAMAutoApprovalEvaluated:                 {1: true},
 	EventPAMAutoApprovalApplied:                   {1: true},
@@ -8701,6 +8704,45 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
 			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, CommandRules: pl.CommandRules,
 			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventCloudMachineChangeProposed:
+		var pl CloudMachineChangeProposed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		r := pl.Record
+		if r.ID == "" || r.TenantID != e.TenantID || r.State != change.AwaitingApproval || r.ApprovalRequestID == "" || r.IntentDigest == "" || r.RequestedBy == "" || r.CreatedAt.IsZero() || !r.ExpiresAt.After(r.CreatedAt) {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if _, err := change.Digest(r.Intent); err != nil {
+			return err
+		}
+		return p.store.ApplyCloudMachineChangeProposedTx(ctx, tx, e.TenantID, r, e.Sequence)
+	case EventCloudMachineChangeProgressed:
+		var pl CloudMachineChangeProgressed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || !change.ValidState(pl.State) || pl.State == change.AwaitingApproval || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		current, err := p.store.GetCloudMachineChangeTx(ctx, tx, e.TenantID, pl.ID)
+		if err != nil {
+			return err
+		}
+		if e.Sequence <= current.EventSequence {
+			return nil
+		}
+		if pl.State == change.Queued {
+			if pl.Approval == nil || pl.Approval.ResourceKind != "cloud_machine" || pl.Approval.ResourceID != pl.ID || pl.Approval.Action != current.Intent.Action || pl.Approval.RequestID != current.ApprovalRequestID || pl.Approval.IntentDigest != current.IntentDigest {
+				return fmt.Errorf("projections: cloud change has no exact approval")
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time); err != nil {
+				return err
+			}
+		} else if pl.Result == nil || current.State != change.Queued {
+			return fmt.Errorf("projections: cloud change has no queued native result")
+		}
+		return p.store.ApplyCloudMachineChangeProgressedTx(ctx, tx, e.TenantID, pl.ID, pl.State, pl.Result, e.Sequence, pl.At)
 	case EventPAMAutoApprovalRuleSaved:
 		var pl PAMAutoApprovalRuleSaved
 		if err := decode(e, &pl); err != nil {

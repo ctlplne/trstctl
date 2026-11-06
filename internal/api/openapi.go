@@ -171,6 +171,9 @@ func managedKeyAcceptedResponse() Response {
 // endpoint itself is omitted from the documented paths.
 func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	schemas := componentSchemas()
+	for name, schema := range cloudMachineChangeSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range customerAssuranceSchemas() {
 		schemas[name] = schema
 	}
@@ -1195,10 +1198,10 @@ func componentSchemas() map[string]*Schema {
 	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items", "runs", "sessions")
 
 	operationApprovalStatuses := []string{"pending", "approved", "denied", "expired", "superseded", "consumed"}
-	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral"}
+	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral", "cloud_machine"}
 	operationApprovalActions := []string{
 		"issue", "create", "rotate", "revoke", "sign", "recover", "delete",
-		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize",
+		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy",
 	}
 	approvalReq := object(map[string]*Schema{
 		"action":        {Type: "string", Enum: identityApprovalActions},

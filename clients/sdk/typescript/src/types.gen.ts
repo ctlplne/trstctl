@@ -3245,6 +3245,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cloud-entitlements/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List captured cloud machine change intents and native results */
+        get: operations["listCloudMachineChanges"];
+        put?: never;
+        /** Propose one exact reviewed cloud machine change */
+        post: operations["proposeCloudMachineChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud-entitlements/changes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one cloud machine change and its native postcondition */
+        get: operations["getCloudMachineChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud-entitlements/changes/{id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consume exact human approval and queue the captured cloud intent */
+        post: operations["executeCloudMachineChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/identities": {
         parameters: {
             query?: never;
@@ -13115,7 +13167,7 @@ export interface components {
         };
         ApprovalDecision: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -15381,6 +15433,80 @@ export interface components {
                 name: string;
                 spec: unknown;
             }[];
+        };
+        CloudMachineChange: {
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            intent: components["schemas"]["CloudMachineChangeIntent"];
+            intent_digest: string;
+            requested_by: string;
+            result?: components["schemas"]["CloudMachineChangeResult"];
+            /** @enum {string} */
+            state: "awaiting_approval" | "queued" | "verified" | "failed";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CloudMachineChangeIntent: {
+            access_key_id?: string;
+            /** @enum {string} */
+            action: "revoke_key" | "tighten_policy";
+            allow_private_endpoint?: boolean;
+            ca_pem?: string;
+            endpoint: string;
+            finding_fingerprint: string;
+            /** Format: uuid */
+            finding_id: string;
+            /**
+             * Format: byte
+             * @description Exact proposed public IAM policy JSON bytes
+             */
+            policy_document?: string;
+            policy_name?: string;
+            policy_sha256?: string;
+            principal_arn: string;
+            principal_id: string;
+            principal_kind: string;
+            principal_name: string;
+            private_egress_cidrs?: string[];
+            reason: string;
+            region: string;
+            required_approvals: number;
+            source_fingerprint: string;
+            /** Format: uuid */
+            source_id: string;
+            writer_session_file_ref: string;
+        };
+        CloudMachineChangeList: {
+            items: components["schemas"]["CloudMachineChange"][];
+            next_cursor: string;
+        };
+        CloudMachineChangeRequest: {
+            access_key_id?: string;
+            /** @enum {string} */
+            action: "revoke_key" | "tighten_policy";
+            evaluation_index?: number;
+            /** Format: uuid */
+            finding_id: string;
+            reason: string;
+            required_approvals?: number;
+            writer_session_file_ref: string;
+        };
+        CloudMachineChangeResult: {
+            /** Format: date-time */
+            checked_at: string;
+            effect_uncertain?: boolean;
+            error?: string;
+            key_absent?: boolean;
+            policy_matches?: boolean;
+            postcondition?: string;
         };
         CloudSecretManagerIntegration: {
             architecture_controls: string[];
@@ -22530,7 +22656,7 @@ export interface components {
         };
         PendingApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
             approval_count: number;
             /** Format: date-time */
             created_at: string;
@@ -22546,7 +22672,7 @@ export interface components {
             required_approvals: number;
             resource_id: string;
             /** @enum {string} */
-            resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral";
+            resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine";
             resource_name: string;
             /** @enum {string} */
             status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
@@ -35963,6 +36089,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangePlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCloudMachineChanges: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                finding_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMachineChangeList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    proposeCloudMachineChange: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMachineChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMachineChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCloudMachineChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMachineChange"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    executeCloudMachineChange: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMachineChange"];
                 };
             };
             /** @description client error */

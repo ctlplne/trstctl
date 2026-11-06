@@ -69,6 +69,11 @@ func (d *issuanceDispatcher) executeCloudMachineEntitlementRun(ctx context.Conte
 			failures = append(failures, err.Error())
 			continue
 		}
+		value.SourceOrigin = endpoint
+		value.SourceFingerprint, err = assessment.SourceFingerprint(cfg)
+		if err != nil {
+			return report, "", "", err
+		}
 		raw, err := json.Marshal(value)
 		if err != nil {
 			return report, "", "", err

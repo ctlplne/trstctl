@@ -67,6 +67,11 @@ func (s *captureSession) identity(ctx context.Context, selection Selection) (Ide
 	if len(arn) > 2048 || len(parts) != 6 || parts[0] != "arn" || (parts[1] != "aws" && parts[1] != "aws-us-gov" && parts[1] != "aws-cn") || parts[2] != "iam" || parts[3] != "" || !account(parts[4]) || !strings.HasPrefix(parts[5], strings.ToLower(typ)+"/") || !strings.HasSuffix(parts[5], "/"+selection.Name) {
 		return out, errors.New("returned IAM identity ARN is invalid or differs from selection")
 	}
+	nativeID, err := native.value(typ + "Id")
+	if err != nil || !validateName(nativeID) {
+		return out, errors.New("missing or invalid immutable IAM principal ID")
+	}
+	out.NativeID = nativeID
 	out.Principal = awspolicy.Principal{Kind: selection.Kind, ARN: arn, AccountID: parts[4]}
 	created, err := native.value("CreateDate")
 	if err != nil {

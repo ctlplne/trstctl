@@ -19,6 +19,7 @@ const (
 	// secret, write transparency evidence, or page an operator (AN-7).
 	SubsystemOutboxExternalCA          = "outbox.external_ca"
 	SubsystemOutboxConnectors          = "outbox.connectors"
+	SubsystemOutboxCloudMachine        = "outbox.cloud_machine"
 	SubsystemOutboxSecrets             = "outbox.secrets" // dynamic-secret provider calls
 	SubsystemOutboxSecretSync          = "outbox.secret_sync"
 	SubsystemOutboxManagedKeys         = "outbox.managed_keys"
@@ -100,6 +101,7 @@ func DefaultConfigs() []Config {
 		{Name: SubsystemOutboxExternalCA, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxConnectors, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxSecrets, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxCloudMachine, Workers: 2, Queue: 64},
 		{Name: SubsystemOutboxSecretSync, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxManagedKeys, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxTransparency, Workers: 4, Queue: 256},

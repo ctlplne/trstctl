@@ -93,10 +93,12 @@ policy and activity-log coverage remain unavailable until separately captured.
 
 `bash scripts/labs/cloud-entitlements.sh` uses only the cached pinned LocalStack
 image and stock `awslocal` to seed a disposable fixture. It proves native IAM
-metadata capture, then stops its exact container and retains its private proof
-directory. This is metadata proof; the served discovery/UI/API journey separately proves
-read-only capture and recorded-evidence policy models. LocalStack does not enforce IAM permissions. No live AWS account,
-key replacement, GCP/Azure inventory or whole workflow completion is claimed here.
+metadata capture, approved key deletion and restrictive-policy readback, then
+stops its exact container and retains its private proof directory. The served
+journey also proves distinct human approval, queue rollback recovery, tenant
+isolation and immutable result replay. LocalStack does not enforce IAM
+permissions. Key replacement, GCP/Azure inventory, live cloud enforcement and
+whole-workflow completion remain separate requirements.
 
 
 ## Durable assessment records
@@ -126,3 +128,42 @@ Canonicalization bounds decoded depth to 64, nodes to 100000 and estimated expan
 numeric/string evidence to 1MiB; numeric exponents outside ±4096 are refused. A
 published assessment event remains at most 512KiB. Graph decoding permits 2MiB for
 JSONB formatting/decimal expansion and then enforces canonicalization bounds.
+
+## Reviewed native AWS changes
+
+A fresh native capture includes the IAM `UserId` or `RoleId`, endpoint, and source
+configuration digest. Captures older than 24 hours and older captures without
+these bindings cannot authorize a change. Proposals preserve this public evidence
+and a reference to an operator-approved private STS writer file. They contain no
+credential values. `access:write` plus `discovery:read` can propose; private
+endpoints also require `egress:private`. The human approval queue requires
+`access:approve`; the console reviewer also needs `access:read` to inspect the
+exact intent before its approval button becomes available. A requester cannot
+approve their own proposal. The default quorum is two distinct reviewers; an
+explicit quorum may select one through five.
+
+`revoke_key` deletes only the named captured IAM user key. `tighten_policy` creates
+one separate `trstctl-tighten-…` inline policy with an explicit Deny for one exact
+unused action and resource ARN. Complete recorded activity coverage is required.
+The new Deny applies in **all contexts**; the approval review must account for
+that impact. Existing grants, conditions, and denies remain untouched. A matching
+existing owned policy is a replay; different content under that name is refused.
+
+The approval digest binds the entire intent. Execution is requester-only and
+consumes that exact approval in the same PostgreSQL transaction that projects
+queued state and enqueues the external intent. A separate bounded outbox pool
+performs the IAM operation. Startup and periodic recovery repair retained queue
+and result events after database rollback. The worker checks the source digest,
+execution deadline, and native principal ID, then independently reads the native
+key list or policy. `verified` means that readback matched. It does not prove
+live AWS enforcement or that a workload adopted replacement credentials. An
+unverified native attempt reports `effect_uncertain`; operators must recapture
+and review its current state before another change. There is no blind inverse
+write. IAM's name-based mutation APIs do not offer an atomic principal-ID
+precondition; pre/post ID checks detect replacement, but cannot make that upstream
+operation transactional.
+
+These are historical capture findings. After a verified change, run the source
+again to refresh inventory and graph evidence. Key replacement, repeated workload
+adoption, live AWS enforcement, and GCP/Azure mutation qualification are separate
+requirements and are not implied by a successful native readback.

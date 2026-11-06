@@ -33,6 +33,8 @@ import {
   requesterMatchesPrincipal,
   type ApprovalQueueRow,
 } from "@/lib/approvalQueue";
+import { CloudChangeIntent } from "./discovery/CloudChangeIntent";
+import { getCloudMachineChange } from "@/lib/cloudMachineApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -59,6 +61,15 @@ export function Approvals() {
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalQueueRow | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const cloudReview = useApiQuery(
+    ["cloud-machine-approval", selectedRequest?.resource_id, selectedRequest?.intent_digest],
+    ({ signal }) => getCloudMachineChange(selectedRequest?.resource_id ?? "", signal),
+    { enabled: reviewDialogOpen && selectedRequest?.resource_kind === "cloud_machine" },
+  );
+  const cloudReviewUnavailable =
+    selectedRequest?.resource_kind === "cloud_machine" &&
+    (!cloudReview.data || cloudReview.error || cloudReview.data.intent_digest !== selectedRequest.intent_digest);
+
   const [rejectionOpen, setRejectionOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedIssuance, setSelectedIssuance] = useState<IssuanceRequest | null>(null);
@@ -618,6 +629,12 @@ export function Approvals() {
             </div>
 
             <GenericRequestSummary row={selectedRequest} detailed />
+            {selectedRequest.resource_kind === "cloud_machine" &&
+              (cloudReview.data && !cloudReviewUnavailable ? (
+                <CloudChangeIntent plan={cloudReview.data} />
+              ) : (
+                <ErrorState title={t("discovery.machine.evidenceUnavailable")}>{cloudReview.error ?? t("discovery.machine.loadingChanges")}</ErrorState>
+              ))}
 
             <dl className="grid gap-3 rounded-control border border-border bg-muted/20 p-4 sm:grid-cols-2">
               <ReviewFact label={t("approvals.design.policyResult")} value={t("approvals.design.policyRequired")} />
@@ -693,7 +710,7 @@ export function Approvals() {
                 </Button>
                 <Button
                   type="button"
-                  disabled={busyKey === rowKey(selectedRequest) || requesterMatchesPrincipal(selectedRequest, user)}
+                  disabled={Boolean(cloudReviewUnavailable) || busyKey === rowKey(selectedRequest) || requesterMatchesPrincipal(selectedRequest, user)}
                   aria-describedby={requesterMatchesPrincipal(selectedRequest, user) ? "self-approval-help" : undefined}
                   onClick={() => void approve(selectedRequest)}
                 >
@@ -939,6 +956,10 @@ function actionSummary(row: ApprovalQueueRow): string {
 
 function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "revoke_key":
+      return "discovery.machine.approveRevoke";
+    case "tighten_policy":
+      return "discovery.machine.approveTighten";
     case "issue":
       return "approvals.design.action.issue";
     case "create":
@@ -962,6 +983,9 @@ function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
 
 function consequenceKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "revoke_key":
+    case "tighten_policy":
+      return "discovery.machine.effectHelp";
     case "issue":
       return "approvals.design.consequence.issue";
     case "create":

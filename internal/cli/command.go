@@ -342,6 +342,11 @@ var coreCommandTable = []Command{
 	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a reviewed short-TTL API key"},
 	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable ephemeral JIT request"},
 
+	{Name: []string{"access", "cloud", "changes", "propose"}, Method: "POST", Path: "/api/v1/cloud-entitlements/changes", Body: bodyFile, Summary: "Propose an exact cloud machine key or restrictive policy change for human approval"},
+	{Name: []string{"access", "cloud", "changes", "list"}, Method: "GET", Path: "/api/v1/cloud-entitlements/changes", Query: []string{"limit", "cursor", "finding_id"}, Summary: "List immutable cloud machine intents and native readback results"},
+	{Name: []string{"access", "cloud", "changes", "get"}, Method: "GET", Path: "/api/v1/cloud-entitlements/changes/{id}", Summary: "Read a cloud machine change and approval binding"},
+	{Name: []string{"access", "cloud", "changes", "execute"}, Method: "POST", Path: "/api/v1/cloud-entitlements/changes/{id}/execute", Body: bodyNone, Summary: "Consume exact human approval and queue a cloud machine change"},
+
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
 	{Name: []string{"discovery", "capabilities"}, Method: "GET", Path: "/api/v1/discovery/capabilities", Summary: "List typed discovery source capabilities, prerequisites, and configuration fields"},
 	{Name: []string{"discovery", "plans", "preview"}, Method: "POST", Path: "/api/v1/discovery/plans/preview", Body: bodyFile, Summary: "Validate and normalize a discovery plan without saving or scanning"},

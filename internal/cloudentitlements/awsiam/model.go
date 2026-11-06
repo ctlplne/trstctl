@@ -39,6 +39,7 @@ type Key struct {
 	LastUseCoverage awspolicy.Coverage `json:"last_use_coverage"`
 }
 type Identity struct {
+	NativeID       string              `json:"native_id,omitempty"`
 	Principal      awspolicy.Principal `json:"principal"`
 	Name           string              `json:"name"`
 	Created        time.Time           `json:"created_at"`

@@ -294,6 +294,7 @@ var TenantScopedTables = []string{
 	// A261 part 3: account folders; no foreign keys.
 	"pam_folders",
 	"pam_auto_approval_rules",
+	"cloud_machine_changes",
 	"pam_command_actions",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",

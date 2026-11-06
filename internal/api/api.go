@@ -145,6 +145,7 @@ type API struct {
 	// core workflows that do not depend on the optional native secret store.
 	// The key stays behind the crypto boundary; callers receive only its digest.
 	commandMAC                 func(domain, material []byte) ([]byte, error)
+	cloudChanges               CloudMachineChangeService
 	pam                        PAMService
 	managedKeys                ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	managedKeyCustody          ManagedKeyCustodyConfiguration
@@ -316,6 +317,7 @@ type config struct {
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
 	commandMAC                  func(domain, material []byte) ([]byte, error)
+	cloudChanges                CloudMachineChangeService
 	pam                         PAMService
 	managedKeys                 ManagedKeyService
 	managedKeyCustody           ManagedKeyCustodyConfiguration
@@ -652,6 +654,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
 		commandMAC:                  cfg.commandMAC,
+		cloudChanges:                cfg.cloudChanges,
 		pam:                         cfg.pam,
 		managedKeys:                 cfg.managedKeys,
 		managedKeyCustody:           cfg.managedKeyCustody,
@@ -1722,6 +1725,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.pamCheckoutRoutes()...)         // see pam_checkouts.go
 	routes = append(routes, a.pamAutoApprovalRuleRoutes()...) // see pam_auto_approval_rules.go
 	routes = append(routes, a.pamCommandRuleRoutes()...)
+	routes = append(routes, a.cloudMachineChangeRoutes()...)
 	routes = append(routes, a.pamFolderRoutes()...)       // see pam_folders.go
 	routes = append(routes, a.pamBrowserRoutes()...)      // see pam_browser.go
 	routes = append(routes, a.switchingImportRoutes()...) // see switching_imports.go

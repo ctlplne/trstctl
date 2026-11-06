@@ -74,11 +74,13 @@ func TestAWSIAMXMLBoundariesA264(t *testing.T) {
 }
 func FuzzAWSIAMResponse(f *testing.F) {
 	f.Add([]byte(`<GetUserResponse><GetUserResult><User><UserName>workload</UserName></User></GetUserResult></GetUserResponse>`))
+	f.Add([]byte(`<DeleteAccessKeyResponse><ResponseMetadata><RequestId>owned</RequestId></ResponseMetadata></DeleteAccessKeyResponse>`))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) > maxResponse {
 			return
 		}
 		_, _ = parseResponse(raw, "GetUser")
+		_, _ = parseEnvelope(raw, "DeleteAccessKey", true)
 	})
 }
 func FuzzAWSIAMPolicyDecode(f *testing.F) {

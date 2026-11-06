@@ -4573,6 +4573,88 @@ ChangeSet = TypedDict(
     total=False,
 )
 
+CloudMachineChange = TypedDict(
+    'CloudMachineChange',
+    {
+        'approval_request_id': str,
+        'created_at': str,
+        'expires_at': str,
+        'id': str,
+        'intent': dict[str, Any],
+        'intent_digest': str,
+        'requested_by': str,
+        'result': dict[str, Any],
+        'state': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+CloudMachineChangeIntent = TypedDict(
+    'CloudMachineChangeIntent',
+    {
+        'access_key_id': str,
+        'action': str,
+        'allow_private_endpoint': bool,
+        'ca_pem': str,
+        'endpoint': str,
+        'finding_fingerprint': str,
+        'finding_id': str,
+        'policy_document': str,
+        'policy_name': str,
+        'policy_sha256': str,
+        'principal_arn': str,
+        'principal_id': str,
+        'principal_kind': str,
+        'principal_name': str,
+        'private_egress_cidrs': list[str],
+        'reason': str,
+        'region': str,
+        'required_approvals': int,
+        'source_fingerprint': str,
+        'source_id': str,
+        'writer_session_file_ref': str,
+    },
+    total=False,
+)
+
+CloudMachineChangeList = TypedDict(
+    'CloudMachineChangeList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+CloudMachineChangeRequest = TypedDict(
+    'CloudMachineChangeRequest',
+    {
+        'access_key_id': str,
+        'action': str,
+        'evaluation_index': int,
+        'finding_id': str,
+        'reason': str,
+        'required_approvals': int,
+        'writer_session_file_ref': str,
+    },
+    total=False,
+)
+
+CloudMachineChangeResult = TypedDict(
+    'CloudMachineChangeResult',
+    {
+        'checked_at': str,
+        'effect_uncertain': bool,
+        'error': str,
+        'key_absent': bool,
+        'policy_matches': bool,
+        'postcondition': str,
+    },
+    total=False,
+)
+
 CloudSecretManagerIntegration = TypedDict(
     'CloudSecretManagerIntegration',
     {

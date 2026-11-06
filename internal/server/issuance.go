@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/cloudentitlements/change"
 	"trstctl.com/trstctl/internal/cmdbexport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -347,6 +348,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleConnectorRightSize(ctx, m)
 	case orchestrator.DestinationAgentAuditRetry:
 		return d.handleAgentAuditRetry(ctx, m)
+	case change.Destination:
+		return d.handleCloudMachineChange(ctx, m)
 	case "discovery.run":
 		relayOwned, err := d.discoveryRunRelayOwned(ctx, m)
 		if err != nil {

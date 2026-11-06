@@ -63,6 +63,9 @@ func (e *element) optionalValue(name string) (string, error) {
 	return v.text.String(), nil
 }
 func parseResponse(raw []byte, action string) (*element, error) {
+	return parseEnvelope(raw, action, false)
+}
+func parseEnvelope(raw []byte, action string, allowEmptyResult bool) (*element, error) {
 	if len(raw) > maxResponse {
 		return nil, errors.New("XML byte bound")
 	}
@@ -115,6 +118,14 @@ func parseResponse(raw []byte, action string) (*element, error) {
 	}
 	if len(stack) != 0 || root == nil || root.name != action+"Response" {
 		return nil, errors.New("unexpected XML response root")
+	}
+	if allowEmptyResult {
+		if result, err := root.optional(action + "Result"); err != nil {
+			return nil, err
+		} else if result != nil {
+			return result, nil
+		}
+		return root, nil
 	}
 	return root.child(action + "Result")
 }

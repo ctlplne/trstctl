@@ -1,3 +1,5 @@
+import { getCloudMachineChange } from "@/lib/cloudMachineApi";
+import type { CloudMachineChange } from "@/lib/api-types.gen";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -38,6 +40,11 @@ vi.mock("@/lib/bootstrapApi", async (orig) => {
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
+});
+
+vi.mock("@/lib/cloudMachineApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/cloudMachineApi")>();
+  return { ...actual, getCloudMachineChange: vi.fn() };
 });
 
 function renderAt(path: string) {
@@ -416,6 +423,37 @@ describe("dedicated approvals inbox", () => {
     expect(screen.queryByRole("button", { name: /approve revoke for/i })).not.toBeInTheDocument();
     expect(apiMock.approvalRequests).toHaveBeenCalledTimes(1);
     expect(apiMock.identities).not.toHaveBeenCalled();
+  });
+
+  it("A264 blocks cloud approval until the exact native change intent is visible", async () => {
+    apiMock.approvalRequests.mockResolvedValue([
+      approvalRequest({ resource_kind: "cloud_machine", action: "tighten_policy", resource_id: "cloud-plan", resource_name: "owned-workload" }),
+    ]);
+    let complete!: (value: CloudMachineChange) => void;
+    vi.mocked(getCloudMachineChange).mockReturnValue(
+      new Promise<CloudMachineChange>((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    renderAt("/approvals");
+    expect(await screen.findByRole("heading", { name: "Restrict a captured permission for owned-workload" })).toBeInTheDocument();
+    await user.click(screen.getByTestId("page-depth-operate").querySelector("button")!);
+    const dialog = await screen.findByRole("dialog", { name: "Review request" });
+    expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+    complete({
+      id: "cloud-plan",
+      intent_digest: "sha256:8ec59a9c",
+      intent: {
+        action: "tighten_policy",
+        principal_arn: "arn:aws:iam::111122223333:user/owned-workload",
+        policy_document: btoa('{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:GetObject","Resource":"arn:aws:s3:::owned/report"}]}'),
+      },
+    } as CloudMachineChange);
+    expect(await within(dialog).findByText(/"Effect":"Deny"/)).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeEnabled());
+    await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
+    await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
   });
 
   it("AUD-77 approves a genuine served request by immutable request id and digest", async () => {

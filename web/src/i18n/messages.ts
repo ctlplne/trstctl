@@ -10,6 +10,119 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.machine.writerExample": { defaultMessage: "env:TRSTCTL_AWS_WRITER_SESSION_PATH", description: "Example reference name; no credential value." },
+  "discovery.machine.approveRevoke": { defaultMessage: "Revoke a captured key for {resource}", description: "Exact cloud key approval action." },
+  "discovery.machine.approveTighten": { defaultMessage: "Restrict a captured permission for {resource}", description: "Exact cloud policy approval action." },
+  "discovery.machine.uncertain": {
+    defaultMessage:
+      "The native effect may have happened, but its final state was not verified. Capture this source again and review the current state before creating another change. No inverse change was attempted.",
+    description: "Cloud change recovery after an uncertain external result.",
+  },
+  "discovery.machine.evidenceUnavailable": {
+    defaultMessage: "Cloud policy evidence cannot be read",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.rescan": {
+    defaultMessage: "Capture this native source again before proposing a change.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.findingHeading": {
+    defaultMessage: "Captured cloud machine permissions",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.snapshot": {
+    defaultMessage: "Snapshot captured at {at}. Later changes require a fresh capture.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.modelLimit": {
+    defaultMessage:
+      "These decisions model the captured policies and supplied request context. Missing organization, resource, or activity evidence limits the result. Native IAM readback confirms stored configuration; it does not prove live AWS request enforcement.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.decision": { defaultMessage: "Policy decision", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.activityResult": {
+    defaultMessage: "Coverage: {coverage}; exact uses: {uses}; unbound uses: {unbound}; unused in this window: {unused}.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.keyResult": {
+    defaultMessage: "{status}; created {created}; last use or coverage {used}; long lived: {long}; stale: {stale}.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.escalation": {
+    defaultMessage: "Candidate {action} on {resource}: {reason}. Confidence: {confidence}.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.reviewChange": { defaultMessage: "Review a cloud change", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.changeHelp": {
+    defaultMessage:
+      "Each proposal names one captured principal and effect. A separate human must approve the exact digest before the requester can queue it. The default requires two distinct reviewers.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.selectChange": {
+    defaultMessage: "Choose the exact change",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.selectHelp": {
+    defaultMessage: "Select one captured key or one unused exact permission.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.reviewBinding": { defaultMessage: "Writer and reviewers", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.writerHelp": {
+    defaultMessage: "Use an operator-approved environment reference to a private, expiring STS session file. Never paste credentials here.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.effectHelp": {
+    defaultMessage:
+      "Revoking a key can stop workloads still using it. Tightening adds an explicit Deny for the selected action and resource in all contexts; existing policies stay intact. Review workload impact before approval. This action does not replace the key or prove workload continuity.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.invalidChange": {
+    defaultMessage: "Select a change, enter a reason of 1 to 500 characters, and choose 1 to 5 reviewers.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.choose": {
+    defaultMessage: "Choose a captured key or permission",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.revokeOption": { defaultMessage: "Revoke key {id}", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.tightenOption": {
+    defaultMessage: "Deny {action} on {resource}",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.writer": { defaultMessage: "Writer STS file reference", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.reason": { defaultMessage: "Reason and workload impact", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.required": { defaultMessage: "Distinct human reviewers", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.propose": { defaultMessage: "Create approval proposal", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.changeError": {
+    defaultMessage: "Cloud change could not complete",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.openApprovals": {
+    defaultMessage: "Open the human approval queue",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.loadingChanges": {
+    defaultMessage: "Loading cloud change results",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.changeState": {
+    defaultMessage: "{action}: {state}. Execution deadline: {expires}.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.exactIntent": {
+    defaultMessage: "Exact reviewed intent and digest",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.nativeResult": {
+    defaultMessage: "Native postcondition: {postcondition}; checked {checked}. {error}",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+  "discovery.machine.execute": { defaultMessage: "Queue the approved change", description: "Captured cloud machine permissions and reviewed native changes." },
+  "discovery.machine.moreChanges": {
+    defaultMessage: "More historical changes are available through the paginated API and CLI.",
+    description: "Captured cloud machine permissions and reviewed native changes.",
+  },
+
   "discovery.machine.endpointExample": { defaultMessage: "https://iam.amazonaws.com", description: "Standard IAM endpoint example." },
   "discovery.machine.regionExample": { defaultMessage: "us-east-1", description: "Standard IAM signing region example." },
   "discovery.machine.title": { defaultMessage: "Cloud machine entitlements", description: "Cloud machine entitlement capture and evidence." },

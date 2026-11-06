@@ -11,6 +11,7 @@ import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressC
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
+import { CloudMachineFindingParts } from "./discovery/CloudMachineFindingParts";
 import { FindingAnnotation } from "./discovery/FindingAnnotation";
 import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
@@ -2513,6 +2514,7 @@ function FindingTable({
           </div>
 
           <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
+          <CloudMachineFindingParts finding={selected} />
           <FindingAnnotation finding={selected} busy={actionBusy} onAnnotate={() => annotateAtProvider(selected)} />
 
           {(() => {

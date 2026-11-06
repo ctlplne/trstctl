@@ -1308,8 +1308,8 @@ Use **Cloud machine entitlements** in Discover → Sources to inspect an AWS use
 or role that a workload already uses. The source reads IAM policy and key
 metadata, evaluates the exact action/resource/context you select, and compares
 that check with explicitly scoped recorded activity. It serves read-only AWS
-capture and advisory findings; approved cloud changes and native GCP/Azure
-collection are separate capabilities.
+capture and advisory findings, plus the reviewed AWS changes below. Native
+GCP/Azure collection is a separate capability.
 
 An operator first approves an environment reference whose value is the absolute
 path to an owner-only standard AWS STS JSON response file. Configure that reference
@@ -1370,3 +1370,33 @@ idempotency key. The REST routes are `/api/v1/discovery/sources`,
 Read the [capture and evaluation contract](../design/cloud-machine-entitlements.md)
 for exact limits and the cached LocalStack lab runner. LocalStack native metadata
 proof does not establish AWS permission enforcement or live cloud qualification.
+
+
+### Propose and execute one reviewed AWS change
+
+Open a native cloud machine finding in Discovery. Its permission table shows the
+server's decision, policy reasons, activity coverage, and known limits. The change
+wizard selects a captured key or one unused exact permission, records a writer STS
+file reference and workload-impact reason, and shows the exact proposal. Open
+Approvals to inspect the same intent and obtain distinct human reviews. Return to
+the finding to queue the approved change and observe its native postcondition.
+
+For automation, write a public proposal body to a file (never credential values):
+
+```json
+{"finding_id":"<finding UUID>","action":"revoke_key","access_key_id":"<captured key ID>","writer_session_file_ref":"env:TRSTCTL_AWS_WRITER_SESSION_PATH","reason":"Workload replacement verified; retire this exact key","required_approvals":2}
+```
+
+Use `trstctl access cloud changes propose --file proposal.json`,
+`trstctl access cloud changes list`, and `trstctl access cloud changes get <id>`.
+Approve the returned approval request and exact digest through the existing
+approval commands or console. Then run
+`trstctl access cloud changes execute <id>`. Execution queues an outbox command;
+read the change again for its final result. A failed request can have an uncertain
+native effect: rescan before proposing recovery. A verified deletion does not
+supply replacement credentials or prove that a workload remains healthy.
+
+To propose policy tightening, use `action: "tighten_policy"` and the zero-based
+`evaluation_index` of a captured unused exact permission. Review the returned
+public policy document (base64 in `intent.policy_document`) and SHA-256 before
+approval. It adds an explicit Deny in all contexts and preserves existing policies.

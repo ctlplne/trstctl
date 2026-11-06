@@ -84,10 +84,20 @@ type captureSession struct {
 // call permits metadata reads only. It neither follows redirects nor retries a
 // credential-bearing request. The caller's outbox worker owns external effects.
 func (s *captureSession) call(ctx context.Context, action string, values url.Values) (*element, error) {
-	switch action {
-	case "GetUser", "GetRole", "ListUserPolicies", "GetUserPolicy", "ListRolePolicies", "GetRolePolicy", "ListAttachedUserPolicies", "ListAttachedRolePolicies", "ListGroupsForUser", "ListGroupPolicies", "GetGroupPolicy", "ListAttachedGroupPolicies", "GetPolicy", "GetPolicyVersion", "ListAccessKeys", "GetAccessKeyLastUsed":
-	default:
-		return nil, errors.New("awsiam: operation is outside read-only inventory")
+	return s.query(ctx, action, values, false)
+}
+
+func (s *captureSession) query(ctx context.Context, action string, values url.Values, mutation bool) (*element, error) {
+	if mutation {
+		if action != "DeleteAccessKey" && action != "PutUserPolicy" && action != "PutRolePolicy" {
+			return nil, errors.New("awsiam: operation is outside reviewed cloud changes")
+		}
+	} else {
+		switch action {
+		case "GetUser", "GetRole", "ListUserPolicies", "GetUserPolicy", "ListRolePolicies", "GetRolePolicy", "ListAttachedUserPolicies", "ListAttachedRolePolicies", "ListGroupsForUser", "ListGroupPolicies", "GetGroupPolicy", "ListAttachedGroupPolicies", "GetPolicy", "GetPolicyVersion", "ListAccessKeys", "GetAccessKeyLastUsed":
+		default:
+			return nil, errors.New("awsiam: operation is outside read-only inventory")
+		}
 	}
 	if s.calls >= 5000 {
 		return nil, errors.New("awsiam: capture call budget exceeded")
@@ -177,7 +187,7 @@ func (s *captureSession) call(ctx context.Context, action string, values url.Val
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("awsiam: %s status %d (body redacted)", action, response.StatusCode)
+		return nil, &StatusError{Action: action, Status: response.StatusCode}
 	}
 	limited.N = maxResponse + 1
 	raw, err := secret.ReadBounded(response.Body, maxResponse+1)
@@ -185,7 +195,7 @@ func (s *captureSession) call(ctx context.Context, action string, values url.Val
 	if err != nil || len(raw) > maxResponse {
 		return nil, fmt.Errorf("awsiam: %s response exceeds bound or is incomplete", action)
 	}
-	result, err := parseResponse(raw, action)
+	result, err := parseEnvelope(raw, action, mutation)
 	if err != nil {
 		return nil, fmt.Errorf("awsiam: %s malformed response: %w", action, err)
 	}
@@ -201,4 +211,14 @@ func validateName(name string) bool {
 		}
 	}
 	return true
+}
+
+// StatusError never retains an upstream response body or credential.
+type StatusError struct {
+	Action string
+	Status int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("awsiam: %s status %d (body redacted)", e.Action, e.Status)
 }

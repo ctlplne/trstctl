@@ -140,6 +140,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMAutoApprovalRuleDeleted:               "EventPAMAutoApprovalRuleDeleted",
 	projections.EventPAMAutoApprovalEvaluated:                 "EventPAMAutoApprovalEvaluated",
 	projections.EventPAMAutoApprovalApplied:                   "EventPAMAutoApprovalApplied",
+	projections.EventCloudMachineChangeProposed:               "EventCloudMachineChangeProposed",
+	projections.EventCloudMachineChangeProgressed:             "EventCloudMachineChangeProgressed",
 	projections.EventPAMFolderSaved:                           "EventPAMFolderSaved",
 	projections.EventPAMFolderDeleted:                         "EventPAMFolderDeleted",
 	projections.EventPAMTargetFolderSet:                       "EventPAMTargetFolderSet",

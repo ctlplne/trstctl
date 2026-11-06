@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/cloudentitlements/awsiam"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/awssignin"
 	"trstctl.com/trstctl/internal/netsec"
 )
@@ -123,4 +124,18 @@ func validateSourceObject(raw []byte) error {
 		return errors.New("invalid source object framing")
 	}
 	return nil
+}
+
+// SourceFingerprint binds public endpoint/trust/selection/reference settings;
+// refreshing the private STS file does not change this configuration authority.
+func SourceFingerprint(cfg SourceConfig) (string, error) {
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	canonical, err := canonicalJSON(raw)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(canonical), nil
 }

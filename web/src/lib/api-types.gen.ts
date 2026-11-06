@@ -1441,7 +1441,7 @@ export interface Approval {
 }
 
 export interface ApprovalDecision {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -3253,6 +3253,68 @@ export interface ChangeSet {
   name: string;
   owners?: { application_id?: string; business_unit?: string; email?: string; environment?: string; escalation_chain?: string[]; key: string; kind: string; name: string; service?: string }[];
   profiles?: { name: string; spec: unknown }[];
+}
+
+export interface CloudMachineChange {
+  approval_request_id: string;
+  created_at: string;
+  expires_at: string;
+  id: string;
+  intent: CloudMachineChangeIntent;
+  intent_digest: string;
+  requested_by: string;
+  result?: CloudMachineChangeResult;
+  state: "awaiting_approval" | "queued" | "verified" | "failed";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface CloudMachineChangeIntent {
+  access_key_id?: string;
+  action: "revoke_key" | "tighten_policy";
+  allow_private_endpoint?: boolean;
+  ca_pem?: string;
+  endpoint: string;
+  finding_fingerprint: string;
+  finding_id: string;
+  policy_document?: string;
+  policy_name?: string;
+  policy_sha256?: string;
+  principal_arn: string;
+  principal_id: string;
+  principal_kind: string;
+  principal_name: string;
+  private_egress_cidrs?: string[];
+  reason: string;
+  region: string;
+  required_approvals: number;
+  source_fingerprint: string;
+  source_id: string;
+  writer_session_file_ref: string;
+}
+
+export interface CloudMachineChangeList {
+  items: CloudMachineChange[];
+  next_cursor: string;
+}
+
+export interface CloudMachineChangeRequest {
+  access_key_id?: string;
+  action: "revoke_key" | "tighten_policy";
+  evaluation_index?: number;
+  finding_id: string;
+  reason: string;
+  required_approvals?: number;
+  writer_session_file_ref: string;
+}
+
+export interface CloudMachineChangeResult {
+  checked_at: string;
+  effect_uncertain?: boolean;
+  error?: string;
+  key_absent?: boolean;
+  policy_matches?: boolean;
+  postcondition?: string;
 }
 
 export interface CloudSecretManagerIntegration {
@@ -9122,7 +9184,7 @@ export interface PQCPilotWaveRequest {
 }
 
 export interface PendingApprovalRequest {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
   approval_count: number;
   created_at: string;
   evidence_refs: string[];
@@ -9134,7 +9196,7 @@ export interface PendingApprovalRequest {
   requester: string;
   required_approvals: number;
   resource_id: string;
-  resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral";
+  resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine";
   resource_name: string;
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   target_version: string;

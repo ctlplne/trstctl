@@ -642,7 +642,7 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 			        OR ($7 AND r.resource_kind = 'secret' AND r.action IN ('create', 'rotate', 'recover', 'delete'))
 		        OR ($8 AND r.resource_kind = 'managed_key'
 		             AND r.action IN ('managedkey:rotate', 'managedkey:revoke', 'managedkey:zeroize'))
-		        OR ($9 AND ((r.resource_kind = 'pam' AND r.action = 'activate') OR (r.resource_kind = 'pam_command' AND r.action = 'execute')))
+		        OR ($9 AND ((r.resource_kind = 'pam' AND r.action = 'activate') OR (r.resource_kind = 'pam_command' AND r.action = 'execute') OR (r.resource_kind = 'cloud_machine' AND r.action IN ('revoke_key','tighten_policy'))))
 		       )
 			 ORDER BY r.created_at DESC, r.id DESC LIMIT $5`,
 			tenantID, options.Status, options.AfterCreatedAt, afterID, options.Limit,
