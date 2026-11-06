@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/accessrules"
 
 	"github.com/google/uuid"
@@ -49,6 +50,7 @@ const (
 	pamTargetGCP        = "gcp"
 	pamTargetAzure      = "azure"
 	pamTargetAWSConsole = accessconsole.TargetAWS
+	pamTargetRDP        = accessdesktop.TargetRDP
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -72,10 +74,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetAWSConsole: "aws-sts",
 	pamTargetGCP:        "gcp-iam",
 	pamTargetAzure:      "azure-entra",
+	pamTargetRDP:        "desktop",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console", pamTargetRDP: "remote desktop"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -161,6 +164,7 @@ type PAMSSHTarget struct {
 }
 
 type pamService struct {
+	desktopJobEnabled   bool
 	commandRuleJobKinds map[string]bool
 	store               *store.Store
 	log                 *events.Log
@@ -244,6 +248,7 @@ type pamTargetID struct {
 }
 
 type pamDeps struct {
+	DesktopJobEnabled   bool
 	CommandRuleJobKinds map[string]bool
 	Config              PAMConfig
 	Store               *store.Store
@@ -337,7 +342,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{
+	return &pamService{desktopJobEnabled: d.DesktopJobEnabled,
 		commandRuleJobKinds: d.CommandRuleJobKinds,
 		browser:             newPAMBrowser(), discovery: newPAMDiscovery(),
 		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
@@ -365,7 +370,7 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 	all = append(all, cfg.DatabaseTargets...)
 	targets := make(map[pamDatabaseID]*pamDatabaseTarget, len(all))
 	for _, target := range all {
-		providerType, known := pamDatabaseProviderTypes[target.TargetType]
+		_, known := pamDatabaseProviderTypes[target.TargetType]
 		if !known {
 			return nil, fmt.Errorf("server: PAM database target type %q is not one of %s", target.TargetType, pamTargetTypesText())
 		}
@@ -387,12 +392,15 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 		if target.TargetType != pamTargetPostgres && (target.GatewayAgentID == "" || target.GatewayAddress == "") {
 			return nil, fmt.Errorf("server: PAM %s target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", kind, target.ID)
 		}
+		if target.TargetType == pamTargetRDP && target.AccountSecret == "" {
+			return nil, fmt.Errorf("server: desktop target %q requires a vaulted account_secret", target.ID)
+		}
 		if target.AccountSecret != "" {
 			// A261: a vaulted account signs in only through the gateway, and
 			// its one role is the secret's: the static rotation keeping it
 			// current runs as that role.
-			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL {
-				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL or MySQL", kind, target.ID)
+			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL && target.TargetType != pamTargetRDP {
+				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL, MySQL or remote desktop", kind, target.ID)
 			}
 			if target.GatewayAgentID == "" || target.GatewayAddress == "" {
 				return nil, fmt.Errorf("server: vaulted PAM target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", target.ID)
@@ -432,8 +440,20 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 				DynamicSecretAllowedRoles() []string
 				DynamicSecretConfigurationRevision() string
 			})
-			if !ok || profile.DynamicSecretProviderType() != providerType {
+			if !ok || !pamProviderMatches(target.TargetType, profile.DynamicSecretProviderType()) {
 				return nil, fmt.Errorf("server: PAM target %q provider must be %s", target.ID, pamDatabaseKinds[target.TargetType])
+			}
+			if target.TargetType == pamTargetRDP {
+				source, ok := provider.(interface {
+					DynamicSecretGatewayDesktop() (accessdesktop.Binding, error)
+				})
+				if !ok {
+					return nil, fmt.Errorf("server: desktop target %q provider has no reviewed route", target.ID)
+				}
+				binding, err := source.DynamicSecretGatewayDesktop()
+				if err != nil || binding.Validate() != nil {
+					return nil, fmt.Errorf("server: desktop target %q needs a valid reviewed route", target.ID)
+				}
 			}
 			if target.TargetType == pamTargetAWS {
 				binding, ok := provider.(interface {
@@ -854,7 +874,7 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		// extension is refused and it closes the session's connections —
 		// while the upstream credential's revocation proceeds as for any
 		// session.
-		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindForPolicy(rec.CommandPolicy), accessgateway.JobKey(id), at); err != nil {
+		if err := s.store.RecallPAMGatewayJob(ctx, tenantID, id, accessgateway.KindForIntent(accessgateway.SessionIntent{TargetType: rec.TargetType, CommandPolicy: rec.CommandPolicy}), accessgateway.JobKey(id), at); err != nil {
 			return api.PAMSession{}, err
 		}
 	}
@@ -1309,6 +1329,11 @@ func (s *pamService) pamRevocationFailed(ctx context.Context, rec store.PAMSessi
 }
 
 func (s *pamService) openDatabase(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time, att attest.Attestation, req api.PAMSessionRequest) (api.PAMSession, error) {
+	if req.TargetType == pamTargetRDP {
+		if err := s.requireDesktopGateway(ctx, tenantID, req.TargetID); err != nil {
+			return api.PAMSession{}, err
+		}
+	}
 	target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 	if err != nil {
 		return api.PAMSession{}, err
@@ -1710,4 +1735,11 @@ func pamFromConfig(c config.PAM) PAMConfig {
 		})
 	}
 	return out
+}
+
+func pamProviderMatches(targetType, providerType string) bool {
+	if targetType == pamTargetRDP {
+		return providerType == "unix" || providerType == "windows" || providerType == "ldap"
+	}
+	return pamDatabaseProviderTypes[targetType] == providerType
 }

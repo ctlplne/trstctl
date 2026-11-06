@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mongosignin"
 	"trstctl.com/trstctl/internal/crypto/mysqlsignin"
 	"trstctl.com/trstctl/internal/crypto/pgsignin"
+	"trstctl.com/trstctl/internal/crypto/rdp"
 	"trstctl.com/trstctl/internal/crypto/redissignin"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/sshgateway"
@@ -29,6 +30,8 @@ type SSHKeySigner interface {
 
 // Config wires a gateway to its agent channel and listener.
 type Config struct {
+	DesktopHelper         string
+	MaxDesktopConnections int
 	// Channel claims session jobs, redeems their credentials and reports.
 	Channel relay.Channel
 	// Listener accepts client connections (TLS, with the agent's certificate).
@@ -47,11 +50,12 @@ type Config struct {
 
 // Gateway holds the sessions this agent serves.
 type Gateway struct {
-	commands commandBudget
-	cfg      Config
-	mu       sync.Mutex
-	sessions map[string]*session
-	claimNow chan struct{}
+	desktopSlots chan struct{}
+	commands     commandBudget
+	cfg          Config
+	mu           sync.Mutex
+	sessions     map[string]*session
+	claimNow     chan struct{}
 	// sshHost is the host key SSH clients see, made with the first SSH
 	// session and wiped when the gateway stops.
 	sshHostOnce sync.Once
@@ -85,6 +89,17 @@ func New(cfg Config) (*Gateway, error) {
 	if cfg.Channel == nil || cfg.Listener == nil {
 		return nil, errors.New("accessgateway: a channel and a listener are required")
 	}
+	if cfg.DesktopHelper != "" {
+		if err := rdp.CheckHelper(cfg.DesktopHelper); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.MaxDesktopConnections == 0 {
+		cfg.MaxDesktopConnections = 4
+	}
+	if cfg.MaxDesktopConnections < 1 || cfg.MaxDesktopConnections > 32 {
+		return nil, errors.New("accessgateway: desktop connection limit must be 1–32")
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -107,7 +122,7 @@ func New(cfg Config) (*Gateway, error) {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	return &Gateway{cfg: cfg, sessions: map[string]*session{}, claimNow: make(chan struct{}, 1)}, nil
+	return &Gateway{desktopSlots: make(chan struct{}, cfg.MaxDesktopConnections), cfg: cfg, sessions: map[string]*session{}, claimNow: make(chan struct{}, 1)}, nil
 }
 
 // Run serves until ctx ends: it claims sessions and accepts connections.
@@ -176,7 +191,7 @@ func (g *Gateway) claim(ctx context.Context) {
 	if room <= 0 {
 		return
 	}
-	jobs, err := g.cfg.Channel.ClaimJobs(ctx, ClaimableKinds(), room, int((2*g.cfg.ExtendInterval)/time.Second)+5)
+	jobs, err := g.cfg.Channel.ClaimJobs(ctx, g.claimableKinds(), room, int((2*g.cfg.ExtendInterval)/time.Second)+5)
 	if err != nil {
 		g.cfg.Logf("accessgateway: claim: %v", err)
 		return
@@ -483,11 +498,29 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		// learns here is the one its SSH client is told to expect.
 		answer = "OK " + host.AuthorizedKey() + "\n"
 	}
-	if !s.admit(conn, g.cfg.MaxConnections) {
+	limit := g.cfg.MaxConnections
+	if s.intent.TargetType == TargetRDP {
+		limit = 1
+	}
+	if !s.admit(conn, limit) {
 		g.deny(conn, "session ended or at its connection limit")
 		return
 	}
 	defer s.release(conn)
+	if s.intent.TargetType == TargetRDP {
+		if g.cfg.DesktopHelper == "" {
+			g.deny(conn, "native desktop executor unavailable")
+			return
+		}
+		select {
+		case g.desktopSlots <- struct{}{}:
+			defer func() { <-g.desktopSlots }()
+		default:
+			g.deny(conn, "desktop capacity exceeded")
+			return
+		}
+	}
+
 	var rec *connRecorder
 	if s.recorder != nil {
 		rec = s.recorder.connection()
@@ -554,6 +587,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		upstream := httpUpstream{URL: s.intent.UpstreamURL, CAPEM: s.intent.UpstreamCAPEM, ServerName: s.intent.UpstreamServerName}
 		if err := serveClickHouse(ctx, conn, credential, upstream, g.cfg.Dial, rec, guard); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
+	case TargetRDP:
+		raw := s.credential()
+		defer secret.Wipe(raw)
+		if err := serveDesktop(ctx, conn, raw, s.intent, g.cfg.DesktopHelper, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: desktop ended: %v", s.intent.SessionID, err)
 		}
 	case TargetAWSConsole:
 		credential := s.credential()
@@ -687,4 +726,12 @@ func readPreface(conn net.Conn) (string, error) {
 		b.WriteByte(one[0])
 	}
 	return "", errors.New("accessgateway: preface too long")
+}
+
+func (g *Gateway) claimableKinds() []string {
+	out := ClaimableKinds()
+	if g.cfg.DesktopHelper != "" {
+		out = append(out, KindSessionDesktop)
+	}
+	return out
 }

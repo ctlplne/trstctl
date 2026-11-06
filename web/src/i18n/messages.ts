@@ -10,6 +10,39 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.desktop.target": { defaultMessage: "Remote desktop (RDP)", description: "Desktop target registration and proof limits." },
+  "admin.access.desktop.accountSecret": { defaultMessage: "Account secret", description: "Desktop target registration and proof limits." },
+  "admin.access.desktop.oneAccount": {
+    defaultMessage: "Choose one vaulted account secret from the provider's roles.",
+    description: "Desktop target registration and proof limits.",
+  },
+  "admin.access.desktop.proof": {
+    defaultMessage:
+      "Linux gateway with the native helper required. xrdp stand-in proof; Windows sign-in remains unverified. The viewer gets pixels, not the upstream password. Recordings contain screen images; pixel masking is not automatic.",
+    description: "Desktop target registration and proof limits.",
+  },
+
+  "admin.access.desktop.replay": { defaultMessage: "Desktop recording replay", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.replayHelp": {
+    defaultMessage:
+      "The control plane verifies the signed manifest and chunk chain before playback. Images can contain on-screen secrets; text masking does not redact pixels.",
+    description: "Desktop replay controls and evidence limits.",
+  },
+  "admin.access.desktop.load": { defaultMessage: "Load verified replay", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.awaitSeal": {
+    defaultMessage: "End the session and wait for its recording to seal before replaying it.",
+    description: "Desktop replay controls and evidence limits.",
+  },
+  "admin.access.desktop.replayFailed": {
+    defaultMessage: "The recording could not be verified or rendered. Check recording permissions, retention and image integrity.",
+    description: "Desktop replay controls and evidence limits.",
+  },
+  "admin.access.desktop.screen": { defaultMessage: "Recorded desktop screen", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.position": { defaultMessage: "Replay position in seconds", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.pause": { defaultMessage: "Pause replay", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.play": { defaultMessage: "Play replay", description: "Desktop replay controls and evidence limits." },
+  "admin.access.desktop.noFrames": { defaultMessage: "No complete desktop frames are available.", description: "Desktop replay controls and evidence limits." },
+
   "admin.access.rules.elapsed": {
     defaultMessage: "Review deadline elapsed; no current authorization",
     description: "Derived expiry without inventing a terminal command event.",

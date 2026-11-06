@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 	"unicode"
 
 	"trstctl.com/trstctl/internal/hostedkey"
@@ -104,6 +105,7 @@ type DynamicSecretGatewayConfig struct {
 }
 
 type DynamicSecretProviderConfig struct {
+	Desktop  *accessdesktop.Binding      `json:"desktop,omitempty"`
 	Console  *accessconsole.Binding      `json:"console,omitempty"`
 	Gateway  *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
 	TenantID string                      `json:"tenant_id"`
@@ -794,6 +796,17 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 			if err := validateSecretIntegrationEndpoint(c.AuthorityHost, c.AllowInsecureLoopback); err != nil {
 				errs = append(errs, fmt.Errorf("%s authority_host: %w", where, err))
 			}
+		}
+	}
+	if c.Desktop != nil {
+		if (c.Type != "unix" && c.Type != "windows" && c.Type != "ldap") || !c.AllowStaticRotation {
+			errs = append(errs, fmt.Errorf("%s desktop needs a static-rotation unix, windows or ldap provider", where))
+		}
+		if c.Gateway != nil || c.Console != nil {
+			errs = append(errs, fmt.Errorf("%s desktop cannot mix HTTP or cloud console routing", where))
+		}
+		if err := c.Desktop.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("%s desktop: %w", where, err))
 		}
 	}
 	if c.Console != nil {

@@ -16,3 +16,9 @@ func TestNativeHelperReplacesInheritedArgumentsAndEnvironment(t *testing.T) {
 		t.Fatal("native credential process inherited parent arguments or environment")
 	}
 }
+
+func TestNativeHelperRequiresProtocolProbe(t *testing.T) {
+	if CheckHelper("/bin/true") == nil {
+		t.Fatal("unrelated executable advertised as a native desktop helper")
+	}
+}

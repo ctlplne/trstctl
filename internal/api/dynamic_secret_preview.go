@@ -147,6 +147,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
 	awsGateway := value("gateway", "Gateway API binding", "Optional gateway-only account attachment: endpoint is a fixed HTTPS origin; service is s3 or sts; region is explicit. API callers get a gateway ticket, not STS key material. LocalStack wire and authorization stand-in are separate qualifications.", false)
 	awsConsole := value("console", "Native console handoff binding", "Optional aws-sts attachment with fixed federation_endpoint and destination on supported AWS commercial HTTPS hosts. The browser receives a native sign-in form, never STS keys. Strict federation/login stand-in and LocalStack STS only. Recording attests the handoff, not native console actions; require_recording templates refuse this type. Native cookies/access keys and logout are unverified.", false)
+	desktop := value("desktop", "Reviewed desktop gateway binding", "Optional static-account attachment for unix, windows or ldap: fixed RDP address, certificate_sha256, domain, width/height and explicit tls_only for xrdp. Requires a Linux gateway with the native helper, encrypted recordings and audit signing. xrdp stock-viewer/PNG replay stand-in proof; native Windows/AD sign-in unverified. Images can contain on-screen secrets; pixel redaction is not automatic.", false)
 	providers := []dynamicSecretSupportedProvider{
 		{Type: "postgresql", Label: "PostgreSQL", Purpose: "Creates and drops a scoped PostgreSQL login role.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
@@ -220,6 +221,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("db", "Database number", "Only database 0 is supported. Leased users cannot run SELECT because Redis ACLs cannot constrain its database argument.", false),
 		)},
 		{Type: "ldap", Label: "LDAP directory", Purpose: "Creates a directory entry whose password the directory sets and hashes, in the role's group, and deletes it at revocation; the directory then refuses its bind.", Requirements: dynamicSecretProviderRequirements(
+			desktop,
 			value("addr", "Directory address", "host:port of the directory's LDAPS listener, verified against tls_server_name; plain LDAP only at a literal loopback or private IP with allow_plaintext.", true),
 			value("bind_dn", "Administrator DN", "Directory account allowed to add and delete entries under users_dn and change the role groups' members.", true),
 			credential("password_ref", "Administrator password reference", "The administrator's bind password.", true),
@@ -457,6 +459,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			roles(`Each allowed role maps to "<account-id> <service-principal-id>", the principal whose OAuth secret rotates.`),
 		)},
 		{Type: "unix", Label: "Unix/Linux local accounts", Purpose: "Rotates local account passwords on a host over SSH as an administrator authenticating with a key, the host key pinned; the only command run is chpasswd with the change on stdin. A role with rotation_accounts alternates between two accounts its owner provisioned (two-phase: the predecessor keeps working until retirement sets a password nobody holds; groups and files stay). A role bound to one account changes its password in place (single phase: a rotation runs only when acknowledged). Verified by logging in with the new password. It rotates only; it issues no leases.", Requirements: dynamicSecretProviderRequirements(
+			desktop,
 			value("addr", "SSH endpoint", "The host's SSH host:port.", true),
 			value("admin_user", "Administrator", "root, or an account allowed `sudo -n /usr/sbin/chpasswd` (set sudo).", true),
 			credential("private_key_ref", "Administrator key reference", "The administrator's private key, PKCS#8 PEM.", true),
@@ -465,6 +468,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			roles("Each allowed role maps to the local account it rotates, or names two accounts in rotation_accounts."),
 		)},
 		{Type: "windows", Label: "Windows local accounts", Purpose: "Rotates local account passwords on a Windows host serving OpenSSH, as a member of Administrators authenticating with a key, the host key pinned; the only command run is Windows PowerShell's Set-LocalUser, the account named in its encoded script and the password on stdin. Passwords mix upper and lower case letters and digits, as Windows' complexity rule needs. A role with rotation_accounts alternates between two accounts its owner provisioned (two-phase: the predecessor keeps working until retirement sets a password nobody holds). A role bound to one account changes its password in place (single phase: a rotation runs only when acknowledged). Verified by logging in with the new password. It rotates only; it issues no leases.", Requirements: dynamicSecretProviderRequirements(
+			desktop,
 			value("addr", "SSH endpoint", "The host's OpenSSH host:port.", true),
 			value("admin_user", "Administrator", "A local account in Administrators, whose key is in administrators_authorized_keys.", true),
 			credential("private_key_ref", "Administrator key reference", "The administrator's private key, PKCS#8 PEM.", true),

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -159,7 +160,7 @@ func (s *pamService) enqueueGatewaySession(ctx context.Context, tenantID string,
 		return err
 	}
 	err = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{TenantID: tenantID, Destination: accessgateway.KindForPolicy(intent.CommandPolicy),
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{TenantID: tenantID, Destination: accessgateway.KindForIntent(intent),
 			IdempotencyKey: accessgateway.JobKey(intent.SessionID), Payload: payload,
 			RequiredAgentRole: mtls.AgentRoleGateway, RequiredAgentID: intent.RequiredAgentID})
 		return err
@@ -253,6 +254,32 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 			}
 		}
 
+		if rec.TargetType == pamTargetRDP {
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			for _, provider := range s.providers.ForTenant(rec.TenantID) {
+				if provider == nil || provider.Name() != target.cfg.ProviderID {
+					continue
+				}
+				source, ok := provider.(interface {
+					DynamicSecretGatewayDesktop() (accessdesktop.Binding, error)
+				})
+				if !ok {
+					continue
+				}
+				binding, e := source.DynamicSecretGatewayDesktop()
+				if e != nil {
+					return accessgateway.SessionIntent{}, e
+				}
+				intent.Desktop = &binding
+				break
+			}
+			if intent.Desktop == nil {
+				return accessgateway.SessionIntent{}, errors.New("server: reviewed desktop route unavailable")
+			}
+		}
 		if rec.TargetType == pamTargetAWSConsole {
 			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {

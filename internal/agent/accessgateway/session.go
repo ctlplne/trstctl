@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/accessrules"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
@@ -25,6 +26,7 @@ import (
 const (
 	// KindSession is the agent job one gateway session rides on.
 	KindSession                = relay.KindAccessGatewaySession
+	KindSessionDesktop         = relay.KindAccessGatewayDesktopSession
 	KindSessionRules           = relay.KindAccessGatewayRulesSession
 	KindSessionSSHRules        = relay.KindAccessGatewaySSHRulesSession
 	KindSessionMySQLRules      = relay.KindAccessGatewayMySQLRulesSession
@@ -46,6 +48,7 @@ const (
 	TargetGCP        = "gcp"
 	TargetAzure      = "azure"
 	TargetAWSConsole = accessconsole.TargetAWS
+	TargetRDP        = accessdesktop.TargetRDP
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -57,7 +60,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole, TargetRDP:
 		return true
 	}
 	return false
@@ -77,6 +80,7 @@ var azureOAuthTenant = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 // of its own for it — and names where to sign in, as whom, and which host keys
 // to accept. The ticket arrives only as its digest.
 type SessionIntent struct {
+	Desktop            *accessdesktop.Binding `json:"desktop,omitempty"`
 	Console            *accessconsole.Binding `json:"console,omitempty"`
 	ConsoleRole        string                 `json:"console_role,omitempty"`
 	OAuthTenant        string                 `json:"oauth_tenant,omitempty"`
@@ -151,6 +155,13 @@ func ValidateSessionIntent(in SessionIntent) error {
 		return errors.New("accessgateway: a session carries its ticket's SHA-256")
 	case in.ExpiresAt.IsZero():
 		return errors.New("accessgateway: a session has a deadline")
+	}
+	if in.TargetType == TargetRDP {
+		if in.Desktop == nil || in.Desktop.Validate() != nil || in.CommandPolicy != nil {
+			return errors.New("accessgateway: desktop needs a reviewed route and cannot carry shell/query rules")
+		}
+	} else if in.Desktop != nil {
+		return errors.New("accessgateway: only desktop sessions carry desktop routing")
 	}
 	if in.TargetType == TargetAWSConsole {
 		if in.Console == nil || in.Console.Validate(true) != nil || in.ConsoleRole == "" || len(in.ConsoleRole) > 128 || strings.ContainsAny(in.ConsoleRole, "\r\n\x00") {
@@ -259,5 +270,16 @@ func KindForPolicy(p *accessrules.Policy) string {
 	return KindSession
 }
 func MatchesSessionJob(kind string, in SessionIntent) bool {
+	if in.TargetType == TargetRDP {
+		return kind == KindSessionDesktop
+	}
 	return kind == KindForPolicy(in.CommandPolicy)
+}
+
+// KindForIntent keeps native desktop work away from legacy gateways.
+func KindForIntent(in SessionIntent) string {
+	if in.TargetType == TargetRDP {
+		return KindSessionDesktop
+	}
+	return KindForPolicy(in.CommandPolicy)
 }

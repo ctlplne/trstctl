@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 
 	"github.com/google/uuid"
 
@@ -225,6 +226,10 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 		cfg.Gateway = &gateway
 	}
 
+	if cfg.Desktop != nil {
+		binding := *cfg.Desktop
+		cfg.Desktop = &binding
+	}
 	if cfg.Console != nil {
 		binding := *cfg.Console
 		cfg.Console = &binding
@@ -1922,4 +1927,12 @@ func (p *configuredDynamicProvider) DynamicSecretGatewayConsole() (accessconsole
 		return accessconsole.Binding{}, errors.New("provider has no native console binding")
 	}
 	return *p.cfg.Console, nil
+}
+
+// DynamicSecretGatewayDesktop returns the reviewed route by value.
+func (p *configuredDynamicProvider) DynamicSecretGatewayDesktop() (accessdesktop.Binding, error) {
+	if p.cfg.Desktop == nil || (p.cfg.Type != "unix" && p.cfg.Type != "windows" && p.cfg.Type != "ldap") || !p.cfg.AllowStaticRotation {
+		return accessdesktop.Binding{}, errors.New("provider needs a reviewed static desktop account binding")
+	}
+	return *p.cfg.Desktop, nil
 }

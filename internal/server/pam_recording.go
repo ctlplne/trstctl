@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/accessconsole"
+	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -120,7 +121,7 @@ func (a *agentService) UploadSessionRecording(ctx context.Context, req *transpor
 		return nil, status.Error(codes.InvalidArgument, "job_id, attempt, seq and a chunk of at most 1 MiB are required")
 	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
-	job, held, err := a.store.GetGatewayJobForRecording(ctx, info.TenantID, agentID, req.JobID, req.Attempt, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession)
+	job, held, err := a.store.GetGatewayJobForRecording(ctx, info.TenantID, agentID, req.JobID, req.Attempt, relay.KindAccessGatewayDesktopSession, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "load job: %v", err)
 	}
@@ -769,6 +770,9 @@ func (s *pamService) recordingScope(ctx context.Context, tenantID, sessionID str
 	session, err := s.store.GetPAMSession(ctx, tenantID, sessionID)
 	if err != nil {
 		return "", err
+	}
+	if session.TargetType == pamTargetRDP {
+		return accessdesktop.RecordingScope, nil
 	}
 	if session.TargetType == pamTargetAWSConsole {
 		return accessconsole.RecordingScope, nil

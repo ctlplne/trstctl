@@ -134,6 +134,7 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindAccessGatewayMongoRulesSession:      true,
 	relay.KindAccessGatewayClickHouseRulesSession: true,
 	relay.KindAccessGatewaySession:                true,
+	relay.KindAccessGatewayDesktopSession:         true,
 	relay.KindAccessGatewayRulesSession:           true,
 	relay.KindAccessGatewaySSHRulesSession:        true,
 	relay.KindAccessGatewayMySQLRulesSession:      true,
@@ -1031,7 +1032,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM check-in result needs a terminal executed report")
 		}
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
-	case relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession:
+	case relay.KindAccessGatewayDesktopSession, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession:
 		// A254: the gateway reports how a session ended; the session itself
 		// is ended by its deadline and revocation, not by this report. A255:
 		// the report is recorded, acknowledging a termination.

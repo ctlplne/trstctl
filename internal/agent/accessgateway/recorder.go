@@ -41,17 +41,18 @@ var ErrRecordingStopped = errors.New("accessgateway: the session's recording was
 
 // frame is one line of a recording.
 type frame struct {
-	T       int64   `json:"t"` // milliseconds since the session's recording began
-	Conn    int     `json:"c"`
-	Ch      int     `json:"ch,omitempty"`
-	Stream  string  `json:"s,omitempty"` // in, out, err
-	Data    string  `json:"d,omitempty"` // base64 of the masked bytes
-	Event   string  `json:"e,omitempty"` // request, sftp, sql, result, connect, close
-	From    string  `json:"from,omitempty"`
-	Kind    string  `json:"kind,omitempty"`
-	Text    string  `json:"v,omitempty"`
-	SFTP    *sftpOp `json:"op,omitempty"`
-	Columns int     `json:"cols,omitempty"`
+	Desktop *desktopTile `json:"desktop,omitempty"`
+	T       int64        `json:"t"` // milliseconds since the session's recording began
+	Conn    int          `json:"c"`
+	Ch      int          `json:"ch,omitempty"`
+	Stream  string       `json:"s,omitempty"` // in, out, err
+	Data    string       `json:"d,omitempty"` // base64 of the masked bytes
+	Event   string       `json:"e,omitempty"` // request, sftp, sql, result, connect, close
+	From    string       `json:"from,omitempty"`
+	Kind    string       `json:"kind,omitempty"`
+	Text    string       `json:"v,omitempty"`
+	SFTP    *sftpOp      `json:"op,omitempty"`
+	Columns int          `json:"cols,omitempty"`
 }
 
 // sessionRecorder records one held session: every connection's traffic,
@@ -242,11 +243,12 @@ func (r *sessionRecorder) send(ctx context.Context, seq int, chunk []byte, final
 // connRecorder records one connection; for SSH it is the session channels'
 // recorder (sshgateway.Recorder).
 type connRecorder struct {
-	r       *sessionRecorder
-	conn    int
-	mu      sync.Mutex
-	maskers map[string]*masker
-	sftp    map[int]*sftpTracker
+	desktopFrame uint64
+	r            *sessionRecorder
+	conn         int
+	mu           sync.Mutex
+	maskers      map[string]*masker
+	sftp         map[int]*sftpTracker
 }
 
 func (c *connRecorder) maskerFor(key string) *masker {

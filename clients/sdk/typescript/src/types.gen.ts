@@ -12386,7 +12386,7 @@ export interface components {
                 roles: string[];
                 target_id: string;
                 /** @enum {string} */
-                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
             }[];
             active_runs: number;
             audiences: ("custom_agent" | "ci" | "mcp_server")[];
@@ -12556,7 +12556,7 @@ export interface components {
                     roles: string[];
                     target_id: string;
                     /** @enum {string} */
-                    target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+                    target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
                 }[];
                 active_runs: number;
                 audiences: ("custom_agent" | "ci" | "mcp_server")[];
@@ -12625,7 +12625,7 @@ export interface components {
                 roles: string[];
                 target_id: string;
                 /** @enum {string} */
-                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+                target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
             }[];
             audiences?: ("custom_agent" | "ci" | "mcp_server")[];
             description?: string;
@@ -21527,7 +21527,7 @@ export interface components {
             subject: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
         };
         PAMAutoApprovalRule: {
             applies_to: ("session" | "checkout")[];
@@ -21904,7 +21904,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
             /** @description at most 3600: an emergency session lasts an hour at most */
             ttl_seconds?: number;
         };
@@ -22132,7 +22132,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
             /**
              * Format: uuid
              * @description the access template the request named (A258)
@@ -22155,7 +22155,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
             /**
              * Format: uuid
              * @description an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session
@@ -22204,7 +22204,7 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -22238,7 +22238,7 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
         };
         PAMTerminal: {
             cols?: number;

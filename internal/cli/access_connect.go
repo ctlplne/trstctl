@@ -170,6 +170,12 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 			commandGroup = "s3api"
 		}
 		return fmt.Sprintf("aws --no-sign-request --endpoint-url http://%s:%d --region %s %s <operation>", local.IP, local.Port, scopes[0].AWSRegion, commandGroup), nil
+	case "rdp":
+		host := local.IP.String()
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+		return fmt.Sprintf("vncviewer -SecurityTypes=None -SendClipboard=0 -AcceptClipboard=0 -RemoteResize=0 %s::%d", host, local.Port), nil
 	case "aws-console":
 		return fmt.Sprintf("Open http://%s/ in your browser", local.String()), nil
 	case "gcp", "azure":

@@ -115,6 +115,12 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 // Only test callers may shorten the broker's duplicate window. Production and
 // ordinary served tests keep the default; durability must survive either case.
 func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, eventOptions []events.OpenOption, opts ...func(*Deps)) *servedHarness {
+	return newServedHarnessWithOwnedStore(t, protocols, eventOptions, nil, opts...)
+}
+
+// newServedHarnessWithOwnedStore accepts a real Store from an isolated native lab.
+// The ordinary harness still creates its verified bundled PostgreSQL instance.
+func newServedHarnessWithOwnedStore(t *testing.T, protocols config.Protocols, eventOptions []events.OpenOption, owned *store.Store, opts ...func(*Deps)) *servedHarness {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("boots embedded PostgreSQL + a signer; skipped in -short")
@@ -123,7 +129,10 @@ func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, 
 	dir := t.TempDir()
 
 	// Embedded PostgreSQL + in-process NATS — the make-test spine.
-	st := newServerTestStore(t)
+	st := owned
+	if st == nil {
+		st = newServerTestStore(t)
+	}
 	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
 		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	}

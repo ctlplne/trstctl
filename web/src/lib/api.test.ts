@@ -2836,6 +2836,13 @@ describe("CLI-parity client methods (S3.3)", () => {
       status: 201,
     },
     { name: "disablePAMTarget", call: () => api.disablePAMTarget("ssh", "edge", "retired"), method: "POST", path: "/api/v1/access/targets/ssh/edge/disable" },
+    { name: "pamRecordingVerify", call: () => api.pamRecordingVerify("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1/recording/verify" },
+    {
+      name: "pamRecordingFrames",
+      call: () => api.pamRecordingFrames("s/1", 2),
+      method: "GET",
+      path: "/api/v1/access/sessions/s%2F1/recording/watch?from=2&limit=1000",
+    },
     { name: "pamSession", call: () => api.pamSession("s/1"), method: "GET", path: "/api/v1/access/sessions/s%2F1" },
     { name: "pamRequestProgress", call: () => api.pamRequestProgress("review/1"), method: "GET", path: "/api/v1/access/session-requests/review%2F1" },
     {

@@ -1,3 +1,4 @@
+import { DesktopReplay } from "@/components/access/DesktopReplay";
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The four named overflow evidence regions must accept keyboard focus so users can scroll them; Route 040 axe tests enforce the resulting behavior. */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1262,6 +1263,7 @@ function PAMDetailDialog({
           </DetailRow>
         ) : null}
       </dl>
+      {current.target_type === "rdp" ? <DesktopReplay sessionID={current.id} active={current.status === "active" || current.status === "revoking"} /> : null}
       {current.status === "revoking" ? (
         <p className="px-5 pb-3 text-sm" role="status">
           {t("admin.access.revokingPending")}

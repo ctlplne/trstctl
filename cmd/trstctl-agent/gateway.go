@@ -17,10 +17,13 @@ import (
 	"trstctl.com/trstctl/internal/agent/accessgateway"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/rdp"
 )
 
 var (
-	accessGatewayListen = flag.String("access-gateway-listen", "",
+	accessGatewayDesktopHelper = flag.String("access-gateway-desktop-helper", "", "protected absolute path to the optional Linux native RDP helper; enables reviewed vaulted desktop sessions inside ticket/mTLS tunnels")
+	accessGatewayDesktopLimit  = flag.Int("access-gateway-desktop-limit", 4, "maximum native desktop child processes across the gateway, 1–32")
+	accessGatewayListen        = flag.String("access-gateway-listen", "",
 		"serve brokered access sessions on this address (A254): clients connect through this agent to a database or "+
 			"an SSH server, and it signs in with the session's credential (a database login, or a certificate for a key it "+
 			"generates), which it holds in locked memory and never returns. "+
@@ -79,7 +82,7 @@ func startGateway(ctx context.Context, a *agent.Agent, ch relayChannel, caPEM []
 		fmt.Fprintln(os.Stderr, "trstctl-agent: access gateway:", err)
 		return func() {}
 	}
-	gw, err := accessgateway.New(accessgateway.Config{Channel: ch, Listener: ln,
+	gw, err := accessgateway.New(accessgateway.Config{Channel: ch, Listener: ln, DesktopHelper: strings.TrimSpace(*accessGatewayDesktopHelper), MaxDesktopConnections: *accessGatewayDesktopLimit,
 		Logf: func(format string, args ...any) { fmt.Fprintf(os.Stderr, "trstctl-agent: "+format+"\n", args...) }})
 	if err != nil {
 		cancel()
@@ -114,4 +117,9 @@ func gatewayHosts(listen, flagValue string) []string {
 		return nil
 	}
 	return []string{host}
+}
+
+func desktopHelperReady() bool {
+	path := strings.TrimSpace(*accessGatewayDesktopHelper)
+	return path != "" && rdp.CheckHelper(path) == nil
 }

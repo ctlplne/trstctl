@@ -1728,9 +1728,11 @@ const hostProfileErrorLimit = 512
 // (A86); nil means no relay bundle is configured.
 func executorCensus(o agentOptions, relayCAStatus func() *transport.RelayCABundleReport) *transport.ExecutorReport {
 	set := map[string]bool{
-		"--relay-claim":     o.relayClaim,
-		"--adcs-certutil":   o.adcsCertutil != "",
-		"--ssh-trust-fleet": o.sshTrust.fleet, "--ssh-trust-confirm": o.sshTrust.confirm, "--ssh-trust-ca-key": o.sshTrust.caKeyPath != "", "--ssh-trust-reload-cmd": o.sshTrust.reloadCmd != "", "--ssh-trust-health-cmd": o.sshTrust.healthCmd != "",
+		"--access-gateway-listen":         strings.TrimSpace(*accessGatewayListen) != "",
+		"--access-gateway-desktop-helper": desktopHelperReady(),
+		"--relay-claim":                   o.relayClaim,
+		"--adcs-certutil":                 o.adcsCertutil != "",
+		"--ssh-trust-fleet":               o.sshTrust.fleet, "--ssh-trust-confirm": o.sshTrust.confirm, "--ssh-trust-ca-key": o.sshTrust.caKeyPath != "", "--ssh-trust-reload-cmd": o.sshTrust.reloadCmd != "", "--ssh-trust-health-cmd": o.sshTrust.healthCmd != "",
 		"--host-exec-profile": o.hostExecProfile != "",
 		"--host-rollback-dir": o.hostRollbackDir != "",
 	}

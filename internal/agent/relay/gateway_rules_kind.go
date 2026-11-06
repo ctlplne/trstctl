@@ -20,6 +20,9 @@ func IsCommandRulesSession(kind string) bool {
 	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession || kind == KindAccessGatewayMySQLRulesSession || kind == KindAccessGatewayRedisRulesSession || kind == KindAccessGatewayMongoRulesSession || kind == KindAccessGatewayClickHouseRulesSession
 }
 
+// KindAccessGatewayDesktopSession requires the native desktop executor.
+const KindAccessGatewayDesktopSession = "access.gateway.session.desktop.v1"
+
 func IsAccessGatewaySession(kind string) bool {
-	return kind == KindAccessGatewaySession || IsCommandRulesSession(kind)
+	return kind == KindAccessGatewaySession || kind == KindAccessGatewayDesktopSession || IsCommandRulesSession(kind)
 }

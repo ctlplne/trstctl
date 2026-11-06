@@ -9173,3 +9173,15 @@ gateway job refuses to remint after losing its cached result; a fresh approved
 session is required. Packaged recovery and recording qualification remain open.
 Google service-account and Azure application API grants do not implement human
 console sign-in. See [the supported flow and exact limits](design/access-gateway.md#native-aws-console-handoff-a263-localstack-and-strict-stand-in).
+
+### A263 remote desktop accounts: xrdp stand-in qualification
+
+The Linux gateway can sign in to a reviewed RDP target with a vaulted static
+account and render its pixels to a stock VNC viewer inside the existing
+mTLS/ticket tunnel. Native helper memory protections, role checks, live
+termination and signed PNG recording/replay are proved against xrdp. The provider
+catalog and target form state this qualification. Windows/NLA success and AD
+sign-in are unverified; the tested xrdp mode explicitly selects pinned TLS-only
+RDP. Images can contain on-screen secrets and are not regex-redacted. Session
+closure ends interaction but does not establish target logout. See the
+[configuration and proof limits](design/access-gateway.md#remote-desktop-accounts-a263-xrdp-stand-in).

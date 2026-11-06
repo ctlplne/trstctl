@@ -1017,3 +1017,89 @@ they do not establish a human console login. Compatible human federation remains
 unsupported by these provider attachments.
 
 Native contract: [AWS custom identity broker console access](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_enable-console-custom-url.html).
+
+## Remote desktop accounts (A263, xrdp stand-in)
+
+A desktop target uses a vaulted account kept current by a `unix`, `windows` or
+`ldap` static-rotation provider. Its one allowed role is the account secret's
+name. The provider's optional `desktop` attachment fixes the RDP address,
+certificate pin, domain and screen size. Neither the account's stored `host`
+field nor the viewer can choose another server.
+
+For example, add this public attachment to a reviewed local-account provider
+that already enables static rotation and binds `desktop/operations` to its
+managed account:
+
+```json
+{
+  "desktop": {
+    "address": "admin-host.internal:3389",
+    "certificate_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "width": 800,
+    "height": 600,
+    "tls_only": true
+  }
+}
+```
+
+`tls_only: true` is explicit for the tested xrdp server. Omit it for Windows NLA;
+the native helper refuses to fall back to TLS-only authentication. Every target
+certificate must match the exact DER SHA-256 pin and be currently valid. Native
+Windows/NLA and domain sign-in remain unverified by the xrdp proof.
+
+The gateway needs Linux and the optional FreeRDP helper. Build it with the
+security-maintained FreeRDP 2.11.x development package and OpenSSL headers:
+
+```sh
+sh internal/crypto/rdp/native/build.sh /usr/local/libexec/trstctl-rdp
+trstctl-agent --access-gateway-listen 0.0.0.0:8443 \
+  --access-gateway-hosts gateway.internal \
+  --access-gateway-desktop-helper /usr/local/libexec/trstctl-rdp \
+  --access-gateway-desktop-limit 4
+```
+
+The helper must be a protected absolute executable. A bounded protocol probe
+checks its version and memory protections before the agent reports capability.
+Give it sufficient `RLIMIT_MEMLOCK`; it fails rather than accepting credentials
+without memory locking or no-dump protection. The helper is a separate process,
+not part of the signer. Its password arrives only on a private pipe, never in
+arguments or environment. Native owned password buffers are erased after
+connection and on failures; complete third-party heap erasure is unmeasured.
+
+Enable `access.gateway.session.desktop.v1` in the control plane's
+`agent_channel.claimable_job_kinds`. Gateways without the helper do not claim
+that kind. The target's gateway must report the native executor before a desktop
+session opens. Encrypted recording storage and audit signing are required. The
+native child pool defaults to four connections across the gateway; each desktop
+session admits one active viewer. Full pools refuse before upstream sign-in.
+
+Register a `rdp` target with `provider_id`,
+`allowed_roles: ["desktop/operations"]`, `account_secret: "desktop/operations"`,
+and its `gateway_agent_id` and `gateway_address`. The console offers the same
+account-secret and gateway fields. Request and approve a session normally, then
+run `trstctl access sessions connect` with its ticket file. The CLI prints the
+stock VNC command. RDP runs upstream; RFB 3.8 runs inside the authenticated
+mTLS/ticket tunnel downstream. Never expose this anonymous inner RFB endpoint as
+a public listener. The viewer receives pixels and input events, not the upstream
+password. Clipboard, drive, printer, audio, arbitrary channels and resize are
+disabled; BMP Unicode and common navigation keys are supported.
+
+Recording stores lossless PNG tiles with bounded dimensions. Each image is
+accepted by recording before it reaches the viewer, so a slow object store
+applies backpressure. The signed manifest binds `scope: desktop_pixels`. After
+the session ends and the recording seals, its session-detail panel verifies the
+manifest and chunk chain, then offers playback and seek. Exports carry the same
+replay tiles. On-screen secrets are personal data: text regex masking does not
+redact arbitrary pixels. Normal recording access, retention and legal-hold
+controls apply. Termination and expiry stop interaction and reap the native
+child; they do not prove target logout or stop background applications.
+
+Qualification is **xrdp stand-in proof**: real PostgreSQL/NATS, reviewed provider
+routing, two approvals, the stock TigerVNC viewer through the CLI ticket tunnel,
+independent input-task readback, live termination, signed/encrypted recording
+and decoded replay pixels. The UI renders the native recording export with
+verification gating and seek. This does not qualify a Windows server, an AD
+forest, native NLA success, third-party memory erasure, or packaged restart and
+partition recovery.
+
+Run the owned xrdp lab with `TRSTCTL_DESKTOP_LAB_BASE=<approved-cached-image@sha256:digest> bash scripts/labs/desktop.sh`. The script never pulls an image. It creates one labelled container, installs official Debian packages, runs the native helper and approved-session proofs, retains the signed export and package versions in its printed evidence directory, and stops only that container. This checks xrdp TLS mode; it does not qualify Windows NLA or Active Directory.

@@ -112,13 +112,18 @@ static int input_packet(freerdp *instance) {
  default:return 0;
  }
 }
-int main(void) {
+int main(int argc,char **argv) {
  struct rlimit core={0,0};
  if(setrlimit(RLIMIT_CORE,&core)||prctl(PR_SET_DUMPABLE,0)||prctl(PR_SET_NO_NEW_PRIVS,1,0,0,0)||mlockall(MCL_CURRENT|MCL_FUTURE))return 70;
  signal(SIGPIPE,SIG_IGN); WLog_SetLogLevel(WLog_GetRoot(),WLOG_OFF);
  char magic[8],host[256]={0},user[129]={0},domain[129]={0},pin[65]={0},password[1025]={0}; unsigned char dimensions[7];
  int exit_code=71; freerdp *instance=NULL;
  if(!private_pages(password,sizeof(password)))goto finish;
+ if(argc==2&&!strcmp(argv[1],"--check")) {
+  static const char ready[]="TRSTCTL-RDP/1\n";
+  return write_all(ready,sizeof(ready)-1)?0:70;
+ }
+ if(argc!=1)goto finish;
  if(!read_all(magic,8)||memcmp(magic,"TRDP0001",8)||!read_all(dimensions,7))goto finish;
  unsigned short port=u16(dimensions);desktop_width=u16(dimensions+2);desktop_height=u16(dimensions+4);
  if(!port||desktop_width<320||desktop_width>1280||desktop_height<200||desktop_height>1024||dimensions[6]>1)goto finish;

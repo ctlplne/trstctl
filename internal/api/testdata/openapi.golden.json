@@ -4696,6 +4696,7 @@
                     "mongodb",
                     "mysql",
                     "postgres",
+                    "rdp",
                     "redis",
                     "snowflake",
                     "ssh"
@@ -5367,6 +5368,7 @@
                           "mongodb",
                           "mysql",
                           "postgres",
+                          "rdp",
                           "redis",
                           "snowflake",
                           "ssh"
@@ -5664,6 +5666,7 @@
                     "mongodb",
                     "mysql",
                     "postgres",
+                    "rdp",
                     "redis",
                     "snowflake",
                     "ssh"
@@ -38614,6 +38617,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"
@@ -40239,6 +40243,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"
@@ -41141,6 +41146,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"
@@ -41223,6 +41229,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"
@@ -41381,6 +41388,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"
@@ -41497,6 +41505,7 @@
               "mongodb",
               "mysql",
               "postgres",
+              "rdp",
               "redis",
               "snowflake",
               "ssh"

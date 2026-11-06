@@ -1023,7 +1023,7 @@ export interface AccessAuthority {
 }
 
 export interface AccessBundle {
-  access_targets: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh" })[];
+  access_targets: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" })[];
   active_runs: number;
   audiences: ("custom_agent" | "ci" | "mcp_server")[];
   created_at: string;
@@ -1061,11 +1061,11 @@ export interface AccessBundleGrantRequest {
 }
 
 export interface AccessBundleList {
-  items: ({ access_targets: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh" })[]; active_runs: number; audiences: ("custom_agent" | "ci" | "mcp_server")[]; created_at: string; created_by: string; description: string; grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; id: string; live_grants: number; max_run_ttl_seconds: number; name: string; permissions: string[]; revision: number; runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[]; updated_at: string })[];
+  items: ({ access_targets: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" })[]; active_runs: number; audiences: ("custom_agent" | "ci" | "mcp_server")[]; created_at: string; created_by: string; description: string; grants?: ({ bundle_id: string; expires_at?: string; granted_at: string; granted_by: string; id: string; live: boolean; principal: string; principal_type: "user" | "machine"; removed_at?: string; removed_by?: string; removed_reason?: string })[]; id: string; live_grants: number; max_run_ttl_seconds: number; name: string; permissions: string[]; revision: number; runs?: ({ bundle_ids: string[]; bundle_names: string[]; chain: ({ actor: string; at: string; detail: string; step: "bundle_saved" | "granted" | "run_issued" })[]; effective: string[]; expires_at: string; grant_ids: string[]; id: string; issued_at: string; issued_by: string; label?: string; permissions: string[]; principal: string; revoked_at?: string; revoked_by?: string; status: "active" | "no_authority" | "expired" | "revoked" })[]; updated_at: string })[];
 }
 
 export interface AccessBundleRequest {
-  access_targets?: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh" })[];
+  access_targets?: ({ roles: string[]; target_id: string; target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" })[];
   audiences?: ("custom_agent" | "ci" | "mcp_server")[];
   description?: string;
   max_run_ttl_seconds?: number;
@@ -8337,7 +8337,7 @@ export interface PAMApprovalRequest {
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   subject: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
 }
 
 export interface PAMAutoApprovalRule {
@@ -8608,7 +8608,7 @@ export interface PAMEmergencySessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
   ttl_seconds?: number;
 }
 
@@ -8784,7 +8784,7 @@ export interface PAMSessionActivationRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
   template_id?: string;
   ttl_seconds?: number;
 }
@@ -8803,7 +8803,7 @@ export interface PAMSessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
   template_id?: string;
   ttl_seconds?: number;
 }
@@ -8832,7 +8832,7 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
 }
 
 export interface PAMTargetDisableRequest {
@@ -8860,7 +8860,7 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
 }
 
 export interface PAMTerminal {

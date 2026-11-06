@@ -5826,7 +5826,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "intent_digest", "resource", "action", "approver", "approvals", "approval_count", "required_approvals", "status")
 	pamSessionReq := object(map[string]*Schema{
 		"request_id":     uuid(),
-		"target_type":    {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+		"target_type":    {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 		"target_id":      str(),
 		"role":           str(),
 		"reason":         str(),
@@ -5838,7 +5838,7 @@ func componentSchemas() map[string]*Schema {
 		"template_id":    {Type: "string", Format: "uuid", Description: "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session"},
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
 		"principals":            {Type: "array", Items: str()},
@@ -5849,7 +5849,7 @@ func componentSchemas() map[string]*Schema {
 		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
@@ -5868,7 +5868,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "target_type", "enabled", "source")
 	pamActivationReq := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
-		"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+		"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 		"target_id":   str(), "role": str(), "reason": str(), "method": str(),
 		"payload_base64": str(), "ttl_seconds": {Type: "integer"},
 		"ssh_public_key": str(), "ssh_principal": str(),
@@ -5878,7 +5878,7 @@ func componentSchemas() map[string]*Schema {
 	pamApprovalRequest := object(map[string]*Schema{
 		"request_id": uuid(), "approval_request_id": uuid(), "intent_digest": str(),
 		"status": {Type: "string", Enum: operationApprovalStatuses}, "subject": str(),
-		"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+		"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 		"target_id":   str(), "role": str(), "approval_count": {Type: "integer"},
 		"required_approvals": {Type: "integer"}, "expires_at": timestamp(),
 	}, "request_id", "approval_request_id", "intent_digest", "status", "subject", "target_type", "target_id", "role", "approval_count", "required_approvals", "expires_at")
@@ -8852,7 +8852,7 @@ func componentSchemas() map[string]*Schema {
 		"PAMEmergencyResponders":   object(map[string]*Schema{"subjects": {Type: "array", Items: str()}}, "subjects"),
 		"PAMEmergencyGrant":        pamEmergencyGrant,
 		"PAMEmergencySessionRequest": object(map[string]*Schema{
-			"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "redis", "snowflake", "ssh"}},
+			"target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
 			"target_id":   str(), "role": str(), "reason": str(), "method": str(), "payload_base64": str(),
 			"ttl_seconds":    {Type: "integer", Description: "at most 3600: an emergency session lasts an hour at most"},
 			"ssh_public_key": str(), "ssh_principal": str(),

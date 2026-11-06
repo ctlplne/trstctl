@@ -91,6 +91,10 @@ func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eve
 }
 
 func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
+	return newRoleHarnessNamedWithOwnedStore(t, agentName, roles, claimable, eventOptions, nil, options...)
+}
+
+func newRoleHarnessNamedWithOwnedStore(t *testing.T, agentName string, roles, claimable []string, eventOptions []events.OpenOption, owned *store.Store, options ...func(*Deps)) *roleHarness {
 	t.Helper()
 	deps := []func(*Deps){withAgentChannel, func(d *Deps) {
 		d.AgentClaimableJobKinds = claimable
@@ -119,7 +123,7 @@ func newRoleHarnessNamedWithEventOptions(t *testing.T, agentName string, roles, 
 		kept = append(kept, events.WithRequiredPrivacyEventPolicies())
 	}
 	eventOptions = kept
-	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, deps...)
+	h := newServedHarnessWithOwnedStore(t, config.Protocols{}, eventOptions, owned, deps...)
 	if isolated {
 		h.tenant = uuid.NewString() // enrollment below registers it
 	}
