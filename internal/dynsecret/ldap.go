@@ -23,6 +23,8 @@ import (
 // its role is bound to; revocation removes it from those groups and deletes
 // it, after which the directory refuses its bind.
 type LDAPConfig struct {
+	// DirectoryMode is empty for generic LDAP, active_directory for existing AD accounts.
+	DirectoryMode string `json:"directory_mode"`
 	// Addr is the directory's host:port: its LDAPS listener, or, with
 	// AllowPlaintext, plain LDAP at a literal loopback or private IP.
 	Addr string
@@ -36,7 +38,8 @@ type LDAPConfig struct {
 	// UsersDN is the container leased entries are created in.
 	UsersDN string
 	// RoleGroups maps each allowed role to the DN of the group
-	// (groupOfNames) whose members get that role's authority.
+	// (groupOfNames) whose members get that role's authority. In active_directory
+	// mode each value instead names one existing AD account under UsersDN.
 	RoleGroups     map[string]string
 	UsernamePrefix string
 	// RotationAccounts maps a two-user role to two existing entries under
@@ -45,6 +48,9 @@ type LDAPConfig struct {
 	// holds; both keep their group memberships.
 	RotationAccounts map[string][2]string
 }
+
+// The active_directory mode instead rotates existing named AD user accounts
+// over verified LDAPS; it never creates inetOrgPerson entries as AD users.
 
 // ldapConn is the part of a directory connection the backend uses.
 type ldapConn interface {
@@ -58,6 +64,7 @@ type ldapConn interface {
 
 // LDAPBackend creates and deletes leased directory accounts.
 type LDAPBackend struct {
+	activeDirectory  bool
 	url              string
 	addr             string
 	tls              bool
@@ -81,6 +88,13 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 	b := &LDAPBackend{addr: net.JoinHostPort(host, port), tls: !cfg.AllowPlaintext,
 		serverName: cfg.TLSServerName, caPEM: append([]byte(nil), cfg.TLSCAPEM...), bindDN: strings.TrimSpace(cfg.BindDN),
 		usersDN: strings.TrimSpace(cfg.UsersDN), roleGroups: map[string]string{}, usernamePrefix: cfg.UsernamePrefix}
+	if cfg.DirectoryMode != "" && cfg.DirectoryMode != "active_directory" {
+		return nil, errors.New("dynsecret ldap: unknown directory_mode")
+	}
+	b.activeDirectory = cfg.DirectoryMode == "active_directory"
+	if b.activeDirectory && cfg.AllowPlaintext {
+		return nil, errors.New("dynsecret AD: verified LDAPS is required")
+	}
 	address := net.ParseIP(host)
 	switch {
 	case cfg.AllowPlaintext:
@@ -109,6 +123,9 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 		group = strings.TrimSpace(group)
 		if _, err := ldap.ParseDN(group); err != nil || group == "" {
 			return nil, fmt.Errorf("dynsecret ldap: role_bindings[%q] must be a group DN", role)
+		}
+		if b.activeDirectory && !b.insideADContainer(group) {
+			return nil, errors.New("dynsecret AD: each role names an existing account under users_dn")
 		}
 		b.roleGroups[role] = group
 	}
@@ -199,6 +216,9 @@ func (b *LDAPBackend) Create(ctx context.Context, role string) (string, []byte, 
 // CreateCredential implements RequestBackend: a lease id makes the entry's
 // name stable, so a retry after an uncertain issue replaces that one entry.
 func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	if b.activeDirectory {
+		return b.createADCredential(ctx, req)
+	}
 	if req.Static {
 		account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor)
 		if !ok {
@@ -324,6 +344,9 @@ func (b *LDAPBackend) setPassword(ctx context.Context, dn string, password []byt
 // VerifyCredential proves a credential binds: a fresh connection binds as its
 // entry with its password.
 func (b *LDAPBackend) VerifyCredential(ctx context.Context, credential []byte) error {
+	if b.activeDirectory {
+		return b.verifyADCredential(ctx, credential)
+	}
 	var parsed struct {
 		BindDN   string           `json:"bind_dn"`
 		Password secret.JSONBytes `json:"password"`
@@ -346,6 +369,9 @@ func (b *LDAPBackend) VerifyCredential(ctx context.Context, credential []byte) e
 // Revoke implements Backend: removing a gone entry succeeds; a two-user entry
 // is retired, never removed.
 func (b *LDAPBackend) Revoke(ctx context.Context, ref string) error {
+	if b.activeDirectory {
+		return b.retireADAccount(ctx, ref)
+	}
 	if b.isRotationAccount(ref) {
 		return b.retireTwoUser(ctx, ref)
 	}

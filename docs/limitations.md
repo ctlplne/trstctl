@@ -9185,3 +9185,14 @@ sign-in are unverified; the tested xrdp mode explicitly selects pinned TLS-only
 RDP. Images can contain on-screen secrets and are not regex-redacted. Session
 closure ends interaction but does not establish target logout. See the
 [configuration and proof limits](design/access-gateway.md#remote-desktop-accounts-a263-xrdp-stand-in).
+
+### AD password adapter qualification (A263)
+
+The explicit AD adapter has native Samba stand-in proof for existing-account
+password reset, stock LDAP sign-in, predecessor refusal and lockout-aware checks.
+Its provider configuration and approved desktop integration are still being built.
+It conservatively refuses an account with any recorded bad password and does not
+unlock it. A password reset does not end existing LDAP/RDP sessions or Kerberos
+tickets; its observed rejection result covers one DC. No forest replication or
+native Windows qualification is claimed. A failure between the intermediate and
+final password replacements can require administrator recovery.

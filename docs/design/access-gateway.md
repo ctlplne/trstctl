@@ -1103,3 +1103,48 @@ forest, native NLA success, third-party memory erasure, or packaged restart and
 partition recovery.
 
 Run the owned xrdp lab with `TRSTCTL_DESKTOP_LAB_BASE=<approved-cached-image@sha256:digest> bash scripts/labs/desktop.sh`. The script never pulls an image. It creates one labelled container, installs official Debian packages, runs the native helper and approved-session proofs, retains the signed export and package versions in its printed evidence directory, and stops only that container. This checks xrdp TLS mode; it does not qualify Windows NLA or Active Directory.
+
+### AD native adapter foundation (A263, Samba stand-in)
+
+The LDAP backend has an explicit `active_directory` mode for existing AD user
+accounts. This adapter is the foundation for the vaulted desktop attachment;
+public provider configuration and the approved desktop journey are the next
+slice. It does not turn generic `inetOrgPerson` issuance into an AD logon account.
+
+The adapter pins verified LDAPS to the configured CA and server name, binds with
+byte-backed credentials, and reads only the exact configured account. It refuses
+unknown accounts, disabled or locked users, expired accounts, incomplete state,
+and any nonzero bad-password count. Verification also refuses expired passwords.
+It makes one user bind after this check, with no password retries. An administrator
+must investigate unsafe state; this adapter does not unlock or enable accounts.
+A check is one DC's observation and cannot prevent concurrent failures or prove
+forest replication. A stale administrator credential can itself be refused by AD.
+
+Password reset uses Microsoft's administrative `unicodePwd` replacement over TLS.
+The bounded quoted UTF-16LE packet is written directly in locked memory and wiped.
+Samba's native password grace period accepted a predecessor in the initial proof.
+The adapter therefore installs an undisclosed random intermediate password before
+the final password, making the immediately preceding password unknown. The native
+test preserves the default grace period and password-history/complexity policy;
+it proves the previously issued password is refused by stock `ldapsearch` after
+rotation. Both replacements belong to the same existing rotation operation. An
+uncertain replacement is an error and may leave the account needing recovery;
+never assume its previous credential remains usable. Retirement also replaces
+through an undisclosed intermediate credential; it does not delete the user or
+change its memberships. Open sessions and Kerberos tickets are not revoked by
+this adapter, and no multi-DC or native Windows result is claimed.
+
+The native proof runs against a separate owned Samba4.15.13-Ubuntu DC, a DNS-SAN
+certificate and a three-attempt lockout policy. After an unrelated bad password
+increments `badPwdCount` once, repeated verification calls leave it at one: no
+additional target passwords were sent. This cached lab version is stand-in
+coverage, not current Samba release qualification. The earlier Samba lab is kept.
+See [Microsoft's password-reset protocol](https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/change-windows-active-directory-user-password)
+and [Samba's password grace period](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html#OLDPASSWORDALLOWEDPERIOD).
+
+Rerun the isolated adapter proof with approved cached Samba and Debian image pins:
+`TRSTCTL_AD_LAB_BASE=<samba-image@sha256:digest> TRSTCTL_AD_CLIENT_BASE=<debian-image@sha256:digest> bash scripts/labs/active-directory.sh`.
+It creates a fresh domain and private network, leaves existing domains alone,
+retains only public test output and version/policy evidence on the host, and stops
+its exact two containers. Private administrator references stay inside the owned
+containers. Its printed evidence directory identifies every retained resource.

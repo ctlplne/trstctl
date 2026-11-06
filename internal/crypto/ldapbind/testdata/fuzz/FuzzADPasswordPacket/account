@@ -1,0 +1,3 @@
+go test fuzz v1
+string("CN=owned,DC=example,DC=test")
+[]byte("Tr5!owned-fuzz-password")
