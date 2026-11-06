@@ -55,6 +55,7 @@ const catalog: DiscoveryCapabilityCatalog = {
     capability("network"),
     capability("cloud_machine_entitlement"),
     capability("gcp_machine_identity"),
+    capability("azure_machine_identity"),
     capability("ssh"),
     capability("ssh_trust"),
     capability("adcs"),
@@ -201,6 +202,35 @@ describe("typed discovery source setup", () => {
     );
     await user.click(await screen.findByRole("button", { name: "Save source" }));
     await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({ kind: "gcp_machine_identity" })));
+  });
+  it("reviews Azure workloads with separate Graph and ARM file references", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Owned Azure workload inventory");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "azure_machine_identity");
+    await user.type(screen.getByLabelText("Azure tenant UUID"), "10000000-0000-0000-0000-000000000001");
+    await user.type(screen.getByLabelText("Azure subscription UUID"), "20000000-0000-0000-0000-000000000002");
+    await user.type(screen.getByLabelText("Selected service-principal object UUIDs"), "30000000-0000-0000-0000-000000000003");
+    await user.type(screen.getByLabelText("Approved Graph token file reference"), "env:OWNED_GRAPH_FILE");
+    await user.type(screen.getByLabelText("Approved ARM token file reference"), "env:OWNED_ARM_FILE");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "azure_machine_identity",
+          config: expect.objectContaining({
+            graph_token_file_ref: "env:OWNED_GRAPH_FILE",
+            arm_token_file_ref: "env:OWNED_ARM_FILE",
+            read_beta_signins: false,
+            activity_lookback_days: 0,
+            service_principal_ids: ["30000000-0000-0000-0000-000000000003"],
+          }),
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({ kind: "azure_machine_identity" })));
   });
   it("requires explicit agentless opt-in and submits pinned hosts with references only", async () => {
     const user = userEvent.setup();

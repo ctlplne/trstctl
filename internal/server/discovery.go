@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/drift"
 	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
+	"trstctl.com/trstctl/internal/cloudentitlements/azureiam"
 	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -218,6 +219,7 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	// M3: a cloud account's IAM user access keys with their age and last use.
 	cloudkeys.SourceKind:  (*issuanceDispatcher).executeCloudAccessKeyDiscoveryRun,
 	assessment.SourceKind: (*issuanceDispatcher).executeCloudMachineEntitlementRun,
+	azureiam.SourceKind:   (*issuanceDispatcher).executeAzureMachineIdentityRun,
 	gcpiam.SourceKind:     (*issuanceDispatcher).executeGCPMachineIdentityRun,
 	// X4: an account and Region's KMS keys with type, size and rotation status.
 	cloudkms.SourceKind: (*issuanceDispatcher).executeCloudKMSKeyDiscoveryRun,

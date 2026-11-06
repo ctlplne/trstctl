@@ -122,6 +122,7 @@ var items = []Capability{
 	cloudAccessKeyCapability(),
 	cloudMachineEntitlementCapability(),
 	gcpMachineIdentityCapability(),
+	azureMachineIdentityCapability(),
 	cloudKMSKeyCapability(),
 	loadBalancerTLSCapability(),
 	cloudSecretCapability("cloud_secret", "Cloud secret managers"),
@@ -549,4 +550,21 @@ func gcpMachineIdentityCapability() Capability {
 		field("ca_pem", "Private endpoint trust anchor", "string", false, false, true, "Public PEM root; hostname verification remains required."),
 		field("allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit private CIDRs. Plaintext is loopback-only."),
 		field("private_egress_cidrs", "Approved private CIDRs", "cidr_list", false, false, true, "Only approved private destinations can be reached.")}, Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#gcp-workload-identity-inventory"}
+}
+
+func azureMachineIdentityCapability() Capability {
+	return Capability{Kind: "azure_machine_identity", Label: "Azure workload identities", Tool: "Discover", Route: "/discovery?tab=sources&kind=azure_machine_identity", SetupSurface: SetupSourceWizard, Purpose: "Read selected service principals and managed identities, public credential dates, app roles, federation, subscription RBAC and optional beta workload sign-ins.", DataHandling: "Uses separate operator-approved private Graph/ARM bearer-token files. Persists typed public metadata, never secret values or password hints. Bindings do not prove effective access; observed sign-ins do not prove non-use.", Permission: "discovery:write", Edition: "core", Execution: "control plane", Configuration: []Field{
+		field("azure_tenant_id", "Azure tenant UUID", "string", true, false, false, "Must match the native Graph organization and ARM subscription tenant."),
+		field("subscription_id", "Subscription UUID", "string", true, false, false, "Read-only RBAC scope; native subscription ownership is verified."),
+		field("service_principal_ids", "Workload principal UUIDs", "string_list", true, false, false, "1..64 selected service-principal object IDs, including ManagedIdentity type."),
+		field("graph_token_file_ref", "Graph reader file reference", "credential_ref", true, true, false, "Approved env: reference to a private raw Graph-audience access-token file."),
+		field("arm_token_file_ref", "ARM reader file reference", "credential_ref", true, true, false, "Separate approved env: reference to a private ARM-audience access-token file."),
+		field("read_beta_signins", "Read beta workload sign-ins", "boolean", false, false, false, "Explicit opt-in to beta API; tenant permissions/license and retention may limit evidence."),
+		field("activity_lookback_days", "Beta sign-in lookback days", "integer", false, false, false, "1..30 with beta opt-in; otherwise zero."),
+		field("managed_identity_resources", "Managed identity ARM bindings", "object", false, false, true, "Selected principal UUID to exact user-assigned ARM resource ID; system-assigned linkage remains unqualified."),
+		field("graph_endpoint", "Graph origin", "url", false, false, true, "Defaults to https://graph.microsoft.com; fixed origin without redirects."),
+		field("arm_endpoint", "ARM origin", "url", false, false, true, "Defaults to https://management.azure.com; separate audience."),
+		field("ca_pem", "Private endpoint trust anchor", "string", false, false, true, "Public PEM root; hostname verification remains required."),
+		field("allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress permission and explicit private CIDRs. Plaintext is loopback-only."),
+		field("private_egress_cidrs", "Approved private CIDRs", "cidr_list", false, false, true, "Only approved private destinations can be reached.")}, Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#azure-workload-identity-inventory"}
 }

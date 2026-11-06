@@ -4183,7 +4183,7 @@ export interface DiscoveryCapability {
   documentation_ref: string;
   edition: string;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "azure_machine_identity" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   label: string;
   lifecycle: string[];
   permission: string;
@@ -4315,7 +4315,7 @@ export interface DiscoveryMonitoringSource {
   failed_run_count: number;
   finding_count: number;
   findings_path: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "azure_machine_identity" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   last_discovery_at?: string;
   last_run_completed_at?: string;
   last_run_error: string;
@@ -4354,7 +4354,7 @@ export interface DiscoveryPlanPreview {
   estimated_upper_seconds: number;
   excluded_target_count: number;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "azure_machine_identity" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   normalized_target_count: number;
   normalized_targets?: string[];
   permission: string;
@@ -4471,7 +4471,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "azure_machine_identity" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -4484,7 +4484,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "azure_machine_identity" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "gcp_machine_identity" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
 }
 

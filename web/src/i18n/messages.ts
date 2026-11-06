@@ -10,6 +10,45 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.azure.evidenceUnavailable": { defaultMessage: "Captured Azure evidence unavailable", description: "Azure workload inventory." },
+  "discovery.azure.rescan": { defaultMessage: "Capture this native source again to refresh its metadata.", description: "Azure workload inventory." },
+  "discovery.azure.useUnknown": {
+    defaultMessage: "Credential last use is unknown. Missing sign-ins do not establish non-use.",
+    description: "Azure workload inventory.",
+  },
+  "discovery.azure.bindingScope": {
+    defaultMessage: "Captured RBAC assignment at {scope}; effective access is unknown.",
+    description: "Azure workload inventory.",
+  },
+  "discovery.azure.title": { defaultMessage: "Azure workload identities", description: "Azure workload inventory." },
+  "discovery.azure.tenant": { defaultMessage: "Azure tenant UUID", description: "Azure workload inventory." },
+  "discovery.azure.subscription": { defaultMessage: "Azure subscription UUID", description: "Azure workload inventory." },
+  "discovery.azure.graphRef": { defaultMessage: "Approved Graph token file reference", description: "Azure workload inventory." },
+  "discovery.azure.armRef": { defaultMessage: "Approved ARM token file reference", description: "Azure workload inventory." },
+  "discovery.azure.principals": { defaultMessage: "Selected service-principal object UUIDs", description: "Azure workload inventory." },
+  "discovery.azure.auditDays": { defaultMessage: "Beta sign-in lookback days", description: "Azure workload inventory." },
+  "discovery.azure.betaHelp": {
+    defaultMessage: "1\u201330 days when enabled. Beta sign-ins require tenant permissions, retention and licensing. Missing events do not prove non-use.",
+    description: "Azure workload inventory.",
+  },
+  "discovery.azure.betaOptIn": { defaultMessage: "Read beta workload sign-ins (observed evidence only)", description: "Azure workload inventory." },
+  "discovery.azure.graphOrigin": { defaultMessage: "Graph origin", description: "Azure workload inventory." },
+  "discovery.azure.armOrigin": { defaultMessage: "ARM origin", description: "Azure workload inventory." },
+  "discovery.azure.resources": { defaultMessage: "User-assigned identity resource bindings (JSON)", description: "Azure workload inventory." },
+  "discovery.azure.resourcesHelp": {
+    defaultMessage:
+      "Optional object mapping a selected principal UUID to its exact user-assigned ARM resource ID. Native principal, tenant and client IDs must agree.",
+    description: "Azure workload inventory.",
+  },
+  "discovery.azure.help": {
+    defaultMessage:
+      "Reads selected service principals and managed identities with separate Graph/ARM token-file references. Retains public credential dates, app roles, federation and RBAC conditions. Effective permissions and proof of non-use remain unknown.",
+    description: "Azure workload inventory.",
+  },
+  "discovery.azure.findingHeading": { defaultMessage: "Captured Azure workload evidence", description: "Azure workload inventory." },
+  "discovery.azure.snapshot": { defaultMessage: "Captured {at}; tenant {tenant}; subscription {subscription}.", description: "Azure workload inventory." },
+  "discovery.azure.keyDates": { defaultMessage: "Created {created}; expires {expires}; long-lived {long}.", description: "Azure workload inventory." },
+  "discovery.azure.federation": { defaultMessage: "Captured federation trusts", description: "Azure workload inventory." },
   "discovery.gcp.title": { defaultMessage: "GCP workload identities", description: "Captured GCP workload evidence." },
   "discovery.gcp.findingHeading": { defaultMessage: "Captured GCP workload identity", description: "Captured GCP workload evidence." },
   "discovery.gcp.snapshot": { defaultMessage: "Captured {at} in project {project}; account {state}.", description: "Captured GCP workload evidence." },

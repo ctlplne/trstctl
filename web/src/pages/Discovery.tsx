@@ -1,3 +1,4 @@
+import { AzureMachineFindingParts } from "./discovery/AzureMachineFindingParts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, RefObject } from "react";
 import { CheckCircle2, Activity, ClipboardList, Code2, Play, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
@@ -96,6 +97,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   cloud_network_path: translateNow("discovery.sourceKind.cloudNetworkPath"),
   cloud_access_key: translateNow("discovery.sourceKind.cloudAccessKey"),
   cloud_machine_entitlement: translateNow("discovery.machine.title"),
+  azure_machine_identity: translateNow("discovery.azure.title"),
   gcp_machine_identity: translateNow("discovery.gcp.title"),
   cloud_kms_key: translateNow("discovery.sourceKind.cloudKmsKey"),
   load_balancer_tls: translateNow("discovery.sourceKind.loadBalancerTls"),
@@ -2518,6 +2520,7 @@ function FindingTable({
           <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
           <CloudMachineFindingParts finding={selected} />
           <GCPMachineFindingParts finding={selected} />
+          <AzureMachineFindingParts finding={selected} />
           <FindingAnnotation finding={selected} busy={actionBusy} onAnnotate={() => annotateAtProvider(selected)} />
 
           {(() => {

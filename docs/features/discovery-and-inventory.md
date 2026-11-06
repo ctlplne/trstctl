@@ -1499,3 +1499,70 @@ These reads follow the official [service-account IAM policy API](https://docs.cl
 and [Cloud Logging entries API](https://docs.cloud.google.com/logging/docs/reference/v2/rest/v2/entries/list).
 Local API-shaped fixtures prove the product path and tenant/replay boundaries;
 OAuth permissions and native behavior in a live GCP account remain Track B proof.
+
+### Azure workload identity inventory
+
+Select **Azure workload identities** in Discover → Sources, or create a discovery
+source with kind `azure_machine_identity` through the existing API/CLI. Supply an
+Azure tenant UUID, subscription UUID, 1–64 service-principal **object** UUIDs and
+separate `graph_token_file_ref` / `arm_token_file_ref` values. Each is an
+operator-approved `env:NAME` whose value names an owner-only file containing a raw
+access token for that API's audience. Tokens are never source configuration values.
+The operator refreshes these files before their short-lived tokens expire.
+
+Graph needs organization ID visibility (`Organization.Read.All` for application
+access), service-principal/application visibility (`Application.Read.All`) and
+consent appropriate to the tenant. ARM needs subscription read plus
+`Microsoft.Authorization/roleAssignments/read` and `roleDefinitions/read` on the
+intended scopes. trstctl checks Graph's organization ID and ARM's native subscription
+ID/tenant ID before collecting identities. Wrong or unreadable tenant bindings fail
+closed. App-registration federation may be unreadable when the application belongs
+to another tenant; that gap stays visible.
+
+The collector reads public credential IDs and creation/expiry dates, app-role
+assignments and referenced resource definitions, application federation and
+subscription RBAC assignments/role definitions. It retains RBAC conditions and
+`notActions`, `dataActions` and `notDataActions`. It discards password hints,
+`secretText`, key bytes and unrecognized response fields. It never creates or
+deletes credentials. A credential at least 90 days old is labeled long-lived;
+absence of a recorded sign-in never means the credential is unused.
+
+Graph principals with native type `ManagedIdentity` are captured explicitly. An
+optional `managed_identity_resources` object maps selected principal UUIDs to exact
+user-assigned identity ARM IDs. trstctl verifies the resource's principal, tenant
+and client IDs before retaining its linkage and federation. Reading this path
+requires `Microsoft.ManagedIdentity/userAssignedIdentities/read` and its
+`federatedIdentityCredentials/read` operation. System-assigned resource linkage,
+Windows/Azure runtime behavior and live tenant qualification remain outside this
+capture proof.
+
+Workload sign-in reads are off by default. To enable the **beta** Graph API, set
+`read_beta_signins: true` and `activity_lookback_days: 1..30`; the console presents
+this opt-in explicitly. Audit access requires the applicable Graph audit permissions
+and tenant licensing/retention. The collector filters service-principal/managed
+identity event types, verifies native principal/application IDs and successful
+status, and binds observed use only to the exact credential key ID. Beta APIs are
+subject to change. Missing events, permissions or key IDs leave last use unknown.
+
+The setup form previews the exact selected scope. Findings show public dates,
+roles, trust metadata and coverage. Graph/NHI retain observed ownership and role
+bindings; they create no effective-access grant from Azure metadata. PIM activation,
+deny assignments, inherited guards, resource constraints and conditional-access
+evaluation remain unknown. The native AWS policy evaluator and reviewed AWS
+remediation are separate workflows.
+
+Origins default to `https://graph.microsoft.com` and
+`https://management.azure.com`. Custom origins need the existing private-egress
+permission/explicit CIDRs when private, with public CA PEM if needed; hostname
+verification remains required. Plaintext is limited to explicitly approved loopback
+fixtures. Redirects, cross-origin/path-changing cursors and cursor changes to the
+original filter/selection are refused. Captures bound calls, identities, pages,
+response bytes and event size. A partial read reports partial coverage rather than
+asserting tenant-wide completeness. Local served proofs use native API-shaped
+fixtures with real PostgreSQL/NATS; they do not qualify a live Azure tenant.
+
+Native API references: [service principal](https://learn.microsoft.com/en-us/graph/api/serviceprincipal-get?view=graph-rest-1.0),
+[application federation](https://learn.microsoft.com/en-us/graph/api/application-list-federatedidentitycredentials?view=graph-rest-1.0),
+[subscription](https://learn.microsoft.com/en-us/rest/api/resources/subscriptions/get?view=rest-resources-2022-12-01),
+[RBAC assignments](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest),
+[beta workload sign-ins](https://learn.microsoft.com/en-us/graph/api/signin-list?view=graph-rest-beta).

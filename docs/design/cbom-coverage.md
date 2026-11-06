@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 27 served source kinds
+## Observability envelopes — 28 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -43,6 +43,7 @@ served set by construction.
 | Source kind | Observes | Preconditions | Freshness |
 |---|---|---|---|
 | `api_key` | `api-key-token` | `connector-credential-configured` | 24h0m0s |
+| `azure_machine_identity` | `cloud-access-key`, `nhi-identity` | `cloud-credential-configured` | 24h0m0s |
 | `cbom_import_image` | `container-image-crypto` | `cbom-imported` | 24h0m0s |
 | `cbom_import_source` | `source-code-crypto` | `cbom-imported` | 24h0m0s |
 | `cbom_import_vendor` | `vendor-embedded-crypto` | `cbom-imported` | 2160h0m0s |
@@ -106,7 +107,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 |---|---|---|
 | `api-key-token` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind api_key (needs: connector-credential-configured)** |
 | `certificate-key` | `OBSERVED` | observed by dc-east |
-| `cloud-access-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_access_key or cloud_machine_entitlement or gcp_machine_identity (needs: cloud-credential-configured)** |
+| `cloud-access-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind azure_machine_identity or cloud_access_key or cloud_machine_entitlement or gcp_machine_identity (needs: cloud-credential-configured)** |
 | `cloud-certificate` | `OBSERVABLE-UNOBSERVED` | source "acm-prod" is configured but has never completed a run — **run discovery source "acm-prod"** |
 | `cloud-kms-key` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_kms_key (needs: cloud-credential-configured)** |
 | `compromised-credential` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind credential_compromise (needs: connector-credential-configured)** |
@@ -116,7 +117,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `kubernetes-tls-endpoint` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind k8s_ingress_gateway (needs: cluster-credential-configured)** |
 | `network-path` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_network_path (needs: cloud-credential-configured)** |
 | `nhi-behavior` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind nhi_behavior (needs: connector-credential-configured)** |
-| `nhi-identity` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_machine_entitlement or gcp_machine_identity or nhi_cross_surface (needs: cloud-credential-configured, connector-credential-configured)** |
+| `nhi-identity` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind azure_machine_identity or cloud_machine_entitlement or gcp_machine_identity or nhi_cross_surface (needs: cloud-credential-configured, connector-credential-configured)** |
 | `oauth-grant` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind oauth_grant (needs: connector-credential-configured)** |
 | `operator-declared` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind manual (needs: operator-supplied-findings)** |
 | `passive-wire-traffic` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **grant an agent the observer role and start it with --observe-interface on the interface to watch (needs: observer-agent-reporting)** |

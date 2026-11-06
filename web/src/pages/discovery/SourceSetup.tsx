@@ -1,3 +1,4 @@
+import { AzureSourceFields, azureFieldPaths, azureSchemaFields, azureDefaults, azureValidation, buildAzureConfig } from "./SourceSetupAzureFields";
 import { GCPSourceFields, gcpFieldPaths, gcpSchemaFields, gcpDefaults, gcpValidation, buildGCPConfig } from "./SourceSetupGCPFields";
 import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,6 +42,7 @@ const primaryKinds = [
   "secret_store",
   "cloud_machine_entitlement",
   "gcp_machine_identity",
+  "azure_machine_identity",
 ] as const;
 export type PrimaryKind = (typeof primaryKinds)[number];
 const noProviders: NonNullable<DiscoveryCapability["providers"]> = [];
@@ -95,6 +97,7 @@ const secretFieldPaths = [
 export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
   cloud_machine_entitlement: machineFieldPaths,
   gcp_machine_identity: gcpFieldPaths,
+  azure_machine_identity: azureFieldPaths,
   network: networkFieldPaths,
   ssh: networkFieldPaths,
   ssh_trust: [
@@ -161,6 +164,7 @@ const setupSchema = z
   .object({
     ...machineSchemaFields,
     ...gcpSchemaFields,
+    ...azureSchemaFields,
     name: z.string().trim().min(2, translateNow("discovery.setup.validation.name")),
     kind: z.enum(primaryKinds),
     sshEnabled: z.boolean(),
@@ -215,6 +219,10 @@ const setupSchema = z
     labelValue: z.string().trim(),
   })
   .superRefine((value, ctx) => {
+    if (value.kind === "azure_machine_identity") {
+      for (const [field, message] of azureValidation(value)) ctx.addIssue({ code: "custom", path: [field], message });
+      return;
+    }
     if (value.kind === "gcp_machine_identity") {
       for (const [field, message] of gcpValidation(value)) ctx.addIssue({ code: "custom", path: [field], message });
       return;
@@ -339,6 +347,7 @@ export type SetupValues = z.infer<typeof setupSchema>;
 const defaults: SetupValues = {
   ...machineDefaults,
   ...gcpDefaults,
+  ...azureDefaults,
   name: "",
   kind: "network",
   sshEnabled: false,
@@ -588,6 +597,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
             {values.kind === "ssh_trust" ? <SSHCollectionFields form={form} segments={declaredScopes} agents={relayAgents.list} /> : null}
             {values.kind === "cloud_machine_entitlement" ? <MachineSourceFields form={form} /> : null}
             {values.kind === "gcp_machine_identity" ? <GCPSourceFields form={form} /> : null}
+            {values.kind === "azure_machine_identity" ? <AzureSourceFields form={form} /> : null}
             {values.kind === "adcs" ? <ADCSFields form={form} agents={relayAgents.list} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
               <CloudFields form={form} providers={providers} />
@@ -1116,6 +1126,7 @@ export function scopeDeclarations(values: SetupValues): string[] {
 function buildConfig(values: SetupValues): Record<string, unknown> {
   if (values.kind === "cloud_machine_entitlement") return buildMachineConfig(values);
   if (values.kind === "gcp_machine_identity") return buildGCPConfig(values);
+  if (values.kind === "azure_machine_identity") return buildAzureConfig(values);
   if (values.kind === "ssh_trust")
     return {
       enabled: values.sshEnabled,

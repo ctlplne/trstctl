@@ -228,9 +228,13 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	if err != nil {
 		return nil, err
 	}
+	azureFindings, err := addAzureMachineIdentities(ctx, st, tenantID, g, findings)
+	if err != nil {
+		return nil, err
+	}
 	agentEvidence := newAgentFindingEvidence(st, tenantID)
 	for _, f := range findings {
-		if cloudFindings[f.ID] || gcpFindings[f.ID] {
+		if cloudFindings[f.ID] || gcpFindings[f.ID] || azureFindings[f.ID] {
 			continue
 		}
 		// A finding's kind and metadata are author-controlled for manual imports.

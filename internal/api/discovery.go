@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
 	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
+	"trstctl.com/trstctl/internal/cloudentitlements/azureiam"
 	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery"
@@ -201,6 +202,27 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		return discoveryPlanPreviewResponse{}, err
 	}
 
+	if req.Kind == azureiam.SourceKind {
+		config, err := azureiam.DecodeConfig(cfg)
+		if err != nil {
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, err)
+		}
+		if config.AllowPrivateEndpoint {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return discoveryPlanPreviewResponse{}, err
+			}
+		}
+		preview.Protocol = "Azure Graph and ARM read APIs; optional beta workload sign-ins"
+		preview.NormalizedTargetCount = len(config.PrincipalIDs)
+		preview.NormalizedTargets = append([]string(nil), config.PrincipalIDs...)
+		if len(preview.NormalizedTargets) > previewTargetLimit {
+			preview.NormalizedTargets = preview.NormalizedTargets[:previewTargetLimit]
+			preview.PreviewTruncated = true
+		}
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
+		preview.EstimatedUpperSeconds = 300
+	}
 	if req.Kind == gcpiam.SourceKind {
 		config, err := gcpiam.DecodeConfig(cfg)
 		if err != nil {
@@ -1510,6 +1532,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		}
 	}
 
+	if req.Kind == azureiam.SourceKind {
+		if _, err := azureiam.DecodeConfig(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+	}
 	if req.Kind == gcpiam.SourceKind {
 		if _, err := gcpiam.DecodeConfig(cfg); err != nil {
 			return nil, errStatusFrom(http.StatusBadRequest, err)

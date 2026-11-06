@@ -123,6 +123,7 @@ function seedDiscoveryMocks() {
       wizardCapability("network"),
       wizardCapability("cloud_machine_entitlement"),
       wizardCapability("gcp_machine_identity"),
+      wizardCapability("azure_machine_identity"),
       wizardCapability("ssh"),
       wizardCapability("ssh_trust"),
       wizardCapability("adcs"),

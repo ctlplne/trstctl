@@ -1044,6 +1044,139 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#gcp-workload-identity-inventory"
     },
     {
+      "kind": "azure_machine_identity",
+      "label": "Azure workload identities",
+      "purpose": "Read selected service principals and managed identities, public credential dates, app roles, federation, subscription RBAC and optional beta workload sign-ins.",
+      "data_handling": "Uses separate operator-approved private Graph/ARM bearer-token files. Persists typed public metadata, never secret values or password hints. Bindings do not prove effective access; observed sign-ins do not prove non-use.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=azure_machine_identity",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "azure_tenant_id",
+          "label": "Azure tenant UUID",
+          "type": "string",
+          "required": true,
+          "description": "Must match the native Graph organization and ARM subscription tenant."
+        },
+        {
+          "path": "subscription_id",
+          "label": "Subscription UUID",
+          "type": "string",
+          "required": true,
+          "description": "Read-only RBAC scope; native subscription ownership is verified."
+        },
+        {
+          "path": "service_principal_ids",
+          "label": "Workload principal UUIDs",
+          "type": "string_list",
+          "required": true,
+          "description": "1..64 selected service-principal object IDs, including ManagedIdentity type."
+        },
+        {
+          "path": "graph_token_file_ref",
+          "label": "Graph reader file reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Approved env: reference to a private raw Graph-audience access-token file."
+        },
+        {
+          "path": "arm_token_file_ref",
+          "label": "ARM reader file reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Separate approved env: reference to a private ARM-audience access-token file."
+        },
+        {
+          "path": "read_beta_signins",
+          "label": "Read beta workload sign-ins",
+          "type": "boolean",
+          "required": false,
+          "description": "Explicit opt-in to beta API; tenant permissions/license and retention may limit evidence."
+        },
+        {
+          "path": "activity_lookback_days",
+          "label": "Beta sign-in lookback days",
+          "type": "integer",
+          "required": false,
+          "description": "1..30 with beta opt-in; otherwise zero."
+        },
+        {
+          "path": "managed_identity_resources",
+          "label": "Managed identity ARM bindings",
+          "type": "object",
+          "required": false,
+          "advanced": true,
+          "description": "Selected principal UUID to exact user-assigned ARM resource ID; system-assigned linkage remains unqualified."
+        },
+        {
+          "path": "graph_endpoint",
+          "label": "Graph origin",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Defaults to https://graph.microsoft.com; fixed origin without redirects."
+        },
+        {
+          "path": "arm_endpoint",
+          "label": "ARM origin",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Defaults to https://management.azure.com; separate audience."
+        },
+        {
+          "path": "ca_pem",
+          "label": "Private endpoint trust anchor",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Public PEM root; hostname verification remains required."
+        },
+        {
+          "path": "allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress permission and explicit private CIDRs. Plaintext is loopback-only."
+        },
+        {
+          "path": "private_egress_cidrs",
+          "label": "Approved private CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Only approved private destinations can be reached."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#azure-workload-identity-inventory"
+    },
+    {
       "kind": "cloud_kms_key",
       "label": "Cloud KMS keys",
       "purpose": "Inventory the keys a cloud account's key management service holds, with each key's type, size and rotation status, so unrotated and quantum-vulnerable keys stand out.",
