@@ -387,9 +387,36 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 	if err != nil {
 		return err
 	}
-	restored, restoreErr := a.writeStaticRotationSecretVersion(ctx, cmd, "rollback", old, cmd.ResultVersion)
+	held, err := secret.NewFrom(old)
+	secret.Wipe(old)
+	if err != nil {
+		return err
+	}
+	defer held.Destroy()
+	old = held.Bytes()
+	intent, restoreErr := a.prepareStaticRotationSecretVersion(ctx, cmd, "rollback", old, cmd.ResultVersion)
+	if restoreErr != nil {
+		secret.Wipe(old)
+		if errors.Is(restoreErr, store.ErrApplicationSecretMutationInFlight) || errors.Is(restoreErr, errPendingApplicationSecretApproval) {
+			return restoreErr
+		}
+		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationRollbackFailed, Error: staticRotationRestoreFailedDetail})
+	}
+	restorer, nativeRestore := provider.(dynsecret.StaticCredentialRestorer)
+	nativeRestore = nativeRestore && staticRotationPhase(provider, cmd.Key) == dynsecret.RotationSinglePhase
+	if nativeRestore && intent.ResultVersion == 0 {
+		if err := restorer.RestoreStaticCredential(ctx, cmd.Key, cmd.OldRef, old); err != nil {
+			secret.Wipe(old)
+			return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationRollbackFailed, Error: staticRotationRestoreFailedDetail})
+		}
+	}
+	restored, restoreErr := a.commitStaticRotationSecretVersion(ctx, cmd, intent)
 	secret.Wipe(old)
 	if restoreErr != nil {
+		if nativeRestore {
+			return restoreErr
+		} // retry the retained native result and publication receipt
+
 		if errors.Is(restoreErr, store.ErrApplicationSecretMutationInFlight) || errors.Is(restoreErr, errPendingApplicationSecretApproval) {
 			return restoreErr // retry the restore rather than declaring it lost
 		}
@@ -422,72 +449,11 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 // crash after the version committed recovers the receipt instead of writing a
 // second version.
 func (a *API) writeStaticRotationSecretVersion(ctx context.Context, cmd store.SecretStaticRotationCommand, step string, value []byte, expectedVersion int) (int, error) {
-	idempotencyKey := cmd.ID + ":" + step
-	principal := "static-rotation:" + cmd.ID
-	request := struct {
-		Command string `json:"command"`
-		Step    string `json:"step"`
-		Key     string `json:"key"`
-	}{Command: cmd.ID, Step: step, Key: cmd.Key}
-	keyDigest, binding, err := a.applicationSecretRequestBinding(cmd.TenantID, idempotencyKey, principal,
-		"WORKER", "/api/v1/secrets/rotations/"+cmd.ID, "rotate", staticRotationSurface, cmd.Key, request)
+	intent, err := a.prepareStaticRotationSecretVersion(ctx, cmd, step, value, expectedVersion)
 	if err != nil {
 		return 0, err
 	}
-	eventID := applicationSecretMutationEventID(cmd.TenantID, cmd.TenantEpoch, cmd.Key, "rotate", keyDigest)
-	if receipt, ok, err := a.applicationSecretMaterializedResult(ctx, cmd.TenantID, eventID, binding, cmd.Key, "rotate"); err != nil {
-		return 0, err
-	} else if ok {
-		return receipt.ResultVersion, nil
-	}
-	fence, payload, prepared, err := a.applicationSecretMutationFence(ctx, cmd.TenantID, cmd.Key, "rotate", eventID, binding)
-	if err != nil {
-		return 0, err
-	}
-	if !prepared {
-		current, err := a.secrets.be.Store.GetSecret(ctx, cmd.TenantID, cmd.Key)
-		if err != nil {
-			return 0, err
-		}
-		if current.Version != expectedVersion {
-			return 0, errStatus(http.StatusConflict, staticRotationVersionMovedDetail)
-		}
-		commandKeyDigest, evidence, err := a.applicationSecretCommandEvidence(cmd.TenantID, idempotencyKey, canonicalApplicationSecretCommand{
-			Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: cmd.TenantEpoch,
-			Action: "rotate", Name: cmd.Key, Surface: staticRotationSurface, Provider: cmd.Provider,
-			OldRef: cmd.OldRef, ExpectedVersion: expectedVersion, ResultVersion: expectedVersion + 1, Value: value,
-		})
-		if err != nil {
-			return 0, err
-		}
-		if commandKeyDigest != keyDigest {
-			return 0, errors.New("api: static rotation idempotency digest changed")
-		}
-		sealed, err := a.secrets.seal(ctx, cmd.TenantID, value, sealAAD(cmd.TenantID, cmd.Key))
-		if err != nil {
-			return 0, err
-		}
-		payload = projections.ApplicationSecretMutation{
-			TenantEpoch: cmd.TenantEpoch, Action: "rotate", Name: cmd.Key,
-			ExpectedVersion: expectedVersion, ResultVersion: expectedVersion + 1, Sealed: sealed,
-			IdempotencyKeyDigest: keyDigest, RequestBinding: binding,
-			CommandEvidence: evidence, Surface: staticRotationSurface,
-		}
-		fence, payload, err = a.claimApplicationSecretMutationFence(ctx, cmd.TenantID, cmd.Key,
-			"rotate", eventID, projections.EventApplicationSecretRotated, binding, payload)
-		if err != nil {
-			return 0, err
-		}
-	}
-	fence, payload, err = a.finalizeApplicationSecretMutationFence(ctx, cmd.TenantID, fence, payload)
-	if err != nil {
-		return 0, err
-	}
-	_, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, cmd.TenantID, fence, payload, prepared)
-	if err != nil {
-		return 0, err
-	}
-	return canonical.ResultVersion, nil
+	return a.commitStaticRotationSecretVersion(ctx, cmd, intent)
 }
 
 // ---- served views ---------------------------------------------------------

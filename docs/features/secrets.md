@@ -2439,3 +2439,24 @@ deny policy, predecessor revocation remains pending until AWS expiry; it does no
 finish merely because trstctl revoked the lease. Native LocalStack wire/readback
 proof does not qualify live AWS enforcement. The reviewed replacement and workload
 adoption path must separately retire an existing long-lived IAM key.
+
+
+#### Native recovery for a vaulted AD account
+
+The explicit `ldap` provider profile with `directory_mode: active_directory`
+can restore a single configured account after verification of its replacement
+fails. Recovery reserves the existing application-secret publication fence, uses
+the configured directory administrator to restore the exact predecessor password,
+and proves that password authenticates over pinned LDAPS before publishing it as
+a recovered vault version. An undisclosed intermediate reset prevents the rejected
+successor from remaining valid during AD's preceding-password grace period.
+Neither the password nor the intermediate appears in events or command output.
+
+An upstream reset or sign-in failure produces `rollback_failed`; it does not
+publish an old vault value while claiming the directory recovered. Inspect that
+command and resolve its native account/fenced publication before another scheduled
+rotation. Existing lockout checks still refuse unsafe authentication attempts.
+This inverse is specific to the configured AD single-account profile. Paired
+accounts retain their existing two-phase lifecycle. The native recovery proof uses
+Samba AD; Windows service/task/IIS dependent coordination and directory drift
+reconciliation have separate execution and verification requirements.

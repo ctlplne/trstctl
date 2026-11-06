@@ -49,6 +49,13 @@ type StaticRotationProvider interface {
 	VerifyStaticCredential(ctx context.Context, backendRef string, credential []byte) (string, error)
 }
 
+// StaticCredentialRestorer is an explicit native inverse for an in-place
+// rotation. Success means the exact predecessor authenticates upstream again;
+// the outbox worker may only then publish it as recovered vault state.
+type StaticCredentialRestorer interface {
+	RestoreStaticCredential(ctx context.Context, role, backendRef string, credential []byte) error
+}
+
 // TwoUserRotationProvider is a StaticRotationProvider whose roles may
 // alternate between two fixed accounts instead of minting a principal per
 // rotation (A240): a rotation stages the account its predecessor does not

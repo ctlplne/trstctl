@@ -262,6 +262,9 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 	provider.open = func(ctx context.Context) (requestDynamicBackend, func(), error) {
 		return openConfiguredDynamicBackend(ctx, provider)
 	}
+	if cfg.Type == "ldap" && cfg.DirectoryMode == "active_directory" {
+		return &configuredADRotationProvider{configuredDynamicProvider: provider}
+	}
 	if cfg.Type == "gcp-iam" {
 		return &configuredPreparedDynamicProvider{configuredDynamicProvider: provider}
 	}

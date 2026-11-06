@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2667 annotated sites across 31 rules. Each row is
+2669 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1461` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1464` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1155,7 +1155,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (56 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (58 sites)
 
 | Location | Reason |
 |---|---|
@@ -1165,6 +1165,7 @@ not this file.
 | `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/dynsecret/active_directory.go:105` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
+| `internal/dynsecret/active_directory_restore_test.go:41` | byte-backed synthetic credential DTO exercises rejected native recovery; never logged or persisted (CWE-200) |
 | `internal/dynsecret/auth0.go:108` | the rotated client secret is this provider's output: the outbox seals it and only the secret's readers open it (CWE-200) |
 | `internal/dynsecret/auth0.go:193` | client credentials go to the tenant's token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/aws_cache_users.go:170` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1214,6 +1215,7 @@ not this file.
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:112` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)
