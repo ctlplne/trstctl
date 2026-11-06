@@ -120,6 +120,7 @@ var items = []Capability{
 	cloudCertificateCapability(),
 	cloudNetworkPathCapability(),
 	cloudAccessKeyCapability(),
+	cloudMachineEntitlementCapability(),
 	cloudKMSKeyCapability(),
 	loadBalancerTLSCapability(),
 	cloudSecretCapability("cloud_secret", "Cloud secret managers"),
@@ -514,4 +515,23 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func cloudMachineEntitlementCapability() Capability {
+	return Capability{
+		Kind: "cloud_machine_entitlement", Label: "Cloud machine entitlements", Tool: "Discover", Route: "/discovery?tab=sources&kind=cloud_machine_entitlement", SetupSurface: SetupSourceWizard,
+		Purpose:      "Read selected AWS workload users and roles, compare exact policy checks with scoped recorded activity, and identify stale keys and possible policy escalation.",
+		DataHandling: "Reads IAM metadata through an operator-approved private STS session file. Stores policy/trust/key identifiers and explicit evidence gaps. Imported organization, resource and activity coverage remains operator-supplied evidence. No mutation occurs.",
+		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
+		Configuration: []Field{
+			field("session_file_ref", "STS session file reference", "credential_ref", true, true, false, "Operator-approved env: reference whose value names an owner-only standard STS JSON response file; no inline credentials or tenant-chosen file paths."),
+			field("principals", "Workload identities", "record_list", true, false, false, "Explicit IAM user/role names used by workloads; at most 256, never assumed to be all account users."),
+			field("assessment", "Permission and activity evidence", "object", true, false, false, "Exact action/resource/context checks with separately identified recorded organization/resource policies and activity coverage; gaps remain visible."),
+			field("endpoint", "IAM endpoint", "url", false, false, true, "Fixed IAM origin; defaults to https://iam.amazonaws.com."),
+			field("region", "Signing region", "string", false, false, true, "IAM signing region; defaults to us-east-1."),
+			field("ca_pem", "Private endpoint trust anchor", "string", false, false, true, "Optional public PEM root for a private endpoint; hostname verification remains required."),
+			field("allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit private CIDRs; plaintext is allowed only on loopback."),
+			field("private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Only these approved private destinations can be reached; no redirects occur."),
+		}, Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-machine-entitlements",
+	}
 }

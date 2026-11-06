@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
+	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
@@ -197,6 +198,29 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		}
 	} else if !store.IsNotFound(err) {
 		return discoveryPlanPreviewResponse{}, err
+	}
+	if req.Kind == assessment.SourceKind {
+		config, err := assessment.DecodeSource(cfg)
+		if err != nil {
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, err)
+		}
+		if config.AllowPrivateEndpoint {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return discoveryPlanPreviewResponse{}, err
+			}
+		}
+		preview.Protocol = "AWS IAM read-only query API"
+		preview.NormalizedTargetCount = len(config.Principals)
+		for _, principal := range config.Principals {
+			preview.NormalizedTargets = append(preview.NormalizedTargets, string(principal.Kind)+":"+principal.Name)
+		}
+		if len(preview.NormalizedTargets) > previewTargetLimit {
+			preview.NormalizedTargets = preview.NormalizedTargets[:previewTargetLimit]
+			preview.PreviewTruncated = true
+		}
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
+		preview.EstimatedUpperSeconds = 300
 	}
 	if req.Kind == "ct_log" {
 		var raw ctMonitoringSourceConfig
@@ -1421,7 +1445,22 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	if err := json.Unmarshal(cfg, &obj); err != nil || obj == nil {
 		return nil, errStatus(http.StatusBadRequest, "config must be a JSON object")
 	}
-	if containsInlineSecret(obj) {
+	secretGuardObject := obj
+	if req.Kind == assessment.SourceKind {
+		// Typed admission rejects unknown credential fields at every fixed schema
+		// level. IAM policy/context dictionaries contain public names such as
+		// aws:TokenIssueTime; the generic secret-name heuristic cannot classify them.
+		if _, err := assessment.DecodeSource(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+		secretGuardObject = make(map[string]json.RawMessage, len(obj))
+		for key, value := range obj {
+			if key != "assessment" {
+				secretGuardObject[key] = value
+			}
+		}
+	}
+	if containsInlineSecret(secretGuardObject) {
 		return nil, errStatus(http.StatusBadRequest, "config may contain credential references, not inline secret values")
 	}
 	if err := sourcecatalog.ValidateConfig(req.Kind, cfg); err != nil {
@@ -1439,6 +1478,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == adcsdiscovery.SourceKind {
 		if _, err := adcsdiscovery.ResolveInventoryIntent(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+	}
+	if req.Kind == assessment.SourceKind {
+		if _, err := assessment.DecodeSource(cfg); err != nil {
 			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}

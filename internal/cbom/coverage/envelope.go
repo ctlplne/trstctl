@@ -126,6 +126,7 @@ func Envelopes() map[string]Envelope {
 		env("cloud_network_path", []AssetClass{AssetNetworkPath}, PrecondCloudCredential),
 		// Long-lived cloud access keys with age and last use, never secrets (M3).
 		env("cloud_access_key", []AssetClass{AssetCloudAccessKey}, PrecondCloudCredential),
+		env("cloud_machine_entitlement", []AssetClass{AssetNHIIdentity, AssetCloudAccessKey}, PrecondCloudCredential),
 		// Cloud KMS keys with type, size and rotation status, never key material (X4).
 		env("cloud_kms_key", []AssetClass{AssetCloudKMSKey}, PrecondCloudCredential),
 		// Load-balancer listener TLS policies on AWS and BIG-IP (X4).

@@ -343,6 +343,19 @@ func identityKindToNHIKind(kind store.IdentityKind) string {
 }
 
 func discoveryFindingToNHIKind(kind string, metadata map[string]any) string {
+	if kind == "cloud_machine_entitlement" {
+		if identity, ok := metadata["identity"].(map[string]any); ok {
+			if principal, ok := identity["principal"].(map[string]any); ok {
+				if principal["kind"] == "iam_role" {
+					return "iam_role"
+				}
+				if principal["kind"] == "iam_user" {
+					return "service_account"
+				}
+			}
+		}
+	}
+
 	if strings.TrimSpace(kind) == "non_human_identity" {
 		return normalizeNHIInventoryKind(metadataString(metadata, "credential_kind"))
 	}

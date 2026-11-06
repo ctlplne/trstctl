@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"session_file_ref\":\"env:APPROVED\",\"principals\":[{\"kind\":\"iam_user\",\"name\":\"workload\"}],\"assessment\":{\"checks\":[{\"principal_arn\":\"arn:aws:iam::111122223333:user/workload\",\"action\":\"s3:GetObject\",\"resource\":\"arn:aws:s3:::owned/report\",\"resource_account_id\":\"111122223333\",\"context\":{\"complete\":false}}]}}")

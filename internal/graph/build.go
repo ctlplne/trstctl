@@ -220,8 +220,15 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 	if err != nil {
 		return nil, err
 	}
+	cloudFindings, err := addCloudMachineAssessments(ctx, st, tenantID, g, findings, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
 	agentEvidence := newAgentFindingEvidence(st, tenantID)
 	for _, f := range findings {
+		if cloudFindings[f.ID] {
+			continue
+		}
 		// A finding's kind and metadata are author-controlled for manual imports.
 		// Only a terminal report bound to the mTLS-authenticated agent may drive
 		// executable trust and dependency edges.

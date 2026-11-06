@@ -53,6 +53,7 @@ const catalog: DiscoveryCapabilityCatalog = {
   schema_version: 1,
   items: [
     capability("network"),
+    capability("cloud_machine_entitlement"),
     capability("ssh"),
     capability("ssh_trust"),
     capability("adcs"),
@@ -140,6 +141,38 @@ describe("typed discovery source setup", () => {
       created_at: "2026-08-25T00:00:00Z",
       updated_at: "2026-08-25T00:00:00Z",
     } satisfies DiscoverySource);
+  });
+
+  it("reviews and saves one exact workload IAM check with unknown context and reference-only custody", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Owned workload IAM");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "cloud_machine_entitlement");
+    await user.type(screen.getByRole("textbox", { name: "Workload IAM name" }), "workload");
+    await user.type(screen.getByRole("textbox", { name: "Exact principal ARN" }), "arn:aws:iam::111122223333:user/workload");
+    await user.type(screen.getByRole("textbox", { name: "Approved STS session file reference" }), "env:TRSTCTL_AWS_READER_SESSION_PATH");
+    await user.type(screen.getByRole("textbox", { name: "Resource ARN or global marker" }), "arn:aws:s3:::owned/report");
+    await user.type(screen.getByRole("textbox", { name: "Resource owner account ID" }), "111122223333");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "cloud_machine_entitlement",
+          config: expect.objectContaining({
+            session_file_ref: "env:TRSTCTL_AWS_READER_SESSION_PATH",
+            principals: [{ kind: "iam_user", name: "workload" }],
+            assessment: expect.objectContaining({
+              checks: [expect.objectContaining({ action: "s3:GetObject", context: { values: {}, complete: false } })],
+              recorded_policy_evidence: [],
+              recorded_activity_evidence: {},
+            }),
+          }),
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({ kind: "cloud_machine_entitlement" })));
   });
 
   it("requires explicit agentless opt-in and submits pinned hosts with references only", async () => {

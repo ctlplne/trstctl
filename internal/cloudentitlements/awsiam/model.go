@@ -50,11 +50,12 @@ type Identity struct {
 	Gaps           []string            `json:"gaps"`
 }
 type PolicyReceipt struct {
-	Category string          `json:"category"`
-	ID       string          `json:"id"`
-	Version  string          `json:"version,omitempty"`
-	SHA256   string          `json:"sha256"`
-	Document json.RawMessage `json:"document"`
+	RawDocument []byte          `json:"raw_document"`
+	Category    string          `json:"category"`
+	ID          string          `json:"id"`
+	Version     string          `json:"version,omitempty"`
+	SHA256      string          `json:"sha256"`
+	Document    json.RawMessage `json:"document"`
 }
 type Capture struct {
 	CollectedAt time.Time  `json:"collected_at"`

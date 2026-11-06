@@ -16469,7 +16469,7 @@ export interface components {
             edition: string;
             execution: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             label: string;
             lifecycle: string[];
             permission: string;
@@ -16631,7 +16631,7 @@ export interface components {
             finding_count: number;
             findings_path: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             /** Format: date-time */
             last_discovery_at?: string;
             /** Format: date-time */
@@ -16673,7 +16673,7 @@ export interface components {
             excluded_target_count: number;
             execution: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             normalized_target_count: number;
             normalized_targets?: string[];
             permission: string;
@@ -16815,7 +16815,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -16829,7 +16829,7 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_access_key" | "cloud_certificate" | "cloud_kms_key" | "cloud_machine_entitlement" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "load_balancer_tls" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             name: string;
         };
         DiscoveryUnknown: {

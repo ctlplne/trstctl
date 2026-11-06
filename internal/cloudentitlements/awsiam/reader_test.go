@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/cloudentitlements/awspolicy"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/awssignin"
 )
 
@@ -128,7 +129,7 @@ func TestAWSIAMSelectedInventoryA264(t *testing.T) {
 		t.Fatalf("role/trust capture missing: %+v", role)
 	}
 	for _, receipt := range user.PolicyReceipts {
-		if len(receipt.SHA256) != 64 || !xmlSafe(receipt.Document) {
+		if len(receipt.SHA256) != 64 || !xmlSafe(receipt.Document) || crypto.SHA256Hex(receipt.RawDocument) != receipt.SHA256 {
 			t.Fatal("policy receipt missing parsed evidence")
 		}
 	}

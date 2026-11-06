@@ -66,11 +66,13 @@ func Coverage() AccessCoverage {
 			"AI agents issued identities by the agent broker, who asked for each identity, and the tools its scopes name",
 			"certificate issuance requests and who approved them",
 			"the certificate, SSH key, deployment and discovery inventory",
+			"selected AWS workload IAM policy models from verified native discovery runs, with imported evidence provenance",
 		},
 		NotCovered: []string{
 			"permissions inside the target system (what a role can do once connected)",
 			"who requested a dynamic-secret lease (leases do not record their holder)",
-			"access granted outside trstctl",
+			"access granted outside trstctl except explicitly captured AWS permission checks",
+			"native AWS enforcement, unmodeled permissions, current session state and complete cloud logging coverage",
 		},
 		Note: "An empty or partial answer is not proof that nobody has access: it covers only access trstctl granted or observed.",
 	}

@@ -1301,3 +1301,72 @@ trstctl-cli switching waves rollback <wave-id> -f reason.json  # {"reason": "...
 ```
 
 Status: served.
+
+## Cloud machine entitlements
+
+Use **Cloud machine entitlements** in Discover → Sources to inspect an AWS user
+or role that a workload already uses. The source reads IAM policy and key
+metadata, evaluates the exact action/resource/context you select, and compares
+that check with explicitly scoped recorded activity. It serves read-only AWS
+capture and advisory findings; approved cloud changes and native GCP/Azure
+collection are separate capabilities.
+
+An operator first approves an environment reference whose value is the absolute
+path to an owner-only standard AWS STS JSON response file. Configure that reference
+in the source, for example `env:TRSTCTL_AWS_READER_SESSION_PATH`. The environment
+value is a path, and the file holds the short-lived credential. Refresh the file
+atomically before expiration. Shared, expired, oversized or missing files fail the
+run. The source never accepts a secret access key in its configuration.
+
+Select the workload IAM name and exact principal ARN, permission action, resource
+ARN and resource owner account. Leave condition-context completeness unchecked
+when any relevant key is unknown. Review the server's exact plan, save the source,
+and run it. The current console form configures one principal/check; the API and
+CLI accept up to 256 selected principals and 128 exact checks. User group policies,
+managed-policy versions, boundaries, role trust, key age and key last-use facts
+come from IAM reads. An identity with a failed policy/group/key read is not
+published as a complete capture.
+
+Organization and resource policies unavailable from these IAM reads stay
+unavailable. Optional recorded policy evidence carries a `recorded:` source
+reference, exact principal/resource/account scope and explicit category coverage.
+A verified absence differs from an unread category. Recorded activity specifies
+its source, start/end window, exact covered principal/action/resource scopes and
+normalized events. Its completeness is an operator declaration, not proof that
+CloudTrail captured every action. Missing coverage cannot justify an unused
+permission; a same-action event without resource identity also prevents that
+claim. No raw CloudTrail request/response bodies enter the findings.
+
+Each finding retains its scoped evaluation inputs and a source-input digest, so
+later source edits cannot replace its recorded policy/activity evidence. Findings
+report permission decisions with source/statement reasons, unused checks
+within the declared covered window, and active keys unused for at least 90 days.
+Keys at least 90 days old are separately marked long-lived. Self-escalation entries
+are policy candidates requiring further trust, attachment and native authority
+checks. None of these findings authorizes a cloud mutation.
+
+The access graph uses the latest verified native-run snapshot per principal.
+Allowed checks create `policy_model` evidence edges for active keys or a role's
+policy authority, with the exact finding and check in their provenance. These are
+conditional policy models, not proof that every requirement of a live AWS API
+call is satisfied. A later denied check removes the previous modeled grant.
+Models older than 24 hours contribute no grant edges. Manual findings cannot
+manufacture native edges. Generated access reviews preserve this model provenance
+and the graph's coverage statement.
+
+The same workflow is available through the existing CLI commands:
+
+```sh
+trstctl discovery sources create -f source.json
+trstctl discovery sources preflight SOURCE_ID
+trstctl discovery runs start -f run.json
+trstctl discovery findings list --run_id RUN_ID
+```
+
+`source.json` contains `kind`, `name` and `config`; `run.json` contains
+`{"source_id":"SOURCE_ID"}`. Requests use the CLI's configured authentication and
+idempotency key. The REST routes are `/api/v1/discovery/sources`,
+`/api/v1/discovery/runs` and `/api/v1/discovery/findings?run_id=RUN_ID`.
+Read the [capture and evaluation contract](../design/cloud-machine-entitlements.md)
+for exact limits and the cached LocalStack lab runner. LocalStack native metadata
+proof does not establish AWS permission enforcement or live cloud qualification.

@@ -10,6 +10,49 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.machine.endpointExample": { defaultMessage: "https://iam.amazonaws.com", description: "Standard IAM endpoint example." },
+  "discovery.machine.regionExample": { defaultMessage: "us-east-1", description: "Standard IAM signing region example." },
+  "discovery.machine.title": { defaultMessage: "Cloud machine entitlements", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.kind": { defaultMessage: "Workload IAM identity type", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.user": { defaultMessage: "IAM workload user", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.role": { defaultMessage: "IAM workload role", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.name": { defaultMessage: "Workload IAM name", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.arn": { defaultMessage: "Exact principal ARN", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.sessionRef": { defaultMessage: "Approved STS session file reference", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.action": { defaultMessage: "Permission action", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.resource": { defaultMessage: "Resource ARN or global marker", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.account": { defaultMessage: "Resource owner account ID", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.context": {
+    defaultMessage: "Condition context values (JSON string arrays)",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+  "discovery.machine.completeContext": {
+    defaultMessage: "All relevant condition keys are known for this hypothetical request. Leave unchecked when context is incomplete.",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+  "discovery.machine.advanced": { defaultMessage: "Recorded evidence and endpoint settings", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.policies": { defaultMessage: "Recorded policy evidence (JSON array)", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.activity": { defaultMessage: "Recorded activity evidence (JSON object)", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.recordedHelp": {
+    defaultMessage:
+      "Optional imported evidence with recorded: provenance and exact coverage. Missing evidence stays unavailable. See the cloud machine entitlements guide.",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+  "discovery.machine.ca": { defaultMessage: "Private endpoint CA (public PEM)", description: "Cloud machine entitlement capture and evidence." },
+  "discovery.machine.help": {
+    defaultMessage:
+      "Capture one selected workload identity and check one action against its IAM policies. Organization, resource and activity gaps stay visible. This analysis changes no cloud authority.",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+  "discovery.machine.invalidBinding": {
+    defaultMessage: "Enter the exact selected IAM identity, action, resource and approved reference.",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+  "discovery.machine.jsonError": {
+    defaultMessage: "Enter a context object of string arrays, a policy-evidence array and an activity-evidence object.",
+    description: "Cloud machine entitlement capture and evidence.",
+  },
+
   "admin.access.desktop.target": { defaultMessage: "Remote desktop (RDP)", description: "Desktop target registration and proof limits." },
   "admin.access.desktop.accountSecret": { defaultMessage: "Account secret", description: "Desktop target registration and proof limits." },
   "admin.access.desktop.oneAccount": {

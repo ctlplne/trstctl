@@ -250,6 +250,8 @@ type issuanceDispatcher struct {
 	// accessKeyNow is the clock a cloud access key's age and staleness are
 	// measured at (M3); nil reads time.Now. Request signing keeps real time.
 	accessKeyNow func() time.Time
+	// cloudEntitlementNow controls metadata age fixtures only; authentication uses real time.
+	cloudEntitlementNow func() time.Time
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,

@@ -837,6 +837,102 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-access-keys"
     },
     {
+      "kind": "cloud_machine_entitlement",
+      "label": "Cloud machine entitlements",
+      "purpose": "Read selected AWS workload users and roles, compare exact policy checks with scoped recorded activity, and identify stale keys and possible policy escalation.",
+      "data_handling": "Reads IAM metadata through an operator-approved private STS session file. Stores policy/trust/key identifiers and explicit evidence gaps. Imported organization, resource and activity coverage remains operator-supplied evidence. No mutation occurs.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=cloud_machine_entitlement",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "session_file_ref",
+          "label": "STS session file reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Operator-approved env: reference whose value names an owner-only standard STS JSON response file; no inline credentials or tenant-chosen file paths."
+        },
+        {
+          "path": "principals",
+          "label": "Workload identities",
+          "type": "record_list",
+          "required": true,
+          "description": "Explicit IAM user/role names used by workloads; at most 256, never assumed to be all account users."
+        },
+        {
+          "path": "assessment",
+          "label": "Permission and activity evidence",
+          "type": "object",
+          "required": true,
+          "description": "Exact action/resource/context checks with separately identified recorded organization/resource policies and activity coverage; gaps remain visible."
+        },
+        {
+          "path": "endpoint",
+          "label": "IAM endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Fixed IAM origin; defaults to https://iam.amazonaws.com."
+        },
+        {
+          "path": "region",
+          "label": "Signing region",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "IAM signing region; defaults to us-east-1."
+        },
+        {
+          "path": "ca_pem",
+          "label": "Private endpoint trust anchor",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Optional public PEM root for a private endpoint; hostname verification remains required."
+        },
+        {
+          "path": "allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit private CIDRs; plaintext is allowed only on loopback."
+        },
+        {
+          "path": "private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Only these approved private destinations can be reached; no redirects occur."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-machine-entitlements"
+    },
+    {
       "kind": "cloud_kms_key",
       "label": "Cloud KMS keys",
       "purpose": "Inventory the keys a cloud account's key management service holds, with each key's type, size and rotation status, so unrotated and quantum-vulnerable keys stand out.",

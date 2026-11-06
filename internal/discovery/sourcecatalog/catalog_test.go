@@ -12,11 +12,11 @@ func TestCatalogIsCompleteAndTyped(t *testing.T) {
 	if err := Validate(catalog); err != nil {
 		t.Fatalf("validate source capability catalog: %v", err)
 	}
-	// A167 adds cloud_network_path; M3 adds cloud_access_key; X4 adds cloud_kms_key and load_balancer_tls.
-	if len(catalog.Items) != 22 {
-		t.Fatalf("catalog source kinds=%d, want 22 served OpenAPI kinds", len(catalog.Items))
+	// A264 adds the typed cloud_machine_entitlement source to the 22 existing kinds.
+	if len(catalog.Items) != 23 {
+		t.Fatalf("catalog source kinds=%d, want 23 served OpenAPI kinds", len(catalog.Items))
 	}
-	for _, kind := range []string{"network", "ssh", "ssh_trust", "adcs", "cloud_certificate", "cloud_network_path", "cloud_access_key", "cloud_kms_key", "load_balancer_tls", "cloud_secret", "secret_store"} {
+	for _, kind := range []string{"network", "ssh", "ssh_trust", "adcs", "cloud_certificate", "cloud_network_path", "cloud_access_key", "cloud_machine_entitlement", "cloud_kms_key", "load_balancer_tls", "cloud_secret", "secret_store"} {
 		item, ok := Find(kind)
 		if !ok || item.SetupSurface != SetupSourceWizard || len(item.Configuration) == 0 {
 			t.Errorf("primary source %q has no typed source-wizard contract", kind)

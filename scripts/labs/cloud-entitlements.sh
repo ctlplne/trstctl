@@ -30,4 +30,5 @@ aws_native iam create-access-key --user-name a264-workload >/dev/null
 aws_native sts get-session-token --duration-seconds 3600 > "$proof/session.json"
 aws_native --version > "$proof/client-version.txt" 2>&1
 (cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/cloudentitlements/awsiam -run '^TestAWSIAMNativeInventoryA264$' -count=1 -v) | tee "$proof/native.log"
-printf 'Native IAM metadata proof retained at %s\n' "$proof"
+(cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/server -run '^TestServedCloudMachineEntitlementCaptureA264$' -count=1 -v) | tee "$proof/served.log"
+printf 'Native IAM metadata and served assessment proof retained at %s\n' "$proof"

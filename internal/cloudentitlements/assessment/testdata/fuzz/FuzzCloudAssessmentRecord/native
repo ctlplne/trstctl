@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\":1,\"provider\":\"aws-iam\",\"identity\":{\"trust_document\":{\"n\":1e2}}}")

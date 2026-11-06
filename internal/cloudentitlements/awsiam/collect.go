@@ -338,7 +338,7 @@ func (s *captureSession) addPolicy(out *Identity, category, id, version string, 
 	if err != nil {
 		return fmt.Errorf("unusable captured policy: %w", err)
 	}
-	receipt := PolicyReceipt{Category: category, ID: id, Version: version, SHA256: digest, Document: append([]byte(nil), raw...)}
+	receipt := PolicyReceipt{RawDocument: append([]byte(nil), raw...), Category: category, ID: id, Version: version, SHA256: digest, Document: append([]byte(nil), raw...)}
 	out.PolicyReceipts = append(out.PolicyReceipts, receipt)
 	if category == "boundary" {
 		out.Evidence.Boundary.Documents = append(out.Evidence.Boundary.Documents, parsed)
