@@ -140,3 +140,37 @@ func TestTaskNativeMalformedProofIsNotRetryableA267(t *testing.T) {
 		t.Fatal("malformed post-execution proof was classified as a safe-to-repeat preflight failure")
 	}
 }
+
+type retainedOwnedTaskDriver struct {
+	*ownedTaskDriver
+	retained bool
+}
+
+func (d *retainedOwnedTaskDriver) runRetained(ctx context.Context, task Task, retain func(string) error) (TaskRunProof, error) {
+	d.runs++
+	if err := retain(d.proof.InstanceID); err != nil {
+		return TaskRunProof{}, &TaskExecutionError{InstanceID: d.proof.InstanceID, Cause: err}
+	}
+	d.retained = true
+	return d.proof, nil
+}
+func TestTaskNativeRetainsInstanceBeforeCompletionA267(t *testing.T) {
+	task := ownedTask()
+	driver := &retainedOwnedTaskDriver{ownedTaskDriver: &ownedTaskDriver{current: task, proof: ownedTaskProof()}}
+	adapter, err := newTasks(driver, TaskExecutionPolicy{VerificationPaths: []string{task.Path}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinel := errors.New("durable journal unavailable")
+	if _, err := adapter.RunAndVerifyRetained(t.Context(), task, func(instance string) error {
+		if instance != driver.proof.InstanceID || driver.retained {
+			t.Fatal("instance retention did not precede completion")
+		}
+		return sentinel
+	}); !errors.Is(err, sentinel) || driver.retained || driver.runs != 1 {
+		t.Fatal("failed retention claimed native completion")
+	}
+	if _, err := adapter.RunAndVerifyRetained(t.Context(), task, nil); err == nil || driver.runs != 1 {
+		t.Fatal("missing recorder reached native execution")
+	}
+}

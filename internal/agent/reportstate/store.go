@@ -88,6 +88,7 @@ type diskRecord struct {
 // cannot silently send an old observation under new authority.
 type Store struct {
 	mu      sync.Mutex
+	taskMu  sync.Mutex
 	root    *os.Root
 	path    string
 	binding string
@@ -180,12 +181,18 @@ func lockStore(path, binding string) (*Store, error) {
 // key could replace the one that sealed it.
 func (s *Store) load() error {
 	keyPath := filepath.Join(s.path, "sealing.key")
-	if _, err := s.root.Lstat("pending.state"); err == nil {
+	retained := false
+	for _, name := range []string{"pending.state", taskExecutionFile} {
+		if _, err := s.root.Lstat(name); err == nil {
+			retained = true
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	if retained {
 		if _, err := s.root.Lstat("sealing.key"); err != nil {
 			return fmt.Errorf("%w: it has no accessible sealing key; preserve the state for recovery", ErrUnopenable)
 		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return err
 	}
 	key, err := secretfile.LoadOrCreate(keyPath, func() ([]byte, error) { return crypto.RandomBytes(32) })
 	if err != nil {
@@ -215,6 +222,10 @@ func (s *Store) load() error {
 	if pending != nil {
 		pending.Destroy()
 	}
+	if err != nil {
+		return err
+	}
+	_, err = s.readTaskExecutions()
 	return err
 }
 
@@ -303,6 +314,9 @@ func (s *Store) Put(value Observation) (err error) {
 	if err := validate(value); err != nil {
 		return err
 	}
+	if err := s.validateTaskExecutionReport(value); err != nil {
+		return err
+	}
 	encoded, err := json.Marshal(diskRecord{Version: 1, Value: value})
 	if err != nil {
 		return err
@@ -377,6 +391,9 @@ func (s *Store) Acknowledge(value Observation) error {
 	defer pending.Destroy()
 	if !same(*pending, value) {
 		return errors.New("reportstate: acknowledgement does not match pending result")
+	}
+	if err := s.acknowledgeTaskExecutions(value); err != nil {
+		return err
 	}
 	if err := s.root.Remove("pending.state"); err != nil {
 		return err

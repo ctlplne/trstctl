@@ -297,7 +297,10 @@ func (nativeTaskDriver) update(ctx context.Context, expected Task, password []by
 		return nil
 	})
 }
-func (nativeTaskDriver) run(ctx context.Context, expected Task) (TaskRunProof, error) {
+func (driver nativeTaskDriver) run(ctx context.Context, expected Task) (TaskRunProof, error) {
+	return driver.runRetained(ctx, expected, nil)
+}
+func (nativeTaskDriver) runRetained(ctx context.Context, expected Task, retain func(string) error) (TaskRunProof, error) {
 	var instance string
 	err := withNativeTask(ctx, expected.Path, func(_ *automationObject, snapshot *nativeTaskSnapshot) error {
 		if expected.LogonType != 1 || !sameTaskBinding(expected, snapshot.Task) || !snapshot.Enabled || !snapshot.allowDemand {
@@ -329,6 +332,11 @@ func (nativeTaskDriver) run(ctx context.Context, expected Task) (TaskRunProof, e
 			return &TaskExecutionError{Cause: errors.New("windows task: execution returned an invalid instance binding")}
 		}
 		instance = canonical
+		if retain != nil {
+			if err := retain(instance); err != nil {
+				return &TaskExecutionError{InstanceID: instance, Cause: err}
+			}
+		}
 		return nil
 	})
 	if err != nil {

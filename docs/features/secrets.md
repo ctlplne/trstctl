@@ -2538,3 +2538,19 @@ local SAM account, pool and site. Its native execution remains a separate requir
 qualification; cross-compilation does not establish that result. The full enrolled
 host workflow, durable task-attempt journal and directory reconciliation remain
 in progress.
+
+The host's task-start journal records a durable fence before calling Task
+Scheduler, then retains the exact native instance before waiting for completion.
+After restart, a known instance is observed without another start. If the start
+reply was lost before an instance could be retained, execution stays uncertain;
+an operator must reconcile it without blindly running the task again. Failed
+native or functional reports keep these fences, including after the server
+acknowledges the failure. Unrelated host work can continue.
+
+Journal events are sealed under the agent registration and server trust binding.
+Missing keys, a different registration, malformed frames and incomplete writes
+are refused without discarding retained evidence. A successful report retires
+only its own fully completed journal after acknowledgement. Windows process
+restart is covered by the native fixture; machine power-loss durability remains
+a filesystem qualification. This journal primitive and the native task adapter
+are separate from the full enrolled-host dependent workflow still being built.

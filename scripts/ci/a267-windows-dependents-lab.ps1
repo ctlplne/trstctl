@@ -58,3 +58,10 @@ if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $iisLog -Pattern 'A267_WIN
     Write-Host '::error::a267 native IIS pool lifecycle did not run and pass'
     exit 1
 }
+
+# The journal uses native Windows file locking and preserves failed/lost starts
+# across a real abrupt child-process exit. Native task API execution is above.
+$journalLog = Join-Path $env:RUNNER_TEMP 'a267-windows-task-journal.log'
+& go test -count=1 -timeout 3m -run '^TestTaskExecution' -v ./internal/agent/reportstate 2>&1 | Tee-Object -FilePath $journalLog
+if ($LASTEXITCODE -ne 0) { throw 'A267 native Windows task journal failed' }
+Write-Host 'A267_WINDOWS_TASK_JOURNAL_OK: sealed native filesystem fence, lost replies, failed reports and abrupt child exit; full host coordination remains separate'

@@ -191,14 +191,52 @@ func validateTaskRunProof(task Task, proof TaskRunProof) error {
 	}
 	return nil
 }
+
+// ValidateTaskSnapshot checks the public frozen authority used by host journals.
+func ValidateTaskSnapshot(task Task) error { return validateTask(task) }
+
+// ValidateTaskRunProof checks one exact instance's successful native evidence.
+func ValidateTaskRunProof(task Task, proof TaskRunProof) error {
+	return validateTaskRunProof(task, proof)
+}
+
+// CanonicalTaskInstance validates a nonzero native instance GUID.
+func CanonicalTaskInstance(value string) (string, bool) { return canonicalTaskInstance(value) }
+
+type retainedTaskRunner interface {
+	runRetained(context.Context, Task, func(string) error) (TaskRunProof, error)
+}
+
 func (t *Tasks) RunAndVerify(ctx context.Context, task Task) (TaskRunProof, error) {
+	return t.runAndVerify(ctx, task, nil)
+}
+
+// RunAndVerifyRetained saves the native instance before waiting for completion.
+// The host must durably fence the attempt before entering this method.
+func (t *Tasks) RunAndVerifyRetained(ctx context.Context, task Task, retain func(string) error) (TaskRunProof, error) {
+	if retain == nil {
+		return TaskRunProof{}, errors.New("windows task: durable instance recorder required")
+	}
+	return t.runAndVerify(ctx, task, retain)
+}
+func (t *Tasks) runAndVerify(ctx context.Context, task Task, retain func(string) error) (TaskRunProof, error) {
 	if task.LogonType != 1 || !t.verification[strings.ToLower(task.Path)] || !task.Enabled {
 		return TaskRunProof{}, errors.New("windows task: exact local verification execution was not authorized or task is disabled")
 	}
 	if err := t.inspectBound(ctx, task); err != nil {
 		return TaskRunProof{}, err
 	}
-	proof, err := t.driver.run(ctx, task)
+	var proof TaskRunProof
+	var err error
+	if retain != nil {
+		runner, ok := t.driver.(retainedTaskRunner)
+		if !ok {
+			return TaskRunProof{}, errors.New("windows task: durable native instance recording unavailable")
+		}
+		proof, err = runner.runRetained(ctx, task, retain)
+	} else {
+		proof, err = t.driver.run(ctx, task)
+	}
 	if err != nil {
 		return TaskRunProof{}, err
 	}

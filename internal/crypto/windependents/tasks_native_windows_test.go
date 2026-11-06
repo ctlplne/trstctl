@@ -324,9 +324,16 @@ func TestNativeWindowsTaskLifecycleA267(t *testing.T) {
 		t.Fatal(err)
 	}
 	nextNonce := nativeTaskNewPublicNonce(t, work)
-	second, err := adapter.RunAndVerify(ctx, target)
+	var retainedInstance string
+	second, err := adapter.RunAndVerifyRetained(ctx, target, func(instance string) error {
+		retainedInstance = instance
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if retainedInstance == "" || retainedInstance != second.InstanceID {
+		t.Fatal("native instance was not retained before completion")
 	}
 	if second.InstanceID == first.InstanceID {
 		t.Fatal("task rotation reused stale instance evidence")

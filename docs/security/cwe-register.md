@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2720 annotated sites across 31 rules. Each row is
+2721 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1377,7 +1377,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (357 sites)
+### G204 — CWE-78 OS command injection (358 sites)
 
 | Location | Reason |
 |---|---|
@@ -1457,6 +1457,7 @@ not this file.
 | `internal/agent/relay/adcsdatabase.go:155` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
+| `internal/agent/reportstate/task_execution_test.go:337` | the current Go test executable and one fixed test name, public owned fixture root only, no shell or credential (CWE-78) |
 | `internal/agent/secretrender/secretrender.go:645` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
 | `internal/agent/sshkrl/revocations_test.go:92` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
