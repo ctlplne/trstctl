@@ -124,6 +124,15 @@ func (b *LDAPBackend) verifyADCredential(ctx context.Context, raw []byte) error 
 	return conn.Close()
 }
 func (b *LDAPBackend) retireADAccount(ctx context.Context, dn string) error {
+	// A single-account predecessor was already replaced during the in-place
+	// rotation. Resetting that same principal here would destroy the successor.
+	if !b.isRotationAccount(dn) {
+		if !b.ownsADAccount(dn) {
+			return errors.New("dynsecret AD: refusing retirement of an unbound account")
+		}
+		return nil
+	}
+
 	if _, err := b.inspectADAccount(ctx, dn, false); err != nil {
 		return err
 	}
@@ -204,4 +213,39 @@ func validateADAccountState(entry *ldap.Entry, forBind bool, now time.Time) (str
 		return "", errors.New("dynsecret AD: password expired; no user bind attempted")
 	}
 	return name, nil
+}
+
+// validateADBindings prevents one role's rotation from changing another role's
+// live principal, including a pair's inactive member and equivalent DN spellings.
+func (b *LDAPBackend) validateADBindings() error {
+	if len(b.roleGroups) > 256 || len(b.rotationAccounts) > 256 {
+		return errors.New("dynsecret AD: account binding count exceeds 256 roles")
+	}
+	type owned struct{ dn *ldap.DN }
+	var accounts []owned
+	for role, binding := range b.roleGroups {
+		names := []string{binding}
+		if pair, ok := b.rotationAccounts[role]; ok {
+			bound, e := ldap.ParseDN(binding)
+			first, fe := ldap.ParseDN(pair[0])
+			second, se := ldap.ParseDN(pair[1])
+			if e != nil || fe != nil || se != nil || (!bound.EqualFold(first) && !bound.EqualFold(second)) {
+				return errors.New("dynsecret AD: role binding must name one of its two rotation accounts")
+			}
+			names = []string{pair[0], pair[1]}
+		}
+		for _, dn := range names {
+			parsed, e := ldap.ParseDN(dn)
+			if e != nil || len(dn) > 4096 || !b.insideADContainer(dn) {
+				return errors.New("dynsecret AD: invalid bound account DN")
+			}
+			for _, previous := range accounts {
+				if parsed.EqualFold(previous.dn) {
+					return errors.New("dynsecret AD: an account serves more than one role or pair slot")
+				}
+			}
+			accounts = append(accounts, owned{dn: parsed})
+		}
+	}
+	return nil
 }

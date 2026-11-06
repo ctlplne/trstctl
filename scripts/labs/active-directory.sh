@@ -15,6 +15,7 @@ case "$arch" in arm64|amd64) ;; *) echo 'unsupported client architecture' >&2; e
 export GOPRIVATE='trstctl.com/*,github.com/ctlplne/*' GONOPROXY='trstctl.com/*,github.com/ctlplne/*' GONOSUMDB='trstctl.com/*,github.com/ctlplne/*'
 cd "$repo"
 CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go test -c -o "$proof/dynsecret-test" ./internal/dynsecret
+CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go test -c -o "$proof/server-test" ./internal/server
 network=$(docker network create --label trstctl.lab=ad "$(basename "$proof")")
 dc='' client=''
 cleanup() {
@@ -35,12 +36,13 @@ cfg=/var/lib/trstctl-ad/etc/smb.conf
 printf "\n[global]\n tls enabled = yes\n tls keyfile = /run/ad-key.pem\n tls certfile = /run/ad-cert.pem\n tls cafile = /run/ad-cert.pem\n ldap server require strong auth = yes\n" >> "$cfg"
 samba-tool ou create OU=TrstctlA263,DC=a263,DC=test -s "$cfg" > /run/seed.log 2>&1
 samba-tool user create a263-proof --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
+samba-tool user create a263-served --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
 samba-tool domain passwordsettings set --account-lockout-threshold=3 -s "$cfg" >> /run/seed.log 2>&1
 samba -D --no-process-group -s "$cfg"
 ' > "$proof/setup-dc.log" 2>&1
 client=$(docker run -d --pull=never --label trstctl.lab=ad --network "$network" "$TRSTCTL_AD_CLIENT_BASE" sleep infinity)
 printf '%s\n' "$client" > "$proof/client.id"
-docker exec "$client" sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends ldap-utils ca-certificates' > "$proof/setup-client.log" 2>&1
+docker exec "$client" sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends ldap-utils ca-certificates postgresql-15' > "$proof/setup-client.log" 2>&1
 umask 077
 docker cp "$dc:/run/ad-admin-password" "$proof/admin-password"
 chmod 600 "$proof/admin-password"
@@ -49,6 +51,9 @@ docker cp "$proof/admin-password" "$client:/run/ad-admin-password"
 rm -f "$proof/admin-password"
 docker cp "$proof/ad-ca.pem" "$client:/run/ad-ca.pem"
 docker cp "$proof/dynsecret-test" "$client:/run/dynsecret-test"
+docker cp "$proof/server-test" "$client:/run/server-test"
+docker cp scripts/labs/active-directory/client-setup.sh "$client:/run/client-setup.sh"
+docker exec "$client" sh /run/client-setup.sh > "$proof/postgres-setup.log" 2>&1
 docker exec "$client" sh -c '
 set -eu
 chmod 600 /run/ad-admin-password
@@ -60,6 +65,7 @@ done
 $ready
 TRSTCTL_AD_NATIVE_LAB=1 /run/dynsecret-test -test.v -test.run ^TestActiveDirectoryVaultedPasswordNativeA263$ -test.timeout=60s
 ' > "$proof/native.log" 2>&1
+docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run ^TestServedADAccountRotationA263$ -test.timeout=90s' > "$proof/served.log" 2>&1
 docker exec "$dc" sh -c 'samba --version; samba-tool domain passwordsettings show -s /var/lib/trstctl-ad/etc/smb.conf; testparm -s /var/lib/trstctl-ad/etc/smb.conf --parameter-name="old password allowed period" 2>/dev/null' > "$proof/directory-version-policy.txt"
 docker exec "$client" dpkg-query -W > "$proof/client-packages.tsv"
-cat "$proof/native.log"
+cat "$proof/native.log" "$proof/served.log"

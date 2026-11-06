@@ -220,8 +220,9 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_plaintext_redis", "Local plaintext exception", "Explicitly permit plain Redis only at a literal loopback or private IP address. The returned URI is redis://; use only in a protected local lab.", false),
 			value("db", "Database number", "Only database 0 is supported. Leased users cannot run SELECT because Redis ACLs cannot constrain its database argument.", false),
 		)},
-		{Type: "ldap", Label: "LDAP directory", Purpose: "Creates a directory entry whose password the directory sets and hashes, in the role's group, and deletes it at revocation; the directory then refuses its bind.", Requirements: dynamicSecretProviderRequirements(
+		{Type: "ldap", Label: "LDAP directory and AD accounts", Purpose: "Creates generic LDAP leased entries in the role's group, or in active_directory mode rotates an existing vaulted AD account without changing its memberships. Native Samba stand-in proof; native Windows and forest-wide revocation remain unverified.", Requirements: dynamicSecretProviderRequirements(
 			desktop,
+			value("directory_mode", "Directory account mode", "Empty for generic LDAP entry issuance. active_directory rotates existing named AD user accounts only, with allow_static_rotation and verified LDAPS. role_bindings values are account DNs under users_dn; optional rotation_accounts pairs preserve memberships. Native Samba stand-in proof: stock LDAP current/predecessor rejection, bounded lockout-aware verification and durable vault rotation. Existing sessions/Kerberos tickets and multi-DC revocation are not covered.", false),
 			value("addr", "Directory address", "host:port of the directory's LDAPS listener, verified against tls_server_name; plain LDAP only at a literal loopback or private IP with allow_plaintext.", true),
 			value("bind_dn", "Administrator DN", "Directory account allowed to add and delete entries under users_dn and change the role groups' members.", true),
 			credential("password_ref", "Administrator password reference", "The administrator's bind password.", true),
@@ -517,7 +518,7 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 	case "redis":
 		return "the role's literal key prefixes and explicitly listed commands", "confirmed"
 	case "ldap":
-		return "membership of the role's directory group", "confirmed"
+		return "generic LDAP leases get membership of the role's group; active_directory mode retains an existing vaulted account's memberships and resets its password only, without revoking existing sessions or Kerberos tickets", "confirmed"
 	case "totp":
 		return "the configured seed's current one-time code, accepted until the end of its time step (and through any skew window the verifier allows)", "ttl_only"
 	case "oauth-client-credentials":

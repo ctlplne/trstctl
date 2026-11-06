@@ -53,10 +53,20 @@ func TestADModeRefusesAuthorityChangesBeforeNetwork(t *testing.T) {
 	if _, _, err = backend.Create(context.Background(), "service"); err == nil {
 		t.Fatal("dynamic AD user issuance invented")
 	}
+	if err = backend.Revoke(context.Background(), cfg.RoleGroups["service"]); err != nil {
+		t.Fatal("single-account retirement must preserve the already-installed successor:", err)
+	}
 	if err = backend.Revoke(context.Background(), "CN=foreign,OU=services,DC=example,DC=test"); err == nil {
 		t.Fatal("foreign account retirement allowed")
 	}
 	for _, mode := range []string{"unknown", strings.Repeat("a", 1024)} {
+		badPair := cfg
+		badPair.RoleGroups = map[string]string{"first": cfg.RoleGroups["service"], "second": "CN=inactive,OU=services,DC=example,DC=test"}
+		badPair.RotationAccounts = map[string][2]string{"first": {cfg.RoleGroups["service"], "CN=inactive,OU=services,DC=example,DC=test"}}
+		if b, e := NewLDAPBackend(badPair); e == nil {
+			b.Close()
+			t.Fatal("one role could reset another role's inactive account")
+		}
 		bad := cfg
 		bad.DirectoryMode = mode
 		if b, e := NewLDAPBackend(bad); e == nil {

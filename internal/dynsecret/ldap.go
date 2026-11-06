@@ -149,6 +149,11 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 		}
 		b.rotationAccounts[role] = pair
 	}
+	if b.activeDirectory {
+		if err := b.validateADBindings(); err != nil {
+			return nil, err
+		}
+	}
 	password, err := secret.NewFrom(cfg.BindPassword)
 	if err != nil {
 		return nil, err

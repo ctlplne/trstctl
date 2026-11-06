@@ -1107,9 +1107,8 @@ Run the owned xrdp lab with `TRSTCTL_DESKTOP_LAB_BASE=<approved-cached-image@sha
 ### AD native adapter foundation (A263, Samba stand-in)
 
 The LDAP backend has an explicit `active_directory` mode for existing AD user
-accounts. This adapter is the foundation for the vaulted desktop attachment;
-public provider configuration and the approved desktop journey are the next
-slice. It does not turn generic `inetOrgPerson` issuance into an AD logon account.
+accounts. Public provider configuration and durable vault rotation are served;
+the approved AD-backed desktop journey is the next slice. It does not turn generic `inetOrgPerson` issuance into an AD logon account.
 
 The adapter pins verified LDAPS to the configured CA and server name, binds with
 byte-backed credentials, and reads only the exact configured account. It refuses
@@ -1129,9 +1128,10 @@ test preserves the default grace period and password-history/complexity policy;
 it proves the previously issued password is refused by stock `ldapsearch` after
 rotation. Both replacements belong to the same existing rotation operation. An
 uncertain replacement is an error and may leave the account needing recovery;
-never assume its previous credential remains usable. Retirement also replaces
-through an undisclosed intermediate credential; it does not delete the user or
-change its memberships. Open sessions and Kerberos tickets are not revoked by
+never assume its previous credential remains usable. Retirement of a paired predecessor also replaces through an undisclosed
+intermediate credential. A single-account predecessor has already been replaced;
+retirement preserves its live successor. Neither path deletes the user or changes
+its memberships. Open sessions and Kerberos tickets are not revoked by
 this adapter, and no multi-DC or native Windows result is claimed.
 
 The native proof runs against a separate owned Samba4.15.13-Ubuntu DC, a DNS-SAN
@@ -1148,3 +1148,32 @@ It creates a fresh domain and private network, leaves existing domains alone,
 retains only public test output and version/policy evidence on the host, and stops
 its exact two containers. Private administrator references stay inside the owned
 containers. Its printed evidence directory identifies every retained resource.
+
+
+### Configuring an existing AD account (A263)
+
+Use a tenant-owned LDAP profile with `directory_mode: "active_directory"`,
+`allow_static_rotation: true`, verified LDAPS, `password_ref` for the reset
+administrator, and `users_dn` bounding existing managed users. Each allowed role
+is its vaulted secret name and maps in `role_bindings` to one account DN.
+An optional `rotation_accounts` pair alternates between two existing users.
+Memberships are assigned by the directory administrator and stay unchanged.
+The configured account and pair bindings are frozen for review; shared principals
+between roles are refused before any password operation. This profile does not
+issue arbitrary AD user leases.
+
+For one account, rotation replaces the password in place. The API requires
+`acknowledge_single_phase: true` and warns that applications can lose access until
+they adopt the new secret version. Use the ordinary secret store and
+`POST /api/v1/secrets/rotations` with the profile ID, secret key and account DN as
+`old_ref`. The durable outbox resets the password, publishes the encrypted secret
+version, verifies a fresh native bind and records completion. Reusing an
+Idempotency-Key returns the original operation. Retirement of this single-account
+predecessor preserves the successor that the rotation has already installed.
+
+`TestServedADAccountRotationA263` proves this path with real PostgreSQL/NATS,
+two rotations and stock LDAP readback, cross-tenant refusal and no plaintext
+passwords in events. The rerun script now runs this served proof alongside the
+native adapter proof in its isolated domain. This is assisted Samba stand-in
+qualification. Final-image interruption/recovery and the AD-backed approved
+desktop with replay remain owed; ordinary Windows/forest deployment is unverified.

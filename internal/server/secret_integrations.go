@@ -220,6 +220,19 @@ type configuredDynamicProvider struct {
 // This keeps authority-bearing bytes short-lived and makes every shipped backend
 // constructor part of buildRunDeps' production call graph.
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
+	if cfg.DirectoryMode == "active_directory" {
+		bindings := make(map[string]string, len(cfg.RoleBindings))
+		for role, dn := range cfg.RoleBindings {
+			bindings[role] = dn
+		}
+		cfg.RoleBindings = bindings
+		pairs := make(map[string][]string, len(cfg.RotationAccounts))
+		for role, pair := range cfg.RotationAccounts {
+			pairs[role] = append([]string(nil), pair...)
+		}
+		cfg.RotationAccounts = pairs
+	}
+
 	if cfg.Gateway != nil {
 		gateway := *cfg.Gateway
 		gateway.Scopes = append([]string(nil), cfg.Gateway.Scopes...)
@@ -383,6 +396,10 @@ func (p *configuredDynamicProvider) Generate(ctx context.Context, req dynsecret.
 }
 
 func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.GenerateRequest, prepared []byte) (dynsecret.Credential, error) {
+	if p.cfg.DirectoryMode == "active_directory" && !req.Static {
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(errors.New("active_directory is an existing vaulted-account profile; dynamic user issuance is not supported"))
+	}
+
 	if req.Role == dynsecret.DecoyRole && p.cfg.Type != "postgresql" {
 		// Other backends would read the unknown role as read-write.
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q cannot mint decoy logins: only PostgreSQL providers can", p.id))
@@ -709,7 +726,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewLDAPBackend(dynsecret.LDAPConfig{
-			Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
+			DirectoryMode: cfg.DirectoryMode, Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
 			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
 			UsernamePrefix: cfg.UsernamePrefix, RotationAccounts: o.provider.rotationAccountPairs(),
 		})
@@ -1789,6 +1806,12 @@ func (p *configuredDynamicProvider) TwoUserRetirement() string {
 // rotation invalidates the current credential when it issues the next is
 // single-phase (A240).
 func (p *configuredDynamicProvider) RotationPhase(role string) string {
+	if p.cfg.Type == "ldap" && p.cfg.DirectoryMode == "active_directory" {
+		if _, paired := p.RotationAccounts(role); !paired {
+			return dynsecret.RotationSinglePhase
+		}
+	}
+
 	if config.SinglePhaseRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] {
 		return dynsecret.RotationSinglePhase
 	}

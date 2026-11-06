@@ -156,8 +156,9 @@ type DynamicSecretProviderConfig struct {
 	KubernetesTLSServerName string `json:"kubernetes_tls_server_name,omitempty"`
 	// BindDN and UsersDN are the LDAP provider's administrator and the
 	// container its leased entries are created in (A239).
-	BindDN  string `json:"bind_dn,omitempty"`
-	UsersDN string `json:"users_dn,omitempty"`
+	DirectoryMode string `json:"directory_mode,omitempty"`
+	BindDN        string `json:"bind_dn,omitempty"`
+	UsersDN       string `json:"users_dn,omitempty"`
 	// TLSCARef pins a private CA and TLSServerName names the certificate the
 	// A239 providers verify; AllowPlaintext permits an unencrypted connection
 	// to a literal loopback or private IP only.
@@ -1209,8 +1210,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if !tlsProviderTypes[c.Type] && (c.TLSCARef != "" || c.TLSServerName != "" || c.AllowPlaintext) {
 		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
 	}
-	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "") {
-		errs = append(errs, fmt.Errorf("%s bind_dn and users_dn are only valid for ldap", where))
+	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "" || c.DirectoryMode != "") {
+		errs = append(errs, fmt.Errorf("%s bind_dn, users_dn and directory_mode are only valid for ldap", where))
 	}
 	if c.Type != "totp" && (c.SeedRef != "" || c.Digits != 0 || c.Period != "" || c.Algorithm != "") {
 		errs = append(errs, fmt.Errorf("%s seed_ref, digits, period and algorithm are only valid for totp", where))
@@ -2263,6 +2264,25 @@ func validateTOTPProvider(where string, c DynamicSecretProviderConfig) []error {
 // role groups (A239).
 func validateLDAPProvider(where string, c DynamicSecretProviderConfig) []error {
 	var errs []error
+	if c.DirectoryMode != "" && c.DirectoryMode != "active_directory" {
+		errs = append(errs, fmt.Errorf("%s directory_mode is empty for generic LDAP or active_directory", where))
+	}
+	if c.DirectoryMode == "active_directory" {
+		if !c.AllowStaticRotation || c.AllowPlaintext {
+			errs = append(errs, fmt.Errorf("%s active_directory requires allow_static_rotation and verified LDAPS; plaintext is forbidden", where))
+		}
+		owners := map[string]string{}
+		for role, dn := range c.RoleBindings {
+			if !strings.Contains(dn, "=") || !strings.HasSuffix(strings.ToLower(dn), ","+strings.ToLower(strings.TrimSpace(c.UsersDN))) {
+				errs = append(errs, fmt.Errorf("%s active_directory role %q must name an existing account under users_dn", where, role))
+			}
+			if other, found := owners[strings.ToLower(dn)]; found && other != role {
+				errs = append(errs, fmt.Errorf("%s active_directory account is bound to more than one role", where))
+			}
+			owners[strings.ToLower(dn)] = role
+		}
+	}
+
 	for name, value := range map[string]string{"addr": c.Addr, "bind_dn": c.BindDN, "users_dn": c.UsersDN} {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for ldap", where, name))

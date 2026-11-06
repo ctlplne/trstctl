@@ -42,30 +42,7 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 		t.Skip("native Linux desktop served lab not requested")
 	}
 	ctx := t.Context()
-	// Each invocation owns a fresh database. Recording evidence intentionally
-	// outlives sessions, so truncating sessions is not a fresh recording store.
-	database := "trstctl_desktop_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	create := exec.CommandContext(ctx, "/usr/lib/postgresql/15/bin/createdb", "-h", "127.0.0.1", "-p", "55432", "-U", "postgres", database) // #nosec G204 -- generated owned database identifier, fixed local test server/tool, no shell (CWE-78)
-	if err := create.Run(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(cleanup, "/usr/lib/postgresql/15/bin/dropdb", "-h", "127.0.0.1", "-p", "55432", "-U", "postgres", database)
-		if err := cmd.Run(); err != nil {
-			t.Error("drop exact owned native database:", err)
-		}
-	}) // #nosec G204 -- drops only the exact database this test created, no shell (CWE-78)
-	st, err := store.Open(ctx, "postgres://postgres@127.0.0.1:55432/"+database+"?sslmode=disable")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
-	if err = st.Migrate(ctx); err != nil {
-		t.Fatal(err)
-	}
-	resetServerTestStore(t, st)
+	st := nativeDesktopOwnedStore(t)
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -389,4 +366,36 @@ func desktopAwait(t *testing.T, label string, ready func() bool) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("%s did not become ready", label)
+}
+
+// nativeDesktopOwnedStore uses only the isolated Linux lab PostgreSQL instance.
+func nativeDesktopOwnedStore(t *testing.T) *store.Store {
+	t.Helper()
+	ctx := t.Context()
+	// Each invocation owns a fresh database. Recording evidence intentionally
+	// outlives sessions, so truncating sessions is not a fresh recording store.
+	database := "trstctl_desktop_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	create := exec.CommandContext(ctx, "/usr/lib/postgresql/15/bin/createdb", "-h", "127.0.0.1", "-p", "55432", "-U", "postgres", database) // #nosec G204 -- generated owned database identifier, fixed local test server/tool, no shell (CWE-78)
+	if err := create.Run(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(cleanup, "/usr/lib/postgresql/15/bin/dropdb", "-h", "127.0.0.1", "-p", "55432", "-U", "postgres", database)
+		if err := cmd.Run(); err != nil {
+			t.Error("drop exact owned native database:", err)
+		}
+	}) // #nosec G204 -- drops only the exact database this test created, no shell (CWE-78)
+	st, err := store.Open(ctx, "postgres://postgres@127.0.0.1:55432/"+database+"?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	if err = st.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	resetServerTestStore(t, st)
+
+	return st
 }

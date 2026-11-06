@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2660 annotated sites across 31 rules. Each row is
+2661 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1438` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1455` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1186,8 +1186,8 @@ not this file.
 | `internal/dynsecret/ibm_api_connect.go:152` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/ibm_api_connect.go:202` | the platform credentials go to the token endpoint over the guarded client and are not kept (CWE-200) |
 | `internal/dynsecret/kafka.go:339` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/ldap.go:277` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
-| `internal/dynsecret/ldap.go:306` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:282` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:311` | the staged two-user credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/litellm.go:40` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
 | `internal/dynsecret/milvus.go:126` | the new user's password goes to the Milvus API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/milvus.go:138` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1208,7 +1208,7 @@ not this file.
 | `internal/dynsecret/tailscale.go:155` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
-| `internal/server/pam_desktop_served_test.go:157` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
+| `internal/server/pam_desktop_served_test.go:134` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
 | `internal/server/pam_gateway_aws_console_standin_test.go:122` | native federation protocol returns its owned issued sign-in token (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:110` | owned Graph addPassword protocol fixture; secret response bytes are wiped and held locked (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
@@ -1329,7 +1329,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (354 sites)
+### G204 — CWE-78 OS command injection (355 sites)
 
 | Location | Reason |
 |---|---|
@@ -1542,15 +1542,16 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:358` | test executes the reference binary it built itself (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:233` | test executes a fixed local tool (CWE-78) |
 | `internal/server/mdm_scep_dynamic_served_test.go:247` | test executes a fixed local tool (CWE-78) |
+| `internal/server/pam_ad_rotation_served_test.go:171` | fixed stock client, exact owned directory DN and inherited password pipe; no shell (CWE-78) |
 | `internal/server/pam_command_clickhouse_served_test.go:68` | stock curl against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mongo_served_test.go:72` | stock Mongo shell against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:48` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:59` | drops only the exact database this test created, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:107` | fixed lab SSH daemon and test-owned configuration; no shell or credential arguments (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:326` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:335` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:84` | fixed lab SSH daemon and test-owned configuration; no shell or credential arguments (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:303` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:312` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:378` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:389` | drops only the exact database this test created, no shell (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:32` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2302,7 +2303,7 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:175` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:179` | what the launched agent wrote in the test's temp dir (CWE-22) |
-| `internal/server/pam_desktop_served_test.go:369` | unique owned task file under fixed lab account home (CWE-22) |
+| `internal/server/pam_desktop_served_test.go:346` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |

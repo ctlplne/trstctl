@@ -9190,7 +9190,7 @@ closure ends interaction but does not establish target logout. See the
 
 The explicit AD adapter has native Samba stand-in proof for existing-account
 password reset, stock LDAP sign-in, predecessor refusal and lockout-aware checks.
-Its provider configuration and approved desktop integration are still being built.
+Its public provider and durable vault rotation are served; approved AD-backed desktop integration is still being built.
 It conservatively refuses an account with any recorded bad password and does not
 unlock it. A password reset does not end existing LDAP/RDP sessions or Kerberos
 tickets; its observed rejection result covers one DC. No forest replication or
