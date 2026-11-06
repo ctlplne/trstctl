@@ -121,6 +121,7 @@ var items = []Capability{
 	cloudNetworkPathCapability(),
 	cloudAccessKeyCapability(),
 	cloudMachineEntitlementCapability(),
+	gcpMachineIdentityCapability(),
 	cloudKMSKeyCapability(),
 	loadBalancerTLSCapability(),
 	cloudSecretCapability("cloud_secret", "Cloud secret managers"),
@@ -534,4 +535,18 @@ func cloudMachineEntitlementCapability() Capability {
 			field("private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Only these approved private destinations can be reached; no redirects occur."),
 		}, Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-machine-entitlements",
 	}
+}
+
+func gcpMachineIdentityCapability() Capability {
+	return Capability{Kind: "gcp_machine_identity", Label: "GCP workload identities", Tool: "Discover", Route: "/discovery?tab=sources&kind=gcp_machine_identity", SetupSurface: SetupSourceWizard, Purpose: "Read selected service accounts, user-managed key metadata, trust policies, project role bindings and scoped observed audit use.", DataHandling: "Uses an operator-approved private bearer-token file. Captures typed public metadata only. No private key download or mutation. Bindings and observed-only audit records do not establish effective permissions or proof of non-use.", Permission: "discovery:write", Edition: "core", Execution: "control plane", Configuration: []Field{
+		field("project", "GCP project ID", "string", true, false, false, "Project containing the selected workload service accounts."),
+		field("service_accounts", "Service-account emails", "string_list", true, false, false, "Between 1 and 64 explicitly selected workload account emails; never assumed to be all project identities."),
+		field("token_file_ref", "Reader token file reference", "credential_ref", true, true, false, "Operator-approved env: reference to a private raw OAuth access-token file; no inline material or tenant-chosen file path."),
+		field("activity_lookback_days", "Audit lookback days", "integer", false, false, false, "Zero disables audit reads; 1..90 enables observed-only scoped Cloud Logging reads."),
+		field("iam_endpoint", "IAM origin", "url", false, false, true, "Defaults to https://iam.googleapis.com; fixed origin, no redirects."),
+		field("resource_manager_endpoint", "Resource Manager origin", "url", false, false, true, "Defaults to https://cloudresourcemanager.googleapis.com."),
+		field("logging_endpoint", "Logging origin", "url", false, false, true, "Defaults to https://logging.googleapis.com."),
+		field("ca_pem", "Private endpoint trust anchor", "string", false, false, true, "Public PEM root; hostname verification remains required."),
+		field("allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit private CIDRs. Plaintext is loopback-only."),
+		field("private_egress_cidrs", "Approved private CIDRs", "cidr_list", false, false, true, "Only approved private destinations can be reached.")}, Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#gcp-workload-identity-inventory"}
 }

@@ -1457,3 +1457,45 @@ and native readback confirms deletion. Session refresh then follows the renderer
 lease loop. The console loads at most 2,000 captured findings for this selector
 and refuses a partial catalog; larger captures can use the documented API/CLI.
 Native AWS authorization and revoked-signature rejection remain live-cloud proof.
+
+
+### GCP workload identity inventory
+
+Select **GCP workload identities** when creating a discovery source. Enter the
+project ID, 1–64 selected service-account emails, and an operator-approved
+`env:` reference to a private raw OAuth access-token file. Review the exact plan
+before saving and running it. Optional audit lookback is 1–90 days; 0 disables
+that read. Custom origins, public CA PEM and explicitly approved private CIDRs
+are available for private endpoints and test environments. Token values and
+arbitrary host paths cannot be supplied by a tenant.
+
+The reader needs `iam.serviceAccounts.get`, `iam.serviceAccountKeys.list`,
+`iam.serviceAccounts.getIamPolicy`, `resourcemanager.projects.getIamPolicy`, and
+`iam.roles.get` on the selected scope. Audit observations also need the applicable
+Cloud Logging read permission. Use a suitable OAuth scope such as
+`cloud-platform` with those restricted IAM permissions; a broad OAuth scope does
+not grant IAM permissions by itself. The operator refreshes the private token
+file before it expires. An expired or unreadable token produces a failed/partial
+run with explicit coverage gaps, rather than a successful empty inventory.
+
+The collector requests only the required public metadata fields, excluding audit request/response contents and key material. It reads account identity and disabled state, user-managed key dates,
+account trust/delegation policy, project role bindings and referenced role
+permissions. CEL conditions remain visible and are not evaluated. A key at least
+90 days old is marked long-lived. Audit reads retain successful observed use for
+the exact account/key in the configured window. Service coverage, retention and
+omitted key names prevent proof that an unobserved key was unused; actual last
+use remains unknown where it cannot be observed.
+
+The finding view shows dates, policy conditions, trust and coverage limits. NHI
+inventory classifies the account as a service account; the graph shows native key
+ownership and project role bindings. It creates no effective-access grant from
+this partial policy scope. Organization/folder/resource inheritance, deny policies
+and principal-access boundaries are not evaluated. The AWS effective-permission
+evaluator and reviewed native changes remain separately identified.
+
+These reads follow the official [service-account IAM policy API](https://docs.cloud.google.com/iam/docs/reference/rest/v1/projects.serviceAccounts/getIamPolicy),
+[project IAM policy API](https://docs.cloud.google.com/resource-manager/reference/rest/v1/projects/getIamPolicy),
+[key metadata API](https://docs.cloud.google.com/iam/docs/reference/rest/v1/projects.serviceAccounts.keys/list),
+and [Cloud Logging entries API](https://docs.cloud.google.com/logging/docs/reference/v2/rest/v2/entries/list).
+Local API-shaped fixtures prove the product path and tenant/replay boundaries;
+OAuth permissions and native behavior in a live GCP account remain Track B proof.

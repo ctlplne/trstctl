@@ -10,6 +10,56 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.gcp.title": { defaultMessage: "GCP workload identities", description: "Captured GCP workload evidence." },
+  "discovery.gcp.findingHeading": { defaultMessage: "Captured GCP workload identity", description: "Captured GCP workload evidence." },
+  "discovery.gcp.snapshot": { defaultMessage: "Captured {at} in project {project}; account {state}.", description: "Captured GCP workload evidence." },
+  "discovery.gcp.disabled": { defaultMessage: "disabled", description: "Captured GCP workload evidence." },
+  "discovery.gcp.enabled": { defaultMessage: "enabled", description: "Captured GCP workload evidence." },
+  "discovery.gcp.coverage": { defaultMessage: "Exact capture coverage", description: "Captured GCP workload evidence." },
+  "discovery.gcp.keyDates": {
+    defaultMessage: "Created {created}; valid until {expires}; disabled: {disabled}; long-lived: {long}.",
+    description: "Captured GCP workload evidence.",
+  },
+  "discovery.gcp.observedUse": {
+    defaultMessage: "Successful key use observed at {at}. This is an audit observation, not proof of all use.",
+    description: "Captured GCP workload evidence.",
+  },
+  "discovery.gcp.useUnknown": {
+    defaultMessage: "No successful use was observed for this key in the captured window. Its actual last use remains unknown.",
+    description: "Captured GCP workload evidence.",
+  },
+  "discovery.gcp.bindingScope": {
+    defaultMessage: "Captured project binding at {scope}; effective access is not evaluated.",
+    description: "Captured GCP workload evidence.",
+  },
+  "discovery.gcp.permissionsUnknown": {
+    defaultMessage: "The referenced role definition could not be read; its permissions are unknown.",
+    description: "Captured GCP workload evidence.",
+  },
+  "discovery.gcp.trustPolicy": { defaultMessage: "Captured account trust and delegation policy", description: "Captured GCP workload evidence." },
+
+  "discovery.gcp.help": {
+    defaultMessage:
+      "Capture selected GCP workload identities, user-managed key dates, trust policy, project role bindings and optional audit observations. These bindings do not prove effective access, and missing log entries do not prove non-use.",
+    description: "GCP workload inventory setup.",
+  },
+  "discovery.gcp.project": { defaultMessage: "Workload project ID", description: "GCP workload inventory setup." },
+  "discovery.gcp.tokenRef": { defaultMessage: "Approved GCP token file reference", description: "GCP workload inventory setup." },
+  "discovery.gcp.tokenHelp": {
+    defaultMessage: "An operator-approved env: reference naming a private raw OAuth reader-token file. Keep the token value out of this form.",
+    description: "GCP workload inventory setup.",
+  },
+  "discovery.gcp.accounts": { defaultMessage: "Selected service-account emails", description: "GCP workload inventory setup." },
+  "discovery.gcp.auditDays": { defaultMessage: "Audit lookback days", description: "GCP workload inventory setup." },
+  "discovery.gcp.auditHelp": {
+    defaultMessage:
+      "Set 1\u201390 days to read scoped audit observations, or 0 to disable them. Logging permissions and service coverage determine what can be observed.",
+    description: "GCP workload inventory setup.",
+  },
+  "discovery.gcp.iamOrigin": { defaultMessage: "IAM API origin", description: "GCP workload inventory setup." },
+  "discovery.gcp.resourceOrigin": { defaultMessage: "Resource Manager API origin", description: "GCP workload inventory setup." },
+  "discovery.gcp.loggingOrigin": { defaultMessage: "Cloud Logging API origin", description: "GCP workload inventory setup." },
+
   "discovery.machine.catalogLimit": {
     defaultMessage: "The capture exceeds this console workflow's bounded catalog. Use the documented proposal API or CLI with the exact captured finding.",
     description: "Cloud role catalog limit.",

@@ -54,6 +54,7 @@ const catalog: DiscoveryCapabilityCatalog = {
   items: [
     capability("network"),
     capability("cloud_machine_entitlement"),
+    capability("gcp_machine_identity"),
     capability("ssh"),
     capability("ssh_trust"),
     capability("adcs"),
@@ -175,6 +176,32 @@ describe("typed discovery source setup", () => {
     await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({ kind: "cloud_machine_entitlement" })));
   });
 
+  it("reviews and saves selected GCP workload accounts with reference-only reader custody", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Owned GCP workload inventory");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "gcp_machine_identity");
+    await user.type(screen.getByLabelText("Workload project ID"), "owned-project");
+    await user.type(screen.getByLabelText("Selected service-account emails"), "orders@owned-project.iam.gserviceaccount.com");
+    await user.type(screen.getByLabelText("Approved GCP token file reference"), "env:TRSTCTL_GCP_READER_TOKEN_FILE");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "gcp_machine_identity",
+          config: expect.objectContaining({
+            project: "owned-project",
+            service_accounts: ["orders@owned-project.iam.gserviceaccount.com"],
+            token_file_ref: "env:TRSTCTL_GCP_READER_TOKEN_FILE",
+            activity_lookback_days: 30,
+          }),
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() => expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(expect.objectContaining({ kind: "gcp_machine_identity" })));
+  });
   it("requires explicit agentless opt-in and submits pinned hosts with references only", async () => {
     const user = userEvent.setup();
     apiMock.discoveryCoverage.mockResolvedValue({

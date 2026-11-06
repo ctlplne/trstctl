@@ -933,6 +933,117 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-machine-entitlements"
     },
     {
+      "kind": "gcp_machine_identity",
+      "label": "GCP workload identities",
+      "purpose": "Read selected service accounts, user-managed key metadata, trust policies, project role bindings and scoped observed audit use.",
+      "data_handling": "Uses an operator-approved private bearer-token file. Captures typed public metadata only. No private key download or mutation. Bindings and observed-only audit records do not establish effective permissions or proof of non-use.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=gcp_machine_identity",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "project",
+          "label": "GCP project ID",
+          "type": "string",
+          "required": true,
+          "description": "Project containing the selected workload service accounts."
+        },
+        {
+          "path": "service_accounts",
+          "label": "Service-account emails",
+          "type": "string_list",
+          "required": true,
+          "description": "Between 1 and 64 explicitly selected workload account emails; never assumed to be all project identities."
+        },
+        {
+          "path": "token_file_ref",
+          "label": "Reader token file reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Operator-approved env: reference to a private raw OAuth access-token file; no inline material or tenant-chosen file path."
+        },
+        {
+          "path": "activity_lookback_days",
+          "label": "Audit lookback days",
+          "type": "integer",
+          "required": false,
+          "description": "Zero disables audit reads; 1..90 enables observed-only scoped Cloud Logging reads."
+        },
+        {
+          "path": "iam_endpoint",
+          "label": "IAM origin",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Defaults to https://iam.googleapis.com; fixed origin, no redirects."
+        },
+        {
+          "path": "resource_manager_endpoint",
+          "label": "Resource Manager origin",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Defaults to https://cloudresourcemanager.googleapis.com."
+        },
+        {
+          "path": "logging_endpoint",
+          "label": "Logging origin",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Defaults to https://logging.googleapis.com."
+        },
+        {
+          "path": "ca_pem",
+          "label": "Private endpoint trust anchor",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "Public PEM root; hostname verification remains required."
+        },
+        {
+          "path": "allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit private CIDRs. Plaintext is loopback-only."
+        },
+        {
+          "path": "private_egress_cidrs",
+          "label": "Approved private CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Only approved private destinations can be reached."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#gcp-workload-identity-inventory"
+    },
+    {
       "kind": "cloud_kms_key",
       "label": "Cloud KMS keys",
       "purpose": "Inventory the keys a cloud account's key management service holds, with each key's type, size and rotation status, so unrotated and quantum-vulnerable keys stand out.",

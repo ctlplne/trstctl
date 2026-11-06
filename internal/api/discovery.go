@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cbom/coverage"
 	"trstctl.com/trstctl/internal/cloudentitlements/assessment"
+	"trstctl.com/trstctl/internal/cloudentitlements/gcpiam"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
@@ -198,6 +199,28 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		}
 	} else if !store.IsNotFound(err) {
 		return discoveryPlanPreviewResponse{}, err
+	}
+
+	if req.Kind == gcpiam.SourceKind {
+		config, err := gcpiam.DecodeConfig(cfg)
+		if err != nil {
+			return discoveryPlanPreviewResponse{}, errStatusFrom(http.StatusBadRequest, err)
+		}
+		if config.AllowPrivateEndpoint {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return discoveryPlanPreviewResponse{}, err
+			}
+		}
+		preview.Protocol = "GCP IAM, Resource Manager and optional Cloud Logging read APIs"
+		preview.NormalizedTargetCount = len(config.ServiceAccounts)
+		preview.NormalizedTargets = append([]string(nil), config.ServiceAccounts...)
+		if len(preview.NormalizedTargets) > previewTargetLimit {
+			preview.NormalizedTargets = preview.NormalizedTargets[:previewTargetLimit]
+			preview.PreviewTruncated = true
+		}
+		preview.Concurrency = 1
+		preview.QueueDepth = 256
+		preview.EstimatedUpperSeconds = 300
 	}
 	if req.Kind == assessment.SourceKind {
 		config, err := assessment.DecodeSource(cfg)
@@ -1483,6 +1506,12 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == assessment.SourceKind {
 		if _, err := assessment.DecodeSource(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+	}
+
+	if req.Kind == gcpiam.SourceKind {
+		if _, err := gcpiam.DecodeConfig(cfg); err != nil {
 			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}

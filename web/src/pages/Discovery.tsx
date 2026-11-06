@@ -11,6 +11,7 @@ import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressC
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
+import { GCPMachineFindingParts } from "./discovery/GCPMachineFindingParts";
 import { CloudMachineFindingParts } from "./discovery/CloudMachineFindingParts";
 import { FindingAnnotation } from "./discovery/FindingAnnotation";
 import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
@@ -95,6 +96,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   cloud_network_path: translateNow("discovery.sourceKind.cloudNetworkPath"),
   cloud_access_key: translateNow("discovery.sourceKind.cloudAccessKey"),
   cloud_machine_entitlement: translateNow("discovery.machine.title"),
+  gcp_machine_identity: translateNow("discovery.gcp.title"),
   cloud_kms_key: translateNow("discovery.sourceKind.cloudKmsKey"),
   load_balancer_tls: translateNow("discovery.sourceKind.loadBalancerTls"),
   cloud_secret: "Cloud secrets",
@@ -2515,6 +2517,7 @@ function FindingTable({
 
           <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
           <CloudMachineFindingParts finding={selected} />
+          <GCPMachineFindingParts finding={selected} />
           <FindingAnnotation finding={selected} busy={actionBusy} onAnnotate={() => annotateAtProvider(selected)} />
 
           {(() => {

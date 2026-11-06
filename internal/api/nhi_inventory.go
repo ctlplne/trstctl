@@ -343,6 +343,9 @@ func identityKindToNHIKind(kind store.IdentityKind) string {
 }
 
 func discoveryFindingToNHIKind(kind string, metadata map[string]any) string {
+	if kind == "gcp_machine_identity" {
+		return "service_account"
+	}
 	if kind == "cloud_machine_entitlement" {
 		if identity, ok := metadata["identity"].(map[string]any); ok {
 			if principal, ok := identity["principal"].(map[string]any); ok {

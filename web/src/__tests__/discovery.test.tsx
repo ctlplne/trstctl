@@ -121,6 +121,8 @@ function seedDiscoveryMocks() {
     schema_version: 1,
     items: [
       wizardCapability("network"),
+      wizardCapability("cloud_machine_entitlement"),
+      wizardCapability("gcp_machine_identity"),
       wizardCapability("ssh"),
       wizardCapability("ssh_trust"),
       wizardCapability("adcs"),

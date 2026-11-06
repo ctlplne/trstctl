@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2666 annotated sites across 31 rules. Each row is
+2667 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1750,7 +1750,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (52 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (53 sites)
 
 | Location | Reason |
 |---|---|
@@ -1768,6 +1768,7 @@ not this file.
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/workloadapi/attest.go:145` | a DIRECTORY, not a file. 0700 is the tightest mode that |
 | `internal/cloudentitlements/awsiam/session_file_posix_test.go:21` | deliberate shared-file negative fixture; SessionFile must reject it (CWE-276) |
+| `internal/cloudentitlements/bearerhttp/client_test.go:108` | negative fixture proves a public token file is refused (CWE-732) |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
 | `internal/crypto/samltest/material_test.go:61` | deliberately unsafe test fixture must be refused |
 | `internal/crypto/secretfile/custody_unix.go:16` | this is a directory; owner execute is required to traverse it, and 0700 grants nothing to group/other (CWE-276) |

@@ -13,8 +13,8 @@ func TestCatalogIsCompleteAndTyped(t *testing.T) {
 		t.Fatalf("validate source capability catalog: %v", err)
 	}
 	// A264 adds the typed cloud_machine_entitlement source to the 22 existing kinds.
-	if len(catalog.Items) != 23 {
-		t.Fatalf("catalog source kinds=%d, want 23 served OpenAPI kinds", len(catalog.Items))
+	if len(catalog.Items) != 24 {
+		t.Fatalf("catalog source kinds=%d, want 24 served OpenAPI kinds", len(catalog.Items))
 	}
 	for _, kind := range []string{"network", "ssh", "ssh_trust", "adcs", "cloud_certificate", "cloud_network_path", "cloud_access_key", "cloud_machine_entitlement", "cloud_kms_key", "load_balancer_tls", "cloud_secret", "secret_store"} {
 		item, ok := Find(kind)
