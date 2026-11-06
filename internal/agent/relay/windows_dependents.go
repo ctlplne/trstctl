@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/servicedependents"
 )
 
+const KindWindowsDependentRotation = servicedependents.RotationDestination
 const KindWindowsDependentInventory = servicedependents.InventoryDestination
 
 type windowsInventoryReaders struct {

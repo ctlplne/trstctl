@@ -98,8 +98,11 @@ func (s *Store) taskExecutionAAD(sequence int) []byte {
 	return []byte("trstctl.agent.task-execution.v1\x00" + s.binding + "\x00" + strconv.Itoa(sequence))
 }
 func (s *Store) readTaskExecutions() (*taskExecutionProjection, error) {
+	return s.readTaskExecutionsFile(taskExecutionFile)
+}
+func (s *Store) readTaskExecutionsFile(name string) (*taskExecutionProjection, error) {
 	projection := &taskExecutionProjection{Steps: map[string]*taskExecutionState{}}
-	info, err := s.root.Lstat(taskExecutionFile)
+	info, err := s.root.Lstat(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return projection, nil
 	}
@@ -109,7 +112,7 @@ func (s *Store) readTaskExecutions() (*taskExecutionProjection, error) {
 	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxTaskExecutionBytes {
 		return nil, ErrInvalidPending
 	}
-	raw, err := secretfile.Load(filepath.Join(s.path, taskExecutionFile))
+	raw, err := secretfile.Load(filepath.Join(s.path, name))
 	if err != nil {
 		return nil, err
 	}
@@ -224,11 +227,23 @@ func (s *Store) taskExecution(jobID int64, stepID string, task windependents.Tas
 	if jobID <= 0 || !taskStepValid(stepID) || windependents.ValidateTaskSnapshot(task) != nil {
 		return nil, errors.New("reportstate: exact task execution authority required")
 	}
+	if archived, found, e := s.readTaskExecutionArchive(jobID); e != nil {
+		return nil, e
+	} else if found {
+		state := archived.Steps[stepID]
+		if state == nil || state.Task != task {
+			return nil, errors.New("reportstate: archived task job has another frozen step authority")
+		}
+		return state, nil
+	}
 	p, err := s.readTaskExecutions()
 	if err != nil {
 		return nil, err
 	}
 	if p.JobID != 0 && p.JobID != jobID {
+		if !completedTaskExecution(p) {
+			return nil, ErrTaskExecutionUncertain
+		}
 		return nil, errors.New("reportstate: another job owns the task execution journal")
 	}
 	if state := p.Steps[stepID]; state != nil {
@@ -335,6 +350,9 @@ func (s *Store) acknowledgeTaskExecutions(report Observation) error {
 	// A failed native or functional result can be retried by the server.
 	// Retain every fence until a successful terminal report is accepted.
 	if report.Outcome != "verified" && report.Outcome != "executed" {
+		if (report.Outcome == "failed" || report.Outcome == "verify_failed") && completedTaskExecution(p) {
+			return s.archiveCompletedTaskExecution(p)
+		}
 		return nil
 	}
 	for _, state := range p.Steps {

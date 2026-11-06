@@ -101,6 +101,9 @@ func (a *agentService) recordServiceDependentFailure(ctx context.Context, info m
 	return a.appendServiceDependentAgentEvent(ctx, info.TenantID, projections.EventServiceDependentScanFailed, value)
 }
 func (a *agentService) appendServiceDependentAgentEvent(ctx context.Context, tenantID, kind string, value any) error {
+	return a.appendServiceDependentAgentEventID(ctx, tenantID, "", kind, value)
+}
+func (a *agentService) appendServiceDependentAgentEventID(ctx context.Context, tenantID, eventID, kind string, value any) error {
 	if a.log == nil || a.store == nil {
 		return errors.New("native inventory event receiver is unavailable")
 	}
@@ -108,7 +111,7 @@ func (a *agentService) appendServiceDependentAgentEvent(ctx context.Context, ten
 	if err != nil {
 		return err
 	}
-	event, err := a.log.Append(ctx, events.Event{TenantID: tenantID, Type: kind, Data: raw, SchemaVersion: 1})
+	event, err := a.log.Append(ctx, events.Event{ID: eventID, TenantID: tenantID, Type: kind, Data: raw, SchemaVersion: 1})
 	if err != nil {
 		return err
 	}

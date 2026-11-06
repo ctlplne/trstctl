@@ -100,6 +100,8 @@ TRSTCTL_AD_DURABLE_LAB=1 /run/dynsecret-test -test.v -test.run "^(TestNativeADPr
 grep -q A267_AD_DURABLE_EXIT_OK "$proof/native.log"
 grep -q A267_AD_DURABLE_DRIFT_OK "$proof/native.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267|TestServedADServiceAccountDiscoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
+docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run ^TestServedNativeADDependentCoordinatorA267$ -test.timeout=90s' > "$proof/coordinator.log" 2>&1
+grep -q A267_NATIVE_AD_COORDINATOR_OK "$proof/coordinator.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_DESKTOP_LAB=1 /run/server-test -test.v -test.run ^TestServedADDesktopA263$ -test.timeout=120s' > "$proof/desktop.log" 2>&1
 docker cp "$client:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 

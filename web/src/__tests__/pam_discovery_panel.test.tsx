@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -84,7 +85,9 @@ function mount(canManage: boolean) {
   return render(
     <AppQueryProvider>
       <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
-        <PAMDiscoveryPanel canManage={canManage} />
+        <MemoryRouter>
+          <PAMDiscoveryPanel canManage={canManage} />
+        </MemoryRouter>
       </IntlProvider>
     </AppQueryProvider>,
   );

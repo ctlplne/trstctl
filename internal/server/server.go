@@ -2621,7 +2621,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// issuance dispatcher sealed with — constructed from the same Deps, so
 		// the two sides of the seal cannot drift apart (epic A3).
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings),
-			pamGatewayCredential: s.pamGatewayCredential()},
+			pamGatewayCredential: s.pamGatewayCredential(), dependentRotationCredential: s.api.OpenDependentRotationCredential},
 		gatewayBoundHosts:         s.pamGatewayBoundHosts(),
 		signGatewayServerCSR:      s.signGatewayServerCSR,
 		signGatewaySSHKey:         s.pamSignGatewaySSHKey(),

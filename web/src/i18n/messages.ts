@@ -10,6 +10,75 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.rotation.title": { defaultMessage: "Rotate account and dependents", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.required": { defaultMessage: "Choose a value before continuing.", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.incomplete": {
+    defaultMessage: "Every enabled host needs a current complete native inventory before rotation. Scan missing or partial hosts first.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.password": { defaultMessage: "Stored password reference", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.passwordHelp": {
+    defaultMessage: "Choose the stored password for this exact AD account. The password value stays out of the browser.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.order": { defaultMessage: "Restart order and useful work", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.orderHelp": {
+    defaultMessage:
+      "Include every selected host. Put services before services that depend on them. Running services and pools stop in reverse order, then start in this order. Bind an existing local useful-work probe to every native object.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.review": { defaultMessage: "Review the exact change", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.reviewHelp": {
+    defaultMessage:
+      "AD accepts one password at a time. The worker checks hosts before resetting AD, updates every selected dependent, verifies useful work, and restores the predecessor after a failed effect. Native uncertainty requires investigation.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.reviewDependents": { defaultMessage: "Review dependents", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.preview": { defaultMessage: "Preview rotation", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.choosePassword": { defaultMessage: "Select a stored password", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.probe": { defaultMessage: "Useful-work probe for {name}", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.probeHelp": {
+    defaultMessage: "The probe ID must already be allowed in this host\u2019s local profile. It checks real work under a fresh challenge.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.earlier": { defaultMessage: "Move {name} earlier", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.later": { defaultMessage: "Move {name} later", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.reviewVersion": {
+    defaultMessage: "Stored reference {name}, version {version}. Review expires {expires}.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.exactReview": { defaultMessage: "Exact reviewed intent", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.acknowledge": {
+    defaultMessage: "I accept the single-phase AD reset and the service interruption needed to update and verify every dependent.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.execute": { defaultMessage: "Rotate account and dependents", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.foreign": {
+    defaultMessage: "This rotation belongs to another discovered account. Open its own account before using the evidence.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.progress": {
+    defaultMessage: "Directory phase: {phase}. Dependent direction: {direction}.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.restored": { defaultMessage: "Directory restored: {value}.", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.yes": { defaultMessage: "yes", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.no": { defaultMessage: "no", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.complete": { defaultMessage: "Rotation complete", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.pendingHelp": {
+    defaultMessage:
+      "Completion requires directory and native useful-work evidence. For a failed or uncertain step, inspect the exact host, native instance and signed receipt before recovery; never start an uncertain task again blindly.",
+    description: "AD dependent rotation workflow.",
+  },
+  "admin.access.rotation.steps": { defaultMessage: "Native dependent steps", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.native": { defaultMessage: "Native object and action", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.evidence": { defaultMessage: "Execution evidence", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.delivery": { defaultMessage: "Delivery", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.exactEvidence": { defaultMessage: "Exact native step evidence", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.unknown": { defaultMessage: "unknown", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.previousSteps": { defaultMessage: "Previous steps", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.nextSteps": { defaultMessage: "Next steps", description: "AD dependent rotation workflow." },
+
   "admin.access.discovery.scanQueued": {
     defaultMessage: "Scan {id} queued for {provider}. Its accounts appear after the provider read completes.",
     description: "Queued account discovery.",

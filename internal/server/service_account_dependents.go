@@ -67,6 +67,11 @@ func (s *pamService) SavePAMServiceDependentHost(ctx context.Context, tenantID, 
 		if err != nil && !errors.Is(err, store.ErrServiceDependentHostNotFound) {
 			return err
 		}
+		if active, e := s.store.NativeStaticRotationInFlight(ctx, tenantID, account); e != nil {
+			return e
+		} else if active {
+			return fmt.Errorf("%w: native account rotation is active; retain its frozen dependent host set until it finishes or recovers", api.ErrPAMTargetConflict)
+		}
 		value := projections.ServiceDependentHostSaved{Account: account, AgentID: agentID, Enabled: enabled, Actor: actor, At: s.clock().UTC()}
 		if err := s.appendServiceDependentEvent(ctx, tenantID, uuid.NewString(), projections.EventServiceDependentHostSaved, value); err != nil {
 			return err

@@ -38,6 +38,7 @@ type ServiceDependentHost struct {
 	UpdatedAt     time.Time                     `json:"updated_at"`
 }
 type ServiceDependentScan struct {
+	ObservedEventID   string                             `json:"observed_event_id,omitempty"`
 	DeliveryStatus    string                             `json:"delivery_status"`
 	ID                string                             `json:"id"`
 	Intent            servicedependents.InventoryIntent  `json:"intent"`
@@ -206,12 +207,12 @@ func (s *Store) ApplyServiceDependentScanQueuedTx(ctx context.Context, tx pgx.Tx
 	return err
 }
 
-const serviceDependentScanColumns = `id::text,intent,status,queued_by,queued_at,queued_event_id::text,outbox_id,report,report_digest,failure,service_count,task_count,pool_count,received_at,observed_at,receipt_job_id,job_attempt,receipt_statement,receipt_signature,signer_fingerprint`
+const serviceDependentScanColumns = `id::text,intent,status,queued_by,queued_at,queued_event_id::text,outbox_id,report,report_digest,failure,service_count,task_count,pool_count,received_at,observed_at,receipt_job_id,job_attempt,receipt_statement,receipt_signature,signer_fingerprint,coalesce(observed_event_id::text,'')`
 
 func scanServiceDependentScan(row pgx.Row) (ServiceDependentScan, error) {
 	var value ServiceDependentScan
 	var intent, report []byte
-	err := row.Scan(&value.ID, &intent, &value.Status, &value.QueuedBy, &value.QueuedAt, &value.QueuedEventID, &value.OutboxID, &report, &value.ReportDigest, &value.Failure, &value.ServiceCount, &value.TaskCount, &value.PoolCount, &value.ReceivedAt, &value.ObservedAt, &value.ReceiptJobID, &value.Attempt, &value.ReceiptStatement, &value.ReceiptSignature, &value.SignerFingerprint)
+	err := row.Scan(&value.ID, &intent, &value.Status, &value.QueuedBy, &value.QueuedAt, &value.QueuedEventID, &value.OutboxID, &report, &value.ReportDigest, &value.Failure, &value.ServiceCount, &value.TaskCount, &value.PoolCount, &value.ReceivedAt, &value.ObservedAt, &value.ReceiptJobID, &value.Attempt, &value.ReceiptStatement, &value.ReceiptSignature, &value.SignerFingerprint, &value.ObservedEventID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return value, ErrServiceDependentScanNotFound
 	}
@@ -262,7 +263,7 @@ func (s *Store) GetServiceDependentScan(ctx context.Context, tenantID, id string
 
 // ApplyServiceDependentScanObservedTx retains one canonical signed observation.
 // A later replay cannot replace the original fact with a different native read.
-func (s *Store) ApplyServiceDependentScanObservedTx(ctx context.Context, tx pgx.Tx, tenantID string, jobID int64, attempt int, report servicedependents.InventoryReport, digest, statement, signature, fingerprint string, at time.Time) error {
+func (s *Store) ApplyServiceDependentScanObservedTx(ctx context.Context, tx pgx.Tx, tenantID string, jobID int64, attempt int, report servicedependents.InventoryReport, digest, statement, signature, fingerprint string, at time.Time, sourceEventIDs ...string) error {
 	existing, err := scanServiceDependentScan(tx.QueryRow(ctx, "SELECT "+serviceDependentScanColumns+" FROM service_account_host_scans WHERE tenant_id=$1 AND id=$2 FOR UPDATE", tenantID, report.RunID))
 	if err != nil {
 		return err
@@ -273,9 +274,20 @@ func (s *Store) ApplyServiceDependentScanObservedTx(ctx context.Context, tx pgx.
 	if err := report.Validate(existing.Intent); err != nil {
 		return err
 	}
+	var sourceID any
+	if len(sourceEventIDs) > 0 {
+		if !dependentSourceEventID(sourceEventIDs[0]) {
+			return errors.New("store: native observation source identity invalid")
+		}
+		sourceID = sourceEventIDs[0]
+	}
 	if existing.ReportDigest != "" {
 		if existing.ReportDigest != digest || existing.Attempt == nil || *existing.Attempt != attempt || existing.ReceiptJobID == nil || *existing.ReceiptJobID != jobID {
 			return ErrIdempotencyConflict
+		}
+		if sourceID != nil && existing.ObservedEventID == "" {
+			_, err = tx.Exec(ctx, `UPDATE service_account_host_scans SET observed_event_id=$3 WHERE tenant_id=$1 AND id=$2 AND observed_event_id IS NULL`, tenantID, report.RunID, sourceID)
+			return err
 		}
 		return nil
 	}
@@ -300,8 +312,8 @@ func (s *Store) ApplyServiceDependentScanObservedTx(ctx context.Context, tx pgx.
 	}
 	_, err = tx.Exec(ctx, `UPDATE service_account_host_scans SET status=$3,report=$4::jsonb,report_digest=$5,failure='',
  service_count=$6,task_count=$7,pool_count=$8,received_at=$9,observed_at=$10,job_attempt=$11,
- receipt_statement=$12,receipt_signature=$13,signer_fingerprint=$14,receipt_job_id=$15
- WHERE tenant_id=$1 AND id=$2`, tenantID, report.RunID, state, raw, digest, len(report.Services), len(report.Tasks), len(report.Pools), at, report.ObservedAt, attempt, statement, signature, fingerprint, jobID)
+ receipt_statement=$12,receipt_signature=$13,signer_fingerprint=$14,receipt_job_id=$15,observed_event_id=$16
+ WHERE tenant_id=$1 AND id=$2`, tenantID, report.RunID, state, raw, digest, len(report.Services), len(report.Tasks), len(report.Pools), at, report.ObservedAt, attempt, statement, signature, fingerprint, jobID, sourceID)
 	if err != nil {
 		return err
 	}
@@ -355,4 +367,16 @@ func (s *Store) LatestServiceDependentScans(ctx context.Context, tenantID, accou
 		return rows.Err()
 	})
 	return result, err
+}
+
+func dependentSourceEventID(value string) bool {
+	if len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	for _, r := range value {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != ':' && r != '-' {
+			return false
+		}
+	}
+	return true
 }

@@ -34,3 +34,33 @@ func TestServiceDependentInventoryCommandsA267(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceDependentRotationCommandsA267(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path, body string
+		args                     []string
+	}{
+		{"preview", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations/preview", `{"secret_name":"ad/svc","order":[],"probes":[]}`, []string{"access", "discovery", "rotation", "preview", "account", "-f", "-"}},
+		{"queue", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations", `{"intent_digest":"reviewed","acknowledge_single_phase":true}`, []string{"access", "discovery", "rotation", "queue", "account", "-f", "-"}},
+		{"get", "GET", "/api/v1/access/discovery/dependent-rotations/change", "", []string{"access", "discovery", "rotation", "get", "change"}},
+		{"steps", "GET", "/api/v1/access/discovery/dependent-rotations/change/steps", "", []string{"access", "discovery", "rotation", "steps", "change", "--limit", "1", "--after", "step"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured capture
+			server := mockServer(t, http.StatusOK, `{"status":"uncertain","delivery_status":"failed"}`, &captured)
+			code, out, stderr := run(t, tc.args, cli.Env{Server: server.URL, Token: "owned-token", Tenant: "tenant-a", HTTPClient: server.Client()}, tc.body)
+			if code != 0 || stderr != "" || captured.Method != tc.method || captured.Path != tc.path || strings.TrimSpace(string(captured.Body)) != tc.body {
+				t.Fatalf("exit=%d err=%s request=%s %s body=%s", code, stderr, captured.Method, captured.Path, captured.Body)
+			}
+			if (captured.Header.Get("Idempotency-Key") != "") != (tc.method != "GET") {
+				t.Fatal("rotation mutation/read key mismatch")
+			}
+			if !strings.Contains(out, "uncertain") || !strings.Contains(out, "failed") {
+				t.Fatal("CLI lost native uncertainty or delivery status")
+			}
+			if tc.name == "steps" && captured.Query != "after=step&limit=1" {
+				t.Fatal("step cursor lost")
+			}
+		})
+	}
+}

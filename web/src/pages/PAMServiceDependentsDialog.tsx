@@ -5,6 +5,7 @@ import { z } from "zod";
 import { api, type PAMDiscoveredAccount, type PAMServiceDependentHost, type PAMServiceDependentScan } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
+import { PAMDependentRotation } from "./PAMDependentRotation";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,16 +17,20 @@ export function PAMServiceDependentsDialog({
   canManage,
   onClose,
   returnFocusRef,
+  onRotationID,
 }: {
   account: PAMDiscoveredAccount;
   canManage: boolean;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  onRotationID?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const title = useId(),
     description = useId();
   const client = useQueryClient();
+  const [rotating, setRotating] = useState(false);
+  const [rotationID, setRotationID] = useState<string>();
   const [after, setAfter] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [runID, setRunID] = useState<string | null>(null);
@@ -239,6 +244,22 @@ export function PAMServiceDependentsDialog({
             </>
           ) : null}
         </section>
+      ) : null}
+      {canManage && !rotating ? (
+        <Button type="button" className="mt-4" onClick={() => setRotating(true)}>
+          {t("admin.access.rotation.title")}
+        </Button>
+      ) : null}
+      {rotating ? (
+        <PAMDependentRotation
+          accountID={account.id}
+          canManage={canManage}
+          rotationID={rotationID}
+          onRotationID={(id) => {
+            setRotationID(id);
+            onRotationID?.(id);
+          }}
+        />
       ) : null}
       <div className="mt-4 flex justify-end">
         <Button type="button" variant="outline" onClick={onClose}>

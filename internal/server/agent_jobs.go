@@ -67,6 +67,7 @@ import (
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
 	relay.KindWindowsDependentInventory: true,
+	relay.KindWindowsDependentRotation:  true,
 	sshcollection.Destination:           true,
 	sshtrustrollout.Destination:         true,
 	"connector.deploy":                  true,
@@ -276,9 +277,12 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		// on a host, waiting for a future key compromise to make it readable.
 		var payload []byte
 		var projectErr error
-		if job.Destination == relay.KindWindowsDependentInventory {
+		switch job.Destination {
+		case relay.KindWindowsDependentRotation:
+			payload, projectErr = a.projectServiceDependentRotationClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
+		case relay.KindWindowsDependentInventory:
 			payload, projectErr = a.projectServiceDependentInventoryClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
-		} else {
+		default:
 			payload, projectErr = a.projectClaimedJobPayloadContext(ctx, job)
 		}
 		if projectErr != nil {
@@ -915,6 +919,8 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case relay.KindWindowsDependentRotation:
+		return a.ingestServiceDependentRotation(ctx, info, agentID, claim, req)
 	case relay.KindWindowsDependentInventory:
 		return a.ingestServiceDependentInventory(ctx, info, agentID, claim, req)
 	case sshtrustrollout.Destination:
@@ -1161,6 +1167,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 	if !held {
 		return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
+	}
+	if claim.Destination == relay.KindWindowsDependentRotation {
+		if err := a.ingestServiceDependentRotation(ctx, info, agentID, claim, req); err != nil {
+			return nil, status.Error(codes.Unavailable, "native dependent failure observation could not be retained")
+		}
 	}
 	if claim.Destination == relay.KindWindowsDependentInventory {
 		if err := a.recordServiceDependentFailure(ctx, info, claim, req, "agent_execution_failed"); err != nil {
@@ -1938,7 +1949,7 @@ func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job 
 	if job.Destination == sshtrustrollout.Destination {
 		return a.projectSSHTrustFleetClaim(ctx, job)
 	}
-	if job.Destination == relay.KindWindowsDependentInventory {
+	if job.Destination == relay.KindWindowsDependentInventory || job.Destination == relay.KindWindowsDependentRotation {
 		return nil, errors.New("native inventory claim requires a certificate-bound host identity")
 	}
 

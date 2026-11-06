@@ -45,6 +45,7 @@ var ErrSecretStaticRotationCommandNotFound = errors.New("store: static rotation 
 type SecretStaticRotationCommand struct {
 	ProviderBinding      string
 	SealedPreparation    []byte
+	DependentChangeID    string
 	CloudChangeID        string
 	TenantID             string
 	ID                   string
@@ -139,6 +140,11 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		cmd.TTLSeconds < 0 || cmd.RetireAfterSeconds < 0 {
 		return errors.New("store: static rotation command is incomplete")
 	}
+	// Serialize identical source replays before PostgreSQL arbitrates between
+	// the primary identity and the parent-authority unique indexes.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "secret-static-rotation-command:"+cmd.TenantID+":"+cmd.ID); err != nil {
+		return err
+	}
 	if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, cmd.TenantID, cmd.TenantEpoch); err != nil {
 		return err
 	}
@@ -163,6 +169,20 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		}
 		cloudChangeID = cmd.CloudChangeID
 	}
+	var dependentChangeID any
+	if cmd.DependentChangeID != "" {
+		if cmd.CloudChangeID != "" {
+			return errors.New("store: rotation has competing parent authorities")
+		}
+		parent, err := s.GetServiceDependentRotationTx(ctx, tx, cmd.TenantID, cmd.DependentChangeID)
+		if err != nil {
+			return err
+		}
+		if parent.CommandID != cmd.ID || parent.TenantEpoch != cmd.TenantEpoch || parent.IntentDigest != cmd.RequestBinding || crypto.SHA256Hex([]byte("service-dependent-rotation:"+parent.ID)) != cmd.IdempotencyKeyDigest || parent.Intent.Plan.Account.ProviderID != cmd.Provider || parent.Intent.Plan.SecretName != cmd.Key || parent.Intent.Plan.Account.DN != cmd.OldRef || parent.Intent.ExpectedVersion != cmd.ExpectedVersion || parent.Intent.ProviderBinding != cmd.ProviderBinding || !cmd.SinglePhaseAcknowledged || cmd.TTLSeconds != 0 || cmd.ScheduleID != "" || len(cmd.Consumers) != 0 || cmd.RetireAfterSeconds != 0 {
+			return errors.New("store: dependent rotation child differs from its exact parent")
+		}
+		dependentChangeID = cmd.DependentChangeID
+	}
 	var scheduleID any
 	if cmd.ScheduleID != "" {
 		scheduleID = cmd.ScheduleID
@@ -171,12 +191,12 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
 		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at,
-		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged,cloud_change_id,provider_binding)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17,$18,$19)
+		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged,cloud_change_id,provider_binding,dependent_change_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17,$18,$19,$20)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
 		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC(),
-		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID, cmd.ProviderBinding); err != nil {
+		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID, cmd.ProviderBinding, dependentChangeID); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -211,6 +231,32 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 		}
 		if len(binding) != 64 {
 			return errors.New("store: native preparation has no frozen provider authority")
+		}
+	}
+	if adv.Phase == SecretStaticRotationCutover || adv.Phase == SecretStaticRotationVerified || adv.Phase == SecretStaticRotationCompleted || adv.Phase == SecretStaticRotationRolledBack {
+		var parentID string
+		if e := tx.QueryRow(ctx, `SELECT coalesce(dependent_change_id::text,'') FROM secret_static_rotation_commands WHERE tenant_id=$1 AND id=$2`, adv.TenantID, adv.ID).Scan(&parentID); e != nil {
+			return e
+		}
+		if parentID != "" {
+			parent, e := s.GetServiceDependentRotationTx(ctx, tx, adv.TenantID, parentID)
+			if e != nil {
+				return e
+			}
+			if adv.Phase == SecretStaticRotationRolledBack {
+				if parent.Direction != "inverse" || !parent.DirectoryRestored {
+					return errors.New("store: directory inverse is not observed")
+				}
+			} else if parent.Direction != "forward" {
+				return errors.New("store: forward publication was superseded")
+			}
+			next, e := s.NextServiceDependentStepTx(ctx, tx, parent, false)
+			if e != nil {
+				return e
+			}
+			if next != nil {
+				return errors.New("store: native dependents are not functionally verified")
+			}
 		}
 	}
 	var terminalAt any
@@ -305,7 +351,7 @@ const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no creden
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
        ttl_seconds, new_expires_at, created_at, updated_at, terminal_at,
-       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged,coalesce(cloud_change_id::text, ''),provider_binding,sealed_preparation`
+       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged,coalesce(cloud_change_id::text, ''),provider_binding,sealed_preparation,coalesce(dependent_change_id::text, '')`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
@@ -313,7 +359,7 @@ func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, 
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
 		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt,
-		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged, &c.CloudChangeID, &c.ProviderBinding, &c.SealedPreparation)
+		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged, &c.CloudChangeID, &c.ProviderBinding, &c.SealedPreparation, &c.DependentChangeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}

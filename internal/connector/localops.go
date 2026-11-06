@@ -53,6 +53,8 @@ type LocalAction struct {
 // AllowedRoots and Action come from operator startup config, never from a tenant
 // deployment target.
 type LocalOpsConfig struct {
+	WindowsDependentWrites []WindowsDependentWriteGrant
+	WindowsDependentProbes []WindowsDependentProbe
 	// WindowsDependentSIDs authorizes only native account-dependent reads.
 	// It is loaded from the host operator's profile, never target/job JSON.
 	WindowsDependentSIDs []string
@@ -500,3 +502,16 @@ func (b *limitedBuffer) Destroy() {
 }
 
 var _ io.Writer = (*limitedBuffer)(nil)
+
+// WindowsDependentWriteGrant authorizes only this exact native object and probe.
+// It is distinct from the read-only SID inventory allowlist.
+type WindowsDependentWriteGrant struct {
+	AccountSID string `json:"account_sid"`
+	Family     string `json:"family"`
+	Name       string `json:"name"`
+	ProbeID    string `json:"probe_id"`
+}
+type WindowsDependentProbe struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
+}

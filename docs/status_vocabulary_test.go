@@ -17,11 +17,12 @@ import (
 )
 
 var servedVerdictFields = map[string]bool{
-	"status":       true,
-	"outcome":      true,
-	"verdict":      true,
-	"health_gate":  true,
-	"canary_state": true,
+	"effective_status": true,
+	"status":           true,
+	"outcome":          true,
+	"verdict":          true,
+	"health_gate":      true,
+	"canary_state":     true,
 }
 
 type openAPIVerdictDocument struct {
@@ -122,16 +123,22 @@ func TestANewServedVerdictFailsClosedUntilBound(t *testing.T) {
 	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
 		t.Fatalf("decode generated OpenAPI status census: %v", err)
 	}
-	doc.Components.Schemas["FutureUnreviewedVerdict"] = openAPIVerdictSchema{
-		Properties: map[string]json.RawMessage{"status": json.RawMessage(`{"type":"string"}`)},
-	}
-	failures := validateServedEvidenceBindings(doc, servedEvidenceBindings)
-	for _, failure := range failures {
-		if strings.Contains(failure, "FutureUnreviewedVerdict.status has no evidence binding") {
-			return
+	for _, field := range []string{"status", "effective_status"} {
+		doc.Components.Schemas["FutureUnreviewedVerdict"] = openAPIVerdictSchema{
+			Properties: map[string]json.RawMessage{field: json.RawMessage(`{"type":"string"}`)},
+		}
+		found := false
+		failures := validateServedEvidenceBindings(doc, servedEvidenceBindings)
+		for _, failure := range failures {
+			if strings.Contains(failure, "FutureUnreviewedVerdict."+field+" has no evidence binding") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("planted generated %s verdict escaped the fail-closed evidence census; failures=%v", field, failures)
 		}
 	}
-	t.Fatalf("planted generated verdict escaped the fail-closed evidence census; failures=%v", failures)
+
 }
 
 func validateServedEvidenceBindings(doc openAPIVerdictDocument, bindings []EvidenceBinding) []string {

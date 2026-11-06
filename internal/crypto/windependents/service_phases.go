@@ -60,3 +60,30 @@ func (s *Services) StopForRotation(ctx context.Context, target Service) (Runtime
 func (s *Services) StartAfterRotation(ctx context.Context, target Service) (Runtime, error) {
 	return s.rotationPhase(ctx, target, true)
 }
+
+type serviceObservationDriver interface {
+	observe(context.Context, Service) (Runtime, error)
+}
+
+// ObserveForRotation reads the current process without starting or stopping it.
+func (s *Services) ObserveForRotation(ctx context.Context, target Service) (Runtime, error) {
+	if e := s.inspectBound(ctx, target); e != nil {
+		return Runtime{}, e
+	}
+	observer, ok := s.driver.(serviceObservationDriver)
+	if !ok {
+		return Runtime{}, errors.New("windows service: native process observation unavailable")
+	}
+	got, e := observer.observe(ctx, target)
+	if e != nil {
+		return Runtime{}, e
+	}
+	if target.WasRunning {
+		if !got.Running || got.ProcessID == 0 || got.AccountSID != target.AccountSID {
+			return Runtime{}, errors.New("windows service: native running identity differs")
+		}
+	} else if got.Running || got.ProcessID != 0 {
+		return Runtime{}, errors.New("windows service: originally stopped state changed")
+	}
+	return got, nil
+}

@@ -1,5 +1,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The named table overflow regions need keyboard focus for horizontal scrolling. */
 import { useEffect, useId, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { PAMDependentRotation } from "./PAMDependentRotation";
 import { api, type PAMDiscoveredAccount, type PAMDiscoveryImportRequest, type PAMDiscoveryImportReview } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -25,6 +27,7 @@ function errorMessage(err: unknown): string {
 
 export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation();
+  const [search, setSearch] = useSearchParams();
   const queryClient = useQueryClient();
   const ids = { provider: useId(), interval: useId(), folder: useId(), template: useId(), reason: useId(), dismiss: useId() };
   const sources = useApiQuery(["pam-discovery-sources"], api.pamDiscoverySources, { retry: false, live: { intervalMs: 5000 } });
@@ -410,8 +413,28 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
         </div>
       ) : null}
 
+      {search.get("dependent_rotation") && search.get("dependent_account") ? (
+        <PAMDependentRotation
+          accountID={search.get("dependent_account")!}
+          canManage={false}
+          rotationID={search.get("dependent_rotation")!}
+          onRotationID={() => {}}
+        />
+      ) : null}
       {dependentAccount ? (
-        <PAMServiceDependentsDialog account={dependentAccount} canManage={canManage} onClose={() => setDependentAccount(null)} returnFocusRef={returnFocus} />
+        <PAMServiceDependentsDialog
+          account={dependentAccount}
+          canManage={canManage}
+          onRotationID={(id) => {
+            const next = new URLSearchParams(search);
+            next.set("dependent_rotation", id);
+            next.set("dependent_account", dependentAccount.id);
+            setSearch(next);
+            setDependentAccount(null);
+          }}
+          onClose={() => setDependentAccount(null)}
+          returnFocusRef={returnFocus}
+        />
       ) : null}
       {importOpen ? (
         <Dialog

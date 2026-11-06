@@ -898,6 +898,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A261 part 3: projected from pam.folder.saved and pam.folder.deleted.
 	"pam_folders",
 	"service_account_hosts", "service_account_host_scans",
+	"service_account_rotations", "service_account_rotation_steps",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",

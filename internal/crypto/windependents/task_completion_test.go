@@ -4,6 +4,7 @@ package windependents
 import (
 	"testing"
 	"testing/quick"
+	"time"
 )
 
 func ownedTaskEvents() []nativeTaskEvent {
@@ -41,5 +42,29 @@ func TestTaskCompletionNeedsNativeInstanceEventsA267(t *testing.T) {
 		return ready && err == nil
 	}, &quick.Config{MaxCount: 500}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNativeTaskCompletionRetainsEventTimesA267(t *testing.T) {
+	events := ownedTaskEvents()
+	start := time.Unix(1700000000, 0).UTC()
+	for i := range events {
+		events[i].CreatedAt = start.Add(time.Duration(i) * time.Second)
+	}
+	task := ownedTask()
+	instance := ownedTaskProof().InstanceID
+	proof, ready, e := taskProofFromEvents(task, instance, events)
+	if e != nil || !ready || !proof.StartedAt.Equal(events[0].CreatedAt) || !proof.CompletedAt.Equal(events[2].CreatedAt) {
+		t.Fatal("native task event times were lost")
+	}
+	if e = ValidateTaskRunFreshness(task, proof, start, start.Add(time.Minute)); e != nil {
+		t.Fatal("fresh native task instance refused", e)
+	}
+	if e = ValidateTaskRunFreshness(task, proof, start.Add(time.Second), start.Add(time.Minute)); e == nil {
+		t.Fatal("historical native task instance accepted as fresh")
+	}
+	events[2].CreatedAt = start.Add(-time.Second)
+	if _, ready, e = taskProofFromEvents(task, instance, events); e == nil || ready {
+		t.Fatal("reversed native task event times accepted")
 	}
 }

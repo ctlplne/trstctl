@@ -328,35 +328,15 @@ func nativeFunctionalWork(t *testing.T, ctx context.Context, address string, exp
 	}
 	t.Fatal("fresh native service process did not complete functional work")
 }
-func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
-	if os.Getenv("TRSTCTL_A267_WINDOWS_SERVICES") != "1" {
-		t.Skip("native owned Windows service lab not requested")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer cancel()
-	random, err := crypto.RandomBytes(4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	suffix := hex.EncodeToString(random)
-	name := "trst267_" + suffix
-	serviceName := "trstctl-a267-" + suffix
-	old, next := nativeOwnedPassword(t), nativeOwnedPassword(t)
-	sid := nativeCreateOwnedAccount(t, name, old.Bytes())
-	binary := nativeOwnedServiceBinary(t, suffix, sid.String())
-	reserved, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := reserved.Addr().String()
-	_ = reserved.Close()
+func nativeCreateOwnedServiceFixture(t *testing.T, ctx context.Context, name, serviceName, binary, address, expectedSID string, password []byte) (windows.Handle, Runtime) {
+	t.Helper()
 	command := fmt.Sprintf("\"%s\" -test.run=^TestWindowsServiceFixtureA267$ -a267-service-name=%s -a267-service-address=%s", binary, serviceName, address)
 	scm, err := openLocalSCM(windows.SC_MANAGER_CONNECT | windows.SC_MANAGER_CREATE_SERVICE)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = windows.CloseServiceHandle(scm) }()
-	wide, err := lockedWindowsPassword(old.Bytes())
+	wide, err := lockedWindowsPassword(password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,10 +376,36 @@ func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
 	if _, err := waitServiceState(ctx, handle, windows.SERVICE_RUNNING); err != nil {
 		t.Fatal(err)
 	}
-	initial, err := verifiedServiceProcess(handle, sid.String())
+	initial, err := verifiedServiceProcess(handle, expectedSID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return handle, initial
+}
+
+func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
+	if os.Getenv("TRSTCTL_A267_WINDOWS_SERVICES") != "1" {
+		t.Skip("native owned Windows service lab not requested")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	random, err := crypto.RandomBytes(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := hex.EncodeToString(random)
+	name := "trst267_" + suffix
+	serviceName := "trstctl-a267-" + suffix
+	old, next := nativeOwnedPassword(t), nativeOwnedPassword(t)
+	sid := nativeCreateOwnedAccount(t, name, old.Bytes())
+	binary := nativeOwnedServiceBinary(t, suffix, sid.String())
+	reserved, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reserved.Addr().String()
+	_ = reserved.Close()
+	_, initial := nativeCreateOwnedServiceFixture(t, ctx, name, serviceName, binary, address, sid.String(), old.Bytes())
 	nativeFunctionalWork(t, ctx, address, initial)
 	adapter := NewServices()
 	found, err := adapter.Discover(ctx, sid.String())

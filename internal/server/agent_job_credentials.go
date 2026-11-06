@@ -64,6 +64,15 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
+	if job.Destination == relay.KindWindowsDependentRotation {
+		if job.RequiredAgentID != agentID || !agentHasRole(info.Roles, mtls.AgentRoleHost) {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+		step, err := a.boundServiceDependentStep(ctx, info.TenantID, agentID, job.IdempotencyKey, job.Payload)
+		if err != nil || step.Action != "update" || !time.Now().Before(step.Deadline) {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+	}
 	if job.Destination == relay.KindWindowsDependentInventory {
 		return nil, status.Error(codes.FailedPrecondition, "native dependent inventory redeems no credential")
 	}

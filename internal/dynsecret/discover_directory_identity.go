@@ -129,3 +129,19 @@ func sameADDiscoveryDN(left, right string) bool {
 	b, err := ldap.ParseDN(right)
 	return err == nil && a.EqualFold(b)
 }
+
+// CanonicalADSIDHex converts the frozen native preparation's SID bytes to the
+// canonical public spelling used by discovery and Windows dependent bindings.
+func CanonicalADSIDHex(value string) (string, error) {
+	if len(value) > 136 || value != strings.ToLower(value) {
+		return "", errors.New("dynsecret AD: native SID bytes are not canonical")
+	}
+	raw, e := hex.DecodeString(value)
+	if e != nil {
+		return "", errors.New("dynsecret AD: invalid native SID encoding")
+	}
+	return adDiscoverySID(raw)
+}
+
+// SameADNativeDN compares parsed native object names, including escaped forms.
+func SameADNativeDN(left, right string) bool { return sameADRestoreDN(left, right) }

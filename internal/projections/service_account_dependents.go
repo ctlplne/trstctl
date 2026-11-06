@@ -94,7 +94,7 @@ func (p *Projector) applyServiceDependentsTx(ctx context.Context, tx pgx.Tx, e e
 		if value.EvidenceDigest != crypto.SHA256Hex(raw) {
 			return true, errors.New("service dependent native metadata digest differs")
 		}
-		return true, p.store.ApplyServiceDependentScanObservedTx(ctx, tx, e.TenantID, value.JobID, value.Attempt, value.Report, value.EvidenceDigest, value.ReceiptStatement, value.ReceiptSignature, value.SignerFingerprint, value.At)
+		return true, p.store.ApplyServiceDependentScanObservedTx(ctx, tx, e.TenantID, value.JobID, value.Attempt, value.Report, value.EvidenceDigest, value.ReceiptStatement, value.ReceiptSignature, value.SignerFingerprint, value.At, e.ID)
 	case EventServiceDependentScanFailed:
 		var value ServiceDependentScanFailed
 		if err := decode(e, &value); err != nil {

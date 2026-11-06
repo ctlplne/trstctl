@@ -85,3 +85,30 @@ func (nativeServiceDriver) start(ctx context.Context, expected Service) (Runtime
 	}
 	return verifiedServiceProcess(handle, expected.AccountSID)
 }
+
+func (nativeServiceDriver) observe(ctx context.Context, expected Service) (Runtime, error) {
+	handle, e := openNativeService(expected.Name, windows.SERVICE_QUERY_CONFIG|windows.SERVICE_QUERY_STATUS)
+	if e != nil {
+		return Runtime{}, e
+	}
+	defer func() { _ = windows.CloseServiceHandle(handle) }()
+	snapshot, e := inspectServiceHandle(ctx, handle, expected.Name, expected.AccountSID)
+	if e != nil {
+		return Runtime{}, e
+	}
+	defer snapshot.destroy()
+	if !sameServiceBinding(expected, snapshot.Service) {
+		return Runtime{}, errors.New("windows service: native observation authority changed")
+	}
+	state, e := nativeServiceStatus(handle)
+	if e != nil {
+		return Runtime{}, e
+	}
+	if state.CurrentState == windows.SERVICE_STOPPED {
+		return Runtime{}, nil
+	}
+	if state.CurrentState != windows.SERVICE_RUNNING {
+		return Runtime{}, errors.New("windows service: paused or transitional state needs a fresh review")
+	}
+	return verifiedServiceProcess(handle, expected.AccountSID)
+}

@@ -297,7 +297,8 @@ import (
 // Version 99 retains native static-rotation authority and sealed preparation.
 // Version 100 retains exact AD account/host bindings and signed dependent scans.
 // Version 101 retains queued provider scan intents and nullable completion times.
-const SnapshotFormatVersion = 101
+// Version102 retains service-account rotation parent/step source projections.
+const SnapshotFormatVersion = 102
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -403,6 +404,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	// Format 94: A261's account folders.
 	"pam_folders",
 	"service_account_hosts", "service_account_host_scans",
+	"service_account_rotations", "service_account_rotation_steps",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",
@@ -776,6 +778,8 @@ SELECT jsonb_build_object(
   'pam_folders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_folders t),
   'service_account_hosts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_hosts t),
   'service_account_host_scans', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_host_scans t),
+  'service_account_rotations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotations t),
+  'service_account_rotation_steps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_steps t),
   'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
   'cloud_machine_changes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cloud_machine_changes t),
   'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),

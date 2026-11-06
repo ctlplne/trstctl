@@ -189,6 +189,11 @@ func (s *Store) load() error {
 			return err
 		}
 	}
+	archives, archiveErr := s.taskExecutionArchives()
+	if archiveErr != nil {
+		return archiveErr
+	}
+	retained = retained || len(archives) > 0
 	if retained {
 		if _, err := s.root.Lstat("sealing.key"); err != nil {
 			return fmt.Errorf("%w: it has no accessible sealing key; preserve the state for recovery", ErrUnopenable)
@@ -225,8 +230,19 @@ func (s *Store) load() error {
 	if err != nil {
 		return err
 	}
-	_, err = s.readTaskExecutions()
-	return err
+	if _, err = s.readTaskExecutions(); err != nil {
+		return err
+	}
+	for _, name := range archives {
+		id, ok := taskExecutionArchiveJob(name)
+		if !ok {
+			return ErrInvalidPending
+		}
+		if _, _, err = s.readTaskExecutionArchive(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // setAside renames the retained report, without reading or rewriting it, so

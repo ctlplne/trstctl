@@ -316,6 +316,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue the exact reviewed AD rotation and all native dependent effects */
+        post: operations["queuePAMServiceDependentRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review complete native dependent inventory, restart order and useful-work bindings before AD rotation */
+        post: operations["previewPAMServiceDependentRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}": {
         parameters: {
             query?: never;
@@ -361,6 +395,40 @@ export interface paths {
         put?: never;
         /** Set a staged account aside with the reason; a scan that finds it changed stages it again */
         post: operations["dismissPAMDiscoveredAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-rotations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read directory rotation and dependent rollback progress */
+        get: operations["getPAMServiceDependentRotation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-rotations/{id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page exact native step evidence and independent delivery state */
+        get: operations["listPAMServiceDependentRotationSteps"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21965,6 +22033,17 @@ export interface components {
             /** @enum {string} */
             status: "complete" | "unavailable";
         };
+        PAMDependentFunctionalProof: {
+            account_sid: string;
+            /** Format: uuid */
+            challenge: string;
+            evidence_sha256: string;
+            probe_id: string;
+            /** Format: int64 */
+            process_id?: number;
+            /** Format: uuid */
+            task_instance_id?: string;
+        };
         PAMDependentHostBinding: {
             account: components["schemas"]["PAMDependentAccountBinding"];
             /** Format: uuid */
@@ -22014,6 +22093,117 @@ export interface components {
             /** Format: int64 */
             logon_type: number;
             path: string;
+        };
+        PAMDependentPoolRestartProof: {
+            account_sid: string;
+            config_sha256: string;
+            name: string;
+            previous_pids: number[] | null;
+            started_observed: boolean;
+            stopped_observed: boolean;
+            was_started: boolean;
+        };
+        PAMDependentProbeBinding: {
+            probe_id: string;
+            ref: components["schemas"]["PAMDependentRef"];
+        };
+        PAMDependentRef: {
+            /** Format: uuid */
+            agent_id: string;
+            /** @enum {string} */
+            family: "services" | "tasks" | "iis";
+            name: string;
+        };
+        PAMDependentRotationHost: {
+            binding: components["schemas"]["PAMDependentHostBinding"];
+            dependents: components["schemas"]["PAMDependentRef"][];
+            inventory_digest: string;
+            /** Format: uuid */
+            inventory_run_id: string;
+            /** Format: date-time */
+            observed_at: string;
+        };
+        PAMDependentRotationPlan: {
+            account: components["schemas"]["PAMDependentAccountBinding"];
+            /** Format: date-time */
+            created_at: string;
+            digest: string;
+            /** Format: date-time */
+            expires_at: string;
+            hosts: components["schemas"]["PAMDependentRotationHost"][];
+            /** Format: uuid */
+            id: string;
+            order: components["schemas"]["PAMDependentRef"][];
+            secret_name: string;
+            /** Format: int64 */
+            version: number;
+        };
+        PAMDependentRotationStep: {
+            account_sid: string;
+            /** @enum {string} */
+            action: "preflight" | "stop" | "update" | "start" | "probe";
+            /** Format: uuid */
+            challenge?: string;
+            /** Format: date-time */
+            deadline: string;
+            /** @enum {string} */
+            direction: "forward" | "inverse";
+            /** Format: date-time */
+            not_before: string;
+            plan_digest: string;
+            pool?: components["schemas"]["PAMDependentNativePool"];
+            previous_pids?: number[];
+            probe_id: string;
+            ref: components["schemas"]["PAMDependentRef"];
+            /** Format: uuid */
+            rotation_id: string;
+            service?: components["schemas"]["PAMDependentNativeService"];
+            step_id: string;
+            task?: components["schemas"]["PAMDependentNativeTask"];
+        };
+        PAMDependentRuntime: {
+            account_sid?: string;
+            /** Format: int64 */
+            process_id?: number;
+            running: boolean;
+        };
+        PAMDependentStepReport: {
+            /** @enum {string} */
+            direction: "forward" | "inverse";
+            failure?: string;
+            functional?: components["schemas"]["PAMDependentFunctionalProof"];
+            /** Format: date-time */
+            observed_at: string;
+            plan_digest: string;
+            pool_proof?: components["schemas"]["PAMDependentPoolRestartProof"];
+            /** Format: uuid */
+            rotation_id: string;
+            runtime?: components["schemas"]["PAMDependentRuntime"];
+            /** @enum {string} */
+            status: "succeeded" | "failed" | "uncertain";
+            step_id: string;
+            task_proof?: components["schemas"]["PAMDependentTaskRunProof"];
+        };
+        PAMDependentTaskActionResult: {
+            /** Format: int64 */
+            record_id: number;
+            /** Format: int64 */
+            result_code: number;
+        };
+        PAMDependentTaskRunProof: {
+            account_sid: string;
+            actions: components["schemas"]["PAMDependentTaskActionResult"][];
+            /** Format: date-time */
+            completed_at: string;
+            /** Format: int64 */
+            completion_record_id: number;
+            /** Format: uuid */
+            instance_id: string;
+            path: string;
+            /** Format: int64 */
+            start_record_id: number;
+            /** Format: date-time */
+            started_at: string;
         };
         PAMDiscoveredAccount: {
             /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
@@ -22381,6 +22571,74 @@ export interface components {
         PAMServiceDependentHostRequest: {
             enabled: boolean;
         };
+        PAMServiceDependentRotation: {
+            actor: string;
+            /** Format: uuid */
+            command_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @enum {string} */
+            direction: "forward" | "inverse";
+            directory_apply_started: boolean;
+            directory_restored: boolean;
+            failure?: string;
+            /** Format: uuid */
+            id: string;
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
+            tenant_epoch: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PAMServiceDependentRotationIntent: {
+            /** Format: int64 */
+            expected_version: number;
+            plan: components["schemas"]["PAMDependentRotationPlan"];
+            probes: components["schemas"]["PAMDependentProbeBinding"][];
+            provider_binding: string;
+        };
+        PAMServiceDependentRotationPreview: {
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
+        };
+        PAMServiceDependentRotationPreviewRequest: {
+            order: components["schemas"]["PAMDependentRef"][];
+            probes: components["schemas"]["PAMDependentProbeBinding"][];
+            secret_name: string;
+        };
+        PAMServiceDependentRotationRequest: {
+            acknowledge_single_phase: boolean;
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
+        };
+        PAMServiceDependentRotationStep: {
+            /** Format: int64 */
+            attempt?: number;
+            delivery_status?: string;
+            intent: components["schemas"]["PAMDependentRotationStep"];
+            /** Format: int64 */
+            outbox_id?: number;
+            /** Format: date-time */
+            queued_at: string;
+            /** Format: int64 */
+            receipt_job_id?: number;
+            receipt_signature_base64?: string;
+            receipt_statement?: string;
+            /** Format: date-time */
+            received_at?: string;
+            report?: components["schemas"]["PAMDependentStepReport"];
+            signer_fingerprint?: string;
+            /** @enum {string} */
+            status: "queued" | "succeeded" | "failed" | "uncertain";
+        };
+        PAMServiceDependentRotationStepList: {
+            items: components["schemas"]["PAMServiceDependentRotationStep"][];
+            next_cursor?: string;
+        };
+        PAMServiceDependentRotationView: {
+            command: components["schemas"]["SecretStaticRotation"];
+            rotation: components["schemas"]["PAMServiceDependentRotation"];
+        };
         PAMServiceDependentScan: {
             /** Format: int64 */
             attempt?: number;
@@ -22391,6 +22649,7 @@ export interface components {
             intent: components["schemas"]["PAMDependentInventoryIntent"];
             /** Format: date-time */
             observed_at?: string;
+            observed_event_id?: string;
             /** Format: int64 */
             outbox_id?: number;
             /** Format: int64 */
@@ -27943,6 +28202,100 @@ export interface operations {
             };
         };
     };
+    queuePAMServiceDependentRotation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRotationView"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewPAMServiceDependentRotation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentRotationPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRotationPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     savePAMServiceDependentHost: {
         parameters: {
             query?: never;
@@ -28060,6 +28413,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveredAccount"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceDependentRotation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRotationView"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMServiceDependentRotationSteps: {
+        parameters: {
+            query?: {
+                /** @description the last step ID from the previous page */
+                after?: string;
+                /** @description 1-256 steps, default 50 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRotationStepList"];
                 };
             };
             /** @description client error */

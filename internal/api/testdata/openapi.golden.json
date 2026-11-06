@@ -40041,6 +40041,38 @@
         ],
         "type": "object"
       },
+      "PAMDependentFunctionalProof": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "challenge": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "evidence_sha256": {
+            "type": "string"
+          },
+          "probe_id": {
+            "type": "string"
+          },
+          "process_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "task_instance_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "probe_id",
+          "challenge",
+          "account_sid",
+          "evidence_sha256"
+        ],
+        "type": "object"
+      },
       "PAMDependentHostBinding": {
         "properties": {
           "account": {
@@ -40222,6 +40254,397 @@
           "enabled",
           "logon_type",
           "action_count"
+        ],
+        "type": "object"
+      },
+      "PAMDependentPoolRestartProof": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "config_sha256": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "previous_pids": {
+            "oneOf": [
+              {
+                "items": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_observed": {
+            "type": "boolean"
+          },
+          "stopped_observed": {
+            "type": "boolean"
+          },
+          "was_started": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "account_sid",
+          "config_sha256",
+          "was_started",
+          "stopped_observed",
+          "started_observed",
+          "previous_pids"
+        ],
+        "type": "object"
+      },
+      "PAMDependentProbeBinding": {
+        "properties": {
+          "probe_id": {
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/PAMDependentRef"
+          }
+        },
+        "required": [
+          "ref",
+          "probe_id"
+        ],
+        "type": "object"
+      },
+      "PAMDependentRef": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "family": {
+            "enum": [
+              "services",
+              "tasks",
+              "iis"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "family",
+          "name"
+        ],
+        "type": "object"
+      },
+      "PAMDependentRotationHost": {
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/PAMDependentHostBinding"
+          },
+          "dependents": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentRef"
+            },
+            "type": "array"
+          },
+          "inventory_digest": {
+            "type": "string"
+          },
+          "inventory_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding",
+          "inventory_run_id",
+          "inventory_digest",
+          "observed_at",
+          "dependents"
+        ],
+        "type": "object"
+      },
+      "PAMDependentRotationPlan": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/PAMDependentAccountBinding"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentRotationHost"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "order": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentRef"
+            },
+            "type": "array"
+          },
+          "secret_name": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "id",
+          "account",
+          "secret_name",
+          "hosts",
+          "order",
+          "created_at",
+          "expires_at",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "PAMDependentRotationStep": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "preflight",
+              "stop",
+              "update",
+              "start",
+              "probe"
+            ],
+            "type": "string"
+          },
+          "challenge": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "forward",
+              "inverse"
+            ],
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "pool": {
+            "$ref": "#/components/schemas/PAMDependentNativePool"
+          },
+          "previous_pids": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "probe_id": {
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/PAMDependentRef"
+          },
+          "rotation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "service": {
+            "$ref": "#/components/schemas/PAMDependentNativeService"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "task": {
+            "$ref": "#/components/schemas/PAMDependentNativeTask"
+          }
+        },
+        "required": [
+          "rotation_id",
+          "plan_digest",
+          "step_id",
+          "direction",
+          "action",
+          "ref",
+          "account_sid",
+          "probe_id",
+          "not_before",
+          "deadline"
+        ],
+        "type": "object"
+      },
+      "PAMDependentRuntime": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "process_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "running": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running"
+        ],
+        "type": "object"
+      },
+      "PAMDependentStepReport": {
+        "properties": {
+          "direction": {
+            "enum": [
+              "forward",
+              "inverse"
+            ],
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "functional": {
+            "$ref": "#/components/schemas/PAMDependentFunctionalProof"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "pool_proof": {
+            "$ref": "#/components/schemas/PAMDependentPoolRestartProof"
+          },
+          "rotation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/PAMDependentRuntime"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "uncertain"
+            ],
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "task_proof": {
+            "$ref": "#/components/schemas/PAMDependentTaskRunProof"
+          }
+        },
+        "required": [
+          "rotation_id",
+          "plan_digest",
+          "step_id",
+          "direction",
+          "status",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "PAMDependentTaskActionResult": {
+        "properties": {
+          "record_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "result_code": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_id",
+          "result_code"
+        ],
+        "type": "object"
+      },
+      "PAMDependentTaskRunProof": {
+        "properties": {
+          "account_sid": {
+            "type": "string"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentTaskActionResult"
+            },
+            "type": "array"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completion_record_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "start_record_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "account_sid",
+          "instance_id",
+          "start_record_id",
+          "completion_record_id",
+          "actions",
+          "started_at",
+          "completed_at"
         ],
         "type": "object"
       },
@@ -41639,6 +42062,243 @@
         ],
         "type": "object"
       },
+      "PAMServiceDependentRotation": {
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "command_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "forward",
+              "inverse"
+            ],
+            "type": "string"
+          },
+          "directory_apply_started": {
+            "type": "boolean"
+          },
+          "directory_restored": {
+            "type": "boolean"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "tenant_epoch": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "intent",
+          "intent_digest",
+          "command_id",
+          "tenant_epoch",
+          "direction",
+          "directory_restored",
+          "directory_apply_started",
+          "actor",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationIntent": {
+        "properties": {
+          "expected_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PAMDependentRotationPlan"
+          },
+          "probes": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentProbeBinding"
+            },
+            "type": "array"
+          },
+          "provider_binding": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "expected_version",
+          "provider_binding",
+          "probes"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationPreview": {
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "intent_digest"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationPreviewRequest": {
+        "properties": {
+          "order": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentRef"
+            },
+            "type": "array"
+          },
+          "probes": {
+            "items": {
+              "$ref": "#/components/schemas/PAMDependentProbeBinding"
+            },
+            "type": "array"
+          },
+          "secret_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_name",
+          "order",
+          "probes"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationRequest": {
+        "properties": {
+          "acknowledge_single_phase": {
+            "type": "boolean"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "intent_digest",
+          "acknowledge_single_phase"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationStep": {
+        "properties": {
+          "attempt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "delivery_status": {
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMDependentRotationStep"
+          },
+          "outbox_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "receipt_job_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "receipt_signature_base64": {
+            "type": "string"
+          },
+          "receipt_statement": {
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/PAMDependentStepReport"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "succeeded",
+              "failed",
+              "uncertain"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "status",
+          "queued_at"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationStepList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMServiceDependentRotationStep"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMServiceDependentRotationView": {
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/SecretStaticRotation"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotation"
+          }
+        },
+        "required": [
+          "rotation",
+          "command"
+        ],
+        "type": "object"
+      },
       "PAMServiceDependentScan": {
         "properties": {
           "attempt": {
@@ -41660,6 +42320,9 @@
           },
           "observed_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "observed_event_id": {
             "type": "string"
           },
           "outbox_id": {
@@ -59836,6 +60499,160 @@
         "x-trstctl-permission": "access:read"
       }
     },
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations": {
+      "post": {
+        "operationId": "queuePAMServiceDependentRotation",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMServiceDependentRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceDependentRotationView"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue the exact reviewed AD rotation and all native dependent effects",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/preview": {
+      "post": {
+        "operationId": "previewPAMServiceDependentRotation",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMServiceDependentRotationPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceDependentRotationPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review complete native dependent inventory, restart order and useful-work bindings before AD rotation",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
     "/api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}": {
       "put": {
         "operationId": "savePAMServiceDependentHost",
@@ -60073,6 +60890,138 @@
         ],
         "summary": "Set a staged account aside with the reason; a scan that finds it changed stages it again",
         "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/dependent-rotations/{id}": {
+      "get": {
+        "operationId": "getPAMServiceDependentRotation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceDependentRotationView"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read directory rotation and dependent rollback progress",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/discovery/dependent-rotations/{id}/steps": {
+      "get": {
+        "operationId": "listPAMServiceDependentRotationSteps",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "the last step ID from the previous page",
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-256 steps, default 50",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceDependentRotationStepList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Page exact native step evidence and independent delivery state",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/discovery/dependent-runs/{id}": {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"unicode/utf8"
 )
@@ -28,6 +29,8 @@ type TaskActionResult struct {
 // TaskRunProof binds success to native start, action and completion records for
 // one fresh instance. A previous/global LastTaskResult cannot satisfy it.
 type TaskRunProof struct {
+	StartedAt          time.Time          `json:"started_at,omitzero"`
+	CompletedAt        time.Time          `json:"completed_at,omitzero"`
 	Path               string             `json:"path"`
 	AccountSID         string             `json:"account_sid"`
 	InstanceID         string             `json:"instance_id"`
@@ -182,6 +185,9 @@ func validateTaskRunProof(task Task, proof TaskRunProof) error {
 	if _, ok := canonicalTaskInstance(proof.InstanceID); !ok || proof.Path != task.Path || proof.AccountSID != task.AccountSID || proof.StartRecordID == 0 || proof.CompletionRecordID <= proof.StartRecordID || len(proof.Actions) != int(task.ActionCount) {
 		return errors.New("windows task: missing or foreign per-instance execution proof")
 	}
+	if proof.StartedAt.IsZero() != proof.CompletedAt.IsZero() || !proof.StartedAt.IsZero() && proof.CompletedAt.Before(proof.StartedAt) {
+		return errors.New("windows task: native instance timestamps are incomplete or reversed")
+	}
 	seen := map[uint64]bool{}
 	for _, action := range proof.Actions {
 		if action.RecordID <= proof.StartRecordID || action.RecordID >= proof.CompletionRecordID || seen[action.RecordID] || action.ResultCode != 0 {
@@ -286,4 +292,22 @@ func (t *Tasks) ObserveInstance(ctx context.Context, task Task, instance string)
 		return TaskRunProof{}, false, err
 	}
 	return proof, true, nil
+}
+
+// CheckRotationSnapshot performs only native identity/definition reads.
+func (t *Tasks) CheckRotationSnapshot(ctx context.Context, task Task) error {
+	return t.inspectBound(ctx, task)
+}
+
+// ValidateTaskRunFreshness additionally binds a new dependent rotation to the
+// native instance's own event time, rather than an arbitrary historical GUID.
+// Undated older journal records remain readable but cannot qualify new work.
+func ValidateTaskRunFreshness(task Task, proof TaskRunProof, notBefore, deadline time.Time) error {
+	if e := validateTaskRunProof(task, proof); e != nil {
+		return e
+	}
+	if notBefore.IsZero() || !deadline.After(notBefore) || proof.StartedAt.IsZero() || proof.CompletedAt.IsZero() || proof.StartedAt.Before(notBefore) || proof.CompletedAt.After(deadline) {
+		return errors.New("windows task: native instance is outside the current execution lease")
+	}
+	return nil
 }

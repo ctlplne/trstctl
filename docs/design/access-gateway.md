@@ -1236,3 +1236,25 @@ this proof. Shared authorization/recording controls and deferred broad gates
 are owed at FINISH. Docker's default address pools need not be free: the script
 allocates a bounded isolated /28 from 10.254.253.0/24, refusing overlaps; an explicit
 `TRSTCTL_AD_LAB_SUBNET` can select another owned private subnet.
+
+The AD dependent coordinator is host work, separate from gateway session authority.
+Its parent freezes complete signed inventory, exact native identity, provider and
+vault generation, restart order and local functional probes. The parent and sealed
+child share one canonical operation identity, so deleting a projected parent link
+cannot downgrade the work into ordinary static rotation. Each effect has a
+canonical queued event, exact enrolled-host outbox grant and stable first signed
+observation. A mutable SQL success cannot authorize the next effect or become
+served verified evidence. Worker cutover and predecessor-process selection compare
+all used results to those canonical sources. A completed source also refuses a
+new claim or credential redemption after operational-row reconstruction.
+
+Read-only SID inventory grants and exact native write/probe grants are separate.
+Passwords are redeemed only for an active exact update step, from its sealed
+forward or inverse generation, and wiped after native use. Service/pool stop,
+update, start and useful-work phases are distinct. Tasks preserve a sealed start
+fence and exact native instance; no uncertain start is automatically repeated.
+Known completed failed instances are archived with their evidence before a
+separate inverse. The parent restores native effects before publishing vault
+recovery, and preserves an unrelated concurrent vault edit as an explicit conflict.
+The Windows local SAM fixture and directory/host boundary fixtures have separate
+qualification limits; neither establishes an AD forest deployment.

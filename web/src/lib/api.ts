@@ -541,6 +541,11 @@ import type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMServiceDependentRotationPreviewRequest,
+  PAMServiceDependentRotationPreview,
+  PAMServiceDependentRotationRequest,
+  PAMServiceDependentRotationView,
+  PAMServiceDependentRotationStepList,
   PAMCheckout,
   PAMCheckoutList,
   PAMCheckoutRequest,
@@ -1537,6 +1542,11 @@ export type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMServiceDependentRotationPreviewRequest,
+  PAMServiceDependentRotationPreview,
+  PAMServiceDependentRotationRequest,
+  PAMServiceDependentRotationView,
+  PAMServiceDependentRotationStepList,
   PAMCheckout,
   PAMCheckoutList,
   PAMCheckoutRequest,
@@ -2581,6 +2591,19 @@ export interface Api {
   savePAMServiceDependentHost(accountID: string, agentID: string, enabled: boolean, idempotencyKey?: string): Promise<PAMServiceDependentHost>;
   runPAMServiceDependentInventory(accountID: string, agentID: string, idempotencyKey?: string): Promise<PAMServiceDependentScan>;
   pamServiceDependentScan(id: string): Promise<PAMServiceDependentScan>;
+  previewPAMServiceDependentRotation(
+    accountID: string,
+    input: PAMServiceDependentRotationPreviewRequest,
+    idempotencyKey?: string,
+  ): Promise<PAMServiceDependentRotationPreview>;
+  queuePAMServiceDependentRotation(
+    accountID: string,
+    input: PAMServiceDependentRotationRequest,
+    idempotencyKey?: string,
+  ): Promise<PAMServiceDependentRotationView>;
+  pamServiceDependentRotation(id: string): Promise<PAMServiceDependentRotationView>;
+  pamServiceDependentRotationSteps(id: string, after?: string): Promise<PAMServiceDependentRotationStepList>;
+
   pamCheckouts(): Promise<PAMCheckoutList>;
   requestPAMCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMCheckoutReview>;
   revealPAMCheckout(requestID: string, input: PAMCheckoutRevealRequest, idempotencyKey?: string): Promise<PAMCheckoutReveal>;
@@ -3541,6 +3564,21 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       key,
     ),
   pamServiceDependentScan: (id) => req<PAMServiceDependentScan>("/api/v1/access/discovery/dependent-runs/" + encodeURIComponent(id)),
+  previewPAMServiceDependentRotation: (accountID, input, key) =>
+    mutate<PAMServiceDependentRotationPreview>(
+      "POST",
+      "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/rotations/preview",
+      input,
+      key,
+    ),
+  queuePAMServiceDependentRotation: (accountID, input, key) =>
+    mutate<PAMServiceDependentRotationView>("POST", "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/rotations", input, key),
+  pamServiceDependentRotation: (id) => req<PAMServiceDependentRotationView>("/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id)),
+  pamServiceDependentRotationSteps: (id, after) =>
+    req<PAMServiceDependentRotationStepList>(
+      "/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id) + "/steps" + (after ? "?after=" + encodeURIComponent(after) : ""),
+    ),
+
   pamImportedAccounts: (folder) => req<PAMImportedAccountList>(`/api/v1/access/accounts${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
   pamCheckouts: () => req<PAMCheckoutList>("/api/v1/access/checkouts"),
   requestPAMCheckout: (input, idempotencyKey) => mutate<PAMCheckoutReview>("POST", "/api/v1/access/checkouts", input, idempotencyKey),

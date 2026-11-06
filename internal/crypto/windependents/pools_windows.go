@@ -201,6 +201,9 @@ func (driver nativePoolDriver) update(ctx context.Context, expected Pool, passwo
 		if !samePoolBinding(expected, snapshot.Pool) {
 			return errors.New("windows pool: native identity/configuration/provider changed before update")
 		}
+		if !expected.WasStarted && snapshot.WasStarted {
+			return errors.New("windows pool: stopped mutation authority changed")
+		}
 		provider, err := newAutomationPublicString(expected.EncryptionProvider)
 		if err != nil {
 			return err

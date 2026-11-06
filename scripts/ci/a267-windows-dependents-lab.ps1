@@ -72,3 +72,18 @@ $inventoryLog = Join-Path $env:RUNNER_TEMP 'a267-windows-inventory.log'
 if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $inventoryLog -Pattern 'A267_WINDOWS_INVENTORY_OK' -Quiet)) {
     throw 'A267 native enrolled-host inventory collector did not run and pass'
 }
+
+# Compile the shipped receiver as a separate native executable so the crypto
+# fixture can drive it through anonymous pipes without introducing an import
+# cycle. Only public fixture paths appear in environment or command arguments.
+$executor = Join-Path $env:RUNNER_TEMP 'a267-dependent-native-executor.test.exe'
+& go test -c -o $executor ./internal/agent/relay
+if ($LASTEXITCODE -ne 0) { throw 'A267 native receiver compilation failed' }
+$env:TRSTCTL_A267_NATIVE_EXECUTOR = $executor
+$env:TRSTCTL_A267_NATIVE_EXECUTOR_SHA256 = (Get-FileHash -LiteralPath $executor -Algorithm SHA256).Hash.ToLowerInvariant()
+$env:TRSTCTL_A267_WINDOWS_EXECUTOR = '1'
+$executorLog = Join-Path $env:RUNNER_TEMP 'a267-windows-dependent-executor.log'
+& go test -count=1 -timeout 22m -run '^TestNativeWindowsDependentExecutorLifecycleA267$' -v ./internal/crypto/windependents 2>&1 | Tee-Object -FilePath $executorLog
+if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $executorLog -Pattern 'A267_WINDOWS_EXECUTOR_OK' -Quiet)) {
+    throw 'A267 native shipped receiver lifecycle did not run and pass'
+}

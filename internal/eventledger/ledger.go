@@ -172,10 +172,18 @@ const (
 	EventPAMSessionRevoked               = "pam.session.revoked"
 	EventPAMDiscoveryScanQueued          = "pam.discovery.scan_queued"
 	EventPAMDiscoveryRunCompleted        = "pam.discovery.run_completed"
-	EventServiceDependentHostSaved       = "pam.service_dependents.host_saved"
-	EventServiceDependentScanQueued      = "pam.service_dependents.scan_queued"
-	EventServiceDependentScanObserved    = "pam.service_dependents.scan_observed"
-	EventServiceDependentScanFailed      = "pam.service_dependents.scan_failed"
+
+	EventServiceDependentRotationQueued        = "pam.service_dependents.rotation_queued"
+	EventServiceDependentRotationInverse       = "pam.service_dependents.rotation_inverse"
+	EventServiceDependentDirectoryApplyStarted = "pam.service_dependents.directory_apply_started"
+	EventServiceDependentDirectoryRestored     = "pam.service_dependents.directory_restored"
+	EventServiceDependentStepQueued            = "pam.service_dependents.step_queued"
+	EventServiceDependentStepObserved          = "pam.service_dependents.step_observed"
+
+	EventServiceDependentHostSaved    = "pam.service_dependents.host_saved"
+	EventServiceDependentScanQueued   = "pam.service_dependents.scan_queued"
+	EventServiceDependentScanObserved = "pam.service_dependents.scan_observed"
+	EventServiceDependentScanFailed   = "pam.service_dependents.scan_failed"
 
 	EventProfileCreated                     = "profile.created"
 	EventProfileUpdated                     = "profile.updated"
@@ -408,6 +416,7 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "scan_privileged_accounts", "runPAMDiscovery", []string{EventPAMDiscoveryScanQueued, EventPAMDiscoveryRunCompleted}},
 	{"F33", "Just-in-time issuance with approval flows", "select_service_account_host", "savePAMServiceDependentHost", []string{EventServiceDependentHostSaved}},
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
+	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved}},
 	// F33 — Just-in-time privileged access sessions.
 	// Gateway checks continue the exact outbox-backed admitted session job.
 	{"F33", "Just-in-time issuance with approval flows", "evaluate_pam_command", "openPAMSession", []string{EventPAMCommandBlocked, EventPAMCommandReviewRequested, EventPAMCommandApprovalRequested, EventPAMCommandReviewDecided}},

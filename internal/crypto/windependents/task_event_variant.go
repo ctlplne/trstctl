@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 package windependents
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // EVT_VARIANT is a distinct native ABI from Automation VARIANT. Scalar numeric
 // authority never follows a native pointer, array or unrecognized type.
@@ -39,4 +42,15 @@ func (v taskEventVariant) boolean() (bool, error) {
 	default:
 		return false, errors.New("windows task: invalid native channel flag")
 	}
+}
+
+// FILETIME is a scalar UTC count of 100ns intervals since 1601, not a pointer
+// or a string interpreted using the machine's locale.
+func (v taskEventVariant) fileTime() (time.Time, error) {
+	const epoch = uint64(11644473600)
+	seconds := v.Value / 10000000
+	if v.Count != 0 || v.Type != 17 || seconds < epoch || seconds-epoch > 253402300799 {
+		return time.Time{}, errors.New("windows task: invalid native event FILETIME")
+	}
+	return time.Unix(int64(seconds-epoch), int64(v.Value%10000000)*100).UTC(), nil
 }

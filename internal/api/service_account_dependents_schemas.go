@@ -8,7 +8,7 @@ func serviceDependentSchemas() map[string]*Schema {
 	integer := func() *Schema { return &Schema{Type: "integer", Format: "int64"} }
 	boolean := func() *Schema { return &Schema{Type: "boolean"} }
 	array := func(item *Schema) *Schema { return &Schema{Type: "array", Items: item} }
-	return map[string]*Schema{
+	schemas := map[string]*Schema{
 		"PAMDependentAccountBinding":     object(map[string]*Schema{"account_id": id(), "provider_id": str(), "name": str(), "dn": str(), "sid": str(), "guid": str()}, "account_id", "provider_id", "name", "dn", "sid", "guid"),
 		"PAMDependentHostBinding":        object(map[string]*Schema{"account": ref("PAMDependentAccountBinding"), "agent_id": id(), "revision": integer(), "enabled": boolean()}, "account", "agent_id", "revision", "enabled"),
 		"PAMDependentInventoryIntent":    object(map[string]*Schema{"run_id": id(), "binding": ref("PAMDependentHostBinding"), "binding_digest": str()}, "run_id", "binding", "binding_digest"),
@@ -21,6 +21,10 @@ func serviceDependentSchemas() map[string]*Schema {
 		"PAMServiceDependentScanHead":    object(map[string]*Schema{"delivery_status": str(), "id": id(), "agent_id": id(), "binding_digest": str(), "status": str(), "failure": str(), "queued_at": stamp(), "received_at": stamp(), "service_count": integer(), "task_count": integer(), "pool_count": integer(), "current": boolean()}, "id", "agent_id", "binding_digest", "status", "queued_at", "service_count", "task_count", "pool_count", "current"),
 		"PAMServiceDependentHost":        object(map[string]*Schema{"binding": ref("PAMDependentHostBinding"), "binding_digest": str(), "latest_scan": ref("PAMServiceDependentScanHead"), "saved_by": str(), "updated_at": stamp()}, "binding", "binding_digest", "saved_by", "updated_at"),
 		"PAMServiceDependentHostList":    object(map[string]*Schema{"items": array(ref("PAMServiceDependentHost")), "next_cursor": str()}, "items"),
-		"PAMServiceDependentScan":        object(map[string]*Schema{"delivery_status": str(), "id": id(), "intent": ref("PAMDependentInventoryIntent"), "status": {Type: "string", Enum: []string{"queued", "complete", "partial", "retrying", "failed", "superseded"}}, "queued_by": str(), "queued_at": stamp(), "queued_event_id": id(), "outbox_id": integer(), "report": ref("PAMDependentInventoryReport"), "report_digest": str(), "failure": str(), "service_count": integer(), "task_count": integer(), "pool_count": integer(), "received_at": stamp(), "observed_at": stamp(), "attempt": integer(), "receipt_job_id": integer(), "receipt_statement": str(), "receipt_signature_base64": str(), "signer_fingerprint": str()}, "id", "intent", "status", "queued_by", "queued_at", "queued_event_id", "service_count", "task_count", "pool_count"),
+		"PAMServiceDependentScan":        object(map[string]*Schema{"observed_event_id": str(), "delivery_status": str(), "id": id(), "intent": ref("PAMDependentInventoryIntent"), "status": {Type: "string", Enum: []string{"queued", "complete", "partial", "retrying", "failed", "superseded"}}, "queued_by": str(), "queued_at": stamp(), "queued_event_id": id(), "outbox_id": integer(), "report": ref("PAMDependentInventoryReport"), "report_digest": str(), "failure": str(), "service_count": integer(), "task_count": integer(), "pool_count": integer(), "received_at": stamp(), "observed_at": stamp(), "attempt": integer(), "receipt_job_id": integer(), "receipt_statement": str(), "receipt_signature_base64": str(), "signer_fingerprint": str()}, "id", "intent", "status", "queued_by", "queued_at", "queued_event_id", "service_count", "task_count", "pool_count"),
 	}
+	for name, schema := range serviceDependentRotationSchemas() {
+		schemas[name] = schema
+	}
+	return schemas
 }

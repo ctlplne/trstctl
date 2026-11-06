@@ -7,6 +7,7 @@ package servicedependents
 import (
 	"encoding/json"
 	"errors"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
 	"strings"
 	"time"
@@ -193,4 +194,15 @@ func (report InventoryReport) Complete() bool {
 		seen[value.Family] = true
 	}
 	return true
+}
+
+// MatchesNative compares parsed DNs: case and equivalent LDAP escapes do not
+// create a second account or a route around its selected dependent hosts.
+func (binding AccountBinding) MatchesNative(provider, dn string) bool {
+	if binding.ProviderID != provider {
+		return false
+	}
+	left, e := ldap.ParseDN(binding.DN)
+	right, err := ldap.ParseDN(dn)
+	return e == nil && err == nil && left.EqualFold(right)
 }

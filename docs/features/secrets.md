@@ -2587,3 +2587,72 @@ tenant-isolated discovery projection and replay. Accounts with neither an SPN no
 a configured rotation binding are outside this directory selection; enrolled-host
 dependent inventory and matching are the next workflow step. This does not
 qualify gMSA password rotation or a real multi-DC forest.
+
+### Review and run an AD dependent rotation
+
+In **Account access → Discovery**, select the discovered AD account and open its
+host dependents. Enable each enrolled Windows host, then request a complete native
+inventory from every enabled host. Inventory-only permission authorizes reads;
+it does not authorize password changes or task execution.
+
+The host operator separately grants `windows_dependent_writes` entries containing
+one `account_sid`, `family`, native `name` and `probe_id`. Each ID resolves through
+`windows_dependent_probes` to a fixed literal-loopback HTTP URL with an explicit
+port. The probe implements the nonce-bound useful-work contract. Tenant job data
+cannot supply executable commands, widen those grants, redirect the request or
+select another URL. Enable `host.windows_dependents.rotation` in the enrolled
+host's claimable job kinds and configure its private durable report-state store.
+
+Choose **Rotate account and dependents**, select the stored password reference,
+review every selected service, task and pool, set the startup order and choose its
+local useful-work probe. Services must follow their native dependencies; stop
+operations use the reverse order. Review the served preview and its exact digest,
+then acknowledge the single-phase outage risk before queuing. The reviewed native
+identity, complete host set, source scans, provider configuration, secret version,
+order and probe bindings are frozen together. Changed inventory or host membership
+requires another review; ordinary static rotation refuses this selected account.
+
+The worker completes all host preflights before changing the directory. It then
+stops previously running services and pools, updates password-bearing dependents,
+starts the objects that were running, and collects fresh process/account evidence
+plus useful-work proof. Previously stopped objects stay stopped. Task verification
+retains the exact native instance and its start/completion event times; a historical
+last-result value cannot qualify this operation. The vault publishes its new value
+only after all required native results succeed. A dependent failure selects a
+durable inverse: restore the directory, restore every dependent, then verify
+recovery before publishing the predecessor. If another writer changed the vault,
+that unrelated version is preserved and the unresolved conflict stays visible.
+
+`access discovery rotation preview ACCOUNT -f review.json` returns the effect-free
+intent and digest. Submit them with `acknowledge_single_phase: true` using
+`access discovery rotation queue ACCOUNT -f approved.json`; retain the same
+Idempotency-Key after a lost response. Use `access discovery rotation get ID` and
+`access discovery rotation steps ID --limit 50` to inspect retained progress.
+Follow `next_cursor` with `--after`. Delivery status is separate from native proof.
+The console can reopen the same operation with read permission. Changed projected
+proof is refused until the read model is rebuilt from its canonical sources.
+
+A task start without a retained native instance remains uncertain and blocks a
+blind repeat. Keep the encrypted host journal and its key. A known completed
+failed task can retain its original evidence while a separate inverse proceeds;
+this does not clear an unknown start. Native AD worker-exit recovery is qualified
+separately with Samba. The served coordinator also runs real Samba directory
+changes and recovery with signed host boundary fixtures; stock LDAP independently
+accepts the final generation and refuses the retired value. Portable coordinator
+fixtures cover publication, source refusal and vault-conflict paths. The Windows
+SCM/task/IIS receiver fixture uses local SAM accounts; its native hosted execution,
+the complete Samba/Windows combination, designated drift reconciliation and
+final-image replay remain separate proof obligations. These results do not qualify an AD forest or host power loss.
+
+The local useful-work endpoint receives `GET /configured-path?phase=verify&challenge=UUID`.
+It returns HTTP 200 and one bounded JSON object with `probe_id`, the same
+`challenge`, `account_sid`, `evidence_sha256`, and the actual `process_id` for a
+service or pool. `evidence_sha256` is the digest of the independent work result.
+For a password-bearing task, the host first sends POST with `phase=prepare` and
+the challenge; the endpoint retains that challenge and returns HTTP 204. The task
+must produce work bound to it. The later GET also carries `task_instance_id`; its
+response must return that exact instance instead of a process ID. Responses are
+limited to 16 KiB and ten seconds, with no proxy or redirect. Implement this
+endpoint against actual application work; echoing a nonce alone is insufficient.
+The endpoint and native process/task identity checks establish different facts,
+and both must pass.

@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/revocationhealth"
+	"trstctl.com/trstctl/internal/servicedependents"
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
@@ -43,9 +44,10 @@ import (
 // the agent-channel assembly from the same Deps the issuance dispatcher seals
 // with, so the two sides of the seal can never use different keys.
 type relayCredentialResolver struct {
-	store        *store.Store
-	kek          sealKeyWrapper
-	tenantCrypto tenantseal.Access
+	dependentRotationCredential func(context.Context, string, servicedependents.RotationStep) ([]byte, error)
+	store                       *store.Store
+	kek                         sealKeyWrapper
+	tenantCrypto                tenantseal.Access
 	// rightSizeBindings lets a relay attempt redeem the entitlement binding's
 	// token and learn its endpoint (A64); nothing of either rides the queue.
 	rightSizeBindings map[string]config.ConnectorRightSizeBinding
@@ -75,6 +77,8 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
 	switch job.Destination {
+	case servicedependents.RotationDestination:
+		return r.resolveServiceDependentRotation(ctx, tenantID, job)
 	case agentJobKindEndpointRenew:
 		return r.resolveHostRenewalReferences(ctx, tenantID, job)
 	case "connector.rollback":

@@ -139,7 +139,7 @@ func waitNativePoolState(ctx context.Context, name string, want int64) error {
 		}
 	}
 }
-func (driver nativePoolDriver) restart(ctx context.Context, expected Pool) (PoolRestartProof, error) {
+func (driver nativePoolDriver) stop(ctx context.Context, expected Pool) (PoolRestartProof, error) {
 	previous, err := nativePoolWorkerPIDs(ctx, expected.Name)
 	if err != nil {
 		return PoolRestartProof{}, err
@@ -188,10 +188,22 @@ func (driver nativePoolDriver) restart(ctx context.Context, expected Pool) (Pool
 		}
 	}
 	proof.StoppedObserved = true
-	err = withNativePool(ctx, expected.Name, func(_ *automationObject, snapshot *nativePoolSnapshot) error {
-		if !samePoolBinding(expected, snapshot.Pool) || snapshot.WasStarted {
+	return proof, nil
+}
+func (driver nativePoolDriver) start(ctx context.Context, expected Pool, proof PoolRestartProof) (PoolRestartProof, error) {
+	if e := validateStoppedPool(expected, proof); e != nil {
+		return PoolRestartProof{}, e
+	}
+	if !expected.WasStarted {
+		return proof, nil
+	}
+	err := withNativePool(ctx, expected.Name, func(_ *automationObject, snapshot *nativePoolSnapshot) error {
+		if !samePoolBinding(expected, snapshot.Pool) {
 			return errors.New("windows pool: frozen stopped pool changed before start")
 		}
+		if snapshot.WasStarted {
+			return nil
+		} // recover an already-started exact object
 		return executePoolMethod(snapshot.object, "Start")
 	})
 	if err != nil {
@@ -202,4 +214,12 @@ func (driver nativePoolDriver) restart(ctx context.Context, expected Pool) (Pool
 	}
 	proof.StartedObserved = true
 	return proof, nil
+}
+
+func (driver nativePoolDriver) restart(ctx context.Context, expected Pool) (PoolRestartProof, error) {
+	proof, e := driver.stop(ctx, expected)
+	if e != nil {
+		return PoolRestartProof{}, e
+	}
+	return driver.start(ctx, expected, proof)
 }

@@ -9,6 +9,8 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+var errStaticRotationVersionMoved = errors.New(staticRotationVersionMovedDetail)
+
 type staticRotationVersionIntent struct {
 	Fence         store.ApplicationSecretMutationFence
 	Payload       projections.ApplicationSecretMutation
@@ -48,7 +50,7 @@ func (a *API) prepareStaticRotationSecretVersion(ctx context.Context, cmd store.
 			return staticRotationVersionIntent{}, err
 		}
 		if current.Version != expectedVersion {
-			return staticRotationVersionIntent{}, errStatus(http.StatusConflict, staticRotationVersionMovedDetail)
+			return staticRotationVersionIntent{}, errWithStatus(http.StatusConflict, errStaticRotationVersionMoved)
 		}
 		commandKeyDigest, evidence, err := a.applicationSecretCommandEvidence(cmd.TenantID, idempotencyKey, canonicalApplicationSecretCommand{
 			Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: cmd.TenantEpoch,

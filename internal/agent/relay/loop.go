@@ -95,7 +95,7 @@ const (
 // refuses a connector it cannot run.
 func ClaimableKinds() []string {
 	return []string{
-		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsDependentInventory,
+		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsDependentInventory, KindWindowsDependentRotation,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindADCSNestedGroups, KindADCSEndpointProbe, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
@@ -289,6 +289,12 @@ func RunOnceWithRoles(
 		// posture. Do not claim file/exec work it cannot perform — but it
 		// still answers its post-upgrade self-check (A71).
 		kinds = []string{KindPQCPosture, KindPQCPostureRollback, KindAgentSelfCheck}
+		if len(hostProfile.WindowsDependentSIDs) > 0 {
+			kinds = append(kinds, KindWindowsDependentInventory)
+		}
+		if len(hostProfile.WindowsDependentWrites) > 0 {
+			kinds = append(kinds, KindWindowsDependentRotation)
+		}
 	}
 	if selfUp != nil {
 		kinds = append(kinds, KindAgentUpgrade)
@@ -327,6 +333,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// A revocation probe carries a different payload and needs no credential at
 	// all — it reads public distribution points. Routing it before the deploy
 	// path keeps it from redeeming material it has no use for (R1).
+	if job.Kind == KindWindowsDependentRotation {
+		return runWindowsDependentRotation(ctx, ch, hostProfile, job)
+	}
 	if job.Kind == KindWindowsDependentInventory {
 		return runWindowsDependentInventory(ctx, ch, hostProfile, job)
 	}

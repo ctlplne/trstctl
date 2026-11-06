@@ -3163,6 +3163,7 @@ type ComplianceReportRunRecorded struct {
 // (A14/A15). It carries identifiers and the request binding only; the staged
 // credential appears later, sealed, on the staged advance.
 type SecretStaticRotationQueued struct {
+	DependentChangeID    string `json:"dependent_change_id,omitempty"`
 	ProviderBinding      string `json:"provider_binding,omitempty"`
 	CloudChangeID        string `json:"cloud_change_id,omitempty"`
 	ID                   string `json:"id"`
@@ -5295,6 +5296,12 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMEmergencyRespondersSet:                {1: true},
 	EventPAMEmergencyOpened:                       {1: true},
 	EventPAMEmergencyReviewed:                     {1: true},
+	EventServiceDependentRotationQueued:           {1: true},
+	EventServiceDependentRotationInverse:          {1: true},
+	EventServiceDependentDirectoryRestored:        {1: true},
+	EventServiceDependentDirectoryApplyStarted:    {1: true},
+	EventServiceDependentStepQueued:               {1: true},
+	EventServiceDependentStepObserved:             {1: true},
 	EventServiceDependentHostSaved:                {1: true},
 	EventServiceDependentScanQueued:               {1: true},
 	EventServiceDependentScanObserved:             {1: true},
@@ -5564,6 +5571,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyArchiveLegalHoldTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyServiceDependentRotationTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyServiceDependentsTx(ctx, tx, e); handled {
@@ -7705,17 +7715,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.TenantEpoch == "" || pl.Provider == "" || pl.Key == "" || pl.OldRef == "" {
-			return fmt.Errorf("projections: %s requires id, tenant_epoch, provider, key and old_ref", e.Type)
-		}
-		return p.store.ApplySecretStaticRotationQueuedTx(ctx, tx, store.SecretStaticRotationCommand{
-			CloudChangeID: pl.CloudChangeID, ProviderBinding: pl.ProviderBinding,
-			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
-			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
-			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, TTLSeconds: pl.TTLSeconds, CreatedAt: e.Time,
-			Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds, RetireApprovedBy: pl.RetireApprovedBy,
-			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged,
-		}, e.Data)
+		return p.applySecretStaticRotationQueuedTx(ctx, tx, e, pl)
 	case EventSecretStaticRotationAdvanced:
 		var pl SecretStaticRotationAdvanced
 		if err := decode(e, &pl); err != nil {

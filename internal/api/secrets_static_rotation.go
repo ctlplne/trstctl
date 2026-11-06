@@ -110,7 +110,23 @@ func staticRotationEventID(cmd store.SecretStaticRotationCommand, phase string) 
 // command id is deterministic from the tenant epoch, secret and Idempotency-Key
 // digest, so a retried request finds its own command; a different request
 // binding under the same key is a conflict, never a second rotation.
-func (a *API) queueStaticSecretRotation(
+func (a *API) queueStaticSecretRotation(ctx context.Context, tenantID, idempotencyKey, requestBinding, scheduleID string, req secretRotationRequest) (store.SecretStaticRotationCommand, error) {
+	provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key)
+	if err != nil {
+		return store.SecretStaticRotationCommand{}, err
+	}
+	if _, prepared := provider.(dynsecret.PreparedStaticRotationProvider); !prepared || staticRotationPhase(provider, req.Key) != dynsecret.RotationSinglePhase {
+		return a.queueStaticSecretRotationUnderCatalog(ctx, tenantID, idempotencyKey, requestBinding, scheduleID, req)
+	}
+	var command store.SecretStaticRotationCommand
+	err = a.store.WithPAMCatalogLock(ctx, tenantID, func() error {
+		var e error
+		command, e = a.queueStaticSecretRotationUnderCatalog(ctx, tenantID, idempotencyKey, requestBinding, scheduleID, req)
+		return e
+	})
+	return command, err
+}
+func (a *API) queueStaticSecretRotationUnderCatalog(
 	ctx context.Context,
 	tenantID, idempotencyKey, requestBinding, scheduleID string,
 	req secretRotationRequest,
@@ -151,6 +167,15 @@ func (a *API) queueStaticSecretRotation(
 		return existing, nil
 	case !errors.Is(err, store.ErrSecretStaticRotationCommandNotFound):
 		return store.SecretStaticRotationCommand{}, err
+	}
+	if _, prepared := provider.(dynsecret.PreparedStaticRotationProvider); prepared && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
+		account, selected, e := a.store.SelectedServiceDependentAccount(ctx, tenantID, req.Provider, req.OldRef)
+		if e != nil {
+			return store.SecretStaticRotationCommand{}, e
+		}
+		if selected {
+			return store.SecretStaticRotationCommand{}, errStatus(http.StatusConflict, "this AD account has selected native dependents; review and queue its complete rotation at /api/v1/access/discovery/accounts/"+account.AccountID+"/dependents/rotations")
+		}
 	}
 	current, err := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Key)
 	if err != nil {
@@ -225,6 +250,9 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 		if err != nil {
 			return err
 		}
+		if err := a.validateDependentCommandSource(ctx, cmd); err != nil {
+			return err
+		}
 		if cmd.Terminal() {
 			return nil
 		}
@@ -259,10 +287,45 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 				err = a.stageStaticRotation(ctx, cmd, provider)
 			}
 		case store.SecretStaticRotationPrepared:
+			if cmd.DependentChangeID != "" {
+				if err := a.beforeDependentDirectoryApply(ctx, cmd, provider); err != nil {
+					return err
+				}
+				current, err := a.store.GetSecretStaticRotationCommand(ctx, cmd.TenantID, cmd.ID)
+				if err != nil {
+					return err
+				}
+				if current.Phase != cmd.Phase {
+					continue
+				}
+			}
 			err = a.stagePreparedStaticRotation(ctx, cmd, provider)
 		case store.SecretStaticRotationStaged:
+			if cmd.DependentChangeID != "" {
+				if err := a.beforeDependentVaultCutover(ctx, cmd, provider); err != nil {
+					return err
+				}
+				current, err := a.store.GetSecretStaticRotationCommand(ctx, cmd.TenantID, cmd.ID)
+				if err != nil {
+					return err
+				}
+				if current.Phase != cmd.Phase {
+					continue
+				}
+			}
 			if cmd.ProviderBinding != "" {
 				err = a.cutoverPreparedStaticRotation(ctx, cmd)
+				if cmd.DependentChangeID != "" && errors.Is(err, errStaticRotationVersionMoved) {
+					parent, e := a.dependentRotationParent(ctx, cmd)
+					if e != nil {
+						return e
+					}
+					if e = a.selectDependentInverse(ctx, parent, "vault_version_changed"); e != nil {
+						return e
+					}
+					err = a.rollbackStaticRotation(ctx, cmd, provider)
+				}
+
 			} else {
 				err = a.cutoverStaticRotation(ctx, cmd, provider)
 			}
@@ -430,6 +493,15 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 // on, so it decides the terminal state; a failed successor revocation is
 // recorded, not fatal.
 func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
+	if cmd.DependentChangeID != "" {
+		parent, err := a.dependentRotationParent(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		if err := a.selectDependentInverse(ctx, parent, "native_apply_failed"); err != nil {
+			return err
+		}
+	}
 	old, err := a.secrets.open(ctx, cmd.TenantID, cmd.SealedOld, staticRotationAAD(cmd.TenantID, cmd.ID, "old"))
 	if err != nil {
 		return err
@@ -446,7 +518,8 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 		expected = cmd.ExpectedVersion
 	}
 	intent, restoreErr := a.prepareStaticRotationSecretVersion(ctx, cmd, "rollback", old, expected)
-	if restoreErr != nil {
+	vaultConflict := cmd.DependentChangeID != "" && errors.Is(restoreErr, errStaticRotationVersionMoved)
+	if restoreErr != nil && !vaultConflict {
 		secret.Wipe(old)
 		if errors.Is(restoreErr, store.ErrApplicationSecretMutationInFlight) || errors.Is(restoreErr, errPendingApplicationSecretApproval) {
 			return restoreErr
@@ -455,7 +528,15 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 	}
 	restorer, nativeRestore := provider.(dynsecret.StaticCredentialRestorer)
 	nativeRestore = nativeRestore && staticRotationPhase(provider, cmd.Key) == dynsecret.RotationSinglePhase
-	if nativeRestore && intent.ResultVersion == 0 {
+	directoryAlreadyRestored := false
+	if cmd.DependentChangeID != "" {
+		parent, e := a.dependentRotationParent(ctx, cmd)
+		if e != nil {
+			return e
+		}
+		directoryAlreadyRestored = parent.DirectoryRestored
+	}
+	if nativeRestore && intent.ResultVersion == 0 && !directoryAlreadyRestored {
 		var err error
 		if len(cmd.SealedPreparation) > 0 {
 			err = a.restorePreparedNativeRotation(ctx, cmd, provider, old)
@@ -468,6 +549,20 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 		}
 	}
 
+	if cmd.DependentChangeID != "" {
+		if err := a.dependentDirectoryRestored(ctx, cmd); err != nil {
+			return err
+		}
+		if err := a.beforeDependentInversePublication(ctx, cmd); err != nil {
+			return err
+		}
+	}
+	if vaultConflict {
+		// A foreign vault version cannot take away this operation's authority
+		// to undo its own native effects. Keep that unrelated value untouched
+		// and report its unresolved mismatch only after every inverse proof.
+		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationRollbackFailed, Error: "directory and dependents restored; unrelated vault version preserved; reconcile the stored password reference before another rotation"})
+	}
 	restored, restoreErr := a.commitStaticRotationSecretVersion(ctx, cmd, intent)
 	secret.Wipe(old)
 	if restoreErr != nil {

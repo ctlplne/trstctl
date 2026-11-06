@@ -355,3 +355,148 @@ func TestTaskExecutionAbruptProcessExitDoesNotRepeatA267(t *testing.T) {
 		t.Fatal("abrupt exit lost the durable start fence", err)
 	}
 }
+
+type distinctTaskExecutionFixture struct{ runs int }
+
+func (f *distinctTaskExecutionFixture) RunAndVerifyRetained(_ context.Context, task windependents.Task, retain func(string) error) (windependents.TaskRunProof, error) {
+	f.runs++
+	proof := taskFixtureProof(task)
+	if f.runs == 1 {
+		proof.InstanceID = "a1234567-1234-1234-1234-123456789001"
+	} else {
+		proof.InstanceID = "a1234567-1234-1234-1234-123456789002"
+	}
+	if e := retain(proof.InstanceID); e != nil {
+		return windependents.TaskRunProof{}, e
+	}
+	return proof, nil
+}
+func (f *distinctTaskExecutionFixture) ObserveInstance(_ context.Context, task windependents.Task, instance string) (windependents.TaskRunProof, bool, error) {
+	proof := taskFixtureProof(task)
+	proof.InstanceID = instance
+	return proof, true, nil
+}
+func TestTaskExecutionKnownFailedWorkAllowsInverseWithoutReplayingOriginalA267(t *testing.T) {
+	root := t.TempDir()
+	task := taskFixtureSnapshot()
+	fixture := &distinctTaskExecutionFixture{}
+	s, e := Open(root, "known-forward-and-inverse")
+	if e != nil {
+		t.Fatal(e)
+	}
+	first, e := s.ExecuteTaskOnce(t.Context(), 701, "forward", task, fixture)
+	if e != nil {
+		t.Fatal(e)
+	}
+	failed := Observation{JobID: 701, Attempt: 1, Outcome: "failed", Detail: []byte("independent functional probe failed")}
+	if e = s.Put(failed); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Acknowledge(failed); e != nil {
+		t.Fatal(e)
+	}
+	inverse, e := s.ExecuteTaskOnce(t.Context(), 702, "inverse", task, fixture)
+	if e != nil || fixture.runs != 2 || inverse.InstanceID == first.InstanceID {
+		t.Fatal("known completed failed work blocked a distinct approved inverse", e)
+	}
+	done := Observation{JobID: 702, Attempt: 1, Outcome: "verified"}
+	if e = s.Put(done); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Acknowledge(done); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Close(); e != nil {
+		t.Fatal(e)
+	}
+	s, e = Open(root, "known-forward-and-inverse")
+	if e != nil {
+		t.Fatal(e)
+	}
+	old, e := s.ExecuteTaskOnce(t.Context(), 701, "forward", task, fixture)
+	if e != nil || fixture.runs != 2 || old.InstanceID != first.InstanceID {
+		t.Fatal("inverse erased the original failed-work fence or repeated its effect", e)
+	}
+	if e = s.Close(); e != nil {
+		t.Fatal(e)
+	}
+	if e = openReportTestRoot(t, root).Remove("sealing.key"); e != nil {
+		t.Fatal(e)
+	}
+	if other, e := Open(root, "known-forward-and-inverse"); e == nil {
+		_ = other.Close()
+		t.Fatal("archived native fences allowed a replacement sealing key")
+	}
+}
+func TestTaskExecutionUnknownFailedWorkStillBlocksInverseA267(t *testing.T) {
+	s, e := Open(t.TempDir(), "unknown-forward-and-inverse")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer func() { _ = s.Close() }()
+	fixture := &retainedTaskFixture{unknown: true}
+	task := taskFixtureSnapshot()
+	if _, e = s.ExecuteTaskOnce(t.Context(), 711, "forward", task, fixture); e == nil {
+		t.Fatal("unknown start claimed complete")
+	}
+	failed := Observation{JobID: 711, Attempt: 1, Outcome: "failed", Detail: []byte("native start response was lost")}
+	if e = s.Put(failed); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Acknowledge(failed); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.ExecuteTaskOnce(t.Context(), 712, "inverse", task, fixture); e == nil || fixture.runs != 1 {
+		t.Fatal("unknown native start was blindly repeated as inverse work")
+	}
+}
+
+func TestTaskExecutionCompletedArchiveRecoversBetweenLinkAndRemovalA267(t *testing.T) {
+	root := t.TempDir()
+	task := taskFixtureSnapshot()
+	fixture := &distinctTaskExecutionFixture{}
+	s, e := Open(root, "archive-interruption")
+	if e != nil {
+		t.Fatal(e)
+	}
+	first, e := s.ExecuteTaskOnce(t.Context(), 721, "forward", task, fixture)
+	if e != nil {
+		t.Fatal(e)
+	}
+	failed := Observation{JobID: 721, Attempt: 1, Outcome: "failed", Detail: []byte("functional verification is unavailable")}
+	if e = s.Put(failed); e != nil {
+		t.Fatal(e)
+	}
+	// Exact fault point: the durable archive name exists, while the original
+	// active name and pending failed acknowledgement have not been removed.
+	if e = s.root.Link(taskExecutionFile, taskExecutionArchiveName(721)); e != nil {
+		t.Fatal(e)
+	}
+	if e = syncDirectory(s.root); e != nil {
+		t.Fatal(e)
+	}
+	if e = s.Close(); e != nil {
+		t.Fatal(e)
+	}
+	s, e = Open(root, "archive-interruption")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer func() { _ = s.Close() }()
+	if e = s.TaskExecutionReady(t.Context(), task); e == nil {
+		t.Fatal("unacknowledged work passed native preflight")
+	}
+	if e = s.Acknowledge(failed); e != nil {
+		t.Fatal("interrupted archive acknowledgement did not resume", e)
+	}
+	if e = s.TaskExecutionReady(t.Context(), task); e != nil {
+		t.Fatal("known completed work remained globally active", e)
+	}
+	if _, e = s.ExecuteTaskOnce(t.Context(), 722, "inverse", task, fixture); e != nil || fixture.runs != 2 {
+		t.Fatal("inverse did not run after exact failed acknowledgement", e)
+	}
+	retained, e := s.ExecuteTaskOnce(t.Context(), 721, "forward", task, fixture)
+	if e != nil || retained.InstanceID != first.InstanceID || fixture.runs != 2 {
+		t.Fatal("interrupted archival lost the original fence", e)
+	}
+}

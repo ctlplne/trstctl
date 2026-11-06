@@ -382,8 +382,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// import, dismissing a staged account and the imported accounts (747).
 	// A261 adds vaulted-account check-outs: request, reveal, check in, list
 	// and read (760); A264 adds four reviewed cloud change operations (764).
-	if len(out) != 764 {
-		t.Fatalf("OpenAPI operationIds = %d, want 764", len(out))
+	// A267 adds four native host-inventory operations (768), then four
+	// reviewed dependent-rotation and retained-evidence operations (772).
+	if len(out) != 772 {
+		t.Fatalf("OpenAPI operationIds = %d, want 772", len(out))
 	}
 	return out
 }

@@ -61,7 +61,7 @@ type PrivacyReadModelSelector struct {
 }
 
 var privacyReadModelSelectorTables = map[string]struct{}{
-	"service_account_hosts": {}, "service_account_host_scans": {},
+	"service_account_hosts": {}, "service_account_host_scans": {}, "service_account_rotations": {},
 	"operation_approval_requests": {}, "operation_approval_decisions": {},
 	"workload_attester_trust_receipts": {},
 	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
@@ -3603,6 +3603,7 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		sql  string
 		args []any
 	}{
+		"service_account_rotations":  {sql: `SELECT count(*) FROM service_account_rotations r WHERE r.tenant_id=$1 AND r.created_at<$2 AND r.actor NOT LIKE 'retained:%' AND r.actor NOT LIKE 'erased:%' AND EXISTS(SELECT 1 FROM secret_static_rotation_commands c WHERE c.tenant_id=$1 AND c.id=r.command_id AND c.terminal_at IS NOT NULL)`, args: []any{tenantID, c.AttestationEvidenceBefore}},
 		"service_account_hosts":      {sql: `SELECT count(*) FROM service_account_hosts WHERE tenant_id=$1 AND updated_at<$2 AND saved_by NOT LIKE 'retained:%' AND saved_by NOT LIKE 'erased:%'`, args: []any{tenantID, c.AttestationEvidenceBefore}},
 		"service_account_host_scans": {sql: `SELECT count(*) FROM service_account_host_scans WHERE tenant_id=$1 AND queued_at<$2 AND status IN ('complete','partial','failed','superseded') AND queued_by NOT LIKE 'retained:%' AND queued_by NOT LIKE 'erased:%'`, args: []any{tenantID, c.AttestationEvidenceBefore}},
 		"owners": {

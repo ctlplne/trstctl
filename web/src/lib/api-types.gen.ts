@@ -8600,6 +8600,15 @@ export interface PAMDependentFamilyCoverage {
   status: "complete" | "unavailable";
 }
 
+export interface PAMDependentFunctionalProof {
+  account_sid: string;
+  challenge: string;
+  evidence_sha256: string;
+  probe_id: string;
+  process_id?: number;
+  task_instance_id?: string;
+}
+
 export interface PAMDependentHostBinding {
   account: PAMDependentAccountBinding;
   agent_id: string;
@@ -8647,6 +8656,101 @@ export interface PAMDependentNativeTask {
   enabled: boolean;
   logon_type: number;
   path: string;
+}
+
+export interface PAMDependentPoolRestartProof {
+  account_sid: string;
+  config_sha256: string;
+  name: string;
+  previous_pids: unknown;
+  started_observed: boolean;
+  stopped_observed: boolean;
+  was_started: boolean;
+}
+
+export interface PAMDependentProbeBinding {
+  probe_id: string;
+  ref: PAMDependentRef;
+}
+
+export interface PAMDependentRef {
+  agent_id: string;
+  family: "services" | "tasks" | "iis";
+  name: string;
+}
+
+export interface PAMDependentRotationHost {
+  binding: PAMDependentHostBinding;
+  dependents: PAMDependentRef[];
+  inventory_digest: string;
+  inventory_run_id: string;
+  observed_at: string;
+}
+
+export interface PAMDependentRotationPlan {
+  account: PAMDependentAccountBinding;
+  created_at: string;
+  digest: string;
+  expires_at: string;
+  hosts: PAMDependentRotationHost[];
+  id: string;
+  order: PAMDependentRef[];
+  secret_name: string;
+  version: number;
+}
+
+export interface PAMDependentRotationStep {
+  account_sid: string;
+  action: "preflight" | "stop" | "update" | "start" | "probe";
+  challenge?: string;
+  deadline: string;
+  direction: "forward" | "inverse";
+  not_before: string;
+  plan_digest: string;
+  pool?: PAMDependentNativePool;
+  previous_pids?: number[];
+  probe_id: string;
+  ref: PAMDependentRef;
+  rotation_id: string;
+  service?: PAMDependentNativeService;
+  step_id: string;
+  task?: PAMDependentNativeTask;
+}
+
+export interface PAMDependentRuntime {
+  account_sid?: string;
+  process_id?: number;
+  running: boolean;
+}
+
+export interface PAMDependentStepReport {
+  direction: "forward" | "inverse";
+  failure?: string;
+  functional?: PAMDependentFunctionalProof;
+  observed_at: string;
+  plan_digest: string;
+  pool_proof?: PAMDependentPoolRestartProof;
+  rotation_id: string;
+  runtime?: PAMDependentRuntime;
+  status: "succeeded" | "failed" | "uncertain";
+  step_id: string;
+  task_proof?: PAMDependentTaskRunProof;
+}
+
+export interface PAMDependentTaskActionResult {
+  record_id: number;
+  result_code: number;
+}
+
+export interface PAMDependentTaskRunProof {
+  account_sid: string;
+  actions: PAMDependentTaskActionResult[];
+  completed_at: string;
+  completion_record_id: number;
+  instance_id: string;
+  path: string;
+  start_record_id: number;
+  started_at: string;
 }
 
 export interface PAMDiscoveredAccount {
@@ -8925,6 +9029,70 @@ export interface PAMServiceDependentHostRequest {
   enabled: boolean;
 }
 
+export interface PAMServiceDependentRotation {
+  actor: string;
+  command_id: string;
+  created_at: string;
+  direction: "forward" | "inverse";
+  directory_apply_started: boolean;
+  directory_restored: boolean;
+  failure?: string;
+  id: string;
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
+  tenant_epoch: string;
+  updated_at: string;
+}
+
+export interface PAMServiceDependentRotationIntent {
+  expected_version: number;
+  plan: PAMDependentRotationPlan;
+  probes: PAMDependentProbeBinding[];
+  provider_binding: string;
+}
+
+export interface PAMServiceDependentRotationPreview {
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
+}
+
+export interface PAMServiceDependentRotationPreviewRequest {
+  order: PAMDependentRef[];
+  probes: PAMDependentProbeBinding[];
+  secret_name: string;
+}
+
+export interface PAMServiceDependentRotationRequest {
+  acknowledge_single_phase: boolean;
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
+}
+
+export interface PAMServiceDependentRotationStep {
+  attempt?: number;
+  delivery_status?: string;
+  intent: PAMDependentRotationStep;
+  outbox_id?: number;
+  queued_at: string;
+  receipt_job_id?: number;
+  receipt_signature_base64?: string;
+  receipt_statement?: string;
+  received_at?: string;
+  report?: PAMDependentStepReport;
+  signer_fingerprint?: string;
+  status: "queued" | "succeeded" | "failed" | "uncertain";
+}
+
+export interface PAMServiceDependentRotationStepList {
+  items: PAMServiceDependentRotationStep[];
+  next_cursor?: string;
+}
+
+export interface PAMServiceDependentRotationView {
+  command: SecretStaticRotation;
+  rotation: PAMServiceDependentRotation;
+}
+
 export interface PAMServiceDependentScan {
   attempt?: number;
   delivery_status?: string;
@@ -8932,6 +9100,7 @@ export interface PAMServiceDependentScan {
   id: string;
   intent: PAMDependentInventoryIntent;
   observed_at?: string;
+  observed_event_id?: string;
   outbox_id?: number;
   pool_count: number;
   queued_at: string;

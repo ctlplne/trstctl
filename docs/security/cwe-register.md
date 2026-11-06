@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2728 annotated sites across 31 rules. Each row is
+2738 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (598 sites)
+### G101 — CWE-798 Use of hardcoded credentials (599 sites)
 
 | Location | Reason |
 |---|---|
@@ -613,6 +613,7 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:604` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:614` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/service_account_ad_discovery_served_test.go:42` | configuration carries only a protected credential-file reference, never a credential value (CWE-798) |
+| `internal/server/service_account_rotation_native_ad_test.go:36` | protected lab credential-file reference only, never a credential value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:103` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
@@ -650,7 +651,7 @@ not this file.
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:304` | SQL column list, no credential (CWE-798) |
-| `internal/store/secret_static_rotation.go:304` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
+| `internal/store/secret_static_rotation.go:350` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
@@ -703,22 +704,22 @@ not this file.
 | `internal/crypto/windependents/services_native_windows_test.go:231` | SDK USER_INFO_1003 borrows the live locked UTF-16 predecessor/successor buffer (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:233` | exact test-owned user, SDK level 1003 and live locked UTF-16 password; no password string or file (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:247` | one bounded sign-in for the test-owned local account using a live locked UTF-16 password and token output (CWE-242) |
-| `internal/crypto/windependents/services_native_windows_test.go:363` | exact new fixture service and live locked initial UTF-16 credential; only owned service is created (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:343` | exact new fixture service and live locked initial UTF-16 credential; only owned service is created (CWE-242) |
 | `internal/crypto/windependents/services_windows.go:57` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
 | `internal/crypto/windependents/services_windows.go:58` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
 | `internal/crypto/windependents/services_windows.go:67` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
 | `internal/crypto/windependents/services_windows.go:88` | page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242) |
 | `internal/crypto/windependents/services_windows.go:197` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
-| `internal/crypto/windependents/services_windows.go:250` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:259` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:32` | fixed local scheduler channel; live UTF-16 public path and native handle (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:39` | exact 16-byte EVT_VARIANT output and size for the fixed Enabled property (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:57` | owned nonempty bounded native render buffer; only checked offset arithmetic (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:134` | complete SID revision/subauthority length is checked inside the live owned render buffer (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:178` | seven fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:178` | eight fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242) |
 | `internal/crypto/windependents/task_events_windows.go:193` | owned locked 64 KiB buffer and sized metadata-only EVT_VARIANT outputs (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:197` | exact seven 16-byte native variants validated against returned property count and buffer length (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:244` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
-| `internal/crypto/windependents/task_events_windows.go:261` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:197` | exact eight 16-byte native variants validated against returned property count and buffer length (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:248` | validated GUID/fixed schema structured query, local channel only, used and closed on this OS thread (CWE-242) |
+| `internal/crypto/windependents/task_events_windows.go:265` | fixed 16-handle output array, zero wait and sized count; every returned native event is closed (CWE-242) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (13 sites)
 
@@ -949,10 +950,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7081` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7098` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7111` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7145` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7091` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7108` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7121` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7155` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1123,8 +1124,8 @@ not this file.
 | `internal/store/pam.go:118` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:735` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:815` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1038` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1052` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1039` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1053` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1144,8 +1145,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:799` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:819` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:803` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:823` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1363,7 +1364,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4209` | closed test table list above |
+| `internal/store/migration_content_test.go:4210` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
@@ -1380,7 +1381,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (362 sites)
+### G204 — CWE-78 OS command injection (364 sites)
 
 | Location | Reason |
 |---|---|
@@ -1478,7 +1479,7 @@ not this file.
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cbom_scan.go:91` | the operator names the scanner and its arguments; running it is the command's purpose (CWE-78) |
 | `internal/cli/cli_test.go:2634` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:425` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:427` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:92` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
@@ -1488,6 +1489,7 @@ not this file.
 | `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/crypto/tlsprobe/openssl.go:104` | trusted absolute local executable; fixed verb/options; no shell or remote command. |
 | `internal/crypto/windependents/pool_runtime_windows.go:39` | fixed inbox IIS executable in native System32, read-only operation and validated pool name; no shell/credentials (CWE-78) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
 | `internal/dynsecret/active_directory_lab_test.go:132` | fixed stock tools and test-owned public directory arguments; password arrives on an inherited pipe, no shell (CWE-78) |
@@ -1689,6 +1691,7 @@ not this file.
 | `internal/server/secret_static_rotation_unix_container_test.go:447` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_sync_signed_targets_served_test.go:135` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/service_account_ad_discovery_served_test.go:24` | fixed stock read-only LDAP client, owned account filter and protected credential reference; no shell or credential argv (CWE-78) |
+| `internal/server/service_account_rotation_native_ad_test.go:123` | fixed read-only stock client and independently selected owned account; credential only in an inherited pipe, no shell or credential argv (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:286` | test builds the repository's own plugin (CWE-78) |
@@ -1865,7 +1868,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (693 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (695 sites)
 
 | Location | Reason |
 |---|---|
@@ -2052,7 +2055,7 @@ not this file.
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:144` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:143` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:145` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
@@ -2192,8 +2195,8 @@ not this file.
 | `internal/config/config.go:4790` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:301` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:393` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:303` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:395` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
@@ -2234,6 +2237,8 @@ not this file.
 | `internal/crypto/secretfile/secretfile.go:83` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
 | `internal/crypto/sshkeys/certificate_test.go:20` | committed test fixture |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:114` | fixed public receipt under the exact test-owned protected native task work directory (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:187` | same bounded regular lab executable, read only to compare the independently recorded compiler-output digest (CWE-22) |
 | `internal/crypto/windependents/services_native_windows_test.go:282` | os.Executable identifies this native test binary; copied code is public, no caller path (CWE-22) |
 | `internal/crypto/windependents/services_native_windows_test.go:288` | fixed filename in the exclusively created native protected test directory, O_EXCL refuses substitution (CWE-22) |
 | `internal/crypto/windependents/tasks_native_windows_test.go:54` | fixed public nonce under the exact native ProgramData fixture path with validated random suffix; no credential file (CWE-22) |
@@ -2809,13 +2814,14 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (38 sites)
+### G702 — CWE-78 OS command injection (taint) (39 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
@@ -2852,7 +2858,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (138 sites)
+### G703 — CWE-22 Path traversal (taint) (142 sites)
 
 | Location | Reason |
 |---|---|
@@ -2898,6 +2904,10 @@ not this file.
 | `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/rdp/process_linux.go:83` | operator-installed helper; absolute regular protected executable, executed by this open FD (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:72` | only the parent-created ACL-restricted native fixture directory, before installing the request handler (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:96` | validated parent-owned directory plus constant filename; request-derived nonce is validated hex file content only (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:183` | explicit local lab artifact reference, required absolute regular non-symlink file and exact build hash below (CWE-22) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:187` | same bounded regular lab executable, read only to compare the independently recorded compiler-output digest (CWE-22) |
 | `internal/dynsecret/windows_accounts_lab_test.go:45` | runner-provided lab path (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/kmip/pykmip_tenants_test.go:72` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
@@ -2995,7 +3005,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (32 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (34 sites)
 
 | Location | Reason |
 |---|---|
@@ -3004,6 +3014,8 @@ not this file.
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:131` | both exact listener addresses validated as literal loopback before handler installation; only a validated 16-byte hex nonce varies (CWE-918) |
+| `internal/crypto/windependents/rotation_native_windows_test.go:136` | fixed validated loopback origin, bounded client and all redirects refused (CWE-918) |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `internal/dynsecret/clickhouse.go:167` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/couchbase.go:184` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |

@@ -238,6 +238,15 @@ func (nativeServiceDriver) update(ctx context.Context, expected Service, passwor
 	if !sameServiceBinding(expected, snapshot.Service) {
 		return errors.New("windows service: frozen native configuration changed before update")
 	}
+	if !expected.WasRunning {
+		state, err := nativeServiceStatus(handle)
+		if err != nil {
+			return err
+		}
+		if state.CurrentState != windows.SERVICE_STOPPED {
+			return errors.New("windows service: stopped mutation authority changed")
+		}
+	}
 	wide, err := lockedWindowsPassword(password)
 	if err != nil {
 		return err

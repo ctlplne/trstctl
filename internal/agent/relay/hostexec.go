@@ -87,7 +87,9 @@ func ExecutesOnHost(name string) bool {
 // argv would expose it in the process table and make it something a deployment
 // system rewrites; putting it in a file makes it something an operator owns.
 type HostProfile struct {
-	WindowsDependentSIDs []string `json:"windows_dependent_sids,omitempty"`
+	WindowsDependentWrites []connector.WindowsDependentWriteGrant `json:"windows_dependent_writes,omitempty"`
+	WindowsDependentProbes []connector.WindowsDependentProbe      `json:"windows_dependent_probes,omitempty"`
+	WindowsDependentSIDs   []string                               `json:"windows_dependent_sids,omitempty"`
 	// TLSProbeOpenSSL enables a native direct-TLS probe when Go cannot
 	// handshake the served certificate. Only local startup config owns it.
 	TLSProbeOpenSSL string `json:"tls_probe_openssl,omitempty"`
@@ -148,6 +150,9 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: decode host profile: %w", err)
 	}
+	if e := validateDependentWriteProfile(profile.WindowsDependentWrites, profile.WindowsDependentProbes); e != nil {
+		return connector.LocalOpsConfig{}, e
+	}
 	if len(profile.WindowsDependentSIDs) > 256 {
 		return connector.LocalOpsConfig{}, errors.New("relay: Windows dependent SID allowlist exceeds bound")
 	}
@@ -170,7 +175,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			}
 		}
 	}
-	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 && len(profile.WindowsDependentSIDs) == 0 {
+	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 && len(profile.WindowsDependentSIDs) == 0 && len(profile.WindowsDependentWrites) == 0 {
 		return connector.LocalOpsConfig{}, errors.New("relay: host profile must allow at least one filesystem root, Kubernetes namespace or Windows inventory account SID")
 	}
 	if len(profile.AllowedRoots) == 0 {
@@ -184,7 +189,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 				return connector.LocalOpsConfig{}, err
 			}
 		}
-		return connector.LocalOpsConfig{KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs}, nil
+		return connector.LocalOpsConfig{KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes}, nil
 	}
 	if profile.TLSProbeOpenSSL != "" {
 		if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
@@ -213,7 +218,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			ServerName: binding.ServerName, Action: binding.Action, RecoveryAction: binding.RecoveryAction,
 		})
 	}
-	configured := connector.LocalOpsConfig{WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
+	configured := connector.LocalOpsConfig{WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
 		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces}
 	if _, err := connector.NewLocalOps(configured); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)

@@ -3068,6 +3068,36 @@ describe("CLI-parity client methods (S3.3)", () => {
       status: 202,
     },
     {
+      name: "previewPAMServiceDependentRotation",
+      call: () => api.previewPAMServiceDependentRotation("account/id", { secret_name: "ad/svc", order: [], probes: [] }),
+      method: "POST",
+      path: "/api/v1/access/discovery/accounts/account%2Fid/dependents/rotations/preview",
+    },
+    {
+      name: "queuePAMServiceDependentRotation",
+      call: () =>
+        api.queuePAMServiceDependentRotation("account/id", {
+          intent: {} as import("./api-types.gen").PAMServiceDependentRotationIntent,
+          intent_digest: "reviewed",
+          acknowledge_single_phase: true,
+        }),
+      method: "POST",
+      path: "/api/v1/access/discovery/accounts/account%2Fid/dependents/rotations",
+      status: 202,
+    },
+    {
+      name: "pamServiceDependentRotation",
+      call: () => api.pamServiceDependentRotation("change/id"),
+      method: "GET",
+      path: "/api/v1/access/discovery/dependent-rotations/change%2Fid",
+    },
+    {
+      name: "pamServiceDependentRotationSteps",
+      call: () => api.pamServiceDependentRotationSteps("change/id", "step/id"),
+      method: "GET",
+      path: "/api/v1/access/discovery/dependent-rotations/change%2Fid/steps?after=step%2Fid",
+    },
+    {
       name: "pamServiceDependentScan",
       call: () => api.pamServiceDependentScan("run/id"),
       method: "GET",

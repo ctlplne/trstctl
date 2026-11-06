@@ -11918,6 +11918,19 @@ PAMDependentFamilyCoverage = TypedDict(
     total=False,
 )
 
+PAMDependentFunctionalProof = TypedDict(
+    'PAMDependentFunctionalProof',
+    {
+        'account_sid': str,
+        'challenge': str,
+        'evidence_sha256': str,
+        'probe_id': str,
+        'process_id': int,
+        'task_instance_id': str,
+    },
+    total=False,
+)
+
 PAMDependentHostBinding = TypedDict(
     'PAMDependentHostBinding',
     {
@@ -11987,6 +12000,141 @@ PAMDependentNativeTask = TypedDict(
         'enabled': bool,
         'logon_type': int,
         'path': str,
+    },
+    total=False,
+)
+
+PAMDependentPoolRestartProof = TypedDict(
+    'PAMDependentPoolRestartProof',
+    {
+        'account_sid': str,
+        'config_sha256': str,
+        'name': str,
+        'previous_pids': Any,
+        'started_observed': bool,
+        'stopped_observed': bool,
+        'was_started': bool,
+    },
+    total=False,
+)
+
+PAMDependentProbeBinding = TypedDict(
+    'PAMDependentProbeBinding',
+    {
+        'probe_id': str,
+        'ref': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMDependentRef = TypedDict(
+    'PAMDependentRef',
+    {
+        'agent_id': str,
+        'family': str,
+        'name': str,
+    },
+    total=False,
+)
+
+PAMDependentRotationHost = TypedDict(
+    'PAMDependentRotationHost',
+    {
+        'binding': dict[str, Any],
+        'dependents': list[dict[str, Any]],
+        'inventory_digest': str,
+        'inventory_run_id': str,
+        'observed_at': str,
+    },
+    total=False,
+)
+
+PAMDependentRotationPlan = TypedDict(
+    'PAMDependentRotationPlan',
+    {
+        'account': dict[str, Any],
+        'created_at': str,
+        'digest': str,
+        'expires_at': str,
+        'hosts': list[dict[str, Any]],
+        'id': str,
+        'order': list[dict[str, Any]],
+        'secret_name': str,
+        'version': int,
+    },
+    total=False,
+)
+
+PAMDependentRotationStep = TypedDict(
+    'PAMDependentRotationStep',
+    {
+        'account_sid': str,
+        'action': str,
+        'challenge': str,
+        'deadline': str,
+        'direction': str,
+        'not_before': str,
+        'plan_digest': str,
+        'pool': dict[str, Any],
+        'previous_pids': list[int],
+        'probe_id': str,
+        'ref': dict[str, Any],
+        'rotation_id': str,
+        'service': dict[str, Any],
+        'step_id': str,
+        'task': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMDependentRuntime = TypedDict(
+    'PAMDependentRuntime',
+    {
+        'account_sid': str,
+        'process_id': int,
+        'running': bool,
+    },
+    total=False,
+)
+
+PAMDependentStepReport = TypedDict(
+    'PAMDependentStepReport',
+    {
+        'direction': str,
+        'failure': str,
+        'functional': dict[str, Any],
+        'observed_at': str,
+        'plan_digest': str,
+        'pool_proof': dict[str, Any],
+        'rotation_id': str,
+        'runtime': dict[str, Any],
+        'status': str,
+        'step_id': str,
+        'task_proof': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMDependentTaskActionResult = TypedDict(
+    'PAMDependentTaskActionResult',
+    {
+        'record_id': int,
+        'result_code': int,
+    },
+    total=False,
+)
+
+PAMDependentTaskRunProof = TypedDict(
+    'PAMDependentTaskRunProof',
+    {
+        'account_sid': str,
+        'actions': list[dict[str, Any]],
+        'completed_at': str,
+        'completion_record_id': int,
+        'instance_id': str,
+        'path': str,
+        'start_record_id': int,
+        'started_at': str,
     },
     total=False,
 )
@@ -12415,6 +12563,102 @@ PAMServiceDependentHostRequest = TypedDict(
     total=False,
 )
 
+PAMServiceDependentRotation = TypedDict(
+    'PAMServiceDependentRotation',
+    {
+        'actor': str,
+        'command_id': str,
+        'created_at': str,
+        'direction': str,
+        'directory_apply_started': bool,
+        'directory_restored': bool,
+        'failure': str,
+        'id': str,
+        'intent': dict[str, Any],
+        'intent_digest': str,
+        'tenant_epoch': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationIntent = TypedDict(
+    'PAMServiceDependentRotationIntent',
+    {
+        'expected_version': int,
+        'plan': dict[str, Any],
+        'probes': list[dict[str, Any]],
+        'provider_binding': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationPreview = TypedDict(
+    'PAMServiceDependentRotationPreview',
+    {
+        'intent': dict[str, Any],
+        'intent_digest': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationPreviewRequest = TypedDict(
+    'PAMServiceDependentRotationPreviewRequest',
+    {
+        'order': list[dict[str, Any]],
+        'probes': list[dict[str, Any]],
+        'secret_name': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationRequest = TypedDict(
+    'PAMServiceDependentRotationRequest',
+    {
+        'acknowledge_single_phase': bool,
+        'intent': dict[str, Any],
+        'intent_digest': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationStep = TypedDict(
+    'PAMServiceDependentRotationStep',
+    {
+        'attempt': int,
+        'delivery_status': str,
+        'intent': dict[str, Any],
+        'outbox_id': int,
+        'queued_at': str,
+        'receipt_job_id': int,
+        'receipt_signature_base64': str,
+        'receipt_statement': str,
+        'received_at': str,
+        'report': dict[str, Any],
+        'signer_fingerprint': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationStepList = TypedDict(
+    'PAMServiceDependentRotationStepList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRotationView = TypedDict(
+    'PAMServiceDependentRotationView',
+    {
+        'command': dict[str, Any],
+        'rotation': dict[str, Any],
+    },
+    total=False,
+)
+
 PAMServiceDependentScan = TypedDict(
     'PAMServiceDependentScan',
     {
@@ -12424,6 +12668,7 @@ PAMServiceDependentScan = TypedDict(
         'id': str,
         'intent': dict[str, Any],
         'observed_at': str,
+        'observed_event_id': str,
         'outbox_id': int,
         'pool_count': int,
         'queued_at': str,

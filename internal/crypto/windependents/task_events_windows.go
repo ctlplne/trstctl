@@ -164,7 +164,7 @@ func taskEventResult(raw []byte, value taskEventVariant) (uint32, bool, error) {
 	return uint32(result & 0xffffffff), true, nil
 }
 
-var taskEventValuePaths = []string{"Event/System/EventID", "Event/System/EventRecordID", "Event/EventData/Data[@Name='TaskName']", "Event/EventData/Data[@Name='UserContext']", "Event/EventData/Data[@Name='InstanceId']", "Event/EventData/Data[@Name='TaskInstanceId']", "Event/EventData/Data[@Name='ResultCode']"}
+var taskEventValuePaths = []string{"Event/System/EventID", "Event/System/EventRecordID", "Event/EventData/Data[@Name='TaskName']", "Event/EventData/Data[@Name='UserContext']", "Event/EventData/Data[@Name='InstanceId']", "Event/EventData/Data[@Name='TaskInstanceId']", "Event/EventData/Data[@Name='ResultCode']", "Event/System/TimeCreated/@SystemTime"}
 
 func taskEventRenderContext() (uintptr, error) {
 	paths := make([]*uint16, len(taskEventValuePaths))
@@ -175,7 +175,7 @@ func taskEventRenderContext() (uintptr, error) {
 		}
 		paths[i] = wide
 	}
-	handle, _, _ := nativeTaskEventsDLL.NewProc("EvtCreateRenderContext").Call(7, uintptr(unsafe.Pointer(&paths[0])), 0) // #nosec G103 -- seven fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242)
+	handle, _, _ := nativeTaskEventsDLL.NewProc("EvtCreateRenderContext").Call(8, uintptr(unsafe.Pointer(&paths[0])), 0) // #nosec G103 -- eight fixed metadata-only XPath selectors, live through synchronous context creation (CWE-242)
 	runtime.KeepAlive(paths)
 	if handle == 0 {
 		return 0, errors.New("windows task: selected event metadata context unavailable")
@@ -191,10 +191,10 @@ func renderNativeTaskEvent(contextHandle, eventHandle uintptr) (nativeTaskEvent,
 	raw := held.Bytes()
 	var used, count uint32
 	ok, _, _ := nativeTaskEventsDLL.NewProc("EvtRender").Call(contextHandle, eventHandle, 0, 64<<10, uintptr(unsafe.Pointer(&raw[0])), uintptr(unsafe.Pointer(&used)), uintptr(unsafe.Pointer(&count))) // #nosec G103 -- owned locked 64 KiB buffer and sized metadata-only EVT_VARIANT outputs (CWE-242)
-	if ok == 0 || count != 7 || used < 7*16 || used > 64<<10 {
+	if ok == 0 || count != 8 || used < 8*16 || used > 64<<10 {
 		return nativeTaskEvent{}, errors.New("windows task: selected native event metadata exceeded its bound")
 	}
-	values := unsafe.Slice((*taskEventVariant)(unsafe.Pointer(&raw[0])), 7) // #nosec G103 -- exact seven 16-byte native variants validated against returned property count and buffer length (CWE-242)
+	values := unsafe.Slice((*taskEventVariant)(unsafe.Pointer(&raw[0])), 8) // #nosec G103 -- exact eight 16-byte native variants validated against returned property count and buffer length (CWE-242)
 	id, err := values[0].unsigned()
 	if err != nil || (id != 100 && id != 102 && id != 201) {
 		return nativeTaskEvent{}, errors.New("windows task: unexpected native completion event")
@@ -215,7 +215,11 @@ func renderNativeTaskEvent(contextHandle, eventHandle uintptr) (nativeTaskEvent,
 	if err != nil {
 		return nativeTaskEvent{}, err
 	}
-	event := nativeTaskEvent{EventID: uint32(id & 0xffffffff), RecordID: record, Path: path, InstanceID: instance}
+	createdAt, err := values[7].fileTime()
+	if err != nil {
+		return nativeTaskEvent{}, err
+	}
+	event := nativeTaskEvent{CreatedAt: createdAt, EventID: uint32(id & 0xffffffff), RecordID: record, Path: path, InstanceID: instance}
 	if id == 100 {
 		event.AccountSID, err = taskEventAccountSID(raw, values[3])
 		if err != nil {

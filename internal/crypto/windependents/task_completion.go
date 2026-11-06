@@ -4,10 +4,12 @@ package windependents
 import (
 	"errors"
 	"sort"
+	"time"
 )
 
 // nativeTaskEvent carries selected metadata only, never task arguments/XML.
 type nativeTaskEvent struct {
+	CreatedAt                    time.Time
 	EventID                      uint32
 	RecordID                     uint64
 	Path, AccountSID, InstanceID string
@@ -34,11 +36,13 @@ func taskProofFromEvents(task Task, instance string, events []nativeTaskEvent) (
 				return TaskRunProof{}, false, errors.New("windows task: native start account or instance differs")
 			}
 			proof.StartRecordID = event.RecordID
+			proof.StartedAt = event.CreatedAt
 		case 102:
 			if proof.CompletionRecordID != 0 {
 				return TaskRunProof{}, false, errors.New("windows task: duplicate native task completion")
 			}
 			proof.CompletionRecordID = event.RecordID
+			proof.CompletedAt = event.CreatedAt
 		case 201:
 			if !event.ResultPresent || event.ResultCode != 0 {
 				return TaskRunProof{}, false, errors.New("windows task: native action reported failure")
