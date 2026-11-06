@@ -2483,3 +2483,14 @@ LDAPS request buffer, and verifies a sign-in before publishing recovery. Generat
 rotation passwords keep their printable-ASCII contract. Directory password policy
 can still refuse a predecessor; that remains `rollback_failed`, with no claim of
 recovery. Interruption between the two administrative resets remains unqualified.
+
+The Windows service dependent adapter reads the enrolled host's local Service
+Control Manager. It selects the exact account SID, captures service names and
+start dependencies, and hashes private configuration inside the crypto boundary.
+Updates change only the stored logon password and recheck the frozen native
+configuration on the same service handle. Restarts preserve stopped services and
+verify a fresh running process's account SID. This identity result alone is not
+functional completion: the host workflow must also pass its configured service
+health check. Task/IIS adapters and the full host workflow are separate parts of
+A267. The Windows runner fixture uses a real SCM service and a local SAM account;
+it is not an AD forest qualification.

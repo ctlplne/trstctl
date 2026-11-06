@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2675 annotated sites across 31 rules. Each row is
+2695 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -668,7 +668,7 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (6 sites)
+### G103 — CWE-? (unmapped rule) (24 sites)
 
 | Location | Reason |
 |---|---|
@@ -678,6 +678,24 @@ not this file.
 | `internal/crypto/secret/mem_windows.go:84` | the address VirtualAlloc returned for this region (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:38` | reads the address of the region alloc returned, to check its alignment (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:45` | the region's address, to query its lock and release state (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:135` | SDK USER_INFO_1 points only to the owned public name and live locked password buffer (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:138` | exact SDK USER_INFO_1 and output scalar for a synchronous local test-account creation; password stays locked (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:144` | exact name of the successfully created test-owned account; no enumeration or global cleanup (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:169` | exact newly created test SID added to the native Users group; deletion removes only its own membership (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:191` | sized SDK LSA_OBJECT_ATTRIBUTES and handle output; local policy only for test-owned SID rights (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:200` | live native owned-account SID and length-framed public LSA right; synchronous local API (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:206` | sized SDK LSA_OBJECT_ATTRIBUTES and handle output; local policy only for test-owned SID rights (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:212` | exact test-owned account SID and the single right this fixture added, with all-rights deletion disabled (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:225` | SDK USER_INFO_1003 borrows the live locked UTF-16 predecessor/successor buffer (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:227` | exact test-owned user, SDK level 1003 and live locked UTF-16 password; no password string or file (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:241` | one bounded sign-in for the test-owned local account using a live locked UTF-16 password and token output (CWE-242) |
+| `internal/crypto/windependents/services_native_windows_test.go:357` | exact new fixture service and live locked initial UTF-16 credential; only owned service is created (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:57` | owned nonempty native query buffer address; only offset arithmetic, never converted back to a pointer (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:58` | SDK-returned UTF-16 pointer is range/alignment/termination checked against the owned buffer before a byte view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:67` | exact SDK status struct size and lifetime for a synchronous local status call (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:88` | page-aligned locked 64 KiB query buffer exceeds the SDK struct and remains alive through all bounded field reads (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:197` | SDK count is bounded by both returned-buffer capacity and total census before creating the native entry view (CWE-242) |
+| `internal/crypto/windependents/services_windows.go:250` | password pointer borrows the locked UTF-16 buffer through Use; frozen account pointer stays in the live locked query buffer (CWE-242) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (13 sites)
 
@@ -1816,7 +1834,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (689 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (691 sites)
 
 | Location | Reason |
 |---|---|
@@ -2185,6 +2203,8 @@ not this file.
 | `internal/crypto/secretfile/secretfile.go:83` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
 | `internal/crypto/sshkeys/certificate_test.go:20` | committed test fixture |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
+| `internal/crypto/windependents/services_native_windows_test.go:276` | os.Executable identifies this native test binary; copied code is public, no caller path (CWE-22) |
+| `internal/crypto/windependents/services_native_windows_test.go:282` | fixed filename in the exclusively created native protected test directory, O_EXCL refuses substitution (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:24` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:53` | a fixed test fixture, named by the test itself (CWE-22) |

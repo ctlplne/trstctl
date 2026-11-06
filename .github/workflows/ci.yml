@@ -802,9 +802,33 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/a240-windows-accounts-lab.ps1
 
+  # A267: native SCM service APIs and functional work on an owned local account.
+  # Samba proves the directory separately; this does not qualify an AD forest.
+  a267-windows-dependents:
+    name: a267 lab (Windows dependents)
+    runs-on: windows-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        shell: bash
+        run: scripts/ci/go-mod-download.sh
+      - name: Native service credential update and functional recovery (A267)
+        shell: pwsh
+        run: ./scripts/ci/a267-windows-dependents-lab.ps1
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()
