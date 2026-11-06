@@ -1622,6 +1622,42 @@ uses a key saved before the call, so a retry after a lost answer gets the same l
 instead of leaving an untracked one. Without the control plane, a file holding a lease
 credential goes at the lease's own expiry if that comes before the freshness bound.
 
+For an approved AWS permanent-key replacement, a template can first adopt the
+exact session published by that change, then use the ordinary lease loop:
+
+```yaml
+consumer: orders-worker
+# Other connection and state settings are the same as above.
+templates:
+  - name: orders
+    destination: /run/orders/aws.json
+    template: '{{ lease "workload-sts/orders" }}'
+    lease_ttl: 15m
+    replacement:
+      change_id: 11111111-1111-4111-8111-111111111111
+      provider: workload-sts
+      role: orders
+    verify:
+      url: http://127.0.0.1:9080/credential-check
+      expect_status: 200
+```
+
+Use the actual change ID and configured provider/role. This token needs
+`access:read`, name-scoped `secrets:read`, and `secrets:write` for lease refresh.
+Its authenticated subject and the configured consumer must match the approved
+change. The probe must perform a fresh resource request with the currently loaded
+credential; a generic liveness response cannot prove credential adoption.
+The renderer waits for approved publication, checks its exact name/version and
+native expiry, writes that session, and reports its version only after the probe
+passes. The control plane then rechecks the role/session and deletes the captured
+old key. A missing initial file is recovered from that same published version.
+At the refresh threshold the renderer issues a new allowed role session, verifies
+it, and retires its predecessor. Later sessions do not report themselves as the
+original published secret version. Only public lease/change metadata is saved in
+the state directory; keep that directory across restarts. STS retirement can stay
+pending until native expiry. Local emulation proves API flow and resource readback;
+AWS authorization and revoked-signature rejection require live cloud proof.
+
 #### Secret volumes for pods, with no Kubernetes Secret (A238)
 
 `deploy/kubernetes/csi-secrets.yaml` installs a node plugin (CSI driver

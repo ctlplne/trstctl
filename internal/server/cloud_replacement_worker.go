@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/netip"
 	"os"
@@ -63,32 +64,32 @@ func (d *issuanceDispatcher) replacementRoleReadback(ctx context.Context, tenant
 	return nil
 }
 
-func (d *issuanceDispatcher) verifyCloudReplacementLease(ctx context.Context, tenantID string, intent change.Intent, leaseID string, provider *configuredDynamicProvider) (store.DynamicSecretLease, error) {
+func (d *issuanceDispatcher) verifyCloudReplacementLease(ctx context.Context, tenantID string, intent change.Intent, leaseID string, provider *configuredDynamicProvider) (time.Time, error) {
 	record, err := d.store.GetDynamicSecretLease(ctx, tenantID, leaseID)
 	if err != nil {
-		return record, err
+		return time.Time{}, err
 	}
 	if record.Provider != intent.ReplacementProviderID || record.Role != intent.ReplacementRole || record.State != store.DynamicSecretLeaseActive || !time.Now().Add(30*time.Second).Before(record.ExpiresAt) {
-		return record, errors.New("replacement lease is unavailable, expired or too close to expiry")
+		return time.Time{}, errors.New("replacement lease is unavailable, expired or too close to expiry")
 	}
 	lifecycle, err := newDurableDynamicSecretLifecycle(tenantID, d.secretIntegrations.dynamicProvidersForTenant(tenantID), d.store, d.log, d.secretIntegrations.kek, d.outbox, func() {}, d.tenantCrypto)
 	if err != nil {
-		return record, err
+		return time.Time{}, err
 	}
 	credential, err := lifecycle.openCredential(ctx, record)
 	if err != nil {
-		return record, err
+		return time.Time{}, err
 	}
 	defer secret.Wipe(credential)
 	endpoint := awsiam.STSEndpoint(provider.cfg.Region, provider.cfg.Endpoint)
 	if err := d.egress.CheckURL(endpoint); err != nil {
-		return record, err
+		return time.Time{}, err
 	}
 	prefixes := make([]netip.Prefix, 0, len(provider.cfg.PrivateEgressCIDRs))
 	for _, raw := range provider.cfg.PrivateEgressCIDRs {
 		prefix, err := netip.ParsePrefix(raw)
 		if err != nil {
-			return record, err
+			return time.Time{}, err
 		}
 		prefixes = append(prefixes, prefix)
 	}
@@ -99,13 +100,19 @@ func (d *issuanceDispatcher) verifyCloudReplacementLease(ctx context.Context, te
 		return awsiam.UseLeaseCredential(credential, time.Now(), use)
 	}}, []string{intent.ReplacementRoleARN})
 	if err != nil {
-		return record, err
+		return time.Time{}, err
 	}
 	nativeID, _, _ := strings.Cut(identity.UserID, ":")
 	if nativeID != intent.ReplacementRoleID {
-		return record, errors.New("replacement session belongs to another immutable native role")
+		return time.Time{}, errors.New("replacement session belongs to another immutable native role")
 	}
-	return record, nil
+	var native struct {
+		Expiration time.Time `json:"expiration"`
+	}
+	if json.Unmarshal(credential, &native) != nil || native.Expiration.Before(record.ExpiresAt) {
+		return time.Time{}, errors.New("replacement native expiration precedes its approved lease deadline")
+	}
+	return native.Expiration, nil
 }
 
 func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message orchestrator.Message, plan change.Record, phase string, writer *awsiam.ChangeClient) error {
@@ -171,12 +178,12 @@ func (d *issuanceDispatcher) handleCloudReplacement(ctx context.Context, message
 		if err := d.replacementRoleReadback(ctx, message.TenantID, plan.Intent); err != nil {
 			return fail(err)
 		}
-		lease, err := d.verifyCloudReplacementLease(ctx, message.TenantID, plan.Intent, prepared.LeaseID, provider)
+		nativeExpiry, err := d.verifyCloudReplacementLease(ctx, message.TenantID, plan.Intent, prepared.LeaseID, provider)
 		if err != nil {
 			return fail(err)
 		}
 		result.ReplacementVersion = prepared.Version
-		result.ReplacementExpiresAt = &lease.ExpiresAt
+		result.ReplacementExpiresAt = &nativeExpiry
 		result.ReplacementNativeRoleID = plan.Intent.ReplacementRoleID
 		result.CheckedAt = time.Now().UTC()
 		return d.orch.RecordCloudMachineReplacementPhase(ctx, message.TenantID, plan.ID, change.WaitingAdoption, result)

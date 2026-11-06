@@ -55,9 +55,28 @@ type Config struct {
 }
 
 // Template is one rendered file.
+type ReplacementBootstrap struct {
+	ChangeID string `yaml:"change_id" json:"change_id"`
+	Provider string `yaml:"provider" json:"provider"`
+	Role     string `yaml:"role" json:"role"`
+}
+
+// ReplacementPublication contains only public metadata from an approved change.
+type ReplacementPublication struct {
+	ID, State, Action, Consumer, Provider, Role, LeaseID, NativeRoleID string
+	Version, ExpectedVersion                                           int
+	ExpiresAt                                                          time.Time
+}
+
+// ReplacementReader reads the publication whose exact version the consumer must use.
+type ReplacementReader interface {
+	ReadReplacement(context.Context, string) (ReplacementPublication, error)
+}
+
 type Template struct {
-	Name        string `yaml:"name" json:"name"`
-	Destination string `yaml:"destination" json:"destination"`
+	Replacement *ReplacementBootstrap `yaml:"replacement,omitempty" json:"replacement,omitempty"`
+	Name        string                `yaml:"name" json:"name"`
+	Destination string                `yaml:"destination" json:"destination"`
 	// Mode is the file's octal permission bits; 0400 when empty.
 	Mode   string `yaml:"mode" json:"mode"`
 	Text   string `yaml:"template" json:"template"`
@@ -187,8 +206,13 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("secretrender: template %q needs a unique name and an absolute destination", t.Name)
 		}
 		seen[t.Name] = true
-		if _, _, _, err := parseTemplate(t.Text); err != nil {
+		if _, _, refs, err := parseTemplate(t.Text); err != nil {
 			return fmt.Errorf("template %s: %w", t.Name, err)
+		} else if t.Replacement != nil {
+			b := t.Replacement
+			if len(b.ChangeID) != 36 || b.Provider == "" || b.Role == "" || len(refs) != 1 || refs[0] != b.Provider+"/"+b.Role || t.Verify.URL == "" {
+				return errors.New("secretrender: replacement needs a change UUID, matching single provider/role lease and an application verification probe")
+			}
 		}
 		if _, err := t.mode(); err != nil {
 			return err
@@ -228,12 +252,13 @@ func signalKnown(name string) bool {
 // templateState is what the renderer keeps between runs: versions and times,
 // never values.
 type templateState struct {
-	Versions  map[string]int        `json:"versions"`
-	FetchedAt time.Time             `json:"fetched_at"`
-	WrittenAt time.Time             `json:"written_at"`
-	Verified  bool                  `json:"verified"`
-	Removed   bool                  `json:"removed,omitempty"`
-	Leases    map[string]leaseState `json:"leases,omitempty"`
+	ReplacementChangeID string                `json:"replacement_change_id,omitempty"`
+	Versions            map[string]int        `json:"versions"`
+	FetchedAt           time.Time             `json:"fetched_at"`
+	WrittenAt           time.Time             `json:"written_at"`
+	Verified            bool                  `json:"verified"`
+	Removed             bool                  `json:"removed,omitempty"`
+	Leases              map[string]leaseState `json:"leases,omitempty"`
 	// Retire lists replaced leases, revoked once the application verified
 	// their replacement.
 	Retire []string `json:"retire,omitempty"`
@@ -242,10 +267,12 @@ type templateState struct {
 // leaseState is a lease the file uses: never its credential. IssueKey is set
 // before an issue call, so a retry after a crash gets the same lease back.
 type leaseState struct {
-	ID            string    `json:"id,omitempty"`
-	ExpiresAt     time.Time `json:"expires_at"`
-	HardExpiresAt time.Time `json:"hard_expires_at"`
-	IssueKey      string    `json:"issue_key,omitempty"`
+	BootstrapName    string    `json:"bootstrap_name,omitempty"`
+	BootstrapVersion int       `json:"bootstrap_version,omitempty"`
+	ID               string    `json:"id,omitempty"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	HardExpiresAt    time.Time `json:"hard_expires_at"`
+	IssueKey         string    `json:"issue_key,omitempty"`
 }
 
 // Renderer keeps a configuration's files current.
@@ -334,6 +361,9 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 		return errors.New("secretrender: the template uses leases but no lease client is configured")
 	}
 	st := r.loadState(t)
+	if err := r.prepareReplacement(ctx, t, &st); err != nil {
+		return r.stale(ctx, t, st, err)
+	}
 	values := map[string][]byte{}
 	defer func() {
 		for name, v := range values {
@@ -361,6 +391,11 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	for _, name := range names {
 		rendered[name] = versions[name]
 	}
+	for _, ref := range leaseRefs {
+		if ls := st.Leases[ref]; ls.BootstrapName != "" {
+			rendered[ls.BootstrapName] = ls.BootstrapVersion
+		}
+	}
 	ttl := t.LeaseTTL
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -373,6 +408,12 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 		ls := st.Leases[ref]
 		if ls.ID == "" {
 			replace = true
+			continue
+		}
+		if ls.BootstrapName != "" && !st.Verified {
+			if !now.Before(ls.ExpiresAt) {
+				return r.stale(ctx, t, st, errors.New("approved session expired before application verification"))
+			}
 			continue
 		}
 		if ls.ExpiresAt.Sub(now) > ttl/3 {
@@ -389,6 +430,10 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	if !staticChanged && !replace {
 		if !st.Verified && t.Verify.URL != "" && r.verify(ctx, t, values) == nil {
 			st.Verified = true
+			r.reportQuietly(ctx, t, "verified", rendered)
+		}
+		if st.Verified && t.Replacement != nil && len(rendered) > 0 {
+			// Retrying this immutable report also recovers a lost HTTP response.
 			r.reportQuietly(ctx, t, "verified", rendered)
 		}
 		if st.Verified || t.Verify.URL == "" {
@@ -408,7 +453,17 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 			st.Leases = map[string]leaseState{}
 		}
 		for _, ref := range leaseRefs {
-			lease, err := r.issueLease(ctx, t, &st, ref, ttl)
+			ls := st.Leases[ref]
+			var lease Lease
+			var err error
+			if ls.BootstrapName != "" && (!st.Verified || ls.ExpiresAt.Sub(now) > ttl/3) {
+				lease, err = r.fetchReplacement(ctx, ls)
+			} else {
+				lease, err = r.issueLease(ctx, t, &st, ref, ttl)
+				if err == nil && ls.BootstrapName != "" {
+					delete(rendered, ls.BootstrapName)
+				}
+			}
 			if err != nil {
 				return err
 			}

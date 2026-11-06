@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2663 annotated sites across 31 rules. Each row is
+2666 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1329,7 +1329,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (355 sites)
+### G204 — CWE-78 OS command injection (356 sites)
 
 | Location | Reason |
 |---|---|
@@ -1409,7 +1409,7 @@ not this file.
 | `internal/agent/relay/adcsdatabase.go:155` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
-| `internal/agent/secretrender/secretrender.go:590` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
+| `internal/agent/secretrender/secretrender.go:645` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
 | `internal/agent/sshkrl/revocations_test.go:92` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1512,6 +1512,7 @@ not this file.
 | `internal/server/ca_hierarchy_pqc_served_test.go:32` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/server/ca_hierarchy_pqc_served_test.go:41` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
+| `internal/server/cloud_workload_replacement_served_test.go:141` | validated 64-hex owned test container ID and constant stock-client program, separate argv, no shell (CWE-78) |
 | `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
@@ -1806,7 +1807,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (687 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (689 sites)
 
 | Location | Reason |
 |---|---|
@@ -2025,11 +2026,13 @@ not this file.
 | `internal/agent/secretrender/lease_test.go:106` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/lease_test.go:130` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/replace_windows_test.go:49` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:313` | the renderer's own state directory and a validated template name (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:572` | operator-configured pid file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:663` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:691` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:738` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/replacement_test.go:53` | this test reads only its own temporary renderer destination (CWE-22) |
+| `internal/agent/secretrender/replacement_test.go:82` | this test reads only its own temporary renderer destination (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:340` | the renderer's own state directory and a validated template name (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:627` | operator-configured pid file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:718` | a fresh random name beside the configured destination (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:746` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:793` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:83` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:142` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:154` | the test's own temp file (CWE-22) |
@@ -2744,7 +2747,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (37 sites)
+### G702 — CWE-78 OS command injection (taint) (38 sites)
 
 | Location | Reason |
 |---|---|
@@ -2756,6 +2759,7 @@ not this file.
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/server/audit_feed_lab_p5_test.go:226` | the runner's own lab container (CWE-78) |
 | `internal/server/audit_feed_lab_p5_test.go:233` | the runner's own lab container (CWE-78) |
+| `internal/server/cloud_workload_replacement_served_test.go:141` | validated 64-hex owned test container ID and constant stock-client program, separate argv, no shell (CWE-78) |
 | `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |

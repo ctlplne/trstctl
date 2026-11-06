@@ -225,3 +225,10 @@ results carry command/lease/version/expiry and native role/old-key postcondition
 no credential values cross this seam. Workload execution and repeated refresh
 must be demonstrated separately; an authenticated assertion alone does not prove
 a successful resource request.
+
+The replacement result's expiration is the exact timestamp returned inside the
+native STS credential. It is distinct from the control plane's earlier lease
+cutoff, which starts before the upstream call. Preparation verifies that native
+expiry is at least that cutoff; retirement still requires an active control-plane
+lease. The renderer checks the credential against the exact native timestamp,
+then verifies a fresh application resource request before reporting adoption.
