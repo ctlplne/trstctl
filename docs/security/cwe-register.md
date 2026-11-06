@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2695 annotated sites across 31 rules. Each row is
+2708 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -668,16 +668,29 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (24 sites)
+### G103 — CWE-? (unmapped rule) (37 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
+| `internal/crypto/secret/foreign_windows.go:23` | caller-owned native allocation remains live through release and native free; only its bounded bytes are borrowed (CWE-242) |
+| `internal/crypto/secret/foreign_windows_test.go:26` | exact owned VirtualAlloc page, freed only after wipe/unlock assertions (CWE-242) |
+| `internal/crypto/secret/foreign_windows_test.go:36` | exact PSAPI working-set output for the live owned allocation and current process (CWE-242) |
 | `internal/crypto/secret/mem_windows.go:40` | VirtualAlloc's committed region, outside the Go heap, released only by free (CWE-242) |
 | `internal/crypto/secret/mem_windows.go:84` | the address VirtualAlloc returned for this region (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:38` | reads the address of the region alloc returned, to check its alignment (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:45` | the region's address, to query its lock and release state (CWE-242) |
+| `internal/crypto/windependents/automation_native_windows_test.go:47` | exact PSAPI output for the current process and live locked owned BSTR, no material is copied (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:53` | owned native BSTR allocator length, wiped in views no larger than 1 MiB before SysFreeString; no password string (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:92` | owned SysAllocStringLen or COM BSTR, native length capped below 1 Mi UTF-16 units and locked before private use (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:130` | public-only UTF-16 input stays alive through the synchronous native allocation; passwords use a separate locked path (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:188` | SDK EXCEPINFO deferred callback receives its live exact output struct; all returned strings are wiped without logging (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:208` | fixed local Schedule.Service identifier and sized SDK GUID output, no caller-selected COM class (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:213` | fixed local scheduler class, exact IDispatch IID and native interface output, released in the same apartment (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:243` | exact live native VARIANT layout; native allocator clears non-text result ownership, text is wiped separately (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:259` | live fixed IDispatch vtable, public method name, sized GUID/DISPID outputs and one bounded name (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:283` | exact IDispatch ABI, at most 16 reversed typed arguments and live sized result/exception outputs; password BSTR lease remains locked (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:135` | SDK USER_INFO_1 points only to the owned public name and live locked password buffer (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:138` | exact SDK USER_INFO_1 and output scalar for a synchronous local test-account creation; password stays locked (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:144` | exact name of the successfully created test-owned account; no enumeration or global cleanup (CWE-242) |

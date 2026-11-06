@@ -2494,3 +2494,10 @@ functional completion: the host workflow must also pass its configured service
 health check. Task/IIS adapters and the full host workflow are separate parts of
 A267. The Windows runner fixture uses a real SCM service and a local SAM account;
 it is not an AD forest qualification.
+
+Windows Automation arguments use a separate native memory boundary: credential
+BSTRs are locked before filling and wiped before their native allocator frees
+them. Private task XML stays byte-backed inside that boundary, and native
+exception descriptions are wiped without entering logs. The native Windows
+memory/Automation proof is separate from task-dependent rotation and full host
+orchestration; those parts are still in progress.
