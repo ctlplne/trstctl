@@ -2476,3 +2476,10 @@ Changing configuration while a rotation is pending may therefore require manual
 recovery. The preparation is included in tenant-key migration and read-model
 recovery; restarting the process alone does not change its configuration binding.
 These controls do not qualify a multi-DC forest or the Windows dependent workflow.
+
+Imported Active Directory predecessors can contain Unicode. Native rollback
+validates bounded UTF-8 without NUL, encodes quoted UTF-16LE directly in a locked
+LDAPS request buffer, and verifies a sign-in before publishing recovery. Generated
+rotation passwords keep their printable-ASCII contract. Directory password policy
+can still refuse a predecessor; that remains `rollback_failed`, with no claim of
+recovery. Interruption between the two administrative resets remains unqualified.

@@ -174,6 +174,14 @@ func (b *LDAPBackend) retireADAccount(ctx context.Context, dn string) error {
 // the final credential. Both writes are part of the existing rotation operation;
 // an uncertain reset is an error, never a claim that the old password still works.
 func (b *LDAPBackend) resetADPassword(ctx context.Context, dn string, final []byte) error {
+	return b.resetADPasswordWithRecovery(ctx, dn, final, false)
+}
+func (b *LDAPBackend) resetADPasswordWithRecovery(ctx context.Context, dn string, final []byte, recovery bool) error {
+	if recovery {
+		if err := ldapbind.ValidateADRecoveryPassword(final); err != nil {
+			return err
+		}
+	}
 	random, err := randomSecretHex(32)
 	if err != nil {
 		return err
@@ -189,6 +197,9 @@ func (b *LDAPBackend) resetADPassword(ctx context.Context, dn string, final []by
 	return b.bindPassword.Use(func(admin []byte) error {
 		if err := ldapbind.ResetADPassword(ctx, b.adRoute(), b.bindDN, admin, dn, intermediate.Bytes()); err != nil {
 			return err
+		}
+		if recovery {
+			return ldapbind.ResetADRecoveryPassword(ctx, b.adRoute(), b.bindDN, admin, dn, final)
 		}
 		return ldapbind.ResetADPassword(ctx, b.adRoute(), b.bindDN, admin, dn, final)
 	})

@@ -139,6 +139,9 @@ func (p *adRollbackFaultProvider) RestoreStaticCredential(ctx context.Context, r
 // Samba proves the directory half; Windows dependent execution is a separate
 // native runner obligation. A vault-only rollback must never count as recovery.
 func TestServedADStaticRotationRollbackA267(t *testing.T) {
+	testServedADStaticRotationRollbackA267(t, false)
+}
+func testServedADStaticRotationRollbackA267(t *testing.T, importedUnicode bool) {
 	if os.Getenv("TRSTCTL_AD_SERVED_LAB") != "1" {
 		t.Skip("owned Samba/real PostgreSQL lab not requested")
 	}
@@ -244,6 +247,23 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 	first := rotate("a267-first")
 	if first.Phase != store.SecretStaticRotationCompleted {
 		t.Fatalf("initial native rotation failed: %+v", first)
+	}
+	if importedUnicode {
+		imported := []byte("Tr5!owned-café-密碼-🙂")
+		defer secret.Wipe(imported)
+		seedADUnicodePredecessor(t, account, imported)
+		wire, e := json.Marshal(struct {
+			Username string           `json:"username"`
+			BindDN   string           `json:"bind_dn"`
+			Password secret.JSONBytes `json:"password"`
+		}{"a267-served", account, imported}) // #nosec G117 -- synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200)
+		if e != nil {
+			t.Fatal(e)
+		}
+		defer secret.Wipe(wire)
+		if status, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/directory/dependents", token, "a267-unicode-import", map[string]any{"value": secret.JSONBytes(wire)}); status != 200 && status != 201 {
+			t.Fatal("Unicode import unavailable")
+		}
 	}
 	predecessor := read()
 	defer secret.Wipe(predecessor)

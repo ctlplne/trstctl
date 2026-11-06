@@ -47,7 +47,7 @@ func TestADRestoreRefusesChangedAuthorityBeforeNetworkA267(t *testing.T) {
 	for _, test := range []struct {
 		role, ref, dn string
 		password      []byte
-	}{{"unknown", account, account, []byte("Owned1!restored-password")}, {"service", "CN=foreign,OU=services,DC=example,DC=test", account, []byte("Owned1!restored-password")}, {"service", account, "CN=foreign,OU=services,DC=example,DC=test", []byte("Owned1!restored-password")}, {"service", account, account, []byte("short")}} {
+	}{{"unknown", account, account, []byte("Owned1!restored-password")}, {"service", "CN=foreign,OU=services,DC=example,DC=test", account, []byte("Owned1!restored-password")}, {"service", account, "CN=foreign,OU=services,DC=example,DC=test", []byte("Owned1!restored-password")}, {"service", account, account, []byte("short")}, {"service", account, account, append([]byte("Tr5!owned-invalid"), 0)}} {
 		raw := value(test.dn, test.password)
 		if err := backend.RestoreStaticCredential(t.Context(), test.role, test.ref, raw); err == nil {
 			t.Fatal("unbound restoration admitted")

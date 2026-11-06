@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -67,6 +68,10 @@ func ResetADPassword(ctx context.Context, route PinnedTLS, adminDN string, admin
 		return err
 	}
 	defer packet.Destroy()
+	return resetADPasswordPacket(ctx, route, adminDN, adminPassword, packet)
+}
+
+func resetADPasswordPacket(ctx context.Context, route PinnedTLS, adminDN string, adminPassword []byte, packet *secret.Buffer) error {
 	bounded, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	raw, err := DialPinned(bounded, route, adminDN, adminPassword)
@@ -96,7 +101,13 @@ func newADPasswordPacket(dn string, password []byte) (*secret.Buffer, error) {
 			return nil, errors.New("AD generated password must be printable ASCII")
 		}
 	}
-	size := (len(password) + 2) * 2
+	return newADPasswordPacketValue(dn, password, len(password))
+}
+
+// Both callers validate before allocating; password decoding writes directly to
+// the locked BER packet, without a temporary UTF-16 slice or immutable string.
+func newADPasswordPacketValue(dn string, password []byte, units int) (*secret.Buffer, error) {
+	size := (units + 2) * 2
 	header := func(tag byte, n int) []byte { return append([]byte{tag}, lengthBytes(n)...) }
 	value := header(0x04, size)
 	values := header(0x31, len(value)+size)
@@ -124,8 +135,18 @@ func newADPasswordPacket(dn string, password []byte) (*secret.Buffer, error) {
 	copy(packet.Bytes(), prefix)
 	dest := packet.Bytes()[len(prefix):]
 	dest[0] = '"'
-	for i, v := range password {
-		dest[(i+1)*2] = v
+	used := 2
+	put := func(v uint16) { dest[used] = byte(v & 0xff); dest[used+1] = byte(v >> 8); used += 2 }
+	for len(password) > 0 {
+		r, width := utf8.DecodeRune(password)
+		password = password[width:]
+		if r <= 0xffff {
+			put(uint16(r & 0xffff))
+		} else {
+			r -= 0x10000
+			put(0xd800 | uint16((r>>10)&0x3ff))
+			put(uint16(0xdc00 + (r & 0x3ff)))
+		}
 	}
 	dest[len(dest)-2] = '"'
 	return packet, nil

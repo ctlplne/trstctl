@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2674 annotated sites across 31 rules. Each row is
+2675 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1155,7 +1155,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (63 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (64 sites)
 
 | Location | Reason |
 |---|---|
@@ -1220,7 +1220,8 @@ not this file.
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
-| `internal/server/service_account_ad_rollback_served_test.go:176` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:179` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:259` | synthetic byte-backed Unicode predecessor in the owned native fixture, never logged (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)

@@ -93,7 +93,7 @@ done
 $ready
 TRSTCTL_AD_NATIVE_LAB=1 /run/dynsecret-test -test.v -test.run ^TestActiveDirectoryVaultedPasswordNativeA263$ -test.timeout=60s
 ' > "$proof/native.log" 2>&1
-docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
+docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_DESKTOP_LAB=1 /run/server-test -test.v -test.run ^TestServedADDesktopA263$ -test.timeout=120s' > "$proof/desktop.log" 2>&1
 docker cp "$client:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 

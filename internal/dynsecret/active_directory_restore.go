@@ -34,6 +34,9 @@ func (b *LDAPBackend) RestoreStaticCredential(ctx context.Context, role, ref str
 	if len(raw) > 64<<10 || json.Unmarshal(raw, &c) != nil || !sameADRestoreDN(c.BindDN, dn) || len(c.Password) < 16 || len(c.Password) > 1024 {
 		return errors.New("dynsecret AD: predecessor does not bind the configured account")
 	}
+	if err := ldapbind.ValidateADRecoveryPassword(c.Password); err != nil {
+		return err
+	}
 	held, err := secret.NewFrom(c.Password)
 	secret.Wipe(c.Password)
 	if err != nil {
@@ -43,7 +46,7 @@ func (b *LDAPBackend) RestoreStaticCredential(ctx context.Context, role, ref str
 	if _, err = b.inspectADAccount(ctx, dn, false); err != nil {
 		return err
 	}
-	if err = held.Use(func(password []byte) error { return b.resetADPassword(ctx, dn, password) }); err != nil {
+	if err = held.Use(func(password []byte) error { return b.resetADPasswordWithRecovery(ctx, dn, password, true) }); err != nil {
 		return err
 	}
 	// The recovery password remains locked; constructing another credential
