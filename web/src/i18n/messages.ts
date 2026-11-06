@@ -10,6 +10,47 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.machine.catalogLimit": {
+    defaultMessage: "The capture exceeds this console workflow's bounded catalog. Use the documented proposal API or CLI with the exact captured finding.",
+    description: "Cloud role catalog limit.",
+  },
+  "discovery.machine.customConsumerConfig": {
+    defaultMessage:
+      "This provider or role alias needs a custom consumer integration. Use the proposal's exact consumer, authenticated subject and published secret version when reporting verified adoption.",
+    description: "Renderer placeholder compatibility limit.",
+  },
+  "discovery.machine.replaceOption": {
+    defaultMessage: "Replace key {id} with temporary role credentials",
+    description: "Approved AWS workload replacement configuration.",
+  },
+  "discovery.machine.loadingChoices": {
+    defaultMessage: "Loading configured providers and captured native roles\u2026",
+    description: "Approved AWS workload replacement configuration.",
+  },
+  "discovery.machine.replacementProvider": { defaultMessage: "Temporary credential provider", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.replacementRole": { defaultMessage: "Configured role alias", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.nativeRole": { defaultMessage: "Captured native IAM role", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.roleBindingHelp": {
+    defaultMessage: "Choose the configured alias for the captured role. The server checks that their exact role ARN and native identity match.",
+    description: "Approved AWS workload replacement configuration.",
+  },
+  "discovery.machine.consumer": { defaultMessage: "Consumer name", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.consumerSubject": { defaultMessage: "Authenticated workload subject", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.consumerSubjectHelp": {
+    defaultMessage: "Use the subject of the workload token. A report from any other subject cannot authorize deletion of the old key.",
+    description: "Approved AWS workload replacement configuration.",
+  },
+  "discovery.machine.sessionTTL": { defaultMessage: "Temporary session lifetime in seconds", description: "Approved AWS workload replacement configuration." },
+  "discovery.machine.rendererConfig": {
+    defaultMessage: "Renderer configuration for this change",
+    description: "Approved AWS workload replacement configuration.",
+  },
+  "discovery.machine.rendererConfigHelp": {
+    defaultMessage:
+      "Add these public settings to the agent renderer configuration. Set the private destination and application probe for your workload, and use its approved token subject. The probe must make a fresh resource request using the current credential. The renderer waits for approved publication and then refreshes sessions automatically.",
+    description: "Approved AWS workload replacement configuration.",
+  },
+
   "discovery.machine.preparingReplacement": {
     defaultMessage: "Preparing and checking the temporary session. The old key has not been retired by this phase.",
     description: "Cloud replacement preparation progress.",

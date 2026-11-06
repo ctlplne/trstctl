@@ -12,6 +12,20 @@ vi.mock("@/lib/cloudMachineApi", () => ({
   listCloudMachineChanges: vi.fn().mockResolvedValue({ items: [], next_cursor: "" }),
   proposeCloudMachineChange: vi.fn(),
   executeCloudMachineChange: vi.fn(),
+  loadCloudReplacementChoices: vi.fn().mockResolvedValue({
+    providers: [
+      {
+        id: "replacement-sts",
+        label: "Workload STS",
+        type: "aws-sts",
+        ready: true,
+        allowed_roles: ["orders"],
+        maximum_ttl_seconds: 900,
+        configuration_revision: "r1",
+      },
+    ],
+    roles: [{ id: "22222222-2222-4222-8222-222222222222", arn: "arn:aws:iam::111122223333:role/orders" }],
+  }),
 }));
 function finding(native = true): DiscoveryFinding {
   return {
@@ -91,5 +105,54 @@ describe("captured cloud permissions and exact human-reviewed changes", () => {
         expect.any(String),
       ),
     );
+  });
+  it("carries a configured temporary role and exact consumer through replacement approval", async () => {
+    const user = userEvent.setup();
+    const accepted = {
+      id: "33333333-3333-4333-8333-333333333333",
+      state: "awaiting_approval",
+      intent_digest: "digest",
+      expires_at: "2026-11-06T07:00:00Z",
+      intent: {
+        action: "replace_key",
+        replacement_provider_id: "replacement-sts",
+        replacement_role: "orders",
+        consumer: "orders-worker",
+        consumer_subject: "workload-subject",
+      },
+    } as never;
+    vi.mocked(client.proposeCloudMachineChange).mockImplementation(async () => {
+      vi.mocked(client.listCloudMachineChanges).mockResolvedValue({ items: [accepted], next_cursor: "" });
+      return accepted;
+    });
+    mount();
+    await user.selectOptions(await screen.findByRole("combobox"), "replace:AKIAOWNED");
+    await user.click(screen.getByRole("button", { name: /Next/ }));
+    await user.selectOptions(await screen.findByLabelText("Temporary credential provider"), "replacement-sts");
+    await user.selectOptions(screen.getByLabelText("Configured role alias"), "orders");
+    await user.selectOptions(screen.getByLabelText("Captured native IAM role"), "22222222-2222-4222-8222-222222222222");
+    await user.type(screen.getByLabelText("Consumer name"), "orders-worker");
+    await user.type(screen.getByLabelText("Authenticated workload subject"), "workload-subject");
+    await user.type(screen.getByLabelText("Writer STS file reference"), "env:OWNED_WRITER_PATH");
+    await user.type(screen.getByLabelText("Reason and workload impact"), "Verify the running workload before removing its old key");
+    await user.click(screen.getByRole("button", { name: /Next/ }));
+    expect(client.proposeCloudMachineChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Create approval proposal" }));
+    await waitFor(() =>
+      expect(client.proposeCloudMachineChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "replace_key",
+          access_key_id: "AKIAOWNED",
+          replacement_provider_id: "replacement-sts",
+          replacement_role: "orders",
+          replacement_role_finding_id: "22222222-2222-4222-8222-222222222222",
+          ttl_seconds: 900,
+          consumer: "orders-worker",
+          consumer_subject: "workload-subject",
+        }),
+        expect.any(String),
+      ),
+    );
+    expect(await screen.findByLabelText("Renderer configuration for this change")).toHaveTextContent("33333333-3333-4333-8333-333333333333");
   });
 });

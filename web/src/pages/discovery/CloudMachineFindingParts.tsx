@@ -1,3 +1,4 @@
+import { CloudReplacementRendererConfig } from "./CloudReplacementRendererConfig";
 import { CloudChangeIntent } from "./CloudChangeIntent";
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -17,7 +18,13 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import type { DiscoveryFinding } from "@/lib/api";
 import type { CloudMachineChange, CloudMachineChangeRequest } from "@/lib/api-types.gen";
 import { newIdempotencyKey } from "@/lib/apiTransport";
-import { cloudChangesKey, executeCloudMachineChange, listCloudMachineChanges, proposeCloudMachineChange } from "@/lib/cloudMachineApi";
+import {
+  cloudChangesKey,
+  executeCloudMachineChange,
+  listCloudMachineChanges,
+  loadCloudReplacementChoices,
+  proposeCloudMachineChange,
+} from "@/lib/cloudMachineApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 const metadataSchema = z.object({
@@ -48,15 +55,30 @@ const metadataSchema = z.object({
   limitations: z.array(z.string()).nullable(),
 });
 type Captured = z.infer<typeof metadataSchema>;
-const formSchema = z.object({
-  target: z.string().min(1),
-  writer: z
-    .string()
-    .trim()
-    .regex(/^env:[A-Za-z_][A-Za-z0-9_]*$/),
-  reason: z.string().trim().min(1).max(500),
-  required: z.coerce.number().int().min(1).max(5),
-});
+const formSchema = z
+  .object({
+    target: z.string().min(1),
+    writer: z
+      .string()
+      .trim()
+      .regex(/^env:[A-Za-z_][A-Za-z0-9_]*$/),
+    provider: z.string().default(""),
+    role: z.string().default(""),
+    roleFinding: z.string().default(""),
+    consumer: z.string().trim().default(""),
+    subject: z.string().trim().default(""),
+    ttl: z.coerce.number().int().min(900).max(3600).default(900),
+    reason: z.string().trim().min(1).max(500),
+    required: z.coerce.number().int().min(1).max(5),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.target.startsWith("replace:")) return;
+    for (const name of ["provider", "role", "roleFinding", "consumer", "subject"] as const) {
+      if (!value[name]) ctx.addIssue({ code: "custom", path: [name] });
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/.test(value.consumer)) ctx.addIssue({ code: "custom", path: ["consumer"] });
+    if (value.subject.length > 256) ctx.addIssue({ code: "custom", path: ["subject"] });
+  });
 type FormValues = z.input<typeof formSchema>;
 
 export function CloudMachineFindingParts({ finding }: { finding: DiscoveryFinding }) {
@@ -157,14 +179,29 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
   const keys = useRef(new Map<string, string>());
   const form = useForm<FormValues, unknown, z.output<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { target: "", writer: "", reason: "", required: 2 },
+    defaultValues: { target: "", writer: "", reason: "", required: 2, provider: "", role: "", roleFinding: "", consumer: "", subject: "", ttl: 900 },
   });
   const fields = useWatch({ control: form.control });
   const selected = (fields.target ?? "").split(":");
+  const replacing = selected[0] === "replace";
+  const choices = useApiQuery(["cloud-replacement-choices"], ({ signal }) => loadCloudReplacementChoices(signal), { enabled: replacing });
+  const provider = choices.data?.providers.find((p) => p.id === fields.provider);
+  const account = value.identity.principal.arn.split(":")[4];
+  const roles = (choices.data?.roles ?? []).filter((role) => role.arn.split(":")[4] === account);
   const request: CloudMachineChangeRequest = {
     finding_id: finding.id,
-    action: selected[0] === "key" ? "revoke_key" : "tighten_policy",
-    ...(selected[0] === "key" ? { access_key_id: selected[1] } : { evaluation_index: Number(selected[1]) }),
+    action: replacing ? "replace_key" : selected[0] === "key" ? "revoke_key" : "tighten_policy",
+    ...(selected[0] === "key" || replacing ? { access_key_id: selected[1] } : { evaluation_index: Number(selected[1]) }),
+    ...(replacing
+      ? {
+          replacement_provider_id: fields.provider ?? "",
+          replacement_role: fields.role ?? "",
+          replacement_role_finding_id: fields.roleFinding ?? "",
+          consumer: fields.consumer ?? "",
+          consumer_subject: fields.subject ?? "",
+          ttl_seconds: Number(fields.ttl ?? 900),
+        }
+      : {}),
     writer_session_file_ref: fields.writer ?? "",
     reason: fields.reason ?? "",
     required_approvals: Number(fields.required ?? 2),
@@ -214,7 +251,14 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
           onNext={
             step < 2
               ? async () => {
-                  if (await form.trigger(step === 0 ? ["target"] : ["writer", "reason", "required"])) setStep(step + 1);
+                  if (
+                    await form.trigger(
+                      step === 0
+                        ? ["target"]
+                        : ["writer", "reason", "required", ...(replacing ? (["provider", "role", "roleFinding", "consumer", "subject", "ttl"] as const) : [])],
+                    )
+                  )
+                    setStep(step + 1);
                 }
               : undefined
           }
@@ -227,6 +271,11 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
                   {(value.keys ?? []).map((item) => (
                     <option key={item.key.id} value={`key:${item.key.id}`}>
                       {t("discovery.machine.revokeOption", { id: item.key.id })}
+                    </option>
+                  ))}
+                  {(value.keys ?? []).map((item) => (
+                    <option key={`replace:${item.key.id}`} value={`replace:${item.key.id}`}>
+                      {t("discovery.machine.replaceOption", { id: item.key.id })}
                     </option>
                   ))}
                   {value.evaluations.map((item, index) =>
@@ -246,6 +295,97 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
           )}
           {step === 1 && (
             <div className="grid gap-4">
+              {replacing && (
+                <>
+                  <p>{t("discovery.machine.replacementHelp")}</p>
+                  {choices.loading && <LoadingState>{t("discovery.machine.loadingChoices")}</LoadingState>}
+                  {choices.error && (
+                    <ErrorState title={t("discovery.machine.changeError")}>
+                      {choices.error === "cloud_replacement_catalog_limit" ? t("discovery.machine.catalogLimit") : choices.error}
+                    </ErrorState>
+                  )}
+                  <Field
+                    label={t("discovery.machine.replacementProvider")}
+                    error={form.formState.errors.provider ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => (
+                      <Select
+                        {...control}
+                        {...form.register("provider")}
+                        onChange={(event) => {
+                          form.setValue("provider", event.target.value, { shouldValidate: true });
+                          form.setValue("role", "");
+                        }}
+                      >
+                        <option value="">{t("discovery.machine.choose")}</option>
+                        {(choices.data?.providers ?? []).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label} ({p.id})
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field
+                    label={t("discovery.machine.replacementRole")}
+                    description={t("discovery.machine.roleBindingHelp")}
+                    error={form.formState.errors.role ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => (
+                      <Select {...control} {...form.register("role")}>
+                        <option value="">{t("discovery.machine.choose")}</option>
+                        {(provider?.allowed_roles ?? []).map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field
+                    label={t("discovery.machine.nativeRole")}
+                    error={form.formState.errors.roleFinding ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => (
+                      <Select {...control} {...form.register("roleFinding")}>
+                        <option value="">{t("discovery.machine.choose")}</option>
+                        {roles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.arn}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field
+                    label={t("discovery.machine.consumer")}
+                    error={form.formState.errors.consumer ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => <Input {...control} {...form.register("consumer")} />}
+                  </Field>
+                  <Field
+                    label={t("discovery.machine.consumerSubject")}
+                    description={t("discovery.machine.consumerSubjectHelp")}
+                    error={form.formState.errors.subject ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => <Input {...control} {...form.register("subject")} />}
+                  </Field>
+                  <Field
+                    label={t("discovery.machine.sessionTTL")}
+                    error={form.formState.errors.ttl ? t("discovery.machine.invalidBinding") : undefined}
+                    required
+                  >
+                    {(control) => (
+                      <Input {...control} {...form.register("ttl")} type="number" min={900} max={Math.min(provider?.maximum_ttl_seconds ?? 3600, 3600)} />
+                    )}
+                  </Field>
+                </>
+              )}
               <Field
                 label={t("discovery.machine.writer")}
                 description={t("discovery.machine.writerHelp")}
@@ -284,6 +424,7 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
           <CredentialChip value={plan.id} fullValue />
           <p>{t("discovery.machine.changeState", { action: plan.intent.action, state: plan.state, expires: plan.expires_at })}</p>
           <CloudChangeIntent plan={plan} />
+          <CloudReplacementRendererConfig plan={plan} />
           {plan.state === "preparing_replacement" && <p>{t("discovery.machine.preparingReplacement")}</p>}
           {plan.state === "waiting_adoption" && (
             <p>

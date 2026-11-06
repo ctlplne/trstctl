@@ -1437,3 +1437,23 @@ and reports the failure. A receipt from an authenticated reporter is evidence of
 that reporter's assertion; independently verify a real workload and its ongoing
 refresh. The current API path does not itself prove workload continuity, automatic
 renewal, live AWS enforcement or GCP/Azure qualification.
+
+
+To replace a captured permanent AWS key in the console, select **Replace key
+with temporary role credentials** in its finding. Choose a configured ready STS
+provider, its role alias, and the captured native IAM role in the same account.
+Set the consumer name and exact authenticated workload subject, session lifetime,
+reference-only writer binding, reason, and approval count. The final review shows
+the full request before it creates the approval. The server freezes and rechecks
+the exact role, provider revision, source and key; selecting an alias does not
+permit a different role to slip through.
+
+The proposed change includes public agent renderer settings. Add them to the
+workload's existing renderer configuration, set its private file destination and
+resource-check probe, and use the token for the approved subject. The renderer
+waits for approved publication, checks the exact session, and reports adoption
+after the resource probe passes. The old key remains until that report is accepted
+and native readback confirms deletion. Session refresh then follows the renderer
+lease loop. The console loads at most 2,000 captured findings for this selector
+and refuses a partial catalog; larger captures can use the documented API/CLI.
+Native AWS authorization and revoked-signature rejection remain live-cloud proof.
