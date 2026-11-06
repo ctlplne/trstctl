@@ -232,3 +232,16 @@ cutoff, which starts before the upstream call. Preparation verifies that native
 expiry is at least that cutoff; retirement still requires an active control-plane
 lease. The renderer checks the credential against the exact native timestamp,
 then verifies a fresh application resource request before reporting adoption.
+
+
+Verified native change receipts also feed the credential graph and its reachability
+and access-review consumers. Exact key absence supersedes an older active-key
+capture: the historical key node remains, with captured status, current absent
+status, change ID and check time, and contributes no active permission edge.
+A natively read-back restrictive policy suppresses only checks for which the AWS
+policy evaluator returns an explicit Deny. Tenant, immutable native principal ID,
+ARN, origin, intent digest, exact result and evidence chronology must match.
+A later native capture wins; pending, failed, uncertain or mismatched receipts
+cannot change reachability. This joins newer evidence to an old capture; it does
+not label that old source inventory as freshly collected or prove live AWS
+resource enforcement. Operators can re-capture through the existing discovery run.

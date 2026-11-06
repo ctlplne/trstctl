@@ -67,6 +67,7 @@ func Coverage() AccessCoverage {
 			"certificate issuance requests and who approved them",
 			"the certificate, SSH key, deployment and discovery inventory",
 			"selected AWS workload IAM policy models from verified native discovery runs, with imported evidence provenance",
+			"natively verified AWS key absence and restrictive policy readback receipts over older captures",
 		},
 		NotCovered: []string{
 			"permissions inside the target system (what a role can do once connected)",

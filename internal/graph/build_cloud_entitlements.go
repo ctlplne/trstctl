@@ -19,6 +19,10 @@ import (
 // Only the latest captured snapshot of a principal contributes modeled edges.
 func addCloudMachineAssessments(ctx context.Context, st *store.Store, tenantID string, g *Graph, findings []store.DiscoveryFinding, now time.Time) (map[string]bool, error) {
 	recognized := map[string]bool{}
+	changes, err := loadCloudGraphChanges(ctx, st, tenantID, now)
+	if err != nil {
+		return nil, err
+	}
 	type candidate struct {
 		finding store.DiscoveryFinding
 		value   assessment.Assessment
@@ -88,9 +92,21 @@ func addCloudMachineAssessments(ctx context.Context, st *store.Store, tenantID s
 		var active []string
 		for _, key := range value.Keys {
 			id := "aws-key:" + crypto.SHA256Hex([]byte(principal.ARN+":"+key.Key.ID))
-			g.AddNode(Node{ID: id, Kind: KindCredential, Name: key.Key.ID, Attrs: map[string]string{"credential_kind": "api_key", "provider": "aws-iam", "status": key.Key.Status, "stale": strconv.FormatBool(key.Stale), "long_lived": strconv.FormatBool(key.LongLived), "finding_id": finding.ID, "risk_score": strconv.Itoa(value.RiskScore)}})
+			attrs := map[string]string{"credential_kind": "api_key", "provider": "aws-iam", "status": key.Key.Status, "stale": strconv.FormatBool(key.Stale), "long_lived": strconv.FormatBool(key.LongLived), "finding_id": finding.ID, "risk_score": strconv.Itoa(value.RiskScore)}
+			absent := cloudGraphAbsentKey(changes, value, finding.DiscoveredAt, key.Key.ID)
+			if absent != nil {
+				attrs["captured_status"] = key.Key.Status
+				attrs["status"] = "absent"
+				attrs["verified_change_id"] = absent.ID
+				attrs["verified_at"] = absent.Result.CheckedAt.UTC().Format(time.RFC3339Nano)
+				attrs["evidence"] = "native key absence independently read back"
+				if absent.Result.ReplacementLeaseID != "" {
+					attrs["replacement_lease_id"] = absent.Result.ReplacementLeaseID
+				}
+			}
+			g.AddNode(Node{ID: id, Kind: KindCredential, Name: key.Key.ID, Attrs: attrs})
 			g.AddEdge(Edge{From: principalID, To: id, Type: EdgeHolds, Source: "native IAM key owner; finding " + finding.ID, Confidence: "observed"})
-			if key.Key.Status == "Active" {
+			if key.Key.Status == "Active" && absent == nil {
 				active = append(active, id)
 			}
 		}
@@ -110,6 +126,10 @@ func addCloudMachineAssessments(ctx context.Context, st *store.Store, tenantID s
 			}
 			target := resourceID("aws:" + evaluation.Check.Resource)
 			g.AddNode(Node{ID: target, Kind: KindResource, Name: evaluation.Check.Resource, Attrs: map[string]string{"resource_kind": "aws_policy_resource", "account_id": evaluation.Check.ResourceAccountID, "evidence": "permission check in a captured context; native enforcement unproven"}})
+			if denied := cloudGraphDeniedCheck(changes, value, finding.DiscoveredAt, evaluation.Check); denied != nil {
+				g.AddNode(Node{ID: target, Kind: KindResource, Name: evaluation.Check.Resource, Attrs: map[string]string{"resource_kind": "aws_policy_resource", "account_id": evaluation.Check.ResourceAccountID, "verified_change_id": denied.ID, "verified_at": denied.Result.CheckedAt.UTC().Format(time.RFC3339Nano), "evidence": "owned explicit-Deny policy independently read back; native enforcement unproven"}})
+				continue
+			}
 			if evaluation.Result.Decision != awspolicy.Allowed {
 				continue
 			}

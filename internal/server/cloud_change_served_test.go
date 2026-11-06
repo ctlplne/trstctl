@@ -28,7 +28,7 @@ func TestServedApprovedCloudKeyRevocationA264(t *testing.T) {
 	t.Setenv("TRSTCTL_A264_CHANGE_READER_PATH", path)
 	t.Setenv("TRSTCTL_A264_CHANGE_WRITER_PATH", path)
 	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_CHANGE_READER_PATH", "env:TRSTCTL_A264_CHANGE_WRITER_PATH"))
-	operator := seedScopedTokenSubject(t, h.store, h.tenant, "cloud-operator", "access:write", "access:read", "discovery:read", "discovery:write", "approvals:review", "access:approve", string(authz.PrivateEgress))
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "cloud-operator", "access:write", "access:read", "discovery:read", "discovery:write", "graph:read", "approvals:review", "access:approve", string(authz.PrivateEgress))
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "cloud-reviewer", "approvals:review", "access:approve", "access:read", "access:write", string(authz.PrivateEgress))
 	arn := "arn:aws:iam::000000000000:user/a264-change552"
 	now := time.Now().UTC()
@@ -192,6 +192,27 @@ func TestServedApprovedCloudKeyRevocationA264(t *testing.T) {
 	if err != nil || !originalUnchanged || !ownedReadBack || len(after.Evaluations) != 1 || after.Evaluations[0].Result.Decision != awspolicy.ExplicitDeny {
 		t.Fatalf("restrictive readback changed original conditions/denies or failed independent model: original=%v owned=%v assessment=%+v err=%v", originalUnchanged, ownedReadBack, after, err)
 	}
+
+	status, graphRaw := secretsReq(t, h, http.MethodGet, "/api/v1/graph", operator, nil)
+	var graphView struct {
+		Nodes []struct {
+			Name  string            `json:"name"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if status != http.StatusOK || json.Unmarshal(graphRaw, &graphView) != nil {
+		t.Fatal("post-policy graph unavailable")
+	}
+	sawDeny := false
+	for _, node := range graphView.Nodes {
+		if node.Name == value.Evaluations[0].Check.Resource && node.Attrs["verified_change_id"] == policyPlan.ID {
+			sawDeny = true
+		}
+	}
+	if !sawDeny {
+		t.Fatal("natively read-back policy denial missing from graph evidence")
+	}
+	assertNativeAbsentKeyGraphA264(t, h, operator, keyID, change.ID)
 	// Reconciliation after completed outcomes must preserve the verified result.
 	if _, err := h.srv.orch.ReconcileCloudMachineChanges(t.Context()); err != nil {
 		t.Fatal(err)

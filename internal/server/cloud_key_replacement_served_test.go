@@ -27,7 +27,7 @@ func TestServedApprovedCloudReplacementWaitsForExactConsumerA264(t *testing.T) {
 	t.Setenv("TRSTCTL_A264_REPLACEMENT_READER_PATH", path)
 	t.Setenv("TRSTCTL_A264_REPLACEMENT_WRITER_PATH", path)
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), allowOutboundEnvCredentialRefs("env:TRSTCTL_A264_REPLACEMENT_READER_PATH", "env:TRSTCTL_A264_REPLACEMENT_WRITER_PATH"), func(d *Deps) { d.TenantDynamicSecretProviders = registry })
-	operator := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-operator", "access:write", "access:read", "discovery:read", "discovery:write", "secrets:read", "secrets:write", string(authz.PrivateEgress))
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-operator", "access:write", "access:read", "discovery:read", "discovery:write", "secrets:read", "secrets:write", "graph:read", string(authz.PrivateEgress))
 	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-reviewer", "access:approve", "access:read", "approvals:review")
 	consumer := seedScopedTokenSubject(t, h.store, h.tenant, "replacement-workload", "secrets:read")
 	other := seedScopedTokenSubject(t, h.store, h.tenant, "other-workload", "secrets:read")
@@ -194,6 +194,7 @@ func TestServedApprovedCloudReplacementWaitsForExactConsumerA264(t *testing.T) {
 	if plan.Adoption == nil || plan.Adoption.Subject != "replacement-workload" || plan.Adoption.Version != 2 || plan.Adoption.EventID == "" {
 		t.Fatal("replacement lost the original exact verified actor/version source receipt")
 	}
+	assertNativeAbsentKeyGraphA264(t, h, operator, keyID, plan.ID)
 	retained, err := h.store.GetCloudMachineChange(t.Context(), h.tenant, plan.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -216,5 +217,29 @@ func TestServedApprovedCloudReplacementWaitsForExactConsumerA264(t *testing.T) {
 	rebuilt, _ := json.Marshal(after)
 	if !bytes.Equal(before, rebuilt) {
 		t.Fatal("replay changed the exact approval, preparation or adoption/native result")
+	}
+	assertNativeAbsentKeyGraphA264(t, h, operator, keyID, plan.ID)
+}
+
+func assertNativeAbsentKeyGraphA264(t *testing.T, h *servedHarness, operator, keyID, changeID string) {
+	t.Helper()
+	status, graphBody := secretsReq(t, h, http.MethodGet, "/api/v1/graph", operator, nil)
+	var graphView struct {
+		Nodes []struct {
+			Name  string            `json:"name"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if status != http.StatusOK || json.Unmarshal(graphBody, &graphView) != nil {
+		t.Fatal("remediated graph unavailable")
+	}
+	foundAbsent := false
+	for _, node := range graphView.Nodes {
+		if node.Name == keyID && node.Attrs["provider"] == "aws-iam" {
+			foundAbsent = node.Attrs["status"] == "absent" && node.Attrs["verified_change_id"] == changeID
+		}
+	}
+	if !foundAbsent {
+		t.Fatal("native absent key missing from graph or lacking its exact change receipt")
 	}
 }
