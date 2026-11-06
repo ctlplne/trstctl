@@ -3,6 +3,7 @@ package dynsecret
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -37,11 +38,17 @@ func (b *LDAPBackend) ownsADAccount(dn string) bool {
 
 // inspectADAccount never tries the target's password. Fail closed on incomplete
 // state and any previous bad password; one DC's observation cannot prevent races.
+type adNativeIdentity struct{ Name, GUID, SID, PasswordSetAt string }
+
 func (b *LDAPBackend) inspectADAccount(ctx context.Context, dn string, forBind bool) (string, error) {
+	value, err := b.inspectADIdentity(ctx, dn, forBind, false)
+	return value.Name, err
+}
+func (b *LDAPBackend) inspectADIdentity(ctx context.Context, dn string, forBind, requireIdentity bool) (adNativeIdentity, error) {
 	if !b.ownsADAccount(dn) {
-		return "", errors.New("dynsecret AD: account is outside the configured role bindings")
+		return adNativeIdentity{}, errors.New("dynsecret AD: account is outside the configured role bindings")
 	}
-	var name string
+	var identity adNativeIdentity
 	err := b.bindPassword.Use(func(admin []byte) error {
 		raw, err := ldapbind.DialPinned(ctx, b.adRoute(), b.bindDN, admin)
 		if err != nil {
@@ -53,14 +60,25 @@ func (b *LDAPBackend) inspectADAccount(ctx context.Context, dn string, forBind b
 		defer func() { _ = conn.Close() }()
 		stop := context.AfterFunc(ctx, func() { _ = raw.Close() })
 		defer stop()
-		result, err := conn.Search(ldap.NewSearchRequest(dn, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 5, false, "(&(objectClass=user)(!(objectClass=computer)))", []string{"sAMAccountName", "userAccountControl", "msDS-User-Account-Control-Computed", "badPwdCount", "pwdLastSet", "accountExpires"}, nil))
+		result, err := conn.Search(ldap.NewSearchRequest(dn, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 5, false, "(&(objectClass=user)(!(objectClass=computer)))", []string{"sAMAccountName", "userAccountControl", "msDS-User-Account-Control-Computed", "badPwdCount", "pwdLastSet", "accountExpires", "objectGUID", "objectSid"}, nil))
 		if err != nil || len(result.Entries) != 1 {
 			return errors.New("dynsecret AD: cannot read the exact account state")
 		}
-		name, err = validateADAccountState(result.Entries[0], forBind, time.Now())
+		entry := result.Entries[0]
+		identity.Name, err = validateADAccountState(entry, forBind, time.Now())
+		if err != nil {
+			return err
+		}
+		identity.PasswordSetAt = entry.GetAttributeValue("pwdLastSet")
+		guid, sid := entry.GetRawAttributeValue("objectGUID"), entry.GetRawAttributeValue("objectSid")
+		if requireIdentity && (len(guid) != 16 || len(sid) < 8 || len(sid) > 68) {
+			return errors.New("dynsecret AD: native account GUID/SID is unavailable")
+		}
+		identity.GUID = hex.EncodeToString(guid)
+		identity.SID = hex.EncodeToString(sid)
 		return err
 	})
-	return name, err
+	return identity, err
 }
 func (b *LDAPBackend) createADCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
 	if !req.Static {

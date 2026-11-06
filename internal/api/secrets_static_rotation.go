@@ -161,8 +161,15 @@ func (a *API) queueStaticSecretRotation(
 	} else if found && !latest.Terminal() {
 		return store.SecretStaticRotationCommand{}, errStatus(http.StatusConflict, staticRotationInFlightDetail)
 	}
+	providerBinding := ""
+	if prepared, ok := provider.(dynsecret.PreparedStaticRotationProvider); ok && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase {
+		providerBinding = prepared.StaticRotationBinding(req.Key)
+		if len(providerBinding) != 64 {
+			return store.SecretStaticRotationCommand{}, errors.New("api: native static preparation has no provider binding")
+		}
+	}
 	payload := projections.SecretStaticRotationQueued{
-		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
+		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef, ProviderBinding: providerBinding,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
 		ScheduleID: scheduleID, Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds, RetireApprovedBy: approvedBy,
 		SinglePhaseAcknowledged: req.AcknowledgeSinglePhase && staticRotationPhase(provider, req.Key) == dynsecret.RotationSinglePhase,
@@ -239,11 +246,26 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 		if err != nil {
 			return err
 		}
+		if cmd.ProviderBinding != "" {
+			if _, err := boundStaticPreparation(provider, cmd); err != nil {
+				return err
+			}
+		}
 		switch cmd.Phase {
 		case store.SecretStaticRotationQueued:
-			err = a.stageStaticRotation(ctx, cmd, provider)
+			if cmd.ProviderBinding != "" {
+				err = a.prepareStaticNativeRotation(ctx, cmd, provider)
+			} else {
+				err = a.stageStaticRotation(ctx, cmd, provider)
+			}
+		case store.SecretStaticRotationPrepared:
+			err = a.stagePreparedStaticRotation(ctx, cmd, provider)
 		case store.SecretStaticRotationStaged:
-			err = a.cutoverStaticRotation(ctx, cmd, provider)
+			if cmd.ProviderBinding != "" {
+				err = a.cutoverPreparedStaticRotation(ctx, cmd)
+			} else {
+				err = a.cutoverStaticRotation(ctx, cmd, provider)
+			}
 		case store.SecretStaticRotationCutover:
 			err = a.verifyStaticRotation(ctx, cmd, provider, verifier, attempt)
 		case store.SecretStaticRotationVerified:
@@ -281,7 +303,32 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 	switch cmd.Phase {
 	case store.SecretStaticRotationQueued:
 		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: staticRotationRetryExhaustedDetail})
+	case store.SecretStaticRotationPrepared:
+		if providerErr != nil {
+			return providerErr
+		}
+		return a.rollbackStaticRotation(ctx, cmd, provider)
 	case store.SecretStaticRotationStaged:
+		if cmd.ProviderBinding != "" {
+			if providerErr != nil {
+				return providerErr
+			}
+			// Recover an already-published cutover before choosing its rollback generation.
+			version, found, err := a.staticRotationMaterializedVersion(ctx, cmd, "cutover")
+			if err != nil {
+				return err
+			}
+			if found {
+				if err := a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationCutover, ResultVersion: version}); err != nil {
+					return err
+				}
+				cmd, err = a.store.GetSecretStaticRotationCommand(ctx, cmd.TenantID, cmd.ID)
+				if err != nil {
+					return err
+				}
+			}
+			return a.rollbackStaticRotation(ctx, cmd, provider)
+		}
 		if providerErr == nil && cmd.NewRef != "" {
 			_ = provider.Revoke(ctx, cmd.NewRef) // best effort: the successor was never published
 		}
@@ -394,7 +441,11 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 	}
 	defer held.Destroy()
 	old = held.Bytes()
-	intent, restoreErr := a.prepareStaticRotationSecretVersion(ctx, cmd, "rollback", old, cmd.ResultVersion)
+	expected := cmd.ResultVersion
+	if expected == 0 && len(cmd.SealedPreparation) > 0 {
+		expected = cmd.ExpectedVersion
+	}
+	intent, restoreErr := a.prepareStaticRotationSecretVersion(ctx, cmd, "rollback", old, expected)
 	if restoreErr != nil {
 		secret.Wipe(old)
 		if errors.Is(restoreErr, store.ErrApplicationSecretMutationInFlight) || errors.Is(restoreErr, errPendingApplicationSecretApproval) {
@@ -405,11 +456,18 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 	restorer, nativeRestore := provider.(dynsecret.StaticCredentialRestorer)
 	nativeRestore = nativeRestore && staticRotationPhase(provider, cmd.Key) == dynsecret.RotationSinglePhase
 	if nativeRestore && intent.ResultVersion == 0 {
-		if err := restorer.RestoreStaticCredential(ctx, cmd.Key, cmd.OldRef, old); err != nil {
+		var err error
+		if len(cmd.SealedPreparation) > 0 {
+			err = a.restorePreparedNativeRotation(ctx, cmd, provider, old)
+		} else {
+			err = restorer.RestoreStaticCredential(ctx, cmd.Key, cmd.OldRef, old)
+		}
+		if err != nil {
 			secret.Wipe(old)
 			return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationRollbackFailed, Error: staticRotationRestoreFailedDetail})
 		}
 	}
+
 	restored, restoreErr := a.commitStaticRotationSecretVersion(ctx, cmd, intent)
 	secret.Wipe(old)
 	if restoreErr != nil {
@@ -423,8 +481,13 @@ func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStatic
 		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationRollbackFailed, Error: staticRotationRestoreFailedDetail})
 	}
 	detail := staticRotationVerifyFailedDetail
-	if err := provider.Revoke(ctx, cmd.NewRef); err != nil {
-		detail = staticRotationVerifyFailedRevokeDetail
+	if !nativeRestore && cmd.NewRef != "" {
+		if err := provider.Revoke(ctx, cmd.NewRef); err != nil {
+			detail = staticRotationVerifyFailedRevokeDetail
+		}
+	}
+	if cmd.ResultVersion == 0 && nativeRestore {
+		detail = "native apply could not be confirmed; predecessor restored"
 	}
 	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{
 		Phase: store.SecretStaticRotationRolledBack, RestoredVersion: restored, Error: detail,
@@ -518,8 +581,14 @@ func toStaticSecretRotationResponse(cmd store.SecretStaticRotationCommand) secre
 	switch cmd.Phase {
 	case store.SecretStaticRotationRolledBack:
 		resp.RolledBack, resp.RollbackAttempted, resp.FailedPhase = true, true, "verify"
+		if cmd.ResultVersion == 0 && len(cmd.SealedPreparation) > 0 {
+			resp.FailedPhase = "stage"
+		}
 	case store.SecretStaticRotationRollbackFailed:
 		resp.RollbackAttempted, resp.RollbackFailed, resp.FailedPhase = true, true, "verify"
+		if cmd.ResultVersion == 0 && len(cmd.SealedPreparation) > 0 {
+			resp.FailedPhase = "stage"
+		}
 		resp.RollbackError = store.SecretRotationScheduleRollbackError
 	case store.SecretStaticRotationFailed:
 		resp.FailedPhase = "stage"

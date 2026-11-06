@@ -81,7 +81,22 @@ func (a *API) prepareStaticRotationSecretVersion(ctx context.Context, cmd store.
 	if err != nil {
 		return staticRotationVersionIntent{}, err
 	}
-	return staticRotationVersionIntent{Fence: fence, Payload: payload, Prepared: prepared}, nil
+	intent := staticRotationVersionIntent{Fence: fence, Payload: payload, Prepared: prepared}
+	// A source event retained after SQL failure proves the inverse already ran.
+	// Reapply that exact fenced event before considering another native effect.
+	if event, found, err := a.log.EventByID(ctx, fence.EventID); err != nil {
+		return staticRotationVersionIntent{}, err
+	} else if found {
+		if event.TenantID != cmd.TenantID || event.Type != fence.EventType {
+			return staticRotationVersionIntent{}, errors.New("api: retained rotation publication differs from its tenant/fence")
+		}
+		version, err := a.commitStaticRotationSecretVersion(ctx, cmd, intent)
+		if err != nil {
+			return staticRotationVersionIntent{}, err
+		}
+		return staticRotationVersionIntent{ResultVersion: version}, nil
+	}
+	return intent, nil
 }
 func (a *API) commitStaticRotationSecretVersion(ctx context.Context, cmd store.SecretStaticRotationCommand, intent staticRotationVersionIntent) (int, error) {
 	if intent.ResultVersion > 0 {
@@ -92,4 +107,19 @@ func (a *API) commitStaticRotationSecretVersion(ctx context.Context, cmd store.S
 		return 0, err
 	}
 	return canonical.ResultVersion, nil
+}
+
+func (a *API) staticRotationMaterializedVersion(ctx context.Context, cmd store.SecretStaticRotationCommand, step string) (int, bool, error) {
+	request := struct {
+		Command string `json:"command"`
+		Step    string `json:"step"`
+		Key     string `json:"key"`
+	}{cmd.ID, step, cmd.Key}
+	digest, binding, err := a.applicationSecretRequestBinding(cmd.TenantID, cmd.ID+":"+step, "static-rotation:"+cmd.ID, "WORKER", "/api/v1/secrets/rotations/"+cmd.ID, "rotate", staticRotationSurface, cmd.Key, request)
+	if err != nil {
+		return 0, false, err
+	}
+	eventID := applicationSecretMutationEventID(cmd.TenantID, cmd.TenantEpoch, cmd.Key, "rotate", digest)
+	receipt, found, err := a.applicationSecretMaterializedResult(ctx, cmd.TenantID, eventID, binding, cmd.Key, "rotate")
+	return receipt.ResultVersion, found, err
 }

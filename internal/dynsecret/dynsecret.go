@@ -56,6 +56,16 @@ type StaticCredentialRestorer interface {
 	RestoreStaticCredential(ctx context.Context, role, backendRef string, credential []byte) error
 }
 
+// PreparedStaticRotationProvider preflights native state without mutation,
+// then applies one durable sealed preparation. Unlike PreparedProvider, its
+// preparation may perform read-only native I/O in the outbox worker.
+type PreparedStaticRotationProvider interface {
+	StaticRotationBinding(role string) string
+	PrepareStaticCredential(ctx context.Context, req GenerateRequest) ([]byte, error)
+	GenerateStaticPrepared(ctx context.Context, req GenerateRequest, prepared []byte) (Credential, error)
+	RestorePreparedStaticCredential(ctx context.Context, req GenerateRequest, prepared, old []byte) error
+}
+
 // TwoUserRotationProvider is a StaticRotationProvider whose roles may
 // alternate between two fixed accounts instead of minting a principal per
 // rotation (A240): a rotation stages the account its predecessor does not

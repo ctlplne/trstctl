@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -25,11 +27,73 @@ import (
 
 type adRollbackFaultProvider struct {
 	dynsecret.Provider
-	fail         atomic.Bool
-	restoreFail  atomic.Bool
-	rejected     atomic.Pointer[secret.Buffer]
-	restoreCalls atomic.Int32
-	afterRestore func() error
+	fail              atomic.Bool
+	restoreFail       atomic.Bool
+	rejected          atomic.Pointer[secret.Buffer]
+	restoreCalls      atomic.Int32
+	afterRestore      func() error
+	loseApplyResponse atomic.Bool
+	applyMu           sync.Mutex
+	applied           map[string]int
+}
+
+func (p *adRollbackFaultProvider) recordNativeApply(credential dynsecret.Credential, err error) (dynsecret.Credential, error) {
+	if err != nil {
+		return credential, err
+	}
+	p.applyMu.Lock()
+	if p.applied == nil {
+		p.applied = map[string]int{}
+	}
+	p.applied[crypto.SHA256Hex(credential.Secret)]++
+	p.applyMu.Unlock()
+	if p.loseApplyResponse.Load() {
+		secret.Wipe(credential.Secret)
+		return dynsecret.Credential{}, errors.New("owned response loss after native directory apply")
+	}
+	return credential, nil
+}
+func (p *adRollbackFaultProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {
+	return p.recordNativeApply(p.Provider.Generate(ctx, req))
+}
+func (p *adRollbackFaultProvider) StaticRotationBinding(role string) string {
+	if provider, ok := p.Provider.(interface{ StaticRotationBinding(string) string }); ok {
+		return provider.StaticRotationBinding(role)
+	}
+	return ""
+}
+func (p *adRollbackFaultProvider) PrepareStaticCredential(ctx context.Context, req dynsecret.GenerateRequest) ([]byte, error) {
+	if provider, ok := p.Provider.(interface {
+		PrepareStaticCredential(context.Context, dynsecret.GenerateRequest) ([]byte, error)
+	}); ok {
+		return provider.PrepareStaticCredential(ctx, req)
+	}
+	return nil, errors.New("native directory has no durable static preparation")
+}
+func (p *adRollbackFaultProvider) GenerateStaticPrepared(ctx context.Context, req dynsecret.GenerateRequest, prepared []byte) (dynsecret.Credential, error) {
+	if provider, ok := p.Provider.(interface {
+		GenerateStaticPrepared(context.Context, dynsecret.GenerateRequest, []byte) (dynsecret.Credential, error)
+	}); ok {
+		return p.recordNativeApply(provider.GenerateStaticPrepared(ctx, req, prepared))
+	}
+	return dynsecret.Credential{}, errors.New("native directory has no prepared static apply")
+}
+func (p *adRollbackFaultProvider) RestorePreparedStaticCredential(ctx context.Context, req dynsecret.GenerateRequest, prepared, old []byte) error {
+	if p.restoreFail.Load() {
+		return errors.New("owned native restore failure")
+	}
+	provider, ok := p.Provider.(dynsecret.PreparedStaticRotationProvider)
+	if !ok {
+		return errors.New("native directory has no prepared native recovery")
+	}
+	p.restoreCalls.Add(1)
+	if err := provider.RestorePreparedStaticCredential(ctx, req, prepared, old); err != nil {
+		return err
+	}
+	if p.afterRestore != nil {
+		return p.afterRestore()
+	}
+	return nil
 }
 
 func (p *adRollbackFaultProvider) AllowsStaticRotation(role string) bool {
@@ -118,7 +182,7 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 		t.Fatal("bootstrap unavailable")
 	}
 	var recoveryFault atomic.Bool
-	recoveryReplayed := false
+	recoveryFaultReleased := false
 	rotate := func(key string) store.SecretStaticRotationCommand {
 		t.Helper()
 		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotations", token, key, map[string]any{"provider": cfg.ID, "key": "directory/dependents", "old_ref": account, "acknowledge_single_phase": true})
@@ -158,10 +222,8 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 				if _, e := st.SystemPool().Exec(ctx, `DROP TRIGGER a267_restore_fault ON secret_store; DROP FUNCTION a267_restore_fault()`); e != nil {
 					t.Fatal(e)
 				}
-				if e := projections.New(st).ProjectCatchUp(ctx, h.log); e != nil {
-					t.Fatal(e)
-				}
-				recoveryReplayed = true
+				// The next worker attempt must recover the retained event itself.
+				recoveryFaultReleased = true
 			}
 
 		}
@@ -186,7 +248,7 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 	predecessor := read()
 	defer secret.Wipe(predecessor)
 	fault.afterRestore = func() error {
-		if recoveryReplayed {
+		if recoveryFaultReleased {
 			return nil
 		}
 		_, err := st.SystemPool().Exec(ctx, `CREATE FUNCTION a267_restore_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'owned native recovery publication fault'; END $$; CREATE TRIGGER a267_restore_fault BEFORE UPDATE ON secret_store FOR EACH ROW WHEN (NEW.name='directory/dependents' AND NEW.tenant_id=OLD.tenant_id) EXECUTE FUNCTION a267_restore_fault()`)
@@ -198,7 +260,7 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 	}
 	fault.fail.Store(true)
 	rolled := rotate("a267-failing-dependent")
-	if !recoveryReplayed || fault.restoreCalls.Load() != 1 {
+	if !recoveryFaultReleased || fault.restoreCalls.Load() != 1 {
 		t.Fatal("native recovery was not retained across publication rollback or repeated the native inverse")
 	}
 	if rolled.Phase != store.SecretStaticRotationRolledBack {
@@ -267,7 +329,7 @@ func TestServedADStaticRotationRollbackA267(t *testing.T) {
 		t.Fatal(err)
 	}
 	replayed, err := st.GetSecretStaticRotationCommand(ctx, h.tenant, rolled.ID)
-	if err != nil || replayed.Phase != rolled.Phase || replayed.RestoredVersion != rolled.RestoredVersion {
+	if err != nil || replayed.Phase != rolled.Phase || replayed.RestoredVersion != rolled.RestoredVersion || replayed.ProviderBinding != rolled.ProviderBinding || !bytes.Equal(replayed.SealedPreparation, rolled.SealedPreparation) {
 		t.Fatal("native rollback lost its durable result")
 	}
 	if err := h.log.Replay(ctx, 0, func(event events.Event) error {

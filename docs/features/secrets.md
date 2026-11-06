@@ -2460,3 +2460,19 @@ This inverse is specific to the configured AD single-account profile. Paired
 accounts retain their existing two-phase lifecycle. The native recovery proof uses
 Samba AD; Windows service/task/IIS dependent coordination and directory drift
 reconciliation have separate execution and verification requirements.
+
+New in-place AD rotations also retain one encrypted preparation before the first
+reset. It binds the operation, provider configuration, native object GUID/SID,
+account name and the directory's password-change observation. The old vault value
+is encrypted alongside it before applying the new password. Retries reuse this
+preparation. If a reply is lost after the reset, the worker checks the same new
+password rather than generating another value. If it cannot confirm the apply,
+it uses the retained predecessor for verified native recovery.
+
+A changed provider or native account binding stops further resets. A password
+change outside the retained preparation is not silently overwritten. Check the
+original binding and reconcile the account when recovery cannot be verified.
+Changing configuration while a rotation is pending may therefore require manual
+recovery. The preparation is included in tenant-key migration and read-model
+recovery; restarting the process alone does not change its configuration binding.
+These controls do not qualify a multi-DC forest or the Windows dependent workflow.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -27,6 +28,7 @@ func TestTenantKeyDomainCiphertextMigrationStagesAreFixed(t *testing.T) {
 		"dynamic_secret_leases.sealed_credential",
 		"secret_static_rotation_commands.sealed_new",
 		"secret_static_rotation_commands.sealed_old",
+		"secret_static_rotation_commands.sealed_preparation",
 		"code_signing_operations.sealed_command",
 		"idempotency_keys.result",
 		"outbox.payload",
@@ -160,4 +162,56 @@ func migrationTestKEK(t *testing.T, fill byte) *seal.LocalKEK {
 	}
 	t.Cleanup(key.Destroy)
 	return key
+}
+
+func TestStaticPreparationCiphertextDomainMigrationA267(t *testing.T) {
+	st := newStore(t)
+	ctx := t.Context()
+	deployment := migrationTestKEK(t, 0x51)
+	domainKey := migrationTestKEK(t, 0x52)
+	domain := []byte("owned-native-static-preparation-domain")
+	original, err := seal.Seal(deployment, []byte("owned-native-preparation"), []byte("native-preparation-aad"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, tenant := range []string{tenantA, tenantB} {
+		if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: tenant}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO secret_static_rotation_commands (tenant_id,id,tenant_epoch,provider,secret_key,old_ref,phase,idempotency_key_digest,request_binding,created_at,updated_at,provider_binding,sealed_preparation,sealed_old) VALUES ($1,$2,'owned','directory','service','owned-account','prepared',$3,$3,now(),now(),$3,$4,$4)`, tenant, uuid(tenant, index+191), strings.Repeat("a", 64), original)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rewriter, err := tenantseal.NewHistoryRewrapper(deployment, domainKey, domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n := 0; n < 2; n++ {
+		changed, err := st.RewriteTenantKeyDomainCiphertextStage(ctx, tenantA, "secret_static_rotation_commands.sealed_preparation", func(before []byte) ([]byte, bool, error) {
+			return rewriter.Transform("postgres.secret_static_rotation_commands.sealed_preparation", 1, before)
+		})
+		if err != nil || changed != int64(1-n) {
+			t.Fatalf("native preparation domain migration changed=%d err=%v", changed, err)
+		}
+	}
+	for _, tenant := range []string{tenantA, tenantB} {
+		if err := st.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+			var current []byte
+			if err := tx.QueryRow(ctx, `SELECT sealed_preparation FROM secret_static_rotation_commands WHERE tenant_id=$1 AND secret_key='service'`, tenant).Scan(&current); err != nil {
+				return err
+			}
+			if tenant == tenantB {
+				if !bytes.Equal(current, original) {
+					t.Fatal("foreign tenant native preparation changed")
+				}
+				return nil
+			}
+			return seal.ValidateDomain(domainKey, current, domain)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

@@ -141,7 +141,7 @@ func normalizeOperation(r store.OperationLedgerRow, adoption string) (string, st
 		switch r.Status {
 		case store.SecretStaticRotationQueued:
 			return inFlight()
-		case store.SecretStaticRotationStaged, store.SecretStaticRotationCutover:
+		case store.SecretStaticRotationPrepared, store.SecretStaticRotationStaged, store.SecretStaticRotationCutover:
 			if r.Quarantined || r.OutboxLeaseExpired {
 				return inFlight()
 			}

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2669 annotated sites across 31 rules. Each row is
+2674 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -649,7 +649,7 @@ not this file.
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/secret_scoped_sync.go:304` | SQL column list, no credential (CWE-798) |
-| `internal/store/secret_static_rotation.go:282` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
+| `internal/store/secret_static_rotation.go:304` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
@@ -906,10 +906,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7071` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7088` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7101` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7135` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7073` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7090` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7103` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7137` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1101,8 +1101,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:793` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:813` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:794` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:814` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1155,7 +1155,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (58 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (63 sites)
 
 | Location | Reason |
 |---|---|
@@ -1164,7 +1164,12 @@ not this file.
 | `internal/agent/accessgateway/console_test.go:24` | owned STS-envelope fixture; parsed into locked bytes and scratch wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
-| `internal/dynsecret/active_directory.go:105` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
+| `internal/dynsecret/active_directory.go:123` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_json.go:105` | password is cleared/omitted before the public-only marshal; native password stamp is public metadata (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:17` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:31` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:59` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_test.go:75` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
 | `internal/dynsecret/active_directory_restore_test.go:41` | byte-backed synthetic credential DTO exercises rejected native recovery; never logged or persisted (CWE-200) |
 | `internal/dynsecret/auth0.go:108` | the rotated client secret is this provider's output: the outbox seals it and only the secret's readers open it (CWE-200) |
 | `internal/dynsecret/auth0.go:193` | client credentials go to the tenant's token endpoint over the guarded client and are not kept (CWE-200) |
@@ -1215,7 +1220,7 @@ not this file.
 | `internal/server/pam_gateway_azure_standin_test.go:182` | owned OAuth endpoint returns issued tokens; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/pam_gateway_gcp_standin_test.go:186` | the owned OAuth endpoint must return its issued token; locked storage and wipeable JSON bytes (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:592` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
-| `internal/server/service_account_ad_rollback_served_test.go:112` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
+| `internal/server/service_account_ad_rollback_served_test.go:176` | byte-backed owned bootstrap sent to the existing sealed-vault API; not logged (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)
@@ -1314,7 +1319,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4206` | closed test table list above |
+| `internal/store/migration_content_test.go:4207` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 

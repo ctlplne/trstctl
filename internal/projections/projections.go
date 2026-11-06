@@ -3163,6 +3163,7 @@ type ComplianceReportRunRecorded struct {
 // (A14/A15). It carries identifiers and the request binding only; the staged
 // credential appears later, sealed, on the staged advance.
 type SecretStaticRotationQueued struct {
+	ProviderBinding      string `json:"provider_binding,omitempty"`
 	CloudChangeID        string `json:"cloud_change_id,omitempty"`
 	ID                   string `json:"id"`
 	TenantEpoch          string `json:"tenant_epoch"`
@@ -3192,18 +3193,19 @@ type SecretStaticRotationQueued struct {
 // rotation command. SealedNew and SealedOld are tenant-sealed containers (AN-8)
 // so a restarted worker resumes without a second provider call.
 type SecretStaticRotationAdvanced struct {
-	ID              string `json:"id"`
-	TenantEpoch     string `json:"tenant_epoch"`
-	FromPhase       string `json:"from_phase"`
-	Phase           string `json:"phase"`
-	ProviderType    string `json:"provider_type,omitempty"`
-	NewRef          string `json:"new_ref,omitempty"`
-	SealedNew       []byte `json:"sealed_new,omitempty"`
-	SealedOld       []byte `json:"sealed_old,omitempty"`
-	ResultVersion   int    `json:"result_version,omitempty"`
-	RestoredVersion int    `json:"restored_version,omitempty"`
-	VerifyMode      string `json:"verify_mode,omitempty"`
-	Error           string `json:"error,omitempty"`
+	SealedPreparation []byte `json:"sealed_preparation,omitempty"`
+	ID                string `json:"id"`
+	TenantEpoch       string `json:"tenant_epoch"`
+	FromPhase         string `json:"from_phase"`
+	Phase             string `json:"phase"`
+	ProviderType      string `json:"provider_type,omitempty"`
+	NewRef            string `json:"new_ref,omitempty"`
+	SealedNew         []byte `json:"sealed_new,omitempty"`
+	SealedOld         []byte `json:"sealed_old,omitempty"`
+	ResultVersion     int    `json:"result_version,omitempty"`
+	RestoredVersion   int    `json:"restored_version,omitempty"`
+	VerifyMode        string `json:"verify_mode,omitempty"`
+	Error             string `json:"error,omitempty"`
 	// NewExpiresAt is when a dynamic-lease rotation's new lease expires.
 	NewExpiresAt *time.Time `json:"new_expires_at,omitempty"`
 	// RetireNotBefore is the approved retirement deadline, fixed when the
@@ -7699,8 +7701,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires id, tenant_epoch, provider, key and old_ref", e.Type)
 		}
 		return p.store.ApplySecretStaticRotationQueuedTx(ctx, tx, store.SecretStaticRotationCommand{
-			CloudChangeID: pl.CloudChangeID,
-			TenantID:      e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
+			CloudChangeID: pl.CloudChangeID, ProviderBinding: pl.ProviderBinding,
+			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
 			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
 			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, TTLSeconds: pl.TTLSeconds, CreatedAt: e.Time,
 			Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds, RetireApprovedBy: pl.RetireApprovedBy,
@@ -7716,7 +7718,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplySecretStaticRotationAdvancedTx(ctx, tx, store.SecretStaticRotationAdvance{
 			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, FromPhase: pl.FromPhase, Phase: pl.Phase,
-			ProviderType: pl.ProviderType, NewRef: pl.NewRef, SealedNew: pl.SealedNew, SealedOld: pl.SealedOld,
+			ProviderType: pl.ProviderType, NewRef: pl.NewRef, SealedNew: pl.SealedNew, SealedOld: pl.SealedOld, SealedPreparation: pl.SealedPreparation,
 			ResultVersion: pl.ResultVersion, RestoredVersion: pl.RestoredVersion, VerifyMode: pl.VerifyMode,
 			Error: pl.Error, NewExpiresAt: pl.NewExpiresAt, RetireNotBefore: pl.RetireNotBefore, At: e.Time,
 		})

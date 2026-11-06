@@ -294,7 +294,8 @@ import (
 // Version 97 adds reviewed cloud machine change intents and native results.
 // A v96 snapshot would skip their events beneath its covered offset.
 // Version 98 carries exact cloud replacement adoption evidence.
-const SnapshotFormatVersion = 98
+// Version 99 retains native static-rotation authority and sealed preparation.
+const SnapshotFormatVersion = 99
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

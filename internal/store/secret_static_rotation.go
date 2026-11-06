@@ -24,6 +24,7 @@ import (
 
 const (
 	SecretStaticRotationQueued         = "queued"
+	SecretStaticRotationPrepared       = "prepared"
 	SecretStaticRotationStaged         = "staged"
 	SecretStaticRotationCutover        = "cutover"
 	SecretStaticRotationVerified       = "verified"
@@ -42,6 +43,8 @@ var ErrSecretStaticRotationCommandNotFound = errors.New("store: static rotation 
 
 // SecretStaticRotationCommand is the projected state of one durable command.
 type SecretStaticRotationCommand struct {
+	ProviderBinding      string
+	SealedPreparation    []byte
 	CloudChangeID        string
 	TenantID             string
 	ID                   string
@@ -102,22 +105,23 @@ func SecretStaticRotationPhaseTerminal(phase string) bool {
 // SecretStaticRotationAdvance is one projected phase transition. Sealed values
 // are set only by the phase that produced them; nil leaves the column alone.
 type SecretStaticRotationAdvance struct {
-	TenantID        string
-	ID              string
-	TenantEpoch     string
-	FromPhase       string
-	Phase           string
-	ProviderType    string
-	NewRef          string
-	SealedNew       []byte
-	SealedOld       []byte
-	ResultVersion   int
-	RestoredVersion int
-	VerifyMode      string
-	Error           string
-	NewExpiresAt    *time.Time
-	RetireNotBefore *time.Time
-	At              time.Time
+	SealedPreparation []byte
+	TenantID          string
+	ID                string
+	TenantEpoch       string
+	FromPhase         string
+	Phase             string
+	ProviderType      string
+	NewRef            string
+	SealedNew         []byte
+	SealedOld         []byte
+	ResultVersion     int
+	RestoredVersion   int
+	VerifyMode        string
+	Error             string
+	NewExpiresAt      *time.Time
+	RetireNotBefore   *time.Time
+	At                time.Time
 }
 
 // SecretStaticRotationOutboxIdempotencyKey is the one outbox identity a command
@@ -167,12 +171,12 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
 		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at,
-		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged,cloud_change_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17,$18)
+		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged,cloud_change_id,provider_binding)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17,$18,$19)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
 		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC(),
-		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID); err != nil {
+		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID, cmd.ProviderBinding); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -194,6 +198,21 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 	if adv.TenantID == "" || adv.ID == "" || adv.FromPhase == "" || adv.Phase == "" || adv.At.IsZero() {
 		return errors.New("store: static rotation advance is incomplete")
 	}
+	if adv.SealedPreparation != nil && adv.Phase != SecretStaticRotationPrepared {
+		return errors.New("store: native preparation is immutable after its prepared phase")
+	}
+	if adv.Phase == SecretStaticRotationPrepared {
+		if len(adv.SealedPreparation) == 0 || len(adv.SealedOld) == 0 || adv.FromPhase != SecretStaticRotationQueued {
+			return errors.New("store: native prepared phase requires sealed preparation and predecessor")
+		}
+		var binding string
+		if err := tx.QueryRow(ctx, `SELECT provider_binding FROM secret_static_rotation_commands WHERE tenant_id=$1 AND id=$2`, adv.TenantID, adv.ID).Scan(&binding); err != nil {
+			return err
+		}
+		if len(binding) != 64 {
+			return errors.New("store: native preparation has no frozen provider authority")
+		}
+	}
 	var terminalAt any
 	if SecretStaticRotationPhaseTerminal(adv.Phase) {
 		terminalAt = adv.At.UTC()
@@ -212,11 +231,12 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 		        updated_at = $13,
 		        terminal_at = $14,
 		        new_expires_at = COALESCE($15, new_expires_at),
-		        retire_not_before = COALESCE($16, retire_not_before)
+		        retire_not_before = COALESCE($16, retire_not_before),
+ sealed_preparation = COALESCE($17,sealed_preparation)
 		  WHERE tenant_id = $1 AND id = $2 AND phase = $3`,
 		adv.TenantID, adv.ID, adv.FromPhase, adv.Phase, adv.ProviderType, adv.NewRef,
 		adv.SealedNew, adv.SealedOld, adv.ResultVersion, adv.RestoredVersion, adv.VerifyMode,
-		adv.Error, adv.At.UTC(), terminalAt, utcTimePtr(adv.NewExpiresAt), utcTimePtr(adv.RetireNotBefore))
+		adv.Error, adv.At.UTC(), terminalAt, utcTimePtr(adv.NewExpiresAt), utcTimePtr(adv.RetireNotBefore), adv.SealedPreparation)
 	if err != nil {
 		return err
 	}
@@ -268,14 +288,16 @@ func secretStaticRotationPhaseRank(phase string) int {
 	switch phase {
 	case SecretStaticRotationQueued:
 		return 0
-	case SecretStaticRotationStaged:
+	case SecretStaticRotationPrepared:
 		return 1
-	case SecretStaticRotationCutover:
+	case SecretStaticRotationStaged:
 		return 2
-	case SecretStaticRotationVerified:
+	case SecretStaticRotationCutover:
 		return 3
+	case SecretStaticRotationVerified:
+		return 4
 	default:
-		return 4 // every terminal phase
+		return 5 // every terminal phase
 	}
 }
 
@@ -283,7 +305,7 @@ const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no creden
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
        ttl_seconds, new_expires_at, created_at, updated_at, terminal_at,
-       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged,coalesce(cloud_change_id::text, '')`
+       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged,coalesce(cloud_change_id::text, ''),provider_binding,sealed_preparation`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
@@ -291,7 +313,7 @@ func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, 
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
 		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt,
-		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged, &c.CloudChangeID)
+		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged, &c.CloudChangeID, &c.ProviderBinding, &c.SealedPreparation)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}
