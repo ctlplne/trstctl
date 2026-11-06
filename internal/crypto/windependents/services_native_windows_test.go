@@ -413,10 +413,13 @@ func TestNativeWindowsServiceLifecycleA267(t *testing.T) {
 		t.Fatal("changed native binding admitted")
 	}
 	nativeSetOwnedPassword(t, name, next.Bytes())
+	if _, err := adapter.StopForRotation(ctx, target); err != nil {
+		t.Fatal(err)
+	}
 	if err := adapter.UpdatePassword(ctx, target, next.Bytes()); err != nil {
 		t.Fatal(err)
 	}
-	successor, err := adapter.RestartAndVerifyIdentity(ctx, target)
+	successor, err := adapter.StartAfterRotation(ctx, target)
 	if err != nil {
 		t.Fatal(err)
 	}
