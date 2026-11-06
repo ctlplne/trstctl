@@ -1,0 +1,1029 @@
+{
+  "policies": {
+    "read": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ReadObjects",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "all": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "All",
+          "Effect": "Allow",
+          "Action": "*",
+          "Resource": "*"
+        }
+      ]
+    },
+    "deny-read": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RefuseRead",
+          "Effect": "Deny",
+          "Action": "s3:GetObject",
+          "Resource": "*"
+        }
+      ]
+    },
+    "write-only": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "WriteOnly",
+          "Effect": "Allow",
+          "Action": "s3:PutObject",
+          "Resource": "*"
+        }
+      ]
+    },
+    "tagged-read": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "TaggedRead",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "StringEquals": {
+              "aws:PrincipalTag/team": "operations"
+            }
+          }
+        }
+      ]
+    },
+    "user-grant": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "UserGrant",
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": "arn:aws:iam::111122223333:user/workload"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "role-grant": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RoleGrant",
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": "arn:aws:iam::111122223333:role/workload"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "session-grant": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "SessionGrant",
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": "arn:aws:sts::111122223333:assumed-role/workload/run"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "secure-only": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "secure-only",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "true"
+            }
+          }
+        }
+      ]
+    },
+    "network": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "network",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "IpAddress": {
+              "aws:SourceIp": "192.0.2.0/24"
+            }
+          }
+        }
+      ]
+    },
+    "outside-network": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "outside-network",
+          "Effect": "Deny",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "NotIpAddress": {
+              "aws:SourceIp": "192.0.2.0/24"
+            }
+          }
+        }
+      ]
+    },
+    "other-team": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "other-team",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "StringNotEquals": {
+              "aws:PrincipalTag/team": [
+                "operations",
+                "platform"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "optional-team": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "optional-team",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "StringEqualsIfExists": {
+              "aws:PrincipalTag/team": "operations"
+            }
+          }
+        }
+      ]
+    },
+    "deny-other-team": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "deny-other-team",
+          "Effect": "Deny",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "StringNotEqualsIfExists": {
+              "aws:PrincipalTag/team": "operations"
+            }
+          }
+        }
+      ]
+    },
+    "all-tags": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "all-tags",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "ForAllValues:StringEquals": {
+              "aws:TagKeys": [
+                "team",
+                "environment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nonempty-tags": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "nonempty-tags",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "ForAllValues:StringEquals": {
+              "aws:TagKeys": [
+                "team",
+                "environment"
+              ]
+            },
+            "Null": {
+              "aws:TagKeys": "false"
+            }
+          }
+        }
+      ]
+    },
+    "some-tags": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "some-tags",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "ForAnyValue:StringEquals": {
+              "aws:TagKeys": [
+                "team",
+                "environment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "recent": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "recent",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "NumericLessThanEquals": {
+              "aws:MultiFactorAuthAge": "3600"
+            }
+          }
+        }
+      ]
+    },
+    "before-date": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "before-date",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "DateLessThan": {
+              "aws:CurrentTime": "2030-01-01T00:00:00Z"
+            }
+          }
+        }
+      ]
+    },
+    "absent-team": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "absent-team",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "Null": {
+              "aws:PrincipalTag/team": "true"
+            }
+          }
+        }
+      ]
+    },
+    "arn-wildcard": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "arn-wildcard",
+          "Effect": "Allow",
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*",
+          "Condition": {
+            "ArnEquals": {
+              "aws:PrincipalArn": "arn:aws:iam::111122223333:user/*"
+            }
+          }
+        }
+      ]
+    },
+    "account-grant": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": "arn:aws:iam::111122223333:root"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "not-principal-deny": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Deny",
+          "NotPrincipal": {
+            "AWS": [
+              "arn:aws:iam::111122223333:root",
+              "arn:aws:iam::111122223333:user/workload"
+            ]
+          },
+          "Action": "s3:GetObject",
+          "Resource": "arn:aws:s3:::owned/*"
+        }
+      ]
+    },
+    "unknown-principal-deny": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Deny",
+          "Principal": {
+            "AWS": "AROAOPAQUEPRINCIPALID"
+          },
+          "Action": "s3:GetObject",
+          "Resource": "*"
+        }
+      ]
+    },
+    "rcp-all": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "All",
+          "Effect": "Allow",
+          "Action": "*",
+          "Resource": "*",
+          "Principal": "*"
+        }
+      ]
+    },
+    "rcp-deny-read": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RefuseRead",
+          "Effect": "Deny",
+          "Action": "s3:GetObject",
+          "Resource": "*",
+          "Principal": "*"
+        }
+      ]
+    },
+    "rcp-deny-write": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RefuseWrite",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:PutObject",
+          "Resource": "*"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "identity allows a covered read",
+      "identity": [
+        "read"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "no identity allow is implicit deny",
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "identity explicit deny wins",
+      "identity": [
+        "read",
+        "deny-read"
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "boundary does not grant missing identity rights",
+      "boundary": [
+        "all"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "boundary intersects identity",
+      "identity": [
+        "read"
+      ],
+      "boundary": [
+        "write-only"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "boundary permits the read",
+      "identity": [
+        "read"
+      ],
+      "boundary": [
+        "read"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "boundary explicit deny wins",
+      "identity": [
+        "all"
+      ],
+      "boundary": [
+        "deny-read"
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "unread boundary is indeterminate",
+      "identity": [
+        "read"
+      ],
+      "unknown": [
+        "boundary"
+      ],
+      "expected": "indeterminate"
+    },
+    {
+      "name": "SCP deny wins",
+      "identity": [
+        "read"
+      ],
+      "scp": [
+        [
+          "all"
+        ],
+        [
+          "all",
+          "deny-read"
+        ]
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "SCP requires an allow at every level",
+      "identity": [
+        "read"
+      ],
+      "scp": [
+        [
+          "all"
+        ],
+        [
+          "write-only"
+        ]
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "SCP allow alone grants nothing",
+      "scp": [
+        [
+          "all"
+        ]
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "SCP allow at every level permits identity",
+      "identity": [
+        "read"
+      ],
+      "scp": [
+        [
+          "all"
+        ],
+        [
+          "read"
+        ]
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "unread organization is indeterminate",
+      "identity": [
+        "read"
+      ],
+      "unknown": [
+        "scp"
+      ],
+      "expected": "indeterminate"
+    },
+    {
+      "name": "RCP explicit deny wins",
+      "identity": [
+        "read"
+      ],
+      "rcp": [
+        [
+          "rcp-all",
+          "rcp-deny-read"
+        ]
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "RCP deny-only capture cannot create a grant",
+      "identity": [
+        "read"
+      ],
+      "rcp": [
+        [
+          "rcp-deny-write"
+        ]
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "matching public context permits conditional read",
+      "identity": [
+        "tagged-read"
+      ],
+      "context": {
+        "aws:PrincipalTag/team": [
+          "operations"
+        ]
+      },
+      "expected": "allowed"
+    },
+    {
+      "name": "known absent context refuses conditional read",
+      "identity": [
+        "tagged-read"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "unobserved context stays indeterminate",
+      "identity": [
+        "tagged-read"
+      ],
+      "partial_context": true,
+      "expected": "indeterminate"
+    },
+    {
+      "name": "direct user grant bypasses an implicit boundary deny",
+      "resource": [
+        "user-grant"
+      ],
+      "boundary": [
+        "write-only"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "direct user grant cannot bypass explicit deny",
+      "identity": [
+        "deny-read"
+      ],
+      "resource": [
+        "user-grant"
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "role ARN grant is still bounded",
+      "principal": "role_session",
+      "resource": [
+        "role-grant"
+      ],
+      "boundary": [
+        "write-only"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "role ARN grant needs no identity allow when boundary allows",
+      "principal": "role_session",
+      "resource": [
+        "role-grant"
+      ],
+      "boundary": [
+        "read"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "direct session grant bypasses implicit boundary deny",
+      "principal": "role_session",
+      "resource": [
+        "session-grant"
+      ],
+      "boundary": [
+        "write-only"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "direct session grant is still subject to SCP",
+      "principal": "role_session",
+      "resource": [
+        "session-grant"
+      ],
+      "scp": [
+        [
+          "all",
+          "deny-read"
+        ]
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "session policy intersects identity",
+      "principal": "role_session",
+      "identity": [
+        "read"
+      ],
+      "session": [
+        "write-only"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "boolean true matches",
+      "identity": [
+        "secure-only"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:SecureTransport": [
+          "true"
+        ]
+      }
+    },
+    {
+      "name": "boolean false refuses",
+      "identity": [
+        "secure-only"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:SecureTransport": [
+          "false"
+        ]
+      }
+    },
+    {
+      "name": "covered IPv4 source matches",
+      "identity": [
+        "network"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:SourceIp": [
+          "192.0.2.24"
+        ]
+      }
+    },
+    {
+      "name": "outside IPv4 source refuses",
+      "identity": [
+        "network"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:SourceIp": [
+          "198.51.100.24"
+        ]
+      }
+    },
+    {
+      "name": "negated IP blocks outside address",
+      "identity": [
+        "read",
+        "outside-network"
+      ],
+      "expected": "explicit_deny",
+      "context": {
+        "aws:SourceIp": [
+          "198.51.100.24"
+        ]
+      }
+    },
+    {
+      "name": "negated IP keeps inside address",
+      "identity": [
+        "read",
+        "outside-network"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:SourceIp": [
+          "192.0.2.24"
+        ]
+      }
+    },
+    {
+      "name": "negated multiple values uses NOR",
+      "identity": [
+        "other-team"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:PrincipalTag/team": [
+          "operations"
+        ]
+      }
+    },
+    {
+      "name": "negated values allow only other team",
+      "identity": [
+        "other-team"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:PrincipalTag/team": [
+          "finance"
+        ]
+      }
+    },
+    {
+      "name": "negated comparison matches known missing key",
+      "identity": [
+        "other-team"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "IfExists matches known missing key",
+      "identity": [
+        "optional-team"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "IfExists does not guess unread context",
+      "identity": [
+        "optional-team"
+      ],
+      "expected": "indeterminate",
+      "partial_context": true
+    },
+    {
+      "name": "negated IfExists deny applies when key missing",
+      "identity": [
+        "read",
+        "deny-other-team"
+      ],
+      "expected": "explicit_deny"
+    },
+    {
+      "name": "all set values must match",
+      "identity": [
+        "all-tags"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:TagKeys": [
+          "team",
+          "environment"
+        ]
+      }
+    },
+    {
+      "name": "one foreign set value refuses",
+      "identity": [
+        "all-tags"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:TagKeys": [
+          "team",
+          "foreign"
+        ]
+      }
+    },
+    {
+      "name": "all-values matches missing set",
+      "identity": [
+        "all-tags"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "Null guard rejects missing set",
+      "identity": [
+        "nonempty-tags"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "Null guard permits present set",
+      "identity": [
+        "nonempty-tags"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:TagKeys": [
+          "team",
+          "environment"
+        ]
+      }
+    },
+    {
+      "name": "any set value may match",
+      "identity": [
+        "some-tags"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:TagKeys": [
+          "foreign",
+          "team"
+        ]
+      }
+    },
+    {
+      "name": "any-values rejects missing set",
+      "identity": [
+        "some-tags"
+      ],
+      "expected": "implicit_deny"
+    },
+    {
+      "name": "numeric comparison matches",
+      "identity": [
+        "recent"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:MultiFactorAuthAge": [
+          "2800"
+        ]
+      }
+    },
+    {
+      "name": "numeric comparison refuses stale value",
+      "identity": [
+        "recent"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:MultiFactorAuthAge": [
+          "4000"
+        ]
+      }
+    },
+    {
+      "name": "date comparison matches",
+      "identity": [
+        "before-date"
+      ],
+      "expected": "allowed",
+      "context": {
+        "aws:CurrentTime": [
+          "2026-11-06T01:00:00Z"
+        ]
+      }
+    },
+    {
+      "name": "date comparison refuses",
+      "identity": [
+        "before-date"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:CurrentTime": [
+          "2031-01-01T00:00:00Z"
+        ]
+      }
+    },
+    {
+      "name": "Null checks known absence",
+      "identity": [
+        "absent-team"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "Null rejects a present value",
+      "identity": [
+        "absent-team"
+      ],
+      "expected": "implicit_deny",
+      "context": {
+        "aws:PrincipalTag/team": [
+          "operations"
+        ]
+      }
+    },
+    {
+      "name": "ARN equals supports AWS wildcards",
+      "identity": [
+        "arn-wildcard"
+      ],
+      "expected": "allowed"
+    },
+    {
+      "name": "principal context cannot replace verified identity",
+      "identity": [
+        "read"
+      ],
+      "expected": "indeterminate",
+      "context": {
+        "aws:PrincipalArn": [
+          "arn:aws:iam::111122223333:user/foreign"
+        ]
+      }
+    },
+    {
+      "name": "account delegation still needs identity allow",
+      "identity": [],
+      "expected": "implicit_deny",
+      "resource": [
+        "account-grant"
+      ]
+    },
+    {
+      "name": "account delegation with identity allow permits",
+      "identity": [
+        "read"
+      ],
+      "expected": "allowed",
+      "resource": [
+        "account-grant"
+      ]
+    },
+    {
+      "name": "NotPrincipal Deny still denies a bounded excluded user",
+      "identity": [
+        "read"
+      ],
+      "expected": "explicit_deny",
+      "boundary": [
+        "read"
+      ],
+      "resource": [
+        "not-principal-deny"
+      ]
+    },
+    {
+      "name": "NotPrincipal honors exclusion without a boundary",
+      "identity": [
+        "read"
+      ],
+      "expected": "allowed",
+      "resource": [
+        "not-principal-deny"
+      ]
+    },
+    {
+      "name": "opaque principal identifiers cannot erase a possible deny",
+      "identity": [
+        "read"
+      ],
+      "expected": "indeterminate",
+      "resource": [
+        "unknown-principal-deny"
+      ]
+    },
+    {
+      "name": "cross-account scope is not guessed",
+      "identity": [
+        "read"
+      ],
+      "expected": "indeterminate",
+      "resource_account": "444455556666"
+    },
+    {
+      "name": "native-shaped RCP default permits unrelated denied action",
+      "identity": [
+        "read"
+      ],
+      "rcp": [
+        [
+          "rcp-all",
+          "rcp-deny-write"
+        ]
+      ],
+      "expected": "allowed"
+    }
+  ]
+}

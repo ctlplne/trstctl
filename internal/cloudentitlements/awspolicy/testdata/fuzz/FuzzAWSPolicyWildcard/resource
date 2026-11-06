@@ -1,0 +1,3 @@
+go test fuzz v1
+string("arn:aws:s3:::owned/*")
+string("arn:aws:s3:::owned/report")

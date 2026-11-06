@@ -1,0 +1,4 @@
+go test fuzz v1
+byte('\x03')
+string("2026-11-06T01:00:00Z")
+string("2030-01-01T00:00:00Z")
