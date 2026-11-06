@@ -8591,7 +8591,7 @@ export interface PAMDiscoveredAccount {
   first_seen_at: string;
   id: string;
   key: string;
-  kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+  kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user" | "directory_service_account";
   last_seen_at: string;
   name: string;
   privileges: string[];
@@ -8605,7 +8605,7 @@ export interface PAMDiscoveredAccountList {
 }
 
 export interface PAMDiscoveryChange {
-  account: { details?: Record<string, unknown>; disabled: boolean; key: string; kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user"; name: string; privileges: string[] };
+  account: { details?: Record<string, unknown>; disabled: boolean; key: string; kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user" | "directory_service_account"; name: string; privileges: string[] };
   change: "added" | "removed" | "changed";
 }
 

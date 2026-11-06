@@ -257,12 +257,34 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                   <td>
                     {account.name}{" "}
                     <span className="text-muted-foreground">
-                      {account.disabled
-                        ? t("admin.access.discovery.kindDisabled", { kind: account.kind })
-                        : t("admin.access.discovery.kind", { kind: account.kind })}
+                      {account.kind === "directory_service_account"
+                        ? account.disabled
+                          ? t("admin.access.discovery.kindDisabled", { kind: t("admin.access.discovery.serviceKind") })
+                          : t("admin.access.discovery.serviceKind")
+                        : account.disabled
+                          ? t("admin.access.discovery.kindDisabled", { kind: account.kind })
+                          : t("admin.access.discovery.kind", { kind: account.kind })}
                     </span>
+                    {account.kind === "directory_service_account" ? (
+                      <div className="text-xs text-muted-foreground">
+                        {typeof account.details?.native_sid === "string" ? (
+                          <div>
+                            {t("admin.access.discovery.serviceSID")} <code>{account.details.native_sid}</code>
+                          </div>
+                        ) : null}
+                        {typeof account.details?.native_guid === "string" ? (
+                          <div>
+                            {t("admin.access.discovery.serviceGUID")} <code>{account.details.native_guid}</code>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </td>
-                  <td className="font-mono text-xs">{account.privileges.join(" ")}</td>
+                  <td className="font-mono text-xs">
+                    {account.privileges.length === 0 && account.kind === "directory_service_account"
+                      ? t("admin.access.discovery.noInferredPrivileges")
+                      : account.privileges.join(" ")}
+                  </td>
                   <td>{account.provider_id}</td>
                   {canManage ? (
                     <td>

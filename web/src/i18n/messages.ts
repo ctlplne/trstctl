@@ -6451,6 +6451,16 @@ export const messages = {
     defaultMessage: "Account",
     description: "Column label: the discovered account (A260).",
   },
+  "admin.access.discovery.serviceKind": { defaultMessage: "AD service account", description: "Native directory service identity kind." },
+  "admin.access.discovery.serviceSID": { defaultMessage: "Windows account ID:", description: "Native SID identifying the selected service account." },
+  "admin.access.discovery.serviceGUID": {
+    defaultMessage: "Directory object ID:",
+    description: "Opaque native GUID identifying the selected directory account.",
+  },
+  "admin.access.discovery.noInferredPrivileges": {
+    defaultMessage: "No administrator privileges inferred",
+    description: "Service-account selection does not invent administrator rights.",
+  },
   "admin.access.discovery.privileges": {
     defaultMessage: "Privileges",
     description: "Column label: what makes the account privileged (A260).",

@@ -2554,3 +2554,19 @@ only its own fully completed journal after acknowledgement. Windows process
 restart is covered by the native fixture; machine power-loss durability remains
 a filesystem qualification. This journal primitive and the native task adapter
 are separate from the full enrolled-host dependent workflow still being built.
+
+AD account discovery in an explicit `active_directory` provider now includes
+SPN-bearing user accounts and the accounts named by its rotation bindings under
+`users_dn`. They use the `directory_service_account` kind, with `service_account: "true"`
+and public `native_sid` / `native_guid` details. SPNs are public identity metadata;
+selection as a service account does not add administrator privileges. Existing
+group and protected-user evidence remains separate in `privileges`.
+
+The provider reads these identities through its pinned LDAPS byte-backed bind.
+It never requests a password attribute, follows a referral, or changes the native
+account. Missing or ambiguous identity/state, an escaped search scope or an
+exceeded result bound fails the scan. SID/GUID metadata survives the existing
+tenant-isolated discovery projection and replay. Accounts with neither an SPN nor
+a configured rotation binding are outside this directory selection; enrolled-host
+dependent inventory and matching are the next workflow step. This does not
+qualify gMSA password rotation or a real multi-DC forest.

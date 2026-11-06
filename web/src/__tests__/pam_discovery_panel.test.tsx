@@ -159,3 +159,27 @@ it("shows a reader the staged and imported accounts without actions", async () =
   expect(apiMock.dynamicSecretProviders).not.toHaveBeenCalled();
   expect(await axe(view.container)).toHaveNoViolations();
 });
+
+it("shows a native AD service identity without inventing administrator rights", async () => {
+  apiMock.pamDiscoveredAccounts.mockResolvedValue({
+    items: [
+      {
+        ...account("ad-service", "orders-service", []),
+        key: "user:orders-service",
+        kind: "directory_service_account",
+        provider_id: "ad-services",
+        details: {
+          service_account: "true",
+          native_sid: "S-1-5-21-1-2-3-1001",
+          native_guid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          configured_rotation_account: "true",
+        },
+      },
+    ],
+  });
+  mount(false);
+  expect(await screen.findByText("AD service account")).toBeVisible();
+  expect(screen.getByText("No administrator privileges inferred")).toBeVisible();
+  expect(screen.getByText("S-1-5-21-1-2-3-1001")).toBeVisible();
+  expect(screen.getByText("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeVisible();
+});

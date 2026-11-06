@@ -21893,7 +21893,7 @@ export interface components {
             id: string;
             key: string;
             /** @enum {string} */
-            kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+            kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user" | "directory_service_account";
             /** Format: date-time */
             last_seen_at: string;
             name: string;
@@ -21917,7 +21917,7 @@ export interface components {
                 disabled: boolean;
                 key: string;
                 /** @enum {string} */
-                kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user";
+                kind: "local_user" | "database_role" | "database_user" | "sql_login" | "directory_user" | "directory_service_account";
                 name: string;
                 /** @description what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin */
                 privileges: string[];

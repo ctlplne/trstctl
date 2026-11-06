@@ -51,6 +51,9 @@ samba-tool user create a263-proof --userou=OU=TrstctlA263 -s "$cfg" --random-pas
 samba-tool user create a263-served --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
 samba-tool user create a267-served --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
 samba-tool user create a267-prepared --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
+samba-tool user create a267-discovery-spn --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
+samba-tool user create a267-discovery-bound --userou=OU=TrstctlA263 -s "$cfg" --random-password >> /run/seed.log 2>&1
+samba-tool spn add HTTP/a267-discovery.test a267-discovery-spn -s "$cfg" >> /run/seed.log 2>&1
 samba-tool domain passwordsettings set --account-lockout-threshold=3 -s "$cfg" >> /run/seed.log 2>&1
 for file in /run/ad-reader-password /run/ad-desktop-password; do { printf "Tr5!"; openssl rand -hex 24 | tr -d "\n"; } > "$file"; done
 python3 /run/desktop-users.py > /run/desktop-users.log 2>&1
@@ -93,7 +96,7 @@ done
 $ready
 TRSTCTL_AD_NATIVE_LAB=1 /run/dynsecret-test -test.v -test.run ^TestActiveDirectoryVaultedPasswordNativeA263$ -test.timeout=60s
 ' > "$proof/native.log" 2>&1
-docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
+docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267|TestServedADServiceAccountDiscoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_DESKTOP_LAB=1 /run/server-test -test.v -test.run ^TestServedADDesktopA263$ -test.timeout=120s' > "$proof/desktop.log" 2>&1
 docker cp "$client:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 

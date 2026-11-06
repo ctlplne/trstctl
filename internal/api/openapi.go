@@ -5928,7 +5928,7 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "require_recording", "revision", "saved_at")
 	pamDiscoveredAccountInfo := map[string]*Schema{
 		"key": str(), "name": str(),
-		"kind":       {Type: "string", Enum: []string{"local_user", "database_role", "database_user", "sql_login", "directory_user"}},
+		"kind":       {Type: "string", Enum: []string{"local_user", "database_role", "database_user", "sql_login", "directory_user", "directory_service_account"}},
 		"privileges": {Type: "array", Items: str(), Description: "what makes the account privileged, e.g. uid0, sudo:ALL, group:wheel, superuser, createrole, member:pg_read_all_data, super, sysadmin"},
 		"disabled":   {Type: "boolean"},
 		"details":    {Type: "object", AdditionalProperties: str(), Description: "bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential"},

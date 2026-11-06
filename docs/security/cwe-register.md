@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2721 annotated sites across 31 rules. Each row is
+2723 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (597 sites)
+### G101 — CWE-798 Use of hardcoded credentials (598 sites)
 
 | Location | Reason |
 |---|---|
@@ -612,6 +612,7 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:593` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:604` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_sync_served_test.go:614` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/service_account_ad_discovery_served_test.go:42` | configuration carries only a protected credential-file reference, never a credential value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:103` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
@@ -1377,7 +1378,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (358 sites)
+### G204 — CWE-78 OS command injection (359 sites)
 
 | Location | Reason |
 |---|---|
@@ -1682,6 +1683,7 @@ not this file.
 | `internal/server/secret_static_rotation_unix_container_test.go:421` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_static_rotation_unix_container_test.go:447` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_sync_signed_targets_served_test.go:135` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/service_account_ad_discovery_served_test.go:24` | fixed stock read-only LDAP client, owned account filter and protected credential reference; no shell or credential argv (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:286` | test builds the repository's own plugin (CWE-78) |

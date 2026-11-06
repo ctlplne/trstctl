@@ -40011,7 +40011,8 @@
               "database_role",
               "database_user",
               "sql_login",
-              "directory_user"
+              "directory_user",
+              "directory_service_account"
             ],
             "type": "string"
           },
@@ -40096,7 +40097,8 @@
                   "database_role",
                   "database_user",
                   "sql_login",
-                  "directory_user"
+                  "directory_user",
+                  "directory_service_account"
                 ],
                 "type": "string"
               },

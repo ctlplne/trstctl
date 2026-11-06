@@ -8889,7 +8889,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		for _, a := range pl.Accounts {
-			if a.Key == "" || a.Name == "" || a.Kind == "" || len(a.Privileges) == 0 {
+			if pamdiscovery.ValidateDiscoveredAccount(a) != nil {
 				return fmt.Errorf("projections: incomplete %s", e.Type)
 			}
 		}
