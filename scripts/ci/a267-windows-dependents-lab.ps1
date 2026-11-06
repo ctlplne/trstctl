@@ -25,3 +25,15 @@ if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $bufferLog -Pattern 'A267_
     Write-Host '::error::a267 native foreign buffer did not run and pass'
     exit 1
 }
+
+# Enable this log only on the disposable owned CI runner. Product verification
+# reads existing log policy and refuses to change it on an operator's host.
+& wevtutil.exe sl Microsoft-Windows-TaskScheduler/Operational /e:true
+if ($LASTEXITCODE -ne 0) { throw 'owned task operational log setup failed' }
+$env:TRSTCTL_A267_WINDOWS_TASKS = '1'
+$taskLog = Join-Path $env:RUNNER_TEMP 'a267-windows-tasks.log'
+& go test -count=1 -timeout 10m -run '^TestNativeWindowsTaskLifecycleA267$' -v ./internal/crypto/windependents 2>&1 | Tee-Object -FilePath $taskLog
+if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $taskLog -Pattern 'A267_WINDOWS_TASK_OK' -Quiet)) {
+    Write-Host '::error::a267 native task lifecycle did not run and pass'
+    exit 1
+}

@@ -173,6 +173,12 @@ func nativeAddOwnedUserGroup(t *testing.T, sid *windows.SID) {
 }
 
 func nativeGrantOwnedServiceRight(t *testing.T, sid *windows.SID) {
+	nativeGrantOwnedAccountRight(t, sid, "SeServiceLogonRight")
+}
+func nativeGrantOwnedAccountRight(t *testing.T, sid *windows.SID, rightName string) {
+	if rightName != "SeServiceLogonRight" && rightName != "SeBatchLogonRight" {
+		t.Fatal("invalid owned logon right")
+	}
 	t.Helper()
 	type objectAttributes struct {
 		Length                          uint32
@@ -193,9 +199,9 @@ func nativeGrantOwnedServiceRight(t *testing.T, sid *windows.SID) {
 		t.Fatalf("owned LSA policy open failed: %d", code)
 	}
 	defer func() { _, _, _ = api.NewProc("LsaClose").Call(handle) }()
-	right := unicodeString{Buffer: nativeOwnedWide(t, "SeServiceLogonRight")}
+	right := unicodeString{Buffer: nativeOwnedWide(t, rightName)}
 	// LSA_UNICODE_STRING length is bytes, excluding its terminator.
-	right.Length = uint16(len("SeServiceLogonRight") * 2)
+	right.Length = uint16((len(rightName) * 2) & 0xffff)
 	right.MaximumLength = right.Length + 2
 	code, _, _ = api.NewProc("LsaAddAccountRights").Call(handle, uintptr(unsafe.Pointer(sid)), uintptr(unsafe.Pointer(&right)), 1) // #nosec G103 -- live native owned-account SID and length-framed public LSA right; synchronous local API (CWE-242)
 	if code != 0 {

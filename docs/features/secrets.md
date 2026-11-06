@@ -2501,3 +2501,22 @@ them. Private task XML stays byte-backed inside that boundary, and native
 exception descriptions are wiped without entering logs. The native Windows
 memory/Automation proof is separate from task-dependent rotation and full host
 orchestration; those parts are still in progress.
+
+Scheduled-task discovery selects the exact native principal SID, including tasks
+whose logon mode does not store a password. Credential updates currently require
+password logon mode: S4U, interactive, group, service-account and legacy mixed
+modes remain explicitly identified in inventory and are refused by the password
+writer. Private task XML and the existing ACL contribute only to the frozen
+configuration hash. Updates preserve the definition and ACL and suppress
+registration triggers.
+
+Starting a task for verification requires an exact local allowlist entry and an
+enabled task that permits demand start. A running instance is left alone. The
+Task Scheduler Operational log must already be enabled by the host operator;
+product verification never changes that policy. A fresh instance is verified
+against its native start account, each action result and task completion records,
+with an independent functional probe still required by the host workflow. A
+previous global last-result value cannot establish this proof. Lost start replies
+remain explicit uncertainty: retain the attempt fence and observe the known
+instance instead of starting it again. Native Windows execution and the complete
+host workflow remain separate qualification steps.

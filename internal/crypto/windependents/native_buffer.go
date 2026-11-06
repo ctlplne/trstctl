@@ -53,6 +53,9 @@ func publicNativeText(raw []byte) (string, error) {
 	return string(utf16.Decode(units)), nil
 }
 func serviceConfigurationHash(name, sid string, numbers []uint32, fields [][]byte) string {
+	return nativeConfigurationHash("trstctl/windows-service/config/v1", name, sid, numbers, fields)
+}
+func nativeConfigurationHash(domain, name, sid string, numbers []uint32, fields [][]byte) string {
 	h := sha256.New()
 	// Length framing prevents a field boundary from changing the frozen meaning.
 	write := func(raw []byte) {
@@ -65,7 +68,7 @@ func serviceConfigurationHash(name, sid string, numbers []uint32, fields [][]byt
 	binary.LittleEndian.PutUint64(counts[:8], uint64(len(numbers)))
 	binary.LittleEndian.PutUint64(counts[8:], uint64(len(fields)))
 	_, _ = h.Write(counts[:])
-	write([]byte("trstctl/windows-service/config/v1"))
+	write([]byte(domain))
 	write([]byte(name))
 	write([]byte(sid))
 	for _, value := range numbers {
