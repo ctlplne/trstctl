@@ -433,6 +433,9 @@ func SecretSyncCommandMatches(a, b SecretSyncJob) bool {
 }
 
 func ensureSecretIntegrationOutboxTx(ctx context.Context, tx pgx.Tx, tenantID, destination, effectLane, key string, payload []byte) (int64, error) {
+	return ensureSecretIntegrationOutboxAtTx(ctx, tx, tenantID, destination, effectLane, key, payload, nil)
+}
+func ensureSecretIntegrationOutboxAtTx(ctx context.Context, tx pgx.Tx, tenantID, destination, effectLane, key string, payload []byte, notBefore *time.Time) (int64, error) {
 	if tenantID == "" || destination == "" || effectLane == "" || key == "" || len(payload) == 0 {
 		return 0, fmt.Errorf("store: secret integration outbox intent is incomplete")
 	}
@@ -446,13 +449,13 @@ func ensureSecretIntegrationOutboxTx(ctx context.Context, tx pgx.Tx, tenantID, d
 	}
 	var id int64
 	err := tx.QueryRow(ctx,
-		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key)
-		 SELECT $1, $2, $3, $4, $5
+		`INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key,next_attempt_at)
+		 SELECT $1, $2, $3, $4, $5,COALESCE($6::timestamptz,now())
 		 WHERE NOT EXISTS (
 		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $5
 		 )
 		 RETURNING id`,
-		tenantID, destination, effectLane, payload, key).Scan(&id)
+		tenantID, destination, effectLane, payload, key, notBefore).Scan(&id)
 	if err == nil {
 		return id, nil
 	}

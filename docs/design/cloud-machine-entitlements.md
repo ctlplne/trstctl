@@ -189,3 +189,39 @@ predecessor retirement stays pending until the configured native denial mechanis
 or actual native expiry. This prepares a short-lived credential; the separately
 reviewed cloud replacement still has to prove workload adoption and retire the
 captured long-lived IAM key.
+
+## Exact approved replacement and adoption projection
+
+A `replace_key` plan binds a fresh same-account native role finding, immutable role
+ID, sorted policy source/version digests and canonical trust, in addition to the
+captured old user/key. It freezes the tenant's configured STS provider revision,
+role alias, TTL, existing secret version and expected consumer subject. Proposals
+perform no native calls. Role authority is read again before preparation and
+retirement; the actual temporary caller's role ID must match the captured ID.
+
+The existing durable publication command carries a nullable `cloud_change_id`.
+Its original 64-hex request-binding invariant remains intact: a separate digest
+binds the child to the consumed cloud intent. New children require an active
+parent; reapplying an exact existing child is safe after the parent completes.
+The native issuance is nonrenewable at the requested TTL, and stage/cutover
+checks reject a closed or changed parent. Snapshot format 98 includes this link
+and the separate adoption column.
+
+Three bounded outbox deliveries share the plan's effect lane. The initial one
+performs native preflight, queues the child and emits preparing state. The second
+reads child status; only its no-receiver-I/O pending wait may refund an attempt.
+After native verification it emits waiting state. An exact verified delivery
+report projects adoption and enqueues retirement in the same transaction. Reports
+that race preparation are retained independently of cloud phase sequence. A
+future deadline row uses the same lane; expiry cannot run concurrently with a
+retirement on that lane. Receiver I/O is never followed by a budget-refunding
+pause. Terminal results and every phase retain deterministic event identities.
+
+The adoption column is built from the original immutable delivery event, not the
+aggregate delivery row's last reporter. It binds tenant, verified state, consumer,
+authenticated subject, secret name, exact version, source sequence and event ID.
+Wrong actors, injection-only reports and other versions do not satisfy it. Public
+results carry command/lease/version/expiry and native role/old-key postconditions;
+no credential values cross this seam. Workload execution and repeated refresh
+must be demonstrated separately; an authenticated assertion alone does not prove
+a successful resource request.

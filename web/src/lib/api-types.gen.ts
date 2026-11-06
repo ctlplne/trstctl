@@ -1441,7 +1441,7 @@ export interface Approval {
 }
 
 export interface ApprovalDecision {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -3256,6 +3256,7 @@ export interface ChangeSet {
 }
 
 export interface CloudMachineChange {
+  adoption?: CloudMachineChangeAdoption;
   approval_request_id: string;
   created_at: string;
   expires_at: string;
@@ -3264,16 +3265,28 @@ export interface CloudMachineChange {
   intent_digest: string;
   requested_by: string;
   result?: CloudMachineChangeResult;
-  state: "awaiting_approval" | "queued" | "verified" | "failed";
+  state: "awaiting_approval" | "queued" | "preparing_replacement" | "waiting_adoption" | "verified" | "failed";
   tenant_id: string;
   updated_at: string;
 }
 
+export interface CloudMachineChangeAdoption {
+  consumer: string;
+  event_id: string;
+  name: string;
+  sequence: number;
+  subject: string;
+  verified_at: string;
+  version: number;
+}
+
 export interface CloudMachineChangeIntent {
   access_key_id?: string;
-  action: "revoke_key" | "tighten_policy";
+  action: "revoke_key" | "tighten_policy" | "replace_key";
   allow_private_endpoint?: boolean;
   ca_pem?: string;
+  consumer?: string;
+  consumer_subject?: string;
   endpoint: string;
   finding_fingerprint: string;
   finding_id: string;
@@ -3287,6 +3300,19 @@ export interface CloudMachineChangeIntent {
   private_egress_cidrs?: string[];
   reason: string;
   region: string;
+  replacement_expected_version?: number;
+  replacement_provider_id?: string;
+  replacement_provider_revision?: string;
+  replacement_role?: string;
+  replacement_role_allow_private?: boolean;
+  replacement_role_arn?: string;
+  replacement_role_authority_fingerprint?: string;
+  replacement_role_finding_fingerprint?: string;
+  replacement_role_finding_id?: string;
+  replacement_role_id?: string;
+  replacement_role_source_fingerprint?: string;
+  replacement_role_source_id?: string;
+  replacement_ttl_seconds?: number;
   required_approvals: number;
   source_fingerprint: string;
   source_id: string;
@@ -3300,11 +3326,17 @@ export interface CloudMachineChangeList {
 
 export interface CloudMachineChangeRequest {
   access_key_id?: string;
-  action: "revoke_key" | "tighten_policy";
+  action: "revoke_key" | "tighten_policy" | "replace_key";
+  consumer?: string;
+  consumer_subject?: string;
   evaluation_index?: number;
   finding_id: string;
   reason: string;
+  replacement_provider_id?: string;
+  replacement_role?: string;
+  replacement_role_finding_id?: string;
   required_approvals?: number;
+  ttl_seconds?: number;
   writer_session_file_ref: string;
 }
 
@@ -3315,6 +3347,12 @@ export interface CloudMachineChangeResult {
   key_absent?: boolean;
   policy_matches?: boolean;
   postcondition?: string;
+  preparation_phase?: string;
+  replacement_command_id?: string;
+  replacement_expires_at?: string;
+  replacement_lease_id?: string;
+  replacement_native_role_id?: string;
+  replacement_version?: number;
 }
 
 export interface CloudSecretManagerIntegration {
@@ -9184,7 +9222,7 @@ export interface PQCPilotWaveRequest {
 }
 
 export interface PendingApprovalRequest {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
   approval_count: number;
   created_at: string;
   evidence_refs: string[];

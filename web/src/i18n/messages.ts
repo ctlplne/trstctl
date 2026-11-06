@@ -10,6 +10,25 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.machine.preparingReplacement": {
+    defaultMessage: "Preparing and checking the temporary session. The old key has not been retired by this phase.",
+    description: "Cloud replacement preparation progress.",
+  },
+  "discovery.machine.waitingAdoption": {
+    defaultMessage:
+      "Waiting for consumer {consumer}, authenticated as {subject}, to verify secret version {version}. The old key remains available while adoption is pending.",
+    description: "Exact cloud adoption gate.",
+  },
+  "discovery.machine.adoptionReceipt": {
+    defaultMessage: "Verified report by {subject} for version {version}; source event {event}.",
+    description: "Immutable consumer report attribution.",
+  },
+  "discovery.machine.approveReplace": { defaultMessage: "Replace a captured key for {resource}", description: "Cloud replacement approval action." },
+  "discovery.machine.replacementHelp": {
+    defaultMessage:
+      "Publish a temporary session for the captured native role, wait for the named authenticated consumer to verify the exact secret version, then retire and independently read back the old key. Missing adoption, drift or expiry stops retirement. This receipt does not prove a live workload or automatic refresh by itself.",
+    description: "Exact cloud replacement effect and proof limit.",
+  },
   "discovery.machine.writerExample": { defaultMessage: "env:TRSTCTL_AWS_WRITER_SESSION_PATH", description: "Example reference name; no credential value." },
   "discovery.machine.approveRevoke": { defaultMessage: "Revoke a captured key for {resource}", description: "Exact cloud key approval action." },
   "discovery.machine.approveTighten": { defaultMessage: "Restrict a captured permission for {resource}", description: "Exact cloud policy approval action." },

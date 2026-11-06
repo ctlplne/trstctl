@@ -221,6 +221,14 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 		if cmd.Terminal() {
 			return nil
 		}
+		if cmd.CloudChangeID != "" && cmd.Phase != store.SecretStaticRotationVerified {
+			if _, err := a.cloudReplacementStageParent(ctx, cmd); err != nil {
+				if cleanupErr := a.failDynamicLeaseRotation(ctx, cmd); cleanupErr != nil {
+					return cleanupErr
+				}
+				continue
+			}
+		}
 		if isDynamicLeaseRotation(cmd.Provider) {
 			if err := a.stepDynamicLeaseRotation(ctx, cmd, attempt); err != nil {
 				return err

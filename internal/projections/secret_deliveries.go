@@ -50,6 +50,11 @@ func (p *Projector) applySecretDeliveryTx(ctx context.Context, tx pgx.Tx, e even
 			pl.ReportedBy, e.Time, e.Sequence); err != nil {
 			return true, err
 		}
+		if pl.State == "verified" {
+			if err := p.store.ApplyCloudReplacementAdoptionTx(ctx, tx, e.TenantID, pl.Consumer, pl.ReportedBy, item.Name, item.Version, e.ID, e.Sequence, e.Time); err != nil {
+				return true, err
+			}
+		}
 	}
 	return true, nil
 }

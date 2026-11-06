@@ -4576,6 +4576,7 @@ ChangeSet = TypedDict(
 CloudMachineChange = TypedDict(
     'CloudMachineChange',
     {
+        'adoption': dict[str, Any],
         'approval_request_id': str,
         'created_at': str,
         'expires_at': str,
@@ -4591,6 +4592,20 @@ CloudMachineChange = TypedDict(
     total=False,
 )
 
+CloudMachineChangeAdoption = TypedDict(
+    'CloudMachineChangeAdoption',
+    {
+        'consumer': str,
+        'event_id': str,
+        'name': str,
+        'sequence': int,
+        'subject': str,
+        'verified_at': str,
+        'version': int,
+    },
+    total=False,
+)
+
 CloudMachineChangeIntent = TypedDict(
     'CloudMachineChangeIntent',
     {
@@ -4598,6 +4613,8 @@ CloudMachineChangeIntent = TypedDict(
         'action': str,
         'allow_private_endpoint': bool,
         'ca_pem': str,
+        'consumer': str,
+        'consumer_subject': str,
         'endpoint': str,
         'finding_fingerprint': str,
         'finding_id': str,
@@ -4611,6 +4628,19 @@ CloudMachineChangeIntent = TypedDict(
         'private_egress_cidrs': list[str],
         'reason': str,
         'region': str,
+        'replacement_expected_version': int,
+        'replacement_provider_id': str,
+        'replacement_provider_revision': str,
+        'replacement_role': str,
+        'replacement_role_allow_private': bool,
+        'replacement_role_arn': str,
+        'replacement_role_authority_fingerprint': str,
+        'replacement_role_finding_fingerprint': str,
+        'replacement_role_finding_id': str,
+        'replacement_role_id': str,
+        'replacement_role_source_fingerprint': str,
+        'replacement_role_source_id': str,
+        'replacement_ttl_seconds': int,
         'required_approvals': int,
         'source_fingerprint': str,
         'source_id': str,
@@ -4633,10 +4663,16 @@ CloudMachineChangeRequest = TypedDict(
     {
         'access_key_id': str,
         'action': str,
+        'consumer': str,
+        'consumer_subject': str,
         'evaluation_index': int,
         'finding_id': str,
         'reason': str,
+        'replacement_provider_id': str,
+        'replacement_role': str,
+        'replacement_role_finding_id': str,
         'required_approvals': int,
+        'ttl_seconds': int,
         'writer_session_file_ref': str,
     },
     total=False,
@@ -4651,6 +4687,12 @@ CloudMachineChangeResult = TypedDict(
         'key_absent': bool,
         'policy_matches': bool,
         'postcondition': str,
+        'preparation_phase': str,
+        'replacement_command_id': str,
+        'replacement_expires_at': str,
+        'replacement_lease_id': str,
+        'replacement_native_role_id': str,
+        'replacement_version': int,
     },
     total=False,
 )

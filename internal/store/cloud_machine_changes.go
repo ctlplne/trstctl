@@ -10,12 +10,12 @@ import (
 	"trstctl.com/trstctl/internal/cloudentitlements/change"
 )
 
-const cloudChangeColumns = `id::text,tenant_id::text,intent,state,approval_request_id::text,intent_digest,requested_by,created_at,updated_at,expires_at,result,event_sequence`
+const cloudChangeColumns = `id::text,tenant_id::text,intent,state,approval_request_id::text,intent_digest,requested_by,created_at,updated_at,expires_at,result,event_sequence,adoption`
 
 func scanCloudChange(row interface{ Scan(...any) error }) (change.Record, error) {
 	var out change.Record
-	var intent, result []byte
-	err := row.Scan(&out.ID, &out.TenantID, &intent, &out.State, &out.ApprovalRequestID, &out.IntentDigest, &out.RequestedBy, &out.CreatedAt, &out.UpdatedAt, &out.ExpiresAt, &result, &out.EventSequence)
+	var intent, result, adoption []byte
+	err := row.Scan(&out.ID, &out.TenantID, &intent, &out.State, &out.ApprovalRequestID, &out.IntentDigest, &out.RequestedBy, &out.CreatedAt, &out.UpdatedAt, &out.ExpiresAt, &result, &out.EventSequence, &adoption)
 	if err != nil {
 		return out, err
 	}
@@ -28,6 +28,13 @@ func scanCloudChange(row interface{ Scan(...any) error }) (change.Record, error)
 			return out, err
 		}
 		out.Result = &value
+	}
+	if len(adoption) > 0 && string(adoption) != "null" {
+		var value change.Adoption
+		if err = json.Unmarshal(adoption, &value); err != nil {
+			return out, err
+		}
+		out.Adoption = &value
 	}
 	return out, nil
 }
@@ -91,6 +98,6 @@ func (s *Store) ApplyCloudMachineChangeProgressedTx(ctx context.Context, tx pgx.
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `UPDATE cloud_machine_changes SET state=$3,result=$4,event_sequence=$5,updated_at=$6 WHERE tenant_id=$1 AND id=$2 AND event_sequence<$5 AND (state='queued' OR (state='awaiting_approval' AND $3='queued'))`, tenantID, id, state, raw, sequence, at)
+	_, err = tx.Exec(ctx, `UPDATE cloud_machine_changes SET state=$3,result=$4,event_sequence=$5,updated_at=GREATEST(updated_at,$6) WHERE tenant_id=$1 AND id=$2 AND event_sequence<$5 AND (state IN ('queued','preparing_replacement','waiting_adoption') OR (state='awaiting_approval' AND $3='queued'))`, tenantID, id, state, raw, sequence, at)
 	return err
 }

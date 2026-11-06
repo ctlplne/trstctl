@@ -1201,7 +1201,7 @@ func componentSchemas() map[string]*Schema {
 	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral", "cloud_machine"}
 	operationApprovalActions := []string{
 		"issue", "create", "rotate", "revoke", "sign", "recover", "delete",
-		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy",
+		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy", "replace_key",
 	}
 	approvalReq := object(map[string]*Schema{
 		"action":        {Type: "string", Enum: identityApprovalActions},

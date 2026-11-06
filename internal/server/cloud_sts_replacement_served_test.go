@@ -19,33 +19,7 @@ func TestServedCloudReplacementSTSIdentityProofA264(t *testing.T) {
 	if endpoint == "" || path == "" {
 		t.Skip("owned STS endpoint/session file and a264-replacement553 role required")
 	}
-	raw, err := secretfile.LoadBounded(path, 64<<10)
-	if err != nil {
-		t.Fatal("owned session file could not be read")
-	}
-	defer secret.Wipe(raw)
-	var bootstrap struct {
-		Credentials struct {
-			AccessKeyID     string           `json:"AccessKeyId"`
-			SecretAccessKey secret.JSONBytes `json:"SecretAccessKey"`
-			SessionToken    secret.JSONBytes `json:"SessionToken"`
-		}
-	}
-	if json.Unmarshal(raw, &bootstrap) != nil {
-		t.Fatal("owned bootstrap document invalid")
-	}
-	defer secret.Wipe(bootstrap.Credentials.SecretAccessKey)
-	defer secret.Wipe(bootstrap.Credentials.SessionToken)
-	dir := t.TempDir()
-	keyPath, tokenPath := filepath.Join(dir, "authority"), filepath.Join(dir, "session")
-	if os.WriteFile(keyPath, bootstrap.Credentials.SecretAccessKey, 0600) != nil || os.WriteFile(tokenPath, bootstrap.Credentials.SessionToken, 0600) != nil {
-		t.Fatal("private test authority files could not be written")
-	}
-	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "replacement-sts", Type: "aws-sts", Endpoint: endpoint, IAMEndpoint: endpoint, Region: "us-east-1", AccessKeyID: bootstrap.Credentials.AccessKeyID, SecretAccessRef: "file:" + keyPath, SessionTokenRef: "file:" + tokenPath, AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "arn:aws:iam::000000000000:role/a264-replacement553"}, MaxTTL: "20m", AllowInsecureLoopback: true}
-	registry, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	registry, cfg := nativeReplacementProviderA264(t, endpoint, path, "reader")
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) { d.TenantDynamicSecretProviders = registry })
 	startServedExternalCADispatcher(t, h)
 	operator := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
@@ -129,4 +103,37 @@ func TestServedCloudReplacementSTSIdentityProofA264(t *testing.T) {
 		t.Fatalf("published replacement failed independent native identity readback: %v", err)
 	}
 
+}
+
+func nativeReplacementProviderA264(t *testing.T, endpoint, path, alias string) (DynamicSecretProviderRegistry, config.DynamicSecretProviderConfig) {
+	t.Helper()
+	raw, err := secretfile.LoadBounded(path, 64<<10)
+	if err != nil {
+		t.Fatal("owned session file could not be read")
+	}
+	defer secret.Wipe(raw)
+	var bootstrap struct {
+		Credentials struct {
+			AccessKeyID     string           `json:"AccessKeyId"`
+			SecretAccessKey secret.JSONBytes `json:"SecretAccessKey"`
+			SessionToken    secret.JSONBytes `json:"SessionToken"`
+		}
+	}
+	if json.Unmarshal(raw, &bootstrap) != nil {
+		t.Fatal("owned bootstrap document invalid")
+	}
+	defer secret.Wipe(bootstrap.Credentials.SecretAccessKey)
+	defer secret.Wipe(bootstrap.Credentials.SessionToken)
+	dir := t.TempDir()
+	keyPath, tokenPath := filepath.Join(dir, "authority"), filepath.Join(dir, "session")
+	if os.WriteFile(keyPath, bootstrap.Credentials.SecretAccessKey, 0600) != nil || os.WriteFile(tokenPath, bootstrap.Credentials.SessionToken, 0600) != nil {
+		t.Fatal("private test authority files could not be written")
+	}
+	cfg := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "replacement-sts", Type: "aws-sts", Endpoint: endpoint, IAMEndpoint: endpoint, Region: "us-east-1", AccessKeyID: bootstrap.Credentials.AccessKeyID, SecretAccessRef: "file:" + keyPath, SessionTokenRef: "file:" + tokenPath, AllowedRoles: []string{alias}, RoleBindings: map[string]string{alias: "arn:aws:iam::000000000000:role/a264-replacement553"}, MaxTTL: "20m", AllowInsecureLoopback: true}
+	registry, err := dynamicSecretProvidersFromConfig(t.Context(), []config.DynamicSecretProviderConfig{cfg}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return registry, cfg
 }

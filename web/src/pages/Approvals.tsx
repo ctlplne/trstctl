@@ -956,6 +956,8 @@ function actionSummary(row: ApprovalQueueRow): string {
 
 function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "replace_key":
+      return "discovery.machine.approveReplace";
     case "revoke_key":
       return "discovery.machine.approveRevoke";
     case "tighten_policy":
@@ -983,6 +985,8 @@ function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
 
 function consequenceKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "replace_key":
+      return "discovery.machine.replacementHelp";
     case "revoke_key":
     case "tighten_policy":
       return "discovery.machine.effectHelp";

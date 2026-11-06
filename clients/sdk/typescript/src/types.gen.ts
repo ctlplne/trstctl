@@ -13167,7 +13167,7 @@ export interface components {
         };
         ApprovalDecision: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -15435,6 +15435,7 @@ export interface components {
             }[];
         };
         CloudMachineChange: {
+            adoption?: components["schemas"]["CloudMachineChangeAdoption"];
             /** Format: uuid */
             approval_request_id: string;
             /** Format: date-time */
@@ -15448,18 +15449,31 @@ export interface components {
             requested_by: string;
             result?: components["schemas"]["CloudMachineChangeResult"];
             /** @enum {string} */
-            state: "awaiting_approval" | "queued" | "verified" | "failed";
+            state: "awaiting_approval" | "queued" | "preparing_replacement" | "waiting_adoption" | "verified" | "failed";
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
             updated_at: string;
         };
+        CloudMachineChangeAdoption: {
+            consumer: string;
+            /** Format: uuid */
+            event_id: string;
+            name: string;
+            sequence: number;
+            subject: string;
+            /** Format: date-time */
+            verified_at: string;
+            version: number;
+        };
         CloudMachineChangeIntent: {
             access_key_id?: string;
             /** @enum {string} */
-            action: "revoke_key" | "tighten_policy";
+            action: "revoke_key" | "tighten_policy" | "replace_key";
             allow_private_endpoint?: boolean;
             ca_pem?: string;
+            consumer?: string;
+            consumer_subject?: string;
             endpoint: string;
             finding_fingerprint: string;
             /** Format: uuid */
@@ -15478,6 +15492,19 @@ export interface components {
             private_egress_cidrs?: string[];
             reason: string;
             region: string;
+            replacement_expected_version?: number;
+            replacement_provider_id?: string;
+            replacement_provider_revision?: string;
+            replacement_role?: string;
+            replacement_role_allow_private?: boolean;
+            replacement_role_arn?: string;
+            replacement_role_authority_fingerprint?: string;
+            replacement_role_finding_fingerprint?: string;
+            replacement_role_finding_id?: string;
+            replacement_role_id?: string;
+            replacement_role_source_fingerprint?: string;
+            replacement_role_source_id?: string;
+            replacement_ttl_seconds?: number;
             required_approvals: number;
             source_fingerprint: string;
             /** Format: uuid */
@@ -15491,12 +15518,19 @@ export interface components {
         CloudMachineChangeRequest: {
             access_key_id?: string;
             /** @enum {string} */
-            action: "revoke_key" | "tighten_policy";
+            action: "revoke_key" | "tighten_policy" | "replace_key";
+            consumer?: string;
+            consumer_subject?: string;
             evaluation_index?: number;
             /** Format: uuid */
             finding_id: string;
             reason: string;
+            replacement_provider_id?: string;
+            replacement_role?: string;
+            replacement_role_finding_id?: string;
             required_approvals?: number;
+            /** @description For replace_key: native temporary session TTL, 900 to 3600 seconds, within the configured provider limit. */
+            ttl_seconds?: number;
             writer_session_file_ref: string;
         };
         CloudMachineChangeResult: {
@@ -15507,6 +15541,13 @@ export interface components {
             key_absent?: boolean;
             policy_matches?: boolean;
             postcondition?: string;
+            preparation_phase?: string;
+            replacement_command_id?: string;
+            /** Format: date-time */
+            replacement_expires_at?: string;
+            replacement_lease_id?: string;
+            replacement_native_role_id?: string;
+            replacement_version?: number;
         };
         CloudSecretManagerIntegration: {
             architecture_controls: string[];
@@ -22656,7 +22697,7 @@ export interface components {
         };
         PendingApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
             approval_count: number;
             /** Format: date-time */
             created_at: string;

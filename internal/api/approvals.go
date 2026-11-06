@@ -424,7 +424,7 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 	case "managed_key":
 		return authz.KeysApprove, action == ManagedKeyActionRotate || action == ManagedKeyActionRevoke || action == ManagedKeyActionZeroize
 	case "cloud_machine":
-		return authz.AccessApprove, action == "revoke_key" || action == "tighten_policy"
+		return authz.AccessApprove, action == "revoke_key" || action == "tighten_policy" || action == "replace_key"
 	case "pam":
 		return authz.AccessApprove, action == "activate"
 	case "pam_command":

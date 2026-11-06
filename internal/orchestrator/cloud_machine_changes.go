@@ -216,11 +216,24 @@ func (o *Orchestrator) ReconcileCloudMachineChanges(ctx context.Context) (int, e
 						return healed, err
 					}
 					healed++
-				case change.Queued:
+				case change.Queued, change.Preparing, change.WaitingAdoption:
 					if found, err := o.RecoverCloudMachineChangeResult(ctx, tenant.TenantID, plan.ID); err != nil {
 						return healed, err
 					} else if found {
 						healed++
+						continue
+					}
+					if plan.State == change.Preparing || plan.State == change.WaitingAdoption {
+						err := o.withTenantCommand(ctx, tenant.TenantID, func(ctx context.Context, tx pgx.Tx) error {
+							current, err := o.store.GetCloudMachineChangeTx(ctx, tx, tenant.TenantID, plan.ID)
+							if err != nil {
+								return err
+							}
+							return o.store.EnsureCloudMachinePhaseOutboxTx(ctx, tx, tenant.TenantID, plan.ID, current.State)
+						})
+						if err != nil {
+							return healed, err
+						}
 						continue
 					}
 					entry, err := cloudChangeEntry(tenant.TenantID, plan.ID)
@@ -249,4 +262,33 @@ func (o *Orchestrator) ReconcileCloudMachineChanges(ctx context.Context) (int, e
 		}
 	}
 	return healed, nil
+}
+
+// RecoverCloudMachineReplacementPhase resumes the retained event before any new
+// receiver I/O. Native preparation and waiting use separate durable deliveries.
+func (o *Orchestrator) RecoverCloudMachineReplacementPhase(ctx context.Context, tenantID, id, state string) (bool, error) {
+	event, found, err := o.log.EventByID(ctx, cloudChangeEventID(tenantID, id, state))
+	if err != nil || !found {
+		return found, err
+	}
+	var payload projections.CloudMachineChangeProgressed
+	if event.TenantID != tenantID || event.Type != projections.EventCloudMachineChangeProgressed || json.Unmarshal(event.Data, &payload) != nil || payload.ID != id || payload.State != state || payload.Result == nil {
+		return true, store.ErrIdempotencyConflict
+	}
+	_, err = o.emitPreparedExact(ctx, event)
+	return true, err
+}
+func (o *Orchestrator) RecordCloudMachineReplacementPhase(ctx context.Context, tenantID, id, state string, result change.Result) error {
+	if state != change.Preparing && state != change.WaitingAdoption {
+		return errors.New("invalid cloud replacement phase")
+	}
+	if found, err := o.RecoverCloudMachineReplacementPhase(ctx, tenantID, id, state); err != nil || found {
+		return err
+	}
+	raw, err := json.Marshal(projections.CloudMachineChangeProgressed{ID: id, State: state, Result: &result, At: result.CheckedAt})
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPreparedExact(ctx, events.Event{ID: cloudChangeEventID(tenantID, id, state), TenantID: tenantID, Type: projections.EventCloudMachineChangeProgressed, Data: raw})
+	return err
 }

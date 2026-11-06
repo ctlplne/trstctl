@@ -1400,3 +1400,40 @@ To propose policy tightening, use `action: "tighten_policy"` and the zero-based
 `evaluation_index` of a captured unused exact permission. Review the returned
 public policy document (base64 in `intent.policy_document`) and SHA-256 before
 approval. It adds an explicit Deny in all contexts and preserves existing policies.
+
+### Bind temporary replacement to an authenticated consumer
+
+The API and CLI also accept `replace_key`. Capture both the existing IAM user and
+the intended IAM role, with an explicit permission check for each. The role must
+be in the same AWS account and match an allowed role of an operator-configured
+`aws-sts` provider. Seed the application secret under that provider role's friendly
+name before proposing replacement. The proposal needs `access:write`,
+`discovery:read`, permission to read and write that secret, and private-egress
+permission for private sources.
+
+```json
+{"finding_id":"<user finding UUID>","action":"replace_key","access_key_id":"<captured key ID>","replacement_role_finding_id":"<role finding UUID>","replacement_provider_id":"workload-sts","replacement_role":"orders","ttl_seconds":900,"consumer":"orders-agent","consumer_subject":"<authenticated workload subject>","writer_session_file_ref":"env:TRSTCTL_AWS_WRITER_SESSION_PATH","reason":"Verify the temporary session before retiring this exact key","required_approvals":2}
+```
+
+Use `trstctl access cloud changes propose --file replacement.json`, inspect the
+returned exact intent, approve its digest through the human approval queue, and
+execute it with the same requester. The intent freezes both native identities,
+role authority, source configurations, provider revision, current secret version,
+consumer and actual authentication subject. Native role or policy drift blocks
+retirement. A provider restart requires a new approval.
+
+`preparing_replacement` means the durable child command is issuing, publishing and
+checking the temporary session. `waiting_adoption` names the exact next secret
+version that the named subject must report verified through
+`POST /api/v1/secrets/deliveries`. Reading or injecting a value alone does not
+satisfy that gate. Another subject or version cannot authorize retirement, and a
+later injected report cannot change the author of an earlier verified receipt.
+The public `adoption` receipt names its immutable source event. The existing agent
+renderer can produce verified reports after its application probe succeeds.
+
+Only then does the worker delete the captured old key and read its native absence
+back. Expiry, missing adoption, failed publication or drift preserves retirement
+and reports the failure. A receipt from an authenticated reporter is evidence of
+that reporter's assertion; independently verify a real workload and its ongoing
+refresh. The current API path does not itself prove workload continuity, automatic
+renewal, live AWS enforcement or GCP/Azure qualification.

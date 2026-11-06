@@ -3163,6 +3163,7 @@ type ComplianceReportRunRecorded struct {
 // (A14/A15). It carries identifiers and the request binding only; the staged
 // credential appears later, sealed, on the staged advance.
 type SecretStaticRotationQueued struct {
+	CloudChangeID        string `json:"cloud_change_id,omitempty"`
 	ID                   string `json:"id"`
 	TenantEpoch          string `json:"tenant_epoch"`
 	Provider             string `json:"provider"`
@@ -7698,7 +7699,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires id, tenant_epoch, provider, key and old_ref", e.Type)
 		}
 		return p.store.ApplySecretStaticRotationQueuedTx(ctx, tx, store.SecretStaticRotationCommand{
-			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
+			CloudChangeID: pl.CloudChangeID,
+			TenantID:      e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, Provider: pl.Provider, Key: pl.Key,
 			OldRef: pl.OldRef, ExpectedVersion: pl.ExpectedVersion, IdempotencyKeyDigest: pl.IdempotencyKeyDigest,
 			RequestBinding: pl.RequestBinding, ScheduleID: pl.ScheduleID, TTLSeconds: pl.TTLSeconds, CreatedAt: e.Time,
 			Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds, RetireApprovedBy: pl.RetireApprovedBy,
@@ -8732,6 +8734,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if e.Sequence <= current.EventSequence {
 			return nil
 		}
+		if err := change.ValidateProgress(current, pl.State, pl.Result); err != nil {
+			return err
+		}
 		if pl.State == change.Queued {
 			if pl.Approval == nil || pl.Approval.ResourceKind != "cloud_machine" || pl.Approval.ResourceID != pl.ID || pl.Approval.Action != current.Intent.Action || pl.Approval.RequestID != current.ApprovalRequestID || pl.Approval.IntentDigest != current.IntentDigest {
 				return fmt.Errorf("projections: cloud change has no exact approval")
@@ -8739,10 +8744,16 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time); err != nil {
 				return err
 			}
-		} else if pl.Result == nil || current.State != change.Queued {
+		} else if pl.Result == nil || (current.State != change.Queued && current.State != change.Preparing && current.State != change.WaitingAdoption) {
 			return fmt.Errorf("projections: cloud change has no queued native result")
 		}
-		return p.store.ApplyCloudMachineChangeProgressedTx(ctx, tx, e.TenantID, pl.ID, pl.State, pl.Result, e.Sequence, pl.At)
+		if err := p.store.ApplyCloudMachineChangeProgressedTx(ctx, tx, e.TenantID, pl.ID, pl.State, pl.Result, e.Sequence, pl.At); err != nil {
+			return err
+		}
+		if current.Intent.Action == change.ReplaceKey {
+			return p.store.EnsureCloudMachinePhaseOutboxTx(ctx, tx, e.TenantID, pl.ID, pl.State)
+		}
+		return nil
 	case EventPAMAutoApprovalRuleSaved:
 		var pl PAMAutoApprovalRuleSaved
 		if err := decode(e, &pl); err != nil {

@@ -293,7 +293,8 @@ import (
 // restoring an older shape must not skip those authority-bearing source events.
 // Version 97 adds reviewed cloud machine change intents and native results.
 // A v96 snapshot would skip their events beneath its covered offset.
-const SnapshotFormatVersion = 97
+// Version 98 carries exact cloud replacement adoption evidence.
+const SnapshotFormatVersion = 98
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

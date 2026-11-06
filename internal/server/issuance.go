@@ -113,7 +113,8 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
-	cmdbExports *certificateCIExporter
+	cloudReplacementPrepare func(context.Context, string, string) (api.CloudReplacementPreparation, error)
+	cmdbExports             *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180).
 	observerEvents          *observerEventDelivery

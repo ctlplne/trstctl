@@ -154,6 +154,12 @@ func (a *API) rotateDynamicLeaseSecret(w http.ResponseWriter, r *http.Request, i
 // domain of its own, so a retried request finds its command and a different
 // request under the same key is a conflict.
 func (a *API) queueDynamicLeaseRotation(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest) (store.SecretStaticRotationCommand, error) {
+	return a.queueDynamicLeaseRotationExpected(ctx, tenantID, idempotencyKey, requestBinding, req, 0)
+}
+func (a *API) queueDynamicLeaseRotationExpected(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest, expectedVersion int) (store.SecretStaticRotationCommand, error) {
+	return a.queueDynamicLeaseRotationBound(ctx, tenantID, idempotencyKey, requestBinding, req, expectedVersion, "")
+}
+func (a *API) queueDynamicLeaseRotationBound(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest, expectedVersion int, cloudChangeID string) (store.SecretStaticRotationCommand, error) {
 	if _, err := a.dynamicLeaseRotationProvider(tenantID, req.Provider, req.Key, *req.TTLSeconds); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
@@ -182,13 +188,17 @@ func (a *API) queueDynamicLeaseRotation(ctx context.Context, tenantID, idempoten
 	if err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
+	if expectedVersion > 0 && current.Version != expectedVersion {
+		return store.SecretStaticRotationCommand{}, errStatus(http.StatusConflict, "approved replacement secret version drifted")
+	}
 	if latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, req.Key); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	} else if found && !latest.Terminal() {
 		return store.SecretStaticRotationCommand{}, errStatus(http.StatusConflict, staticRotationInFlightDetail)
 	}
 	payload := projections.SecretStaticRotationQueued{
-		ID: id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
+		CloudChangeID: cloudChangeID,
+		ID:            id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
 		TTLSeconds: *req.TTLSeconds,
 	}
@@ -272,10 +282,25 @@ func (a *API) stageDynamicLeaseRotation(ctx context.Context, cmd store.SecretSta
 	if err != nil {
 		return err
 	}
+	cloudParent, err := a.cloudReplacementStageParent(ctx, cmd)
+	if err != nil {
+		return err
+	}
 	issueCtx, cancel := context.WithTimeout(ctx, dynamicLeaseRotationIssueWait)
 	defer cancel()
-	lease, credential, err := issuer.IssueBound(issueCtx, configured.ID, cmd.Key, time.Duration(cmd.TTLSeconds)*time.Second,
-		"dlrot-issue:"+cmd.ID, dynamicLeaseRotationBinding(cmd, "issue"))
+	var lease dynsecret.Lease
+	var credential []byte
+	if cloudParent != nil {
+		bounded, ok := issuer.(interface {
+			IssueBoundNonRenewable(context.Context, string, string, time.Duration, string, string) (dynsecret.Lease, []byte, error)
+		})
+		if !ok {
+			return errors.New("cloud replacement requires native TTL-bounded lease issuance")
+		}
+		lease, credential, err = bounded.IssueBoundNonRenewable(issueCtx, configured.ID, cmd.Key, time.Duration(cmd.TTLSeconds)*time.Second, "dlrot-issue:"+cmd.ID, dynamicLeaseRotationBinding(cmd, "issue"))
+	} else {
+		lease, credential, err = issuer.IssueBound(issueCtx, configured.ID, cmd.Key, time.Duration(cmd.TTLSeconds)*time.Second, "dlrot-issue:"+cmd.ID, dynamicLeaseRotationBinding(cmd, "issue"))
+	}
 	if err != nil {
 		return fmt.Errorf("api: dynamic-lease rotation issue: %w", err)
 	}

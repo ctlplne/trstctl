@@ -14,7 +14,9 @@ export function CloudChangeIntent({ plan }: { plan: CloudMachineChange }) {
   return (
     <details open>
       <summary>{t("discovery.machine.exactIntent")}</summary>
-      <p className="my-2 text-muted-foreground">{t("discovery.machine.effectHelp")}</p>
+      <p className="my-2 text-muted-foreground">
+        {t(plan.intent.action === "replace_key" ? "discovery.machine.replacementHelp" : "discovery.machine.effectHelp")}
+      </p>
       <pre className="overflow-x-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(plan.intent, null, 2)}</pre>
       {document && <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs">{document}</pre>}
       <CredentialChip value={plan.intent_digest} fullValue />

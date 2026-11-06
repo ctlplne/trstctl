@@ -30,6 +30,9 @@ aws_native iam create-group --group-name a264-machines >/dev/null
 aws_native iam put-group-policy --group-name a264-machines --policy-name group-read --policy-document "$read_policy" >/dev/null
 aws_native iam add-user-to-group --user-name a264-workload --group-name a264-machines >/dev/null
 aws_native iam create-access-key --user-name a264-workload >/dev/null
+aws_native iam create-user --user-name a264-replace554 >/dev/null
+aws_native iam create-access-key --user-name a264-replace554 >/dev/null
+aws_native iam put-user-policy --user-name a264-replace554 --policy-name read-note --policy-document "$read_policy" >/dev/null
 aws_native iam create-user --user-name a264-change552 >/dev/null
 aws_native iam create-access-key --user-name a264-change552 >/dev/null
 change_policy='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::a264-workload/note","Condition":{"StringEquals":{"aws:RequestedRegion":"us-east-1"}}},{"Effect":"Deny","Action":"s3:DeleteObject","Resource":"arn:aws:s3:::a264-workload/note"}]}'
@@ -37,5 +40,5 @@ aws_native iam put-user-policy --user-name a264-change552 --policy-name baseline
 aws_native sts get-session-token --duration-seconds 3600 > "$proof/session.json"
 aws_native --version > "$proof/client-version.txt" 2>&1
 (cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/cloudentitlements/awsiam -run '^TestAWSIAMNativeInventoryA264$' -count=1 -v) | tee "$proof/native.log"
-(cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/server -run '^TestServed(CloudMachineEntitlementCapture|ApprovedCloudKeyRevocation|CloudReplacementSTSIdentityProof)A264$' -count=1 -v) | tee "$proof/served.log"
+(cd "$repo" && TRSTCTL_A264_IAM_ENDPOINT="$endpoint" TRSTCTL_A264_IAM_SESSION_FILE="$proof/session.json" go test ./internal/server -run '^TestServed(CloudMachineEntitlementCapture|ApprovedCloudKeyRevocation|CloudReplacementSTSIdentityProof|ApprovedCloudReplacementWaitsForExactConsumer)A264$' -count=1 -v) | tee "$proof/served.log"
 printf 'Native IAM metadata and served assessment proof retained at %s\n' "$proof"

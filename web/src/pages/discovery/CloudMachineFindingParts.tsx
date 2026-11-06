@@ -284,6 +284,20 @@ function CloudChangeControls({ finding, value }: { finding: DiscoveryFinding; va
           <CredentialChip value={plan.id} fullValue />
           <p>{t("discovery.machine.changeState", { action: plan.intent.action, state: plan.state, expires: plan.expires_at })}</p>
           <CloudChangeIntent plan={plan} />
+          {plan.state === "preparing_replacement" && <p>{t("discovery.machine.preparingReplacement")}</p>}
+          {plan.state === "waiting_adoption" && (
+            <p>
+              {t("discovery.machine.waitingAdoption", {
+                consumer: plan.intent.consumer ?? "",
+                subject: plan.intent.consumer_subject ?? "",
+                version: plan.result?.replacement_version ?? 0,
+              })}
+            </p>
+          )}
+          {plan.adoption && (
+            <p>{t("discovery.machine.adoptionReceipt", { subject: plan.adoption.subject, version: plan.adoption.version, event: plan.adoption.event_id })}</p>
+          )}
+
           {plan.result?.effect_uncertain && <p className="text-risk-high">{t("discovery.machine.uncertain")}</p>}
           {plan.result && (
             <p>

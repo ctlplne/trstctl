@@ -21,48 +21,19 @@ import (
 )
 
 func (s *Server) ProposeCloudMachineChange(ctx context.Context, tenantID, id, requester string, req api.CloudMachineChangeRequest) (change.Record, error) {
-	finding, err := s.store.GetDiscoveryFinding(ctx, tenantID, req.FindingID)
+	finding, value, cfg, sourceFingerprint, err := s.verifiedCloudFinding(ctx, tenantID, req.FindingID)
 	if err != nil {
 		return change.Record{}, err
 	}
-	source, err := s.store.GetDiscoverySource(ctx, tenantID, finding.SourceID)
-	if err != nil {
-		return change.Record{}, err
-	}
-	run, err := s.store.GetDiscoveryRun(ctx, tenantID, finding.RunID)
-	if err != nil {
-		return change.Record{}, err
-	}
-	if source.Kind != assessment.SourceKind || finding.Kind != assessment.FindingKind || run.SourceID != source.ID || run.DryRun || (run.Status != "succeeded" && run.Status != "partial") {
-		return change.Record{}, errors.New("cloud changes require a verified native discovery finding")
-	}
-	value, err := assessment.DecodeAssessment(finding.Metadata)
-	if err != nil {
-		return change.Record{}, err
-	}
-	fingerprint, err := assessment.Fingerprint(value)
-	if err != nil || fingerprint != finding.Fingerprint {
-		return change.Record{}, errors.New("captured cloud evidence fingerprint differs")
-	}
-	cfg, err := assessment.DecodeSource(source.Config)
-	if err != nil {
-		return change.Record{}, err
-	}
-	sourceFingerprint, err := assessment.SourceFingerprint(cfg)
-	if err != nil {
-		return change.Record{}, err
-	}
+	fingerprint := finding.Fingerprint
 	endpoint := cfg.Endpoint
 	if endpoint == "" {
 		endpoint = "https://iam.amazonaws.com"
 	}
-	if value.SourceOrigin != endpoint || value.SourceFingerprint != sourceFingerprint || value.Identity.NativeID == "" || finding.DiscoveredAt.Before(time.Now().Add(-24*time.Hour)) {
-		return change.Record{}, errors.New("rescan this exact native source before proposing a cloud change")
-	}
 	principal := value.Identity.Principal
-	intent := change.Intent{RequiredApprovals: req.RequiredApprovals, Action: req.Action, SourceID: source.ID, FindingID: finding.ID, FindingFingerprint: fingerprint, SourceFingerprint: sourceFingerprint, PrincipalARN: principal.ARN, PrincipalID: value.Identity.NativeID, PrincipalKind: string(principal.Kind), PrincipalName: value.Identity.Name, Endpoint: endpoint, Region: cfg.Region, CAPEM: cfg.CAPEM, AllowPrivateEndpoint: cfg.AllowPrivateEndpoint, PrivateEgressCIDRs: append([]string(nil), cfg.PrivateEgressCIDRs...), WriterSessionFileRef: req.WriterSessionFileRef, Reason: req.Reason}
+	intent := change.Intent{RequiredApprovals: req.RequiredApprovals, Action: req.Action, SourceID: finding.SourceID, FindingID: finding.ID, FindingFingerprint: fingerprint, SourceFingerprint: sourceFingerprint, PrincipalARN: principal.ARN, PrincipalID: value.Identity.NativeID, PrincipalKind: string(principal.Kind), PrincipalName: value.Identity.Name, Endpoint: endpoint, Region: cfg.Region, CAPEM: cfg.CAPEM, AllowPrivateEndpoint: cfg.AllowPrivateEndpoint, PrivateEgressCIDRs: append([]string(nil), cfg.PrivateEgressCIDRs...), WriterSessionFileRef: req.WriterSessionFileRef, Reason: req.Reason}
 	switch req.Action {
-	case change.RevokeKey:
+	case change.RevokeKey, change.ReplaceKey:
 		if principal.Kind != awspolicy.IAMUser || req.AccessKeyID == "" {
 			return change.Record{}, errors.New("key revocation requires one captured IAM user key")
 		}
@@ -76,6 +47,11 @@ func (s *Server) ProposeCloudMachineChange(ctx context.Context, tenantID, id, re
 			return change.Record{}, errors.New("access_key_id is not part of this captured native identity")
 		}
 		intent.AccessKeyID = req.AccessKeyID
+		if req.Action == change.ReplaceKey {
+			if err := s.bindCloudReplacement(ctx, tenantID, &intent, value, req); err != nil {
+				return change.Record{}, err
+			}
+		}
 	case change.TightenPolicy:
 		document, digest, err := change.RestrictivePolicy(value, req.EvaluationIndex)
 		if err != nil {
@@ -96,6 +72,7 @@ func (s *Server) ProposeCloudMachineChange(ctx context.Context, tenantID, id, re
 		existing.State = change.AwaitingApproval
 		existing.UpdatedAt = existing.CreatedAt
 		existing.Result = nil
+		existing.Adoption = nil
 		return existing, nil
 	} else if !store.IsNotFound(err) {
 		return change.Record{}, err
@@ -107,7 +84,8 @@ func (s *Server) ExecuteCloudMachineChange(ctx context.Context, tenantID, id, re
 }
 func (d *issuanceDispatcher) handleCloudMachineChange(ctx context.Context, message orchestrator.Message) error {
 	var command struct {
-		ID string `json:"id"`
+		ID    string `json:"id"`
+		Phase string `json:"phase,omitempty"`
 	}
 	if err := decodeCloudChangeCommand(message.Payload, &command); err != nil {
 		return orchestrator.DefiniteNoEffect(err)
@@ -119,13 +97,31 @@ func (d *issuanceDispatcher) handleCloudMachineChange(ctx context.Context, messa
 	if value.State == change.Verified || value.State == change.Failed {
 		return nil
 	}
-	if value.State != change.Queued {
+	if value.State != change.Queued && (value.Intent.Action != change.ReplaceKey || (value.State != change.Preparing && value.State != change.WaitingAdoption)) {
 		return orchestrator.DefiniteNoEffect(errors.New("cloud change is not queued"))
 	}
 	if recovered, err := d.orch.RecoverCloudMachineChangeResult(ctx, message.TenantID, value.ID); err != nil || recovered {
 		return err
 	}
+	if value.Intent.Action == change.ReplaceKey {
+		state := ""
+		if value.State == change.Queued {
+			state = change.Preparing
+		}
+		if value.State == change.Preparing {
+			state = change.WaitingAdoption
+		}
+		if state != "" {
+			if found, err := d.orch.RecoverCloudMachineReplacementPhase(ctx, message.TenantID, value.ID, state); err != nil || found {
+				return err
+			}
+		}
+	}
 	result := change.Result{CheckedAt: time.Now().UTC()}
+	if value.Intent.Action == change.ReplaceKey && value.Result != nil {
+		result = *value.Result
+		result.CheckedAt = time.Now().UTC()
+	}
 	fail := func(err error) error {
 		result.Error = err.Error()
 		return d.orch.RecordCloudMachineChangeResult(ctx, message.TenantID, value.ID, change.Failed, result)
@@ -172,6 +168,9 @@ func (d *issuanceDispatcher) handleCloudMachineChange(ctx context.Context, messa
 	if err != nil {
 		return fail(err)
 	}
+	if value.Intent.Action == change.ReplaceKey {
+		return d.handleCloudReplacement(ctx, message, value, command.Phase, client)
+	}
 	target := awsiam.ChangeTarget{ARN: value.Intent.PrincipalARN, NativeID: value.Intent.PrincipalID, Name: value.Intent.PrincipalName, Kind: awspolicy.PrincipalKind(value.Intent.PrincipalKind)}
 	var readback awsiam.ChangeReadback
 	switch value.Intent.Action {
@@ -195,4 +194,49 @@ func decodeCloudChangeCommand(raw []byte, target any) error {
 		return errors.New("cloud change command exceeds bound")
 	}
 	return json.Unmarshal(raw, target)
+}
+
+func (s *Server) verifiedCloudFinding(ctx context.Context, tenantID, findingID string) (store.DiscoveryFinding, assessment.Assessment, assessment.SourceConfig, string, error) {
+	return verifiedCloudFinding(ctx, s.store, tenantID, findingID)
+}
+func verifiedCloudFinding(ctx context.Context, st *store.Store, tenantID, findingID string) (store.DiscoveryFinding, assessment.Assessment, assessment.SourceConfig, string, error) {
+	finding, err := st.GetDiscoveryFinding(ctx, tenantID, findingID)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	source, err := st.GetDiscoverySource(ctx, tenantID, finding.SourceID)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	run, err := st.GetDiscoveryRun(ctx, tenantID, finding.RunID)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	if source.Kind != assessment.SourceKind || finding.Kind != assessment.FindingKind || run.SourceID != source.ID || run.DryRun || (run.Status != "succeeded" && run.Status != "partial") {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", errors.New("cloud changes require a verified native discovery finding")
+	}
+	value, err := assessment.DecodeAssessment(finding.Metadata)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	fingerprint, err := assessment.Fingerprint(value)
+	if err != nil || fingerprint != finding.Fingerprint {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", errors.New("captured cloud evidence fingerprint differs")
+	}
+	cfg, err := assessment.DecodeSource(source.Config)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	sourceFingerprint, err := assessment.SourceFingerprint(cfg)
+	if err != nil {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", err
+	}
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://iam.amazonaws.com"
+	}
+	if value.SourceOrigin != endpoint || value.SourceFingerprint != sourceFingerprint || value.Identity.NativeID == "" || finding.DiscoveredAt.Before(time.Now().Add(-24*time.Hour)) {
+		return store.DiscoveryFinding{}, assessment.Assessment{}, assessment.SourceConfig{}, "", errors.New("rescan this exact native source before proposing a cloud change")
+	}
+	return finding, value, cfg, sourceFingerprint, nil
 }

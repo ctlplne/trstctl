@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"trstctl.com/trstctl/internal/cloudentitlements/change"
+	"trstctl.com/trstctl/internal/crypto"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -40,6 +42,7 @@ var ErrSecretStaticRotationCommandNotFound = errors.New("store: static rotation 
 
 // SecretStaticRotationCommand is the projected state of one durable command.
 type SecretStaticRotationCommand struct {
+	CloudChangeID        string
 	TenantID             string
 	ID                   string
 	TenantEpoch          string
@@ -135,6 +138,27 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 	if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, cmd.TenantID, cmd.TenantEpoch); err != nil {
 		return err
 	}
+	var cloudChangeID any
+	if cmd.CloudChangeID != "" {
+		parent, err := s.GetCloudMachineChangeTx(ctx, tx, cmd.TenantID, cmd.CloudChangeID)
+		if err != nil {
+			return err
+		}
+		if parent.Intent.Action != change.ReplaceKey || change.PublicationBinding(parent) != cmd.RequestBinding || crypto.SHA256Hex([]byte("cloud-replacement:"+parent.ID)) != cmd.IdempotencyKeyDigest || cmd.Provider != "dynamic-lease:"+parent.Intent.ReplacementProviderID || cmd.Key != parent.Intent.ReplacementRole || cmd.ExpectedVersion != parent.Intent.ReplacementExpectedVersion || cmd.TTLSeconds != parent.Intent.ReplacementTTLSeconds {
+			return errors.New("store: cloud replacement child differs from its consumed exact intent")
+		}
+		existing, readErr := scanSecretStaticRotationCommand(tx.QueryRow(ctx, `SELECT `+secretStaticRotationColumns+` FROM secret_static_rotation_commands WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, cmd.TenantID, cmd.ID))
+		if readErr == nil {
+			if existing.CloudChangeID != cmd.CloudChangeID || existing.RequestBinding != cmd.RequestBinding || existing.Provider != cmd.Provider || existing.Key != cmd.Key || existing.OldRef != cmd.OldRef || existing.ExpectedVersion != cmd.ExpectedVersion || existing.IdempotencyKeyDigest != cmd.IdempotencyKeyDigest || existing.TTLSeconds != cmd.TTLSeconds {
+				return errors.New("store: retained cloud publication child differs from its source command")
+			}
+		} else if !errors.Is(readErr, ErrSecretStaticRotationCommandNotFound) {
+			return readErr
+		} else if parent.State != change.Queued && parent.State != change.Preparing {
+			return errors.New("store: new cloud publication child has no active consumed parent")
+		}
+		cloudChangeID = cmd.CloudChangeID
+	}
 	var scheduleID any
 	if cmd.ScheduleID != "" {
 		scheduleID = cmd.ScheduleID
@@ -143,12 +167,12 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
 		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at,
-		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17)
+		         consumers, retire_after_seconds, retire_approved_by, single_phase_acknowledged,cloud_change_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14, $15, $16, $17,$18)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
 		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC(),
-		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged); err != nil {
+		nonNilStrings(cmd.Consumers), cmd.RetireAfterSeconds, cmd.RetireApprovedBy, cmd.SinglePhaseAcknowledged, cloudChangeID); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -259,7 +283,7 @@ const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no creden
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
        ttl_seconds, new_expires_at, created_at, updated_at, terminal_at,
-       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged`
+       consumers, retire_after_seconds, retire_approved_by, retire_not_before, single_phase_acknowledged,coalesce(cloud_change_id::text, '')`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
@@ -267,7 +291,7 @@ func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, 
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
 		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt,
-		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged)
+		&c.Consumers, &c.RetireAfterSeconds, &c.RetireApprovedBy, &c.RetireNotBefore, &c.SinglePhaseAcknowledged, &c.CloudChangeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}

@@ -343,6 +343,7 @@ public final class OpenApiSchemas {
       "ChangePlan",
       "ChangeSet",
       "CloudMachineChange",
+      "CloudMachineChangeAdoption",
       "CloudMachineChangeIntent",
       "CloudMachineChangeList",
       "CloudMachineChangeRequest",
