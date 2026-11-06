@@ -2491,8 +2491,8 @@ Updates change only the stored logon password and recheck the frozen native
 configuration on the same service handle. Restarts preserve stopped services and
 verify a fresh running process's account SID. This identity result alone is not
 functional completion: the host workflow must also pass its configured service
-health check. Task/IIS adapters and the full host workflow are separate parts of
-A267. The Windows runner fixture uses a real SCM service and a local SAM account;
+health check. The task and IIS adapters and the full host workflow have separate
+execution and verification requirements. The Windows runner fixture uses a real SCM service and a local SAM account;
 it is not an AD forest qualification.
 
 Windows Automation arguments use a separate native memory boundary: credential
@@ -2520,3 +2520,21 @@ previous global last-result value cannot establish this proof. Lost start replie
 remain explicit uncertainty: retain the attempt fence and observe the known
 instance instead of starting it again. Native Windows execution and the complete
 host workflow remain separate qualification steps.
+
+IIS application-pool discovery selects the exact custom account SID. The adapter
+freezes the pool configuration and its existing encryption provider without reading
+the saved password. Password writes keep that provider and require a fresh native
+readback that confirms encrypted storage. A changed SID, provider or configuration
+stops the write. Native IIS recycling settings remain in force: writing the logon
+password can itself recycle the pool, so the host workflow must approve and order
+that effect.
+
+Restarting one selected pool preserves its previous stopped state. A started pool
+needs an independent functional request to create and exercise its worker. Native
+worker metadata and process tokens must then agree on the exact pool, fresh PID
+and account SID; process identity alone is not a functional result. The Windows
+fixture performs nonce-bound HTTP work and predecessor recovery using an owned
+local SAM account, pool and site. Its native execution remains a separate required
+qualification; cross-compilation does not establish that result. The full enrolled
+host workflow, durable task-attempt journal and directory reconciliation remain
+in progress.

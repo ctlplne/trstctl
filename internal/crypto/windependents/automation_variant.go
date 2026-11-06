@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 package windependents
 
-import "errors"
+import (
+	"errors"
+	"strconv"
+)
 
 // VARIANT's native union includes a two-pointer BRECORD arm. This gives the
 // required 24-byte layout on 64-bit Windows and 16-byte layout on 32-bit Windows.
@@ -56,4 +59,12 @@ func automationDISPID(value int32) uintptr {
 		return uintptr(value)
 	}
 	return uintptr(((int64(1) << 32) + int64(value)) & 0xffffffff)
+}
+
+// Native 64-bit scalar union members span both pointer slots on 32-bit Windows.
+func (v automationVariant) scalarBits64() uint64 {
+	if strconv.IntSize == 32 {
+		return uint64(v.Value&0xffffffff) | (uint64(v.Extra&0xffffffff) << 32)
+	}
+	return uint64(v.Value)
 }

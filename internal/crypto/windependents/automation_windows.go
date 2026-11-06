@@ -199,22 +199,31 @@ func automationFailed(result uintptr) bool { return result&0x80000000 != 0 }
 func automationHRESULT(result uintptr) error {
 	return fmt.Errorf("windows Automation: native call failed (0x%08x)", result&0xffffffff)
 }
-func newLocalTaskScheduler(ctx context.Context) (*automationObject, error) {
-	name, err := windows.UTF16PtrFromString("Schedule.Service")
+func newLocalAutomationObject(ctx context.Context, programID string) (*automationObject, error) {
+	if programID != "Schedule.Service" && programID != "Microsoft.ApplicationHost.WritableAdminManager" {
+		return nil, errors.New("windows Automation: unapproved local native class")
+	}
+	name, err := windows.UTF16PtrFromString(programID)
 	if err != nil {
 		return nil, err
 	}
 	var clsid windows.GUID
-	result, _, _ := automationOLE.NewProc("CLSIDFromProgID").Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(&clsid))) // #nosec G103 -- fixed local Schedule.Service identifier and sized SDK GUID output, no caller-selected COM class (CWE-242)
+	result, _, _ := automationOLE.NewProc("CLSIDFromProgID").Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(&clsid))) // #nosec G103 -- two allowlisted local native identifiers and sized SDK GUID output, no caller-selected COM class (CWE-242)
 	if automationFailed(result) {
 		return nil, automationHRESULT(result)
 	}
 	var pointer uintptr
-	result, _, _ = automationOLE.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&clsid)), 0, 1, uintptr(unsafe.Pointer(&automationDispatchIID)), uintptr(unsafe.Pointer(&pointer))) // #nosec G103 -- fixed local scheduler class, exact IDispatch IID and native interface output, released in the same apartment (CWE-242)
+	result, _, _ = automationOLE.NewProc("CoCreateInstance").Call(uintptr(unsafe.Pointer(&clsid)), 0, 1, uintptr(unsafe.Pointer(&automationDispatchIID)), uintptr(unsafe.Pointer(&pointer))) // #nosec G103 -- allowlisted local native class, exact IDispatch IID and native interface output, released in the same apartment (CWE-242)
 	if automationFailed(result) || pointer == 0 {
-		return nil, errors.New("windows Automation: local Task Scheduler unavailable")
+		return nil, errors.New("windows Automation: local native administration object unavailable")
 	}
-	object := &automationObject{pointer: pointer, ctx: ctx}
+	return &automationObject{pointer: pointer, ctx: ctx}, nil
+}
+func newLocalTaskScheduler(ctx context.Context) (*automationObject, error) {
+	object, err := newLocalAutomationObject(ctx, "Schedule.Service")
+	if err != nil {
+		return nil, err
+	}
 	value, err := object.call("Connect", 1, automationVariant{}, automationVariant{}, automationVariant{}, automationVariant{})
 	if err != nil {
 		object.destroy()
@@ -223,6 +232,24 @@ func newLocalTaskScheduler(ctx context.Context) (*automationObject, error) {
 	value.destroy()
 	return object, nil
 }
+func newLocalIISManager(ctx context.Context) (*automationObject, error) {
+	object, err := newLocalAutomationObject(ctx, "Microsoft.ApplicationHost.WritableAdminManager")
+	if err != nil {
+		return nil, err
+	}
+	path, err := newAutomationPublicString("MACHINE/WEBROOT/APPHOST")
+	if err != nil {
+		object.destroy()
+		return nil, err
+	}
+	defer func() { _ = path.destroy() }()
+	if err := object.set("CommitPath", path.variant()); err != nil {
+		object.destroy()
+		return nil, err
+	}
+	return object, nil
+}
+
 func (o *automationObject) method(index int) uintptr {
 	table := *(*uintptr)(unsafe.Add(nil, o.pointer))
 	return (*[7]uintptr)(unsafe.Add(nil, table))[index]
@@ -360,4 +387,20 @@ func automationNativeBool(value bool) automationVariant {
 // a password string. Used by the native proof as well as typed native metadata.
 func automationUTF16Unit(raw []byte, index int) uint16 {
 	return binary.LittleEndian.Uint16(raw[index*2:])
+}
+
+func (o *automationObject) optionalObject(name string, flags uint16, args ...automationVariant) (*automationObject, error) {
+	value, err := o.call(name, flags, args...)
+	if err != nil {
+		return nil, err
+	}
+	if value.VT == 0 || value.VT == 1 || (value.VT == 9 && value.Value == 0) {
+		value.destroy()
+		return nil, nil
+	}
+	if value.VT != 9 {
+		value.destroy()
+		return nil, errors.New("windows Automation: unexpected optional object type")
+	}
+	return &automationObject{pointer: value.Value, ctx: o.ctx}, nil
 }

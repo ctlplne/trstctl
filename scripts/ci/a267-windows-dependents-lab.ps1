@@ -37,3 +37,24 @@ if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $taskLog -Pattern 'A267_WI
     Write-Host '::error::a267 native task lifecycle did not run and pass'
     exit 1
 }
+
+# Inbox features only, with Windows Update access forbidden. Missing local
+# payload is a concrete native-proof blocker, never a download or skipped pass.
+$features = @('IIS-WebServerRole', 'IIS-ASPNET45', 'IIS-ManagementScriptingTools')
+foreach ($featureName in $features) {
+    $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName
+    if ($feature.State -eq 'DisabledWithPayloadRemoved') { throw "local inbox feature payload is missing: $featureName" }
+    if ($feature.State -ne 'Enabled') {
+        $result = Enable-WindowsOptionalFeature -Online -FeatureName $featureName -All -LimitAccess -NoRestart
+        if ($result.RestartNeeded) { throw "native IIS fixture needs a runner restart: $featureName" }
+    }
+}
+Start-Service WAS
+Start-Service W3SVC
+$env:TRSTCTL_A267_WINDOWS_IIS = '1'
+$iisLog = Join-Path $env:RUNNER_TEMP 'a267-windows-iis.log'
+& go test -count=1 -timeout 10m -run '^TestNativeWindowsIISPoolLifecycleA267$' -v ./internal/crypto/windependents 2>&1 | Tee-Object -FilePath $iisLog
+if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $iisLog -Pattern 'A267_WINDOWS_IIS_OK' -Quiet)) {
+    Write-Host '::error::a267 native IIS pool lifecycle did not run and pass'
+    exit 1
+}

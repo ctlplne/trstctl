@@ -7,6 +7,14 @@ import (
 )
 
 func TestAutomationVariantAuthorityA267(t *testing.T) {
+	encoded := automationVariant{Value: 1, Extra: 2}.scalarBits64()
+	wantBits := uint64(1)
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		wantBits = 0x200000001
+	}
+	if encoded != wantBits {
+		t.Fatal("native 64-bit union layout differs")
+	}
 	if automationDISPID(-3) != 0xfffffffd || automationDISPID(-2147483648) != 0x80000000 || automationDISPID(42) != 42 {
 		t.Fatal("native signed dispatch ID encoding differs")
 	}

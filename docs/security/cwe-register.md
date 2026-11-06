@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2719 annotated sites across 31 rules. Each row is
+2720 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -686,11 +686,11 @@ not this file.
 | `internal/crypto/windependents/automation_windows.go:92` | owned SysAllocStringLen or COM BSTR, native length capped below 1 Mi UTF-16 units and locked before private use (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:130` | public-only UTF-16 input stays alive through the synchronous native allocation; passwords use a separate locked path (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:188` | SDK EXCEPINFO deferred callback receives its live exact output struct; all returned strings are wiped without logging (CWE-242) |
-| `internal/crypto/windependents/automation_windows.go:208` | fixed local Schedule.Service identifier and sized SDK GUID output, no caller-selected COM class (CWE-242) |
-| `internal/crypto/windependents/automation_windows.go:213` | fixed local scheduler class, exact IDispatch IID and native interface output, released in the same apartment (CWE-242) |
-| `internal/crypto/windependents/automation_windows.go:243` | exact live native VARIANT layout; native allocator clears non-text result ownership, text is wiped separately (CWE-242) |
-| `internal/crypto/windependents/automation_windows.go:259` | live fixed IDispatch vtable, public method name, sized GUID/DISPID outputs and one bounded name (CWE-242) |
-| `internal/crypto/windependents/automation_windows.go:283` | exact IDispatch ABI, at most 16 reversed typed arguments and live sized result/exception outputs; password BSTR lease remains locked (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:211` | two allowlisted local native identifiers and sized SDK GUID output, no caller-selected COM class (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:216` | allowlisted local native class, exact IDispatch IID and native interface output, released in the same apartment (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:270` | exact live native VARIANT layout; native allocator clears non-text result ownership, text is wiped separately (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:286` | live fixed IDispatch vtable, public method name, sized GUID/DISPID outputs and one bounded name (CWE-242) |
+| `internal/crypto/windependents/automation_windows.go:310` | exact IDispatch ABI, at most 16 reversed typed arguments and live sized result/exception outputs; password BSTR lease remains locked (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:135` | SDK USER_INFO_1 points only to the owned public name and live locked password buffer (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:138` | exact SDK USER_INFO_1 and output scalar for a synchronous local test-account creation; password stays locked (CWE-242) |
 | `internal/crypto/windependents/services_native_windows_test.go:144` | exact name of the successfully created test-owned account; no enumeration or global cleanup (CWE-242) |
@@ -1377,7 +1377,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (356 sites)
+### G204 — CWE-78 OS command injection (357 sites)
 
 | Location | Reason |
 |---|---|
@@ -1482,6 +1482,7 @@ not this file.
 | `internal/crypto/pqc_x509_test.go:61` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/crypto/tlsprobe/openssl.go:104` | trusted absolute local executable; fixed verb/options; no shell or remote command. |
+| `internal/crypto/windependents/pool_runtime_windows.go:39` | fixed inbox IIS executable in native System32, read-only operation and validated pool name; no shell/credentials (CWE-78) |
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
 | `internal/dynsecret/active_directory_lab_test.go:132` | fixed stock tools and test-owned public directory arguments; password arrives on an inherited pipe, no shell (CWE-78) |
