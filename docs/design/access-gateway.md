@@ -1134,6 +1134,25 @@ retirement preserves its live successor. Neither path deletes the user or change
 its memberships. Open sessions and Kerberos tickets are not revoked by
 this adapter, and no multi-DC or native Windows result is claimed.
 
+Prepared in-place rotations now freeze both intermediates and the final password
+under encryption before any write. Version2 also freezes the actual verified
+peer address, DC invocation and password-attribute version. The four native
+positions distinguish forward intermediate, final replacement, inverse
+intermediate and restored predecessor. A restarted worker proves only its exact
+version-selected credential, then advances one position. Recovery from the first
+forward intermediate completes the fixed replacement position before the inverse.
+Native bad-password checks still prevent candidate retries. Existing version1
+preparations remain readable with their earlier verification limits.
+
+The native reset principal also reads rootDSE and Directory Service heuristics.
+Constant key-version emulation is refused before preparation. The pinned DC route
+and TLS identity remain fixed for the operation. These are observation and
+attribution guards, not native compare-and-swap: concurrent outside administrator
+resets can race the final read/write gap. External writers need a maintenance
+window. The four actual worker-exit tests reload encrypted preparation, check
+exact native version counts, then prove current/retired credentials with stock
+LDAP. They do not claim power-loss or forest replication qualification.
+
 The native proof runs against a separate owned Samba4.15.13-Ubuntu DC, a DNS-SAN
 certificate and a three-attempt lockout policy. After an unrelated bad password
 increments `badPwdCount` once, repeated verification calls leave it at one: no

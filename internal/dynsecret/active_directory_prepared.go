@@ -6,25 +6,33 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"strconv"
 	"strings"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/ldapbind"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 type adStaticPreparation struct {
-	held            *secret.Buffer
-	Version         int              `json:"version"`
-	Role            string           `json:"role"`
-	OperationID     string           `json:"operation_id"`
-	Predecessor     string           `json:"predecessor"`
-	ProviderBinding string           `json:"provider_binding"`
-	DN              string           `json:"bind_dn"`
-	Name            string           `json:"username"`
-	GUID            string           `json:"native_guid"`
-	SID             string           `json:"native_sid"`
-	PasswordSetAt   string           `json:"password_set_at"`
-	Password        secret.JSONBytes `json:"password,omitempty"`
+	held                     *secret.Buffer
+	forwardHeld, inverseHeld *secret.Buffer
+	KeyVersion               uint64           `json:"key_version,omitempty"`
+	DCInvocationID           string           `json:"dc_invocation_id,omitempty"`
+	NativeAddress            string           `json:"native_address,omitempty"`
+	ForwardIntermediate      secret.JSONBytes `json:"forward_intermediate,omitempty"`
+	InverseIntermediate      secret.JSONBytes `json:"inverse_intermediate,omitempty"`
+	Version                  int              `json:"version"`
+	Role                     string           `json:"role"`
+	OperationID              string           `json:"operation_id"`
+	Predecessor              string           `json:"predecessor"`
+	ProviderBinding          string           `json:"provider_binding"`
+	DN                       string           `json:"bind_dn"`
+	Name                     string           `json:"username"`
+	GUID                     string           `json:"native_guid"`
+	SID                      string           `json:"native_sid"`
+	PasswordSetAt            string           `json:"password_set_at"`
+	Password                 secret.JSONBytes `json:"password,omitempty"`
 }
 
 func validADPreparationHash(v string, n int) bool {
@@ -36,36 +44,69 @@ func decodeADStaticPreparation(raw []byte) (adStaticPreparation, error) {
 	if len(raw) > 64<<10 {
 		return p, errors.New("dynsecret AD: preparation exceeds bound")
 	}
-	if validateADPreparationFields(raw) != nil || json.Unmarshal(raw, &p) != nil || p.Version != 1 || len(p.Role) < 1 || len(p.Role) > 512 || len(p.OperationID) < 1 || len(p.OperationID) > 128 || len(p.DN) < 1 || len(p.DN) > 4096 || len(p.Name) < 1 || len(p.Name) > 128 || !validADPreparationHash(p.ProviderBinding, 32) || !validADPreparationHash(p.GUID, 16) || len(p.SID) < 16 || len(p.SID) > 136 || p.PasswordSetAt == "" || len(p.Password) < 16 || len(p.Password) > 1024 {
-		secret.Wipe(p.Password)
+	if validateADPreparationFields(raw) != nil || json.Unmarshal(raw, &p) != nil || (p.Version != 1 && p.Version != 2) || len(p.Role) < 1 || len(p.Role) > 512 || len(p.OperationID) < 1 || len(p.OperationID) > 128 || len(p.DN) < 1 || len(p.DN) > 4096 || len(p.Name) < 1 || len(p.Name) > 128 || !validADPreparationHash(p.ProviderBinding, 32) || !validADPreparationHash(p.GUID, 16) || len(p.SID) < 16 || len(p.SID) > 136 || p.PasswordSetAt == "" || len(p.Password) < 16 || len(p.Password) > 1024 {
+		p.destroy()
 		return adStaticPreparation{}, errors.New("dynsecret AD: invalid bound preparation")
 	}
 	if _, err := strconv.ParseUint(p.PasswordSetAt, 10, 64); err != nil {
-		secret.Wipe(p.Password)
+		p.destroy()
 		return adStaticPreparation{}, errors.New("dynsecret AD: invalid native password stamp")
 	}
 	if _, err := hex.DecodeString(p.SID); err != nil {
-		secret.Wipe(p.Password)
+		p.destroy()
 		return adStaticPreparation{}, errors.New("dynsecret AD: invalid native SID")
+	}
+	if p.Version == 2 {
+		address, addressErr := netip.ParseAddrPort(p.NativeAddress)
+		if addressErr != nil || address.Port() == 0 || address.String() != p.NativeAddress || p.KeyVersion < 1 || p.KeyVersion > uint64(1<<32-1)-4 || !validADPreparationHash(p.DCInvocationID, 16) || ldapbind.ValidateADGeneratedPassword(p.Password) != nil || ldapbind.ValidateADGeneratedPassword(p.ForwardIntermediate) != nil || ldapbind.ValidateADGeneratedPassword(p.InverseIntermediate) != nil || crypto.ConstantTimeEqual(p.Password, p.ForwardIntermediate) || crypto.ConstantTimeEqual(p.Password, p.InverseIntermediate) || crypto.ConstantTimeEqual(p.ForwardIntermediate, p.InverseIntermediate) {
+			p.destroy()
+			return adStaticPreparation{}, errors.New("dynsecret AD: incomplete or aliased durable reset generations")
+		}
+	} else if p.KeyVersion != 0 || p.DCInvocationID != "" || p.NativeAddress != "" || len(p.ForwardIntermediate) > 0 || len(p.InverseIntermediate) > 0 {
+		p.destroy()
+		return adStaticPreparation{}, errors.New("dynsecret AD: legacy preparation carries another reset format")
 	}
 	held, err := secret.NewFrom(p.Password)
 	secret.Wipe(p.Password)
 	if err != nil {
+		p.destroy()
 		return adStaticPreparation{}, err
 	}
 	p.held = held
 	p.Password = held.Bytes()
+	if p.Version == 2 {
+		p.forwardHeld, err = secret.NewFrom(p.ForwardIntermediate)
+		secret.Wipe(p.ForwardIntermediate)
+		if err != nil {
+			p.destroy()
+			return adStaticPreparation{}, err
+		}
+		p.ForwardIntermediate = p.forwardHeld.Bytes()
+		p.inverseHeld, err = secret.NewFrom(p.InverseIntermediate)
+		secret.Wipe(p.InverseIntermediate)
+		if err != nil {
+			p.destroy()
+			return adStaticPreparation{}, err
+		}
+		p.InverseIntermediate = p.inverseHeld.Bytes()
+	}
 	return p, nil
 }
 func (p *adStaticPreparation) destroy() {
-	if p.held != nil {
-		p.Password = nil
-		p.held.Destroy()
-		p.held = nil
-		return
-	}
 	secret.Wipe(p.Password)
+	secret.Wipe(p.ForwardIntermediate)
+	secret.Wipe(p.InverseIntermediate)
 	p.Password = nil
+	p.ForwardIntermediate = nil
+	p.InverseIntermediate = nil
+	for _, held := range []*secret.Buffer{p.held, p.forwardHeld, p.inverseHeld} {
+		if held != nil {
+			held.Destroy()
+		}
+	}
+	p.held = nil
+	p.forwardHeld = nil
+	p.inverseHeld = nil
 }
 
 // PrepareStaticCredential performs native read-only preflight, then creates the
@@ -79,25 +120,32 @@ func (b *LDAPBackend) PrepareStaticCredential(ctx context.Context, req GenerateR
 	if _, paired := b.rotationAccounts[req.Role]; paired {
 		return nil, errors.New("dynsecret AD: native in-place preparation is not a paired rotation")
 	}
-	identity, err := b.inspectADIdentity(ctx, dn, false, true)
+	identity, err := b.inspectADResetIdentity(ctx, dn, b.adRoute())
 	if err != nil {
 		return nil, err
 	}
-	random, err := randomSecretHex(24)
-	if err != nil {
-		return nil, err
+	if identity.KeyVersion > uint64(1<<32-1)-4 {
+		return nil, errors.New("dynsecret AD: native version has no room for the complete reset/inverse sequence")
 	}
-	defer secret.Wipe(random)
-	password, err := secret.New(4 + len(random))
+	password, err := newADPreparedPassword()
 	if err != nil {
 		return nil, err
 	}
 	defer password.Destroy()
-	copy(password.Bytes(), []byte("Tr5!"))
-	copy(password.Bytes()[4:], random)
-	p := adStaticPreparation{Version: 1, Role: req.Role, OperationID: req.LeaseID, Predecessor: req.Predecessor, ProviderBinding: binding, DN: dn, Name: identity.Name, GUID: identity.GUID, SID: identity.SID, PasswordSetAt: identity.PasswordSetAt, Password: password.Bytes()}
+	forward, err := newADPreparedPassword()
+	if err != nil {
+		return nil, err
+	}
+	defer forward.Destroy()
+	inverse, err := newADPreparedPassword()
+	if err != nil {
+		return nil, err
+	}
+	defer inverse.Destroy()
+	p := adStaticPreparation{Version: 2, Role: req.Role, OperationID: req.LeaseID, Predecessor: req.Predecessor, ProviderBinding: binding, DN: dn, Name: identity.Name, GUID: identity.GUID, SID: identity.SID, PasswordSetAt: identity.PasswordSetAt, KeyVersion: identity.KeyVersion, DCInvocationID: identity.DCInvocationID, NativeAddress: identity.NativeAddress, Password: password.Bytes(), ForwardIntermediate: forward.Bytes(), InverseIntermediate: inverse.Bytes()}
 	return marshalADStaticPreparation(p)
 }
+
 func (b *LDAPBackend) boundADPreparation(ctx context.Context, req GenerateRequest, raw []byte, binding string) (adStaticPreparation, adNativeIdentity, error) {
 	p, err := decodeADStaticPreparation(raw)
 	if err != nil {
@@ -113,7 +161,24 @@ func (b *LDAPBackend) boundADPreparation(ctx context.Context, req GenerateReques
 	if _, paired := b.rotationAccounts[req.Role]; paired {
 		return reject()
 	}
-	current, err := b.inspectADIdentity(ctx, p.DN, false, true)
+	var current adNativeIdentity
+	if p.Version == 2 {
+		observed, e := newADPreparedResetNative(b, p).Observe(ctx)
+		if e != nil {
+			p.destroy()
+			return adStaticPreparation{}, current, e
+		}
+		if observed.Name != p.Name || observed.GUID != p.GUID || observed.SID != p.SID {
+			return reject()
+		}
+		if _, e = p.resetPosition(observed); e != nil {
+			p.destroy()
+			return adStaticPreparation{}, current, e
+		}
+		current = observed.adNativeIdentity
+	} else {
+		current, err = b.inspectADIdentity(ctx, p.DN, false, true)
+	}
 	if err != nil {
 		p.destroy()
 		return adStaticPreparation{}, current, err
@@ -140,7 +205,11 @@ func (b *LDAPBackend) GenerateStaticPrepared(ctx context.Context, req GenerateRe
 	}
 	defer p.destroy()
 	password := p.held
-	if current.PasswordSetAt != p.PasswordSetAt {
+	if p.Version == 2 {
+		if err := driveADPreparedReset(ctx, p, nil, false, newADPreparedResetNative(b, p)); err != nil {
+			return "", nil, err
+		}
+	} else if current.PasswordSetAt != p.PasswordSetAt {
 		// An ambiguous earlier apply may already be current. Verify that exact
 		// preparation once; never overwrite an unrelated native password change.
 		if err := password.Use(func(value []byte) error { return b.verifyBoundADPassword(ctx, p.DN, value) }); err != nil {
@@ -166,6 +235,14 @@ func (b *LDAPBackend) RestorePreparedStaticCredential(ctx context.Context, req G
 		return err
 	}
 	defer p.destroy()
+	if p.Version == 2 {
+		predecessor, e := decodeADPredecessorPassword(old, p.DN)
+		if e != nil {
+			return e
+		}
+		defer predecessor.Destroy()
+		return driveADPreparedReset(ctx, p, predecessor.Bytes(), true, newADPreparedResetNative(b, p))
+	}
 	if current.PasswordSetAt == p.PasswordSetAt {
 		// Preparation never reached a native reset. Do not mutate the directory
 		// merely to make an unverified imported vault value appear correct.

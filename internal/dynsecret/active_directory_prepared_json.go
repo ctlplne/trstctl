@@ -19,8 +19,8 @@ func validateADPreparationFields(raw []byte) error {
 	if len(raw) < 2 || raw[0] != '{' || raw[len(raw)-1] != '}' {
 		return errors.New("dynsecret AD: preparation must be an object")
 	}
-	names := []string{"version", "role", "operation_id", "predecessor", "provider_binding", "bind_dn", "username", "native_guid", "native_sid", "password_set_at", "password"}
-	seen := uint16(0)
+	names := []string{"version", "role", "operation_id", "predecessor", "provider_binding", "bind_dn", "username", "native_guid", "native_sid", "password_set_at", "password", "key_version", "dc_invocation_id", "forward_intermediate", "inverse_intermediate", "native_address"}
+	seen := uint32(0)
 	i := adJSONSpace(raw, 1)
 	for i < len(raw)-1 {
 		end := adJSONStringEnd(raw, i)
@@ -100,15 +100,41 @@ func adJSONStringEnd(raw []byte, i int) int {
 // Only public metadata goes through encoding/json's pooled encoder. Secret
 // quoting uses an owned byte slice, which is wiped after the final wire copy.
 func marshalADStaticPreparation(p adStaticPreparation) ([]byte, error) {
-	password := p.Password
+	password, forward, inverse := p.Password, p.ForwardIntermediate, p.InverseIntermediate
 	p.Password = nil
-	metadata, err := json.Marshal(p) // #nosec G117 -- password is cleared/omitted before the public-only marshal; native password stamp is public metadata (CWE-200)
+	p.ForwardIntermediate = nil
+	p.InverseIntermediate = nil
+	metadata, err := json.Marshal(p) // #nosec G117 -- all three secret generations are cleared before marshaling public metadata (CWE-200)
 	if err != nil {
 		return nil, err
 	}
-	return appendADCredentialPassword(metadata, password)
+	out, err := appendADCredentialSecret(metadata, "password", password)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range []struct {
+		name  string
+		value []byte
+	}{{"forward_intermediate", forward}, {"inverse_intermediate", inverse}} {
+		if len(field.value) == 0 {
+			continue
+		}
+		next, e := appendADCredentialSecret(out, field.name, field.value)
+		secret.Wipe(out)
+		if e != nil {
+			return nil, e
+		}
+		out = next
+	}
+	return out, nil
 }
 func appendADCredentialPassword(metadata, password []byte) ([]byte, error) {
+	return appendADCredentialSecret(metadata, "password", password)
+}
+func appendADCredentialSecret(metadata []byte, fieldName string, password []byte) ([]byte, error) {
+	if fieldName != "password" && fieldName != "forward_intermediate" && fieldName != "inverse_intermediate" {
+		return nil, errors.New("dynsecret AD: unknown sealed credential field")
+	}
 	if len(metadata) < 2 || metadata[0] != '{' || metadata[len(metadata)-1] != '}' {
 		return nil, errors.New("dynsecret AD: credential metadata is not an object")
 	}
@@ -117,7 +143,7 @@ func appendADCredentialPassword(metadata, password []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer secret.Wipe(quoted)
-	field := []byte(`,"password":`)
+	field := []byte(",\"" + fieldName + "\":")
 	out := make([]byte, len(metadata)-1+len(field)+len(quoted)+1)
 	i := copy(out, metadata[:len(metadata)-1])
 	i += copy(out[i:], field)

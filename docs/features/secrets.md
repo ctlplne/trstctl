@@ -2461,28 +2461,45 @@ accounts retain their existing two-phase lifecycle. The native recovery proof us
 Samba AD; Windows service/task/IIS dependent coordination and directory drift
 reconciliation have separate execution and verification requirements.
 
-New in-place AD rotations also retain one encrypted preparation before the first
-reset. It binds the operation, provider configuration, native object GUID/SID,
-account name and the directory's password-change observation. The old vault value
-is encrypted alongside it before applying the new password. Retries reuse this
-preparation. If a reply is lost after the reset, the worker checks the same new
-password rather than generating another value. If it cannot confirm the apply,
-it uses the retained predecessor for verified native recovery.
+New in-place AD rotations retain a version2 encrypted preparation before the
+first reset. It holds the final password and both forward and inverse
+intermediates. All three remain byte-backed, locked and wiped after use. The
+preparation binds the operation, provider, account GUID/SID/name, exact DC
+invocation, verified TLS peer address and the directory's password-change count.
+The old vault value is encrypted alongside it before any native write.
 
-A changed provider or native account binding stops further resets. A password
-change outside the retained preparation is not silently overwritten. Check the
-original binding and reconcile the account when recovery cannot be verified.
-Changing configuration while a rotation is pending may therefore require manual
-recovery. The preparation is included in tenant-key migration and read-model
-recovery; restarting the process alone does not change its configuration binding.
-These controls do not qualify a multi-DC forest or the Windows dependent workflow.
+The fixed sequence is original → forward intermediate → new password → inverse
+intermediate → restored predecessor. A restarted worker reads the native version
+and proves only that version's retained credential. It never guesses several
+passwords. If recovery starts after the first forward write, it completes the
+retained new generation before running the inverse; this gives every intermediate
+one unambiguous position. A completed operation replays without another reset.
+Existing version1 preparations stay readable, but an intermediate they did not
+retain cannot acquire this recovery guarantee retroactively.
 
-Imported Active Directory predecessors can contain Unicode. Native rollback
-validates bounded UTF-8 without NUL, encodes quoted UTF-16LE directly in a locked
-LDAPS request buffer, and verifies a sign-in before publishing recovery. Generated
-rotation passwords keep their printable-ASCII contract. Directory password policy
-can still refuse a predecessor; that remains `rollback_failed`, with no claim of
-recovery. Interruption between the two administrative resets remains unqualified.
+The reset principal must read rootDSE/DC invocation and Directory Service
+`dSHeuristics` metadata as well as the account's native state. Key-version
+emulation (`fKVNOEmuW2K`, character17) is refused because its constant version1
+cannot identify progress. Keep the configured DC and original verified TLS trust
+available while an operation is pending. A changed DC, account, provider or
+unexplained native progress stops further resets.
+
+The administrative reset API has no atomic expected-version condition. These
+checks refuse observed serial changes; another directory administrator can still
+race the last read and the write. Keep external password automation and manual
+resets out of the operation's maintenance window. Failed attribution or an unsafe
+lockout state requires investigation before deliberate recovery.
+
+Imported predecessors can contain bounded UTF-8 without NUL. Native rollback
+encodes quoted UTF-16LE directly into locked LDAPS buffers and proves a sign-in
+before publishing recovery. Generated passwords keep their printable-ASCII
+contract. Directory policy can refuse a predecessor; that remains
+`rollback_failed`, with no claim of recovery. The owned Samba proof exits an
+actual worker after each of four native writes, reloads the same encrypted
+preparation, checks the exact native version and uses stock `ldapsearch` to prove
+current acceptance and explicit retired-password refusal. This is worker-process
+recovery evidence; it does not qualify host power loss, a multi-DC forest or the
+Windows dependent workflow.
 
 The Windows service dependent adapter reads the enrolled host's local Service
 Control Manager. It selects the exact account SID, captures service names and

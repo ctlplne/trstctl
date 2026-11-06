@@ -92,14 +92,25 @@ func resetADPasswordPacket(ctx context.Context, route PinnedTLS, adminDN string,
 	return parseLDAPResult(response, 2, 0x67)
 }
 
-func newADPasswordPacket(dn string, password []byte) (*secret.Buffer, error) {
-	if len(dn) == 0 || len(dn) > 4096 || len(password) < 16 || len(password) > 1024 {
-		return nil, errors.New("AD password reset exceeds its bounds")
+// ValidateADGeneratedPassword checks all generated reset material before a
+// multi-effect operation starts; Unicode predecessors use the recovery validator.
+func ValidateADGeneratedPassword(password []byte) error {
+	if len(password) < 16 || len(password) > 1024 {
+		return errors.New("AD generated password exceeds its bounds")
 	}
 	for _, v := range password {
 		if v < 32 || v > 126 {
-			return nil, errors.New("AD generated password must be printable ASCII")
+			return errors.New("AD generated password must be printable ASCII")
 		}
+	}
+	return nil
+}
+func newADPasswordPacket(dn string, password []byte) (*secret.Buffer, error) {
+	if len(dn) == 0 || len(dn) > 4096 {
+		return nil, errors.New("AD password reset account exceeds its bounds")
+	}
+	if e := ValidateADGeneratedPassword(password); e != nil {
+		return nil, e
 	}
 	return newADPasswordPacketValue(dn, password, len(password))
 }

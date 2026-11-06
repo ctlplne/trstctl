@@ -90,3 +90,55 @@ func TestADPreparationRejectsAmbiguousJSONA267(t *testing.T) {
 		}
 	}
 }
+
+func TestADPreparationRetainsEveryResetGenerationA267(t *testing.T) {
+	p := adPreparationFixture()
+	p.Version = 2
+	p.KeyVersion = 48
+	p.DCInvocationID = strings.Repeat("c", 32)
+	p.NativeAddress = "127.0.0.1:636"
+	p.ForwardIntermediate = []byte("Owned1!forward-intermediate")
+	p.InverseIntermediate = []byte("Owned1!inverse-intermediate")
+	raw, e := marshalADStaticPreparation(p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer secret.Wipe(raw)
+	parsed, e := decodeADStaticPreparation(raw)
+	if e != nil {
+		t.Fatal("complete durable reset preparation refused", e)
+	}
+	final, forward, inverse := parsed.Password, parsed.ForwardIntermediate, parsed.InverseIntermediate
+	if !bytes.Equal(final, p.Password) || !bytes.Equal(forward, p.ForwardIntermediate) || !bytes.Equal(inverse, p.InverseIntermediate) || parsed.KeyVersion != 48 || parsed.DCInvocationID != p.DCInvocationID {
+		t.Fatal("sealed reset preparation lost a generation or native authority")
+	}
+	parsed.destroy()
+	for _, held := range [][]byte{final, forward, inverse} {
+		for _, v := range held {
+			if v != 0 {
+				t.Fatal("destroyed preparation retained reset material")
+			}
+		}
+	}
+	for _, mutate := range []func(*adStaticPreparation){
+		func(v *adStaticPreparation) { v.ForwardIntermediate = nil },
+		func(v *adStaticPreparation) { v.InverseIntermediate = v.Password },
+		func(v *adStaticPreparation) { v.KeyVersion = 0 },
+		func(v *adStaticPreparation) { v.KeyVersion = 1<<32 - 3 },
+		func(v *adStaticPreparation) { v.DCInvocationID = "foreign" },
+		func(v *adStaticPreparation) { v.NativeAddress = "unreviewed.test:636" },
+	} {
+		candidate := p
+		mutate(&candidate)
+		wire, e := marshalADStaticPreparation(candidate)
+		if e != nil {
+			continue
+		}
+		value, e := decodeADStaticPreparation(wire)
+		value.destroy()
+		secret.Wipe(wire)
+		if e == nil {
+			t.Fatal("incomplete, aliased or unbound reset generations accepted")
+		}
+	}
+}

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2724 annotated sites across 31 rules. Each row is
+2728 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -764,7 +764,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (427 sites)
+### G115 — CWE-190 Integer overflow or wraparound (429 sites)
 
 | Location | Reason |
 |---|---|
@@ -906,6 +906,8 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:323` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:348` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:352` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
+| `internal/dynsecret/active_directory_reset_native_lab_test.go:305` | preparation is checked at <=64KiB before conversion (CWE-190) |
+| `internal/dynsecret/active_directory_reset_native_lab_test.go:306` | predecessor is checked at <=1024 bytes before conversion (CWE-190) |
 | `internal/dynsecret/drivers.go:321` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:329` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:688` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1206,7 +1208,7 @@ not this file.
 | `internal/agent/accessgateway/gcp_test.go:35` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/agent/accessgateway/gcp_test.go:166` | owned provider-envelope fixture; private bytes are locked on parse and scratch is wiped (CWE-200) |
 | `internal/dynsecret/active_directory.go:123` | byte-backed rotated credential is sealed by the existing outbox rotation worker (CWE-200) |
-| `internal/dynsecret/active_directory_prepared_json.go:105` | password is cleared/omitted before the public-only marshal; native password stamp is public metadata (CWE-200) |
+| `internal/dynsecret/active_directory_prepared_json.go:107` | all three secret generations are cleared before marshaling public metadata (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:17` | synthetic byte-backed parser fixture, wiped and never logged (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:31` | synthetic rejected credential fixture, wiped and never logged (CWE-200) |
 | `internal/dynsecret/active_directory_prepared_test.go:59` | synthetic byte-backed fuzz/parser seed, never logged (CWE-200) |
@@ -1378,7 +1380,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (360 sites)
+### G204 — CWE-78 OS command injection (362 sites)
 
 | Location | Reason |
 |---|---|
@@ -1489,6 +1491,8 @@ not this file.
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
 | `internal/dynsecret/active_directory_lab_test.go:132` | fixed stock tools and test-owned public directory arguments; password arrives on an inherited pipe, no shell (CWE-78) |
+| `internal/dynsecret/active_directory_reset_native_lab_test.go:216` | this exact owned test executable and public fixture references; key material travels only through the anonymous stdin pipe (CWE-78) |
+| `internal/dynsecret/active_directory_reset_native_lab_test.go:247` | fixed stock LDAP binary and exact owned DN; only a private inherited pipe carries the password, no argv/environment/plain file (CWE-78) |
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
 | `internal/kmip/pykmip_client_test.go:49` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/kmip/pykmip_tenants_test.go:46` | fixed docker subcommands with test-owned arguments (CWE-78) |
