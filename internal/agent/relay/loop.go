@@ -95,7 +95,7 @@ const (
 // refuses a connector it cannot run.
 func ClaimableKinds() []string {
 	return []string{
-		"connector.deploy", "connector.test", KindConnectorRollback,
+		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsDependentInventory,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindADCSNestedGroups, KindADCSEndpointProbe, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
@@ -327,6 +327,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// A revocation probe carries a different payload and needs no credential at
 	// all — it reads public distribution points. Routing it before the deploy
 	// path keeps it from redeeming material it has no use for (R1).
+	if job.Kind == KindWindowsDependentInventory {
+		return runWindowsDependentInventory(ctx, ch, hostProfile, job)
+	}
 	if job.Kind == KindRevocationProbe {
 		return runRevocationProbe(ctx, ch, client, job)
 	}

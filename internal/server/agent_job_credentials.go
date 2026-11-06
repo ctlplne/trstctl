@@ -64,6 +64,10 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
+	if job.Destination == relay.KindWindowsDependentInventory {
+		return nil, status.Error(codes.FailedPrecondition, "native dependent inventory redeems no credential")
+	}
+
 	if job.Destination == "adcs.inventory.enrollment_groups" || job.Destination == "adcs.inventory.endpoint_probe" {
 		if a.orch == nil || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network") {
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)

@@ -26,37 +26,11 @@ func ValidateDiscoveredAccount(account Account) error {
 		}
 		return nil
 	}
-	if account.Key != "user:"+strings.ToLower(account.Name) || len(account.Name) > 256 || !utf8.ValidString(account.Name) || account.Details["service_account"] != "true" {
-		return errors.New("pam discovery: incomplete service identity")
+	if account.Details["service_account"] != "true" {
+		return errors.New("pam discovery: service selection flag required")
 	}
-	for _, r := range account.Name {
-		if r < 32 || r == 127 {
-			return errors.New("pam discovery: invalid service account name")
-		}
-	}
-	guid, err := hex.DecodeString(account.Details["native_guid"])
-	if err != nil || len(guid) != 16 || account.Details["native_guid"] != strings.ToLower(account.Details["native_guid"]) {
-		return errors.New("pam discovery: native service GUID required")
-	}
-	nonzero := false
-	for _, value := range guid {
-		nonzero = nonzero || value != 0
-	}
-	if !nonzero {
-		return errors.New("pam discovery: zero native service GUID")
-	}
-	sid := strings.Split(account.Details["native_sid"], "-")
-	if len(sid) != 8 || strings.Join(sid[:4], "-") != "S-1-5-21" {
-		return errors.New("pam discovery: native domain account SID required")
-	}
-	for _, value := range sid[4:] {
-		n, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || strconv.FormatUint(n, 10) != value {
-			return errors.New("pam discovery: invalid canonical service SID")
-		}
-	}
-	if dn, err := ldap.ParseDN(account.Details["dn"]); err != nil || len(dn.RDNs) == 0 {
-		return errors.New("pam discovery: native service DN required")
+	if err := ValidateNativeADIdentity(account); err != nil {
+		return err
 	}
 	if account.Details["configured_rotation_account"] == "true" {
 		return nil
@@ -81,5 +55,47 @@ func ValidateDiscoveredAccount(account Account) error {
 			}
 		}
 	}
+	return nil
+}
+
+// ValidateNativeADIdentity checks native identity independently of privileges or
+// service selection. Enrolled-host binding must retain both the object GUID and SID.
+func ValidateNativeADIdentity(account Account) error {
+	if account.Name == "" || account.Key != "user:"+strings.ToLower(account.Name) || len(account.Name) > 256 || !utf8.ValidString(account.Name) {
+		return errors.New("pam discovery: incomplete service identity")
+	}
+	for _, r := range account.Name {
+		if r < 32 || r == 127 {
+			return errors.New("pam discovery: invalid service account name")
+		}
+	}
+	if len(account.Details["native_guid"]) != 32 || len(account.Details["native_sid"]) > 184 || len(account.Details["dn"]) == 0 || len(account.Details["dn"]) > 4096 || !utf8.ValidString(account.Details["dn"]) {
+		return errors.New("pam discovery: bounded native identity required")
+	}
+	guid, err := hex.DecodeString(account.Details["native_guid"])
+	if err != nil || len(guid) != 16 || account.Details["native_guid"] != strings.ToLower(account.Details["native_guid"]) {
+		return errors.New("pam discovery: native service GUID required")
+	}
+	nonzero := false
+	for _, value := range guid {
+		nonzero = nonzero || value != 0
+	}
+	if !nonzero {
+		return errors.New("pam discovery: zero native service GUID")
+	}
+	sid := strings.Split(account.Details["native_sid"], "-")
+	if len(sid) != 8 || strings.Join(sid[:4], "-") != "S-1-5-21" {
+		return errors.New("pam discovery: native domain account SID required")
+	}
+	for i, value := range sid[4:] {
+		n, err := strconv.ParseUint(value, 10, 32)
+		if err != nil || strconv.FormatUint(n, 10) != value || (i == 3 && n == 0) {
+			return errors.New("pam discovery: invalid canonical service SID")
+		}
+	}
+	if dn, err := ldap.ParseDN(account.Details["dn"]); err != nil || len(dn.RDNs) == 0 {
+		return errors.New("pam discovery: native service DN required")
+	}
+
 	return nil
 }

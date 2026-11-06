@@ -26,6 +26,7 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"agents.name",
 		"agents.offboarding-evidence",
 		"pam_sessions.subjects",
+		"service_account_dependents.actors",
 		"discovery_findings.triage",
 		"discovery_sources.config",
 		"discovery_findings.metadata",

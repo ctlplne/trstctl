@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"trstctl.com/trstctl/internal/servicedependents"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -2531,9 +2532,10 @@ func (s *Server) configurePAMSurface(d Deps) error {
 		sshCA = sshSurface.CA()
 	}
 	svc, err := newPAMService(pamDeps{
-		DesktopJobEnabled:   AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionDesktop],
-		ADDesktopJobEnabled: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionADDesktop],
-		Config:              d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
+		DesktopJobEnabled:                AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionDesktop],
+		ADDesktopJobEnabled:              AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionADDesktop],
+		WindowsDependentInventoryEnabled: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[servicedependents.InventoryDestination],
+		Config:                           d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,
 		CommandRuleJobKinds: map[string]bool{accessgateway.KindSessionClickHouseRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionClickHouseRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionMongoRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionMongoRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionRedisRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRedisRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionMySQLRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionMySQLRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil, accessgateway.KindSessionSSHRules: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionSSHRules] && s.bulk.Pool(bulkhead.SubsystemGatewayCommands) != nil},
 		Audit:               attestedIssuanceAuditor(d.Log), Providers: d.TenantDynamicSecretProviders,
 		KEK: d.KEK, Outbox: s.outbox, WakeOutbox: s.wakeOutbox, TenantCrypto: d.TenantCrypto,

@@ -164,31 +164,32 @@ type PAMSSHTarget struct {
 }
 
 type pamService struct {
-	desktopJobEnabled   bool
-	adDesktopJobEnabled bool
-	commandRuleJobKinds map[string]bool
-	store               *store.Store
-	log                 *events.Log
-	projector           *projections.Projector
-	audit               auditsink.Auditor
-	attestors           []attest.Attestor
-	databases           map[pamDatabaseID]*pamDatabaseTarget
-	providers           DynamicSecretProviderRegistry
-	kek                 seal.KeyWrapper
-	outbox              *orchestrator.Outbox
-	wakeOutbox          func()
-	tenantCrypto        tenantseal.Access
-	sshTargets          map[pamTargetID]PAMSSHTarget
-	sshCA               *sshca.CA
-	sshProtocol         *sshProtocol
-	defaultTTL          time.Duration
-	maxTTL              time.Duration
-	expiryInterval      time.Duration
-	clock               func() time.Time
-	orch                *orchestrator.Orchestrator
-	approvalTTL         time.Duration
-	requiredApprovals   int
-	targetDeps          pamDeps
+	windowsDependentInventoryEnabled bool
+	desktopJobEnabled                bool
+	adDesktopJobEnabled              bool
+	commandRuleJobKinds              map[string]bool
+	store                            *store.Store
+	log                              *events.Log
+	projector                        *projections.Projector
+	audit                            auditsink.Auditor
+	attestors                        []attest.Attestor
+	databases                        map[pamDatabaseID]*pamDatabaseTarget
+	providers                        DynamicSecretProviderRegistry
+	kek                              seal.KeyWrapper
+	outbox                           *orchestrator.Outbox
+	wakeOutbox                       func()
+	tenantCrypto                     tenantseal.Access
+	sshTargets                       map[pamTargetID]PAMSSHTarget
+	sshCA                            *sshca.CA
+	sshProtocol                      *sshProtocol
+	defaultTTL                       time.Duration
+	maxTTL                           time.Duration
+	expiryInterval                   time.Duration
+	clock                            func() time.Time
+	orch                             *orchestrator.Orchestrator
+	approvalTTL                      time.Duration
+	requiredApprovals                int
+	targetDeps                       pamDeps
 	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
 	// certificate against (A254); nil when no agent channel is served.
 	agentCAPEM func() []byte
@@ -249,22 +250,23 @@ type pamTargetID struct {
 }
 
 type pamDeps struct {
-	DesktopJobEnabled   bool
-	ADDesktopJobEnabled bool
-	CommandRuleJobKinds map[string]bool
-	Config              PAMConfig
-	Store               *store.Store
-	Log                 *events.Log
-	SSHCA               *sshca.CA
-	SSHProtocol         *sshProtocol
-	Audit               auditsink.Auditor
-	Clock               func() time.Time
-	Providers           DynamicSecretProviderRegistry
-	KEK                 seal.KeyWrapper
-	Outbox              *orchestrator.Outbox
-	WakeOutbox          func()
-	TenantCrypto        tenantseal.Access
-	Orch                *orchestrator.Orchestrator
+	DesktopJobEnabled                bool
+	ADDesktopJobEnabled              bool
+	WindowsDependentInventoryEnabled bool
+	CommandRuleJobKinds              map[string]bool
+	Config                           PAMConfig
+	Store                            *store.Store
+	Log                              *events.Log
+	SSHCA                            *sshca.CA
+	SSHProtocol                      *sshProtocol
+	Audit                            auditsink.Auditor
+	Clock                            func() time.Time
+	Providers                        DynamicSecretProviderRegistry
+	KEK                              seal.KeyWrapper
+	Outbox                           *orchestrator.Outbox
+	WakeOutbox                       func()
+	TenantCrypto                     tenantseal.Access
+	Orch                             *orchestrator.Orchestrator
 	// AgentCAPEM is the agent CA a client verifies a gateway against (A254).
 	AgentCAPEM func() []byte
 	// RecordingObjects and RecordingSigner store and sign gateway session
@@ -345,8 +347,9 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		return nil, err
 	}
 	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled,
-		commandRuleJobKinds: d.CommandRuleJobKinds,
-		browser:             newPAMBrowser(), discovery: newPAMDiscovery(),
+		commandRuleJobKinds:              d.CommandRuleJobKinds,
+		windowsDependentInventoryEnabled: d.WindowsDependentInventoryEnabled,
+		browser:                          newPAMBrowser(), discovery: newPAMDiscovery(),
 		recordings: recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,

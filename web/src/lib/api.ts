@@ -538,6 +538,9 @@ import type {
   PAMDiscoveryImportRequest,
   PAMDiscoveryImportReview,
   PAMImportedAccountList,
+  PAMServiceDependentHost,
+  PAMServiceDependentHostList,
+  PAMServiceDependentScan,
   PAMCheckout,
   PAMCheckoutList,
   PAMCheckoutRequest,
@@ -1531,6 +1534,9 @@ export type {
   PAMDiscoveryImportRequest,
   PAMDiscoveryImportReview,
   PAMImportedAccountList,
+  PAMServiceDependentHost,
+  PAMServiceDependentHostList,
+  PAMServiceDependentScan,
   PAMCheckout,
   PAMCheckoutList,
   PAMCheckoutRequest,
@@ -2571,6 +2577,10 @@ export interface Api {
   applyPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMImportedAccountList>;
   dismissPAMDiscoveredAccount(id: string, reason: string, idempotencyKey?: string): Promise<PAMDiscoveredAccount>;
   pamImportedAccounts(folder?: string): Promise<PAMImportedAccountList>;
+  pamServiceDependentHosts(accountID: string, after?: string): Promise<PAMServiceDependentHostList>;
+  savePAMServiceDependentHost(accountID: string, agentID: string, enabled: boolean, idempotencyKey?: string): Promise<PAMServiceDependentHost>;
+  runPAMServiceDependentInventory(accountID: string, agentID: string, idempotencyKey?: string): Promise<PAMServiceDependentScan>;
+  pamServiceDependentScan(id: string): Promise<PAMServiceDependentScan>;
   pamCheckouts(): Promise<PAMCheckoutList>;
   requestPAMCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMCheckoutReview>;
   revealPAMCheckout(requestID: string, input: PAMCheckoutRevealRequest, idempotencyKey?: string): Promise<PAMCheckoutReveal>;
@@ -3512,6 +3522,25 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PAMImportedAccountList>("POST", `/api/v1/access/discovery/imports/${encodeURIComponent(input.request_id)}/apply`, input, idempotencyKey),
   dismissPAMDiscoveredAccount: (id, reason, idempotencyKey) =>
     mutate<PAMDiscoveredAccount>("POST", `/api/v1/access/discovery/accounts/${encodeURIComponent(id)}/dismiss`, { reason }, idempotencyKey),
+  pamServiceDependentHosts: (accountID, after) =>
+    req<PAMServiceDependentHostList>(
+      "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents" + (after ? "?after=" + encodeURIComponent(after) : ""),
+    ),
+  savePAMServiceDependentHost: (accountID, agentID, enabled, key) =>
+    mutate<PAMServiceDependentHost>(
+      "PUT",
+      "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/" + encodeURIComponent(agentID),
+      { enabled },
+      key,
+    ),
+  runPAMServiceDependentInventory: (accountID, agentID, key) =>
+    mutate<PAMServiceDependentScan>(
+      "POST",
+      "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/" + encodeURIComponent(agentID) + "/runs",
+      undefined,
+      key,
+    ),
+  pamServiceDependentScan: (id) => req<PAMServiceDependentScan>("/api/v1/access/discovery/dependent-runs/" + encodeURIComponent(id)),
   pamImportedAccounts: (folder) => req<PAMImportedAccountList>(`/api/v1/access/accounts${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`),
   pamCheckouts: () => req<PAMCheckoutList>("/api/v1/access/checkouts"),
   requestPAMCheckout: (input, idempotencyKey) => mutate<PAMCheckoutReview>("POST", "/api/v1/access/checkouts", input, idempotencyKey),

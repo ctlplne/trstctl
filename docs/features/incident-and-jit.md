@@ -1147,3 +1147,57 @@ notifications use the [notification integrations](policy-and-governance.md).
 glossary: [revocation](../glossary.md), [rotation](../glossary.md), [CA](../glossary.md)
 
 **Covers:** F31, F32, F33, F34
+
+## AD account references on enrolled Windows hosts
+
+After scanning an explicit Active Directory source, open **Dependent hosts** beside
+the account in privileged account discovery. Non-admin SPN accounts and explicitly
+configured rotation accounts retain their native SID and object GUID; an account
+reference does not imply administrative privilege.
+
+Add the UUID of each enrolled host that uses the account. The host must have the
+`host` role. On the server, add `host.windows_dependents.inventory` to
+`TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` while preserving any other
+explicitly authorized kinds. On each Windows agent, enable
+`--relay-claim` and point `--host-exec-profile` at an operator-owned
+JSON file containing the exact account SID:
+
+```json
+{"windows_dependent_sids":["S-1-5-21-111-222-333-1001"]}
+```
+
+This grant permits local read-only inventory for that SID. It grants no credential
+redemption, password write, task start, shell command or filesystem deployment.
+An existing host profile can add this property alongside its existing settings.
+
+Choose **Scan host**. The server queues an intent for the exact enrolled host.
+Its signed report retains separate coverage for Windows services, scheduled tasks
+and IIS application pools, with native object identifiers and configuration hashes.
+Saved passwords, task arguments and private configuration are not returned.
+Read access can reopen the latest scan; target-write access is required to select,
+disable or scan a host. Disabling or saving a new binding makes prior results
+historical. Scan again before using inventory from an earlier binding.
+
+An unavailable reader is not an empty result. Check the agent's native permissions,
+Task Scheduler availability and local IIS installation, then scan again. An offline
+agent leaves its read queued; a refused local SID requires updating that host's
+operator-owned profile. A failed delivery requires resolving its cause before
+queuing another scan. Do not treat a complete inventory as functional workload
+verification: it shows account references on this host at the observation time.
+The directory does not enumerate all machines for you.
+
+The same workflow is available through the generated CLI and SDK contract:
+
+- `GET /api/v1/access/discovery/accounts/{account_id}/dependents?limit=50&after={agent_uuid}`
+  pages selected hosts; use `next_cursor` for the next page.
+- `PUT /api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}`
+  accepts `{"enabled":true}` or `{"enabled":false}`.
+- `POST /api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}/runs`
+  returns the queued run with HTTP 202.
+- `GET /api/v1/access/discovery/dependent-runs/{id}` returns its retained
+  native report and signed receipt metadata.
+
+Both mutations require an `Idempotency-Key`; reuse the same key when retrying
+the same request. Each queued intent freezes the native directory identity, exact
+agent and binding revision. A different account, tenant, host or revision cannot
+borrow that intent.

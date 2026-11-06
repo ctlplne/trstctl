@@ -10,6 +10,69 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.dependents.delivery": { defaultMessage: "Delivery: {status}", description: "Native host inventory delivery." },
+  "admin.access.dependents.deliveryFailed": {
+    defaultMessage: "Delivery stopped. Resolve the host or profile failure, then queue a new scan. The retained receipt describes the earlier attempt.",
+    description: "Native host inventory delivery.",
+  },
+  "admin.access.dependents.loading": { defaultMessage: "Loading host inventory…", description: "AD host inventory." },
+  "admin.access.dependents.retry": { defaultMessage: "Retry read", description: "AD host inventory." },
+  "admin.access.dependents.title": { defaultMessage: "Dependents for {name}", description: "AD service-account host inventory." },
+  "admin.access.dependents.description": {
+    defaultMessage:
+      "Select each enrolled Windows host that uses this AD account. A scan reads Windows services, scheduled tasks and IIS application pools. It does not change passwords or start workloads.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.hostID": { defaultMessage: "Enrolled host ID", description: "AD service-account host inventory." },
+  "admin.access.dependents.hostHelp": {
+    defaultMessage: "Copy the host agent UUID from Agents. Its local execution profile must allow this exact account SID for read-only inventory.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.invalidHost": { defaultMessage: "Enter the enrolled host UUID.", description: "AD service-account host inventory." },
+  "admin.access.dependents.addHost": { defaultMessage: "Add host", description: "AD service-account host inventory." },
+  "admin.access.dependents.enabled": { defaultMessage: "Inventory enabled", description: "AD service-account host inventory." },
+  "admin.access.dependents.disabled": { defaultMessage: "Inventory disabled", description: "AD service-account host inventory." },
+  "admin.access.dependents.latest": {
+    defaultMessage: "Latest scan: {status} \u00b7 services {services}, tasks {tasks}, IIS pools {pools}",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.stale": {
+    defaultMessage: "Earlier host binding: scan this enabled host again before using its inventory.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.view": { defaultMessage: "View scan", description: "AD service-account host inventory." },
+  "admin.access.dependents.noScan": { defaultMessage: "No scan has been received.", description: "AD service-account host inventory." },
+  "admin.access.dependents.scan": { defaultMessage: "Scan host", description: "AD service-account host inventory." },
+  "admin.access.dependents.disable": { defaultMessage: "Disable inventory", description: "AD service-account host inventory." },
+  "admin.access.dependents.enable": { defaultMessage: "Enable inventory", description: "AD service-account host inventory." },
+  "admin.access.dependents.noHosts": {
+    defaultMessage: "No hosts selected. Add every host that uses this account; directory discovery does not enumerate machines.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.previous": { defaultMessage: "Previous hosts", description: "AD service-account host inventory." },
+  "admin.access.dependents.next": { defaultMessage: "Next hosts", description: "AD service-account host inventory." },
+  "admin.access.dependents.result": { defaultMessage: "Host inventory result", description: "AD service-account host inventory." },
+  "admin.access.dependents.runStatus": { defaultMessage: "Run {id}: {status}", description: "AD service-account host inventory." },
+  "admin.access.dependents.pending": {
+    defaultMessage:
+      "Waiting for the host report. Check that the agent is online, the server allows this job kind, and the local profile allows the account SID.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.incomplete": {
+    defaultMessage: "Coverage is incomplete. Resolve the unavailable family on this host and scan again; an unavailable family is not an empty inventory.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.complete": {
+    defaultMessage: "All three inventory readers completed. These are account references, not proof that workloads can perform useful work.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.hashHelp": {
+    defaultMessage:
+      "Configuration hashes bind native metadata without exposing private task arguments or saved credentials. A scan reflects only this host at its observation time.",
+    description: "AD service-account host inventory.",
+  },
+  "admin.access.dependents.close": { defaultMessage: "Close", description: "AD service-account host inventory." },
+  "admin.access.dependents.open": { defaultMessage: "Dependent hosts", description: "AD service-account host inventory." },
   "discovery.azure.evidenceUnavailable": { defaultMessage: "Captured Azure evidence unavailable", description: "Azure workload inventory." },
   "discovery.azure.rescan": { defaultMessage: "Capture this native source again to refresh its metadata.", description: "Azure workload inventory." },
   "discovery.azure.useUnknown": {

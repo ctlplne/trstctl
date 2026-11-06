@@ -293,6 +293,7 @@ var TenantScopedTables = []string{
 	"pam_checkouts",
 	// A261 part 3: account folders; no foreign keys.
 	"pam_folders",
+	"service_account_hosts", "service_account_host_scans",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",

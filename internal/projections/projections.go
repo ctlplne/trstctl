@@ -5295,6 +5295,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMEmergencyRespondersSet:                {1: true},
 	EventPAMEmergencyOpened:                       {1: true},
 	EventPAMEmergencyReviewed:                     {1: true},
+	EventServiceDependentHostSaved:                {1: true},
+	EventServiceDependentScanQueued:               {1: true},
+	EventServiceDependentScanObserved:             {1: true},
+	EventServiceDependentScanFailed:               {1: true},
 	EventPAMDiscoverySourceSaved:                  {1: true},
 	EventPAMDiscoverySourceDeleted:                {1: true},
 	EventPAMDiscoveryRunCompleted:                 {1: true},
@@ -5559,6 +5563,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyArchiveLegalHoldTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyServiceDependentsTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applySSHTrustFleetTx(ctx, tx, e); handled {

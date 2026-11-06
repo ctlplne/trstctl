@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     pamDiscoverySources: vi.fn(),
     pamDiscoveredAccounts: vi.fn(),
     pamImportedAccounts: vi.fn(),
+    pamServiceDependentHosts: vi.fn(),
     dynamicSecretProviders: vi.fn(),
     savePAMDiscoverySource: vi.fn(),
     runPAMDiscovery: vi.fn(),
@@ -70,6 +71,7 @@ beforeEach(() => {
     items: [account("a-1", "app_admin", ["superuser"]), account("a-2", "etl", ["member:pg_read_all_data"])],
   });
   apiMock.pamImportedAccounts.mockResolvedValue({ items: [] });
+  apiMock.pamServiceDependentHosts.mockResolvedValue({ items: [] });
   apiMock.dynamicSecretProviders.mockResolvedValue({
     configured_providers: [
       { id: "orders-pg", type: "postgresql" },
@@ -182,4 +184,21 @@ it("shows a native AD service identity without inventing administrator rights", 
   expect(screen.getByText("No administrator privileges inferred")).toBeVisible();
   expect(screen.getByText("S-1-5-21-1-2-3-1001")).toBeVisible();
   expect(screen.getByText("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).toBeVisible();
+});
+
+it("keeps native host inventory reachable after an AD account is imported", async () => {
+  const native = {
+    ...account("native-imported", "svc-web", []),
+    kind: "directory_service_account",
+    status: "imported",
+    details: { native_sid: "S-1-5-21-1-2-3-1001", native_guid: "a".repeat(32) },
+  };
+  apiMock.pamImportedAccounts.mockResolvedValue({ items: [{ ...native, folder: "service-accounts", imported_by: "owner" }] });
+  apiMock.pamDiscoveredAccounts.mockImplementation(async (options) => ({ items: options?.status === "imported" ? [native] : [] }));
+  mount(false);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Dependent hosts" }));
+  await screen.findByRole("dialog");
+  expect(apiMock.pamServiceDependentHosts).toHaveBeenCalledWith(native.id, "");
+  expect(screen.queryByRole("button", { name: "Add host" })).not.toBeInTheDocument();
 });

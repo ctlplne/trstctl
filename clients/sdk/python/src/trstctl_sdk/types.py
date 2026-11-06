@@ -11895,6 +11895,102 @@ PAMCommandRule = TypedDict(
     total=False,
 )
 
+PAMDependentAccountBinding = TypedDict(
+    'PAMDependentAccountBinding',
+    {
+        'account_id': str,
+        'dn': str,
+        'guid': str,
+        'name': str,
+        'provider_id': str,
+        'sid': str,
+    },
+    total=False,
+)
+
+PAMDependentFamilyCoverage = TypedDict(
+    'PAMDependentFamilyCoverage',
+    {
+        'failure': str,
+        'family': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMDependentHostBinding = TypedDict(
+    'PAMDependentHostBinding',
+    {
+        'account': dict[str, Any],
+        'agent_id': str,
+        'enabled': bool,
+        'revision': int,
+    },
+    total=False,
+)
+
+PAMDependentInventoryIntent = TypedDict(
+    'PAMDependentInventoryIntent',
+    {
+        'binding': dict[str, Any],
+        'binding_digest': str,
+        'run_id': str,
+    },
+    total=False,
+)
+
+PAMDependentInventoryReport = TypedDict(
+    'PAMDependentInventoryReport',
+    {
+        'binding_digest': str,
+        'coverage': list[dict[str, Any]],
+        'observed_at': str,
+        'pools': list[dict[str, Any]],
+        'run_id': str,
+        'services': list[dict[str, Any]],
+        'tasks': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMDependentNativePool = TypedDict(
+    'PAMDependentNativePool',
+    {
+        'account_sid': str,
+        'config_sha256': str,
+        'encryption_provider': str,
+        'name': str,
+        'password_protected': bool,
+        'was_started': bool,
+    },
+    total=False,
+)
+
+PAMDependentNativeService = TypedDict(
+    'PAMDependentNativeService',
+    {
+        'account_sid': str,
+        'config_sha256': str,
+        'dependencies': list[str],
+        'name': str,
+        'was_running': bool,
+    },
+    total=False,
+)
+
+PAMDependentNativeTask = TypedDict(
+    'PAMDependentNativeTask',
+    {
+        'account_sid': str,
+        'action_count': int,
+        'config_sha256': str,
+        'enabled': bool,
+        'logon_type': int,
+        'path': str,
+    },
+    total=False,
+)
+
 PAMDiscoveredAccount = TypedDict(
     'PAMDiscoveredAccount',
     {
@@ -12285,6 +12381,82 @@ PAMSSHCredential = TypedDict(
         'principal': str,
         'serial': int,
         'valid_before': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentHost = TypedDict(
+    'PAMServiceDependentHost',
+    {
+        'binding': dict[str, Any],
+        'binding_digest': str,
+        'latest_scan': dict[str, Any],
+        'saved_by': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentHostList = TypedDict(
+    'PAMServiceDependentHostList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentHostRequest = TypedDict(
+    'PAMServiceDependentHostRequest',
+    {
+        'enabled': bool,
+    },
+    total=False,
+)
+
+PAMServiceDependentScan = TypedDict(
+    'PAMServiceDependentScan',
+    {
+        'attempt': int,
+        'delivery_status': str,
+        'failure': str,
+        'id': str,
+        'intent': dict[str, Any],
+        'observed_at': str,
+        'outbox_id': int,
+        'pool_count': int,
+        'queued_at': str,
+        'queued_by': str,
+        'queued_event_id': str,
+        'receipt_job_id': int,
+        'receipt_signature_base64': str,
+        'receipt_statement': str,
+        'received_at': str,
+        'report': dict[str, Any],
+        'report_digest': str,
+        'service_count': int,
+        'signer_fingerprint': str,
+        'status': str,
+        'task_count': int,
+    },
+    total=False,
+)
+
+PAMServiceDependentScanHead = TypedDict(
+    'PAMServiceDependentScanHead',
+    {
+        'agent_id': str,
+        'binding_digest': str,
+        'current': bool,
+        'delivery_status': str,
+        'failure': str,
+        'id': str,
+        'pool_count': int,
+        'queued_at': str,
+        'received_at': str,
+        'service_count': int,
+        'status': str,
+        'task_count': int,
     },
     total=False,
 )

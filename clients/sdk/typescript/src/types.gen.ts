@@ -299,6 +299,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List selected enrolled hosts for an AD account, with a cursor */
+        get: operations["listPAMServiceDependentHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Bind or disable one enrolled host for read-only AD account dependent inventory */
+        put: operations["savePAMServiceDependentHost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/{agent_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a read-only service, task and IIS account inventory on the exact enrolled host */
+        post: operations["runPAMServiceDependentInventory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/accounts/{id}/dismiss": {
         parameters: {
             query?: never;
@@ -310,6 +361,23 @@ export interface paths {
         put?: never;
         /** Set a staged account aside with the reason; a scan that finds it changed stages it again */
         post: operations["dismissPAMDiscoveredAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read signed native dependent metadata and explicit coverage for one host scan */
+        get: operations["getPAMServiceDependentScan"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21881,6 +21949,72 @@ export interface components {
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
             review_ttl_seconds?: number;
         };
+        PAMDependentAccountBinding: {
+            /** Format: uuid */
+            account_id: string;
+            dn: string;
+            guid: string;
+            name: string;
+            provider_id: string;
+            sid: string;
+        };
+        PAMDependentFamilyCoverage: {
+            failure?: string;
+            /** @enum {string} */
+            family: "services" | "tasks" | "iis";
+            /** @enum {string} */
+            status: "complete" | "unavailable";
+        };
+        PAMDependentHostBinding: {
+            account: components["schemas"]["PAMDependentAccountBinding"];
+            /** Format: uuid */
+            agent_id: string;
+            enabled: boolean;
+            /** Format: int64 */
+            revision: number;
+        };
+        PAMDependentInventoryIntent: {
+            binding: components["schemas"]["PAMDependentHostBinding"];
+            binding_digest: string;
+            /** Format: uuid */
+            run_id: string;
+        };
+        PAMDependentInventoryReport: {
+            binding_digest: string;
+            coverage: components["schemas"]["PAMDependentFamilyCoverage"][];
+            /** Format: date-time */
+            observed_at: string;
+            pools?: components["schemas"]["PAMDependentNativePool"][];
+            /** Format: uuid */
+            run_id: string;
+            services?: components["schemas"]["PAMDependentNativeService"][];
+            tasks?: components["schemas"]["PAMDependentNativeTask"][];
+        };
+        PAMDependentNativePool: {
+            account_sid: string;
+            config_sha256: string;
+            encryption_provider: string;
+            name: string;
+            password_protected: boolean;
+            was_started: boolean;
+        };
+        PAMDependentNativeService: {
+            account_sid: string;
+            config_sha256: string;
+            dependencies?: string[];
+            name: string;
+            was_running: boolean;
+        };
+        PAMDependentNativeTask: {
+            account_sid: string;
+            /** Format: int64 */
+            action_count: number;
+            config_sha256: string;
+            enabled: boolean;
+            /** Format: int64 */
+            logon_type: number;
+            path: string;
+        };
         PAMDiscoveredAccount: {
             /** @description bounded facts (shell, uid, can_login, authorized keys' fingerprints); never a credential */
             details?: {
@@ -22229,6 +22363,77 @@ export interface components {
             serial: number;
             /** Format: date-time */
             valid_before: string;
+        };
+        PAMServiceDependentHost: {
+            binding: components["schemas"]["PAMDependentHostBinding"];
+            binding_digest: string;
+            latest_scan?: components["schemas"]["PAMServiceDependentScanHead"];
+            saved_by: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PAMServiceDependentHostList: {
+            items: components["schemas"]["PAMServiceDependentHost"][];
+            next_cursor?: string;
+        };
+        PAMServiceDependentHostRequest: {
+            enabled: boolean;
+        };
+        PAMServiceDependentScan: {
+            /** Format: int64 */
+            attempt?: number;
+            delivery_status?: string;
+            failure?: string;
+            /** Format: uuid */
+            id: string;
+            intent: components["schemas"]["PAMDependentInventoryIntent"];
+            /** Format: date-time */
+            observed_at?: string;
+            /** Format: int64 */
+            outbox_id?: number;
+            /** Format: int64 */
+            pool_count: number;
+            /** Format: date-time */
+            queued_at: string;
+            queued_by: string;
+            /** Format: uuid */
+            queued_event_id: string;
+            /** Format: int64 */
+            receipt_job_id?: number;
+            receipt_signature_base64?: string;
+            receipt_statement?: string;
+            /** Format: date-time */
+            received_at?: string;
+            report?: components["schemas"]["PAMDependentInventoryReport"];
+            report_digest?: string;
+            /** Format: int64 */
+            service_count: number;
+            signer_fingerprint?: string;
+            /** @enum {string} */
+            status: "queued" | "complete" | "partial" | "retrying" | "failed" | "superseded";
+            /** Format: int64 */
+            task_count: number;
+        };
+        PAMServiceDependentScanHead: {
+            /** Format: uuid */
+            agent_id: string;
+            binding_digest: string;
+            current: boolean;
+            delivery_status?: string;
+            failure?: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            pool_count: number;
+            /** Format: date-time */
+            queued_at: string;
+            /** Format: date-time */
+            received_at?: string;
+            /** Format: int64 */
+            service_count: number;
+            status: string;
+            /** Format: int64 */
+            task_count: number;
         };
         PAMSession: {
             attestation?: components["schemas"]["Attestation"];
@@ -27691,6 +27896,143 @@ export interface operations {
             };
         };
     };
+    listPAMServiceDependentHosts: {
+        parameters: {
+            query?: {
+                /** @description the last agent UUID from the previous page */
+                after?: string;
+                /** @description 1-256 hosts, default 50 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentHostList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savePAMServiceDependentHost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentHostRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentHost"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runPAMServiceDependentInventory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     dismissPAMDiscoveredAccount: {
         parameters: {
             query?: never;
@@ -27716,6 +28058,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveredAccount"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceDependentScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentScan"];
                 };
             };
             /** @description client error */

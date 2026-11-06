@@ -65,3 +65,10 @@ $journalLog = Join-Path $env:RUNNER_TEMP 'a267-windows-task-journal.log'
 & go test -count=1 -timeout 3m -run '^TestTaskExecution' -v ./internal/agent/reportstate 2>&1 | Tee-Object -FilePath $journalLog
 if ($LASTEXITCODE -ne 0) { throw 'A267 native Windows task journal failed' }
 Write-Host 'A267_WINDOWS_TASK_JOURNAL_OK: sealed native filesystem fence, lost replies, failed reports and abrupt child exit; full host coordination remains separate'
+
+$env:TRSTCTL_A267_WINDOWS_INVENTORY = '1'
+$inventoryLog = Join-Path $env:RUNNER_TEMP 'a267-windows-inventory.log'
+& go test -count=1 -timeout 3m -run '^TestNativeWindowsInventoryCollectorA267$' -v ./internal/agent/relay 2>&1 | Tee-Object -FilePath $inventoryLog
+if ($LASTEXITCODE -ne 0 -or -not (Select-String -Path $inventoryLog -Pattern 'A267_WINDOWS_INVENTORY_OK' -Quiet)) {
+    throw 'A267 native enrolled-host inventory collector did not run and pass'
+}

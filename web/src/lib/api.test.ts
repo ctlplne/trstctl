@@ -3048,6 +3048,31 @@ describe("CLI-parity client methods (S3.3)", () => {
       path: "/api/v1/secrets/rotation-schedules?limit=20",
     },
     { name: "runDueSecretRotations", call: () => api.runDueSecretRotations(), method: "POST", path: "/api/v1/secrets/rotation-schedules/run-due" },
+    {
+      name: "pamServiceDependentHosts",
+      call: () => api.pamServiceDependentHosts("account/id", "agent/id"),
+      method: "GET",
+      path: "/api/v1/access/discovery/accounts/account%2Fid/dependents?after=agent%2Fid",
+    },
+    {
+      name: "savePAMServiceDependentHost",
+      call: () => api.savePAMServiceDependentHost("account/id", "agent/id", true),
+      method: "PUT",
+      path: "/api/v1/access/discovery/accounts/account%2Fid/dependents/agent%2Fid",
+    },
+    {
+      name: "runPAMServiceDependentInventory",
+      call: () => api.runPAMServiceDependentInventory("account/id", "agent/id"),
+      method: "POST",
+      path: "/api/v1/access/discovery/accounts/account%2Fid/dependents/agent%2Fid/runs",
+      status: 202,
+    },
+    {
+      name: "pamServiceDependentScan",
+      call: () => api.pamServiceDependentScan("run/id"),
+      method: "GET",
+      path: "/api/v1/access/discovery/dependent-runs/run%2Fid",
+    },
   ];
 
   it.each(cases.map((entry) => [entry.name, entry] as const))("%s calls its served route", async (_name, entry) => {

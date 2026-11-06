@@ -61,6 +61,7 @@ type PrivacyReadModelSelector struct {
 }
 
 var privacyReadModelSelectorTables = map[string]struct{}{
+	"service_account_hosts": {}, "service_account_host_scans": {},
 	"operation_approval_requests": {}, "operation_approval_decisions": {},
 	"workload_attester_trust_receipts": {},
 	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
@@ -1324,6 +1325,9 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	if r.EnforcedAt.IsZero() {
 		r.EnforcedAt = time.Now().UTC()
 	}
+	if err := retainServiceDependentActorsTx(ctx, tx, r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
+		return err
+	}
 	if r.Counts == nil {
 		r.Counts = map[string]int{}
 	}
@@ -2112,7 +2116,7 @@ func discoveryPrivacyJSONHasRetainablePII(column string) string {
 				          )`, column, strings.Join(conditions, " OR "))
 }
 
-func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQuery {
+func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
 		{
 			table: "operation_approval_requests",
@@ -2307,7 +2311,7 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 	}
 }
 
-func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadModelQuery {
+func basePrivacyReadModelSelectorQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
 		{table: "operation_approval_requests", sql: `SELECT id::text, ''::text, 0 FROM operation_approval_requests WHERE tenant_id = $1 AND (requester = $2 OR position($2 in resource_kind) > 0 OR position($2 in resource_id) > 0 OR position($2 in resource_name) > 0 OR position($2 in action) > 0 OR position($2 in from_state) > 0 OR position($2 in to_state) > 0 OR position($2 in reason) > 0 OR position($2 in evidence_refs::text) > 0) ORDER BY id`, args: []any{tenantID, subject}},
 		{
@@ -2628,6 +2632,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseIncidentFleetReissuancePrivacyRows,
 		eraseOwnershipReadinessExceptionPrivacyRows,
 		eraseAttesterTrustReceiptPrivacyRows,
+		eraseServiceDependentActorPrivacyRows,
 	} {
 		if err := fn(ctx, tx, tenantID, subjectRef, placeholder, selectors); err != nil {
 			return err
@@ -3598,6 +3603,8 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		sql  string
 		args []any
 	}{
+		"service_account_hosts":      {sql: `SELECT count(*) FROM service_account_hosts WHERE tenant_id=$1 AND updated_at<$2 AND saved_by NOT LIKE 'retained:%' AND saved_by NOT LIKE 'erased:%'`, args: []any{tenantID, c.AttestationEvidenceBefore}},
+		"service_account_host_scans": {sql: `SELECT count(*) FROM service_account_host_scans WHERE tenant_id=$1 AND queued_at<$2 AND status IN ('complete','partial','failed','superseded') AND queued_by NOT LIKE 'retained:%' AND queued_by NOT LIKE 'erased:%'`, args: []any{tenantID, c.AttestationEvidenceBefore}},
 		"owners": {
 			sql: `SELECT count(*) FROM owners
 			       WHERE tenant_id = $1

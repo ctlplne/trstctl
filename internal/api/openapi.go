@@ -171,6 +171,9 @@ func managedKeyAcceptedResponse() Response {
 // endpoint itself is omitted from the documented paths.
 func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	schemas := componentSchemas()
+	for name, schema := range serviceDependentSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range cloudMachineChangeSchemas() {
 		schemas[name] = schema
 	}

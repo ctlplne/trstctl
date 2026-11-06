@@ -271,6 +271,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "agent fleet",
 		},
 		{
+			ID:             "service_account_dependents.actors",
+			Location:       "service_account_hosts.saved_by/service_account_host_scans.queued_by",
+			Category:       "operator identities selecting an enrolled host or requesting native account references",
+			Purpose:        "attribute read-only host inventory and preserve exact native authority and signed receipt evidence",
+			RetentionClass: "operational:discovery-triage-after-397d",
+			Erasure:        "subject export includes matching host selections and scans; subject erasure replaces exact matching actors while preserving native bindings, metadata and signed receipts; retention pseudonymizes stale selection actors and terminal scan requesters",
+			Owner:          "privileged access",
+		},
+		{
 			ID:             "pam_sessions.subjects",
 			Location:       "pam_sessions.subject/requested_by/ssh_principal/reason/audit/attestation",
 			Category:       "privileged-access requester, verified target subject, and free-form reason and attestation metadata",

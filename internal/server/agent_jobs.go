@@ -66,13 +66,14 @@ import (
 // ship. Handing out work nothing can perform is how a queue silently fills while
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
-	sshcollection.Destination:   true,
-	sshtrustrollout.Destination: true,
-	"connector.deploy":          true,
-	"connector.rollback":        true,
-	relay.KindEndpointContain:   true,
-	relay.KindEndpointPurge:     true,
-	relay.KindConnectorTakedown: true,
+	relay.KindWindowsDependentInventory: true,
+	sshcollection.Destination:           true,
+	sshtrustrollout.Destination:         true,
+	"connector.deploy":                  true,
+	"connector.rollback":                true,
+	relay.KindEndpointContain:           true,
+	relay.KindEndpointPurge:             true,
+	relay.KindConnectorTakedown:         true,
 	// A210: the read-only recovery check that follows a containment. It is
 	// enabled with endpoint.contain (see AgentClaimableJobKinds).
 	relay.KindEndpointRecoveryCheck: true,
@@ -273,7 +274,13 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		// and must never hold it: shipping ciphertext it has no key for is
 		// pointless at best, and at worst it is a copy of the credential sitting
 		// on a host, waiting for a future key compromise to make it readable.
-		payload, projectErr := a.projectClaimedJobPayloadContext(ctx, job)
+		var payload []byte
+		var projectErr error
+		if job.Destination == relay.KindWindowsDependentInventory {
+			payload, projectErr = a.projectServiceDependentInventoryClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
+		} else {
+			payload, projectErr = a.projectClaimedJobPayloadContext(ctx, job)
+		}
 		if projectErr != nil {
 			// A job whose envelope cannot be built is not handed out at all.
 			// Leaving it claimed is correct: the lease lapses and it returns.
@@ -556,6 +563,13 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	}
 
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
+		if claim.Destination == relay.KindWindowsDependentInventory && errors.Is(ingestErr, errServiceDependentReportRefused) {
+			if err := a.recordServiceDependentFailure(ctx, info, claim, req, "invalid_native_report"); err != nil {
+				return nil, status.Error(codes.Unavailable, "native inventory refusal could not be retained")
+			}
+			return a.refuseExecutedReportPermanently(ctx, info, agentID, claim, req, now, ingestErr)
+		}
+
 		if claim.Destination == relay.KindDiscoveryRun && errors.Is(ingestErr, segmentscan.ErrFindingCountMismatch) {
 			return a.failInconsistentDiscoveryReport(ctx, info, agentID, claim, req, now)
 		}
@@ -901,6 +915,8 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case relay.KindWindowsDependentInventory:
+		return a.ingestServiceDependentInventory(ctx, info, agentID, claim, req)
 	case sshtrustrollout.Destination:
 		return a.recordSSHTrustFleetResult(ctx, info, claim, req)
 	case relay.KindPQCPosture, relay.KindPQCPostureRollback:
@@ -1145,6 +1161,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 	if !held {
 		return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
+	}
+	if claim.Destination == relay.KindWindowsDependentInventory {
+		if err := a.recordServiceDependentFailure(ctx, info, claim, req, "agent_execution_failed"); err != nil {
+			return nil, status.Error(codes.Unavailable, "native inventory failure could not be retained")
+		}
 	}
 	migrationHandled, detail, err := a.recordFailedJobOutcome(ctx, info, agentID, claim, req)
 	if err != nil {
@@ -1916,6 +1937,9 @@ func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job 
 	}
 	if job.Destination == sshtrustrollout.Destination {
 		return a.projectSSHTrustFleetClaim(ctx, job)
+	}
+	if job.Destination == relay.KindWindowsDependentInventory {
+		return nil, errors.New("native inventory claim requires a certificate-bound host identity")
 	}
 
 	if job.Destination == relay.KindPQCPosture || job.Destination == relay.KindPQCPostureRollback {

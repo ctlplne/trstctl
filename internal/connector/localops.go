@@ -53,6 +53,9 @@ type LocalAction struct {
 // AllowedRoots and Action come from operator startup config, never from a tenant
 // deployment target.
 type LocalOpsConfig struct {
+	// WindowsDependentSIDs authorizes only native account-dependent reads.
+	// It is loaded from the host operator's profile, never target/job JSON.
+	WindowsDependentSIDs []string
 	// TLSProbeOpenSSL is an optional absolute executable path from the local
 	// host profile. Tenant target/job JSON cannot set process authority.
 	TLSProbeOpenSSL string

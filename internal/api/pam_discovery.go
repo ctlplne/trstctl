@@ -143,7 +143,7 @@ type PAMDiscoveryService interface {
 
 func (a *API) pamDiscoveryRoutes() []route {
 	provider := []param{pathString("provider_id", "the dynamic-secret provider's ID")}
-	return []route{
+	routes := []route{
 		{method: "GET", path: "/api/v1/access/discovery/sources", opID: "listPAMDiscoverySources", summary: "List the providers whose targets privileged account discovery scans, with each one's last run", handler: a.listPAMDiscoverySources, resSchema: "PAMDiscoverySourceList", successCode: "200", perm: authz.AccessRead},
 		{method: "PUT", path: "/api/v1/access/discovery/sources/{provider_id}", opID: "savePAMDiscoverySource", summary: "Scan a provider's target for privileged accounts on demand, or every interval_seconds (at least an hour); read-only", handler: a.savePAMDiscoverySource, pathParams: provider, reqSchema: "PAMDiscoverySourceRequest", resSchema: "PAMDiscoverySource", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "DELETE", path: "/api/v1/access/discovery/sources/{provider_id}", opID: "deletePAMDiscoverySource", summary: "Stop scanning a provider's target; its runs and staged accounts stay", handler: a.deletePAMDiscoverySource, pathParams: provider, resSchema: "PAMDiscoverySourceDeleted", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
@@ -156,6 +156,7 @@ func (a *API) pamDiscoveryRoutes() []route {
 		{method: "GET", path: "/api/v1/access/accounts", opID: "listPAMImportedAccounts", summary: "List the privileged accounts imported into folders", handler: a.listPAMImportedAccounts, query: []param{{name: "folder", typ: "string", desc: "only this folder's accounts"}, {name: "provider_id", typ: "string", desc: "only this source's accounts"}}, resSchema: "PAMImportedAccountList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/accounts", opID: "listPAMDiscoveredAccounts", summary: "List the privileged accounts discovery has staged", handler: a.listPAMDiscoveredAccounts, query: []param{{name: "provider_id", typ: "string", desc: "only this source's accounts"}, {name: "status", typ: "string", desc: "staged, imported or dismissed"}, {name: "include_removed", typ: "boolean", desc: "also accounts the last scan no longer found"}}, resSchema: "PAMDiscoveredAccountList", successCode: "200", perm: authz.AccessRead},
 	}
+	return append(routes, a.pamServiceDependentRoutes()...)
 }
 
 func (a *API) discovery() (PAMDiscoveryService, error) {

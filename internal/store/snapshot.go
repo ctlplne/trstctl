@@ -295,7 +295,8 @@ import (
 // A v96 snapshot would skip their events beneath its covered offset.
 // Version 98 carries exact cloud replacement adoption evidence.
 // Version 99 retains native static-rotation authority and sealed preparation.
-const SnapshotFormatVersion = 99
+// Version 100 retains exact AD account/host bindings and signed dependent scans.
+const SnapshotFormatVersion = 100
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -400,6 +401,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_checkouts",
 	// Format 94: A261's account folders.
 	"pam_folders",
+	"service_account_hosts", "service_account_host_scans",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",
@@ -771,6 +773,8 @@ SELECT jsonb_build_object(
   'pam_imported_accounts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_imported_accounts t),
   'pam_checkouts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_checkouts t),
   'pam_folders', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_folders t),
+  'service_account_hosts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_hosts t),
+  'service_account_host_scans', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_host_scans t),
   'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
   'cloud_machine_changes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cloud_machine_changes t),
   'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),

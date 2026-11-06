@@ -186,3 +186,6 @@ func (p *Pools) VerifyWorkers(ctx context.Context, pool Pool, proof PoolRestartP
 	}
 	return workers, nil
 }
+
+// ValidatePoolSnapshot validates public frozen native authority.
+func ValidatePoolSnapshot(pool Pool) error { return validatePool(pool) }

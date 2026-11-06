@@ -7,7 +7,9 @@ package relay
 import (
 	"bytes"
 	"context"
+	"golang.org/x/sys/windows"
 	"os/exec"
+	"path/filepath"
 
 	"trstctl.com/trstctl/internal/discovery/adcs"
 )
@@ -29,12 +31,18 @@ func (b *boundedCommandBuffer) Write(p []byte) (int, error) {
 }
 
 func observeCAAgentRestrictions(ctx context.Context, service adcs.EnrollmentService) adcs.EnrollmentAgentRestrictions {
-	if service.DNSName == "" || service.Name == "" {
+	configuration, ok := nativeCAConfigurationArgument(service.DNSName, service.Name)
+	if !ok {
 		return adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "ca_identity_unobserved"}
 	}
-	cmd := exec.CommandContext(ctx, "certutil.exe", "-config", service.DNSName+"\\"+service.Name, "-getreg", "CA\\EnrollmentAgentRights")
+	systemDirectory, err := windows.GetSystemDirectory()
+	if err != nil {
+		return adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "native_tool_unavailable"}
+	}
+	// #nosec G204 -- CWE-78: the Windows SDK supplies System32, certutil.exe and command switches are fixed, and the bounded validated CA selector is one argv value; no shell or credentials are used.
+	cmd := exec.CommandContext(ctx, filepath.Join(systemDirectory, "certutil.exe"), "-config", configuration, "-getreg", "CA\\EnrollmentAgentRights")
 	var output boundedCommandBuffer
 	cmd.Stdout, cmd.Stderr = &output, &output
-	err := cmd.Run()
+	err = cmd.Run()
 	return parseCAAgentRestrictions(output.Bytes(), err == nil)
 }

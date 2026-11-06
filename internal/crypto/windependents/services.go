@@ -170,3 +170,9 @@ func (s *Services) RestartAndVerifyIdentity(ctx context.Context, target Service)
 	}
 	return observed, nil
 }
+
+// ValidateServiceSnapshot validates public frozen native authority.
+func ValidateServiceSnapshot(target Service) error { return validateService(target) }
+
+// ValidAccountSID checks the canonical native domain/local SAM account SID.
+func ValidAccountSID(sid string) bool { return validAccountSID(sid) }

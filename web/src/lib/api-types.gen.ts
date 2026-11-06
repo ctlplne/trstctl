@@ -8585,6 +8585,70 @@ export interface PAMCommandRule {
   review_ttl_seconds?: number;
 }
 
+export interface PAMDependentAccountBinding {
+  account_id: string;
+  dn: string;
+  guid: string;
+  name: string;
+  provider_id: string;
+  sid: string;
+}
+
+export interface PAMDependentFamilyCoverage {
+  failure?: string;
+  family: "services" | "tasks" | "iis";
+  status: "complete" | "unavailable";
+}
+
+export interface PAMDependentHostBinding {
+  account: PAMDependentAccountBinding;
+  agent_id: string;
+  enabled: boolean;
+  revision: number;
+}
+
+export interface PAMDependentInventoryIntent {
+  binding: PAMDependentHostBinding;
+  binding_digest: string;
+  run_id: string;
+}
+
+export interface PAMDependentInventoryReport {
+  binding_digest: string;
+  coverage: PAMDependentFamilyCoverage[];
+  observed_at: string;
+  pools?: PAMDependentNativePool[];
+  run_id: string;
+  services?: PAMDependentNativeService[];
+  tasks?: PAMDependentNativeTask[];
+}
+
+export interface PAMDependentNativePool {
+  account_sid: string;
+  config_sha256: string;
+  encryption_provider: string;
+  name: string;
+  password_protected: boolean;
+  was_started: boolean;
+}
+
+export interface PAMDependentNativeService {
+  account_sid: string;
+  config_sha256: string;
+  dependencies?: string[];
+  name: string;
+  was_running: boolean;
+}
+
+export interface PAMDependentNativeTask {
+  account_sid: string;
+  action_count: number;
+  config_sha256: string;
+  enabled: boolean;
+  logon_type: number;
+  path: string;
+}
+
 export interface PAMDiscoveredAccount {
   details?: Record<string, unknown>;
   disabled: boolean;
@@ -8841,6 +8905,62 @@ export interface PAMSSHCredential {
   principal: string;
   serial: number;
   valid_before: string;
+}
+
+export interface PAMServiceDependentHost {
+  binding: PAMDependentHostBinding;
+  binding_digest: string;
+  latest_scan?: PAMServiceDependentScanHead;
+  saved_by: string;
+  updated_at: string;
+}
+
+export interface PAMServiceDependentHostList {
+  items: PAMServiceDependentHost[];
+  next_cursor?: string;
+}
+
+export interface PAMServiceDependentHostRequest {
+  enabled: boolean;
+}
+
+export interface PAMServiceDependentScan {
+  attempt?: number;
+  delivery_status?: string;
+  failure?: string;
+  id: string;
+  intent: PAMDependentInventoryIntent;
+  observed_at?: string;
+  outbox_id?: number;
+  pool_count: number;
+  queued_at: string;
+  queued_by: string;
+  queued_event_id: string;
+  receipt_job_id?: number;
+  receipt_signature_base64?: string;
+  receipt_statement?: string;
+  received_at?: string;
+  report?: PAMDependentInventoryReport;
+  report_digest?: string;
+  service_count: number;
+  signer_fingerprint?: string;
+  status: "queued" | "complete" | "partial" | "retrying" | "failed" | "superseded";
+  task_count: number;
+}
+
+export interface PAMServiceDependentScanHead {
+  agent_id: string;
+  binding_digest: string;
+  current: boolean;
+  delivery_status?: string;
+  failure?: string;
+  id: string;
+  pool_count: number;
+  queued_at: string;
+  received_at?: string;
+  service_count: number;
+  status: string;
+  task_count: number;
 }
 
 export interface PAMSession {

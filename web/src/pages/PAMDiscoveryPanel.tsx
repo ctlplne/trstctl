@@ -6,6 +6,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { PAMServiceDependentsDialog } from "./PAMServiceDependentsDialog";
 import { Dialog } from "@/components/Dialog";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 
@@ -29,9 +30,14 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
   const sources = useApiQuery(["pam-discovery-sources"], api.pamDiscoverySources, { retry: false });
   const staged = useApiQuery(["pam-discovered-accounts", "staged"], () => api.pamDiscoveredAccounts({ status: "staged" }), { retry: false });
   const imported = useApiQuery(["pam-imported-accounts"], () => api.pamImportedAccounts(), { retry: false });
+  const importedNative = useApiQuery(["pam-discovered-accounts", "imported"], () => api.pamDiscoveredAccounts({ status: "imported" }), {
+    enabled: !!imported.data?.items.some((a) => a.kind === "directory_service_account" || a.kind === "directory_user"),
+    retry: false,
+  });
   const providers = useApiQuery(["dynamic-secret-providers"], api.dynamicSecretProviders, { enabled: canManage, retry: false });
   const [sourceForm, setSourceForm] = useState({ provider: "", interval: 0 });
   const [selected, setSelected] = useState<string[]>([]);
+  const [dependentAccount, setDependentAccount] = useState<PAMDiscoveredAccount | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importForm, setImportForm] = useState({ folder: "", template: "", reason: "" });
   const [pending, setPending] = useState<{ request: PAMDiscoveryImportRequest; review: PAMDiscoveryImportReview } | null>(null);
@@ -121,6 +127,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
 
   const discoverable = (providers.data?.configured_providers ?? []).filter((p) => DISCOVERABLE.has(p.type));
   const stagedItems = staged.data?.items ?? [];
+  const importedNativeByID = new Map((importedNative.data?.items ?? []).map((a) => [a.id, a]));
   return (
     <section aria-labelledby="pam-discovery-heading" className="grid gap-3">
       <div>
@@ -147,7 +154,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                 <th scope="col">{t("admin.access.discovery.provider")}</th>
                 <th scope="col">{t("admin.access.discovery.schedule")}</th>
                 <th scope="col">{t("admin.access.discovery.lastRun")}</th>
-                {canManage ? <th scope="col">{t("admin.access.discovery.actions")}</th> : null}
+                <th scope="col">{t("admin.access.discovery.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -172,13 +179,13 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                         : t("admin.access.discovery.lastRunFailed", { failure: source.last_run.failure ?? "error" })
                       : t("admin.access.discovery.neverRun")}
                   </td>
-                  {canManage ? (
-                    <td>
+                  <td>
+                    {canManage ? (
                       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void scan(source.provider_id)}>
                         {t("admin.access.discovery.scanNow", { provider: source.provider_id })}
                       </Button>
-                    </td>
-                  ) : null}
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +243,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                 <th scope="col">{t("admin.access.discovery.account")}</th>
                 <th scope="col">{t("admin.access.discovery.privileges")}</th>
                 <th scope="col">{t("admin.access.discovery.provider")}</th>
-                {canManage ? <th scope="col">{t("admin.access.discovery.actions")}</th> : null}
+                <th scope="col">{t("admin.access.discovery.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -286,8 +293,21 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                       : account.privileges.join(" ")}
                   </td>
                   <td>{account.provider_id}</td>
-                  {canManage ? (
-                    <td>
+                  <td>
+                    {typeof account.details?.native_sid === "string" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          returnFocus.current = event.currentTarget;
+                          setDependentAccount(account);
+                        }}
+                      >
+                        {t("admin.access.dependents.open")}
+                      </Button>
+                    ) : null}
+                    {canManage ? (
                       <Button
                         type="button"
                         size="sm"
@@ -299,8 +319,8 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                       >
                         {t("admin.access.discovery.dismiss", { name: account.name })}
                       </Button>
-                    </td>
-                  ) : null}
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -324,6 +344,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
       ) : null}
 
       <h4 className="text-sm font-semibold">{t("admin.access.discovery.importedHeading")}</h4>
+      {importedNative.error ? <ErrorState title={importedNative.error} /> : null}
       {imported.data && imported.data.items.length === 0 ? <UnavailableState title={t("admin.access.discovery.noImported")} /> : null}
       {imported.data && imported.data.items.length > 0 ? (
         <div className="overflow-auto" tabIndex={0} role="region" aria-label={t("admin.access.discovery.importedHeading")}>
@@ -335,6 +356,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                 <th scope="col">{t("admin.access.discovery.account")}</th>
                 <th scope="col">{t("admin.access.discovery.privileges")}</th>
                 <th scope="col">{t("admin.access.discovery.importedBy")}</th>
+                <th scope="col">{t("admin.access.discovery.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -346,6 +368,21 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
                   </td>
                   <td className="font-mono text-xs">{account.privileges.join(" ")}</td>
                   <td>{account.imported_by}</td>
+                  <td>
+                    {typeof importedNativeByID.get(account.id)?.details?.native_sid === "string" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          returnFocus.current = event.currentTarget;
+                          setDependentAccount(importedNativeByID.get(account.id)!);
+                        }}
+                      >
+                        {t("admin.access.dependents.open")}
+                      </Button>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -353,6 +390,9 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
         </div>
       ) : null}
 
+      {dependentAccount ? (
+        <PAMServiceDependentsDialog account={dependentAccount} canManage={canManage} onClose={() => setDependentAccount(null)} returnFocusRef={returnFocus} />
+      ) : null}
       {importOpen ? (
         <Dialog
           open
