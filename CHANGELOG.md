@@ -2,6 +2,10 @@
 
 ### Added
 
+- Network devices (A270 part 1): `iosxe` and `junos` dynamic-secret providers rotate local account passwords (and the
+  IOS-XE enable secret) through the device's CLI over SSH, single-phase with acknowledgement, keeping each account's
+  privilege level or login class and rolling an unproven change back; privileged account discovery reads both.
+  Provider catalog 45 -> 47 recipes.
 - Remote desktop (A269 part 2): access templates gain `desktop_clipboard` (deny, to_target, from_target, both); the
   reviewed policy reaches the gateway and its native helper loads the RDP clipboard channel only for an allowed
   direction (bounded, indexed by length). Sessions now return the approval they consumed when read back. Migration 0424,

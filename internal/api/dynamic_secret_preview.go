@@ -478,6 +478,22 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the local account it rotates (at most 20 characters), or names two accounts in rotation_accounts."),
 		)},
+		{Type: "iosxe", Label: "Cisco IOS-XE local accounts", Purpose: "Changes local account passwords on a Cisco IOS-XE device through its own command line over SSH, as an administrator at privilege 15 signing in with a password, the host key pinned: configure terminal, username <account> privilege <its current level> secret 0 <password>, end and write memory, so the account keeps its privilege level and the change survives a reload. A role bound to the account enable rotates the privileged-mode secret (enable secret). Each role's one account changes in place (single phase: a rotation runs only when acknowledged); a change the device does not prove is put back. Verified by signing in with the new password, or entering privileged mode with the new enable secret. Discovery lists the device's local accounts with their privilege level, never their hashes. It rotates only; it issues no leases. Built against a stand-in of the CLI; no device proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("addr", "SSH endpoint", "The device's SSH host:port.", true),
+			value("admin_user", "Administrator", "A local account at privilege 15 that signs in with a password and may configure accounts; never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("host_key_fingerprint", "Host key pin", "The device's SSH host key SHA256 fingerprint, as ssh-keygen -lf prints it.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the local account it rotates, or to enable for the privileged-mode secret."),
+		)},
+		{Type: "junos", Label: "Juniper Junos local accounts", Purpose: "Changes local account passwords on a Juniper Junos device through its own command line over SSH, as an administrator in a class allowed to configure system login, signing in with a password, the host key pinned: configure private, set system login user <account> authentication plain-text-password (the password typed at the prompt, never on the command line) and commit and-quit, so the account keeps its login class. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); a change the device does not prove is put back. Verified by signing in with the new password. Discovery lists the device's local accounts with their login class, never their hashes. It rotates only; it issues no leases. Built against a stand-in of the CLI; no device proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("addr", "SSH endpoint", "The device's SSH host:port.", true),
+			value("admin_user", "Administrator", "A local account whose class may configure system login (super-user) and signs in with a password; never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("host_key_fingerprint", "Host key pin", "The device's SSH host key SHA256 fingerprint, as ssh-keygen -lf prints it.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the local account it rotates."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -584,6 +600,10 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the local account's own rights on the host (its groups, files and sudo rules), through its password", "confirmed"
 	case "windows":
 		return "the local account's own rights on the Windows host (its groups and files), through its password", "confirmed"
+	case "iosxe":
+		return "the device account's own privilege level (or privileged mode, for the enable secret), through its password", "confirmed"
+	case "junos":
+		return "the device account's own login class, through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

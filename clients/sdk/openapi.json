@@ -22349,7 +22349,9 @@
               "cloudflare-r2",
               "okta",
               "databricks",
-              "windows"
+              "windows",
+              "iosxe",
+              "junos"
             ],
             "type": "string"
           }

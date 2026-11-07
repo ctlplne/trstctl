@@ -252,12 +252,12 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
 // through them runs only when acknowledged (A240).
-var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -363,7 +363,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
-	"okta": {}, "databricks": {}, "windows": {},
+	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -382,7 +382,7 @@ var apiKeyProviderTypes = map[string]bool{
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -629,6 +629,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"auth0": validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 	"openrouter": validateHostedKeyProvider, "fireworks": validateHostedKeyProvider, "litellm": validateHostedKeyProvider, "supabase": validateHostedKeyProvider, "convex": validateHostedKeyProvider, "dbt": validateHostedKeyProvider, "cloudflare": validateHostedKeyProvider, "cloudflare-r2": validateHostedKeyProvider,
 	"unix": validateUnixProvider, "windows": validateUnixProvider,
+	"iosxe": validateNetworkDeviceProvider, "junos": validateNetworkDeviceProvider,
 	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
@@ -1249,8 +1250,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.PrivateKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix and windows", where))
 	}
-	if c.Type != "unix" && c.Type != "windows" && c.HostKeyFingerprint != "" {
-		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix and windows", where))
+	if c.Type != "unix" && c.Type != "windows" && !networkDeviceProviderTypes[c.Type] && c.HostKeyFingerprint != "" {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix, windows and network devices", where))
 	}
 	if c.Type != "unix" && c.Sudo {
 		errs = append(errs, fmt.Errorf("%s sudo is only valid for unix", where))
@@ -2382,6 +2383,48 @@ func validateRoleBindingsCoverRoles(where string, c DynamicSecretProviderConfig)
 	for role := range c.RoleBindings {
 		if !allowed[role] {
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
+// networkDeviceProviderTypes rotate network device accounts through the
+// device's own command line (A270).
+var networkDeviceProviderTypes = map[string]bool{"iosxe": true, "junos": true}
+
+// validateNetworkDeviceProvider checks a network device (A270): the device's
+// SSH address and pinned host key, the administrator that makes each change
+// and its password, static rotation of one bound account per role, never the
+// administrator; on IOS-XE the account "enable" is the privileged-mode secret.
+func validateNetworkDeviceProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
+		errs = append(errs, fmt.Errorf("%s addr must be the device's SSH host:port for %s", where, c.Type))
+	}
+	if !unixAccountName.MatchString(c.AdminUser) {
+		errs = append(errs, fmt.Errorf("%s admin_user must name the device account that changes passwords for %s", where, c.Type))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil || strings.TrimSpace(c.PasswordRef) == "" {
+		errs = append(errs, fmt.Errorf("%s password_ref must name the administrator's password for %s", where, c.Type))
+	}
+	if !strings.HasPrefix(c.HostKeyFingerprint, "SHA256:") || len(c.HostKeyFingerprint) < 20 {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the device's host key (SHA256:...) for %s", where, c.Type))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s %s rotates device account passwords and issues no leases: set allow_static_rotation", where, c.Type))
+	}
+	if len(c.RotationAccounts) != 0 {
+		errs = append(errs, fmt.Errorf("%s %s rotates one bound account per role in place; rotation_accounts is not used", where, c.Type))
+	}
+	for role, account := range c.RoleBindings {
+		account = strings.TrimSpace(account)
+		switch {
+		case account == c.AdminUser:
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the administrator that makes the change", where, role))
+		case account == "enable" && c.Type != "iosxe":
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the enable secret, which only iosxe has", where, role))
+		case account != "enable" && !unixAccountName.MatchString(account):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name a device account", where, role))
 		}
 	}
 	return errs

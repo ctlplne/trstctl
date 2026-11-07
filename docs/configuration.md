@@ -2177,6 +2177,16 @@ fingerprints (`SHA256:...`, as `ssh-keygen -lf` prints it), and `allow_static_ro
 true`; each allowed role names its account in `role_bindings` (rotated in place,
 single-phase) or two in `rotation_accounts` (two-user).
 
+An `iosxe` or `junos` provider (A270) changes local account passwords on a Cisco IOS-XE
+or Juniper Junos device through the device's own command line. It sets `addr` to the
+device's SSH `host:port`, `host_key_fingerprint` to its host key (`SHA256:...`),
+`admin_user` and `password_ref` to an administrator that signs in with a password and
+may configure accounts (privilege 15 on IOS-XE, a class allowed to configure system
+login on Junos), and `allow_static_rotation: true`. Each allowed role names one account
+in `role_bindings`, rotated in place (single-phase); on IOS-XE the account `enable`
+rotates the privileged-mode secret. The administrator is never a bound account, and
+`rotation_accounts` is not used.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2184,7 +2194,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks` and `windows`. Sync `type` values are
+`databricks`, `windows`, `iosxe` and `junos`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

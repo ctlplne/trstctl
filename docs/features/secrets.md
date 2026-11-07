@@ -635,9 +635,9 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns forty-five safe setup recipes (including the
-  `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `okta` and
-  `databricks`, which only rotate). Each states its `authority` (what a
+- `GET /api/v1/secrets/leases/providers` returns forty-seven safe setup recipes (including the
+  `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
+  `junos`, `okta` and `databricks`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -920,6 +920,23 @@ predecessor logs in until its retirement and only the successor after, and an in
 change after which only the new password logs in. The served rotation around those calls
 is the one the Unix proof exercises; the runner has no embedded PostgreSQL for the served
 harness.
+
+`iosxe` and `junos` (A270) change local account passwords on network devices through the
+device's own command line over SSH, as an administrator signing in with a password, the
+host key pinned. On IOS-XE the change is `username <account> privilege <level> secret 0
+<password>` under `configure terminal`, then `write memory`: the account's current
+privilege level is read first and kept, because IOS replaces the whole username line. A
+role bound to `enable` rotates the privileged-mode secret and is proved by entering
+privileged mode with it. On Junos the password is typed at `plain-text-password`'s
+prompts, never on the command line, and committed with `commit and-quit`. Each role's
+one account changes in place, so a rotation runs only when acknowledged
+(`acknowledge_single_phase`); the worker proves the new password signs in, and a change
+the device does not prove is put back to the predecessor, which must sign in again.
+Discovery (A260) reads a device's local accounts with their privilege level or login
+class and never their password hashes. The served proof runs against stand-ins of both
+CLIs: an account and the enable secret rotate with the privilege kept and the
+configuration saved, the old password stops, a device that reports the change but keeps
+the old password is rolled back, and discovery stages each account with its level.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports
