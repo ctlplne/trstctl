@@ -9390,3 +9390,19 @@ What comes next:
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.
 
+## Break-glass identity provider accounts (A272) — part 1: password rotation
+
+Status: in progress. `okta-user`, `entra-user` and `google-workspace-user` providers rotate
+the break-glass super administrators' passwords through each identity provider's
+administration API; Okta and Entra prove each change with one non-interactive sign-in,
+Google cannot be proved. Proof today: `TestIdPAdminRotationA272` and
+`TestServedIdPAdminRotationA272` against stand-ins built from Okta's, Microsoft's and
+Google's API references; no live tenant has run them.
+
+What comes next:
+- Release only through emergency access, once, with every approver notified, the TOTP code
+  computed from a stored seed, hardware security keys recorded with their holders, and a
+  rotation right after use (part 2).
+- A health check that never trips a lockout (part 3).
+- Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
+

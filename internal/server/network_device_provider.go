@@ -172,3 +172,34 @@ func openConfiguredVCenterSSOBackend(o *configuredDynamicBackendOpener) (request
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredIdPAdminBackend builds a backend that sets an identity
+// provider administrator's password through the provider's administration
+// API (A272): Okta's SSWS token, Entra's application secret or Google's
+// service account key.
+func openConfiguredIdPAdminBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	idp := dynsecret.IdPAdminConfig{Vendor: cfg.Type, Endpoint: cfg.Endpoint, AuthorityHost: cfg.AuthorityHost, AllowInsecureLoopback: cfg.AllowInsecureLoopback,
+		HTTPClient: client, ClientID: cfg.ClientID, AzureTenant: cfg.AzureTenant, ServiceAccountEmail: cfg.ServiceAccount, Subject: cfg.AdminUser,
+		RoleAccounts: cfg.RoleBindings}
+	switch cfg.Type {
+	case "okta-user":
+		idp.APIToken, err = o.resolve(cfg.APIKeyRef)
+	case "entra-user":
+		idp.ClientSecret, err = o.resolve(cfg.ClientSecretRef)
+	case "google-workspace-user":
+		idp.ServiceAccountKeyPEM, err = o.resolve(cfg.PrivateKeyRef)
+	}
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewIdPAdminBackend(idp)
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

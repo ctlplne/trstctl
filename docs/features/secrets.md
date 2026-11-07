@@ -635,10 +635,10 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns fifty-three safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fifty-six safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
-  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `vcenter-sso`, `okta` and
-  `databricks`, which only rotate). Each states its `authority` (what a
+  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `vcenter-sso`, `okta-user`,
+  `entra-user`, `google-workspace-user`, `okta` and `databricks`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -986,6 +986,18 @@ so it never appears on a command line. The new password is `--new`'s argument, a
 (`POST /api/session`) as the user, and a reset the appliance does not prove is put back.
 Discovery lists the SSO `Administrators` group. The served proof runs against a stand-in
 of the appliance's shell and REST API.
+
+`okta-user`, `entra-user` and `google-workspace-user` (A272) rotate identity provider
+administrator passwords — the break-glass super administrators — through each provider's
+own administration API: Okta's partial user update with an API token, a Microsoft Graph
+`passwordProfile` PATCH with an application's token, and an Admin SDK Directory PATCH as a
+service account impersonating another super administrator. Okta and Entra prove a change
+with one non-interactive sign-in (Okta's Authentication API, where an MFA step after the
+right password counts and the pending transaction is cancelled; an Entra resource-owner
+sign-in read by its error code); a proof is never retried, so a wrong password costs one
+lockout attempt. Google has no such check, so its verification reports not available.
+The served proof runs against stand-ins of all three with a lockout counter, which never
+reaches its threshold.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

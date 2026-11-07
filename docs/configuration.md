@@ -2230,6 +2230,19 @@ set to `/bin/bash`, a PKCS#8 key), `sso_admin` to the SSO administrator's `user@
 with `password_ref` its password, and `allow_static_rotation: true`; each allowed role
 names one SSO user without its domain, never the administrator.
 
+`okta-user`, `entra-user` and `google-workspace-user` providers (A272) set an identity
+provider administrator's password (a break-glass super administrator). `okta-user` takes
+`endpoint` (the org) and `api_key_ref` (an SSWS token of an administrator allowed to set
+the account's password). `entra-user` takes `endpoint` (Microsoft Graph),
+`authority_host` (the identity platform), `azure_tenant_id`, `client_id` and
+`client_secret_ref` (an application with User-PasswordProfile.ReadWrite.All and the
+Privileged Authentication Administrator role). `google-workspace-user` takes `endpoint`
+(the Admin SDK), `authority_host` (the token endpoint), `service_account` and
+`private_key_ref` (a service account with domain-wide delegation for
+`admin.directory.user`) and `admin_user` (the super administrator it impersonates, never
+a rotated account). Each needs `allow_static_rotation: true`; each allowed role names
+one account as `user@domain`, rotated in place.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2237,7 +2250,8 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi` and `vcenter-sso`. Sync `type` values are
+`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `vcenter-sso`, `okta-user`,
+`entra-user` and `google-workspace-user`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

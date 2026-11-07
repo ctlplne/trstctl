@@ -256,12 +256,13 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true, "okta-user": true, "entra-user": true, "google-workspace-user": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
 // through them runs only when acknowledged (A240).
-var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true,
+	"okta-user": true, "entra-user": true, "google-workspace-user": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -368,13 +369,14 @@ var dynamicSecretTypes = map[string]struct{}{
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
 	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {}, "esxi": {}, "vcenter-sso": {},
+	"okta-user": {}, "entra-user": {}, "google-workspace-user": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
 // client_secret_ref: an OAuth client the provider authenticates as.
 var (
-	clientIDProviderTypes     = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "github-app": true, "ibm-api-connect": true, "auth0": true, "databricks": true}
-	clientSecretProviderTypes = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "ibm-api-connect": true, "auth0": true, "databricks": true}
+	clientIDProviderTypes     = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "github-app": true, "ibm-api-connect": true, "auth0": true, "databricks": true, "entra-user": true}
+	clientSecretProviderTypes = map[string]bool{"oauth-client-credentials": true, "mongodb-atlas": true, "ibm-api-connect": true, "auth0": true, "databricks": true, "entra-user": true}
 )
 
 // apiKeyProviderTypes take api_key_ref, an administrator's key or token
@@ -382,11 +384,11 @@ var (
 var apiKeyProviderTypes = map[string]bool{
 	"ibm-api-connect": true, "datadog": true, "openai": true,
 	"openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true,
-	"okta": true, "fortigate": true,
+	"okta": true, "fortigate": true, "okta-user": true,
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true, "google-workspace-user": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -636,6 +638,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"iosxe": validateNetworkDeviceProvider, "junos": validateNetworkDeviceProvider,
 	"eos": validateNetworkAPIProvider, "fortigate": validateNetworkAPIProvider, "bigip": validateNetworkAPIProvider,
 	"redfish": validateNetworkAPIProvider, "esxi": validateNetworkAPIProvider, "vcenter-sso": validateVCenterSSOProvider,
+	"okta-user": validateIdPAdminProvider, "entra-user": validateIdPAdminProvider, "google-workspace-user": validateIdPAdminProvider,
 	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
@@ -903,8 +906,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 			errs = append(errs, fmt.Errorf("%s gateway endpoint must name only a fixed origin", where))
 		}
 	}
-	if c.Type != "azure-entra" && c.AuthorityHost != "" {
-		errs = append(errs, fmt.Errorf("%s authority_host is only valid for azure-entra", where))
+	if c.Type != "azure-entra" && c.Type != "entra-user" && c.Type != "google-workspace-user" && c.AuthorityHost != "" {
+		errs = append(errs, fmt.Errorf("%s authority_host is only valid for azure-entra, entra-user and google-workspace-user", where))
 	}
 	if c.RevokeWithDenyPolicy && c.Type != "aws-iam" && c.Type != "aws-sts" {
 		errs = append(errs, fmt.Errorf("%s revoke_with_deny_policy is only valid for aws-sts", where))
@@ -1253,8 +1256,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
 	}
-	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && c.PrivateKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix, windows and vcenter-sso", where))
+	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && c.Type != "google-workspace-user" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix, windows, vcenter-sso and google-workspace-user", where))
 	}
 	if c.Type != "vcenter-sso" && c.SSOAdmin != "" {
 		errs = append(errs, fmt.Errorf("%s sso_admin is only valid for vcenter-sso", where))
@@ -2564,6 +2567,63 @@ func validateVCenterSSOProvider(where string, c DynamicSecretProviderConfig) []e
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the SSO administrator that makes the change", where, role))
 		case !networkAPIAccountName.MatchString(account):
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name an SSO user, without its domain", where, role))
+		}
+	}
+	return errs
+}
+
+var idpAdminAccount = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
+
+// validateIdPAdminProvider checks an identity provider administrator
+// provider (A272): okta-user (endpoint, api_key_ref), entra-user (endpoint,
+// authority_host, azure_tenant_id, client_id, client_secret_ref) or
+// google-workspace-user (endpoint, authority_host, service_account,
+// private_key_ref, admin_user as the impersonated super administrator), with
+// static rotation of one account (user@domain) per role.
+func validateIdPAdminProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	endpoint := func(name, value string) {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
+		} else if err := validateSecretIntegrationEndpoint(value, c.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", where, name, err))
+		}
+	}
+	ref := func(name, value string) {
+		if err := validateCredentialRef(value); err != nil || strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
+		}
+	}
+	endpoint("endpoint", c.Endpoint)
+	switch c.Type {
+	case "okta-user":
+		ref("api_key_ref", c.APIKeyRef)
+	case "entra-user":
+		endpoint("authority_host", c.AuthorityHost)
+		if strings.TrimSpace(c.AzureTenant) == "" || strings.TrimSpace(c.ClientID) == "" {
+			errs = append(errs, fmt.Errorf("%s azure_tenant_id and client_id are required for entra-user", where))
+		}
+		ref("client_secret_ref", c.ClientSecretRef)
+	case "google-workspace-user":
+		endpoint("authority_host", c.AuthorityHost)
+		if !idpAdminAccount.MatchString(c.ServiceAccount) || !idpAdminAccount.MatchString(c.AdminUser) {
+			errs = append(errs, fmt.Errorf("%s service_account and admin_user (the super administrator it impersonates) are required for google-workspace-user", where))
+		}
+		ref("private_key_ref", c.PrivateKeyRef)
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s %s rotates administrator passwords and issues no leases: set allow_static_rotation", where, c.Type))
+	}
+	if len(c.RotationAccounts) != 0 {
+		errs = append(errs, fmt.Errorf("%s %s rotates one bound account per role in place; rotation_accounts is not used", where, c.Type))
+	}
+	for role, account := range c.RoleBindings {
+		account = strings.TrimSpace(account)
+		switch {
+		case !idpAdminAccount.MatchString(account):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name an account as user@domain", where, role))
+		case strings.EqualFold(account, c.AdminUser):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the administrator the provider acts as", where, role))
 		}
 	}
 	return errs

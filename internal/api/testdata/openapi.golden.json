@@ -22357,7 +22357,10 @@
               "bigip",
               "redfish",
               "esxi",
-              "vcenter-sso"
+              "vcenter-sso",
+              "okta-user",
+              "entra-user",
+              "google-workspace-user"
             ],
             "type": "string"
           }

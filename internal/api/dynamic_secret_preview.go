@@ -551,6 +551,30 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the SSO user (without its domain) it rotates."),
 		)},
+		{Type: "okta-user", Label: "Okta administrator accounts", Purpose: "Sets an Okta administrator's (a break-glass super administrator's) password with an API token: a partial update of the user's credentials.password, which needs no old password. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); the change is proved by one sign-in through the Authentication API (SUCCESS, or an MFA step after the right password; a pending transaction is cancelled), never retried, so a wrong password costs one lockout attempt. It rotates only; it issues no leases. Built against a stand-in of the Okta API; no Okta proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Okta org", "HTTPS URL of the Okta org.", true),
+			credential("api_key_ref", "API token reference", "An API token (SSWS) of an administrator allowed to set this account's password (Super Administrator for a super administrator).", true),
+			value("allow_static_rotation", "Static rotation", "Required: the provider rotates only.", true),
+			roles("Each allowed role maps to the account's Okta login (user@domain)."),
+		)},
+		{Type: "entra-user", Label: "Microsoft Entra ID administrator accounts", Purpose: "Sets an Entra ID administrator's (a break-glass Global Administrator's) password through Microsoft Graph with an application's client-credentials token: a PATCH of the user's passwordProfile. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); the change is proved by one resource-owner password sign-in, read by its error code (a wrong password is 50126; an MFA or conditional-access step after the right password proves it; a tenant that refuses the flow cannot prove it), never retried. It rotates only; it issues no leases. Built against a stand-in of Graph and the identity platform; no Entra proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Microsoft Graph", "https://graph.microsoft.com.", true),
+			value("authority_host", "Identity platform", "https://login.microsoftonline.com.", true),
+			value("azure_tenant_id", "Directory", "The directory (tenant) ID.", true),
+			value("client_id", "Application", "The application (client) ID; it needs User-PasswordProfile.ReadWrite.All and the Privileged Authentication Administrator role to reset an administrator's password.", true),
+			credential("client_secret_ref", "Client secret reference", "The application's client secret.", true),
+			value("allow_static_rotation", "Static rotation", "Required: the provider rotates only.", true),
+			roles("Each allowed role maps to the account's user principal name."),
+		)},
+		{Type: "google-workspace-user", Label: "Google Workspace administrator accounts", Purpose: "Sets a Google Workspace super administrator's (a break-glass account's) password through the Admin SDK Directory API, as a service account with domain-wide delegation impersonating another super administrator: a PATCH of the user's password. Each role's one account changes in place (single phase: a rotation runs only when acknowledged). Google offers no non-interactive password check, so a change is not proved there (verification reports not available). It rotates only; it issues no leases. Built against a stand-in of the Admin SDK and token endpoint; no Google proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Admin SDK", "https://admin.googleapis.com.", true),
+			value("authority_host", "Token endpoint", "https://oauth2.googleapis.com/token.", true),
+			value("service_account", "Service account", "The service account's email; it needs domain-wide delegation for https://www.googleapis.com/auth/admin.directory.user.", true),
+			credential("private_key_ref", "Service account key reference", "The service account's private key, PEM.", true),
+			value("admin_user", "Impersonated administrator", "The super administrator the service account acts as; never a rotated account.", true),
+			value("allow_static_rotation", "Static rotation", "Required: the provider rotates only.", true),
+			roles("Each allowed role maps to the account's primary email."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -673,6 +697,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the host account's own permissions (its roles on the host's inventory), through its password", "confirmed"
 	case "vcenter-sso":
 		return "the SSO user's own vCenter roles and group memberships, through its password", "confirmed"
+	case "okta-user", "entra-user", "google-workspace-user":
+		return "the administrator account's own roles in the identity provider, through its password (and its own MFA)", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

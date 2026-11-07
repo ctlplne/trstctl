@@ -2,6 +2,9 @@
 
 ### Added
 
+- Break-glass identity provider accounts (A272 part 1): `okta-user`, `entra-user` and `google-workspace-user`
+  dynamic-secret providers rotate super administrator passwords through each provider's administration API, proved by one
+  non-interactive sign-in where the provider has one (never retried). Provider catalog 53 -> 56 recipes.
 - Account check-outs (A271 part 4): `account` access targets vault an account its provider rotates in place (ESXi,
   vCenter single sign-on, Redfish controllers, network devices); they are checked out, never opened as sessions, and
   check-in rotates them. Migration 0426.
