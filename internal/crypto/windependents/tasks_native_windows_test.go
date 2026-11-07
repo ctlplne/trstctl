@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"golang.org/x/sys/windows"
 	"io"
@@ -345,6 +346,39 @@ func TestNativeWindowsTaskLifecycleA267(t *testing.T) {
 	}
 	// Observation must not launch another task or replace its work receipt.
 	nativeTaskVerifyWork(t, work, nextNonce, sid.String())
+	// Lose the native reply after Run but before the host's instance recorder
+	// can persist it. Recovery observes only this exact instance and quiescence.
+	terminalNonce := nativeTaskNewPublicNonce(t, work)
+	lostInstance := ""
+	if _, err := adapter.RunAndVerifyRetained(ctx, target, func(instance string) error {
+		lostInstance = instance
+		return errors.New("owned interrupted instance persistence")
+	}); err == nil || lostInstance == "" {
+		t.Fatal("native lost-start fixture did not preserve its exact inspection reference")
+	}
+	observationDeadline := time.Now().Add(10 * time.Second)
+	terminalReady := false
+	var terminalErr error
+	for time.Now().Before(observationDeadline) {
+		observation, ready, err := adapter.ObserveTerminalInstance(ctx, target, lostInstance)
+		terminalErr = err
+		if err == nil && ready {
+			if observation.Proof.InstanceID != lostInstance || !observation.Quiescent || !observation.AllInstancesVisible {
+				t.Fatal("native terminal observation lost exact authority")
+			}
+			terminalReady = true
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+	if !terminalReady {
+		t.Fatal("native exact terminal observation/quiescence unavailable", terminalErr)
+	}
+	nativeTaskVerifyWork(t, work, terminalNonce, sid.String())
 	if nativeOwnedSignIn(t, name, old.Bytes()) || !nativeOwnedSignIn(t, name, next.Bytes()) {
 		t.Fatal("native task rotation did not refuse/accept exact credentials")
 	}

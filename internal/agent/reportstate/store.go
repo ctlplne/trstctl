@@ -133,12 +133,17 @@ func SetAsideUnopenable(path, binding string) (string, error) {
 }
 
 // lockStore checks the private directory and takes its process lock.
-func lockStore(path, binding string) (*Store, error) {
+func lockStore(path, binding string) (*Store, error) { return lockStoreMode(path, binding, true) }
+func lockStoreMode(path, binding string, create bool) (*Store, error) {
 	path = filepath.Clean(path)
 	if !filepath.IsAbs(path) || path == string(os.PathSeparator) || binding == "" {
 		return nil, errors.New("reportstate: an absolute private directory and identity binding are required")
 	}
-	if err := os.MkdirAll(path, 0o700); err != nil {
+	if create {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			return nil, err
+		}
+	} else if _, err := os.Lstat(path); err != nil {
 		return nil, err
 	}
 	if err := secretfile.SecurePrivateDirectory(path); err != nil {
@@ -179,7 +184,8 @@ func lockStore(path, binding string) (*Store, error) {
 // load creates the sealing key when nothing is retained and checks that a
 // retained report opens. A report without its key is refused before a new
 // key could replace the one that sealed it.
-func (s *Store) load() error {
+func (s *Store) load() error { return s.loadWithKeyCreation(true) }
+func (s *Store) loadWithKeyCreation(create bool) error {
 	keyPath := filepath.Join(s.path, "sealing.key")
 	retained := false
 	for _, name := range []string{"pending.state", taskExecutionFile} {
@@ -199,7 +205,13 @@ func (s *Store) load() error {
 			return fmt.Errorf("%w: it has no accessible sealing key; preserve the state for recovery", ErrUnopenable)
 		}
 	}
-	key, err := secretfile.LoadOrCreate(keyPath, func() ([]byte, error) { return crypto.RandomBytes(32) })
+	var key []byte
+	var err error
+	if create {
+		key, err = secretfile.LoadOrCreate(keyPath, func() ([]byte, error) { return crypto.RandomBytes(32) })
+	} else {
+		key, err = secretfile.Load(keyPath)
+	}
 	if err != nil {
 		return err
 	}

@@ -55,6 +55,11 @@ func main() {
 	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
 	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	taskExecutionAction := flag.String("task-execution", "", "one-shot with the agent stopped: inspect retained native task fences, or reconcile one exact terminal instance without starting, stopping or updating a task; uses the existing registration and private report state")
+	taskExecutionJob := flag.Int64("task-job", 0, "exact retained job ID for --task-execution=reconcile")
+	taskExecutionStep := flag.String("task-step", "", "exact retained step ID for --task-execution=reconcile")
+	taskExecutionInstance := flag.String("task-instance", "", "existing native instance GUID to observe, never a request to run it")
+	taskExecutionReason := flag.String("task-recovery-reason", "", "bounded reason for retaining a separate native terminal observation; the original failed or uncertain result stays unchanged")
 	setAsidePendingReport := flag.Bool("set-aside-pending-report", false, "one-shot, with the agent stopped: move a pending job report this registration cannot open (after re-enrollment, a changed --ca-bundle or --server-name, a missing sealing key, or damage) aside, intact and unsent, so job claims resume; a report the agent can still send is left in place. Reads --key, --cert, --ca-bundle, --name and --server-name, then exits")
 	distrustFile := flag.String("distrust-file", "", "optional operator distrust list, in the control plane's trust.distrust_file format, added to the shipped entries; the agent rates discovered certificates and removes distrusted trust-store roots against it")
 	tomcatReloadURL := flag.String("tomcat-reload-url", "", "one-shot: reload TLS through the stock Tomcat Manager /manager/text/sslReload on a literal loopback address, then exit")
@@ -555,11 +560,25 @@ func main() {
 	}
 
 	// Uninstalling a service needs no connection settings; everything else does.
-	if *service != "uninstall" {
+	if *service != "uninstall" && *taskExecutionAction == "" {
 		if o.enrollURL == "" || o.caBundle == "" || o.serverAddr == "" || o.commonName == "" {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: --enroll-url, --ca-bundle, --server, and --name are required")
 			os.Exit(2)
 		}
+	}
+
+	if *taskExecutionAction != "" {
+		if *service != "" || *setAsidePendingReport {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: task execution recovery requires its own stopped-agent invocation")
+			os.Exit(2)
+		}
+		raw, err := runTaskExecutionCommand(o, taskRecoveryCommand{Action: *taskExecutionAction, JobID: *taskExecutionJob, StepID: *taskExecutionStep, Instance: *taskExecutionInstance, Reason: *taskExecutionReason})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(raw))
+		return
 	}
 
 	// B13-R1: the operator's explicit decision about a pending job report this

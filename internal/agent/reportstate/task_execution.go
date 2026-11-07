@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -31,6 +32,8 @@ type TaskExecutor interface {
 	ObserveInstance(context.Context, windependents.Task, string) (windependents.TaskRunProof, bool, error)
 }
 type taskExecutionEvent struct {
+	At       time.Time                   `json:"at,omitempty"`
+	Recovery *TaskExecutionRecovery      `json:"recovery,omitempty"`
 	Version  int                         `json:"version"`
 	JobID    int64                       `json:"job_id"`
 	StepID   string                      `json:"step_id"`
@@ -40,6 +43,9 @@ type taskExecutionEvent struct {
 	Proof    *windependents.TaskRunProof `json:"proof,omitempty"`
 }
 type taskExecutionState struct {
+	Version  int
+	FencedAt time.Time
+	Recovery *TaskExecutionRecovery
 	Task     windependents.Task
 	Instance string
 	Proof    *windependents.TaskRunProof
@@ -63,7 +69,7 @@ func taskStepValid(value string) bool {
 	return true
 }
 func (p *taskExecutionProjection) apply(event taskExecutionEvent) error {
-	if event.Version != 1 || event.JobID <= 0 || !taskStepValid(event.StepID) || p.Sequence >= 1536 {
+	if (event.Version != 1 && event.Version != 2) || event.JobID <= 0 || !taskStepValid(event.StepID) || p.Sequence >= 1536 {
 		return ErrInvalidPending
 	}
 	if p.JobID != 0 && p.JobID != event.JobID {
@@ -72,21 +78,35 @@ func (p *taskExecutionProjection) apply(event taskExecutionEvent) error {
 	state := p.Steps[event.StepID]
 	switch event.Phase {
 	case "fenced":
+		if event.Recovery != nil || event.Version == 1 && !event.At.IsZero() || event.Version == 2 && event.At.IsZero() {
+			return ErrInvalidPending
+		}
 		if state != nil || event.Task == nil || event.Instance != "" || event.Proof != nil || len(p.Steps) >= 512 || windependents.ValidateTaskSnapshot(*event.Task) != nil {
 			return ErrInvalidPending
 		}
-		p.Steps[event.StepID] = &taskExecutionState{Task: *event.Task}
+		p.Steps[event.StepID] = &taskExecutionState{Task: *event.Task, Version: event.Version, FencedAt: event.At}
 	case "started":
+		if state == nil || event.Version != state.Version || !event.At.IsZero() || event.Recovery != nil || state.Recovery != nil {
+			return ErrInvalidPending
+		}
 		canonical, ok := windependents.CanonicalTaskInstance(event.Instance)
 		if state == nil || state.Instance != "" || state.Proof != nil || event.Task != nil || event.Proof != nil || !ok || canonical != event.Instance {
 			return ErrInvalidPending
 		}
 		state.Instance = canonical
 	case "completed":
+		if state == nil || event.Version != state.Version || !event.At.IsZero() || event.Recovery != nil || state.Recovery != nil {
+			return ErrInvalidPending
+		}
 		if state == nil || state.Instance == "" || state.Proof != nil || event.Task != nil || event.Instance != "" || event.Proof == nil || event.Proof.InstanceID != state.Instance || windependents.ValidateTaskRunProof(state.Task, *event.Proof) != nil {
 			return ErrInvalidPending
 		}
 		state.Proof = event.Proof
+	case "observed_terminal":
+		if state == nil || state.Version != 2 || event.Version != 2 || state.Proof != nil || state.Recovery != nil || event.Task != nil || event.Proof != nil || event.Instance != "" || event.Recovery == nil || !event.At.Equal(event.Recovery.At) || validateTaskRecovery(*state, *event.Recovery) != nil {
+			return ErrInvalidPending
+		}
+		state.Recovery = event.Recovery
 	default:
 		return ErrInvalidPending
 	}
@@ -260,7 +280,7 @@ func (s *Store) taskExecution(jobID int64, stepID string, task windependents.Tas
 		pending.Destroy()
 		return nil, errors.New("reportstate: terminal observation must be acknowledged before new task work")
 	}
-	if err := s.appendTaskExecution(p, taskExecutionEvent{Version: 1, JobID: jobID, StepID: stepID, Phase: "fenced", Task: &task}); err != nil {
+	if err := s.appendTaskExecution(p, taskExecutionEvent{Version: 2, JobID: jobID, StepID: stepID, Phase: "fenced", Task: &task, At: time.Now().UTC()}); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -277,6 +297,13 @@ func (s *Store) recordTaskExecution(event taskExecutionEvent) error {
 	p, err := s.readTaskExecutions()
 	if err != nil {
 		return err
+	}
+	if event.Version == 0 {
+		state := p.Steps[event.StepID]
+		if state == nil {
+			return ErrInvalidPending
+		}
+		event.Version = state.Version
 	}
 	return s.appendTaskExecution(p, event)
 }
@@ -302,6 +329,12 @@ func (s *Store) ExecuteTaskOnce(ctx context.Context, jobID int64, stepID string,
 	}
 	var proof windependents.TaskRunProof
 	if state != nil {
+		if state.Recovery != nil {
+			if state.Recovery.OriginalStartUnknown {
+				return proof, errors.Join(ErrTaskExecutionUncertain, ErrTaskExecutionObservedTerminal)
+			}
+			return proof, ErrTaskExecutionObservedTerminal
+		}
 		if state.Proof != nil {
 			return *state.Proof, nil
 		}
@@ -322,7 +355,7 @@ func (s *Store) ExecuteTaskOnce(ctx context.Context, jobID int64, stepID string,
 			if !ok {
 				return errors.New("reportstate: native task returned invalid instance")
 			}
-			return s.recordTaskExecution(taskExecutionEvent{Version: 1, JobID: jobID, StepID: stepID, Phase: "started", Instance: canonical})
+			return s.recordTaskExecution(taskExecutionEvent{JobID: jobID, StepID: stepID, Phase: "started", Instance: canonical})
 		})
 		if err != nil {
 			return windependents.TaskRunProof{}, err
@@ -331,7 +364,7 @@ func (s *Store) ExecuteTaskOnce(ctx context.Context, jobID int64, stepID string,
 	if err := windependents.ValidateTaskRunProof(task, proof); err != nil {
 		return windependents.TaskRunProof{}, err
 	}
-	if err := s.recordTaskExecution(taskExecutionEvent{Version: 1, JobID: jobID, StepID: stepID, Phase: "completed", Proof: &proof}); err != nil {
+	if err := s.recordTaskExecution(taskExecutionEvent{JobID: jobID, StepID: stepID, Phase: "completed", Proof: &proof}); err != nil {
 		return windependents.TaskRunProof{}, err
 	}
 	return proof, nil

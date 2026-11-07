@@ -70,7 +70,7 @@ func completedTaskExecution(p *taskExecutionProjection) bool {
 		return false
 	}
 	for _, state := range p.Steps {
-		if state.Proof == nil {
+		if state.Proof == nil && state.Recovery == nil {
 			return false
 		}
 	}

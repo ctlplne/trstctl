@@ -2572,6 +2572,46 @@ restart is covered by the native fixture; machine power-loss durability remains
 a filesystem qualification. This journal primitive and the native task adapter
 are separate from the full enrolled-host dependent workflow still being built.
 
+When a native start reply is lost, the agent pauses further dependent-rotation
+claims and continues explicitly selected unrelated host work. It never sends an
+empty filtered kind list as an unrestricted claim. Stop the agent before
+inspecting or reconciling its private task state:
+
+```sh
+trstctl-agent --task-execution inspect --name HOST --server-name CONTROL_PLANE \
+  --ca-bundle ca.pem --key agent.key --cert agent.crt
+trstctl-agent --task-execution reconcile --name HOST --server-name CONTROL_PLANE \
+  --ca-bundle ca.pem --key agent.key --cert agent.crt \
+  --task-job JOB_ID --task-step STEP_ID --task-instance EXISTING_GUID \
+  --task-recovery-reason 'Observe the exact terminal instance before inverse work'
+```
+
+These one-shot modes use the existing registration and server trust. They do not
+enroll, connect to the control plane, read a vault credential or replace a sealing
+key. The report store's process lock refuses them while the agent runs. Inspection
+returns public task identity, fence time and retained native evidence. Choose an
+existing instance from the host's Task Scheduler operational history; supplying a
+GUID does not authorize starting that instance or the task.
+
+Reconciliation reads that exact instance's dated start, action and completion
+records, checks the frozen path, account SID and definition, and requires no running
+instances under a fully elevated administrator view. [A filtered ordinary-user view](https://learn.microsoft.com/windows/win32/taskschd/registeredtask-getinstances)
+cannot establish quiescence. Nonzero native action results remain failures. Running,
+foreign, incomplete, changed or historical evidence refuses without clearing state.
+New version-two fences retain the original fence time; older undated unknown-start
+journals remain readable but cannot gain an invented recovery timestamp.
+
+The host appends a separate sealed observation with the local actor and reason.
+It preserves the original unknown instance and outcome, and original execution can
+never be retried or reported successful through this operation. Fully settled
+history is archived with the existing fsync and collision checks; an unacknowledged
+original report still blocks new work. After acknowledgement, separately authorized
+work can use the active slot. Restarting the agent does not revive an expired job
+or change an already failed or uncertain server step. Coordinator recovery for
+those cases remains a separate obligation. Windows runtime qualification of this
+terminal-observation path and final-image recovery remain unverified; portable
+journal/CLI contracts and Windows cross-compilation are separate evidence.
+
 AD account discovery in an explicit `active_directory` provider now includes
 SPN-bearing user accounts and the accounts named by its rotation bindings under
 `users_dn`. They use the `directory_service_account` kind, with `service_account: "true"`

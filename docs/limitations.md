@@ -9218,3 +9218,15 @@ reports are fixtures. Portable served proof covers exact first-command recovery,
 privacy, expiry refusal and invalid recovery material. Native Windows dependent
 execution, the combined journey, final-image replay and AD forest behavior remain
 separate proof obligations.
+
+
+### Native task terminal observation
+
+A stopped host agent can inspect an existing registration-bound task fence and
+retain a separate exact-instance terminal observation without running, stopping
+or updating the task. It requires dated native evidence and full administrator
+visibility of all instances. The original uncertain execution remains uncertain;
+nonzero action results remain failures. Legacy undated unknown starts, expired
+coordinator jobs, already failed inverse steps, native Windows runtime and final
+packaged recovery remain separate obligations. The operator contract is in the
+[service-account dependent workflow](features/secrets.md).

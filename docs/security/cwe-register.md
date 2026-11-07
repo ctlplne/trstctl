@@ -773,7 +773,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:613` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:632` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1819,7 +1819,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:741` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:760` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1913,8 +1913,8 @@ not this file.
 | `cmd/trstctl-agent/factory_test.go:32` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1361` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:2024` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1380` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:2043` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:217` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:477` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:504` | operator-supplied public issuer certificate (CWE-22) |
@@ -2245,8 +2245,8 @@ not this file.
 | `internal/crypto/windependents/rotation_native_windows_test.go:187` | same bounded regular lab executable, read only to compare the independently recorded compiler-output digest (CWE-22) |
 | `internal/crypto/windependents/services_native_windows_test.go:282` | os.Executable identifies this native test binary; copied code is public, no caller path (CWE-22) |
 | `internal/crypto/windependents/services_native_windows_test.go:288` | fixed filename in the exclusively created native protected test directory, O_EXCL refuses substitution (CWE-22) |
-| `internal/crypto/windependents/tasks_native_windows_test.go:54` | fixed public nonce under the exact native ProgramData fixture path with validated random suffix; no credential file (CWE-22) |
-| `internal/crypto/windependents/tasks_native_windows_test.go:126` | fixed bounded public receipt inside the exclusively created native protected fixture directory, exact path revalidated (CWE-22) |
+| `internal/crypto/windependents/tasks_native_windows_test.go:55` | fixed public nonce under the exact native ProgramData fixture path with validated random suffix; no credential file (CWE-22) |
+| `internal/crypto/windependents/tasks_native_windows_test.go:127` | fixed bounded public receipt inside the exclusively created native protected fixture directory, exact path revalidated (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:24` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:53` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -2761,7 +2761,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:921` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:940` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

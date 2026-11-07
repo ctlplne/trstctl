@@ -79,6 +79,14 @@ func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leas
 	if err := r.recoverPendingReport(ctx); err != nil {
 		return nil, err
 	}
+	filtered, paused, err := r.dependentTaskClaimKinds(ctx, kinds)
+	if err != nil {
+		return nil, err
+	}
+	if paused && len(filtered) == 0 {
+		return nil, nil
+	}
+	kinds = filtered
 	resp, err := r.c.ClaimJobs(ctx, &transport.ClaimJobsRequest{
 		Kinds: kinds, Limit: limit, LeaseSeconds: leaseSeconds,
 	})
