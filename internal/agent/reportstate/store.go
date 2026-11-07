@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/crypto/winaccounts"
 	"trstctl.com/trstctl/internal/custody"
 )
 
@@ -56,6 +57,9 @@ type Observation struct {
 	CredentialFingerprint string            `json:"credential_fingerprint"`
 	Custody               *custody.Record   `json:"custody,omitempty"`
 	HostRenew             *HostRenewCleanup `json:"host_renew,omitempty"`
+	// LocalAccountRotation is local-only acknowledgement metadata. The signed
+	// wire report carries its own exact public receipt, never this disk envelope.
+	LocalAccountRotation *winaccounts.RotationProof `json:"local_account_rotation,omitempty"`
 	// AdoptedPredecessorFingerprint and AdoptedPredecessorPEM carry the pair a
 	// first host deploy found installed and retained for rollback (A45). The
 	// PEM is the public leaf only.
@@ -87,14 +91,15 @@ type diskRecord struct {
 // server trust, tenant registration and agent identity; changing any of them
 // cannot silently send an old observation under new authority.
 type Store struct {
-	mu      sync.Mutex
-	taskMu  sync.Mutex
-	root    *os.Root
-	path    string
-	binding string
-	lock    *os.File
-	closed  bool
-	fault   error
+	mu        sync.Mutex
+	taskMu    sync.Mutex
+	accountMu sync.Mutex
+	root      *os.Root
+	path      string
+	binding   string
+	lock      *os.File
+	closed    bool
+	fault     error
 }
 
 // Open takes the directory's process lock and refuses a retained report it
@@ -188,7 +193,7 @@ func (s *Store) load() error { return s.loadWithKeyCreation(true) }
 func (s *Store) loadWithKeyCreation(create bool) error {
 	keyPath := filepath.Join(s.path, "sealing.key")
 	retained := false
-	for _, name := range []string{"pending.state", taskExecutionFile} {
+	for _, name := range []string{"pending.state", taskExecutionFile, localAccountRotationDirectory} {
 		if _, err := s.root.Lstat(name); err == nil {
 			retained = true
 		} else if !errors.Is(err, fs.ErrNotExist) {
@@ -240,6 +245,9 @@ func (s *Store) loadWithKeyCreation(create bool) error {
 		pending.Destroy()
 	}
 	if err != nil {
+		return err
+	}
+	if err = s.loadLocalAccountRotations(); err != nil {
 		return err
 	}
 	if _, err = s.readTaskExecutions(); err != nil {
@@ -342,6 +350,9 @@ func (s *Store) Put(value Observation) (err error) {
 	if err := validate(value); err != nil {
 		return err
 	}
+	if err := s.validateLocalAccountRotationReport(value); err != nil {
+		return err
+	}
 	if err := s.validateTaskExecutionReport(value); err != nil {
 		return err
 	}
@@ -420,6 +431,9 @@ func (s *Store) Acknowledge(value Observation) error {
 	if !same(*pending, value) {
 		return errors.New("reportstate: acknowledgement does not match pending result")
 	}
+	if err := s.acknowledgeLocalAccountRotation(value); err != nil {
+		return err
+	}
 	if err := s.acknowledgeTaskExecutions(value); err != nil {
 		return err
 	}
@@ -497,6 +511,9 @@ func validate(o Observation) error {
 	if o.JobID <= 0 || o.Attempt <= 0 {
 		return errors.New("reportstate: original job and attempt are required")
 	}
+	if o.LocalAccountRotation != nil && (o.Outcome != "verified" || !validLocalAccountProof(*o.LocalAccountRotation)) {
+		return ErrInvalidPending
+	}
 	if o.HostRenew != nil {
 		if (o.Outcome != "verified" && o.Outcome != "executed") || o.Custody == nil || o.CredentialFingerprint == "" ||
 			o.HostRenew.Connector == "" || o.HostRenew.TargetID == "" || len(o.HostRenew.Binding) != 64 {
@@ -519,6 +536,13 @@ func same(a, b Observation) bool {
 			return false
 		}
 	} else if *a.Custody != *b.Custody {
+		return false
+	}
+	if a.LocalAccountRotation == nil || b.LocalAccountRotation == nil {
+		if a.LocalAccountRotation != nil || b.LocalAccountRotation != nil {
+			return false
+		}
+	} else if !sameAccountRotationProof(*a.LocalAccountRotation, *b.LocalAccountRotation) {
 		return false
 	}
 	if a.HostRenew == nil || b.HostRenew == nil {

@@ -1306,6 +1306,27 @@ phase detect observed changes but do not provide an atomic SID compare-and-set.
 A trusted local administrator can still race a rename between those calls.
 
 The owned Windows fixture covers two account contexts on one operating system.
-Cross-compilation is separate from execution. The durable host journal, prepared
-credential transport, enrolled fleet scheduling, checkout invalidation and offline
-return each require their own integration and runtime evidence.
+Cross-compilation is separate from execution. Prepared credential transport,
+enrolled fleet scheduling, checkout invalidation and offline return each require
+their own integration and runtime evidence.
+
+The agent's existing sealed report store also retains local account execution.
+Each local SID has one bounded record containing its exact job, generation,
+machine/account binding and start phase. The file is flushed before native work;
+a completed proof is flushed before the caller can publish success. A retry reads
+that exact proof without redeeming credentials or probing either password again.
+A started attempt without a retained proof remains uncertain after restart and
+after acknowledgment of a failed report.
+
+Successful report acknowledgment preserves the latest public proof as a replay
+fence. Only a distinct generation explicitly naming the acknowledged generation as its
+predecessor can replace it. Recreated delivery IDs replay the original proof;
+older ancestry and changed authority cannot reset the account again. Delivery
+ordering never depends on a database-local outbox identity.
+Independent accounts have independent queue order. The private child directory
+holds at most 5,000 identity records; each record has a fixed byte bound, and
+retired SID fences are preserved rather than silently evicted. Missing keys,
+foreign registration bindings, invalid files and damaged ciphertext refuse work
+without discarding evidence. Password bytes are never serialized into this
+journal. Windows power-loss durability still requires native filesystem
+qualification; flushing files does not establish that qualification.

@@ -817,6 +817,14 @@ jobs:
           $a268RotationOutput | ForEach-Object { Write-Output $_ }
           if ($LASTEXITCODE -ne 0) { throw 'Native local administrator rotation failed' }
           if (($a268RotationOutput -join "`n") -notmatch 'A268_WINDOWS_LOCAL_ROTATION_OK') { throw 'Required native rotation proof marker missing' }
+      - name: Durable local account rotation journal
+        shell: pwsh
+        run: |
+          $a268JournalOutput = & go test ./internal/agent/reportstate -run '^TestLocalAccountRotation' -count=1 -v -timeout=3m 2>&1
+          $a268JournalOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Durable local account rotation journal failed' }
+          if (($a268JournalOutput -join "`n") -notmatch 'A268_LOCAL_ROTATION_JOURNAL_OK') { throw 'Required durable rotation journal proof marker missing' }
+
 
 
   # A267: native SCM service APIs and functional work on an owned local account.
