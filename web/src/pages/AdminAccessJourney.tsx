@@ -944,7 +944,10 @@ export function AdminAccess() {
                 <>
                   <PAMAutoApprovalPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
                   <PAMFoldersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
-                  <PAMTargetsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
+                  <PAMTargetsPanel
+                    canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")}
+                    canAssignOwner={!!user?.permissions?.some((permission) => permission === "*" || permission === "owners:write")}
+                  />
                 </>
               ) : null}
               {pamRows ? (

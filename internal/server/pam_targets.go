@@ -238,10 +238,34 @@ func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
 		GatewayAgentID: t.GatewayAgentID, GatewayAddress: t.GatewayAddress, HostKeyFingerprints: t.HostKeyFingerprints}
 }
 
+// pamAccountOwners is each brokered account's owner (A276), by the
+// ownership assignment of its inventory record.
+func (s *pamService) pamAccountOwners(ctx context.Context, tenantID string) (map[string]string, error) {
+	assignments, err := s.store.ListOwnershipAssignments(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(assignments))
+	for _, a := range assignments {
+		if strings.HasPrefix(a.InventoryID, "pam-account/") {
+			out[a.InventoryID] = a.OwnerID
+		}
+	}
+	return out, nil
+}
+
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
 	target, err := s.getPAMTarget(ctx, tenantID, targetType, id)
-	if err != nil || (!isPAMDatabaseType(targetType) && targetType != pamTargetBreakGlass) {
+	if err != nil {
 		return target, err
+	}
+	owners, err := s.pamAccountOwners(ctx, tenantID)
+	if err != nil {
+		return api.PAMTarget{}, err
+	}
+	target.OwnerID = owners[api.PAMAccountInventoryID(target.TargetType, target.ID)]
+	if !isPAMDatabaseType(targetType) && targetType != pamTargetBreakGlass {
+		return target, nil
 	}
 	health, err := s.store.ListPAMAccountHealth(ctx, tenantID)
 	if err != nil {
@@ -308,10 +332,15 @@ func (s *pamService) ListPAMTargets(ctx context.Context, tenantID string) ([]api
 	if err != nil {
 		return nil, err
 	}
+	owners, err := s.pamAccountOwners(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	for i := range out {
 		if h, ok := health[[2]string{out[i].TargetType, out[i].ID}]; ok {
 			out[i].Health = healthView(h)
 		}
+		out[i].OwnerID = owners[api.PAMAccountInventoryID(out[i].TargetType, out[i].ID)]
 	}
 	return out, nil
 }

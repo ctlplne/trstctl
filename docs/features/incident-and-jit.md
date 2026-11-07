@@ -645,6 +645,16 @@ name — only the category's name leaves the gateway:
 They read through `sudo`-style wrappers but not through stored programs, dynamic SQL
 or nested interpreters; like the operation rules, they are guardrails.
 
+#### Owners of brokered accounts (A276)
+
+Every brokered account — each privileged access target, configured or registered — is a
+record of the NHI inventory (`pam-account/<target_type>/<id>`, kind `privileged_account`,
+counted as `privileged_account_records`). Its accountable owner is assigned like any
+record's (`POST /api/v1/ownership/assignments` with that inventory ID and a reason; the
+`owners:write` permission), and the target reads it back as `owner_id`. In the console,
+the privileged access targets table shows each account's owner, or **No owner**, and
+**Assign owner** sets one.
+
 #### Search across recordings (A275)
 
 Holders of `recordings:read` search every recorded gateway session of the tenant at once:

@@ -7409,6 +7409,7 @@ export interface NHIInventoryRecordSummary {
   counting_mode: "durable_source_records_not_unique_credentials";
   discovery_finding_records: number;
   managed_identity_records: number;
+  privileged_account_records?: number;
   total_records: number;
 }
 
@@ -9446,6 +9447,7 @@ export interface PAMTarget {
   host?: string;
   host_key_fingerprints?: string[];
   id: string;
+  owner_id?: string;
   port?: number;
   principals?: string[];
   provider_id?: string;

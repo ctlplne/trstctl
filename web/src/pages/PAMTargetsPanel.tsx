@@ -127,10 +127,16 @@ function errorMessage(err: unknown): string {
 
 /** Tenant target registration is separate from the requester form. A caller
  * with access:write can request a session but cannot change its destination. */
-export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
+export function PAMTargetsPanel({ canManage, canAssignOwner = false }: { canManage: boolean; canAssignOwner?: boolean }) {
   const { t } = useTranslation();
   const [formOpen, setFormOpen] = useState(false);
   const query = useApiQuery(["pam-targets"], api.pamTargets, { retry: false });
+  // A276: every brokered account has an accountable owner, assigned to its
+  // inventory record pam-account/<type>/<id>.
+  const owners = useApiQuery(["owners"], api.owners, { enabled: !!query.data?.items.length, retry: false });
+  const ownerName = (id?: string) => (id ? (owners.data?.find((owner) => owner.id === id)?.name ?? id) : "");
+  const [ownerTarget, setOwnerTarget] = useState<PAMTarget | null>(null);
+  const [ownerChoice, setOwnerChoice] = useState({ owner: "", reason: "" });
   const folders = useApiQuery(["pam-folders"], api.pamFolders, { enabled: formOpen, retry: false });
   const providers = useApiQuery(["dynamic-secret-providers"], api.dynamicSecretProviders, { enabled: formOpen, retry: false });
   const queryClient = useQueryClient();
@@ -184,6 +190,27 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
       setFormOpen(false);
       reset(emptyTarget);
       submitKey.current = crypto.randomUUID();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignOwner() {
+    if (!ownerTarget || !ownerChoice.owner || !ownerChoice.reason.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.assignOwnership({
+        owner_id: ownerChoice.owner,
+        inventory_ids: [`pam-account/${ownerTarget.target_type}/${ownerTarget.id}`],
+        reason: ownerChoice.reason.trim(),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["pam-targets"] });
+      setNotice(t("admin.access.targetOwnerAssigned", { id: ownerTarget.id, owner: ownerName(ownerChoice.owner) }));
+      setOwnerTarget(null);
+      setOwnerChoice({ owner: "", reason: "" });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -245,7 +272,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
       ) : null}
       {query.data?.items.length === 0 ? <UnavailableState title={t("admin.access.noTargets")} /> : null}
       {query.data?.items.length ? (
-        <div role="region" aria-label={t("admin.access.targetsHeading")} tabIndex={0} className="max-w-full overflow-x-auto rounded-panel border border-border">
+        <div role="region" aria-label={t("admin.access.targetsTable")} tabIndex={0} className="max-w-full overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-184">
             <thead>
               <tr>
@@ -254,6 +281,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                 <th scope="col">{t("admin.access.allowedRoles")}</th>
                 <th scope="col">{t("admin.access.targetSource")}</th>
                 <th scope="col">{t("admin.access.targetStatus")}</th>
+                <th scope="col">{t("admin.access.targetOwner")}</th>
                 <th scope="col">{t("admin.access.targetAction")}</th>
               </tr>
             </thead>
@@ -269,7 +297,23 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                   <td>{target.target_type === "ssh" ? target.principals?.join(", ") : target.allowed_roles?.join(", ")}</td>
                   <td>{target.source === "tenant" ? t("admin.access.sourceTenant") : t("admin.access.sourceOperator")}</td>
                   <td>{target.enabled ? t("admin.access.targetEnabled") : t("admin.access.targetDisabledStatus")}</td>
-                  <td>
+                  <td>{target.owner_id ? ownerName(target.owner_id) : <span className="text-status-warning">{t("admin.access.targetNoOwner")}</span>}</td>
+                  <td className="flex flex-wrap gap-2">
+                    {canAssignOwner ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={t("admin.access.assignTargetOwnerFor", { id: target.id })}
+                        onClick={() => {
+                          setError(null);
+                          setOwnerChoice({ owner: target.owner_id ?? "", reason: "" });
+                          setOwnerTarget(target);
+                        }}
+                      >
+                        {t("admin.access.assignTargetOwner")}
+                      </Button>
+                    ) : null}
                     {canManage && target.source === "tenant" && target.enabled ? (
                       <Button
                         type="button"
@@ -501,6 +545,49 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
             </Button>
           </div>
         </form>
+      </Dialog>
+      <Dialog
+        open={ownerTarget !== null}
+        onClose={() => {
+          if (!busy) setOwnerTarget(null);
+        }}
+        titleId="pam-target-owner-heading"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayClassName="absolute inset-0 bg-black/55"
+        panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-panel border border-border bg-card p-5 shadow-elevation2"
+      >
+        <h2 id="pam-target-owner-heading" className="text-title font-semibold">
+          {t("admin.access.assignTargetOwnerFor", { id: ownerTarget?.id ?? "" })}
+        </h2>
+        <p className="mt-2 text-sm">{t("admin.access.assignTargetOwnerHelp")}</p>
+        {error ? (
+          <ErrorState title={t("admin.access.targetSaveFailed")}>
+            <p>{error}</p>
+          </ErrorState>
+        ) : null}
+        <label className="mt-3 grid gap-1 text-sm">
+          {t("admin.access.targetOwner")}
+          <Select value={ownerChoice.owner} onChange={(event) => setOwnerChoice({ ...ownerChoice, owner: event.target.value })}>
+            <option value="">{t("admin.access.chooseTargetOwner")}</option>
+            {(owners.data ?? []).map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="mt-3 grid gap-1 text-sm">
+          {t("admin.access.targetOwnerReason")}
+          <Textarea value={ownerChoice.reason} onChange={(event) => setOwnerChoice({ ...ownerChoice, reason: event.target.value })} maxLength={1000} />
+        </label>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => setOwnerTarget(null)}>
+            {translateNow("source.cancel.19766ed6cc")}
+          </Button>
+          <Button type="button" disabled={busy || !ownerChoice.owner || !ownerChoice.reason.trim()} onClick={() => void assignOwner()}>
+            {t("admin.access.assignTargetOwner")}
+          </Button>
+        </div>
       </Dialog>
       <Dialog
         open={disableTarget !== null}

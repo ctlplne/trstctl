@@ -34583,6 +34583,10 @@
           "managed_identity_records": {
             "type": "integer"
           },
+          "privileged_account_records": {
+            "description": "brokered accounts: privileged access targets (A276)",
+            "type": "integer"
+          },
           "total_records": {
             "type": "integer"
           }
@@ -43950,6 +43954,11 @@
             "type": "array"
           },
           "id": {
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "the brokered account's accountable owner (A276): the ownership assignment of its inventory record pam-account/\u003ctarget_type\u003e/\u003cid\u003e",
+            "format": "uuid",
             "type": "string"
           },
           "port": {

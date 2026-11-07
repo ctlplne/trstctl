@@ -9136,6 +9136,20 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
+## Owners, certification and orphans (A276) — part 1: owners of brokered accounts
+
+Status: in progress. Brokered accounts are NHI inventory records, so the existing ownership
+assignment names their owners, and targets read them back. Proof:
+`TestServedBrokeredAccountsAreInventoriedWithOwnersA276` (a registered target is listed as a
+privileged account with no owner; an assignment makes the owner show on the record and the
+target; another tenant neither sees nor can assign it) and the console tests.
+
+What comes next:
+- Orphaned and unused accounts flagged with a proposed action that needs approval, then
+  applied and read back (part 2).
+- Periodic certification of brokered accounts, templates and approver lists through the
+  access reviews, with a signed result (part 3).
+
 ## Session risk alerts and recording search (A275) — parts 1–3: alerts, risk categories and search
 
 Status: in progress. A template rule's `alert` effect (severity `warning` or

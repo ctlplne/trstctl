@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -31,6 +32,7 @@ var nhiInventoryCoverage = []string{
 	"webhook",
 	"workload_identity",
 	"agent",
+	"privileged_account",
 }
 
 type nhiInventoryResponse struct {
@@ -53,6 +55,8 @@ type nhiInventoryRecordSummary struct {
 	APITokenRecords         int    `json:"api_token_records"`
 	AgentRecords            int    `json:"agent_records"`
 	DiscoveryFindingRecords int    `json:"discovery_finding_records"`
+	// PrivilegedAccountRecords are brokered accounts (A276).
+	PrivilegedAccountRecords int `json:"privileged_account_records"`
 }
 
 type nhiInventoryItem struct {
@@ -123,6 +127,8 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 			out.RecordSummary.AgentRecords++
 		case "discovery_finding":
 			out.RecordSummary.DiscoveryFindingRecords++
+		case "pam_target":
+			out.RecordSummary.PrivilegedAccountRecords++
 		}
 	}
 
@@ -288,6 +294,40 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 			DiscoveredAt: &finding.DiscoveredAt,
 			CreatedAt:    finding.DiscoveredAt,
 		})
+	}
+
+	// Brokered accounts (A276): every privileged access target trstctl
+	// brokers, configured or registered, is a record its owner is assigned
+	// to like any other.
+	if a.pam != nil {
+		targets, err := a.pam.ListPAMTargets(ctx, tenantID)
+		if err != nil && !errors.Is(err, ErrPAMUnavailable) {
+			return out, err
+		}
+		for _, target := range targets {
+			status := "active"
+			if !target.Enabled {
+				status = "disabled"
+			}
+			created := time.Time{}
+			if target.RegisteredAt != nil {
+				created = *target.RegisteredAt
+			}
+			add(nhiInventoryItem{
+				ID:          PAMAccountInventoryID(target.TargetType, target.ID),
+				TenantID:    tenantID,
+				Kind:        "privileged_account",
+				Source:      "pam_target",
+				DisplayName: target.ID + " (" + target.TargetType + ")",
+				Status:      status,
+				Ref:         target.TargetType + "/" + target.ID,
+				Metadata: marshalNHIInventoryMetadata(map[string]any{
+					"target_type": target.TargetType, "provider_id": target.ProviderID, "account_secret": target.AccountSecret,
+					"folder": target.Folder, "source": target.Source, "gateway": target.GatewayAgentID != "",
+				}),
+				CreatedAt: created,
+			})
+		}
 	}
 
 	// An ownership assignment (POST /api/v1/ownership/assignments, or a stale

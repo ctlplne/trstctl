@@ -136,6 +136,12 @@ type PAMRecordingVerification struct {
 
 // PAMTarget is routing policy, never a credential. PostgreSQL administrator
 // material stays in the tenant-bound dynamic-secret provider's protected ref.
+// PAMAccountInventoryID is a brokered account's NHI inventory record (A276):
+// the record ownership assignments, attestations and reviews name.
+func PAMAccountInventoryID(targetType, id string) string {
+	return "pam-account/" + targetType + "/" + id
+}
+
 type PAMTarget struct {
 	ID             string     `json:"id"`
 	TargetType     string     `json:"target_type"`
@@ -163,6 +169,9 @@ type PAMTarget struct {
 	// HardwareKeyHolders (A272) is who holds a break-glass account's hardware
 	// security keys, read from its provider; the keys stay with them.
 	HardwareKeyHolders []string `json:"hardware_key_holders,omitempty"`
+	// OwnerID (A276) is the brokered account's accountable owner: the
+	// ownership assignment of its inventory record (PAMAccountInventoryID).
+	OwnerID string `json:"owner_id,omitempty"`
 	// Health (A258) is the last read-only sign-in check of the credential a
 	// provider-backed target's provider holds; absent before its first check.
 	Health *PAMAccountHealth `json:"health,omitempty"`

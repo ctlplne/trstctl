@@ -2783,13 +2783,14 @@ func componentSchemas() map[string]*Schema {
 		"created_at":    timestamp(),
 	}, "id", "tenant_id", "kind", "source", "display_name", "status", "metadata", "created_at")
 	nhiInventoryRecordSummary := object(map[string]*Schema{
-		"counting_mode":             {Type: "string", Enum: []string{"durable_source_records_not_unique_credentials"}},
-		"total_records":             {Type: "integer"},
-		"managed_identity_records":  {Type: "integer"},
-		"certificate_records":       {Type: "integer"},
-		"api_token_records":         {Type: "integer"},
-		"agent_records":             {Type: "integer"},
-		"discovery_finding_records": {Type: "integer"},
+		"counting_mode":              {Type: "string", Enum: []string{"durable_source_records_not_unique_credentials"}},
+		"total_records":              {Type: "integer"},
+		"managed_identity_records":   {Type: "integer"},
+		"certificate_records":        {Type: "integer"},
+		"api_token_records":          {Type: "integer"},
+		"agent_records":              {Type: "integer"},
+		"discovery_finding_records":  {Type: "integer"},
+		"privileged_account_records": {Type: "integer", Description: "brokered accounts: privileged access targets (A276)"},
 	}, "counting_mode", "total_records", "managed_identity_records", "certificate_records", "api_token_records", "agent_records", "discovery_finding_records")
 	nhiInventory := object(map[string]*Schema{
 		"generated_at":   timestamp(),
@@ -5868,6 +5869,7 @@ func componentSchemas() map[string]*Schema {
 		"gateway_agent_id": str(), "gateway_address": str(),
 		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(), "folder": str(),
 		"hardware_key_holders": {Type: "array", Items: str(), Description: "who holds a break-glass account's hardware security keys (A272); the keys stay with them"},
+		"owner_id":             {Type: "string", Format: "uuid", Description: "the brokered account's accountable owner (A276): the ownership assignment of its inventory record pam-account/<target_type>/<id>"},
 		"web":                  ref("PAMWebConsoleRoute"),
 		"health": object(map[string]*Schema{
 			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},

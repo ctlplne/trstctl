@@ -20911,6 +20911,8 @@ export interface components {
             counting_mode: "durable_source_records_not_unique_credentials";
             discovery_finding_records: number;
             managed_identity_records: number;
+            /** @description brokered accounts: privileged access targets (A276) */
+            privileged_account_records?: number;
             total_records: number;
         };
         NHIOverPrivilegeFinding: {
@@ -23424,6 +23426,11 @@ export interface components {
             host?: string;
             host_key_fingerprints?: string[];
             id: string;
+            /**
+             * Format: uuid
+             * @description the brokered account's accountable owner (A276): the ownership assignment of its inventory record pam-account/<target_type>/<id>
+             */
+            owner_id?: string;
             port?: number;
             principals?: string[];
             provider_id?: string;

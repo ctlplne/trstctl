@@ -802,6 +802,17 @@ export const messages = {
   "admin.access.recordingSearch.sourceOutput": { defaultMessage: "Terminal output", description: "Recording search (A275)." },
   "admin.access.recordingSearch.sourceIndex": { defaultMessage: "Desktop index", description: "Recording search (A275)." },
   "admin.access.recordingSearch.sourceRequest": { defaultMessage: "Recorded request", description: "Recording search (A275)." },
+  "admin.access.targetOwner": { defaultMessage: "Owner", description: "Brokered account owners (A276)." },
+  "admin.access.targetNoOwner": { defaultMessage: "No owner", description: "Brokered account owners (A276)." },
+  "admin.access.assignTargetOwner": { defaultMessage: "Assign owner", description: "Brokered account owners (A276)." },
+  "admin.access.assignTargetOwnerFor": { defaultMessage: "Assign the owner of {id}", description: "Brokered account owners (A276)." },
+  "admin.access.assignTargetOwnerHelp": {
+    defaultMessage: "The owner is accountable for this brokered account: its certification, and what happens to it when it is orphaned or unused.",
+    description: "Brokered account owners (A276).",
+  },
+  "admin.access.chooseTargetOwner": { defaultMessage: "Choose an owner", description: "Brokered account owners (A276)." },
+  "admin.access.targetOwnerReason": { defaultMessage: "Why this owner", description: "Brokered account owners (A276)." },
+  "admin.access.targetOwnerAssigned": { defaultMessage: "{owner} now owns {id}.", description: "Brokered account owners (A276)." },
   "admin.access.signins.heading": { defaultMessage: "Sign-ins to managed accounts", description: "Bypass detection (A274)." },
   "admin.access.signins.description": {
     defaultMessage:
@@ -7490,6 +7501,7 @@ export const messages = {
   "admin.access.targetType": { defaultMessage: "Target type", description: "Privileged-session target-kind field label." },
   "admin.access.targetId": { defaultMessage: "Target ID", description: "Privileged-session target identifier field label." },
   "admin.access.targetsHeading": { defaultMessage: "Privileged access targets", description: "Tenant PAM target inventory heading." },
+  "admin.access.targetsTable": { defaultMessage: "Targets, their owners and status", description: "Tenant PAM target table region (A276)." },
   "admin.access.targetsHelp": {
     defaultMessage:
       "A target names the allowed database provider or SSH host. It never stores an administrator password here. Only a target registrar can add or disable one.",

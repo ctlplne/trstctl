@@ -2,6 +2,10 @@
 
 ### Added
 
+- Owners of brokered accounts (A276 part 1): every privileged access target is an NHI inventory record
+  (`pam-account/<type>/<id>`, kind `privileged_account`, `privileged_account_records` in the record summary), so
+  ownership assignments name its owner; targets read `owner_id` back; the console's targets table shows owners and
+  assigns them.
 - Recording search (A275 part 3): `GET /api/v1/access/recordings/search` (`searchPAMRecordings`, OpenAPI 790 -> 791),
   `trstctl access recordings search` (CLI 857 -> 858) and the console's **Search session recordings** search the tenant's
   recordings — SSH commands and output, SQL statements and results, desktop indexes; never typed input — within bounds,
