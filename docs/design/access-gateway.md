@@ -1330,3 +1330,41 @@ foreign registration bindings, invalid files and damaged ciphertext refuse work
 without discarding evidence. Password bytes are never serialized into this
 journal. Windows power-loss durability still requires native filesystem
 qualification; flushing files does not establish that qualification.
+
+
+### Enrolled local account execution transport
+
+A native password job carries only public identifiers: tenant, enrolled host,
+vaulted account, complete inventory run, exact local SAM/account binding,
+rotation generation and predecessor host generation. Its digest commits to all
+of those fields. A queued operation has no expiry merely because its host is
+offline; a live claim lease and credential authorization bound execution when
+the host returns. Native proof reports remain separate from delivery success.
+
+The operator-owned host profile grants `windows_local_account_writes` as exact
+`tenant_id`, `agent_id`, `machine_sid` and `account_sid` tuples. A SID is Windows'
+stable account identifier. There are no wildcard tuples. Read-only inventory,
+file roots, shell commands and domain-account membership grant no native password
+write. The agent independently compares the intent's tenant and host with its
+current client certificate before redeeming anything. An unsupported operating
+system refuses execution before credential redemption.
+
+One worker accepts native local account rotation; overlapping work rejects
+promptly. It reads the durable journal first. A retained proof is reported with
+its original observation time without another password redemption, reset or
+login. An uncertain start remains fenced. A fresh execution redeems exactly the
+predecessor and successor password byte fields for that claim, checks their
+expiry, locks their buffers and wipes every wire copy. Duplicate, empty or extra
+credential names refuse execution; rejected replies are wiped in full before
+reporting. Locked password buffers are destroyed when the native phase returns,
+before terminal-report network I/O. The
+credential deadline further shortens the native execution context.
+
+Only the public native proof is signed and retained in the existing sealed
+terminal-report store. Server refusal or restart keeps the original report and
+blocks new claims until acknowledgment. Exact acknowledgment also advances the
+native generation journal; a successful RPC alone cannot manufacture native
+proof absent from that journal. The transport fixture uses real mutual TLS and
+verifies detached signatures, with a separately identified native-effect adapter.
+It does not qualify the control-plane queue/broker, scheduled or checkout-driven
+fleet lifecycle, or native Windows execution. Those require their own proofs.

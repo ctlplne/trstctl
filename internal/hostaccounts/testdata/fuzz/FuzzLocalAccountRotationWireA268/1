@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"rotation_id\":\"one\",\"ROTATION_ID\":\"two\"}")

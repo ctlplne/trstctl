@@ -95,7 +95,7 @@ const (
 // refuses a connector it cannot run.
 func ClaimableKinds() []string {
 	return []string{
-		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsLocalAccountsInventory, KindWindowsDependentInventory, KindWindowsDependentRotation,
+		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsLocalAccountsInventory, KindWindowsLocalAccountRotation, KindWindowsDependentInventory, KindWindowsDependentRotation,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindADCSNestedGroups, KindADCSEndpointProbe, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
@@ -289,6 +289,9 @@ func RunOnceWithRoles(
 		// posture. Do not claim file/exec work it cannot perform — but it
 		// still answers its post-upgrade self-check (A71).
 		kinds = []string{KindPQCPosture, KindPQCPostureRollback, KindAgentSelfCheck}
+		if len(hostProfile.WindowsLocalAccountWrites) > 0 {
+			kinds = append(kinds, KindWindowsLocalAccountRotation)
+		}
 		if hostProfile.WindowsLocalAccountsInventory {
 			kinds = append(kinds, KindWindowsLocalAccountsInventory)
 		}
@@ -338,6 +341,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// path keeps it from redeeming material it has no use for (R1).
 	if job.Kind == KindWindowsDependentRotation {
 		return runWindowsDependentRotation(ctx, ch, hostProfile, job)
+	}
+	if job.Kind == KindWindowsLocalAccountRotation {
+		return runWindowsLocalAccountRotation(ctx, ch, hostProfile, job)
 	}
 	if job.Kind == KindWindowsLocalAccountsInventory {
 		return runWindowsLocalAccountsInventory(ctx, ch, hostProfile, job)

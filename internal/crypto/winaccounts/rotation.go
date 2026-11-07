@@ -156,6 +156,10 @@ func (r Rotator) Rotate(ctx context.Context, b RotationBinding, generation strin
 	}); err != nil {
 		return none, ErrRotationUncertain
 	}
+	// Native password calls have finished. Release private copies before the
+	// final public-state read and durable proof persistence perform any I/O.
+	oldBuffer.Destroy()
+	nextBuffer.Destroy()
 	// No further authentication follows this read: a bad-count increment is
 	// retained, never reset or hidden by changing flags or lockout policy.
 	state, err = r.inspect(ctx, b)

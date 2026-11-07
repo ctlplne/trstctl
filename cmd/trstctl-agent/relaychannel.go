@@ -108,15 +108,17 @@ func (r relayChannel) RedeemJobCredential(ctx context.Context, jobID int64, atte
 		JobID: jobID, Attempt: attempt,
 	})
 	if err != nil {
+		if resp != nil {
+			wipeRedeemedItems(resp.Items)
+		}
 		return nil, err
 	}
-	// The values are handed straight to relay.AdoptMaterial, which moves each
-	// into a locked buffer and wipes the wire copy. Nothing is retained here.
-	items := make(map[string][]byte, len(resp.Items))
-	for _, item := range resp.Items {
-		items[item.Name] = item.Value
+	if resp == nil {
+		return nil, errors.New("agent: empty credential redemption response")
 	}
-	return items, nil
+	// The unique values pass straight to locked adoption; no overwritten wire
+	// buffer can escape the caller's wipe ownership.
+	return redeemedItemMap(resp.Items)
 }
 
 func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error) {

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"proof\":{\"new_authenticated\":true,\"old_refused\":null}}")

@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/crypto/windependents"
+	"trstctl.com/trstctl/internal/hostaccounts"
 )
 
 // Host-executed connector deploys (epic D1).
@@ -87,6 +88,7 @@ func ExecutesOnHost(name string) bool {
 // argv would expose it in the process table and make it something a deployment
 // system rewrites; putting it in a file makes it something an operator owns.
 type HostProfile struct {
+	WindowsLocalAccountWrites     []hostaccounts.RotationGrant           `json:"windows_local_account_writes,omitempty"`
 	WindowsLocalAccountsInventory bool                                   `json:"windows_local_accounts_inventory,omitempty"`
 	WindowsDependentWrites        []connector.WindowsDependentWriteGrant `json:"windows_dependent_writes,omitempty"`
 	WindowsDependentProbes        []connector.WindowsDependentProbe      `json:"windows_dependent_probes,omitempty"`
@@ -151,6 +153,9 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: decode host profile: %w", err)
 	}
+	if e := validateLocalAccountWriteProfile(profile.WindowsLocalAccountWrites); e != nil {
+		return connector.LocalOpsConfig{}, e
+	}
 	if e := validateDependentWriteProfile(profile.WindowsDependentWrites, profile.WindowsDependentProbes); e != nil {
 		return connector.LocalOpsConfig{}, e
 	}
@@ -176,7 +181,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			}
 		}
 	}
-	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 && len(profile.WindowsDependentSIDs) == 0 && len(profile.WindowsDependentWrites) == 0 && !profile.WindowsLocalAccountsInventory {
+	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 && len(profile.WindowsDependentSIDs) == 0 && len(profile.WindowsDependentWrites) == 0 && !profile.WindowsLocalAccountsInventory && len(profile.WindowsLocalAccountWrites) == 0 {
 		return connector.LocalOpsConfig{}, errors.New("relay: host profile must allow at least one filesystem root, Kubernetes namespace or Windows inventory account SID")
 	}
 	if len(profile.AllowedRoots) == 0 {
@@ -190,7 +195,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 				return connector.LocalOpsConfig{}, err
 			}
 		}
-		return connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes}, nil
+		return connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: profile.WindowsLocalAccountWrites, KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, WindowsDependentSIDs: profile.WindowsDependentSIDs, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes}, nil
 	}
 	if profile.TLSProbeOpenSSL != "" {
 		if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
@@ -219,7 +224,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			ServerName: binding.ServerName, Action: binding.Action, RecoveryAction: binding.RecoveryAction,
 		})
 	}
-	configured := connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
+	configured := connector.LocalOpsConfig{WindowsLocalAccountsInventory: profile.WindowsLocalAccountsInventory, WindowsLocalAccountWrites: profile.WindowsLocalAccountWrites, WindowsDependentWrites: profile.WindowsDependentWrites, WindowsDependentProbes: profile.WindowsDependentProbes, WindowsDependentSIDs: profile.WindowsDependentSIDs, AllowedRoots: profile.AllowedRoots, Actions: actions,
 		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces}
 	if _, err := connector.NewLocalOps(configured); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)

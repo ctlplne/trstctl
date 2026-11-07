@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/localexec"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
@@ -56,8 +57,11 @@ type LocalOpsConfig struct {
 	// WindowsLocalAccountsInventory grants read-only local-SAM discovery.
 	// It grants no password write, file access, or general process execution.
 	WindowsLocalAccountsInventory bool
-	WindowsDependentWrites        []WindowsDependentWriteGrant
-	WindowsDependentProbes        []WindowsDependentProbe
+	// WindowsLocalAccountWrites grants native password-only operations to exact
+	// tenant/host/local-SAM tuples. Inventory reads never imply this grant.
+	WindowsLocalAccountWrites []hostaccounts.RotationGrant
+	WindowsDependentWrites    []WindowsDependentWriteGrant
+	WindowsDependentProbes    []WindowsDependentProbe
 	// WindowsDependentSIDs authorizes only native account-dependent reads.
 	// It is loaded from the host operator's profile, never target/job JSON.
 	WindowsDependentSIDs []string

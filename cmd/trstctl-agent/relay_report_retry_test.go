@@ -27,6 +27,7 @@ import (
 )
 
 type receiptRetryChannelServer struct {
+	redeem func(context.Context, *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error)
 	blockedJobChannel
 	report func(context.Context, *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error)
 	claim  func(context.Context, *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error)
@@ -39,11 +40,21 @@ func (s *receiptRetryChannelServer) ClaimJobs(ctx context.Context, req *transpor
 	return s.blockedJobChannel.ClaimJobs(ctx, req)
 }
 
+func (s *receiptRetryChannelServer) RedeemJobCredential(ctx context.Context, req *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error) {
+	if s.redeem != nil {
+		return s.redeem(ctx, req)
+	}
+	return s.blockedJobChannel.RedeemJobCredential(ctx, req)
+}
 func (s *receiptRetryChannelServer) ReportJobResult(ctx context.Context, req *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
 	return s.report(ctx, req)
 }
 
 func newReceiptRetryChannel(t *testing.T, report func(context.Context, *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error), configure ...func(*receiptRetryChannelServer)) relayChannel {
+	t.Helper()
+	return newReceiptRetryChannelForTenant(t, "receipt-retry-tenant", report, configure...)
+}
+func newReceiptRetryChannelForTenant(t *testing.T, tenant string, report func(context.Context, *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error), configure ...func(*receiptRetryChannelServer)) relayChannel {
 	t.Helper()
 	ca, err := mtls.NewCA("receipt-retry-ca")
 	if err != nil {
@@ -58,7 +69,7 @@ func newReceiptRetryChannel(t *testing.T, report func(context.Context, *transpor
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, err := ca.SignClientCSRWithTenant(csr, "receipt-retry-tenant", []string{mtls.AgentRoleHost}, time.Hour)
+	chain, err := ca.SignClientCSRWithTenant(csr, tenant, []string{mtls.AgentRoleHost}, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

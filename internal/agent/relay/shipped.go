@@ -47,6 +47,7 @@ type ShippedJobKind struct {
 // ShippedJobKinds is what this build performs.
 func ShippedJobKinds() []ShippedJobKind {
 	return []ShippedJobKind{
+		{Kind: KindWindowsLocalAccountRotation, Flags: []string{"--relay-claim", "--host-exec-profile"}, Roles: []string{mtls.AgentRoleHost}},
 		{Kind: KindWindowsLocalAccountsInventory, Flags: []string{"--relay-claim", "--host-exec-profile"}, Roles: []string{mtls.AgentRoleHost}},
 		{Kind: KindWindowsDependentRotation, Flags: []string{"--relay-claim", "--host-exec-profile"}, Roles: []string{mtls.AgentRoleHost}},
 		{Kind: KindWindowsDependentInventory, Flags: []string{"--relay-claim", "--host-exec-profile"}, Roles: []string{mtls.AgentRoleHost}},

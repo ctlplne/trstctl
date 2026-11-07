@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"native\":{\"machine\":{\"name\":\"\\ud800\",\"sid\":\"S-1-5-21-1-2-3\",\"role\":3}}}")

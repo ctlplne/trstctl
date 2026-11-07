@@ -87,10 +87,10 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 			hostProfile
 	}
 	if hasHost {
-		// Envoy's co-resident management API and encrypted posture predecessor
-		// need no file/exec grant. The claim runner narrows this mode to the two
-		// PQC posture kinds; it cannot accidentally take a file deploy job.
-		fmt.Printf("trstctl-agent: host PQC posture claiming enabled every %s\n", o.relayPollEvery)
+		// Posture and explicit native inventory/password grants need no file
+		// roots or shell actions. The claim runner includes only these configured
+		// native kinds and posture; it cannot accidentally take a file deploy job.
+		fmt.Printf("trstctl-agent: host claiming enabled every %s (posture, local account inventory %t, %d local account password grants, %d dependent write grants)\n", o.relayPollEvery, hostProfile.WindowsLocalAccountsInventory, len(hostProfile.WindowsLocalAccountWrites), len(hostProfile.WindowsDependentWrites))
 		return time.NewTimer(o.relayPollEvery),
 			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
 			hostProfile

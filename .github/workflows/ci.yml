@@ -824,6 +824,14 @@ jobs:
           $a268JournalOutput | ForEach-Object { Write-Output $_ }
           if ($LASTEXITCODE -ne 0) { throw 'Durable local account rotation journal failed' }
           if (($a268JournalOutput -join "`n") -notmatch 'A268_LOCAL_ROTATION_JOURNAL_OK') { throw 'Required durable rotation journal proof marker missing' }
+      - name: Enrolled local account rotation receipt transport
+        shell: pwsh
+        run: |
+          $a268ChannelOutput = & go test ./cmd/trstctl-agent -run '^TestLocalAccountRotation' -count=1 -v -timeout=3m 2>&1
+          $a268ChannelOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Enrolled local account rotation receipt transport failed' }
+          if (($a268ChannelOutput -join "`n") -notmatch 'A268_HOST_ROTATION_RECEIPT_OK') { throw 'Required native host receipt transport proof marker missing' }
+
 
 
 

@@ -1270,3 +1270,12 @@ slot and a thirty-second request deadline. No password or password hash is read.
 This inventory path does not yet configure fleet password rotation.
 Scheduled rotation, checkout invalidation and native Windows qualification remain
 separate from discovering an account.
+
+
+A native local-account password write has a separate host permission. The
+`windows_local_account_writes` host-profile list names an exact tenant UUID,
+enrolled host UUID, machine SAM SID and account SID. Inventory permission alone
+does not authorize it. The [execution boundary](../design/access-gateway.md#enrolled-local-account-execution-transport)
+describes this permission, retained generation proofs and credential lifetime.
+The inventory commands above provide observations; they do not themselves queue
+or schedule a password change.

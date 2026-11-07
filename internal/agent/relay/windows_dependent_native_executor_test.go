@@ -92,7 +92,11 @@ func TestNativeWindowsDependentExecutorChildA267(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	defer state.Close()
+	defer func() {
+		if e := state.Close(); e != nil {
+			t.Error("close native fixture report state", e)
+		}
+	}()
 	channel := &nativeExecutorChannel{state: state, password: next}
 	taskAdapter, e := windependents.NewTasks(windependents.TaskExecutionPolicy{VerificationPaths: []string{input.Tasks[0].Path}})
 	if e != nil {
