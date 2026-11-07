@@ -1376,7 +1376,9 @@ account's native rotation. If the host is offline, the rotation waits in
 `prepared` and runs when the host checks in again; the host retires the revealed
 password and authenticates the new one before the vault publishes it. Folders,
 templates and auto-approval rules apply to `windows_local` targets as to other
-vaulted accounts.
+vaulted accounts. In the console, register one under the access targets (type
+**Windows local administrator (check-out)**: its native `windows` provider and the
+account secret; it names no gateway) and check it out from the check-out panel.
 
 #### Release a break-glass identity provider account
 

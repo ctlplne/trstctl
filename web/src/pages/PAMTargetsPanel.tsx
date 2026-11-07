@@ -21,7 +21,7 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole", "windows_local"]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -45,7 +45,7 @@ const targetSchema = z
     } else if (value.target_type !== "ssh") {
       if (!value.provider_id) ctx.addIssue({ code: "custom", path: ["provider_id"], message: translateNow("admin.access.providerRequired") });
       const roles = splitList(value.allowed_roles);
-      if ((value.target_type === "rdp" || value.target_type === "netdevice") && roles.length !== 1)
+      if ((value.target_type === "rdp" || value.target_type === "netdevice" || isCheckoutAccount(value.target_type)) && roles.length !== 1)
         ctx.addIssue({ code: "custom", path: ["allowed_roles"], message: translateNow("admin.access.desktop.oneAccount") });
       if (roles.length === 0 || (value.target_type === "postgres" && roles.some((role) => role !== "readonly" && role !== "writer")))
         ctx.addIssue({
@@ -89,6 +89,12 @@ const emptyTarget: TargetForm = {
   web_ca_pem: "",
   web_server_name: "",
 };
+// Check-out accounts (A268 windows_local) are vaulted accounts a provider
+// rotates in place: checked out, never a session, so they name no gateway.
+const CHECKOUT_PROVIDER_TYPES: Record<string, string[]> = { windows_local: ["windows"] };
+function isCheckoutAccount(targetType: string): boolean {
+  return targetType in CHECKOUT_PROVIDER_TYPES;
+}
 function splitList(value: string): string[] {
   return value
     .split(",")
@@ -144,11 +150,11 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
         : form.target_type !== "ssh"
           ? { id: form.id, target_type: form.target_type, provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
           : { id: form.id, target_type: "ssh", host: form.host, port: Number(form.port), principals: splitList(form.principals) };
-    if (form.target_type === "rdp" || form.target_type === "netdevice" || form.target_type === "webconsole")
+    if (form.target_type === "rdp" || form.target_type === "netdevice" || form.target_type === "webconsole" || isCheckoutAccount(form.target_type))
       input.account_secret = splitList(form.allowed_roles)[0];
     if (form.folder) input.folder = form.folder;
-    if (form.gateway_agent_id) input.gateway_agent_id = form.gateway_agent_id;
-    if (form.gateway_address) input.gateway_address = form.gateway_address;
+    if (form.gateway_agent_id && !isCheckoutAccount(form.target_type)) input.gateway_agent_id = form.gateway_agent_id;
+    if (form.gateway_address && !isCheckoutAccount(form.target_type)) input.gateway_address = form.gateway_address;
     setBusy(true);
     setError(null);
     try {
@@ -305,6 +311,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="rdp">{t("admin.access.desktop.target")}</option>
               <option value="netdevice">{t("admin.access.netdevice.target")}</option>
               <option value="webconsole">{t("admin.access.webconsole.target")}</option>
+              <option value="windows_local">{t("admin.access.windowsLocal.target")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
               <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
@@ -354,18 +361,20 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                     (provider) =>
                       (targetType === "rdp"
                         ? ["unix", "windows", "ldap"].includes(provider.type)
-                        : targetType === "netdevice"
-                          ? ["iosxe", "junos", "eos", "fortigate", "bigip"].includes(provider.type)
-                          : provider.type ===
-                            (targetType === "postgres"
-                              ? "postgresql"
-                              : targetType === "snowflake"
-                                ? "snowflake"
-                                : targetType === "gcp"
-                                  ? "gcp-iam"
-                                  : targetType === "azure"
-                                    ? "azure-entra"
-                                    : "aws-sts")) && provider.ready,
+                        : isCheckoutAccount(targetType)
+                          ? (CHECKOUT_PROVIDER_TYPES[targetType] ?? []).includes(provider.type)
+                          : targetType === "netdevice"
+                            ? ["iosxe", "junos", "eos", "fortigate", "bigip"].includes(provider.type)
+                            : provider.type ===
+                              (targetType === "postgres"
+                                ? "postgresql"
+                                : targetType === "snowflake"
+                                  ? "snowflake"
+                                  : targetType === "gcp"
+                                    ? "gcp-iam"
+                                    : targetType === "azure"
+                                      ? "azure-entra"
+                                      : "aws-sts")) && provider.ready,
                   )
                   .map((provider) => (
                     <option key={provider.id} value={provider.id}>
@@ -374,9 +383,13 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                   ))}
               </datalist>
               <label className="grid gap-1 text-sm">
-                {t(targetType === "rdp" || targetType === "netdevice" ? "admin.access.desktop.accountSecret" : "admin.access.allowedRoles")}
+                {t(
+                  targetType === "rdp" || targetType === "netdevice" || isCheckoutAccount(targetType)
+                    ? "admin.access.desktop.accountSecret"
+                    : "admin.access.allowedRoles",
+                )}
                 <Input
-                  list={targetType === "rdp" || targetType === "netdevice" ? "pam-desktop-accounts" : undefined}
+                  list={targetType === "rdp" || targetType === "netdevice" || isCheckoutAccount(targetType) ? "pam-desktop-accounts" : undefined}
                   {...register("allowed_roles")}
                   aria-invalid={!!errors.allowed_roles}
                 />
@@ -384,7 +397,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
                   <span role="alert">{t(targetType === "postgres" ? "admin.access.rolesHelp" : "admin.access.providerRolesRequired")}</span>
                 ) : null}
               </label>
-              {targetType === "rdp" || targetType === "netdevice" ? (
+              {targetType === "rdp" || targetType === "netdevice" || isCheckoutAccount(targetType) ? (
                 <datalist id="pam-desktop-accounts">
                   {providers.data?.configured_providers
                     .find((p) => p.id === providerID)
@@ -416,39 +429,44 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           {targetType === "rdp" ? <p>{t("admin.access.desktop.proof")}</p> : null}
           {targetType === "netdevice" ? <p>{t("admin.access.netdevice.proof")}</p> : null}
           {targetType === "webconsole" ? <p>{t("admin.access.webconsole.proof")}</p> : null}
+          {targetType === "windows_local" ? <p>{t("admin.access.windowsLocal.proof")}</p> : null}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}
           {targetType === "gcp" ? <p>{t("admin.access.gcpAPIProof")}</p> : null}
           {targetType === "azure" ? <p>{t("admin.access.azureAPIProof")}</p> : null}
-          <Field
-            label={t("admin.access.gatewayAgent")}
-            required={
-              targetType === "snowflake" ||
-              targetType === "aws" ||
-              targetType === "gcp" ||
-              targetType === "azure" ||
-              targetType === "aws-console" ||
-              targetType === "rdp"
-            }
-            error={errors.gateway_agent_id ? t("admin.access.gatewayRequired") : undefined}
-          >
-            {(control) => <Input {...control} {...register("gateway_agent_id")} />}
-          </Field>
-          <Field
-            label={t("admin.access.gatewayAddress")}
-            required={
-              targetType === "snowflake" ||
-              targetType === "aws" ||
-              targetType === "gcp" ||
-              targetType === "azure" ||
-              targetType === "aws-console" ||
-              targetType === "rdp"
-            }
-            error={errors.gateway_address ? t("admin.access.gatewayRequired") : undefined}
-          >
-            {(control) => <Input {...control} {...register("gateway_address")} />}
-          </Field>
+          {isCheckoutAccount(targetType) ? null : (
+            <>
+              <Field
+                label={t("admin.access.gatewayAgent")}
+                required={
+                  targetType === "snowflake" ||
+                  targetType === "aws" ||
+                  targetType === "gcp" ||
+                  targetType === "azure" ||
+                  targetType === "aws-console" ||
+                  targetType === "rdp"
+                }
+                error={errors.gateway_agent_id ? t("admin.access.gatewayRequired") : undefined}
+              >
+                {(control) => <Input {...control} {...register("gateway_agent_id")} />}
+              </Field>
+              <Field
+                label={t("admin.access.gatewayAddress")}
+                required={
+                  targetType === "snowflake" ||
+                  targetType === "aws" ||
+                  targetType === "gcp" ||
+                  targetType === "azure" ||
+                  targetType === "aws-console" ||
+                  targetType === "rdp"
+                }
+                error={errors.gateway_address ? t("admin.access.gatewayRequired") : undefined}
+              >
+                {(control) => <Input {...control} {...register("gateway_address")} />}
+              </Field>
+            </>
+          )}
           <p className="text-caption text-muted-foreground">{t("admin.access.targetRetryHelp")}</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>

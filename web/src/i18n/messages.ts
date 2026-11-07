@@ -666,6 +666,15 @@ export const messages = {
 
   "admin.access.desktop.target": { defaultMessage: "Remote desktop (RDP)", description: "Desktop target registration and proof limits." },
   "admin.access.netdevice.target": { defaultMessage: "Network device (SSH)", description: "Network device target registration (A270)." },
+  "admin.access.windowsLocal.target": {
+    defaultMessage: "Windows local administrator (check-out)",
+    description: "Windows local administrator target registration (A268).",
+  },
+  "admin.access.windowsLocal.proof": {
+    defaultMessage:
+      "A local administrator account a native Windows provider rotates on its enrolled host. It is checked out — reviewed, revealed once — never opened as a session, and checking it in rotates it on the host. It names no gateway. Native results on windows-latest are read at the build's final checks.",
+    description: "Windows local administrator target registration (A268).",
+  },
   "admin.access.webconsole.target": { defaultMessage: "Web admin console (HTTPS)", description: "Web console target registration (A273)." },
   "admin.access.webconsole.url": { defaultMessage: "Console address", description: "Web console target registration (A273): its https origin." },
   "admin.access.webconsole.urlHelp": {

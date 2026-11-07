@@ -352,3 +352,34 @@ it("registers a web admin console with its vaulted account, its https origin and
     ),
   );
 });
+
+it("registers a Windows local administrator account for check-out with its native provider and no gateway (A268)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "host-admin");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "typed-before-the-type");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "windows_local");
+  expect(within(form).queryByRole("textbox", { name: "Gateway agent ID" })).not.toBeInTheDocument();
+  expect(within(form).getByText(/never opened as a session/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "host-sam");
+  const secret = within(form).getByRole("combobox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "hosts/local-admin");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "host-admin",
+        target_type: "windows_local",
+        provider_id: "host-sam",
+        allowed_roles: ["hosts/local-admin"],
+        account_secret: "hosts/local-admin",
+      },
+      expect.any(String),
+    ),
+  );
+});

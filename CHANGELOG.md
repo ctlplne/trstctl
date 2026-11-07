@@ -2,6 +2,8 @@
 
 ### Added
 
+- Windows local administrator accounts (A268 console): the access targets panel registers `windows_local` targets — a
+  native `windows` provider and one account secret, with no gateway fields — for check-out.
 - Internal web admin consoles (A273 part 3): the console registers `webconsole` targets (account secret, https origin,
   CA, certificate name) and sets an access template's web sign-in (mode, sign-in page and fields or header, browser
   cookies). The served proof can hold its session open for a real browser (`TRSTCTL_A273_BROWSER_DIR`).

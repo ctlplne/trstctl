@@ -9269,7 +9269,9 @@ the queue, receipts and the host's journal carry no plaintext password. Rotation
 schedules rotate these secrets on an interval. A vaulted account registered as a
 `windows_local` access target is checked out through A261 — reviewed, revealed
 once, never a session — and checking it in, or its deadline, queues its native
-rotation, which retires the revealed password when the host runs it.
+rotation, which retires the revealed password when the host runs it. The console
+registers `windows_local` targets (its native provider and the one account secret,
+no gateway), lists them for check-out and checks them in.
 
 Proof today: `TestServedPreparedWindowsLocalRotationA268` (served PostgreSQL/NATS/
 mTLS queue, custody, offline retries, cache-forgery and lost-projection refusals,
@@ -9289,8 +9291,6 @@ What comes next:
   the runner, using its preinstalled PostgreSQL).
 - Explicit recovery of an unknown native effect (today it stays fenced and
   prepared for an operator, never rolled back blindly).
-- Console registration of `windows_local` targets (today: API and CLI; the console
-  lists, checks out and checks in registered ones).
 - Real-image replay (replay-owed.md).
 
 ## Remote desktop, production grade (A269) — parts 1–2 of 3: redirection policy and the recording index
