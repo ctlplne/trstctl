@@ -40,6 +40,23 @@ const ServiceDependentReconcileSchemaVersion = 2
 // is readable only in schema two, including on canonical worker recovery.
 func ValidateServiceDependentRotationSource(event events.Event, v ServiceDependentRotationQueued) error {
 	version := schemaVersionOf(event)
+	if len(event.Data) > 0 {
+		if version == 1 {
+			var historical privacyServiceDependentRotationQueuedV1
+			if err := decodePublishedDependentSource(event.Data, &historical); err != nil {
+				return err
+			}
+		} else {
+			var historical privacyServiceDependentRotationQueuedV2
+			if err := decodePublishedDependentSource(event.Data, &historical); err != nil {
+				return err
+			}
+		}
+	}
+	if v.Intent.Plan.Version != servicedependents.RotationPlanVersion || v.Intent.Plan.Manifest != nil {
+		return errors.New("dependent rotation: published inline source cannot carry paged manifest authority")
+	}
+
 	if event.Type != EventServiceDependentRotationQueued || event.ID != v.Intent.Plan.ID || v.Child.ID != event.ID || v.Child.DependentChangeID != event.ID || v.At.IsZero() {
 		return errors.New("dependent rotation: canonical command identity differs")
 	}

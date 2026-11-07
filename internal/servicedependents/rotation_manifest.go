@@ -329,3 +329,19 @@ func (input RotationManifestPageInput) Page(header RotationManifestHeader, numbe
 func RotationManifestReferenceDigest(ref DependentRef) string {
 	return crypto.SHA256Hex([]byte("trstctl.service-dependent.manifest-native-ref.v1\x00" + ref.AgentID + "\x00" + ref.Family + "\x00" + ref.Name))
 }
+
+// ValidateShape validates a self-contained seal encoding. Native completeness
+// and header identity still require Validate(header) plus canonical source reads.
+func (s RotationManifestSeal) ValidateShape() error {
+	if s.Version != 1 || !canonicalID(s.ID) || !rotationDigestValid(s.HeaderDigest) || s.PageCount < 1 || s.EntryCount < 1 || s.HostCount < 1 || !rotationDigestValid(s.TailDigest) || s.ExpiresAt.IsZero() {
+		return errors.New("service dependents: complete typed manifest seal required")
+	}
+	digest, err := s.contentDigest()
+	if err != nil {
+		return err
+	}
+	if digest != s.Digest {
+		return errors.New("service dependents: manifest seal content digest differs")
+	}
+	return nil
+}

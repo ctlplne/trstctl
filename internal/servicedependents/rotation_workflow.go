@@ -51,6 +51,10 @@ func validProbeID(id string) bool {
 	return true
 }
 func (intent RotationIntent) Digest() (string, error) {
+	if intent.Plan.Version == RotationManifestPlanVersion && len(intent.Probes) != 0 {
+		return "", errors.New("service dependents: paged probes must come from the sealed native manifest")
+	}
+
 	if e := intent.validateMode(); e != nil {
 		return "", e
 	}
@@ -67,6 +71,10 @@ func (intent RotationIntent) Digest() (string, error) {
 	return crypto.SHA256Hex(append([]byte("trstctl.service-account.rotation-intent.v1\x00"), raw...)), nil
 }
 func (intent RotationIntent) Validate(inputs []RotationHostInput) error {
+	if intent.Plan.Version == RotationManifestPlanVersion || intent.Plan.Manifest != nil {
+		return errors.New("service dependents: paged intent requires its canonical manifest entry resolver")
+	}
+
 	if intent.ExpectedVersion < 1 || !rotationDigestValid(intent.ProviderBinding) {
 		return errors.New("service dependents: exact provider and vault predecessor required")
 	}
@@ -115,28 +123,34 @@ func (intent RotationIntent) Validate(inputs []RotationHostInput) error {
 // RotationStep is exact native authority for one bounded host effect. There is
 // one typed snapshot, a parent intent digest, a direction and a fixed operation.
 type RotationStep struct {
-	Recovery     *StepRecoveryBinding   `json:"recovery,omitempty"`
-	RotationID   string                 `json:"rotation_id"`
-	PlanDigest   string                 `json:"plan_digest"`
-	ID           string                 `json:"step_id"`
-	Direction    string                 `json:"direction"`
-	Action       string                 `json:"action"`
-	Ref          DependentRef           `json:"ref"`
-	AccountSID   string                 `json:"account_sid"`
-	ProbeID      string                 `json:"probe_id"`
-	Service      *windependents.Service `json:"service,omitempty"`
-	Task         *windependents.Task    `json:"task,omitempty"`
-	Pool         *windependents.Pool    `json:"pool,omitempty"`
-	PreviousPIDs []uint32               `json:"previous_pids,omitempty"`
-	Challenge    string                 `json:"challenge,omitempty"`
-	NotBefore    time.Time              `json:"not_before"`
-	Deadline     time.Time              `json:"deadline"`
+	ManifestPosition *ManifestPosition      `json:"manifest_position,omitempty"`
+	Recovery         *StepRecoveryBinding   `json:"recovery,omitempty"`
+	RotationID       string                 `json:"rotation_id"`
+	PlanDigest       string                 `json:"plan_digest"`
+	ID               string                 `json:"step_id"`
+	Direction        string                 `json:"direction"`
+	Action           string                 `json:"action"`
+	Ref              DependentRef           `json:"ref"`
+	AccountSID       string                 `json:"account_sid"`
+	ProbeID          string                 `json:"probe_id"`
+	Service          *windependents.Service `json:"service,omitempty"`
+	Task             *windependents.Task    `json:"task,omitempty"`
+	Pool             *windependents.Pool    `json:"pool,omitempty"`
+	PreviousPIDs     []uint32               `json:"previous_pids,omitempty"`
+	Challenge        string                 `json:"challenge,omitempty"`
+	NotBefore        time.Time              `json:"not_before"`
+	Deadline         time.Time              `json:"deadline"`
 }
 
 func (step RotationStep) Active() bool {
 	return step.Service != nil && step.Service.WasRunning || step.Pool != nil && step.Pool.WasStarted || step.Task != nil && step.Task.Enabled
 }
 func (step RotationStep) Validate() error {
+	if step.ManifestPosition != nil {
+		if err := step.ManifestPosition.validateEffect(step.Direction, step.Action); err != nil {
+			return err
+		}
+	}
 	if !canonicalID(step.RotationID) || !rotationDigestValid(step.PlanDigest) || !canonicalID(step.Ref.AgentID) || !windependents.ValidAccountSID(step.AccountSID) || (step.Direction != Forward && step.Direction != Inverse) || !validProbeID(step.ProbeID) {
 		return errors.New("service dependents: incomplete native step authority")
 	}

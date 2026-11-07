@@ -36,15 +36,16 @@ type RotationHost struct {
 	Dependents      []DependentRef `json:"dependents"`
 }
 type RotationPlan struct {
-	Version    int            `json:"version"`
-	ID         string         `json:"id"`
-	Account    AccountBinding `json:"account"`
-	SecretName string         `json:"secret_name"`
-	Hosts      []RotationHost `json:"hosts"`
-	Order      []DependentRef `json:"order"`
-	CreatedAt  time.Time      `json:"created_at"`
-	ExpiresAt  time.Time      `json:"expires_at"`
-	Digest     string         `json:"digest"`
+	Manifest   *RotationManifestSeal `json:"manifest,omitempty"`
+	Version    int                   `json:"version"`
+	ID         string                `json:"id"`
+	Account    AccountBinding        `json:"account"`
+	SecretName string                `json:"secret_name"`
+	Hosts      []RotationHost        `json:"hosts"`
+	Order      []DependentRef        `json:"order"`
+	CreatedAt  time.Time             `json:"created_at"`
+	ExpiresAt  time.Time             `json:"expires_at"`
+	Digest     string                `json:"digest"`
 }
 
 func dependentKey(ref DependentRef) string {
@@ -120,6 +121,13 @@ func (p RotationPlan) contentDigest() (string, error) {
 	return crypto.SHA256Hex(append([]byte("trstctl.service-account.rotation-plan.v1\x00"), raw...)), nil
 }
 func (p RotationPlan) Validate() error {
+	if p.Version == RotationManifestPlanVersion {
+		return p.validateManifestPlan()
+	}
+	if p.Manifest != nil {
+		return errors.New("service dependents: inline plan cannot carry paged manifest authority")
+	}
+
 	if p.Version != RotationPlanVersion || !canonicalID(p.ID) || p.Account.Validate() != nil || p.CreatedAt.IsZero() || !p.ExpiresAt.After(p.CreatedAt) || p.ExpiresAt.After(p.CreatedAt.Add(RotationInventoryMaxAge)) || len(p.Hosts) == 0 {
 		return errors.New("service dependents: incomplete reviewed rotation plan")
 	}

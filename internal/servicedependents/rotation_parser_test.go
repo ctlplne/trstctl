@@ -63,6 +63,12 @@ func FuzzDependentRotationWireA267(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(seed)
+	step.ManifestPosition = &ManifestPosition{Stage: step.Action, EntryOrdinal: 0, PageNumber: 0, EntryIndex: 0}
+	pagedSeed, err := json.Marshal(step)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(pagedSeed)
 	recovery, err := NewInverseRecoveryStep(ownedRecoveryStep(), "57800000-0000-4000-8000-000000000006", ownedRecoveryStep().Deadline.Add(time.Hour))
 	if err != nil {
 		f.Fatal(err)

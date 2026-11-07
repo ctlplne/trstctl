@@ -63,6 +63,15 @@ func ServiceDependentRecoveryReviewDigest(previous servicedependents.RotationSte
 	return crypto.SHA256Hex(append([]byte("trstctl.service-dependent.inverse-recovery-review.v1\x00"), raw...)), nil
 }
 func ValidateServiceDependentStepRecovery(e events.Event, v ServiceDependentStepRecoveryQueued) error {
+	if len(e.Data) > 0 {
+		var historical privacyServiceDependentStepRecoveryQueuedV1
+		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+			return err
+		}
+	}
+	if v.Previous.ManifestPosition != nil || v.Step.ManifestPosition != nil {
+		return errors.New("dependent recovery: published schema cannot carry paged manifest position")
+	}
 	digest, err := ServiceDependentRecoveryReviewDigest(v.Previous, v.PreviousStatus, v.PreviousReportDigest, v.CurrentVersion)
 	if err != nil {
 		return err
@@ -95,8 +104,12 @@ func DecodeServiceDependentStepSource(e events.Event) (servicedependents.Rotatio
 	var at time.Time
 	switch e.Type {
 	case EventServiceDependentStepQueued:
+		var historical privacyServiceDependentStepQueuedV1
+		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+			return step, at, nil, err
+		}
 		var v ServiceDependentStepQueued
-		if json.Unmarshal(e.Data, &v) != nil || v.Step.Recovery != nil {
+		if json.Unmarshal(e.Data, &v) != nil || v.Step.Recovery != nil || v.Step.ManifestPosition != nil {
 			return step, at, nil, errors.New("dependent step: ordinary source cannot carry recovery authority")
 		}
 		step, at = v.Step, v.At

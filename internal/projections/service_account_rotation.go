@@ -59,6 +59,10 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 	}
 	switch e.Type {
 	case EventServiceReconciliationReviewProposed:
+		var historical privacyServiceReconciliationReviewV1
+		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+			return true, err
+		}
 		var v ServiceReconciliationReview
 		if err := decode(e, &v); err != nil {
 			return true, err

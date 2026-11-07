@@ -18,7 +18,7 @@ type ServiceReconciliationReview struct {
 }
 
 func ValidateServiceReconciliationReview(v ServiceReconciliationReview) error {
-	if v.Intent.Mode != servicedependents.Reconcile || v.Actor == "" || !v.At.Equal(v.Intent.Plan.CreatedAt) {
+	if v.Intent.Plan.Version != servicedependents.RotationPlanVersion || v.Intent.Plan.Manifest != nil || v.Intent.Mode != servicedependents.Reconcile || v.Actor == "" || !v.At.Equal(v.Intent.Plan.CreatedAt) {
 		return errors.New("dependent reconciliation: incomplete frozen review")
 	}
 	_, err := v.Intent.Digest()
