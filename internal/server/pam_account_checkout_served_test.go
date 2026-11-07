@@ -29,6 +29,9 @@ import (
 // target is refused for a role its provider does not rotate in place.
 func TestServedAccountCheckoutA271(t *testing.T) {
 	ctx := context.Background()
+	// A tenant of its own: the package's served tests share servedTestTenant,
+	// and other check-out tests count every check-out in it.
+	tenant := uuid.NewString()
 	esxi := infratest.StartESXi("root", "esxi-root-password-1")
 	t.Cleanup(esxi.Close)
 	esxi.AddAccount("ops", "esxi-ops-password-1", -1)
@@ -49,7 +52,7 @@ func TestServedAccountCheckoutA271(t *testing.T) {
 	router.AddAccount("ops", "router-ops-password-1", "privilege 15")
 
 	private := func(c config.DynamicSecretProviderConfig) config.DynamicSecretProviderConfig {
-		c.TenantID, c.MaxTTL, c.AllowStaticRotation = servedTestTenant, "1h", true
+		c.TenantID, c.MaxTTL, c.AllowStaticRotation = tenant, "1h", true
 		c.AllowPrivate, c.PrivateEgressCIDRs = true, []string{"127.0.0.1/32"}
 		return c
 	}
@@ -67,7 +70,7 @@ func TestServedAccountCheckoutA271(t *testing.T) {
 			TLSCARef: writeServedCredentialFile(t, "a271co-bmc-ca", string(bmc.CAPEM())), AdminUser: "Administrator",
 			PasswordRef:  writeServedCredentialFile(t, "a271co-bmc-admin", "bmc-admin-password-1"),
 			AllowedRoles: []string{"bmc/ops"}, RoleBindings: map[string]string{"bmc/ops": "ops"}}),
-		{TenantID: servedTestTenant, ID: "core-router", Type: "iosxe", Addr: router.Addr(), HostKeyFingerprint: router.FingerprintSHA256(),
+		{TenantID: tenant, ID: "core-router", Type: "iosxe", Addr: router.Addr(), HostKeyFingerprint: router.FingerprintSHA256(),
 			AdminUser: "netadmin", PasswordRef: writeServedCredentialFile(t, "a271co-router-admin", "router-admin-password-1"),
 			AllowedRoles: []string{"net/ops"}, RoleBindings: map[string]string{"net/ops": "ops"}, MaxTTL: "1h", AllowStaticRotation: true},
 	}
@@ -79,16 +82,17 @@ func TestServedAccountCheckoutA271(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newRoleHarnessWithDeps(t, nil, nil, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: registry.ForTenant(servedTestTenant)}
+		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{tenant: registry.ForTenant(tenant)}
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: time.Second,
 			Attestors: []attest.Attestor{servedPAMAttestor{}}}
 	})
 	sh := h.servedHarness
-	custodian := seedScopedTokenSubject(t, sh.store, sh.tenant, "a271co-custodian", "access:read", "access:targets.write", "secrets:read", "secrets:write")
-	requester := seedScopedTokenSubject(t, sh.store, sh.tenant, "a271co-requester", "access:read", "access:sessions.open")
+	registerServedTenantID(t, sh, tenant, "A271 account check-outs")
+	custodian := seedScopedTokenSubject(t, sh.store, tenant, "a271co-custodian", "access:read", "access:targets.write", "secrets:read", "secrets:write")
+	requester := seedScopedTokenSubject(t, sh.store, tenant, "a271co-requester", "access:read", "access:sessions.open")
 	reviewers := []string{
-		seedScopedTokenSubject(t, sh.store, sh.tenant, "a271co-reviewer-1", "access:read", "access:approve"),
-		seedScopedTokenSubject(t, sh.store, sh.tenant, "a271co-reviewer-2", "access:read", "access:approve"),
+		seedScopedTokenSubject(t, sh.store, tenant, "a271co-reviewer-1", "access:read", "access:approve"),
+		seedScopedTokenSubject(t, sh.store, tenant, "a271co-reviewer-2", "access:read", "access:approve"),
 	}
 
 	type account struct {
@@ -177,7 +181,7 @@ func TestServedAccountCheckoutA271(t *testing.T) {
 		}
 		var view staticRotationCommandView
 		for deadline := time.Now().Add(90 * time.Second); ; {
-			a270StaticRotationDue(t, sh)
+			staticRotationDueFor(t, sh, tenant)
 			sh.srv.dispatchOnce(ctx)
 			status, raw = secretsReq(t, sh, http.MethodGet, "/api/v1/secrets/rotations/"+checkedIn.RotationCommandID, custodian, nil)
 			if status != http.StatusOK || json.Unmarshal(raw, &view) != nil {

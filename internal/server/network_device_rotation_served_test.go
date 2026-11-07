@@ -254,9 +254,15 @@ func TestServedNetworkDeviceRotationA270(t *testing.T) {
 // so a verification that fails reaches its last attempt without the backoff.
 func a270StaticRotationDue(t *testing.T, h *servedHarness) {
 	t.Helper()
-	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+	staticRotationDueFor(t, h, h.tenant)
+}
+
+// staticRotationDueFor is a270StaticRotationDue for a tenant of a test's own.
+func staticRotationDueFor(t *testing.T, h *servedHarness, tenant string) {
+	t.Helper()
+	if err := h.store.WithTenant(context.Background(), tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(context.Background(), `UPDATE outbox SET next_attempt_at = now()
-			WHERE tenant_id = $1 AND destination = 'secret.static-rotation' AND status = 'pending'`, h.tenant)
+			WHERE tenant_id = $1 AND destination = 'secret.static-rotation' AND status = 'pending'`, tenant)
 		return err
 	}); err != nil {
 		t.Fatal(err)
