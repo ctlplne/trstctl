@@ -22099,7 +22099,7 @@ export interface components {
             subject: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
         };
         PAMAutoApprovalRule: {
             applies_to: ("session" | "checkout")[];
@@ -22702,7 +22702,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
             /** @description at most 3600: an emergency session lasts an hour at most */
             ttl_seconds?: number;
         };
@@ -23254,7 +23254,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
             /**
              * Format: uuid
              * @description the access template the request named (A258)
@@ -23277,7 +23277,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
             /**
              * Format: uuid
              * @description an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session

@@ -39053,7 +39053,8 @@
               "redis",
               "snowflake",
               "ssh",
-              "netdevice"
+              "netdevice",
+              "webconsole"
             ],
             "type": "string"
           }
@@ -41522,7 +41523,8 @@
               "redis",
               "snowflake",
               "ssh",
-              "netdevice"
+              "netdevice",
+              "webconsole"
             ],
             "type": "string"
           },
@@ -43514,7 +43516,8 @@
               "redis",
               "snowflake",
               "ssh",
-              "netdevice"
+              "netdevice",
+              "webconsole"
             ],
             "type": "string"
           },
@@ -43598,7 +43601,8 @@
               "redis",
               "snowflake",
               "ssh",
-              "netdevice"
+              "netdevice",
+              "webconsole"
             ],
             "type": "string"
           },

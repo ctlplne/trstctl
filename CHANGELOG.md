@@ -2,6 +2,8 @@
 
 ### Added
 
+- Internal web admin consoles (A273 fix): the published session request, approval, activation and emergency session
+  schemas admit `webconsole`, which the API already served.
 - Break-glass accounts (A272 console): the access targets panel registers `breakglass` targets; a new Break-glass
   accounts panel releases one as a named responder after a confirmation that every approver is notified, shows its
   username, password, one-time code and hardware key holders once, checks it in, and lists emergency grants with another

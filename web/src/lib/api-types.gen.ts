@@ -8441,7 +8441,7 @@ export interface PAMApprovalRequest {
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   subject: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
 }
 
 export interface PAMAutoApprovalRule {
@@ -8911,7 +8911,7 @@ export interface PAMEmergencySessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
   ttl_seconds?: number;
 }
 
@@ -9363,7 +9363,7 @@ export interface PAMSessionActivationRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
   template_id?: string;
   ttl_seconds?: number;
 }
@@ -9382,7 +9382,7 @@ export interface PAMSessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice" | "webconsole";
   template_id?: string;
   ttl_seconds?: number;
 }
