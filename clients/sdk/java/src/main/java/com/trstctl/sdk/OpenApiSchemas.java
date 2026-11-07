@@ -335,6 +335,7 @@ public final class OpenApiSchemas {
       "CertificateProfileSpec",
       "CertificateSourceHealth",
       "CertificateTransparencyEntry",
+      "CertificationResult",
       "ChangeApplication",
       "ChangeApplyRequest",
       "ChangeDraft",

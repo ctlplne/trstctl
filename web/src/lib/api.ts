@@ -2832,6 +2832,7 @@ export interface Api {
   brokerAgentIdentity(id: string, signal?: AbortSignal): Promise<BrokerAgentIdentityHistory>;
   revokeBrokerAgentIdentity(id: string, input: BrokerAgentIdentityRevokeRequest, idempotencyKey?: string): Promise<BulkRevokeResult>;
   generateNHIReviewCampaign: typeof accessReview.generateNHIReviewCampaign;
+  nhiReviewResult: typeof accessReview.nhiReviewResult;
   workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
   createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
   updateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
@@ -3966,6 +3967,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   brokerAgentIdentity: (id, signal) => req<BrokerAgentIdentityHistory>(`/api/v1/broker/agent-identities/${encodeURIComponent(id)}`, { signal }),
   revokeBrokerAgentIdentity: agentIdentity.revokeBrokerAgentIdentity,
   generateNHIReviewCampaign: accessReview.generateNHIReviewCampaign,
+  nhiReviewResult: accessReview.nhiReviewResult,
   workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
   createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),
   updateWorkloadAttesterTrustSource: (id, input) =>

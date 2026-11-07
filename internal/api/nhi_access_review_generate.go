@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -76,8 +77,17 @@ func (a *API) generateNHIReviewCampaign(w http.ResponseWriter, r *http.Request) 
 			coverage = &c
 		case "stale_owner_attestation":
 			start, err = a.nhiReviewFromStaleOwners(ctx, tenantID, g, req.OlderThanDays, time.Now().UTC())
+		case "pam_accounts":
+			// A276: brokered accounts, their templates' approvers, the
+			// approvers of access without a template, and the emergency
+			// responders.
+			src, ok := a.pam.(PAMCertificationService)
+			if a.pam == nil || !ok {
+				return 0, nil, ErrPAMUnavailable
+			}
+			start, err = src.GeneratePAMCertification(ctx, tenantID)
 		default:
-			return 0, nil, errStatus(http.StatusBadRequest, "source must be graph_reachers or stale_owner_attestation")
+			return 0, nil, errStatus(http.StatusBadRequest, "source must be graph_reachers, stale_owner_attestation or pam_accounts")
 		}
 		if err != nil {
 			return 0, nil, err
@@ -195,4 +205,48 @@ func staleOwnerReviewItem(owner store.Owner, credential graph.Node) orchestrator
 		Resource: "owner " + firstNonEmpty(owner.Name, owner.ID), Entitlement: "ownership " + attested,
 		EvidenceRefs: []string{"owner:" + owner.ID},
 	}
+}
+
+// CertificationResult is a completed campaign's canonical result and the
+// audit key's signature over it (A276): verify the signature with the audit
+// verification keys, then compare the payload it carries with result.
+type CertificationResult struct {
+	Artifact  string          `json:"artifact"`
+	Result    json.RawMessage `json:"result"`
+	Signature string          `json:"signature"`
+}
+
+// PAMCertificationService builds certification campaigns from brokered
+// accounts and signs completed campaigns' results; the served broker
+// implements it.
+type PAMCertificationService interface {
+	GeneratePAMCertification(ctx context.Context, tenantID string) (orchestrator.NHIReviewCampaignStartRequest, error)
+	CertificationResult(ctx context.Context, tenantID, campaignID string) (CertificationResult, error)
+}
+
+func (a *API) nhiReviewResultRoutes() []route {
+	return []route{
+		{method: "GET", path: "/api/v1/access/reviews/{id}/result", opID: "getNHIReviewResult",
+			summary: "Get a completed access review's result, signed with the audit key",
+			handler: a.getNHIReviewResult, pathParams: []param{pathUUID("id")}, resSchema: "CertificationResult", successCode: "200", perm: authz.AccessRead},
+	}
+}
+
+func (a *API) getNHIReviewResult(w http.ResponseWriter, r *http.Request) {
+	src, ok := a.pam.(PAMCertificationService)
+	if a.pam == nil || !ok {
+		a.writePAMError(w, ErrPAMUnavailable)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	out, err := src.CertificationResult(r.Context(), tenantID, strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, out)
 }

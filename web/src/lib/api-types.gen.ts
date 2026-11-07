@@ -3206,6 +3206,12 @@ export interface CertificateTransparencyEntry {
   tree_size?: number;
 }
 
+export interface CertificationResult {
+  artifact: "access-certification-result";
+  result: Record<string, unknown>;
+  signature: string;
+}
+
 export interface ChangeApplication {
   change_set_digest: string;
   complete: boolean;
@@ -7598,7 +7604,7 @@ export interface NHIReviewGenerateRequest {
   name: string;
   older_than_days?: number;
   reviewer_subject?: string;
-  source: "graph_reachers" | "stale_owner_attestation";
+  source: "graph_reachers" | "stale_owner_attestation" | "pam_accounts";
   target?: string;
 }
 

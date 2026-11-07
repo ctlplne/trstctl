@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
 import { PolicyRuleEditor } from "@/pages/policy/PolicyRuleEditor";
-import { AccessReviewGenerate, AccessReviewOutcome } from "@/pages/policy/AccessReviewActs";
+import { AccessReviewGenerate, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
 import { useAuth } from "@/auth/AuthProvider";
 import { hasPermission } from "@/lib/access";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider, useQueryClient } from "@/lib/query";
@@ -1688,6 +1688,7 @@ function NHIReviewCampaignPanel({
         <Metric label="Revoked" value={String(campaign.revoked_count)} />
         <Metric label="Exceptions" value={String(campaign.exception_count)} />
       </dl>
+      <AccessReviewSignedResult campaignId={campaign.id} completed={campaign.status === "completed"} />
       {!canDecide && campaign.pending_count > 0 && (
         <p className="mt-4 rounded-md border border-border bg-muted p-3 text-sm">
           {!viewerCanWrite

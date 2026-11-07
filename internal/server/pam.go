@@ -140,6 +140,12 @@ type PAMConfig struct {
 	// UnusedAfter flags a brokered account with no session or check-out for
 	// this long (A276); zero is 90 days.
 	UnusedAfter time.Duration
+	// CertificationInterval starts a certification campaign of brokered
+	// accounts and approver lists this often (A276); zero never.
+	// CertificationReviewer is the subject such a campaign is assigned to;
+	// empty is any distinct reviewer.
+	CertificationInterval time.Duration
+	CertificationReviewer string
 	// HealthInterval is how often each brokered account's stored credential
 	// is signed in with (A258); zero is the default, an hour.
 	HealthInterval time.Duration
@@ -242,6 +248,14 @@ type pamService struct {
 	// is flagged (A276); lastFlagScan is when the worker last scanned.
 	unusedAfter  time.Duration
 	lastFlagScan time.Time
+	// certificationInterval starts a certification campaign of brokered
+	// accounts and approver lists this often (A276; zero never), assigned to
+	// certificationReviewer when it is set; auditSigner signs completed
+	// campaigns' results.
+	certificationInterval  time.Duration
+	certificationReviewer  string
+	lastCertificationCheck time.Time
+	auditSigner            *jose.SigningKey
 	// healthInterval spaces each brokered account's credential sign-in
 	// checks, and health is their schedule (A258).
 	healthInterval time.Duration
@@ -319,6 +333,8 @@ type pamDeps struct {
 	// recordings (A255); either unset leaves sessions unrecorded.
 	RecordingObjects objectstore.Store
 	RecordingSigner  *jose.SigningKey
+	// AuditSigner signs completed certification campaigns' results (A276).
+	AuditSigner *jose.SigningKey
 	// SecretReader reads an application secret's current value: a vaulted
 	// target's account (A261). Nil when the secrets API is not served.
 	SecretReader func(ctx context.Context, tenantID, name string) ([]byte, int, error)
@@ -397,7 +413,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
 		browser:                             newPAMBrowser(),
-		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), healthInterval: healthInterval, health: health,
+		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), certificationInterval: cfg.CertificationInterval, certificationReviewer: cfg.CertificationReviewer, auditSigner: d.AuditSigner, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
@@ -1225,6 +1241,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 		s.deleteExpiredRecordings(ctx)
 		s.purgeExpiredSignIns(ctx)
 		s.scanAccountFlags(ctx)
+		s.certifyPeriodically(ctx)
 		s.expireCheckouts(ctx, s.clock().UTC())
 		select {
 		case <-ctx.Done():
@@ -1825,6 +1842,10 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	if d, err := time.ParseDuration(strings.TrimSpace(c.UnusedAfter)); err == nil {
 		out.UnusedAfter = d
 	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.CertificationInterval)); err == nil {
+		out.CertificationInterval = d
+	}
+	out.CertificationReviewer = strings.TrimSpace(c.CertificationReviewer)
 	if d, err := time.ParseDuration(strings.TrimSpace(c.HealthCheckInterval)); err == nil {
 		out.HealthInterval = d
 	}

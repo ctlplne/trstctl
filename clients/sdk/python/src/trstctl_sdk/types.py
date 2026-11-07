@@ -4496,6 +4496,16 @@ CertificateTransparencyEntry = TypedDict(
     total=False,
 )
 
+CertificationResult = TypedDict(
+    'CertificationResult',
+    {
+        'artifact': str,
+        'result': dict[str, Any],
+        'signature': str,
+    },
+    total=False,
+)
+
 ChangeApplication = TypedDict(
     'ChangeApplication',
     {

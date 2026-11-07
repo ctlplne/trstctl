@@ -12,7 +12,7 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 // instead of a hand-typed list, a revoke decision revokes the credential once
 // and its item closes only on evidence, and a keep decision renews the owner's
 // attestation with a next review date.
-type Source = "graph_reachers" | "stale_owner_attestation";
+type Source = "graph_reachers" | "stale_owner_attestation" | "pam_accounts";
 
 export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId: string) => void }) {
   const { t } = useTranslation();
@@ -43,7 +43,11 @@ export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId
         {
           name: form.name.trim(),
           source: form.source,
-          ...(form.source === "graph_reachers" ? { target: form.target.trim() } : days > 0 ? { older_than_days: days } : {}),
+          ...(form.source === "graph_reachers"
+            ? { target: form.target.trim() }
+            : form.source === "stale_owner_attestation" && days > 0
+              ? { older_than_days: days }
+              : {}),
           ...(form.reviewer.trim() ? { reviewer_subject: form.reviewer.trim() } : {}),
         },
         key,
@@ -79,6 +83,7 @@ export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId
           <Select {...control} value={form.source} onChange={(event) => change({ source: event.target.value as Source })}>
             <option value="graph_reachers">{t("policy.nhiReview.generate.sourceGraph")}</option>
             <option value="stale_owner_attestation">{t("policy.nhiReview.generate.sourceStale")}</option>
+            <option value="pam_accounts">{t("policy.nhiReview.generate.sourcePAM")}</option>
           </Select>
         )}
       </Field>
@@ -96,6 +101,8 @@ export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId
             />
           )}
         </Field>
+      ) : form.source === "pam_accounts" ? (
+        <p className="text-muted-foreground lg:col-span-4">{t("policy.nhiReview.generate.pamHelp")}</p>
       ) : (
         <Field label={t("policy.nhiReview.generate.olderThanDays")} className="lg:col-span-4">
           {(control) => (
@@ -137,6 +144,49 @@ export function AccessReviewOutcome({ item }: { item: NHIReviewItem }) {
     <div className="mt-1 text-xs">
       <p className={item.revocation_status === "failed" ? "font-medium text-destructive" : "font-medium"}>{label}</p>
       <p className="break-words text-muted-foreground">{item.revocation_status === "closed" ? item.closing_evidence : item.revocation_detail}</p>
+    </div>
+  );
+}
+
+// AccessReviewSignedResult (A276) downloads a completed campaign's result
+// with the audit key's signature over it, for evidence kept outside
+// trstctl; verify it with the audit verification keys.
+export function AccessReviewSignedResult({ campaignId, completed }: { campaignId: string; completed: boolean }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  if (!completed) return null;
+
+  async function download() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const signed = await api.nhiReviewResult(campaignId);
+      const blob = new Blob([JSON.stringify(signed, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `access-certification-${campaignId}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(t("policy.nhiReview.result.downloaded"));
+    } catch (cause) {
+      setMessage(apiProblemMessage(cause, t("policy.nhiReview.result.failed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void download()}>
+        {t("policy.nhiReview.result.download")}
+      </Button>
+      {message ? (
+        <p role="status" className="text-sm">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

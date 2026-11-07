@@ -14866,6 +14866,30 @@
         ],
         "type": "object"
       },
+      "CertificationResult": {
+        "properties": {
+          "artifact": {
+            "enum": [
+              "access-certification-result"
+            ],
+            "type": "string"
+          },
+          "result": {
+            "description": "the completed campaign's canonical result: campaign, requester, reviewer, completion, counts and every item's decision",
+            "type": "object"
+          },
+          "signature": {
+            "description": "the audit key's signature over result; verify it with GET /api/v1/audit/verification-keys",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact",
+          "result",
+          "signature"
+        ],
+        "type": "object"
+      },
       "ChangeApplication": {
         "properties": {
           "change_set_digest": {
@@ -35374,7 +35398,8 @@
           "source": {
             "enum": [
               "graph_reachers",
-              "stale_owner_attestation"
+              "stale_owner_attestation",
+              "pam_accounts"
             ],
             "type": "string"
           },
@@ -66126,6 +66151,64 @@
         ],
         "summary": "Record an NHI access-review item decision",
         "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/reviews/{id}/result": {
+      "get": {
+        "operationId": "getNHIReviewResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificationResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a completed access review's result, signed with the audit key",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/roles": {

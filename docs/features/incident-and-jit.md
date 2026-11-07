@@ -669,6 +669,21 @@ any other request; `.../actions/apply` then applies it once with the approval's 
 identifiers, consuming the approval, and the flag and the target read back what it did. In
 the console: Access → Privileged access → **Orphaned and unused accounts**.
 
+Brokered accounts are certified through the access reviews: a review generated with
+`"source": "pam_accounts"` (`POST /api/v1/access/reviews/generate`) lists every enabled
+brokered account — its owner, roles or principals, template and quorum, and any open flag
+(high risk) — every access template's approvers (members whose roles grant
+`access:approve`) and quorum, the approvers of access without a template, and the emergency
+responders. A reviewer's revoke of an account disables it (the item closes when it reads
+disabled); a revoked approver list is changed by hand. Once every item is decided,
+`GET /api/v1/access/reviews/{id}/result` (CLI `access reviews result`) returns the
+campaign's canonical result with the audit key's signature over it; verify it with
+`GET /api/v1/audit/verification-keys`. With `pam.certification_interval` set, the PAM worker
+starts the next such campaign when the last one began longer ago than the interval
+(assigned to `pam.certification_reviewer` when set). In the console: Policy → access
+reviews → **Build from: Privileged accounts and their approvers**, and **Download the
+signed result** on a completed campaign.
+
 #### Search across recordings (A275)
 
 Holders of `recordings:read` search every recorded gateway session of the tenant at once:

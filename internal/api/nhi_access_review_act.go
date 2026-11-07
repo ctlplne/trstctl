@@ -79,6 +79,20 @@ func (a *API) RevokeReviewedCredential(ctx context.Context, tenantID, campaignID
 		return store.NHIReviewRevocationRequested, "API token revoked; the item closes when the token reads revoked"
 	case "lease":
 		return a.revokeReviewedLease(ctx, tenantID, id, item.DecisionBy, key)
+	case "pam-account":
+		// A276: a brokered account a reviewer did not certify is disabled;
+		// an operator-configured one is removed from configuration by hand.
+		if a.pam == nil {
+			return store.NHIReviewRevocationManual, "PAM is not served here; disable the account where it is served"
+		}
+		targetType, targetID, _ := strings.Cut(id, "/")
+		if _, err := a.pam.DisablePAMTarget(ctx, tenantID, targetType, targetID, item.DecisionBy, reason); err != nil {
+			if errors.Is(err, ErrPAMTargetConflict) {
+				return store.NHIReviewRevocationManual, "the account is configured by the operator or already disabled: " + err.Error()
+			}
+			return store.NHIReviewRevocationFailed, "the account's disabling was refused: " + err.Error()
+		}
+		return store.NHIReviewRevocationRequested, "brokered account disabled; the item closes when it reads disabled"
 	}
 	return store.NHIReviewRevocationManual, "trstctl does not revoke a " + item.NHIKind +
 		" from a review: revoke it through its own revocation, and the item closes when trstctl sees it revoked"
@@ -177,6 +191,18 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 			return nhiReviewTargetRevoked, "PAM session expired" + at(s.EndedAt), nil
 		case store.PAMSessionStatusRevocationFailed:
 			return nhiReviewTargetFailed, "the PAM session's revocation failed; revoke it again from PAM", nil
+		}
+	case "pam-account":
+		if a.pam == nil {
+			return "", "", nil
+		}
+		targetType, targetID, _ := strings.Cut(id, "/")
+		target, err := a.pam.GetPAMTarget(ctx, tenantID, targetType, targetID)
+		if err != nil {
+			return "", "", nhiReviewReadError(err)
+		}
+		if !target.Enabled {
+			return nhiReviewTargetRevoked, "brokered account disabled" + at(target.DisabledAt), nil
 		}
 	case "token", "msession":
 		t, err := a.store.GetAPIToken(ctx, tenantID, id)

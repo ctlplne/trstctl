@@ -1826,7 +1826,7 @@ func componentSchemas() map[string]*Schema {
 	// Q1: a campaign generated from the access graph or stale owner attestations.
 	nhiReviewGenerateReq := object(map[string]*Schema{
 		"name":             str(),
-		"source":           {Type: "string", Enum: []string{"graph_reachers", "stale_owner_attestation"}},
+		"source":           {Type: "string", Enum: []string{"graph_reachers", "stale_owner_attestation", "pam_accounts"}},
 		"target":           {Type: "string", Description: "graph_reachers: the graph node whose reachers to review"},
 		"older_than_days":  {Type: "integer", Description: "stale_owner_attestation: attested longer ago than this (default: the attestation cadence)"},
 		"reviewer_subject": str(), "due_at": timestamp(),
@@ -8882,6 +8882,11 @@ func componentSchemas() map[string]*Schema {
 			}, "kind"),
 		}, "provider_id", "fingerprint", "account", "at", "last_seen_at"),
 		"PAMSignInList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMSignIn")}}, "items"),
+		"CertificationResult": object(map[string]*Schema{
+			"artifact":  {Type: "string", Enum: []string{"access-certification-result"}},
+			"result":    {Type: "object", Description: "the completed campaign's canonical result: campaign, requester, reviewer, completion, counts and every item's decision"},
+			"signature": {Type: "string", Description: "the audit key's signature over result; verify it with GET /api/v1/audit/verification-keys"},
+		}, "artifact", "result", "signature"),
 		"PAMAccountFlag": object(map[string]*Schema{
 			"target_type": str(), "target_id": str(),
 			"reasons":             {Type: "array", Items: &Schema{Type: "string", Enum: []string{"orphaned", "unused"}}, Description: "orphaned: the owner is gone (none, deleted or offboarded); unused: no session or check-out past pam.unused_after"},

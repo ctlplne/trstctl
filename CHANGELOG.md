@@ -2,6 +2,12 @@
 
 ### Added
 
+- Privileged account certification (A276 part 3): access reviews generate from `"source": "pam_accounts"` — brokered
+  accounts with owner, roles, template and open flags; template approver lists and quorums; approvers without a
+  template; emergency responders. A revoke disables the account. `GET /api/v1/access/reviews/{id}/result`
+  (`getNHIReviewResult`, OpenAPI 795 -> 796; CLI `access reviews result`, 862 -> 863) signs a completed campaign's
+  result with the audit key; `pam.certification_interval` / `pam.certification_reviewer` start campaigns
+  periodically. Console: the review source option and **Download the signed result**.
 - Orphaned and unused accounts (A276 part 2): brokered accounts are flagged orphaned (no owner, owner deleted, owner
   offboarded) or unused past `pam.unused_after` (default 90 days) by the PAM worker or `POST
   /api/v1/access/account-flags/scan`; `reassign` and `rotate_disable` actions are proposed for approval, applied once

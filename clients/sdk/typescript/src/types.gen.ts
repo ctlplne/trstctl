@@ -1174,6 +1174,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/reviews/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a completed access review's result, signed with the audit key */
+        get: operations["getNHIReviewResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/roles": {
         parameters: {
             query?: never;
@@ -15719,6 +15736,14 @@ export interface components {
             /** Format: int64 */
             tree_size?: number;
         };
+        CertificationResult: {
+            /** @enum {string} */
+            artifact: "access-certification-result";
+            /** @description the completed campaign's canonical result: campaign, requester, reviewer, completion, counts and every item's decision */
+            result: Record<string, never>;
+            /** @description the audit key's signature over result; verify it with GET /api/v1/audit/verification-keys */
+            signature: string;
+        };
         ChangeApplication: {
             change_set_digest: string;
             complete: boolean;
@@ -21183,7 +21208,7 @@ export interface components {
             older_than_days?: number;
             reviewer_subject?: string;
             /** @enum {string} */
-            source: "graph_reachers" | "stale_owner_attestation";
+            source: "graph_reachers" | "stale_owner_attestation" | "pam_accounts";
             /** @description graph_reachers: the graph node whose reachers to review */
             target?: string;
         };
@@ -31588,6 +31613,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIReviewCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getNHIReviewResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificationResult"];
                 };
             };
             /** @description client error */

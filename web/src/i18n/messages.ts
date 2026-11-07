@@ -17780,6 +17780,18 @@ export const messages = {
   "policy.nhiReview.generate.source": { defaultMessage: "Build from", description: "Q1: what the generated review lists." },
   "policy.nhiReview.generate.sourceGraph": { defaultMessage: "Who can reach a resource (access graph)", description: "Q1: graph source option." },
   "policy.nhiReview.generate.sourceStale": { defaultMessage: "Owners with a stale attestation", description: "Q1: stale owner source option." },
+  "policy.nhiReview.generate.sourcePAM": { defaultMessage: "Privileged accounts and their approvers", description: "Access reviews (A276): a review source." },
+  "policy.nhiReview.generate.pamHelp": {
+    defaultMessage:
+      "Lists every brokered account with its owner, roles and template, every template's approvers and quorum, the approvers of access without a template, and the emergency responders.",
+    description: "Access reviews (A276).",
+  },
+  "policy.nhiReview.result.download": { defaultMessage: "Download the signed result", description: "Access reviews (A276)." },
+  "policy.nhiReview.result.downloaded": {
+    defaultMessage: "Downloaded. Verify its signature with the audit verification keys.",
+    description: "Access reviews (A276).",
+  },
+  "policy.nhiReview.result.failed": { defaultMessage: "The signed result could not be downloaded", description: "Access reviews (A276)." },
   "policy.nhiReview.generate.target": { defaultMessage: "Graph node to review", description: "Q1: the graph node whose reachers are reviewed." },
   "policy.nhiReview.generate.targetPlaceholder": {
     defaultMessage: "res:pam:postgres:pg-main",

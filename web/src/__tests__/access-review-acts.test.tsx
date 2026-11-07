@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AccessReviewGenerate, AccessReviewOutcome } from "@/pages/policy/AccessReviewActs";
+import { AccessReviewGenerate, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
 import type { NHIReviewItem } from "@/lib/api";
 
-const { apiMock, can } = vi.hoisted(() => ({ apiMock: { generateNHIReviewCampaign: vi.fn() }, can: { value: true } }));
+const { apiMock, can } = vi.hoisted(() => ({ apiMock: { generateNHIReviewCampaign: vi.fn(), nhiReviewResult: vi.fn() }, can: { value: true } }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -80,5 +80,36 @@ describe("Q1 access reviews that act", () => {
     expect(screen.getByText("Revocation failed")).toBeInTheDocument();
     rerender(<AccessReviewOutcome item={item({ status: "certified", next_review_at: "2027-01-30T00:00:00Z" })} />);
     expect(screen.getByText(/no upstream right changed/)).toBeInTheDocument();
+  });
+
+  it("generates a privileged account certification with no target (A276)", async () => {
+    apiMock.generateNHIReviewCampaign.mockResolvedValueOnce({ campaign: { id: "c2", item_count: 4 } });
+    const onGenerated = vi.fn();
+    const user = userEvent.setup();
+    render(<AccessReviewGenerate onGenerated={onGenerated} />);
+    await user.type(screen.getByRole("textbox", { name: "Campaign name" }), "Q4 privileged accounts");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Build from" }), "pam_accounts");
+    expect(screen.getByText(/every template's approvers and quorum/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Graph node/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Generate review" }));
+    expect(apiMock.generateNHIReviewCampaign).toHaveBeenCalledWith({ name: "Q4 privileged accounts", source: "pam_accounts" }, expect.any(String));
+    expect(onGenerated).toHaveBeenCalledWith("c2");
+  });
+
+  it("downloads a completed campaign's signed result, and offers none before it completes (A276)", async () => {
+    apiMock.nhiReviewResult.mockResolvedValueOnce({ artifact: "access-certification-result", result: { campaign_id: "c2" }, signature: "sig" });
+    const create = vi.fn(() => "blob:result");
+    const revoke = vi.fn();
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const user = userEvent.setup();
+    const { rerender } = render(<AccessReviewSignedResult campaignId="c2" completed={false} />);
+    expect(screen.queryByRole("button", { name: "Download the signed result" })).not.toBeInTheDocument();
+    rerender(<AccessReviewSignedResult campaignId="c2" completed />);
+    await user.click(screen.getByRole("button", { name: "Download the signed result" }));
+    expect(apiMock.nhiReviewResult).toHaveBeenCalledWith("c2");
+    expect(click).toHaveBeenCalled();
+    expect(await screen.findByRole("status")).toHaveTextContent("Verify its signature with the audit verification keys.");
+    click.mockRestore();
   });
 });

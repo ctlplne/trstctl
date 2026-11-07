@@ -698,6 +698,8 @@ access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
 (A272: `{"request_id", "target_type": "breakglass", "target_id", "reason",
 "ttl_seconds"}` up to 3600); `access checkouts checkin <request-id>` rotates it, and its
 grant is reviewed with `access emergency review <request-id> -f`.
+`access reviews result <campaign-id>` returns a completed review's result with the audit
+key's signature over it (A276).
 `access account-flags list|scan` lists or refreshes the brokered accounts flagged orphaned
 or unused (A276); `access account-flags propose <type> <id> -f` proposes `reassign`
 (`owner_id`) or `rotate_disable` (`rotation_old_ref` for a two-account rotation) with a

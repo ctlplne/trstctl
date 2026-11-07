@@ -1899,6 +1899,11 @@ type PAM struct {
 	// UnusedAfter (A276) flags a brokered account with no session or
 	// check-out for this long; empty is 90 days.
 	UnusedAfter string `json:"unused_after,omitempty"`
+	// CertificationInterval (A276) starts a certification campaign of
+	// brokered accounts and approver lists this often; empty never.
+	// CertificationReviewer is the subject it is assigned to.
+	CertificationInterval string `json:"certification_interval,omitempty"`
+	CertificationReviewer string `json:"certification_reviewer,omitempty"`
 	// HealthCheckInterval (A258) is how often each brokered account's stored
 	// credential is signed in with, read-only; empty is an hour. Checks are
 	// spread over the interval.
@@ -5161,6 +5166,7 @@ func validatePAM(p PAM) []error {
 	_ = parsePositive("recording_retention", p.RecordingRetention)
 	_ = parsePositive("signin_retention", p.SignInRetention)
 	_ = parsePositive("unused_after", p.UnusedAfter)
+	_ = parsePositive("certification_interval", p.CertificationInterval)
 	_ = parsePositive("health_check_interval", p.HealthCheckInterval)
 	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
 		errs = append(errs, errors.New("pam.default_ttl must not exceed pam.max_ttl"))

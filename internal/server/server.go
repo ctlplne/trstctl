@@ -2561,7 +2561,7 @@ func (s *Server) configurePAMSurface(d Deps) error {
 			}
 			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.agentCACertDER})
 		},
-		RecordingObjects: d.ArchiveObjectStore, RecordingSigner: d.AuditSigningKey,
+		RecordingObjects: d.ArchiveObjectStore, RecordingSigner: d.AuditSigningKey, AuditSigner: d.AuditSigningKey,
 		// Bound late: the API that holds the secrets is assembled separately.
 		SecretReader: func(ctx context.Context, tenantID, name string) ([]byte, int, error) {
 			if s.api == nil {

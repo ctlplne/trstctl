@@ -2436,7 +2436,9 @@ neither (A254); a gateway-bound SSH target also pins its host keys in
 (a duration, e.g. `2160h`) deletes a sealed gateway session recording's objects that long
 after it was sealed unless a legal hold keeps it; empty keeps recordings (A255).
 `pam.unused_after` (a positive duration; empty is `2160h`) flags a brokered account with
-no session or check-out for that long (A276).
+no session or check-out for that long (A276). `pam.certification_interval` (a positive
+duration; empty never) starts a certification campaign of brokered accounts and approver
+lists that often, assigned to `pam.certification_reviewer` (a subject) when it is set.
 `pam.signin_retention` (a positive duration; empty is `2160h`, 90 days) is how long the
 sign-ins bypass detection reads for a provider's managed accounts are kept (A274); older
 ones are purged, and the compromised-credential findings they raised stay. Sessions to such a target are delivered through that gateway: the

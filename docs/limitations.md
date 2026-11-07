@@ -9136,9 +9136,9 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
-## Owners, certification and orphans (A276) — part 1: owners of brokered accounts
+## Owners, certification and orphans (A276) — parts 1–3: owners, flags and certification
 
-Status: in progress. Brokered accounts are NHI inventory records, so the existing ownership
+Status: built locally. Brokered accounts are NHI inventory records, so the existing ownership
 assignment names their owners, and targets read them back. Proof:
 `TestServedBrokeredAccountsAreInventoriedWithOwnersA276` (a registered target is listed as a
 privileged account with no owner; an assignment makes the owner show on the record and the
@@ -9156,9 +9156,18 @@ refused, and the approved rotate-and-disable queues the two-account rotation, wh
 completes, and disables the target) and the console tests. Operator-configured accounts are
 reassigned but disabled by removing them from the configuration.
 
-What comes next:
-- Periodic certification of brokered accounts, templates and approver lists through the
-  access reviews, with a signed result (part 3).
+Part 3: a `pam_accounts` review lists every brokered account, every template's approver
+list and quorum, the approvers of access without a template and the emergency responders;
+a completed campaign's result is signed with the audit key; `pam.certification_interval`
+starts the next campaign. Proof:
+`TestServedCertificationCampaignCertifiesAccountsAndApproversWithASignedResultA276` (the
+account item names its owner and template quorum, the template's approver list names the
+approving member, the responders item names the responder; the result is refused while
+items wait; a distinct reviewer certifies the approver lists and accounts and revokes one
+account, which reads disabled; the result's signature verifies with the audit key over
+exactly the result; the periodic campaign starts only after the interval) and the console
+tests. Approvers are members whose roles grant `access:approve`; API tokens that hold the
+permission are not listed. A revoked approver list is changed by hand.
 
 ## Session risk alerts and recording search (A275) — parts 1–3: alerts, risk categories and search
 
