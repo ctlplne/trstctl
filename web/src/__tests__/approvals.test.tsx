@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
+    pamServiceReconciliationReview: vi.fn(),
     approvalRequestHistory: vi.fn(),
     profileEditApprovals: vi.fn(),
     approveProfileEditApproval: vi.fn(),
@@ -744,4 +745,81 @@ describe("dedicated approvals inbox", () => {
       ),
     );
   });
+});
+
+it("A267 blocks reconciliation approval until its exact native manifest matches the grant", async () => {
+  const digest = "frozen-native-intent";
+  apiMock.approvalRequests.mockResolvedValue([
+    approvalRequest({
+      resource_kind: "pam_service_reconcile",
+      resource_id: "native-plan",
+      action: "reconcile",
+      resource_name: "owned-service",
+      to_state: digest,
+      from_state: "version:7",
+      target_version: "7",
+      evidence_refs: ["service-dependent-intent:" + digest],
+    }),
+  ]);
+  let release!: (value: unknown) => void;
+  apiMock.pamServiceReconciliationReview.mockReturnValue(
+    new Promise((resolve) => {
+      release = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  renderAt("/approvals?request=approval-request-1");
+  const dialog = await screen.findByRole("dialog", { name: "Review request" });
+  expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+  release({
+    intent_digest: digest,
+    intent: {
+      mode: "reconcile",
+      expected_version: 7,
+      reconcile: { dn: "CN=owned-reset,DC=example,DC=test", sid: "S-1-5-21-1-2-3-1002", guid: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+      plan: {
+        id: "native-plan",
+        account: { dn: "CN=owned-service,DC=example,DC=test", sid: "S-1-5-21-1-2-3-1001", guid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        secret_name: "ad/service",
+        expires_at: "2099-01-01T00:00:00Z",
+        order: [],
+        hosts: [],
+      },
+      probes: [],
+    },
+  });
+  await within(dialog).findByText("CN=owned-reset,DC=example,DC=test");
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeEnabled());
+  await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
+  await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
+});
+
+it.each(["digest", "plan", "version"])("A267 refuses a reconciliation manifest with mismatched %s", async (mismatch) => {
+  const digest = "frozen-native-intent";
+  apiMock.approvalRequests.mockResolvedValue([
+    approvalRequest({
+      resource_kind: "pam_service_reconcile",
+      resource_id: "native-plan",
+      action: "reconcile",
+      to_state: digest,
+      from_state: "version:7",
+      target_version: "7",
+      evidence_refs: ["service-dependent-intent:" + digest],
+    }),
+  ]);
+  apiMock.pamServiceReconciliationReview.mockResolvedValue({
+    intent_digest: mismatch === "digest" ? "other" : digest,
+    intent: {
+      mode: "reconcile",
+      expected_version: mismatch === "version" ? 8 : 7,
+      reconcile: { dn: "CN=owned-reset,DC=example,DC=test" },
+      plan: { id: mismatch === "plan" ? "other" : "native-plan" },
+    },
+  });
+  renderAt("/approvals?request=approval-request-1");
+  const dialog = await screen.findByRole("dialog", { name: "Review request" });
+  await waitFor(() => expect(apiMock.pamServiceReconciliationReview).toHaveBeenCalled());
+  expect(await within(dialog).findByText(/exact reconciliation manifest is unavailable/)).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+  expect(apiMock.approveApprovalRequest).not.toHaveBeenCalled();
 });

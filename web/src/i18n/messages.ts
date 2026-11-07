@@ -10,6 +10,34 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.rotation.operation": { defaultMessage: "Directory operation", description: "AD reconciliation workflow." },
+  "admin.access.rotation.normal": { defaultMessage: "Rotate known password", description: "AD reconciliation workflow." },
+  "admin.access.rotation.reconcile": { defaultMessage: "Reconcile external drift", description: "AD reconciliation workflow." },
+  "admin.access.rotation.reason": { defaultMessage: "Reason for reconciliation", description: "AD reconciliation workflow." },
+  "admin.access.rotation.requestApproval": { defaultMessage: "Request independent reconciliation approval", description: "AD reconciliation workflow." },
+  "admin.access.rotation.openApproval": { defaultMessage: "Open independent approval", description: "AD reconciliation workflow." },
+  "admin.access.rotation.refreshApproval": { defaultMessage: "Refresh reconciliation approval", description: "AD reconciliation workflow." },
+  "admin.access.rotation.approvalState": {
+    defaultMessage: "Independent approval: {status}. {count} of {required} approvals.",
+    description: "AD reconciliation workflow.",
+  },
+  "admin.access.rotation.queuePending": {
+    defaultMessage: "The exact first command is claimed. Retry it to finish queuing; no new approval or password is needed.",
+    description: "AD reconciliation workflow.",
+  },
+  "admin.access.rotation.reconcileManifest": { defaultMessage: "Native reconciliation manifest", description: "AD reconciliation workflow." },
+  "admin.access.rotation.targetIdentity": { defaultMessage: "Account to reconcile", description: "AD reconciliation workflow." },
+  "admin.access.rotation.resetIdentity": { defaultMessage: "Separately designated reset identity", description: "AD reconciliation workflow." },
+  "admin.access.rotation.reconcileHelp": {
+    defaultMessage:
+      "Reconciliation uses the separately configured reset identity to replace an unknown current AD password. It updates every selected dependent and verifies useful work. Recovery restores the retained vault generation; it cannot recover the unknown drifted password.",
+    description: "AD reconciliation workflow.",
+  },
+  "admin.access.rotation.manifestUnavailable": {
+    defaultMessage: "The exact reconciliation manifest is unavailable or differs from this approval. Reopen it before approving.",
+    description: "AD reconciliation workflow.",
+  },
+  "admin.access.rotation.approveSummary": { defaultMessage: "Reconcile external password drift for {resource}", description: "AD reconciliation workflow." },
   "admin.access.rotation.title": { defaultMessage: "Rotate account and dependents", description: "AD dependent rotation workflow." },
   "admin.access.rotation.required": { defaultMessage: "Choose a value before continuing.", description: "AD dependent rotation workflow." },
   "admin.access.rotation.incomplete": {

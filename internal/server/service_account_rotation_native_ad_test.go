@@ -28,6 +28,7 @@ type dependentNativeDirectoryFixture struct {
 	store    *store.Store
 	identity servicedependents.AccountBinding
 	initial  *secret.Buffer
+	drift    *secret.Buffer
 }
 
 func newNativeDependentDirectoryFixture(t *testing.T) *dependentNativeDirectoryFixture {
@@ -168,4 +169,13 @@ func assertNativeDependentDirectory(t *testing.T, native *dependentNativeDirecto
 	if !nativeDependentStockBind(t, t.Context(), native.identity, current) {
 		t.Fatal("known current native generation did not clear the owned refusal")
 	}
+	if native.drift != nil {
+		if nativeDependentStockBind(t, t.Context(), native.identity, native.drift.Bytes()) {
+			t.Fatal("reconciliation left independent drift generation accepted")
+		}
+		if !nativeDependentStockBind(t, t.Context(), native.identity, current) {
+			t.Fatal("known reconciled generation did not clear the single owned drift refusal")
+		}
+	}
+
 }

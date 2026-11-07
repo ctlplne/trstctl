@@ -12446,6 +12446,16 @@ PAMQueryResult = TypedDict(
     total=False,
 )
 
+PAMReconcilePrincipal = TypedDict(
+    'PAMReconcilePrincipal',
+    {
+        'dn': str,
+        'guid': str,
+        'sid': str,
+    },
+    total=False,
+)
+
 PAMRecording = TypedDict(
     'PAMRecording',
     {
@@ -12586,9 +12596,11 @@ PAMServiceDependentRotationIntent = TypedDict(
     'PAMServiceDependentRotationIntent',
     {
         'expected_version': int,
+        'mode': str,
         'plan': dict[str, Any],
         'probes': list[dict[str, Any]],
         'provider_binding': str,
+        'reconcile': dict[str, Any],
     },
     total=False,
 )
@@ -12605,6 +12617,7 @@ PAMServiceDependentRotationPreview = TypedDict(
 PAMServiceDependentRotationPreviewRequest = TypedDict(
     'PAMServiceDependentRotationPreviewRequest',
     {
+        'mode': str,
         'order': list[dict[str, Any]],
         'probes': list[dict[str, Any]],
         'secret_name': str,
@@ -12616,6 +12629,8 @@ PAMServiceDependentRotationRequest = TypedDict(
     'PAMServiceDependentRotationRequest',
     {
         'acknowledge_single_phase': bool,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
         'intent': dict[str, Any],
         'intent_digest': str,
     },
@@ -12653,6 +12668,8 @@ PAMServiceDependentRotationStepList = TypedDict(
 PAMServiceDependentRotationView = TypedDict(
     'PAMServiceDependentRotationView',
     {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
         'command': dict[str, Any],
         'rotation': dict[str, Any],
     },
@@ -12703,6 +12720,53 @@ PAMServiceDependentScanHead = TypedDict(
         'service_count': int,
         'status': str,
         'task_count': int,
+    },
+    total=False,
+)
+
+PAMServiceReconciliationApproval = TypedDict(
+    'PAMServiceReconciliationApproval',
+    {
+        'approval_count': int,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'expires_at': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMServiceReconciliationApprovalRequest = TypedDict(
+    'PAMServiceReconciliationApprovalRequest',
+    {
+        'intent': dict[str, Any],
+        'intent_digest': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+PAMServiceReconciliationPendingReview = TypedDict(
+    'PAMServiceReconciliationPendingReview',
+    {
+        'approval': dict[str, Any],
+        'created_at': str,
+        'intent': dict[str, Any],
+        'intent_digest': str,
+        'queue_pending': bool,
+        'reason': str,
+        'rotation_id': str,
+    },
+    total=False,
+)
+
+PAMServiceReconciliationReview = TypedDict(
+    'PAMServiceReconciliationReview',
+    {
+        'created_at': str,
+        'intent': dict[str, Any],
+        'intent_digest': str,
     },
     total=False,
 )

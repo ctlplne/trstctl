@@ -413,21 +413,41 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
         </div>
       ) : null}
 
-      {search.get("dependent_rotation") && search.get("dependent_account") ? (
+      {search.get("dependent_account") && (search.get("dependent_rotation") || (search.get("dependent_review") && search.get("dependent_approval"))) ? (
         <PAMDependentRotation
+          key={[search.get("dependent_account"), search.get("dependent_rotation"), search.get("dependent_review"), search.get("dependent_approval")].join(":")}
           accountID={search.get("dependent_account")!}
-          canManage={false}
-          rotationID={search.get("dependent_rotation")!}
-          onRotationID={() => {}}
+          canManage={canManage}
+          rotationID={search.get("dependent_rotation") ?? undefined}
+          reviewID={search.get("dependent_review") ?? undefined}
+          approvalID={search.get("dependent_approval") ?? undefined}
+          onRotationID={(id) => {
+            const next = new URLSearchParams(search);
+            next.set("dependent_rotation", id);
+            next.delete("dependent_review");
+            next.delete("dependent_approval");
+            setSearch(next);
+          }}
         />
       ) : null}
       {dependentAccount ? (
         <PAMServiceDependentsDialog
           account={dependentAccount}
           canManage={canManage}
+          onReviewID={(review, approval) => {
+            const next = new URLSearchParams(search);
+            next.set("dependent_account", dependentAccount.id);
+            next.set("dependent_review", review);
+            next.set("dependent_approval", approval);
+            next.delete("dependent_rotation");
+            setSearch(next);
+            setDependentAccount(null);
+          }}
           onRotationID={(id) => {
             const next = new URLSearchParams(search);
             next.set("dependent_rotation", id);
+            next.delete("dependent_review");
+            next.delete("dependent_approval");
             next.set("dependent_account", dependentAccount.id);
             setSearch(next);
             setDependentAccount(null);

@@ -41,6 +41,9 @@ func TestServiceDependentRotationCommandsA267(t *testing.T) {
 		args                     []string
 	}{
 		{"preview", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations/preview", `{"secret_name":"ad/svc","order":[],"probes":[]}`, []string{"access", "discovery", "rotation", "preview", "account", "-f", "-"}},
+		{"pending", "GET", "/api/v1/access/discovery/accounts/account/dependents/rotations/reviews/change", "", []string{"access", "discovery", "rotation", "pending", "account", "change", "--approval-request-id", "review"}},
+		{"approval", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations/approval", `{"intent_digest":"reviewed","reason":"repair drift"}`, []string{"access", "discovery", "rotation", "approval", "account", "-f", "-"}},
+		{"review", "GET", "/api/v1/access/discovery/reconciliation-reviews/change", "", []string{"access", "discovery", "rotation", "review", "change"}},
 		{"queue", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations", `{"intent_digest":"reviewed","acknowledge_single_phase":true}`, []string{"access", "discovery", "rotation", "queue", "account", "-f", "-"}},
 		{"get", "GET", "/api/v1/access/discovery/dependent-rotations/change", "", []string{"access", "discovery", "rotation", "get", "change"}},
 		{"steps", "GET", "/api/v1/access/discovery/dependent-rotations/change/steps", "", []string{"access", "discovery", "rotation", "steps", "change", "--limit", "1", "--after", "step"}},
@@ -57,6 +60,9 @@ func TestServiceDependentRotationCommandsA267(t *testing.T) {
 			}
 			if !strings.Contains(out, "uncertain") || !strings.Contains(out, "failed") {
 				t.Fatal("CLI lost native uncertainty or delivery status")
+			}
+			if tc.name == "pending" && captured.Query != "approval_request_id=review" {
+				t.Fatal("pending review lost its exact approval request")
 			}
 			if tc.name == "steps" && captured.Query != "after=step&limit=1" {
 				t.Fatal("step cursor lost")

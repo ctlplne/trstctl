@@ -20,24 +20,32 @@ import (
 )
 
 type dependentRotationPreviewRequest struct {
+	Mode       string                           `json:"mode,omitempty"`
 	SecretName string                           `json:"secret_name"`
 	Order      []servicedependents.DependentRef `json:"order"`
 	Probes     []servicedependents.ProbeBinding `json:"probes"`
 }
 type dependentRotationRequest struct {
+	ApprovalRequestID      string                           `json:"approval_request_id,omitempty"`
+	ApprovalIntentDigest   string                           `json:"approval_intent_digest,omitempty"`
 	Intent                 servicedependents.RotationIntent `json:"intent"`
 	IntentDigest           string                           `json:"intent_digest"`
 	AcknowledgeSinglePhase bool                             `json:"acknowledge_single_phase"`
 }
 type dependentRotationView struct {
-	Rotation store.ServiceDependentRotation `json:"rotation"`
-	Command  secretStaticRotationView       `json:"command"`
+	ApprovalRequestID    string                         `json:"approval_request_id,omitempty"`
+	ApprovalIntentDigest string                         `json:"approval_intent_digest,omitempty"`
+	Rotation             store.ServiceDependentRotation `json:"rotation"`
+	Command              secretStaticRotationView       `json:"command"`
 }
 
 func (a *API) pamServiceDependentRotationRoutes() []route {
 	root := "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations"
 	return []route{
+		{method: "GET", path: root + "/reviews/{id}", opID: "getPAMServiceReconciliationPendingReview", summary: "Resume your exact reviewed reconciliation and read its current approval without approving it", handler: a.getPAMServiceReconciliationPendingReview, pathParams: []param{pathUUID("account_id"), pathUUID("id")}, query: []param{{name: "approval_request_id", typ: "string", format: "uuid", required: true}}, resSchema: "PAMServiceReconciliationPendingReview", successCode: "200", perm: authz.AccessTargetsWrite},
+		{method: "GET", path: "/api/v1/access/discovery/reconciliation-reviews/{id}", opID: "getPAMServiceReconciliationReview", summary: "Open the frozen native reconciliation effect before independent approval", handler: a.getPAMServiceReconciliationReview, pathParams: []param{pathUUID("id")}, resSchema: "PAMServiceReconciliationReview", successCode: "200", perm: authz.AccessApprove},
 		{method: "POST", path: root + "/preview", opID: "previewPAMServiceDependentRotation", summary: "Review complete native dependent inventory, restart order and useful-work bindings before AD rotation", handler: a.previewPAMServiceDependentRotation, pathParams: []param{pathUUID("account_id")}, reqSchema: "PAMServiceDependentRotationPreviewRequest", resSchema: "PAMServiceDependentRotationPreview", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "POST", path: root + "/approval", opID: "requestPAMServiceReconciliationApproval", summary: "Request independent review of exact designated AD reconciliation authority", handler: a.requestPAMServiceReconciliationApproval, pathParams: []param{pathUUID("account_id")}, reqSchema: "PAMServiceReconciliationApprovalRequest", resSchema: "PAMServiceReconciliationApproval", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "POST", path: root, opID: "queuePAMServiceDependentRotation", summary: "Queue the exact reviewed AD rotation and all native dependent effects", handler: a.queuePAMServiceDependentRotation, pathParams: []param{pathUUID("account_id")}, reqSchema: "PAMServiceDependentRotationRequest", resSchema: "PAMServiceDependentRotationView", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "GET", path: "/api/v1/access/discovery/dependent-rotations/{id}/steps", opID: "listPAMServiceDependentRotationSteps", summary: "Page exact native step evidence and independent delivery state", handler: a.listPAMServiceDependentRotationSteps, pathParams: []param{pathUUID("id")}, query: []param{{name: "after", typ: "string", desc: "the last step ID from the previous page"}, {name: "limit", typ: "integer", desc: "1-256 steps, default 50"}}, resSchema: "PAMServiceDependentRotationStepList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/dependent-rotations/{id}", opID: "getPAMServiceDependentRotation", summary: "Read directory rotation and dependent rollback progress", handler: a.getPAMServiceDependentRotation, pathParams: []param{pathUUID("id")}, resSchema: "PAMServiceDependentRotationView", successCode: "200", perm: authz.AccessRead},
@@ -136,6 +144,10 @@ func (a *API) previewPAMServiceDependentRotation(w http.ResponseWriter, r *http.
 		if e != nil {
 			return 0, nil, e
 		}
+		provider, pins, e := selectDependentRotationProvider(provider, req.SecretName, req.Mode)
+		if e != nil {
+			return 0, nil, e
+		}
 		prepared, ok := provider.(dynsecret.PreparedStaticRotationProvider)
 		if !ok || staticRotationPhase(provider, req.SecretName) != dynsecret.RotationSinglePhase {
 			return 0, nil, errStatus(http.StatusConflict, "a prepared native AD provider is required")
@@ -151,7 +163,7 @@ func (a *API) previewPAMServiceDependentRotation(w http.ResponseWriter, r *http.
 		if e != nil {
 			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, e)
 		}
-		intent := servicedependents.RotationIntent{Plan: plan, ExpectedVersion: current.Version, ProviderBinding: prepared.StaticRotationBinding(req.SecretName), Probes: req.Probes}
+		intent := servicedependents.RotationIntent{Mode: req.Mode, Reconcile: pins, Plan: plan, ExpectedVersion: current.Version, ProviderBinding: prepared.StaticRotationBinding(req.SecretName), Probes: req.Probes}
 		if e = intent.Validate(inputs); e != nil {
 			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, e)
 		}
@@ -197,11 +209,48 @@ func (a *API) queuePAMServiceDependentRotation(w http.ResponseWriter, r *http.Re
 				if e != nil || retained != digest {
 					return store.ErrIdempotencyConflict
 				}
+				if queued.Approval == nil {
+					if req.ApprovalRequestID != "" || req.ApprovalIntentDigest != "" {
+						return store.ErrIdempotencyConflict
+					}
+				} else {
+					actor, err := requestPrincipalSubject(ctx)
+					if err != nil {
+						return err
+					}
+					if queued.Approval.RequestID != req.ApprovalRequestID || queued.Approval.IntentDigest != req.ApprovalIntentDigest || queued.Approval.Requester != actor {
+						return store.ErrIdempotencyConflict
+					}
+				}
+				if err := projections.ValidateServiceDependentRotationSource(source, queued); err != nil {
+					return err
+				}
 				if e := projections.New(a.store).Apply(ctx, source); e != nil {
 					return e
 				}
 				parent, e = a.store.GetServiceDependentRotation(ctx, tenantID, source.ID)
 				return e
+			}
+			if req.Intent.Mode == servicedependents.Reconcile {
+				fence, err := a.store.GetApprovedTargetFence(ctx, tenantID, store.ApprovedTargetServiceReconciliation, servicedependents.ReconcileCommandKey(tenantID, req.Intent.Plan.SecretName))
+				if err == nil {
+					actor, e := requestPrincipalSubject(ctx)
+					if e != nil {
+						return e
+					}
+					var retained projections.ServiceDependentRotationQueued
+					if fence.EventID != req.Intent.Plan.ID || fence.RequestBinding != digest || fence.Approval.RequestID != req.ApprovalRequestID || fence.Approval.IntentDigest != req.ApprovalIntentDigest || json.Unmarshal(fence.Payload, &retained) != nil || retained.Actor != actor {
+						return store.ErrIdempotencyConflict
+					}
+					if e := a.projectServiceReconcileFence(ctx, tenantID, fence); e != nil {
+						return e
+					}
+					parent, e = a.store.GetServiceDependentRotation(ctx, tenantID, req.Intent.Plan.ID)
+					return e
+				}
+				if !store.IsNotFound(err) {
+					return err
+				}
 			}
 			now := time.Now().UTC()
 			if !now.Before(req.Intent.Plan.ExpiresAt) || req.Intent.Plan.CreatedAt.After(now.Add(time.Minute)) {
@@ -221,13 +270,8 @@ func (a *API) queuePAMServiceDependentRotation(w http.ResponseWriter, r *http.Re
 			if current.Version != req.Intent.ExpectedVersion {
 				return errStatus(http.StatusConflict, staticRotationVersionMovedDetail)
 			}
-			provider, _, e := a.staticRotationProvider(tenantID, req.Intent.Plan.Account.ProviderID, req.Intent.Plan.SecretName)
-			if e != nil {
+			if _, e := a.dependentIntentProvider(tenantID, req.Intent); e != nil {
 				return e
-			}
-			prep, ok := provider.(dynsecret.PreparedStaticRotationProvider)
-			if !ok || prep.StaticRotationBinding(req.Intent.Plan.SecretName) != req.Intent.ProviderBinding || staticRotationPhase(provider, req.Intent.Plan.SecretName) != dynsecret.RotationSinglePhase {
-				return errStatus(http.StatusConflict, "native AD provider changed after review")
 			}
 			if latest, found, e := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, req.Intent.Plan.SecretName); e != nil {
 				return e
@@ -247,8 +291,15 @@ func (a *API) queuePAMServiceDependentRotation(w http.ResponseWriter, r *http.Re
 			if e != nil {
 				return e
 			}
-			queued := projections.ServiceDependentRotationQueued{Intent: req.Intent, Child: child, Actor: actor, At: now}
-			if e := a.appendAndProjectStaticRotation(ctx, tenantID, req.Intent.Plan.ID, projections.EventServiceDependentRotationQueued, queued); e != nil {
+			approval, e := a.dependentReconcileApprovalUse(ctx, tenantID, req, actor)
+			if e != nil {
+				return e
+			}
+			if req.Intent.Mode == servicedependents.Reconcile {
+				now = now.Truncate(time.Microsecond)
+			}
+			queued := projections.ServiceDependentRotationQueued{Intent: req.Intent, Child: child, Actor: actor, At: now, Approval: approval}
+			if e := a.appendDependentRotationQueued(ctx, tenantID, queued); e != nil {
 				return e
 			}
 			parent, e = a.store.GetServiceDependentRotation(ctx, tenantID, req.Intent.Plan.ID)
@@ -266,7 +317,22 @@ func (a *API) dependentRotationView(ctx context.Context, parent store.ServiceDep
 	if e != nil {
 		return dependentRotationView{}, e
 	}
-	return dependentRotationView{Rotation: parent, Command: toSecretStaticRotationView(child)}, nil
+	view := dependentRotationView{Rotation: parent, Command: toSecretStaticRotationView(child)}
+	if parent.Intent.Mode == servicedependents.Reconcile {
+		if _, err := a.dependentRotationParent(ctx, child); err != nil {
+			return dependentRotationView{}, err
+		}
+		event, found, err := a.log.EventByID(ctx, parent.ID)
+		if err != nil {
+			return dependentRotationView{}, err
+		}
+		var source projections.ServiceDependentRotationQueued
+		if !found || json.Unmarshal(event.Data, &source) != nil || source.Approval == nil {
+			return dependentRotationView{}, errors.New("api: canonical reconciliation approval unavailable")
+		}
+		view.ApprovalRequestID, view.ApprovalIntentDigest = source.Approval.RequestID, source.Approval.IntentDigest
+	}
+	return view, nil
 }
 func (a *API) getPAMServiceDependentRotation(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)

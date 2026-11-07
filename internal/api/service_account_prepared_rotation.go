@@ -9,6 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/servicedependents"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -61,6 +62,18 @@ func (a *API) prepareStaticNativeRotation(ctx context.Context, cmd store.SecretS
 		return err
 	}
 	defer oldHeld.Destroy()
+	if cmd.DependentChangeID != "" {
+		parent, err := a.dependentRotationParent(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		if parent.Intent.Mode == servicedependents.Reconcile {
+			validator, ok := provider.(dynsecret.StaticRecoveryCredentialValidator)
+			if !ok || validator.ValidateStaticRecoveryCredential(staticPreparedRequest(cmd), oldHeld.Bytes()) != nil {
+				return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: "retained vault generation cannot recover this exact native account; no directory reset was performed"})
+			}
+		}
+	}
 	prepared, err := preparer.PrepareStaticCredential(ctx, staticPreparedRequest(cmd))
 	if err != nil {
 		secret.Wipe(prepared)

@@ -35,18 +35,42 @@ import (
 // This provider is a directory-boundary fault fixture, not a native AD proof.
 // Samba and Windows fixtures separately qualify their actual native adapters.
 type dependentDirectoryBoundary struct {
-	native     dynsecret.Provider
-	lastNative *secret.Buffer
-	mu         sync.Mutex
-	current    *secret.Buffer
-	applied    int
-	restored   int
-	afterApply func()
+	native    dynsecret.Provider
+	reconcile bool
+	*dependentDirectoryState
+}
+type dependentDirectoryState struct {
+	refusePublicationProof bool
+	publicationProofs      int
+	lastNative             *secret.Buffer
+	mu                     sync.Mutex
+	current                *secret.Buffer
+	applied                int
+	restored               int
+	afterApply             func()
 }
 
 const dependentFixtureDN = "CN=service,DC=lab,DC=test"
 const dependentFixtureSID = "S-1-5-21-1-2-3-1001"
 
+func (f *dependentDirectoryBoundary) StaticReconciliation(role string) (dynsecret.Provider, dynsecret.ADReconcilePrincipal, error) {
+	var pins dynsecret.ADReconcilePrincipal
+	if f.reconcile || !f.AllowsStaticRotation(role) {
+		return nil, pins, errors.New("fixture reconcile role unavailable")
+	}
+	selected := *f
+	selected.reconcile = true
+	if f.native != nil {
+		p, identity, err := f.native.(dynsecret.StaticReconciliationProvider).StaticReconciliation(role)
+		if err != nil {
+			return nil, pins, err
+		}
+		selected.native = p
+		return &selected, identity, nil
+	}
+	pins = dynsecret.ADReconcilePrincipal{DN: "CN=reconcile,DC=lab,DC=test", SID: "S-1-5-21-1-2-3-1101", GUID: strings.Repeat("b", 32)}
+	return &selected, pins, nil
+}
 func (f *dependentDirectoryBoundary) Name() string {
 	if f.native != nil {
 		return f.native.Name()
@@ -69,6 +93,9 @@ func (f *dependentDirectoryBoundary) StaticRotationBinding(role string) string {
 	if f.native != nil {
 		return f.native.(dynsecret.PreparedStaticRotationProvider).StaticRotationBinding(role)
 	}
+	if f.reconcile {
+		return strings.Repeat("f", 64)
+	}
 	return strings.Repeat("e", 64)
 }
 func (*dependentDirectoryBoundary) Generate(context.Context, dynsecret.GenerateRequest) (dynsecret.Credential, error) {
@@ -90,6 +117,12 @@ func (f *dependentDirectoryBoundary) VerifyStaticCredential(ctx context.Context,
 		return "", errors.New("owned native password rejected")
 	}
 	return "connected", nil
+}
+func (f *dependentDirectoryBoundary) ValidateStaticRecoveryCredential(req dynsecret.GenerateRequest, raw []byte) error {
+	if f.native != nil {
+		return f.native.(dynsecret.StaticRecoveryCredentialValidator).ValidateStaticRecoveryCredential(req, raw)
+	}
+	return dynsecret.ValidateADRecoveryCredential(raw, req.Predecessor)
 }
 func (f *dependentDirectoryBoundary) PrepareStaticCredential(ctx context.Context, req dynsecret.GenerateRequest) ([]byte, error) {
 	if f.native != nil {
@@ -115,7 +148,22 @@ func (f *dependentDirectoryBoundary) PrepareStaticCredential(ctx context.Context
 		User      string `json:"username"`
 		SID       string `json:"native_sid"`
 		GUID      string `json:"native_guid"`
-	}{req.Role, req.LeaseID, strings.Repeat("e", 64), dependentFixtureDN, "service", "010500000000000515000000010000000200000003000000e9030000", strings.Repeat("a", 32)}, password.Bytes())
+	}{req.Role, req.LeaseID, f.StaticRotationBinding(req.Role), dependentFixtureDN, "service", "010500000000000515000000010000000200000003000000e9030000", strings.Repeat("a", 32)}, password.Bytes())
+}
+func (f *dependentDirectoryBoundary) VerifyStaticPreparedCredential(ctx context.Context, req dynsecret.GenerateRequest, prepared, credential []byte) error {
+	f.mu.Lock()
+	f.publicationProofs++
+	refuse := f.refusePublicationProof
+	f.mu.Unlock()
+	if refuse {
+		return errors.New("owned exact native publication proof refused")
+	}
+
+	if f.native != nil {
+		return f.native.(dynsecret.PreparedStaticRotationVerifier).VerifyStaticPreparedCredential(ctx, req, prepared, credential)
+	}
+	_, err := f.VerifyStaticCredential(ctx, req.Predecessor, credential)
+	return err
 }
 func (f *dependentDirectoryBoundary) GenerateStaticPrepared(ctx context.Context, req dynsecret.GenerateRequest, prepared []byte) (dynsecret.Credential, error) {
 	var credential dynsecret.Credential
@@ -239,6 +287,35 @@ func servedDependentRotation(t *testing.T, injectFailure bool, moved ...bool) {
 	servedDependentRotationCase(t, nil, injectFailure, moved...)
 }
 func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure bool, moved ...bool) {
+	servedDependentRotationCaseWithMode(t, native, injectFailure, false, moved...)
+}
+func TestServedDependentReconciliationRequiresIndependentReviewA267(t *testing.T) {
+	for _, failure := range []bool{false, true} {
+		name := "forward"
+		if failure {
+			name = "dependent failure"
+		}
+		t.Run(name, func(t *testing.T) { servedDependentRotationCaseWithMode(t, nil, failure, true) })
+	}
+}
+
+type dependentRotationOptions struct {
+	ExpireBeforeApply      bool
+	InvalidRecovery        bool
+	EraseClaim             bool
+	LoseQueueProjection    bool
+	Reconcile              bool
+	RefusePublicationProof bool
+}
+
+func servedDependentRotationCaseWithMode(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure, reconcile bool, moved ...bool) {
+	servedDependentRotationScenario(t, native, injectFailure, dependentRotationOptions{Reconcile: reconcile}, moved...)
+}
+func TestServedReconciliationRefusesChangedNativePublicationProofA267(t *testing.T) {
+	servedDependentRotationScenario(t, nil, false, dependentRotationOptions{Reconcile: true, RefusePublicationProof: true})
+}
+func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure bool, scenario dependentRotationOptions, moved ...bool) {
+	reconcile, proofFailure := scenario.Reconcile, scenario.RefusePublicationProof
 	staleVault := len(moved) > 0 && moved[0]
 	lateVault := len(moved) > 1 && moved[1]
 	partialNative := len(moved) > 2 && moved[2]
@@ -260,7 +337,7 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	if e != nil {
 		t.Fatal(e)
 	}
-	directory := &dependentDirectoryBoundary{current: held}
+	directory := &dependentDirectoryBoundary{dependentDirectoryState: &dependentDirectoryState{current: held, refusePublicationProof: proofFailure}}
 	t.Cleanup(func() {
 		directory.mu.Lock()
 		defer directory.mu.Unlock()
@@ -269,6 +346,19 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 			directory.lastNative.Destroy()
 		}
 	})
+	if reconcile && native == nil {
+		drift, err := dependentFixtureCredential([]byte(strings.Repeat("owned-external-drift-", 3)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		replacement, err := secret.NewFrom(drift)
+		secret.Wipe(drift)
+		if err != nil {
+			t.Fatal(err)
+		}
+		directory.current.Destroy()
+		directory.current = replacement
+	}
 	options := []func(*Deps){withSecretsEnabled(t, nil), func(d *Deps) {
 		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, Attestors: []attest.Attestor{servedPAMAttestor{}}}
 		d.DynamicSecretProviders = []dynsecret.Provider{directory}
@@ -322,7 +412,7 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 		t.Fatal("native account source unavailable", e)
 	}
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "owned-rotation-operator", "access:read", "access:targets.write", "secrets:read", "secrets:write")
-	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/store", token, "owned-initial-value", map[string]any{"name": "app/dependent", "value": secret.JSONBytes(old)})
+	code, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/store", token, "owned-initial-value", map[string]any{"name": "app/dependent", "value": secret.JSONBytes(storedDependentFixtureValue(old, scenario.InvalidRecovery))})
 	if code != 200 && code != 201 {
 		t.Fatalf("initial secret: %d %s", code, body)
 	}
@@ -344,6 +434,16 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	if status, _ := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/secrets/rotations", token, "refuse-dependent-bypass", map[string]any{"provider": directory.Name(), "key": "app/dependent", "old_ref": strings.ToUpper(identity.DN), "acknowledge_single_phase": true}); status != http.StatusConflict {
 		t.Fatalf("ordinary rotation bypassed selected native dependents: %d", status)
 	}
+	if scenario.ExpireBeforeApply {
+		// Seed a genuinely historical scan command, then accept its signed
+		// observation now. Only PAM's fixture clock is scoped to that command;
+		// review/worker deadlines still use the unchanged real host clock.
+		previousClock := h.srv.pam.clock
+		h.srv.pam.clock = func() time.Time {
+			return time.Now().UTC().Add(-servicedependents.RotationInventoryMaxAge + 8*time.Second)
+		}
+		defer func() { h.srv.pam.clock = previousClock }()
+	}
 	code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/"+hostID+"/runs", token, "owned-inventory", nil)
 	if code != 202 {
 		t.Fatalf("inventory: %d %s", code, body)
@@ -361,6 +461,9 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 		Services: []windependents.Service{{Name: "owned-service", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("b", 64), WasRunning: true}},
 		Tasks:    []windependents.Task{{Path: "\\owned\\task", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("c", 64), Enabled: true, LogonType: 1, ActionCount: 1}},
 		Pools:    []windependents.Pool{{Name: "owned-pool", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("d", 64), EncryptionProvider: "native", PasswordProtected: true, WasStarted: true}}}
+	if scenario.ExpireBeforeApply {
+		inventory.ObservedAt = time.Now().UTC().Add(-servicedependents.RotationInventoryMaxAge + 8*time.Second)
+	}
 	raw, e := json.Marshal(inventory)
 	if e != nil {
 		t.Fatal(e)
@@ -404,7 +507,11 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 		t.Fatalf("rewritten native SQL metadata accepted for review: %d", status)
 	}
 	replaceReport(originalRaw)
-	code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations/preview", token, "owned-review", map[string]any{"secret_name": "app/dependent", "order": order, "probes": probes})
+	previewInput := map[string]any{"secret_name": "app/dependent", "order": order, "probes": probes}
+	if reconcile {
+		previewInput["mode"] = "reconcile"
+	}
+	code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations/preview", token, "owned-review", previewInput)
 	var preview struct {
 		Intent servicedependents.RotationIntent `json:"intent"`
 		Digest string                           `json:"intent_digest"`
@@ -413,12 +520,119 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 		t.Fatalf("reviewed dependent rotation: status=%d body=%s", code, body)
 	}
 	request := map[string]any{"intent": preview.Intent, "intent_digest": preview.Digest, "acknowledge_single_phase": true}
+	if reconcile {
+		var wire struct {
+			Intent struct {
+				Mode      string `json:"mode"`
+				Reconcile struct {
+					DN   string `json:"dn"`
+					SID  string `json:"sid"`
+					GUID string `json:"guid"`
+				} `json:"reconcile"`
+			} `json:"intent"`
+		}
+		if json.Unmarshal(body, &wire) != nil || wire.Intent.Mode != "reconcile" || wire.Intent.Reconcile.SID == "" || wire.Intent.Reconcile.SID == identity.SID || len(wire.Intent.Reconcile.GUID) != 32 {
+			t.Fatal("public reconciliation review omitted exact designated authority")
+		}
+		assertNoQueue := func(key string) {
+			t.Helper()
+			if status, _ := secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations", token, key, request); status != http.StatusConflict {
+				t.Fatalf("unapproved reconciliation queued: %d", status)
+			}
+			if _, found, e := h.log.EventByID(ctx, preview.Intent.Plan.ID); e != nil || found {
+				t.Fatal("refused reconciliation poisoned the canonical event stream", e)
+			}
+			if directory.applied != 0 {
+				t.Fatal("refused reconciliation reached native reset")
+			}
+		}
+		assertNoQueue("reconcile-without-approval")
+		code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations/approval", token, "request-reconcile-review", map[string]any{"intent": preview.Intent, "intent_digest": preview.Digest, "reason": "Repair independently observed drift for owned-rotation-operator"})
+		var review struct {
+			RequestID string `json:"approval_request_id"`
+			Digest    string `json:"approval_intent_digest"`
+			Status    string `json:"status"`
+		}
+		if code != http.StatusAccepted || json.Unmarshal(body, &review) != nil || review.RequestID == "" || review.Digest == "" || review.Status != "pending" {
+			t.Fatalf("request exact reconciliation review: %d %s", code, body)
+		}
+		request["approval_request_id"], request["approval_intent_digest"] = review.RequestID, review.Digest
+		assertNoQueue("reconcile-pending-approval")
+		ownReview := root + "/rotations/reviews/" + preview.Intent.Plan.ID + "?approval_request_id=" + review.RequestID
+		status, resumed := secretsReq(t, h.servedHarness, http.MethodGet, ownReview, token, nil)
+		var pending struct {
+			Digest   string `json:"intent_digest"`
+			Approval struct {
+				ID     string `json:"approval_request_id"`
+				Status string `json:"status"`
+			} `json:"approval"`
+			Reason string `json:"reason"`
+		}
+		if status != http.StatusOK || json.Unmarshal(resumed, &pending) != nil || pending.Digest != preview.Digest || pending.Approval.ID != review.RequestID || pending.Approval.Status != "pending" || pending.Reason != "Repair independently observed drift for owned-rotation-operator" {
+			t.Fatalf("requester could not resume exact pending review without approval permission: %d %s", status, resumed)
+		}
+		outsider := seedScopedTokenSubject(t, h.store, h.tenant, "owned-other-rotation-operator", "access:read", "access:targets.write", "secrets:read", "secrets:write")
+		if status, _ := secretsReq(t, h.servedHarness, http.MethodGet, ownReview, outsider, nil); status != http.StatusForbidden {
+			t.Fatalf("another writer resumed someone else's review: %d", status)
+		}
+
+		self := seedScopedTokenSubject(t, h.store, h.tenant, "owned-rotation-operator", "access:approve")
+		if status, _ := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/approval-requests/"+review.RequestID+"/approvals", self, "refuse-self-reconcile-review", map[string]string{"intent_digest": review.Digest}); status != http.StatusForbidden {
+			t.Fatalf("self reconciliation review accepted: %d", status)
+		}
+		reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "owned-independent-reconcile-reviewer", "access:approve")
+		status, listed := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/approval-requests?status=pending", reviewer, nil)
+		if status != http.StatusOK || !bytes.Contains(listed, []byte(review.RequestID)) {
+			t.Fatalf("independent reviewer could not discover reconciliation: %d %s", status, listed)
+		}
+		status, manifest := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/discovery/reconciliation-reviews/"+preview.Intent.Plan.ID, reviewer, nil)
+		var opened struct {
+			Intent servicedependents.RotationIntent `json:"intent"`
+			Digest string                           `json:"intent_digest"`
+		}
+		if status != http.StatusOK || json.Unmarshal(manifest, &opened) != nil || opened.Digest != preview.Digest || opened.Intent.Mode != servicedependents.Reconcile || opened.Intent.Reconcile == nil || opened.Intent.Reconcile.SID != wire.Intent.Reconcile.SID {
+			t.Fatalf("reviewer could not open the complete frozen reconcile manifest: %d %s", status, manifest)
+		}
+		if e, err := opened.Intent.Digest(); err != nil || e != preview.Digest {
+			t.Fatal("review manifest no longer matches approved digest", err)
+		}
+		if status, _ := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/discovery/reconciliation-reviews/"+preview.Intent.Plan.ID, token, nil); status != http.StatusForbidden {
+			t.Fatalf("review manifest omitted independent review permission: %d", status)
+		}
+		code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/approval-requests/"+review.RequestID+"/approvals", reviewer, "approve-exact-reconciliation", map[string]string{"intent_digest": review.Digest})
+		if code != http.StatusOK {
+			t.Fatalf("independent exact reconciliation review: %d %s", code, body)
+		}
+		status, resumed = secretsReq(t, h.servedHarness, http.MethodGet, ownReview, token, nil)
+		if status != http.StatusOK || json.Unmarshal(resumed, &pending) != nil || pending.Approval.Status != "approved" || pending.Approval.ID != review.RequestID {
+			t.Fatal("requester approval refresh did not retain its exact review")
+		}
+
+	}
+
+	if scenario.LoseQueueProjection {
+		interruptDependentQueueProjection(t, h, root, token, preview.Intent.Plan.ID, request)
+	}
+	if scenario.EraseClaim {
+		eraseAndRecoverDependentClaim(t, h, preview.Intent.Plan.ID)
+		return
+	}
+
 	code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, root+"/rotations", token, "owned-rotate", request)
 	var queued struct {
 		Rotation store.ServiceDependentRotation `json:"rotation"`
 	}
 	if code != 202 || json.Unmarshal(body, &queued) != nil || queued.Rotation.CommandID == "" {
 		t.Fatalf("atomic queue: %d %s", code, body)
+	}
+	if reconcile {
+		status, recovered := secretsReq(t, h.servedHarness, http.MethodGet, root+"/rotations/reviews/"+preview.Intent.Plan.ID+"?approval_request_id="+request["approval_request_id"].(string), token, nil)
+		var result struct {
+			RotationID string `json:"rotation_id"`
+		}
+		if status != http.StatusOK || json.Unmarshal(recovered, &result) != nil || result.RotationID != queued.Rotation.ID || directory.applied != 0 {
+			t.Fatal("lost queue response did not recover existing operation without native replay")
+		}
 	}
 	if queued.Rotation.ID != preview.Intent.Plan.ID {
 		t.Fatal("reviewed identity changed")
@@ -429,6 +643,10 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	}
 	if status, _ := secretsReqKey(t, h.servedHarness, http.MethodPut, root+"/"+hostID, token, "refuse-midflight-host-change", map[string]any{"enabled": false}); status != http.StatusConflict {
 		t.Fatalf("in-flight native host membership changed: %d", status)
+	}
+	if scenario.ExpireBeforeApply || scenario.InvalidRecovery {
+		assertDependentNoEffectAdmission(t, h, directory, root, token, queued.Rotation.CommandID, preview.Intent.Plan.ExpiresAt, scenario.ExpireBeforeApply)
+		return
 	}
 	checkedAuthority := false
 	checkedStepSource := false
@@ -690,7 +908,7 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 		}
 	}
 	want := store.SecretStaticRotationCompleted
-	if injectFailure {
+	if injectFailure || proofFailure {
 		want = store.SecretStaticRotationRolledBack
 	}
 	if staleVault {
@@ -699,10 +917,13 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	if lateVault {
 		want = store.SecretStaticRotationRollbackFailed
 	}
+	if proofFailure && (directory.publicationProofs == 0 || final.ResultVersion != 0) {
+		t.Fatal("native identity proof failure was ignored or allowed successor vault publication")
+	}
 	if final.Phase != want {
 		t.Fatalf("incomplete dependent coordinator phase=%s error=%s steps=%v", final.Phase, final.Error, seen)
 	}
-	if (injectFailure || lateVault) && (injectFailure && !failed || directory.restored != 1) {
+	if (injectFailure || lateVault || proofFailure) && (injectFailure && !failed || directory.restored != 1) {
 		t.Fatal("dependent failure did not restore directory once")
 	}
 	if !injectFailure {
@@ -717,11 +938,11 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	directory.mu.Lock()
 	same := bytes.Equal(directory.current.Bytes(), old)
 	directory.mu.Unlock()
-	if same != (injectFailure || staleVault || lateVault) {
+	if same != (injectFailure || staleVault || lateVault || proofFailure) {
 		t.Fatal("upstream directory final generation differs")
 	}
 	if native != nil {
-		assertNativeDependentDirectory(t, native, directory, old, injectFailure)
+		assertNativeDependentDirectory(t, native, directory, old, injectFailure || proofFailure)
 	}
 	if lateVault {
 		code, raw := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/secrets/store/app/dependent", token, nil)
@@ -787,6 +1008,22 @@ func servedDependentRotationCase(t *testing.T, native *dependentNativeDirectoryF
 	}
 	if status, _ := secretsReq(t, h.servedHarness, http.MethodGet, readRoot+"/steps", otherToken, nil); status != http.StatusNotFound {
 		t.Fatal("foreign tenant read signed dependent steps")
+	}
+	if reconcile {
+		event, found, err := h.log.EventByID(ctx, queued.Rotation.ID)
+		var source struct {
+			Approval *store.OperationApprovalUse `json:"approval"`
+		}
+		if err != nil || !found || json.Unmarshal(event.Data, &source) != nil || source.Approval == nil || source.Approval.Action != "reconcile" || source.Approval.ResourceKind != "pam_service_reconcile" || source.Approval.Requester != "owned-rotation-operator" {
+			t.Fatal("completed reconciliation lacks exact audited authority", err)
+		}
+		if event.SchemaVersion != 2 {
+			t.Fatal("reconciliation widened the historical ordinary source schema")
+		}
+		approval, err := h.store.GetOperationApproval(ctx, h.tenant, source.Approval.RequestID)
+		if err != nil || approval.Status != store.ApprovalStatusConsumed || approval.ConsumedEventID != event.ID {
+			t.Fatal("reconciliation approval not consumed by its exact root", err)
+		}
 	}
 	if e := projector.ProjectCatchUp(ctx, h.log); e != nil {
 		t.Fatal(e)

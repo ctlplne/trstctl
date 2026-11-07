@@ -37,6 +37,21 @@ func (a *API) dependentRotationParent(ctx context.Context, cmd store.SecretStati
 	if e != nil || retained != digest {
 		return parent, errors.New("api: retained native intent differs from its source")
 	}
+	if err := projections.ValidateServiceDependentRotationSource(event, source); err != nil {
+		return parent, err
+	}
+	if source.Approval != nil {
+		approval, err := a.store.GetOperationApproval(ctx, cmd.TenantID, source.Approval.RequestID)
+		if err != nil {
+			return parent, err
+		}
+		if approval.Status != store.ApprovalStatusConsumed || approval.ConsumedEventID != event.ID {
+			return parent, errors.New("api: reconciliation lacks exact consumed approval authority")
+		}
+		if err := validateConsumedReconcileReadAuthority(event.ID, source.Intent.Plan.Account.Name, *source.Approval, approval); err != nil {
+			return parent, err
+		}
+	}
 	applying, hasApplying, e := a.log.EventByID(ctx, servicedependents.DirectoryApplyStartedSourceID(parent.ID))
 	if e != nil {
 		return parent, e
@@ -222,6 +237,9 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 		return e
 	}
 	if !time.Now().Before(parent.Intent.Plan.ExpiresAt) {
+		if parent.Intent.Mode == servicedependents.Reconcile {
+			return a.failUnstartedReconciliation(ctx, cmd, "review deadline expired")
+		}
 		if e := a.selectDependentInverse(ctx, parent, "deadline_expired"); e != nil {
 			return e
 		}
@@ -232,6 +250,9 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 		e = parent.Intent.Validate(inputs)
 	}
 	if e != nil {
+		if parent.Intent.Mode == servicedependents.Reconcile {
+			return a.failUnstartedReconciliation(ctx, cmd, "reviewed inventory changed")
+		}
 		if e := a.selectDependentInverse(ctx, parent, "source_changed"); e != nil {
 			return e
 		}
@@ -261,7 +282,10 @@ func (a *API) beforeDependentVaultCutover(ctx context.Context, cmd store.SecretS
 		}
 		return a.rollbackStaticRotation(ctx, cmd, provider)
 	}
-	return e
+	if e != nil {
+		return e
+	}
+	return a.proveDependentDirectorySuccessor(ctx, cmd, provider)
 }
 func (a *API) dependentDirectoryRestored(ctx context.Context, cmd store.SecretStaticRotationCommand) error {
 	parent, e := a.dependentRotationParent(ctx, cmd)
@@ -355,4 +379,8 @@ func (a *API) OpenDependentRotationCredential(ctx context.Context, tenantID stri
 func dependentPreparedIdentityMatches(nativeSID, guid, dn, user string, account servicedependents.AccountBinding) bool {
 	sid, e := dynsecret.CanonicalADSIDHex(nativeSID)
 	return e == nil && sid == account.SID && guid == account.GUID && dynsecret.SameADNativeDN(dn, account.DN) && user == account.Name
+}
+
+func (a *API) failUnstartedReconciliation(ctx context.Context, cmd store.SecretStaticRotationCommand, detail string) error {
+	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: detail + "; no directory reset or predecessor authentication was performed"})
 }

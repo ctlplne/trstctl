@@ -18,12 +18,14 @@ export function PAMServiceDependentsDialog({
   onClose,
   returnFocusRef,
   onRotationID,
+  onReviewID,
 }: {
   account: PAMDiscoveredAccount;
   canManage: boolean;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onRotationID?: (id: string) => void;
+  onReviewID?: (review: string, approval: string) => void;
 }) {
   const { t } = useTranslation();
   const title = useId(),
@@ -255,6 +257,7 @@ export function PAMServiceDependentsDialog({
           accountID={account.id}
           canManage={canManage}
           rotationID={rotationID}
+          onReviewID={onReviewID}
           onRotationID={(id) => {
             setRotationID(id);
             onRotationID?.(id);

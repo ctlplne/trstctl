@@ -9211,6 +9211,10 @@ Designated AD reconciliation has a native adapter proof against Samba: a separat
 SID/GUID-pinned principal holds only the reset-password right on one owned target.
 Stock LDAP accepts the repaired and recovered generations and refuses the retired
 ones; a foreign target without the grant is refused. Unprepared writes and
-ordinary-writer fallback are blocked. This is not yet the public approved
-reconciliation/audit workflow. Windows dependent execution, the combined journey,
-final-image replay, and AD forest behavior remain separate proof obligations.
+ordinary-writer fallback are blocked. The public reconciliation coordinator has
+separate Samba proof for independent approval, audited forward reset, dependent
+failure recovery, vault publication and stock LDAP readback. Its signed host
+reports are fixtures. Portable served proof covers exact first-command recovery,
+privacy, expiry refusal and invalid recovery material. Native Windows dependent
+execution, the combined journey, final-image replay and AD forest behavior remain
+separate proof obligations.

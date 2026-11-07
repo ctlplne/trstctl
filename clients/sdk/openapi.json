@@ -7469,9 +7469,19 @@
           "action": {
             "enum": [
               "issue",
+              "create",
               "rotate",
               "revoke",
-              "sign"
+              "sign",
+              "recover",
+              "delete",
+              "managedkey:rotate",
+              "managedkey:revoke",
+              "managedkey:zeroize",
+              "revoke_key",
+              "tighten_policy",
+              "replace_key",
+              "reconcile"
             ],
             "type": "string"
           },
@@ -7538,7 +7548,8 @@
               "managedkey:zeroize",
               "revoke_key",
               "tighten_policy",
-              "replace_key"
+              "replace_key",
+              "reconcile"
             ],
             "type": "string"
           },
@@ -41769,6 +41780,25 @@
         ],
         "type": "object"
       },
+      "PAMReconcilePrincipal": {
+        "properties": {
+          "dn": {
+            "type": "string"
+          },
+          "guid": {
+            "type": "string"
+          },
+          "sid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dn",
+          "sid",
+          "guid"
+        ],
+        "type": "object"
+      },
       "PAMRecording": {
         "properties": {
           "bytes": {
@@ -42130,6 +42160,12 @@
             "format": "int64",
             "type": "integer"
           },
+          "mode": {
+            "enum": [
+              "reconcile"
+            ],
+            "type": "string"
+          },
           "plan": {
             "$ref": "#/components/schemas/PAMDependentRotationPlan"
           },
@@ -42141,6 +42177,9 @@
           },
           "provider_binding": {
             "type": "string"
+          },
+          "reconcile": {
+            "$ref": "#/components/schemas/PAMReconcilePrincipal"
           }
         },
         "required": [
@@ -42168,6 +42207,12 @@
       },
       "PAMServiceDependentRotationPreviewRequest": {
         "properties": {
+          "mode": {
+            "enum": [
+              "reconcile"
+            ],
+            "type": "string"
+          },
           "order": {
             "items": {
               "$ref": "#/components/schemas/PAMDependentRef"
@@ -42195,6 +42240,13 @@
         "properties": {
           "acknowledge_single_phase": {
             "type": "boolean"
+          },
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
           },
           "intent": {
             "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
@@ -42286,6 +42338,13 @@
       },
       "PAMServiceDependentRotationView": {
         "properties": {
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "command": {
             "$ref": "#/components/schemas/SecretStaticRotation"
           },
@@ -42456,6 +42515,123 @@
           "task_count",
           "pool_count",
           "current"
+        ],
+        "type": "object"
+      },
+      "PAMServiceReconciliationApproval": {
+        "properties": {
+          "approval_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "required_approvals": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "superseded",
+              "consumed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_request_id",
+          "approval_intent_digest",
+          "status",
+          "required_approvals",
+          "approval_count",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "PAMServiceReconciliationApprovalRequest": {
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "intent_digest",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMServiceReconciliationPendingReview": {
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/PAMServiceReconciliationApproval"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "queue_pending": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rotation_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "intent_digest",
+          "created_at",
+          "approval",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMServiceReconciliationReview": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intent",
+          "intent_digest",
+          "created_at"
         ],
         "type": "object"
       },
@@ -44073,7 +44249,8 @@
               "managedkey:zeroize",
               "revoke_key",
               "tighten_policy",
-              "replace_key"
+              "replace_key",
+              "reconcile"
             ],
             "type": "string"
           },
@@ -44123,7 +44300,8 @@
               "managed_key",
               "code_signing",
               "ephemeral",
-              "cloud_machine"
+              "cloud_machine",
+              "pam_service_reconcile"
             ],
             "type": "string"
           },
@@ -60576,6 +60754,83 @@
         "x-trstctl-permission": "access:targets.write"
       }
     },
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/approval": {
+      "post": {
+        "operationId": "requestPAMServiceReconciliationApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMServiceReconciliationApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceReconciliationApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request independent review of exact designated AD reconciliation authority",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
     "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/preview": {
       "post": {
         "operationId": "previewPAMServiceDependentRotation",
@@ -60650,6 +60905,82 @@
           }
         ],
         "summary": "Review complete native dependent inventory, restart order and useful-work bindings before AD rotation",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/reviews/{id}": {
+      "get": {
+        "operationId": "getPAMServiceReconciliationPendingReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceReconciliationPendingReview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resume your exact reviewed reconciliation and read its current approval without approving it",
         "x-trstctl-permission": "access:targets.write"
       }
     },
@@ -61225,6 +61556,64 @@
         ],
         "summary": "Apply an approved import with the approval's exact request ID and intent digest; an account changed since the review is refused",
         "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/reconciliation-reviews/{id}": {
+      "get": {
+        "operationId": "getPAMServiceReconciliationReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceReconciliationReview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Open the frozen native reconciliation effect before independent approval",
+        "x-trstctl-permission": "access:approve"
       }
     },
     "/api/v1/access/discovery/runs": {

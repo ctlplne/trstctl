@@ -85,3 +85,14 @@ func newADPreparedPassword() (*secret.Buffer, error) {
 	copy(held.Bytes()[4:], random)
 	return held, nil
 }
+
+// ValidateADRecoveryCredential checks the exact account and native recovery
+// password format without opening a connection or guessing a password.
+func ValidateADRecoveryCredential(raw []byte, dn string) error {
+	held, err := decodeADPredecessorPassword(raw, dn)
+	if err != nil {
+		return err
+	}
+	held.Destroy()
+	return nil
+}

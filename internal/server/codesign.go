@@ -891,6 +891,10 @@ func reconcileApprovedTargetEventFences(ctx context.Context, st *store.Store, lo
 				if _, err := orch.ProjectApprovedCertificateFence(ctx, tenant.TenantID, fence); err != nil {
 					return healed, fmt.Errorf("server: reconcile approved certificate %s: %w", fence.EventID, err)
 				}
+			case store.ApprovedTargetServiceReconciliation:
+				if err := api.ProjectServiceReconciliationFence(ctx, st, log, fence); err != nil {
+					return healed, fmt.Errorf("server: reconcile approved directory command %s: %w", fence.EventID, err)
+				}
 			case store.ApprovedTargetCodeSigningCommand:
 				if err := codeSigningRecovery.projectCodeSigningFence(ctx, tenant.TenantID, fence); err != nil {
 					return healed, fmt.Errorf("server: reconcile approved code-signing command %s: %w", fence.EventID, err)

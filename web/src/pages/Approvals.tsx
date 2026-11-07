@@ -33,6 +33,7 @@ import {
   requesterMatchesPrincipal,
   type ApprovalQueueRow,
 } from "@/lib/approvalQueue";
+import { PAMReconciliationIntent } from "./PAMReconciliationIntent";
 import { CloudChangeIntent } from "./discovery/CloudChangeIntent";
 import { getCloudMachineChange } from "@/lib/cloudMachineApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
@@ -70,6 +71,23 @@ export function Approvals() {
     selectedRequest?.resource_kind === "cloud_machine" &&
     (!cloudReview.data || cloudReview.error || cloudReview.data.intent_digest !== selectedRequest.intent_digest);
 
+  const reconcileReview = useApiQuery(
+    ["pam-reconcile-approval", selectedRequest?.resource_id, selectedRequest?.intent_digest],
+    () => api.pamServiceReconciliationReview(selectedRequest?.resource_id ?? ""),
+    { enabled: reviewDialogOpen && selectedRequest?.resource_kind === "pam_service_reconcile", retry: false },
+  );
+  const reconcileUnavailable =
+    selectedRequest?.resource_kind === "pam_service_reconcile" &&
+    (!reconcileReview.data ||
+      !!reconcileReview.error ||
+      reconcileReview.data.intent.mode !== "reconcile" ||
+      !reconcileReview.data.intent.reconcile ||
+      reconcileReview.data.intent_digest !== selectedRequest.to_state ||
+      reconcileReview.data.intent.plan.id !== selectedRequest.resource_id ||
+      String(reconcileReview.data.intent.expected_version) !== String(selectedRequest.target_version) ||
+      selectedRequest.from_state !== "version:" + reconcileReview.data.intent.expected_version ||
+      selectedRequest.evidence_refs.length !== 1 ||
+      selectedRequest.evidence_refs[0] !== "service-dependent-intent:" + reconcileReview.data.intent_digest);
   const [rejectionOpen, setRejectionOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedIssuance, setSelectedIssuance] = useState<IssuanceRequest | null>(null);
@@ -629,6 +647,17 @@ export function Approvals() {
             </div>
 
             <GenericRequestSummary row={selectedRequest} detailed />
+            {selectedRequest.resource_kind === "pam_service_reconcile" ? (
+              reconcileReview.data && !reconcileUnavailable ? (
+                <PAMReconciliationIntent intent={reconcileReview.data.intent} digest={reconcileReview.data.intent_digest} />
+              ) : (
+                <ErrorState title={t("admin.access.rotation.manifestUnavailable")}>
+                  <Button type="button" variant="outline" onClick={reconcileReview.refetch}>
+                    {t("admin.access.dependents.retry")}
+                  </Button>
+                </ErrorState>
+              )
+            ) : null}
             {selectedRequest.resource_kind === "cloud_machine" &&
               (cloudReview.data && !cloudReviewUnavailable ? (
                 <CloudChangeIntent plan={cloudReview.data} />
@@ -710,7 +739,11 @@ export function Approvals() {
                 </Button>
                 <Button
                   type="button"
-                  disabled={Boolean(cloudReviewUnavailable) || busyKey === rowKey(selectedRequest) || requesterMatchesPrincipal(selectedRequest, user)}
+                  disabled={
+                    Boolean(cloudReviewUnavailable || reconcileUnavailable) ||
+                    busyKey === rowKey(selectedRequest) ||
+                    requesterMatchesPrincipal(selectedRequest, user)
+                  }
                   aria-describedby={requesterMatchesPrincipal(selectedRequest, user) ? "self-approval-help" : undefined}
                   onClick={() => void approve(selectedRequest)}
                 >
@@ -956,6 +989,8 @@ function actionSummary(row: ApprovalQueueRow): string {
 
 function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "reconcile":
+      return "admin.access.rotation.approveSummary";
     case "replace_key":
       return "discovery.machine.approveReplace";
     case "revoke_key":
@@ -985,6 +1020,8 @@ function actionSummaryKey(action: ApprovalQueueRow["action"]): MessageKey {
 
 function consequenceKey(action: ApprovalQueueRow["action"]): MessageKey {
   switch (action) {
+    case "reconcile":
+      return "admin.access.rotation.reconcileHelp";
     case "replace_key":
       return "discovery.machine.replacementHelp";
     case "revoke_key":

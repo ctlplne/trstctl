@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/servicedependents"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -270,7 +271,7 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 			}
 			continue
 		}
-		provider, verifier, err := a.staticRotationProvider(tenantID, cmd.Provider, cmd.Key)
+		provider, verifier, err := a.staticRotationCommandProvider(ctx, cmd)
 		if err != nil {
 			return err
 		}
@@ -356,13 +357,16 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 	if err != nil {
 		return err
 	}
+	if err := a.validateDependentCommandSource(ctx, cmd); err != nil {
+		return err
+	}
 	if cmd.Terminal() {
 		return nil
 	}
 	if isDynamicLeaseRotation(cmd.Provider) {
 		return a.failDynamicLeaseRotation(ctx, cmd)
 	}
-	provider, _, providerErr := a.staticRotationProvider(tenantID, cmd.Provider, cmd.Key)
+	provider, _, providerErr := a.staticRotationCommandProvider(ctx, cmd)
 	switch cmd.Phase {
 	case store.SecretStaticRotationQueued:
 		return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationFailed, Error: staticRotationRetryExhaustedDetail})
@@ -493,6 +497,16 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 // on, so it decides the terminal state; a failed successor revocation is
 // recorded, not fatal.
 func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
+	if cmd.DependentChangeID != "" && cmd.Phase == store.SecretStaticRotationPrepared {
+		parent, err := a.dependentRotationParent(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		if parent.Intent.Mode == servicedependents.Reconcile && !parent.DirectoryApplyStarted {
+			return a.failUnstartedReconciliation(ctx, cmd, "reconciliation refused before native apply")
+		}
+	}
+
 	if cmd.DependentChangeID != "" {
 		parent, err := a.dependentRotationParent(ctx, cmd)
 		if err != nil {
@@ -593,7 +607,23 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 	if err := a.holdStaticRotationRetirement(ctx, cmd); err != nil {
 		return err
 	}
-	if cmd.OldRef != staticRotationNoPredecessor {
+	coordinatedInPlace := cmd.DependentChangeID != ""
+	if coordinatedInPlace {
+		parent, err := a.dependentRotationParent(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		if parent.Direction != "forward" || !parent.Intent.Plan.Account.MatchesNative(cmd.Provider, cmd.OldRef) || !parent.Intent.Plan.Account.MatchesNative(cmd.Provider, cmd.NewRef) || staticRotationPhase(provider, cmd.Key) != dynsecret.RotationSinglePhase {
+			return errors.New("api: coordinated retirement changed its exact in-place native account")
+		}
+		// The prepared two-reset protocol already retired the predecessor. Prove
+		// its final native object/generation again; revoking this same account
+		// would instead revoke the successor that every dependent now uses.
+		if err := a.proveDependentDirectorySuccessor(ctx, cmd, provider); err != nil {
+			return err
+		}
+	}
+	if !coordinatedInPlace && cmd.OldRef != staticRotationNoPredecessor {
 		if err := provider.Revoke(ctx, cmd.OldRef); err != nil {
 			return fmt.Errorf("api: static rotation retire: %w", err)
 		}

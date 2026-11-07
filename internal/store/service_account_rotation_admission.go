@@ -62,7 +62,15 @@ func (s *Store) NativeStaticRotationInFlight(ctx context.Context, tenantID strin
 				return nil
 			}
 		}
-		return rows.Err()
+		if e := rows.Err(); e != nil {
+			return e
+		}
+		rows.Close()
+		return tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM approved_target_event_fences
+ WHERE tenant_id=$1 AND target_kind=$2
+ AND convert_from(event_payload,'UTF8')::jsonb->'intent'->'plan'->'account'->>'provider_id'=$3
+ AND convert_from(event_payload,'UTF8')::jsonb->'intent'->'plan'->'account'->>'guid'=$4
+ AND convert_from(event_payload,'UTF8')::jsonb->'intent'->'plan'->'account'->>'sid'=$5)`, tenantID, ApprovedTargetServiceReconciliation, account.ProviderID, account.GUID, account.SID).Scan(&found)
 	})
 	return found, err
 }

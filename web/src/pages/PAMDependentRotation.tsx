@@ -1,8 +1,9 @@
+import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api, type PAMServiceDependentRotationPreview } from "@/lib/api";
+import { api, type PAMServiceDependentRotationPreview, type PAMServiceReconciliationPendingReview } from "@/lib/api";
 import type { PAMDependentRef, PAMServiceDependentRotationStep } from "@/lib/api-types.gen";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -14,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { PAMReconciliationIntent } from "./PAMReconciliationIntent";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 // Read every selected host page. Only the served preview can authorize a reset;
@@ -61,20 +64,40 @@ export function PAMDependentRotation({
   canManage,
   rotationID,
   onRotationID,
+  reviewID,
+  approvalID,
+  onReviewID,
 }: {
   accountID: string;
   canManage: boolean;
   rotationID?: string;
   onRotationID: (id: string) => void;
+  reviewID?: string;
+  approvalID?: string;
+  onReviewID?: (review: string, approval: string) => void;
 }) {
   const { t } = useTranslation();
   const client = useQueryClient();
   const [activeID, setActiveID] = useState(rotationID ?? "");
-  const id = rotationID || activeID;
+  const activeRotation = rotationID || activeID;
+  const [localReview, setLocalReview] = useState({ reviewID: "", approvalID: "" });
+  const savedReview = reviewID || localReview.reviewID;
+  const savedApproval = approvalID || localReview.approvalID;
+  const pendingKey = ["pam-reconcile-pending", accountID, savedReview, savedApproval];
+  const pending = useApiQuery(pendingKey, () => api.pamServiceReconciliationPendingReview(accountID, savedReview, savedApproval), {
+    enabled: !!reviewID && !!approvalID && !activeRotation,
+    retry: false,
+  });
+  const id = activeRotation || pending.data?.rotation_id || "";
   const [stage, setStage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<PAMServiceDependentRotationPreview | null>(null);
+  const [localPreview, setPreview] = useState<PAMServiceDependentRotationPreview | null>(null);
+  const preview = pending.data ? { intent: pending.data.intent, intent_digest: pending.data.intent_digest } : localPreview;
+  const reviewing = !!preview;
+  const reconcile = preview?.intent.mode === "reconcile";
+  const approval = pending.data?.approval;
+  const mayQueue = !reconcile || (!pending.error && !pending.fetching && (approval?.status === "approved" || pending.data?.queue_pending === true));
   const [after, setAfter] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const requestKeys = useRef(new Map<string, string>());
@@ -89,18 +112,28 @@ export function PAMDependentRotation({
     retry: false,
     live: { intervalMs: 3000 },
   });
-  const schema = z.object({
-    secretName: z.string().trim().min(1, t("admin.access.rotation.required")),
-    dependents: z.array(
-      z.object({
-        ref: z.object({ agent_id: z.string(), family: z.enum(["services", "tasks", "iis"]), name: z.string() }),
-        probe: z.string().trim().min(1, t("admin.access.rotation.required")),
-      }),
-    ),
-    acknowledge: z.boolean(),
+  const schema = z
+    .object({
+      secretName: z.string().trim().min(1, t("admin.access.rotation.required")),
+      dependents: z.array(
+        z.object({
+          ref: z.object({ agent_id: z.string(), family: z.enum(["services", "tasks", "iis"]), name: z.string() }),
+          probe: z.string().trim().min(1, t("admin.access.rotation.required")),
+        }),
+      ),
+      acknowledge: z.boolean(),
+      mode: z.enum(["rotate", "reconcile"]),
+      reason: z.string().trim().max(4096),
+    })
+    .superRefine((v, c) => {
+      if (v.mode === "reconcile" && !v.reason) c.addIssue({ code: "custom", path: ["reason"], message: t("admin.access.rotation.required") });
+    });
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: { secretName: "", dependents: [], acknowledge: false, mode: "rotate", reason: "" },
   });
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { secretName: "", dependents: [], acknowledge: false } });
   const fields = useFieldArray({ control: form.control, name: "dependents" });
+  const mode = useWatch({ control: form.control, name: "mode" });
   const acknowledged = useWatch({ control: form.control, name: "acknowledge" });
   async function act(work: () => Promise<void>) {
     setBusy(true);
@@ -119,7 +152,7 @@ export function PAMDependentRotation({
     return requestKeys.current.get(value)!;
   }
   async function loadDependents() {
-    if (!(await form.trigger("secretName"))) return;
+    if (!(await form.trigger(["secretName", "mode", "reason"]))) return;
     await act(async () => {
       const refs = await client.fetchQuery({
         queryKey: ["pam-dependent-review-inputs", accountID],
@@ -134,6 +167,7 @@ export function PAMDependentRotation({
     await form.handleSubmit(async (values) =>
       act(async () => {
         const input = {
+          ...(values.mode === "reconcile" ? { mode: "reconcile" as const } : {}),
           secret_name: values.secretName,
           order: values.dependents.map((d) => d.ref),
           probes: values.dependents.map((d) => ({ ref: d.ref, probe_id: d.probe })),
@@ -145,14 +179,31 @@ export function PAMDependentRotation({
     )();
   }
   async function queue() {
-    if (!preview || !acknowledged) return;
+    if (!preview || !acknowledged || !mayQueue) return;
     await act(async () => {
-      const input = { ...preview, acknowledge_single_phase: true };
+      const input = {
+        ...preview,
+        acknowledge_single_phase: true,
+        ...(reconcile && approval ? { approval_request_id: approval.approval_request_id, approval_intent_digest: approval.approval_intent_digest } : {}),
+      };
       const value = await api.queuePAMServiceDependentRotation(accountID, input, requestKey(input));
       client.setQueryData(["pam-dependent-rotation", value.rotation.id], value);
       setActiveID(value.rotation.id);
       onRotationID(value.rotation.id);
       await client.invalidateQueries({ queryKey: ["pam-dependent-rotation", value.rotation.id] });
+    });
+  }
+  async function requestApproval() {
+    if (!preview || !reconcile || approval) return;
+    await act(async () => {
+      const input = { ...preview, reason: form.getValues("reason").trim() };
+      const grant = await api.requestPAMServiceReconciliationApproval(accountID, input, requestKey(input));
+      const key = ["pam-reconcile-pending", accountID, preview.intent.plan.id, grant.approval_request_id];
+      const value: PAMServiceReconciliationPendingReview = { ...preview, created_at: preview.intent.plan.created_at, approval: grant, reason: input.reason };
+      client.setQueryData(key, value);
+      setLocalReview({ reviewID: preview.intent.plan.id, approvalID: grant.approval_request_id });
+      onReviewID?.(preview.intent.plan.id, grant.approval_request_id);
+      await client.invalidateQueries({ queryKey: ["approval-requests"] });
     });
   }
   const wizard = [
@@ -166,23 +217,31 @@ export function PAMDependentRotation({
     <section className="mt-4 border-t border-border pt-4" aria-label={t("admin.access.rotation.title")}>
       <h3 className="text-title font-semibold">{t("admin.access.rotation.title")}</h3>
       {error ? <ErrorState title={error} /> : null}
-      {!id && canManage ? (
+      {pending.error ? (
+        <ErrorState title={pending.error}>
+          <Button type="button" onClick={pending.refetch}>
+            {t("admin.access.dependents.retry")}
+          </Button>
+        </ErrorState>
+      ) : null}
+      {!!reviewID && pending.loading ? <LoadingState>{t("admin.access.dependents.loading")}</LoadingState> : null}
+      {!id && canManage && (!reviewID || !!pending.data) ? (
         <StepShell
           steps={wizard}
-          currentIndex={stage}
+          currentIndex={reviewing ? 2 : stage}
           onPrevious={
-            stage
+            stage && !savedReview
               ? () => {
                   setPreview(null);
                   setStage(stage - 1);
                 }
               : undefined
           }
-          onNext={stage === 0 ? () => void loadDependents() : stage === 1 ? () => void review() : undefined}
+          onNext={reviewing ? undefined : stage === 0 ? () => void loadDependents() : stage === 1 ? () => void review() : undefined}
           nextLabel={stage === 0 ? t("admin.access.rotation.reviewDependents") : t("admin.access.rotation.preview")}
           nextDisabled={busy || names.loading || !!names.error}
         >
-          {stage === 0 ? (
+          {!reviewing && stage === 0 ? (
             <>
               {names.error ? (
                 <ErrorState title={names.error}>
@@ -190,6 +249,19 @@ export function PAMDependentRotation({
                     {t("admin.access.dependents.retry")}
                   </Button>
                 </ErrorState>
+              ) : null}
+              <Field label={t("admin.access.rotation.operation")}>
+                {(control) => (
+                  <Select {...control} {...form.register("mode")} disabled={busy}>
+                    <option value="rotate">{t("admin.access.rotation.normal")}</option>
+                    <option value="reconcile">{t("admin.access.rotation.reconcile")}</option>
+                  </Select>
+                )}
+              </Field>
+              {mode === "reconcile" ? (
+                <Field label={t("admin.access.rotation.reason")} required error={form.formState.errors.reason?.message}>
+                  {(control) => <Textarea {...control} {...form.register("reason")} disabled={busy} />}
+                </Field>
               ) : null}
               <Field label={t("admin.access.rotation.password")} error={form.formState.errors.secretName?.message} required>
                 {(control) => (
@@ -204,7 +276,7 @@ export function PAMDependentRotation({
                 )}
               </Field>
             </>
-          ) : stage === 1 ? (
+          ) : !reviewing && stage === 1 ? (
             <ol className="grid gap-3">
               {fields.fields.map((dependent, index) => (
                 <li key={dependent.id} className="border-b border-border pb-3">
@@ -252,11 +324,39 @@ export function PAMDependentRotation({
                 <summary>{t("admin.access.rotation.exactReview")}</summary>
                 <pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview, null, 2)}</pre>
               </details>
+              {reconcile ? (
+                <>
+                  <PAMReconciliationIntent intent={preview.intent} digest={preview.intent_digest} />
+                  {approval ? (
+                    <>
+                      <p>{pending.data?.reason}</p>
+                      <p role="status">
+                        {t("admin.access.rotation.approvalState", {
+                          status: approval.status,
+                          count: approval.approval_count,
+                          required: approval.required_approvals,
+                        })}
+                      </p>
+                      <Link className="text-brand-accent underline" to={"/approvals?request=" + encodeURIComponent(approval.approval_request_id)}>
+                        {t("admin.access.rotation.openApproval")}
+                      </Link>
+                      <Button type="button" variant="outline" disabled={pending.fetching} onClick={pending.refetch}>
+                        {t("admin.access.rotation.refreshApproval")}
+                      </Button>
+                      {pending.data?.queue_pending ? <p>{t("admin.access.rotation.queuePending")}</p> : null}
+                    </>
+                  ) : (
+                    <Button type="button" disabled={busy} onClick={() => void requestApproval()}>
+                      {t("admin.access.rotation.requestApproval")}
+                    </Button>
+                  )}
+                </>
+              ) : null}
               <label className="flex items-start gap-2">
                 <input type="checkbox" {...form.register("acknowledge")} disabled={busy} />
                 <span>{t("admin.access.rotation.acknowledge")}</span>
               </label>
-              <Button type="button" disabled={busy || !acknowledged} loading={busy} onClick={() => void queue()}>
+              <Button type="button" disabled={busy || !acknowledged || !mayQueue} loading={busy} onClick={() => void queue()}>
                 {t("admin.access.rotation.execute")}
               </Button>
             </div>

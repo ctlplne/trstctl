@@ -31,10 +31,12 @@ type ProbeBinding struct {
 // inventory plan. Probe IDs select operator-owned host configuration, never URLs
 // or commands supplied by a remote requester.
 type RotationIntent struct {
-	Plan            RotationPlan   `json:"plan"`
-	ExpectedVersion int            `json:"expected_version"`
-	ProviderBinding string         `json:"provider_binding"`
-	Probes          []ProbeBinding `json:"probes"`
+	Mode            string              `json:"mode,omitempty"`
+	Reconcile       *ReconcilePrincipal `json:"reconcile,omitempty"`
+	Plan            RotationPlan        `json:"plan"`
+	ExpectedVersion int                 `json:"expected_version"`
+	ProviderBinding string              `json:"provider_binding"`
+	Probes          []ProbeBinding      `json:"probes"`
 }
 
 func validProbeID(id string) bool {
@@ -49,6 +51,9 @@ func validProbeID(id string) bool {
 	return true
 }
 func (intent RotationIntent) Digest() (string, error) {
+	if e := intent.validateMode(); e != nil {
+		return "", e
+	}
 	if e := intent.Plan.Validate(); e != nil {
 		return "", e
 	}

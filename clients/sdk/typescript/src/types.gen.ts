@@ -333,6 +333,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request independent review of exact designated AD reconciliation authority */
+        post: operations["requestPAMServiceReconciliationApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/preview": {
         parameters: {
             query?: never;
@@ -344,6 +361,23 @@ export interface paths {
         put?: never;
         /** Review complete native dependent inventory, restart order and useful-work bindings before AD rotation */
         post: operations["previewPAMServiceDependentRotation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume your exact reviewed reconciliation and read its current approval without approving it */
+        get: operations["getPAMServiceReconciliationPendingReview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -480,6 +514,23 @@ export interface paths {
         put?: never;
         /** Apply an approved import with the approval's exact request ID and intent digest; an account changed since the review is refused */
         post: operations["applyPAMDiscoveryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/reconciliation-reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open the frozen native reconciliation effect before independent approval */
+        get: operations["getPAMServiceReconciliationReview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13289,7 +13340,7 @@ export interface components {
         };
         Approval: {
             /** @enum {string} */
-            action: "issue" | "rotate" | "revoke" | "sign";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -13303,7 +13354,7 @@ export interface components {
         };
         ApprovalDecision: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             approvals: number;
             approver: string;
@@ -22487,6 +22538,11 @@ export interface components {
             rows: string[][];
             truncated?: boolean;
         };
+        PAMReconcilePrincipal: {
+            dn: string;
+            guid: string;
+            sid: string;
+        };
         PAMRecording: {
             bytes: number;
             chain_head: string;
@@ -22593,21 +22649,29 @@ export interface components {
         PAMServiceDependentRotationIntent: {
             /** Format: int64 */
             expected_version: number;
+            /** @enum {string} */
+            mode?: "reconcile";
             plan: components["schemas"]["PAMDependentRotationPlan"];
             probes: components["schemas"]["PAMDependentProbeBinding"][];
             provider_binding: string;
+            reconcile?: components["schemas"]["PAMReconcilePrincipal"];
         };
         PAMServiceDependentRotationPreview: {
             intent: components["schemas"]["PAMServiceDependentRotationIntent"];
             intent_digest: string;
         };
         PAMServiceDependentRotationPreviewRequest: {
+            /** @enum {string} */
+            mode?: "reconcile";
             order: components["schemas"]["PAMDependentRef"][];
             probes: components["schemas"]["PAMDependentProbeBinding"][];
             secret_name: string;
         };
         PAMServiceDependentRotationRequest: {
             acknowledge_single_phase: boolean;
+            approval_intent_digest?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
             intent: components["schemas"]["PAMServiceDependentRotationIntent"];
             intent_digest: string;
         };
@@ -22636,6 +22700,9 @@ export interface components {
             next_cursor?: string;
         };
         PAMServiceDependentRotationView: {
+            approval_intent_digest?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
             command: components["schemas"]["SecretStaticRotation"];
             rotation: components["schemas"]["PAMServiceDependentRotation"];
         };
@@ -22695,6 +22762,41 @@ export interface components {
             status: string;
             /** Format: int64 */
             task_count: number;
+        };
+        PAMServiceReconciliationApproval: {
+            /** Format: int64 */
+            approval_count: number;
+            approval_intent_digest: string;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: int64 */
+            required_approvals: number;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+        };
+        PAMServiceReconciliationApprovalRequest: {
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
+            reason: string;
+        };
+        PAMServiceReconciliationPendingReview: {
+            approval: components["schemas"]["PAMServiceReconciliationApproval"];
+            /** Format: date-time */
+            created_at: string;
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
+            queue_pending?: boolean;
+            reason: string;
+            /** Format: uuid */
+            rotation_id?: string;
+        };
+        PAMServiceReconciliationReview: {
+            /** Format: date-time */
+            created_at: string;
+            intent: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest: string;
         };
         PAMSession: {
             attestation?: components["schemas"]["Attestation"];
@@ -23163,7 +23265,7 @@ export interface components {
         };
         PendingApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
+            action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
             approval_count: number;
             /** Format: date-time */
             created_at: string;
@@ -23179,7 +23281,7 @@ export interface components {
             required_approvals: number;
             resource_id: string;
             /** @enum {string} */
-            resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine";
+            resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine" | "pam_service_reconcile";
             resource_name: string;
             /** @enum {string} */
             status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
@@ -28249,6 +28351,53 @@ export interface operations {
             };
         };
     };
+    requestPAMServiceReconciliationApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceReconciliationApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceReconciliationApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     previewPAMServiceDependentRotation: {
         parameters: {
             query?: never;
@@ -28274,6 +28423,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMServiceDependentRotationPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceReconciliationPendingReview: {
+        parameters: {
+            query: {
+                approval_request_id: string;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceReconciliationPendingReview"];
                 };
             };
             /** @description client error */
@@ -28630,6 +28822,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMImportedAccountList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceReconciliationReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceReconciliationReview"];
                 };
             };
             /** @description client error */

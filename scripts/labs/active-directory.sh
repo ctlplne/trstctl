@@ -109,6 +109,8 @@ docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -t
 grep -q A267_NATIVE_AD_COORDINATOR_OK "$proof/coordinator.log"
 docker exec -w /run -e TRSTCTL_AD_RECONCILE_LAB=1 "$client" /run/server-test -test.v -test.run '^TestNativeADDesignatedReconciliationAuthorityA267$' -test.timeout=90s > "$proof/reconcile.log" 2>&1
 grep -q A267_NATIVE_RECONCILE_AUTHORITY_OK "$proof/reconcile.log"
+docker exec -w /run -e TRSTCTL_AD_RECONCILE_LAB=1 "$client" /run/server-test -test.v -test.run '^TestServedNativeADReconciliationCoordinatorA267$' -test.timeout=90s > "$proof/reconcile-coordinator.log" 2>&1
+grep -q A267_NATIVE_RECONCILE_COORDINATOR_OK "$proof/reconcile-coordinator.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_DESKTOP_LAB=1 /run/server-test -test.v -test.run ^TestServedADDesktopA263$ -test.timeout=120s' > "$proof/desktop.log" 2>&1
 docker cp "$client:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 

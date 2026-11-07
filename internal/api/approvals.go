@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -427,6 +428,8 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.AccessApprove, action == "revoke_key" || action == "tighten_policy" || action == "replace_key"
 	case "pam":
 		return authz.AccessApprove, action == "activate"
+	case projections.ServiceReconcileApprovalKind:
+		return authz.AccessApprove, action == "reconcile"
 	case "pam_command":
 		return authz.AccessApprove, action == "execute"
 	case "pam_checkout":

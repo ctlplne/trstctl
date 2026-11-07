@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2740 annotated sites across 31 rules. Each row is
+2742 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (601 sites)
+### G101 — CWE-798 Use of hardcoded credentials (603 sites)
 
 | Location | Reason |
 |---|---|
@@ -615,7 +615,9 @@ not this file.
 | `internal/server/service_account_ad_discovery_served_test.go:42` | configuration carries only a protected credential-file reference, never a credential value (CWE-798) |
 | `internal/server/service_account_ad_reconcile_native_test.go:41` | protected owned lab credential-file reference, never credential bytes (CWE-798) |
 | `internal/server/service_account_ad_reconcile_native_test.go:68` | protected owned lab credential-file reference, never credential bytes (CWE-798) |
-| `internal/server/service_account_rotation_native_ad_test.go:36` | protected lab credential-file reference only, never a credential value (CWE-798) |
+| `internal/server/service_account_reconciliation_native_test.go:34` | protected owned lab credential-file reference only (CWE-798) |
+| `internal/server/service_account_reconciliation_native_test.go:74` | separate protected owned lab reference only (CWE-798) |
+| `internal/server/service_account_rotation_native_ad_test.go:37` | protected lab credential-file reference only, never a credential value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:103` | the name of a test-only secret, not a credential (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
@@ -641,7 +643,7 @@ not this file.
 | `internal/sshcollection/report_test.go:11` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/api_token_revocation_commands.go:60` | SQL column names for an opaque command fence, not a credential. |
-| `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
+| `internal/store/approved_target_fences.go:230` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/discovery_secret_move.go:53` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/store/discovery_secret_move.go:56` | SQL column list, no credential (CWE-798) */ `m.finding_id::text, m.secret_name, m.secret_version, m.moved_by, m.moved_at, m.residue, |
 | `internal/store/dynamic_secret_lease.go:667` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
@@ -952,10 +954,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7091` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7108` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7121` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7155` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7092` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7109` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7122` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7156` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1693,7 +1695,7 @@ not this file.
 | `internal/server/secret_static_rotation_unix_container_test.go:447` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_sync_signed_targets_served_test.go:135` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/service_account_ad_discovery_served_test.go:24` | fixed stock read-only LDAP client, owned account filter and protected credential reference; no shell or credential argv (CWE-78) |
-| `internal/server/service_account_rotation_native_ad_test.go:123` | fixed read-only stock client and independently selected owned account; credential only in an inherited pipe, no shell or credential argv (CWE-78) |
+| `internal/server/service_account_rotation_native_ad_test.go:124` | fixed read-only stock client and independently selected owned account; credential only in an inherited pipe, no shell or credential argv (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:286` | test builds the repository's own plugin (CWE-78) |
@@ -2174,7 +2176,7 @@ not this file.
 | `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:87` | operator-named local file (CWE-22) |
 | `internal/cli/cli.go:294` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:685` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/cli.go:691` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2176` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
@@ -2766,7 +2768,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
 | `internal/agent/k8s/informer.go:208` | reconnect jitter, not a security decision (CWE-338) |
-| `internal/cli/cli.go:693` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:699` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

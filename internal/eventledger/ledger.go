@@ -173,6 +173,7 @@ const (
 	EventPAMDiscoveryScanQueued          = "pam.discovery.scan_queued"
 	EventPAMDiscoveryRunCompleted        = "pam.discovery.run_completed"
 
+	EventServiceReconciliationReviewProposed   = "pam.service_dependents.reconcile_review_proposed"
 	EventServiceDependentRotationQueued        = "pam.service_dependents.rotation_queued"
 	EventServiceDependentRotationInverse       = "pam.service_dependents.rotation_inverse"
 	EventServiceDependentDirectoryApplyStarted = "pam.service_dependents.directory_apply_started"
@@ -416,6 +417,7 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "scan_privileged_accounts", "runPAMDiscovery", []string{EventPAMDiscoveryScanQueued, EventPAMDiscoveryRunCompleted}},
 	{"F33", "Just-in-time issuance with approval flows", "select_service_account_host", "savePAMServiceDependentHost", []string{EventServiceDependentHostSaved}},
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
+	{"F33", "Just-in-time issuance with approval flows", "review_service_account_reconciliation", "requestPAMServiceReconciliationApproval", []string{EventServiceReconciliationReviewProposed, EventApprovalRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved}},
 	// F33 — Just-in-time privileged access sessions.
 	// Gateway checks continue the exact outbox-backed admitted session job.

@@ -20,10 +20,11 @@ const EventServiceDependentStepQueued = "pam.service_dependents.step_queued"
 const EventServiceDependentStepObserved = "pam.service_dependents.step_observed"
 
 type ServiceDependentRotationQueued struct {
-	Intent servicedependents.RotationIntent `json:"intent"`
-	Child  SecretStaticRotationQueued       `json:"child"`
-	Actor  string                           `json:"actor"`
-	At     time.Time                        `json:"at"`
+	Approval *store.OperationApprovalUse      `json:"approval,omitempty"`
+	Intent   servicedependents.RotationIntent `json:"intent"`
+	Child    SecretStaticRotationQueued       `json:"child"`
+	Actor    string                           `json:"actor"`
+	At       time.Time                        `json:"at"`
 }
 type ServiceDependentRotationInverse struct {
 	RotationID   string    `json:"rotation_id"`
@@ -54,6 +55,16 @@ type ServiceDependentStepObserved struct {
 
 func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
 	switch e.Type {
+	case EventServiceReconciliationReviewProposed:
+		var v ServiceReconciliationReview
+		if err := decode(e, &v); err != nil {
+			return true, err
+		}
+		if e.ID != servicedependents.ReconciliationReviewSourceID(e.TenantID, v.Intent.Plan.ID) {
+			return true, errors.New("dependent reconciliation: frozen review source identity differs")
+		}
+		return true, ValidateServiceReconciliationReview(v)
+
 	case EventServiceDependentRotationQueued:
 		var v ServiceDependentRotationQueued
 		if err := decode(e, &v); err != nil {
@@ -65,6 +76,24 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 		}
 		if e.ID != v.Intent.Plan.ID || v.Child.ID != e.ID || v.Child.DependentChangeID != e.ID || v.Child.RequestBinding != digest || v.At.IsZero() {
 			return true, errors.New("dependent rotation queued source binding differs")
+		}
+		if err := ValidateServiceDependentRotationSource(e, v); err != nil {
+			return true, err
+		}
+		fenceSemantic := ""
+		if v.Approval != nil {
+			fenceSemantic, err = p.resolveServiceReconcileFenceUseTx(ctx, tx, e, &v)
+			if err != nil {
+				return true, err
+			}
+		}
+		if v.Approval != nil {
+			if err := validateApprovalActor(e, v.Approval.Requester); err != nil {
+				return true, err
+			}
+			if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *v.Approval, e.ID, e.Time); err != nil {
+				return true, err
+			}
 		}
 		parent := store.ServiceDependentRotation{TenantID: e.TenantID, ID: e.ID, Intent: v.Intent, IntentDigest: digest, CommandID: v.Child.ID, TenantEpoch: v.Child.TenantEpoch, Direction: servicedependents.Forward, Actor: v.Actor, CreatedAt: v.At}
 		if err = p.store.ApplyServiceDependentRotationQueuedTx(ctx, tx, parent); err != nil {
@@ -78,7 +107,13 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 		childEvent.ID = v.Child.ID
 		childEvent.Type = EventSecretStaticRotationQueued
 		childEvent.Data = raw
-		return true, p.applySecretStaticRotationQueuedTx(ctx, tx, childEvent, v.Child)
+		if err := p.applySecretStaticRotationQueuedTx(ctx, tx, childEvent, v.Child); err != nil {
+			return true, err
+		}
+		if v.Approval != nil {
+			return true, p.store.CompleteApprovedTargetFenceTx(ctx, tx, e.TenantID, store.ApprovedTargetServiceReconciliation, servicedependents.ReconcileCommandKey(e.TenantID, v.Intent.Plan.SecretName), e.ID, e.Type, schemaVersionOf(e), e.Time, []byte(fenceSemantic))
+		}
+		return true, nil
 	case EventServiceDependentRotationInverse:
 		var v ServiceDependentRotationInverse
 		if err := decode(e, &v); err != nil {

@@ -541,6 +541,10 @@ import type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMServiceReconciliationApprovalRequest,
+  PAMServiceReconciliationApproval,
+  PAMServiceReconciliationReview,
+  PAMServiceReconciliationPendingReview,
   PAMServiceDependentRotationPreviewRequest,
   PAMServiceDependentRotationPreview,
   PAMServiceDependentRotationRequest,
@@ -1542,6 +1546,10 @@ export type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMServiceReconciliationApprovalRequest,
+  PAMServiceReconciliationApproval,
+  PAMServiceReconciliationReview,
+  PAMServiceReconciliationPendingReview,
   PAMServiceDependentRotationPreviewRequest,
   PAMServiceDependentRotationPreview,
   PAMServiceDependentRotationRequest,
@@ -2601,6 +2609,13 @@ export interface Api {
     input: PAMServiceDependentRotationRequest,
     idempotencyKey?: string,
   ): Promise<PAMServiceDependentRotationView>;
+  requestPAMServiceReconciliationApproval(
+    accountID: string,
+    input: PAMServiceReconciliationApprovalRequest,
+    idempotencyKey?: string,
+  ): Promise<PAMServiceReconciliationApproval>;
+  pamServiceReconciliationReview(id: string): Promise<PAMServiceReconciliationReview>;
+  pamServiceReconciliationPendingReview(accountID: string, id: string, approvalID: string): Promise<PAMServiceReconciliationPendingReview>;
   pamServiceDependentRotation(id: string): Promise<PAMServiceDependentRotationView>;
   pamServiceDependentRotationSteps(id: string, after?: string): Promise<PAMServiceDependentRotationStepList>;
 
@@ -3573,6 +3588,23 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     ),
   queuePAMServiceDependentRotation: (accountID, input, key) =>
     mutate<PAMServiceDependentRotationView>("POST", "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/rotations", input, key),
+  requestPAMServiceReconciliationApproval: (accountID, input, key) =>
+    mutate<PAMServiceReconciliationApproval>(
+      "POST",
+      "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/rotations/approval",
+      input,
+      key,
+    ),
+  pamServiceReconciliationReview: (id) => req<PAMServiceReconciliationReview>("/api/v1/access/discovery/reconciliation-reviews/" + encodeURIComponent(id)),
+  pamServiceReconciliationPendingReview: (accountID, id, approvalID) =>
+    req<PAMServiceReconciliationPendingReview>(
+      "/api/v1/access/discovery/accounts/" +
+        encodeURIComponent(accountID) +
+        "/dependents/rotations/reviews/" +
+        encodeURIComponent(id) +
+        "?approval_request_id=" +
+        encodeURIComponent(approvalID),
+    ),
   pamServiceDependentRotation: (id) => req<PAMServiceDependentRotationView>("/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id)),
   pamServiceDependentRotationSteps: (id, after) =>
     req<PAMServiceDependentRotationStepList>(

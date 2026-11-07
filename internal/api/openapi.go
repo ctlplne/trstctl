@@ -1201,10 +1201,10 @@ func componentSchemas() map[string]*Schema {
 	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items", "runs", "sessions")
 
 	operationApprovalStatuses := []string{"pending", "approved", "denied", "expired", "superseded", "consumed"}
-	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral", "cloud_machine"}
+	operationApprovalResourceKinds := []string{"identity", "secret", "managed_key", "code_signing", "ephemeral", "cloud_machine", "pam_service_reconcile"}
 	operationApprovalActions := []string{
 		"issue", "create", "rotate", "revoke", "sign", "recover", "delete",
-		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy", "replace_key",
+		"managedkey:rotate", "managedkey:revoke", "managedkey:zeroize", "revoke_key", "tighten_policy", "replace_key", "reconcile",
 	}
 	approvalReq := object(map[string]*Schema{
 		"action":        {Type: "string", Enum: identityApprovalActions},
@@ -1213,7 +1213,7 @@ func componentSchemas() map[string]*Schema {
 	}, "action", "request_id", "intent_digest")
 	approval := object(map[string]*Schema{
 		"id": uuid(), "intent_digest": str(), "resource": str(),
-		"action":   {Type: "string", Enum: identityApprovalActions},
+		"action":   {Type: "string", Enum: operationApprovalActions},
 		"approver": str(), "approvals": {Type: "integer"},
 		"approval_count": {Type: "integer"}, "required_approvals": {Type: "integer"},
 		"status": {Type: "string", Enum: operationApprovalStatuses},

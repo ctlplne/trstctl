@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	ApprovedTargetEphemeralCertificate = "ephemeral_certificate"
-	ApprovedTargetCodeSigningCommand   = "code_signing_command"
-	ApprovedTargetClaimed              = "claimed"
+	ApprovedTargetEphemeralCertificate  = "ephemeral_certificate"
+	ApprovedTargetCodeSigningCommand    = "code_signing_command"
+	ApprovedTargetServiceReconciliation = "service_reconcile_rotation"
+	ApprovedTargetClaimed               = "claimed"
 )
 
 // ApprovedTargetFence is the independently durable first command that claimed
@@ -194,10 +195,10 @@ func validateApprovedTargetFence(f ApprovedTargetFence) error {
 		f.EventTime.IsZero() || len(f.Payload) == 0 || f.SemanticDigest == "" {
 		return errors.New("store: approved target fence is incomplete")
 	}
-	if f.TargetKind != ApprovedTargetEphemeralCertificate && f.TargetKind != ApprovedTargetCodeSigningCommand {
+	if f.TargetKind != ApprovedTargetEphemeralCertificate && f.TargetKind != ApprovedTargetCodeSigningCommand && f.TargetKind != ApprovedTargetServiceReconciliation {
 		return fmt.Errorf("store: unsupported approved target kind %q", f.TargetKind)
 	}
-	if (f.TargetKind == ApprovedTargetEphemeralCertificate ||
+	if (f.TargetKind == ApprovedTargetEphemeralCertificate || f.TargetKind == ApprovedTargetServiceReconciliation ||
 		f.TargetKind == ApprovedTargetCodeSigningCommand && f.SchemaVersion >= 3) &&
 		!f.EventTime.Equal(f.EventTime.UTC().Truncate(time.Microsecond)) {
 		return errors.New("store: approved target fence time is not PostgreSQL-exact")

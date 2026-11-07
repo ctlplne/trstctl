@@ -66,6 +66,18 @@ type PreparedStaticRotationProvider interface {
 	RestorePreparedStaticCredential(ctx context.Context, req GenerateRequest, prepared, old []byte) error
 }
 
+// StaticRecoveryCredentialValidator validates retained recovery material locally.
+// It never authenticates that value against an upstream account that may drift.
+type StaticRecoveryCredentialValidator interface {
+	ValidateStaticRecoveryCredential(GenerateRequest, []byte) error
+}
+
+// PreparedStaticRotationVerifier proves the exact native object and final
+// prepared generation without performing a reset or trying alternate passwords.
+type PreparedStaticRotationVerifier interface {
+	VerifyStaticPreparedCredential(context.Context, GenerateRequest, []byte, []byte) error
+}
+
 // TwoUserRotationProvider is a StaticRotationProvider whose roles may
 // alternate between two fixed accounts instead of minting a principal per
 // rotation (A240): a rotation stages the account its predecessor does not

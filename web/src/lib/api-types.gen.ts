@@ -1429,7 +1429,7 @@ export interface AlertRecipient {
 }
 
 export interface Approval {
-  action: "issue" | "rotate" | "revoke" | "sign";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -1441,7 +1441,7 @@ export interface Approval {
 }
 
 export interface ApprovalDecision {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   approvals: number;
   approver: string;
@@ -8952,6 +8952,12 @@ export interface PAMQueryResult {
   truncated?: boolean;
 }
 
+export interface PAMReconcilePrincipal {
+  dn: string;
+  guid: string;
+  sid: string;
+}
+
 export interface PAMRecording {
   bytes: number;
   chain_head: string;
@@ -9046,9 +9052,11 @@ export interface PAMServiceDependentRotation {
 
 export interface PAMServiceDependentRotationIntent {
   expected_version: number;
+  mode?: "reconcile";
   plan: PAMDependentRotationPlan;
   probes: PAMDependentProbeBinding[];
   provider_binding: string;
+  reconcile?: PAMReconcilePrincipal;
 }
 
 export interface PAMServiceDependentRotationPreview {
@@ -9057,6 +9065,7 @@ export interface PAMServiceDependentRotationPreview {
 }
 
 export interface PAMServiceDependentRotationPreviewRequest {
+  mode?: "reconcile";
   order: PAMDependentRef[];
   probes: PAMDependentProbeBinding[];
   secret_name: string;
@@ -9064,6 +9073,8 @@ export interface PAMServiceDependentRotationPreviewRequest {
 
 export interface PAMServiceDependentRotationRequest {
   acknowledge_single_phase: boolean;
+  approval_intent_digest?: string;
+  approval_request_id?: string;
   intent: PAMServiceDependentRotationIntent;
   intent_digest: string;
 }
@@ -9089,6 +9100,8 @@ export interface PAMServiceDependentRotationStepList {
 }
 
 export interface PAMServiceDependentRotationView {
+  approval_intent_digest?: string;
+  approval_request_id?: string;
   command: SecretStaticRotation;
   rotation: PAMServiceDependentRotation;
 }
@@ -9131,6 +9144,37 @@ export interface PAMServiceDependentScanHead {
   service_count: number;
   status: string;
   task_count: number;
+}
+
+export interface PAMServiceReconciliationApproval {
+  approval_count: number;
+  approval_intent_digest: string;
+  approval_request_id: string;
+  expires_at: string;
+  required_approvals: number;
+  status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
+}
+
+export interface PAMServiceReconciliationApprovalRequest {
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
+  reason: string;
+}
+
+export interface PAMServiceReconciliationPendingReview {
+  approval: PAMServiceReconciliationApproval;
+  created_at: string;
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
+  queue_pending?: boolean;
+  reason: string;
+  rotation_id?: string;
+}
+
+export interface PAMServiceReconciliationReview {
+  created_at: string;
+  intent: PAMServiceDependentRotationIntent;
+  intent_digest: string;
 }
 
 export interface PAMSession {
@@ -9512,7 +9556,7 @@ export interface PQCPilotWaveRequest {
 }
 
 export interface PendingApprovalRequest {
-  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key";
+  action: "issue" | "create" | "rotate" | "revoke" | "sign" | "recover" | "delete" | "managedkey:rotate" | "managedkey:revoke" | "managedkey:zeroize" | "revoke_key" | "tighten_policy" | "replace_key" | "reconcile";
   approval_count: number;
   created_at: string;
   evidence_refs: string[];
@@ -9524,7 +9568,7 @@ export interface PendingApprovalRequest {
   requester: string;
   required_approvals: number;
   resource_id: string;
-  resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine";
+  resource_kind: "identity" | "secret" | "managed_key" | "code_signing" | "ephemeral" | "cloud_machine" | "pam_service_reconcile";
   resource_name: string;
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   target_version: string;

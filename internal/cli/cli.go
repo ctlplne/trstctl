@@ -666,10 +666,16 @@ func splitArgs(args, queryNames []string) (positionals []string, query url.Value
 				}
 				val = args[i]
 			}
-			if !allowed[name] {
+			// Operator-facing flags may spell an existing API query with hyphens.
+			// Keep the wire key exact and still reject every undeclared query.
+			canonicalName := name
+			if !allowed[canonicalName] {
+				canonicalName = strings.ReplaceAll(name, "-", "_")
+			}
+			if !allowed[canonicalName] {
 				return nil, nil, "", false, fmt.Errorf("unknown flag --%s", name)
 			}
-			query.Set(name, val)
+			query.Set(canonicalName, val)
 		default:
 			positionals = append(positionals, a)
 		}

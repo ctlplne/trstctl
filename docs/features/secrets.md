@@ -2641,8 +2641,9 @@ changes and recovery with signed host boundary fixtures; stock LDAP independentl
 accepts the final generation and refuses the retired value. Portable coordinator
 fixtures cover publication, source refusal and vault-conflict paths. The Windows
 SCM/task/IIS receiver fixture uses local SAM accounts; its native hosted execution,
-the complete Samba/Windows combination, designated drift reconciliation and
-final-image replay remain separate proof obligations. These results do not qualify an AD forest or host power loss.
+the complete Samba/Windows combination and final-image replay remain separate
+proof obligations. Approved drift reconciliation has the separate directory and
+signed-host-fixture proof described below. These results do not qualify an AD forest or host power loss.
 
 The local useful-work endpoint receives `GET /configured-path?phase=verify&challenge=UUID`.
 It returns HTTP 200 and one bounded JSON object with `probe_id`, the same
@@ -2674,11 +2675,58 @@ DC progress metadata over verified LDAPS. It refuses missing permissions,
 changed identity pins and unprepared writes; it never falls back to the ordinary
 writer. The credential reference remains in the control plane.
 
-Samba native adapter proof covers a separate writer with that right on one
-owned account, drift repair, retained-generation recovery, stock LDAP acceptance
-and retired-password refusal, and a foreign target without the grant. This
-configuration is preparation for the coordinated reconciliation workflow; an
-approved public reconciliation operation and its audit journey are not yet
-served. Restoring after a dependent failure recovers the retained stored value;
-it cannot reconstruct an unknown externally changed password. Existing lockout
-checks remain in force, and neither unlock nor forest replication is qualified.
+Choose **Reconcile external drift** in the account's dependent rotation wizard
+and give a reason. Review the exact target and designated writer DN, SID and GUID,
+retained vault version, complete host inventory, restart order, useful-work probes
+and deadline. Request independent approval. The Approvals page opens that same
+frozen manifest; it refuses approval while the manifest is missing or differs.
+The requester cannot approve their own operation. Refresh the approval in the
+wizard, acknowledge the single-phase interruption, then queue the frozen intent.
+The saved URL reopens that exact review or its already queued operation.
+
+The CLI follows the same contract:
+
+```sh
+trstctl access discovery rotation preview ACCOUNT -f reconcile-preview.json
+trstctl access discovery rotation approval ACCOUNT -f reconcile-approval.json
+trstctl access discovery rotation review PLAN_ID
+trstctl access discovery rotation pending ACCOUNT PLAN_ID --approval-request-id APPROVAL_ID
+trstctl access discovery rotation queue ACCOUNT -f approved-reconcile.json
+```
+
+The preview input sets `mode: "reconcile"` alongside `secret_name`, `order` and
+`probes`. The approval input contains the returned `intent`, `intent_digest` and
+a reason of at most 4096 characters. The queue input adds the returned
+`approval_request_id`, `approval_intent_digest` and
+`acknowledge_single_phase: true`. All mutations require an `Idempotency-Key`.
+Request, preview and queue require `access:targets.write`, `secrets:write` and
+write access to the stored reference. Independent review and approval require
+`access:approve`. The requester-only pending read needs the write permissions,
+not approval permission. Approval requires one independent reviewer and expires
+no later than the original 15-minute inventory deadline.
+
+Approval and the exact first command are durably claimed before broker append.
+If publication or SQL projection is interrupted, `queue_pending: true` means the
+same claimed command needs recovery; it does not claim that the operation was
+projected. Retrying its exact queue request or restarting the control plane
+recovers the original event and transactionally creates the parent, native child
+and outbox work. A different approval or intent cannot replace that first command.
+This command state is included in backup and privacy erasure. Recovery never
+needs another password or fresh consent for the same already spent capability.
+
+Before native effects, the worker checks locally that the retained vault value
+contains a valid recovery password for the exact account. It does not authenticate
+that possibly stale password. Expiry or changed inventory before any recorded
+native apply ends the command without resetting AD or probing the old value.
+After apply begins, only the sealed prepared generations may resume or recover.
+Before vault publication and retirement, native identity and the exact final
+prepared generation must still verify. A dependent failure restores the retained
+stored generation; it cannot reconstruct the unknown drifted password.
+
+Samba proof covers a separate writer with the target-only reset right, independent
+public approval, drift repair, audit and vault state, dependent failure recovery,
+stock LDAP acceptance and retired-password refusal. The signed host reports in
+that coordinator proof are fixtures. Separate adapter proof also refuses a foreign
+target without the grant. Native Windows dependent execution, the combined domain
+journey, final-image replay and forest replication remain unverified. Existing
+lockout checks remain in force; this workflow does not unlock an account.

@@ -151,6 +151,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMDiscoverySourceSaved:                  "EventPAMDiscoverySourceSaved",
 	projections.EventPAMDiscoverySourceDeleted:                "EventPAMDiscoverySourceDeleted",
 	projections.EventPAMDiscoveryScanQueued:                   "EventPAMDiscoveryScanQueued",
+	projections.EventServiceReconciliationReviewProposed:      "EventServiceReconciliationReviewProposed",
 	projections.EventServiceDependentRotationQueued:           "EventServiceDependentRotationQueued",
 	projections.EventServiceDependentRotationInverse:          "EventServiceDependentRotationInverse",
 	projections.EventServiceDependentDirectoryApplyStarted:    "EventServiceDependentDirectoryApplyStarted",
