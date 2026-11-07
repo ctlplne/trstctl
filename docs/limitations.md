@@ -9376,7 +9376,7 @@ appliance's root shell (the administrator's password only at its prompt; the new
 `dir-cli`'s documented `--new` argument, so it is briefly on that command line inside the
 appliance) and proves each reset with a REST session. Each of these accounts (and a
 network device account) is checked out as an `account` target, whose check-in rotates it
-in place. Proof today:
+in place; the console registers `account` targets. Proof today:
 `TestRedfishRotationA271`, `TestServedRedfishRotationA271`, `TestESXiRotationA271`,
 `TestServedESXiRotationA271`, `TestVCenterSSORotationA271` and
 `TestServedVCenterSSORotationA271` and `TestServedAccountCheckoutA271` against stand-ins built from the DMTF Redfish
@@ -9385,8 +9385,6 @@ dir-cli articles; no controller, host or appliance has run them.
 
 What comes next:
 - A vCenter run that also confirms `dir-cli`'s output on vSphere 8.
-- Registering `account` and `windows_local` targets from the console (today the API and
-  `trstctl access targets register`).
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.
 

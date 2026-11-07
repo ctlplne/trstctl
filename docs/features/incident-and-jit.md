@@ -1430,7 +1430,9 @@ Registration is refused unless that provider rotates the secret's role in place 
 secret is readable. An `account` target has no sessions; check it out
 (`trstctl access checkouts request`, reviewed by others, then `reveal` once). Checking it
 in, or its deadline passing, queues the provider's rotation: the revealed password stops
-working at the target once the new one is proved there.
+working at the target once the new one is proved there. In the console, register one under
+the access targets (type **Account rotated in place (check-out)**: the provider and the
+account secret; it names no gateway).
 
 #### Open a session on a network device
 

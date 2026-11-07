@@ -21,7 +21,7 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole", "windows_local"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole", "windows_local", "account"]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -89,9 +89,13 @@ const emptyTarget: TargetForm = {
   web_ca_pem: "",
   web_server_name: "",
 };
-// Check-out accounts (A268 windows_local) are vaulted accounts a provider
-// rotates in place: checked out, never a session, so they name no gateway.
-const CHECKOUT_PROVIDER_TYPES: Record<string, string[]> = { windows_local: ["windows"] };
+// Check-out accounts (A268 windows_local, A271 account) are vaulted accounts a
+// provider rotates in place: checked out, never a session, so they name no
+// gateway.
+const CHECKOUT_PROVIDER_TYPES: Record<string, string[]> = {
+  windows_local: ["windows"],
+  account: ["esxi", "vcenter-sso", "redfish", "iosxe", "junos", "eos", "fortigate", "bigip"],
+};
 function isCheckoutAccount(targetType: string): boolean {
   return targetType in CHECKOUT_PROVIDER_TYPES;
 }
@@ -312,6 +316,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="netdevice">{t("admin.access.netdevice.target")}</option>
               <option value="webconsole">{t("admin.access.webconsole.target")}</option>
               <option value="windows_local">{t("admin.access.windowsLocal.target")}</option>
+              <option value="account">{t("admin.access.inPlaceAccount.target")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
               <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
@@ -430,6 +435,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           {targetType === "netdevice" ? <p>{t("admin.access.netdevice.proof")}</p> : null}
           {targetType === "webconsole" ? <p>{t("admin.access.webconsole.proof")}</p> : null}
           {targetType === "windows_local" ? <p>{t("admin.access.windowsLocal.proof")}</p> : null}
+          {targetType === "account" ? <p>{t("admin.access.inPlaceAccount.proof")}</p> : null}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}

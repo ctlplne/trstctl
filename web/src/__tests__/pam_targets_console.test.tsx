@@ -383,3 +383,27 @@ it("registers a Windows local administrator account for check-out with its nativ
     ),
   );
 });
+
+it("registers an account its provider rotates in place for check-out, with no gateway (A271)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "esxi-root");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "account");
+  expect(within(form).queryByRole("textbox", { name: "Gateway address (host:port)" })).not.toBeInTheDocument();
+  expect(within(form).getByText(/a Redfish controller or a network device/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "esxi-host");
+  const secret = within(form).getByRole("combobox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "infra/esxi-root");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      { id: "esxi-root", target_type: "account", provider_id: "esxi-host", allowed_roles: ["infra/esxi-root"], account_secret: "infra/esxi-root" },
+      expect.any(String),
+    ),
+  );
+});

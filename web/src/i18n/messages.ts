@@ -675,6 +675,15 @@ export const messages = {
       "A local administrator account a native Windows provider rotates on its enrolled host. It is checked out — reviewed, revealed once — never opened as a session, and checking it in rotates it on the host. It names no gateway. Native results on windows-latest are read at the build's final checks.",
     description: "Windows local administrator target registration (A268).",
   },
+  "admin.access.inPlaceAccount.target": {
+    defaultMessage: "Account rotated in place (check-out)",
+    description: "Account target registration (A271): hypervisors, server controllers and network devices.",
+  },
+  "admin.access.inPlaceAccount.proof": {
+    defaultMessage:
+      "An account its provider rotates in place — an ESXi host, vCenter single sign-on, a Redfish controller or a network device. It is checked out — reviewed, revealed once — never opened as a session, and checking it in rotates it. It names no gateway. Proven against stand-ins built from each vendor's documentation; no real device yet.",
+    description: "Account target registration (A271).",
+  },
   "admin.access.webconsole.target": { defaultMessage: "Web admin console (HTTPS)", description: "Web console target registration (A273)." },
   "admin.access.webconsole.url": { defaultMessage: "Console address", description: "Web console target registration (A273): its https origin." },
   "admin.access.webconsole.urlHelp": {

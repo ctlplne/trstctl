@@ -2,6 +2,8 @@
 
 ### Added
 
+- Accounts rotated in place (A271 console): the access targets panel registers `account` targets — an `esxi`,
+  `vcenter-sso`, `redfish` or network device provider and one account secret, with no gateway fields — for check-out.
 - Windows local administrator accounts (A268 console): the access targets panel registers `windows_local` targets — a
   native `windows` provider and one account secret, with no gateway fields — for check-out.
 - Internal web admin consoles (A273 part 3): the console registers `webconsole` targets (account secret, https origin,
