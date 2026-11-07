@@ -9035,6 +9035,25 @@ export interface PAMRecordingLegalHoldRequest {
   reason: string;
 }
 
+export interface PAMRecordingSearchHit {
+  at_millis: number;
+  conn: number;
+  kind?: string;
+  session_id: string;
+  session_started_at: string;
+  source: "command" | "sql" | "result" | "output" | "index" | "request";
+  subject: string;
+  target_id: string;
+  target_type: string;
+  text: string;
+}
+
+export interface PAMRecordingSearchResult {
+  items: PAMRecordingSearchHit[];
+  sessions_searched: number;
+  truncated: boolean;
+}
+
 export interface PAMRecordingVerification {
   chunks: number;
   problems?: string[];

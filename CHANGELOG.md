@@ -2,6 +2,10 @@
 
 ### Added
 
+- Recording search (A275 part 3): `GET /api/v1/access/recordings/search` (`searchPAMRecordings`, OpenAPI 790 -> 791),
+  `trstctl access recordings search` (CLI 857 -> 858) and the console's **Search session recordings** search the tenant's
+  recordings — SSH commands and output, SQL statements and results, desktop indexes; never typed input — within bounds,
+  with masked results; every search is recorded as `pam.recording.searched` with its query masked.
 - Risk categories (A275 part 2): command rules for PostgreSQL, MySQL and SSH can name `CREDENTIAL_READ`,
   `AUDIT_TAMPERING`, `BULK_DELETE` and `PRIVILEGE_CHANGE` (lowercase for SSH), which the gateway reads from the
   statement's tokens or the command's programs, flags, paths and redirections (through `sudo`-style wrappers); only

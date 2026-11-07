@@ -12569,6 +12569,33 @@ PAMRecordingLegalHoldRequest = TypedDict(
     total=False,
 )
 
+PAMRecordingSearchHit = TypedDict(
+    'PAMRecordingSearchHit',
+    {
+        'at_millis': int,
+        'conn': int,
+        'kind': str,
+        'session_id': str,
+        'session_started_at': str,
+        'source': str,
+        'subject': str,
+        'target_id': str,
+        'target_type': str,
+        'text': str,
+    },
+    total=False,
+)
+
+PAMRecordingSearchResult = TypedDict(
+    'PAMRecordingSearchResult',
+    {
+        'items': list[dict[str, Any]],
+        'sessions_searched': int,
+        'truncated': bool,
+    },
+    total=False,
+)
+
 PAMRecordingVerification = TypedDict(
     'PAMRecordingVerification',
     {

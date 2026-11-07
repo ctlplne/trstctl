@@ -645,6 +645,26 @@ name — only the category's name leaves the gateway:
 They read through `sudo`-style wrappers but not through stored programs, dynamic SQL
 or nested interpreters; like the operation rules, they are guardrails.
 
+#### Search across recordings (A275)
+
+Holders of `recordings:read` search every recorded gateway session of the tenant at once:
+SSH exec commands and terminal output, SQL statements and results, remote desktop index
+entries and other recorded requests. Recordings stay sealed per tenant in the object
+store — there is no plaintext search index at rest — so a search opens the newest
+sessions' recordings (50 by default, up to 200, begun in the last 30 days unless
+`since`/`until` say otherwise; at most 64 MiB read) and matches the text
+case-insensitively. Typed input is never searched (a password typed at an echo-off
+prompt can stand there); returned lines are masked again; each hit names its session,
+target, person and offset. Every search is recorded (`pam.recording.searched`: who, the
+query masked, the filters, how many recordings were read and which sessions matched).
+
+```sh
+trstctl-cli access recordings search --q "DROP TABLE" --target_type postgres --sessions 100
+```
+
+In the console: Access → Privileged access → **Search session recordings**; each hit links
+to its session and recording.
+
 Automatic approval rules apply to normal session and vaulted check-out requests, never the
 emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
 with `GET /api/v1/access/auto-approval-rules`, or with the CLI:

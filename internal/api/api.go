@@ -1723,6 +1723,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.accessBundleRoutes()...)        // see access_bundles.go
 	routes = append(routes, a.pamTemplateRoutes()...)         // see pam_templates.go
 	routes = append(routes, a.pamSignInRoutes()...)           // see pam_signins.go
+	routes = append(routes, a.pamRecordingSearchRoutes()...)  // see pam_recording_search.go
 	routes = append(routes, a.pamDiscoveryRoutes()...)        // see pam_discovery.go
 	routes = append(routes, a.pamCheckoutRoutes()...)         // see pam_checkouts.go
 	routes = append(routes, a.pamAutoApprovalRuleRoutes()...) // see pam_auto_approval_rules.go

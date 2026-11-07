@@ -348,9 +348,12 @@ const (
 	EventPAMRecordingLegalHold          = "pam.session.recording_legal_hold"
 	EventPAMRecordingDeleted            = "pam.session.recording_deleted"
 	// A274: the sign-ins a bypass detection run read, and their purge.
-	EventPAMSignInsCollected     = "pam.signin.collected"
-	EventPAMSignInsPurged        = "pam.signin.records_purged"
-	EventPAMRecordingRead        = "pam.session.recording_read"
+	EventPAMSignInsCollected = "pam.signin.collected"
+	EventPAMSignInsPurged    = "pam.signin.records_purged"
+	EventPAMRecordingRead    = "pam.session.recording_read"
+	// EventPAMRecordingSearched (A275): who searched the tenant's recordings,
+	// for what (masked), and what the search found.
+	EventPAMRecordingSearched    = "pam.recording.searched"
 	EventPAMAccountHealthChecked = "pam.account.health_checked"
 	EventPAMTemplateSaved        = "pam.template.saved"
 	EventPAMCommandBlocked       = "pam.command.blocked"
@@ -4752,6 +4755,24 @@ type PAMRecordingRead struct {
 	At    time.Time `json:"at"`
 }
 
+// PAMRecordingSearched is one search across a tenant's recordings (A275):
+// the searcher, the query as masked, its filters, how many recordings it
+// read, how many lines matched and in which sessions.
+type PAMRecordingSearched struct {
+	ID               string    `json:"id"`
+	Actor            string    `json:"actor"`
+	Query            string    `json:"query"`
+	Since            time.Time `json:"since"`
+	Until            time.Time `json:"until"`
+	TargetType       string    `json:"target_type,omitempty"`
+	TargetID         string    `json:"target_id,omitempty"`
+	SessionsSearched int       `json:"sessions_searched"`
+	Matches          int       `json:"matches"`
+	MatchedSessions  []string  `json:"matched_sessions,omitempty"`
+	Truncated        bool      `json:"truncated,omitempty"`
+	At               time.Time `json:"at"`
+}
+
 type PAMTargetDisabled struct {
 	TargetType string `json:"target_type"`
 	ID         string `json:"id"`
@@ -5365,6 +5386,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMSignInsCollected:                      {1: true},
 	EventPAMSignInsPurged:                         {1: true},
 	EventPAMRecordingRead:                         {1: true},
+	EventPAMRecordingSearched:                     {1: true},
 	EventPAMAccountHealthChecked:                  {1: true},
 	EventPAMTemplateSaved:                         {1: true, PAMCommandRulesEventSchemaVersion: true},
 	EventPAMCommandBlocked:                        {1: true},
@@ -9160,8 +9182,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMRecordingDeletedTx(ctx, tx, e.TenantID, pl.ID, pl.DeletedAt)
-	case EventPAMRecordingRead:
-		// An audit fact only: who read which recording, how.
+	case EventPAMRecordingRead, EventPAMRecordingSearched:
+		// Audit facts only: who read which recording, how; who searched the
+		// recordings for what.
 		return nil
 	case EventPAMTargetDisabled:
 		var pl PAMTargetDisabled

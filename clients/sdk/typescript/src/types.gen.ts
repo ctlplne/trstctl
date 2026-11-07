@@ -968,6 +968,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/recordings/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the tenant's session recordings — SSH commands and output, SQL statements and results, remote desktop indexes — newest sessions first; results are masked and every search is recorded */
+        get: operations["searchPAMRecordings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/requests": {
         parameters: {
             query?: never;
@@ -22879,6 +22896,35 @@ export interface components {
         PAMRecordingLegalHoldRequest: {
             reason: string;
         };
+        PAMRecordingSearchHit: {
+            /** @description milliseconds into the session's recording */
+            at_millis: number;
+            /** @description the connection within the session */
+            conn: number;
+            /** @description the recorded event's kind (exec, query, row, window title …) */
+            kind?: string;
+            /** Format: uuid */
+            session_id: string;
+            /** Format: date-time */
+            session_started_at: string;
+            /**
+             * @description what the line is: an SSH exec command, a SQL statement, a SQL result, terminal output, a remote desktop index entry or another recorded request
+             * @enum {string}
+             */
+            source: "command" | "sql" | "result" | "output" | "index" | "request";
+            subject: string;
+            target_id: string;
+            target_type: string;
+            /** @description the matching line, masked, at most 240 characters around the match */
+            text: string;
+        };
+        PAMRecordingSearchResult: {
+            items: components["schemas"]["PAMRecordingSearchHit"][];
+            /** @description recordings read, newest sessions first */
+            sessions_searched: number;
+            /** @description a bound (lines returned or bytes read) stopped the search before every recording was read */
+            truncated: boolean;
+        };
         PAMRecordingVerification: {
             chunks: number;
             problems?: string[];
@@ -30772,6 +30818,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OIDCMappingStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchPAMRecordings: {
+        parameters: {
+            query?: {
+                /** @description the text to find, 3-200 characters, case-insensitive */
+                q?: string;
+                /** @description sessions begun at or after this RFC 3339 time (default: 30 days ago) */
+                since?: string;
+                /** @description sessions begun before this RFC 3339 time (default: now) */
+                until?: string;
+                /** @description only this target type's sessions */
+                target_type?: string;
+                /** @description only this target's sessions */
+                target_id?: string;
+                /** @description recordings to read, newest first, 1-200 (default 50) */
+                sessions?: number;
+                /** @description matching lines to return, 1-500 (default 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecordingSearchResult"];
                 };
             };
             /** @description client error */

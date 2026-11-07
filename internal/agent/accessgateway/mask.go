@@ -164,3 +164,12 @@ func (m *masker) mask(b []byte) []byte {
 	}
 	return out
 }
+
+// MaskText masks the issued-credential shapes in a text the control plane
+// shows or keeps (A275: recording search results and the searches it
+// records). Recordings are masked as they are made; this masks again.
+func MaskText(text string) string {
+	m := newMasker()
+	defer m.Close()
+	return string(append(m.Write([]byte(text)), m.Flush()...))
+}

@@ -9136,7 +9136,7 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
-## Session risk alerts and recording search (A275) — parts 1–2: alert rules and risk categories
+## Session risk alerts and recording search (A275) — parts 1–3: alerts, risk categories and search
 
 Status: in progress. A template rule's `alert` effect (severity `warning` or
 `critical`) lets a matching command run once its `alerted` decision is durable and
@@ -9158,10 +9158,20 @@ alerted and `rm -rf` blocked with the directory intact, while a plain `rm` passe
 three alerts, no table, path or argument in any action or alert), and the classifier
 tables in `TestSQLRiskCategoriesA275`/`TestSSHRiskCategoriesA275`. Redis, MongoDB,
 ClickHouse and network devices have no categories.
+Part 3: `GET /api/v1/access/recordings/search` (`recordings:read`; CLI `access recordings
+search`; console panel) reads the tenant's newest sealed or live recordings within bounds
+— no plaintext index at rest — over commands, output, statements, results and desktop
+indexes, never typed input; results are masked; every search is recorded with its query
+masked. Proof: `TestServedRecordingSearchIsScopedMaskedAndAuditedA275` (one search finds
+the text in a PostgreSQL statement and an SSH session's output and command; a token-shaped
+secret is masked in the recording, so searching for it finds nothing and its mask shows
+only the mask; no `recordings:read` is refused, another tenant finds nothing, a short query
+is refused; three searches recorded, the secret's query masked) and the unit and console
+tests. Scope is the tenant and `recordings:read`; there is no narrower per-folder scope.
+Searches read sealed objects on every call, so large estates rely on the bounds (newest
+sessions first) rather than an index.
 
 What comes next:
-- Full-text search across SSH and SQL transcripts and remote desktop indexes,
-  scoped, masked and audited (part 3).
 - Alerts for interactive SSH shells need typed-line inspection (A270-L1); ruled
   SSH sessions run complete commands only.
 

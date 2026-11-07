@@ -765,6 +765,43 @@ export const messages = {
     defaultMessage: "{count, plural, one {# responder saved} other {# responders saved}}",
     description: "Emergency access (A258).",
   },
+  "admin.access.recordingSearch.heading": { defaultMessage: "Search session recordings", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.description": {
+    defaultMessage:
+      "Find a command, statement or text across every recorded session: SSH commands and output, SQL statements and results, remote desktop indexes. Results are masked, typed input is never searched, and every search is recorded.",
+    description: "Recording search (A275).",
+  },
+  "admin.access.recordingSearch.form": { defaultMessage: "Search recordings", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.query": { defaultMessage: "Text to find (at least 3 characters)", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.target": { defaultMessage: "Target ID (optional)", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.search": { defaultMessage: "Search", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.searching": { defaultMessage: "Searching recordings", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.failed": { defaultMessage: "The recordings could not be searched", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.summary": {
+    defaultMessage: "{matches, plural, one {# match} other {# matches}} in {sessions, plural, one {# recording} other {# recordings}} searched.",
+    description: "Recording search (A275).",
+  },
+  "admin.access.recordingSearch.summaryTruncated": {
+    defaultMessage:
+      "{matches, plural, one {# match} other {# matches}} in {sessions, plural, one {# recording} other {# recordings}} searched; a limit stopped the search early — narrow it to see more.",
+    description: "Recording search (A275).",
+  },
+  "admin.access.recordingSearch.none": { defaultMessage: "Nothing in the recordings matches.", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.results": { defaultMessage: "Matching recorded lines", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.session": { defaultMessage: "Session", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.where": { defaultMessage: "Target and person", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.what": { defaultMessage: "Found in", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.line": { defaultMessage: "Line (masked)", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.open": {
+    defaultMessage: "{started}, at {at}",
+    description: "Recording search (A275): a link to the session; its start and the line's offset.",
+  },
+  "admin.access.recordingSearch.sourceCommand": { defaultMessage: "SSH command", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.sourceSQL": { defaultMessage: "SQL statement", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.sourceResult": { defaultMessage: "SQL result", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.sourceOutput": { defaultMessage: "Terminal output", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.sourceIndex": { defaultMessage: "Desktop index", description: "Recording search (A275)." },
+  "admin.access.recordingSearch.sourceRequest": { defaultMessage: "Recorded request", description: "Recording search (A275)." },
   "admin.access.signins.heading": { defaultMessage: "Sign-ins to managed accounts", description: "Bypass detection (A274)." },
   "admin.access.signins.description": {
     defaultMessage:

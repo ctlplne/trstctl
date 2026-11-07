@@ -42264,6 +42264,91 @@
         ],
         "type": "object"
       },
+      "PAMRecordingSearchHit": {
+        "properties": {
+          "at_millis": {
+            "description": "milliseconds into the session's recording",
+            "type": "integer"
+          },
+          "conn": {
+            "description": "the connection within the session",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "the recorded event's kind (exec, query, row, window title …)",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "session_started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "source": {
+            "description": "what the line is: an SSH exec command, a SQL statement, a SQL result, terminal output, a remote desktop index entry or another recorded request",
+            "enum": [
+              "command",
+              "sql",
+              "result",
+              "output",
+              "index",
+              "request"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "text": {
+            "description": "the matching line, masked, at most 240 characters around the match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "target_type",
+          "target_id",
+          "subject",
+          "session_started_at",
+          "at_millis",
+          "conn",
+          "source",
+          "text"
+        ],
+        "type": "object"
+      },
+      "PAMRecordingSearchResult": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMRecordingSearchHit"
+            },
+            "type": "array"
+          },
+          "sessions_searched": {
+            "description": "recordings read, newest sessions first",
+            "type": "integer"
+          },
+          "truncated": {
+            "description": "a bound (lines returned or bytes read) stopped the search before every recording was read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "sessions_searched",
+          "truncated"
+        ],
+        "type": "object"
+      },
       "PAMRecordingVerification": {
         "properties": {
           "chunks": {
@@ -64852,6 +64937,112 @@
         ],
         "summary": "Show served OIDC tenant and group mapping status",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/recordings/search": {
+      "get": {
+        "operationId": "searchPAMRecordings",
+        "parameters": [
+          {
+            "description": "the text to find, 3-200 characters, case-insensitive",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "sessions begun at or after this RFC 3339 time (default: 30 days ago)",
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "sessions begun before this RFC 3339 time (default: now)",
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only this target type's sessions",
+            "in": "query",
+            "name": "target_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only this target's sessions",
+            "in": "query",
+            "name": "target_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "recordings to read, newest first, 1-200 (default 50)",
+            "in": "query",
+            "name": "sessions",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "matching lines to return, 1-500 (default 100)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecordingSearchResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Search the tenant's session recordings — SSH commands and output, SQL statements and results, remote desktop indexes — newest sessions first; results are masked and every search is recorded",
+        "x-trstctl-permission": "recordings:read",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/access/requests": {

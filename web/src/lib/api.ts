@@ -575,6 +575,8 @@ import type {
   PAMEmergencySessionRequest,
   PAMSignIn,
   PAMSignInList,
+  PAMRecordingSearchHit,
+  PAMRecordingSearchResult,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1599,6 +1601,8 @@ export type {
   PAMEmergencySessionRequest,
   PAMSignIn,
   PAMSignInList,
+  PAMRecordingSearchHit,
+  PAMRecordingSearchResult,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2690,6 +2694,17 @@ export interface Api {
   openPAMEmergencySession(input: PAMEmergencySessionRequest, idempotencyKey?: string): Promise<PAMSession>;
   /** A274: the sign-ins bypass detection read for managed accounts, newest first, with what explained each. */
   pamSignIns(options?: { providerId?: string; unexplained?: boolean; limit?: number; signal?: AbortSignal }): Promise<PAMSignInList>;
+  /** A275: search the tenant's session recordings; results are masked and every search is recorded. */
+  searchPAMRecordings(options: {
+    q: string;
+    since?: string;
+    until?: string;
+    targetType?: string;
+    targetID?: string;
+    sessions?: number;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<PAMRecordingSearchResult>;
   pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
   pamRecordingVerify(id: string): Promise<PAMRecordingVerification>;
   pamRecordingFrames(id: string, from: number): Promise<PAMRecordingFrames>;
@@ -3734,6 +3749,16 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   pamEmergencyResponders: () => req<PAMEmergencyResponders>("/api/v1/access/emergency/responders"),
   setPAMEmergencyResponders: (input, idempotencyKey) => mutate<PAMEmergencyResponders>("PUT", "/api/v1/access/emergency/responders", input, idempotencyKey),
   openPAMEmergencySession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/emergency-sessions", input, idempotencyKey),
+  searchPAMRecordings: (options) => {
+    const query = new URLSearchParams({ q: options.q });
+    if (options.since) query.set("since", options.since);
+    if (options.until) query.set("until", options.until);
+    if (options.targetType) query.set("target_type", options.targetType);
+    if (options.targetID) query.set("target_id", options.targetID);
+    if (options.sessions) query.set("sessions", String(options.sessions));
+    if (options.limit) query.set("limit", String(options.limit));
+    return req<PAMRecordingSearchResult>(`/api/v1/access/recordings/search?${query.toString()}`, { signal: options.signal });
+  },
   pamSignIns: (options) => {
     const query = new URLSearchParams({ limit: String(options?.limit ?? 200) });
     if (options?.providerId) query.set("provider_id", options.providerId);

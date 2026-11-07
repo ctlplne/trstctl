@@ -184,6 +184,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMRecordingLegalHold:                    "EventPAMRecordingLegalHold",
 	projections.EventPAMRecordingDeleted:                      "EventPAMRecordingDeleted",
 	projections.EventPAMRecordingRead:                         "EventPAMRecordingRead",
+	projections.EventPAMRecordingSearched:                     "EventPAMRecordingSearched",
 	projections.EventPAMSessionActivationRequested:            "EventPAMSessionActivationRequested",
 	projections.EventPAMSSHSigningRecoveryRequested:           "EventPAMSSHSigningRecoveryRequested",
 	projections.EventPAMSSHSigningRecovered:                   "EventPAMSSHSigningRecovered",

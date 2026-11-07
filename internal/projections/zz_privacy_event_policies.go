@@ -1181,6 +1181,12 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMRecordingRead, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/mode", opaque), privacyRule("/at", opaque),
 		),
+		{EventPAMRecordingSearched, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/query", clear), privacyRule("/since", opaque),
+			privacyRule("/until", opaque), privacyRule("/target_type", opaque), privacyRule("/target_id", opaque),
+			privacyRule("/sessions_searched", opaque), privacyRule("/matches", opaque), privacyRule("/matched_sessions/*", opaque),
+			privacyRule("/truncated", opaque), privacyRule("/at", opaque),
+		),
 		{EventPAMTargetDisabled, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque),
 			privacyRule("/disabled_by", exact), privacyRule("/reason", clear),
@@ -1772,6 +1778,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMRecordingLegalHold, 1}:                                                      privacyPayloadShape[PAMRecordingLegalHold](),
 		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
 		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
+		{EventPAMRecordingSearched, 1}:                                                       privacyPayloadShape[PAMRecordingSearched](),
 		{EventPAMAccountHealthChecked, 1}:                                                    privacyPayloadShape[PAMAccountHealthChecked](),
 		{EventPAMSignInsCollected, 1}:                                                        privacyPayloadShape[PAMSignInsCollected](),
 		{EventPAMSignInsPurged, 1}:                                                           privacyPayloadShape[PAMSignInsPurged](),

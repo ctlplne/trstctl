@@ -8880,6 +8880,19 @@ func componentSchemas() map[string]*Schema {
 			}, "kind"),
 		}, "provider_id", "fingerprint", "account", "at", "last_seen_at"),
 		"PAMSignInList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMSignIn")}}, "items"),
+		"PAMRecordingSearchHit": object(map[string]*Schema{
+			"session_id": uuid(), "target_type": str(), "target_id": str(), "subject": str(), "session_started_at": timestamp(),
+			"at_millis": {Type: "integer", Description: "milliseconds into the session's recording"},
+			"conn":      {Type: "integer", Description: "the connection within the session"},
+			"source":    {Type: "string", Enum: []string{"command", "sql", "result", "output", "index", "request"}, Description: "what the line is: an SSH exec command, a SQL statement, a SQL result, terminal output, a remote desktop index entry or another recorded request"},
+			"kind":      {Type: "string", Description: "the recorded event's kind (exec, query, row, window title …)"},
+			"text":      {Type: "string", Description: "the matching line, masked, at most 240 characters around the match"},
+		}, "session_id", "target_type", "target_id", "subject", "session_started_at", "at_millis", "conn", "source", "text"),
+		"PAMRecordingSearchResult": object(map[string]*Schema{
+			"items":             {Type: "array", Items: ref("PAMRecordingSearchHit")},
+			"sessions_searched": {Type: "integer", Description: "recordings read, newest sessions first"},
+			"truncated":         {Type: "boolean", Description: "a bound (lines returned or bytes read) stopped the search before every recording was read"},
+		}, "items", "sessions_searched", "truncated"),
 		"PAMWebConsoleRoute": object(map[string]*Schema{
 			"url":         {Type: "string", Description: "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)"},
 			"ca_pem":      {Type: "string", Description: "PEM certificates the console's certificate is checked against; none: the system roots"},
