@@ -300,7 +300,8 @@ import (
 // Version102 retains service-account rotation parent/step source projections.
 // Version103 retains the complete bounded rotation-review manifest and ordered pages.
 // Version104 retains canonical source-bound native execution cursors.
-const SnapshotFormatVersion = 105
+// Version106 retains sealed-command native host generation and signed receipts.
+const SnapshotFormatVersion = 106
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -405,7 +406,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_checkouts",
 	// Format 94: A261's account folders.
 	"pam_folders",
-	"service_account_hosts", "service_account_host_scans", "windows_local_account_scans",
+	"service_account_hosts", "service_account_host_scans", "windows_local_account_scans", "windows_local_account_rotations",
 	"service_account_rotations", "service_account_rotation_steps",
 	"service_account_rotation_manifests", "service_account_rotation_manifest_pages", "service_account_rotation_manifest_hosts", "service_account_rotation_manifest_entries",
 	"pam_auto_approval_rules",
@@ -782,6 +783,7 @@ SELECT jsonb_build_object(
   'service_account_hosts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_hosts t),
   'service_account_host_scans', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_host_scans t),
   'windows_local_account_scans', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM windows_local_account_scans t),
+  'windows_local_account_rotations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM windows_local_account_rotations t),
   'service_account_rotations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotations t),
   'service_account_rotation_steps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_steps t),
   'service_account_rotation_manifests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_manifests t),

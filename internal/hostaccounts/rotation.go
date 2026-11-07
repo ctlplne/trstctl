@@ -4,6 +4,8 @@ package hostaccounts
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/google/uuid"
 	"time"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/winaccounts"
@@ -103,4 +105,9 @@ func (r RotationReport) Validate(i RotationIntent) error {
 		return errors.New("host accounts: native rotation report exceeds wire bound")
 	}
 	return nil
+}
+
+// RotationObservationSourceID preserves one signed result per real claim attempt.
+func RotationObservationSourceID(tenantID string, jobID int64, attempt int) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf("trstctl/windows-local-rotation/observed/%s/%d/%d", tenantID, jobID, attempt))).String()
 }

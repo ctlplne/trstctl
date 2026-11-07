@@ -1279,3 +1279,66 @@ does not authorize it. The [execution boundary](../design/access-gateway.md#enro
 describes this permission, retained generation proofs and credential lifetime.
 The inventory commands above provide observations; they do not themselves queue
 or schedule a password change.
+
+#### Rotate one enrolled host's local account
+
+A Windows provider can use its enrolled host agent to change a discovered local
+administrator password. Each rotation retains one successor under tenant
+custody, queues one exact-host job and waits for the host's signed proof that the
+successor authenticates as the selected SID and the predecessor is refused.
+
+Set `windows_host_agent_id` on a `windows` dynamic provider, opt into
+`allow_static_rotation`, and map each allowed secret role to its exact local
+account SID in `role_bindings`. This mode has no SSH address, administrator key,
+paired accounts or desktop binding. The existing SSH Windows mode keeps its
+existing configuration and account-name grammar. For example:
+
+```json
+{
+  "tenant_id": "11111111-1111-4111-8111-111111111111",
+  "id": "owned-host-local",
+  "type": "windows",
+  "windows_host_agent_id": "22222222-2222-4222-8222-222222222222",
+  "allowed_roles": ["hosts/local-admin"],
+  "role_bindings": {"hosts/local-admin": "S-1-5-21-1-2-3-1001"},
+  "allow_static_rotation": true
+}
+```
+
+The control plane must enable `host.windows_local_accounts.rotate` in
+`agent.claimable_job_kinds`. The Windows agent's execution profile must separately
+grant the exact tenant, enrolled host, machine SID and account SID:
+
+```json
+{
+  "windows_local_account_writes": [{
+    "tenant_id": "11111111-1111-4111-8111-111111111111",
+    "agent_id": "22222222-2222-4222-8222-222222222222",
+    "machine_sid": "S-1-5-21-1-2-3",
+    "account_sid": "S-1-5-21-1-2-3-1001"
+  }]
+}
+```
+
+First obtain a complete signed local-account inventory. Seed the application
+secret through the Secrets API with the existing local-account credential JSON:
+`host` is the observed machine name, `username` the observed account name, and
+`password` the current password. Submit its normal static rotation with
+`acknowledge_single_phase: true`; the first rotation uses `old_ref: "none"`.
+Later rotations refer to the preceding completed command. Existing static
+rotation schedules use the same provider and secret role.
+
+While the host is offline, the command stays `prepared`: retries retain the
+same sealed successor and do not spend the static worker's failure budget.
+No queued-time password deadline expires before host check-in. Credential
+redemption is limited to the current exact-host claim attempt and its live
+lease; the queue, receipts and host journal carry no plaintext password.
+A retained native success is rotation evidence, not a fresh health check.
+
+A refusal or uncertain result leaves the command prepared with an explicit
+recovery message and both sealed generations retained. A later refusal cannot
+prove that an earlier unknown attempt left the password unchanged. Generic
+rollback therefore cannot publish the predecessor without native recovery
+proof. Automatic inverse recovery and the native check-out target workflow are
+not yet served by this transport; do not use this configuration as a claim of
+complete fleet or check-out qualification.

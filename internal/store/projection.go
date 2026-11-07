@@ -897,7 +897,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"pam_checkouts",
 	// A261 part 3: projected from pam.folder.saved and pam.folder.deleted.
 	"pam_folders",
-	"service_account_hosts", "service_account_host_scans", "windows_local_account_scans",
+	"service_account_hosts", "service_account_host_scans", "windows_local_account_scans", "windows_local_account_rotations",
 	"service_account_rotations", "service_account_rotation_steps",
 	"service_account_rotation_manifests", "service_account_rotation_manifest_pages", "service_account_rotation_manifest_hosts", "service_account_rotation_manifest_entries",
 	"pam_auto_approval_rules",

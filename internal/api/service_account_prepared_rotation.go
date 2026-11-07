@@ -96,9 +96,17 @@ func (a *API) prepareStaticNativeRotation(ctx context.Context, cmd store.SecretS
 	if err != nil {
 		return err
 	}
+	advance := projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationPrepared, SealedPreparation: sealed, SealedOld: sealedOld}
+	if host, ok := provider.(dynsecret.PreparedHostStaticRotationProvider); ok {
+		intent, e := host.PreparedHostRotationIntent(staticPreparedRequest(cmd), preparedHeld.Bytes(), oldHeld.Bytes())
+		if e != nil {
+			return e
+		}
+		advance.WindowsLocalIntent = &intent
+	}
 	preparedHeld.Destroy()
 	oldHeld.Destroy()
-	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationPrepared, SealedPreparation: sealed, SealedOld: sealedOld})
+	return a.advanceStaticRotation(ctx, cmd, advance)
 }
 func (a *API) stagePreparedStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
 	if found, err := a.recoverStaticRotationAdvance(ctx, cmd, store.SecretStaticRotationStaged); err != nil || found {
@@ -140,7 +148,7 @@ func (a *API) stagePreparedStaticRotation(ctx context.Context, cmd store.SecretS
 	held.Destroy()
 	return a.advanceStaticRotation(ctx, cmd, projections.SecretStaticRotationAdvanced{Phase: store.SecretStaticRotationStaged, ProviderType: credential.Metadata["provider_type"], NewRef: credential.BackendRef, SealedNew: sealed})
 }
-func (a *API) cutoverPreparedStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand) error {
+func (a *API) cutoverPreparedStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
 	if found, err := a.recoverStaticRotationAdvance(ctx, cmd, store.SecretStaticRotationCutover); err != nil || found {
 		return err
 	}
@@ -154,6 +162,9 @@ func (a *API) cutoverPreparedStaticRotation(ctx context.Context, cmd store.Secre
 		return err
 	}
 	defer valueHeld.Destroy()
+	if err = a.verifyPreparedHostGeneration(ctx, cmd, provider, valueHeld.Bytes()); err != nil {
+		return err
+	}
 	version, err := a.writeStaticRotationSecretVersion(ctx, cmd, "cutover", valueHeld.Bytes(), cmd.ExpectedVersion)
 	if err != nil {
 		return err
@@ -177,4 +188,34 @@ func (a *API) restorePreparedNativeRotation(ctx context.Context, cmd store.Secre
 	}
 	defer held.Destroy()
 	return preparer.RestorePreparedStaticCredential(ctx, staticPreparedRequest(cmd), held.Bytes(), old)
+}
+
+// Check retained native evidence before any application-secret publication.
+// A later phase event cannot undo a vault write made before discovering that a
+// cached native completion has lost or substituted its immutable source.
+func (a *API) verifyPreparedHostGeneration(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider, value []byte) error {
+	if _, host := provider.(dynsecret.PreparedHostStaticRotationProvider); !host {
+		return nil
+	}
+	if cmd.NewRef != cmd.ID {
+		return errors.New("native local generation reference differs from its command")
+	}
+	if _, e := boundStaticPreparation(provider, cmd); e != nil {
+		return e
+	}
+	verifier, ok := provider.(dynsecret.PreparedStaticRotationVerifier)
+	if !ok {
+		return errors.New("native local generation verifier unavailable")
+	}
+	raw, e := a.secrets.open(ctx, cmd.TenantID, cmd.SealedPreparation, staticRotationAAD(cmd.TenantID, cmd.ID, "prepared"))
+	if e != nil {
+		return e
+	}
+	held, e := secret.NewFrom(raw)
+	secret.Wipe(raw)
+	if e != nil {
+		return e
+	}
+	defer held.Destroy()
+	return verifier.VerifyStaticPreparedCredential(ctx, staticPreparedRequest(cmd), held.Bytes(), value)
 }

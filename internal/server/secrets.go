@@ -305,7 +305,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		// a revoked dynamic-secret cert stops validating (GAP-005). The store ops are
 		// harmless when no cert was issued, and the resolver above gates actual issuance.
 		RevocationSink:             &secretRevocationSink{store: d.Store, log: s.log},
-		DynamicProviders:           d.DynamicSecretProviders,
+		DynamicProviders:           attachWindowsLocalRotationProviders(d.DynamicSecretProviders, d),
 		DynamicLeaseWorkerInterval: d.DynamicLeaseWorkerInterval,
 		SecretRotators:             d.SecretRotators,
 		SecretSyncTargets:          d.SecretSyncTargets,
@@ -315,7 +315,9 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		be.CommandMAC = mac.KeyedDigest
 	}
 	if d.TenantDynamicSecretProviders != nil {
-		be.DynamicProvidersForTenant = d.TenantDynamicSecretProviders.ForTenant
+		be.DynamicProvidersForTenant = func(tenantID string) []dynsecret.Provider {
+			return attachWindowsLocalRotationProviders(d.TenantDynamicSecretProviders.ForTenant(tenantID), d)
+		}
 		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
 	}
 	if d.TenantAWSHoneyAccounts != nil {

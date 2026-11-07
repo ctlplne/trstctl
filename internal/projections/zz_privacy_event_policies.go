@@ -1298,6 +1298,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	addSSHTrustFleetPrivacyPolicies(policies)
 	addServiceDependentPrivacyPolicies(policies)
 	addWindowsLocalAccountPrivacyPolicies(policies)
+	addWindowsLocalRotationPrivacyPolicies(policies)
 	addPAMDiscoveryOutboxPrivacyPolicies(policies)
 	addADCSDecisionPrivacyPolicies(policies)
 	addMDMCheckInPrivacyPolicies(policies)
@@ -1872,6 +1873,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addSSHTrustFleetPrivacyShapes(shapes)
 	addServiceDependentPrivacyShapes(shapes)
 	addWindowsLocalAccountPrivacyShapes(shapes)
+	addWindowsLocalRotationPrivacyShapes(shapes)
 	addPAMDiscoveryOutboxPrivacyShapes(shapes)
 	addADCSDecisionPrivacyShapes(shapes)
 	addMDMCheckInPrivacyShapes(shapes)
@@ -1896,7 +1898,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	shapes := map[privacyEventPolicyKey]events.PrivacyPayloadShape{
 		{EventSecretStaticRotationQueued, 1}:                                 privacyPayloadShape[SecretStaticRotationQueued](),
-		{EventSecretStaticRotationAdvanced, 1}:                               privacyPayloadShape[SecretStaticRotationAdvanced](),
+		{EventSecretStaticRotationAdvanced, 1}:                               privacyPayloadShape[privacySecretStaticRotationAdvancedV1](),
+		{EventSecretStaticRotationAdvanced, 2}:                               privacyPayloadShape[SecretStaticRotationAdvanced](),
 		{EventCAIssuedCertificate, CAIssuedCertificateEvidenceSchemaVersion}: privacyPayloadShape[privacyCAIssuedEvidenceV2](),
 		{EventCAIssuedCertificate, CASecretInventorySchemaVersion}:           privacyPayloadShape[CASecretCertificateInventoried](),
 		{EventCAEndEntityIssued, CAIssuedCertificateEvidenceSchemaVersion}: events.PrivacyPayloadShapeOneOf(

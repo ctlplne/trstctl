@@ -218,6 +218,15 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 	if adv.TenantID == "" || adv.ID == "" || adv.FromPhase == "" || adv.Phase == "" || adv.At.IsZero() {
 		return errors.New("store: static rotation advance is incomplete")
 	}
+	if adv.Phase == SecretStaticRotationStaged || adv.Phase == SecretStaticRotationCutover || adv.Phase == SecretStaticRotationVerified || adv.Phase == SecretStaticRotationCompleted || adv.Phase == SecretStaticRotationRolledBack {
+		var native, proven bool
+		if e := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM windows_local_account_rotations WHERE tenant_id=$1 AND id=$2),EXISTS(SELECT 1 FROM windows_local_account_rotations WHERE tenant_id=$1 AND id=$2 AND observation->'report'->>'status'='succeeded')`, adv.TenantID, adv.ID).Scan(&native, &proven); e != nil {
+			return e
+		}
+		if native && (!proven || adv.Phase == SecretStaticRotationRolledBack) {
+			return errors.New("store: local native generation has no exact successful publication proof or inverse")
+		}
+	}
 	if adv.SealedPreparation != nil && adv.Phase != SecretStaticRotationPrepared {
 		return errors.New("store: native preparation is immutable after its prepared phase")
 	}

@@ -268,6 +268,14 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 	if cfg.Type == "ldap" && cfg.DirectoryMode == "active_directory" {
 		return &configuredADRotationProvider{configuredDynamicProvider: provider}
 	}
+	if cfg.Type == "windows" && cfg.WindowsHostAgentID != "" {
+		bindings := make(map[string]string, len(cfg.RoleBindings))
+		for k, v := range cfg.RoleBindings {
+			bindings[k] = v
+		}
+		provider.cfg.RoleBindings = bindings
+		return &configuredWindowsLocalRotationProvider{configuredDynamicProvider: provider}
+	}
 	if cfg.Type == "gcp-iam" {
 		return &configuredPreparedDynamicProvider{configuredDynamicProvider: provider}
 	}

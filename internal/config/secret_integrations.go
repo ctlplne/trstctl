@@ -105,13 +105,16 @@ type DynamicSecretGatewayConfig struct {
 }
 
 type DynamicSecretProviderConfig struct {
-	ADReconcile *ADReconcileConfig          `json:"ad_reconcile,omitempty"`
-	Desktop     *accessdesktop.Binding      `json:"desktop,omitempty"`
-	Console     *accessconsole.Binding      `json:"console,omitempty"`
-	Gateway     *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
-	TenantID    string                      `json:"tenant_id"`
-	ID          string                      `json:"id"`
-	Type        string                      `json:"type"`
+	// WindowsHostAgentID selects the native enrolled-host transport. Role bindings
+	// then contain local account SIDs, never SSH usernames or remote authorities.
+	WindowsHostAgentID string                      `json:"windows_host_agent_id,omitempty"`
+	ADReconcile        *ADReconcileConfig          `json:"ad_reconcile,omitempty"`
+	Desktop            *accessdesktop.Binding      `json:"desktop,omitempty"`
+	Console            *accessconsole.Binding      `json:"console,omitempty"`
+	Gateway            *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
+	TenantID           string                      `json:"tenant_id"`
+	ID                 string                      `json:"id"`
+	Type               string                      `json:"type"`
 
 	Endpoint    string `json:"endpoint,omitempty"`
 	AdminDSNRef string `json:"admin_dsn_ref,omitempty"`
@@ -432,6 +435,9 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		}
 		if ttl, err := item.MaxTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("%s max_ttl must be a positive duration", where))
+		}
+		if item.WindowsHostAgentID != "" && item.Type != "windows" {
+			errs = append(errs, fmt.Errorf("%s windows_host_agent_id requires windows", where))
 		}
 		errs = append(errs, validateRotationAccounts(where, item)...)
 		errs = append(errs, validateDynamicProvider(where, item)...)
@@ -1473,6 +1479,9 @@ var unixAccountName = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 // pins the host key, and each allowed role names its account in
 // role_bindings, or two in rotation_accounts. It rotates only.
 func validateUnixProvider(where string, c DynamicSecretProviderConfig) []error {
+	if c.WindowsHostAgentID != "" {
+		return validateNativeWindowsProvider(where, c)
+	}
 	var errs []error
 	if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
 		errs = append(errs, fmt.Errorf("%s addr must be the host's SSH host:port for %s", where, c.Type))

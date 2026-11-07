@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/dependents"
+	"trstctl.com/trstctl/internal/hostaccounts"
 )
 
 // GenerateRequest asks a provider for a scoped backend credential.
@@ -64,6 +65,12 @@ type PreparedStaticRotationProvider interface {
 	PrepareStaticCredential(ctx context.Context, req GenerateRequest) ([]byte, error)
 	GenerateStaticPrepared(ctx context.Context, req GenerateRequest, prepared []byte) (Credential, error)
 	RestorePreparedStaticCredential(ctx context.Context, req GenerateRequest, prepared, old []byte) error
+}
+
+// PreparedHostStaticRotationProvider binds the prepared phase to one host job.
+// old is opened by tenant custody; no plaintext is returned as public intent.
+type PreparedHostStaticRotationProvider interface {
+	PreparedHostRotationIntent(GenerateRequest, []byte, []byte) (hostaccounts.RotationIntent, error)
 }
 
 // StaticRecoveryCredentialValidator validates retained recovery material locally.

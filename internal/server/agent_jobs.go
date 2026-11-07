@@ -68,6 +68,7 @@ import (
 var agentJobKindAllowlist = map[string]bool{
 	relay.KindWindowsDependentInventory:     true,
 	relay.KindWindowsLocalAccountsInventory: true,
+	relay.KindWindowsLocalAccountRotation:   true,
 	relay.KindWindowsDependentRotation:      true,
 	sshcollection.Destination:               true,
 	sshtrustrollout.Destination:             true,
@@ -281,6 +282,8 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		switch job.Destination {
 		case relay.KindWindowsDependentRotation:
 			payload, projectErr = a.projectServiceDependentRotationClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
+		case relay.KindWindowsLocalAccountRotation:
+			payload, projectErr = a.projectWindowsLocalRotationClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
 		case relay.KindWindowsLocalAccountsInventory:
 			payload, projectErr = a.projectWindowsLocalInventoryClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
 		case relay.KindWindowsDependentInventory:
@@ -930,6 +933,8 @@ func (a *agentService) ingestExecutedReport(
 	switch claim.Destination {
 	case relay.KindWindowsDependentRotation:
 		return a.ingestServiceDependentRotation(ctx, info, agentID, claim, req)
+	case relay.KindWindowsLocalAccountRotation:
+		return a.ingestWindowsLocalRotation(ctx, info, agentID, claim, req)
 	case relay.KindWindowsLocalAccountsInventory:
 		return a.ingestWindowsLocalInventory(ctx, info, agentID, claim, req)
 	case relay.KindWindowsDependentInventory:
@@ -1965,7 +1970,7 @@ func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job 
 	if job.Destination == sshtrustrollout.Destination {
 		return a.projectSSHTrustFleetClaim(ctx, job)
 	}
-	if job.Destination == relay.KindWindowsLocalAccountsInventory || job.Destination == relay.KindWindowsDependentInventory || job.Destination == relay.KindWindowsDependentRotation {
+	if job.Destination == relay.KindWindowsLocalAccountRotation || job.Destination == relay.KindWindowsLocalAccountsInventory || job.Destination == relay.KindWindowsDependentInventory || job.Destination == relay.KindWindowsDependentRotation {
 		return nil, errors.New("native inventory claim requires a certificate-bound host identity")
 	}
 

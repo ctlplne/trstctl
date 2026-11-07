@@ -73,6 +73,14 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 		}
 	}
+	if job.Destination == relay.KindWindowsLocalAccountRotation {
+		if job.RequiredAgentID != agentID || !agentHasRole(info.Roles, mtls.AgentRoleHost) {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+		if _, err := a.boundWindowsLocalRotation(ctx, info.TenantID, agentID, job.IdempotencyKey, job.Payload); err != nil {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+	}
 	if job.Destination == relay.KindWindowsLocalAccountsInventory {
 		return nil, status.Error(codes.FailedPrecondition, "local administrator inventory redeems no credential")
 	}

@@ -164,6 +164,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventServiceDependentCursorAdvanced:           "EventServiceDependentCursorAdvanced",
 	projections.EventServiceDependentStepObserved:             "EventServiceDependentStepObserved",
 	projections.EventServiceDependentHostSaved:                "EventServiceDependentHostSaved",
+	projections.EventWindowsLocalRotationObserved:             "EventWindowsLocalRotationObserved",
 	projections.EventWindowsLocalAccountScanQueued:            "EventWindowsLocalAccountScanQueued",
 	projections.EventWindowsLocalAccountScanObserved:          "EventWindowsLocalAccountScanObserved",
 	projections.EventWindowsLocalAccountScanFailed:            "EventWindowsLocalAccountScanFailed",

@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servicedependents"
 	"trstctl.com/trstctl/internal/store"
@@ -217,7 +218,11 @@ func (a *API) appendAndProjectStaticRotation(ctx context.Context, tenantID, even
 		return err
 	}
 	defer secret.Wipe(raw)
-	ev := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: time.Now().UTC(), SchemaVersion: 1, Data: raw}
+	schemaVersion := 1
+	if advance, ok := payload.(projections.SecretStaticRotationAdvanced); ok && advance.WindowsLocalIntent != nil {
+		schemaVersion = 2
+	}
+	ev := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: time.Now().UTC(), SchemaVersion: schemaVersion, Data: raw}
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		ev.Actor = &actor
 	}
@@ -316,7 +321,7 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 				}
 			}
 			if cmd.ProviderBinding != "" {
-				err = a.cutoverPreparedStaticRotation(ctx, cmd)
+				err = a.cutoverPreparedStaticRotation(ctx, cmd, provider)
 				if cmd.DependentChangeID != "" && errors.Is(err, errStaticRotationVersionMoved) {
 					parent, e := a.dependentRotationParent(ctx, cmd)
 					if e != nil {
@@ -475,8 +480,20 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 	if err != nil {
 		return err
 	}
-	mode, verifyErr := verifier.VerifyStaticCredential(ctx, cmd.NewRef, value)
+	valueHeld, err := secret.NewFrom(value)
 	secret.Wipe(value)
+	if err != nil {
+		return err
+	}
+	defer valueHeld.Destroy()
+	mode, verifyErr := "", error(nil)
+	if _, host := provider.(dynsecret.PreparedHostStaticRotationProvider); host {
+		verifyErr = a.verifyPreparedHostGeneration(ctx, cmd, provider, valueHeld.Bytes())
+		mode = "authenticated"
+	} else {
+		mode, verifyErr = verifier.VerifyStaticCredential(ctx, cmd.NewRef, valueHeld.Bytes())
+	}
+	valueHeld.Destroy()
 	if verifyErr == nil {
 		if mode == "" {
 			mode = "not_available"
@@ -498,6 +515,9 @@ func (a *API) verifyStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 // on, so it decides the terminal state; a failed successor revocation is
 // recorded, not fatal.
 func (a *API) rollbackStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
+	if _, host := provider.(dynsecret.PreparedHostStaticRotationProvider); host && len(cmd.SealedPreparation) > 0 {
+		return orchestrator.DeferDelivery(errors.New("native local rotation requires exact generation proof; sealed generations retained"))
+	}
 	if cmd.DependentChangeID != "" && cmd.Phase == store.SecretStaticRotationPrepared {
 		parent, err := a.dependentRotationParent(ctx, cmd)
 		if err != nil {
@@ -608,6 +628,7 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 	if err := a.holdStaticRotationRetirement(ctx, cmd); err != nil {
 		return err
 	}
+	_, nativeHost := provider.(dynsecret.PreparedHostStaticRotationProvider)
 	coordinatedInPlace := cmd.DependentChangeID != ""
 	if coordinatedInPlace {
 		parent, err := a.dependentRotationParent(ctx, cmd)
@@ -624,7 +645,7 @@ func (a *API) retireStaticRotation(ctx context.Context, cmd store.SecretStaticRo
 			return err
 		}
 	}
-	if !coordinatedInPlace && cmd.OldRef != staticRotationNoPredecessor {
+	if !nativeHost && !coordinatedInPlace && cmd.OldRef != staticRotationNoPredecessor {
 		if err := provider.Revoke(ctx, cmd.OldRef); err != nil {
 			return fmt.Errorf("api: static rotation retire: %w", err)
 		}

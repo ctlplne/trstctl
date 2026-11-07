@@ -44,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/eventprivacy"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
+	"trstctl.com/trstctl/internal/hostaccounts"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/pamdiscovery"
@@ -3194,19 +3195,20 @@ type SecretStaticRotationQueued struct {
 // rotation command. SealedNew and SealedOld are tenant-sealed containers (AN-8)
 // so a restarted worker resumes without a second provider call.
 type SecretStaticRotationAdvanced struct {
-	SealedPreparation []byte `json:"sealed_preparation,omitempty"`
-	ID                string `json:"id"`
-	TenantEpoch       string `json:"tenant_epoch"`
-	FromPhase         string `json:"from_phase"`
-	Phase             string `json:"phase"`
-	ProviderType      string `json:"provider_type,omitempty"`
-	NewRef            string `json:"new_ref,omitempty"`
-	SealedNew         []byte `json:"sealed_new,omitempty"`
-	SealedOld         []byte `json:"sealed_old,omitempty"`
-	ResultVersion     int    `json:"result_version,omitempty"`
-	RestoredVersion   int    `json:"restored_version,omitempty"`
-	VerifyMode        string `json:"verify_mode,omitempty"`
-	Error             string `json:"error,omitempty"`
+	WindowsLocalIntent *hostaccounts.RotationIntent `json:"windows_local_intent,omitempty"`
+	SealedPreparation  []byte                       `json:"sealed_preparation,omitempty"`
+	ID                 string                       `json:"id"`
+	TenantEpoch        string                       `json:"tenant_epoch"`
+	FromPhase          string                       `json:"from_phase"`
+	Phase              string                       `json:"phase"`
+	ProviderType       string                       `json:"provider_type,omitempty"`
+	NewRef             string                       `json:"new_ref,omitempty"`
+	SealedNew          []byte                       `json:"sealed_new,omitempty"`
+	SealedOld          []byte                       `json:"sealed_old,omitempty"`
+	ResultVersion      int                          `json:"result_version,omitempty"`
+	RestoredVersion    int                          `json:"restored_version,omitempty"`
+	VerifyMode         string                       `json:"verify_mode,omitempty"`
+	Error              string                       `json:"error,omitempty"`
 	// NewExpiresAt is when a dynamic-lease rotation's new lease expires.
 	NewExpiresAt *time.Time `json:"new_expires_at,omitempty"`
 	// RetireNotBefore is the approved retirement deadline, fixed when the
@@ -5223,7 +5225,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventSecretRotationScheduleRetired:            {1: true, 2: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
 	EventSecretStaticRotationQueued:               {1: true},
-	EventSecretStaticRotationAdvanced:             {1: true},
+	EventSecretStaticRotationAdvanced:             {1: true, 2: true},
 	EventNotificationRead:                         {1: true},
 	EventNotificationChannelUpserted:              {1: true},
 	EventNotificationChannelDeleted:               {1: true},
@@ -5310,6 +5312,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventServiceDependentStepObserved:             {1: true},
 	EventServiceDependentHostSaved:                {1: true},
 	EventServiceDependentScanQueued:               {1: true},
+	EventWindowsLocalRotationObserved:             {1: true},
 	EventWindowsLocalAccountScanQueued:            {1: true},
 	EventWindowsLocalAccountScanObserved:          {1: true},
 	EventWindowsLocalAccountScanFailed:            {1: true},
@@ -5583,6 +5586,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyServiceDependentRotationTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyWindowsLocalRotationTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyWindowsLocalAccountsTx(ctx, tx, e); handled {
@@ -7736,12 +7742,25 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.FromPhase == "" || pl.Phase == "" {
 			return fmt.Errorf("projections: %s requires id, from_phase and phase", e.Type)
 		}
-		return p.store.ApplySecretStaticRotationAdvancedTx(ctx, tx, store.SecretStaticRotationAdvance{
+		err := p.store.ApplySecretStaticRotationAdvancedTx(ctx, tx, store.SecretStaticRotationAdvance{
 			TenantID: e.TenantID, ID: pl.ID, TenantEpoch: pl.TenantEpoch, FromPhase: pl.FromPhase, Phase: pl.Phase,
 			ProviderType: pl.ProviderType, NewRef: pl.NewRef, SealedNew: pl.SealedNew, SealedOld: pl.SealedOld, SealedPreparation: pl.SealedPreparation,
 			ResultVersion: pl.ResultVersion, RestoredVersion: pl.RestoredVersion, VerifyMode: pl.VerifyMode,
 			Error: pl.Error, NewExpiresAt: pl.NewExpiresAt, RetireNotBefore: pl.RetireNotBefore, At: e.Time,
 		})
+		if err != nil {
+			return err
+		}
+		if pl.WindowsLocalIntent != nil {
+			if e.SchemaVersion != 2 {
+				return errors.New("projections: native local authority requires schema two")
+			}
+			if pl.Phase != store.SecretStaticRotationPrepared || pl.ID != pl.WindowsLocalIntent.RotationID {
+				return errors.New("projections: native local intent requires its prepared phase")
+			}
+			return p.store.ApplyWindowsLocalRotationPreparedTx(ctx, tx, e.TenantID, e.ID, *pl.WindowsLocalIntent, e.Time)
+		}
+		return nil
 	case EventSecretRotationScheduleUpserted:
 		var pl SecretRotationScheduleUpserted
 		if err := decode(e, &pl); err != nil {

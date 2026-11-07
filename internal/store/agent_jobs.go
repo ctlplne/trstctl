@@ -746,6 +746,8 @@ const (
 // resolve a claimed job's credential references: never handed to the agent —
 // the payload here is still sealed.
 type AgentJobForRedemption struct {
+	// ID is the exact operational claim whose current attempt may redeem.
+	ID              int64
 	RequiredAgentID string
 	Destination     string
 	IdempotencyKey  string
@@ -783,6 +785,7 @@ func (s *Store) GetAgentJobForRedemption(
 		if scanErr != nil {
 			return scanErr
 		}
+		out.ID = jobID
 		found = true
 		return nil
 	})

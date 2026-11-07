@@ -191,6 +191,7 @@ const (
 	EventWindowsLocalAccountScanQueued   = "pam.windows_local_accounts.scan_queued"
 	EventWindowsLocalAccountScanObserved = "pam.windows_local_accounts.scan_observed"
 	EventWindowsLocalAccountScanFailed   = "pam.windows_local_accounts.scan_failed"
+	EventWindowsLocalRotationObserved    = "pam.windows_local_accounts.rotation_observed"
 	EventServiceDependentScanObserved    = "pam.service_dependents.scan_observed"
 	EventServiceDependentScanFailed      = "pam.service_dependents.scan_failed"
 
@@ -478,7 +479,7 @@ var ledger = []FeatureEvent{
 	{"F37", "Secret rotation engine", "resume_secret_rotation_schedule", "resumeSecretRotationSchedule", []string{EventSecretRotationScheduleResumed}},
 	{"F37", "Secret rotation engine", "retire_secret_rotation_schedule", "retireSecretRotationSchedule", []string{EventSecretRotationScheduleRetired}},
 	{"F37", "Secret rotation engine", "run_due_secret_rotations", "runDueSecretRotationSchedules", []string{EventSecretRotationScheduleRan}},
-	{"F37", "Secret rotation engine", "rotate_static_secret", "rotateStaticSecret", []string{EventSecretStaticRotationQueued, EventSecretStaticRotationAdvanced}},
+	{"F37", "Secret rotation engine", "rotate_static_secret", "rotateStaticSecret", []string{EventSecretStaticRotationQueued, EventSecretStaticRotationAdvanced, EventWindowsLocalRotationObserved}},
 }
 
 // eventTypeSet is the flattened set of every event type cataloged above, built
