@@ -39379,7 +39379,8 @@
             "enum": [
               "postgres",
               "mysql",
-              "windows_local"
+              "windows_local",
+              "account"
             ],
             "type": "string"
           },
@@ -43717,7 +43718,8 @@
               "snowflake",
               "ssh",
               "windows_local",
-              "netdevice"
+              "netdevice",
+              "account"
             ],
             "type": "string"
           }
@@ -43836,7 +43838,8 @@
               "snowflake",
               "ssh",
               "windows_local",
-              "netdevice"
+              "netdevice",
+              "account"
             ],
             "type": "string"
           }

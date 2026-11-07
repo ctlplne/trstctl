@@ -9363,9 +9363,9 @@ What comes next:
 - Accounts held in a TACACS+ or RADIUS server rotate there, not on the device; today
   only device-local accounts rotate.
 
-## Hypervisors and server management controllers (A271) — parts 1–3: Redfish controllers, ESXi hosts and vCenter single sign-on
+## Hypervisors and server management controllers (A271) — built against stand-ins: Redfish controllers, ESXi hosts and vCenter single sign-on
 
-Status: in progress. A `redfish` provider rotates a server management controller's
+Status: built; real runs are owed. A `redfish` provider rotates a server management controller's
 account passwords through Redfish's AccountService (HPE iLO first, then any
 conforming controller), proves each change with a new session on the new password,
 rolls an unproven change back, and discovery stages each account with its `RoleId`. An
@@ -9374,17 +9374,19 @@ API (`UpdateUser`, proved by signing in), never touching `vpxuser` or `dcui`. A
 `vcenter-sso` provider resets vCenter single sign-on users with `dir-cli` in the
 appliance's root shell (the administrator's password only at its prompt; the new one is
 `dir-cli`'s documented `--new` argument, so it is briefly on that command line inside the
-appliance) and proves each reset with a REST session. Proof today:
+appliance) and proves each reset with a REST session. Each of these accounts (and a
+network device account) is checked out as an `account` target, whose check-in rotates it
+in place. Proof today:
 `TestRedfishRotationA271`, `TestServedRedfishRotationA271`, `TestESXiRotationA271`,
 `TestServedESXiRotationA271`, `TestVCenterSSORotationA271` and
-`TestServedVCenterSSORotationA271` against stand-ins built from the DMTF Redfish
+`TestServedVCenterSSORotationA271` and `TestServedAccountCheckoutA271` against stand-ins built from the DMTF Redfish
 specification, HPE's iLO Redfish reference, the vSphere Web Services SDK and VMware's
 dir-cli articles; no controller, host or appliance has run them.
 
 What comes next:
 - A vCenter run that also confirms `dir-cli`'s output on vSphere 8.
-- Check-out of these accounts (a vaulted account target that is checked out, never
-  opened as a session).
+- Registering `account` and `windows_local` targets from the console (today the API and
+  `trstctl access targets register`).
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.
 

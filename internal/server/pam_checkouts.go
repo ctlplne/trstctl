@@ -102,6 +102,9 @@ func (s *pamService) checkoutTarget(ctx context.Context, tenantID, targetType, t
 	if targetType == pamTargetWindowsLocal && targetID != "" {
 		return s.windowsLocalCheckoutTarget(ctx, tenantID, targetID)
 	}
+	if targetType == pamTargetAccount && targetID != "" {
+		return s.accountCheckoutTarget(ctx, tenantID, targetID)
+	}
 	if !isPAMDatabaseType(targetType) || targetID == "" {
 		return nil, fmt.Errorf("%w: a check-out names a vaulted postgres, mysql or windows_local target", api.ErrPAMInvalid)
 	}
@@ -149,8 +152,8 @@ func (s *pamService) vaultedAccount(ctx context.Context, tenantID, targetType, a
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("%w: account secret %q is not readable", api.ErrPAMRejected, accountSecret)
 	}
-	if targetType == pamTargetWindowsLocal {
-		// A268: the native provider rotates one account in place, so a
+	if targetType == pamTargetWindowsLocal || targetType == pamTargetAccount {
+		// A268, A271: the provider rotates one account in place, so a
 		// rotation names no predecessor account.
 		return value, version, "", nil
 	}
@@ -493,4 +496,25 @@ func (s *Server) GetPAMCheckout(ctx context.Context, tenantID, requestID string)
 func pamCheckoutPolicyRef(refs []string) string {
 	raw, _ := json.Marshal(refs)
 	return "pam-checkout-policy:" + crypto.SHA256Hex(raw)
+}
+
+// accountCheckoutTarget is a registered account target as a check-out reads
+// it (A271): its provider and account secret, checked against the provider
+// again now.
+func (s *pamService) accountCheckoutTarget(ctx context.Context, tenantID, targetID string) (*pamDatabaseTarget, error) {
+	rec, err := s.store.GetPAMTarget(ctx, tenantID, pamTargetAccount, targetID)
+	if errors.Is(err, store.ErrPAMTargetNotFound) {
+		return nil, fmt.Errorf("%w: unknown account target %q", api.ErrPAMInvalid, targetID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !rec.Enabled {
+		return nil, fmt.Errorf("%w: account target %q is disabled", api.ErrPAMRejected, targetID)
+	}
+	if err := s.inPlaceAccount(tenantID, rec.ProviderID, rec.AccountSecret, rec.AllowedRoles); err != nil {
+		return nil, fmt.Errorf("%w: registered account target %q is no longer valid: %v", api.ErrPAMRejected, targetID, err)
+	}
+	return &pamDatabaseTarget{cfg: PAMDatabaseTarget{TargetType: pamTargetAccount, TenantID: tenantID, ID: targetID,
+		ProviderID: rec.ProviderID, AllowedRoles: rec.AllowedRoles, AccountSecret: rec.AccountSecret}}, nil
 }

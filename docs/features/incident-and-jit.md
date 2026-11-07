@@ -1378,6 +1378,25 @@ password and authenticates the new one before the vault publishes it. Folders,
 templates and auto-approval rules apply to `windows_local` targets as to other
 vaulted accounts.
 
+#### Check out an account its provider rotates in place
+
+An ESXi local account, a vCenter single sign-on user, a server management controller
+account (Redfish) or a network device account, vaulted in the application secret its
+provider (`esxi`, `vcenter-sso`, `redfish`, `iosxe`, `junos`, `eos`, `fortigate` or
+`bigip`) rotates, is registered as an `account` target: it names only the provider and
+the account secret, which is its only role.
+
+```json
+{"id": "esxi-ops", "target_type": "account", "provider_id": "esxi-host",
+ "account_secret": "esxi/ops"}
+```
+
+Registration is refused unless that provider rotates the secret's role in place and the
+secret is readable. An `account` target has no sessions; check it out
+(`trstctl access checkouts request`, reviewed by others, then `reveal` once). Checking it
+in, or its deadline passing, queues the provider's rotation: the revealed password stops
+working at the target once the new one is proved there.
+
 #### Open a session on a network device
 
 Register the device account a network device provider rotates (`iosxe`, `junos`,

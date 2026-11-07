@@ -2,6 +2,9 @@
 
 ### Added
 
+- Account check-outs (A271 part 4): `account` access targets vault an account its provider rotates in place (ESXi,
+  vCenter single sign-on, Redfish controllers, network devices); they are checked out, never opened as sessions, and
+  check-in rotates them. Migration 0426.
 - Hypervisors (A271 part 3): a `vcenter-sso` dynamic-secret provider resets vCenter single sign-on users' passwords
   with `dir-cli` in the appliance's root shell (administrator password only at its prompt) and proves each reset with a
   vSphere Automation API session; discovery lists the SSO Administrators group. New config field `sso_admin`. Provider

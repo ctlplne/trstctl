@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -114,6 +115,24 @@ func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor stri
 			target.AllowedRoles = []string{target.AccountSecret}
 		}
 		if err := s.windowsLocalAccount(tenantID, target.ProviderID, target.AccountSecret, target.AllowedRoles); err != nil {
+			return api.PAMTarget{}, err
+		}
+		value, _, err := s.secretReader(ctx, tenantID, target.AccountSecret)
+		if err != nil {
+			return api.PAMTarget{}, fmt.Errorf("%w: account secret %q is not readable: %v", api.ErrPAMInvalid, target.AccountSecret, err)
+		}
+		secret.Wipe(value)
+	case target.TargetType == pamTargetAccount:
+		// A271: an account its provider rotates in place, vaulted in an
+		// application secret; checked out, never a session.
+		if target.Host != "" || target.Port != 0 || len(target.Principals) != 0 || target.GatewayAgentID != "" ||
+			target.GatewayAddress != "" || len(target.HostKeyFingerprints) != 0 {
+			return api.PAMTarget{}, fmt.Errorf("%w: an account target names only its provider and account secret", api.ErrPAMInvalid)
+		}
+		if len(target.AllowedRoles) == 0 {
+			target.AllowedRoles = []string{target.AccountSecret}
+		}
+		if err := s.inPlaceAccount(tenantID, target.ProviderID, target.AccountSecret, target.AllowedRoles); err != nil {
 			return api.PAMTarget{}, err
 		}
 		value, _, err := s.secretReader(ctx, tenantID, target.AccountSecret)
@@ -226,7 +245,7 @@ func (s *pamService) getPAMTarget(ctx context.Context, tenantID, targetType, id 
 		if t, ok := s.sshTargets[pamTargetID{tenantID, id}]; ok {
 			return operatorSSHTarget(id, t), nil
 		}
-	case targetType == pamTargetWindowsLocal:
+	case targetType == pamTargetWindowsLocal || targetType == pamTargetAccount:
 		// Tenant-registered only.
 	default:
 		return api.PAMTarget{}, fmt.Errorf("%w: unknown target type", api.ErrPAMInvalid)
@@ -381,4 +400,40 @@ func (s *pamService) windowsLocalAccount(tenantID, providerID, accountSecret str
 			providerID, accountSecret)
 	}
 	return nil
+}
+
+// pamInPlaceAccountTypes are the providers whose account an account target
+// vaults (A271): each rotates one account per role in place and can put the
+// predecessor back.
+var pamInPlaceAccountTypes = map[string]bool{"esxi": true, "vcenter-sso": true, "redfish": true,
+	"iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
+
+// inPlaceAccount checks an account target's provider and secret: the
+// provider is one of pamInPlaceAccountTypes in this tenant and rotates the
+// secret's role in place as a static credential, which is the target's only
+// role.
+func (s *pamService) inPlaceAccount(tenantID, providerID, accountSecret string, roles []string) error {
+	if providerID == "" || accountSecret == "" || len(roles) != 1 || roles[0] != accountSecret {
+		return fmt.Errorf("%w: an account target names its provider and one account secret, which is its only role", api.ErrPAMInvalid)
+	}
+	if s.secretReader == nil || s.rotation.check == nil || s.rotation.queue == nil {
+		return fmt.Errorf("%w: account targets need the secrets API", api.ErrPAMInvalid)
+	}
+	for _, provider := range s.providers.ForTenant(tenantID) {
+		if provider == nil || provider.Name() != providerID {
+			continue
+		}
+		profile, ok := provider.(interface{ DynamicSecretProviderType() string })
+		static, isStatic := provider.(dynsecret.StaticRotationProvider)
+		phaser, phased := provider.(dynsecret.RotationPhaser)
+		_, restores := provider.(dynsecret.StaticCredentialRestorer)
+		switch {
+		case !ok || !pamInPlaceAccountTypes[profile.DynamicSecretProviderType()]:
+			return fmt.Errorf("%w: provider %q is not an ESXi, vCenter single sign-on, Redfish or network device provider", api.ErrPAMInvalid, providerID)
+		case !isStatic || !static.AllowsStaticRotation(accountSecret) || !phased || phaser.RotationPhase(accountSecret) != dynsecret.RotationSinglePhase || !restores:
+			return fmt.Errorf("%w: provider %q does not rotate %q in place as a static credential", api.ErrPAMInvalid, providerID, accountSecret)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: no dynamic-secret provider %s in this tenant", api.ErrPAMInvalid, providerID)
 }

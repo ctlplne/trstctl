@@ -53,8 +53,13 @@ const (
 	// vaulted in an application secret that its native provider rotates on
 	// the enrolled host. It is checked out (A261), never opened as a session.
 	pamTargetWindowsLocal = "windows_local"
-	pamTargetAWSConsole   = accessconsole.TargetAWS
-	pamTargetRDP          = accessdesktop.TargetRDP
+	// pamTargetAccount (A271) is an account its provider rotates in place
+	// (ESXi, vCenter single sign-on, Redfish controllers, network devices),
+	// vaulted in an application secret. It is checked out, never opened as a
+	// session.
+	pamTargetAccount    = "account"
+	pamTargetAWSConsole = accessconsole.TargetAWS
+	pamTargetRDP        = accessdesktop.TargetRDP
 	// pamTargetNetDevice (A270) is a network device's vaulted account: its
 	// gateway signs in to the device over SSH with the account's password.
 	pamTargetNetDevice = accessgateway.TargetNetDevice
@@ -1591,6 +1596,9 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 	}
 	if req.TargetType == pamTargetWindowsLocal {
 		return fmt.Errorf("%w: a windows_local account has no sessions; request a check-out (POST /api/v1/access/checkouts)", api.ErrPAMInvalid)
+	}
+	if req.TargetType == pamTargetAccount {
+		return fmt.Errorf("%w: an account target has no sessions; request a check-out (POST /api/v1/access/checkouts)", api.ErrPAMInvalid)
 	}
 	if !isPAMDatabaseType(req.TargetType) && req.TargetType != pamTargetSSH {
 		return fmt.Errorf("%w: target_type must be one of %s", api.ErrPAMInvalid, pamTargetTypesText())
