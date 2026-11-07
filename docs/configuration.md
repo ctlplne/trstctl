@@ -2213,6 +2213,14 @@ AccountService. It sets `endpoint` to the controller's `https://host[:port]`,
 `role_bindings`, rotated in place (single-phase), never the administrator. `addr` and
 `host_key_fingerprint` are not used.
 
+An `esxi` provider (A271) changes VMware ESXi local account passwords through the
+vSphere Web Services API. It sets `endpoint` to the host's `https://host[:port]` (the
+API is its `/sdk`), `tls_ca_ref` to its certificate or CA, `allow_private_endpoint` and
+`private_egress_cidrs` for the host, `admin_user` and `password_ref` to a local account
+with the Administrator role (root), and `allow_static_rotation: true`; each allowed role
+names one local account, rotated in place, never the administrator, `vpxuser` (vCenter's
+own account) or `dcui`.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2220,7 +2228,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip` and `redfish`. Sync `type` values are
+`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish` and `esxi`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

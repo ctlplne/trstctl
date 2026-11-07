@@ -635,10 +635,10 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns fifty-one safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fifty-two safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
-  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `okta` and `databricks`, which only
-  rotate). Each states its `authority` (what a
+  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `okta` and `databricks`,
+  which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -965,6 +965,16 @@ predecessor. Discovery lists every account with its `RoleId`; Redfish never retu
 password. The served proof runs against a Redfish stand-in: the account moves to the
 published password alone, a controller that answers but keeps the old password is
 rolled back, discovery stages each account's role, and no session is left open.
+
+`esxi` (A271) rotates VMware ESXi local accounts through the vSphere Web Services API
+(SOAP at `/sdk`): an administrator signs in (`SessionManager.Login`), changes the bound
+account with `HostLocalAccountManager.UpdateUser` and signs out; the password travels as
+escaped XML in the request body only. The change is proved by signing in as the account
+with the new password, and a change the host does not prove is put back. `vpxuser` and
+`dcui` are refused: vCenter and the console manage them. Discovery reads the local users
+(`RetrieveUserGroups`) and the roles their permissions grant (`RetrieveAllPermissions`),
+marking `vpxuser` and `dcui` as system accounts. The served proof runs against a stand-in
+of the API with the same checks as the Redfish proof.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

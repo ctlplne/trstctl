@@ -2,6 +2,9 @@
 
 ### Added
 
+- Hypervisors (A271 part 2): an `esxi` dynamic-secret provider rotates ESXi local account passwords through the vSphere
+  Web Services API (`UpdateUser`, proved by signing in), never `vpxuser` or `dcui`, single-phase with acknowledgement and
+  rollback; discovery lists local users with their roles. Provider catalog 51 -> 52 recipes.
 - Server management controllers (A271 part 1): a `redfish` dynamic-secret provider rotates controller account passwords
   through Redfish's AccountService (HPE iLO first), proved by a new session on the new password, single-phase with
   acknowledgement and rollback; discovery lists accounts with their RoleId. Provider catalog 50 -> 51 recipes.

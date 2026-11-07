@@ -530,6 +530,15 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the account UserName it rotates."),
 		)},
+		{Type: "esxi", Label: "VMware ESXi local accounts", Purpose: "Changes local account passwords on a VMware ESXi host through the vSphere Web Services API (SOAP at /sdk over HTTPS, the host's certificate pinned): an administrator signs in, changes the bound account with HostLocalAccountManager.UpdateUser and signs out. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); the change is proved by signing in as the account with the new password, and a change the host does not prove is put back. vpxuser and dcui, which vCenter and the console manage, are never rotated. Discovery lists the local users with the roles their permissions grant, never a password. It rotates only; it issues no leases. Built against a stand-in of the API; no host proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Host", "The host's https://host[:port]; the API is its /sdk.", true),
+			credential("tls_ca_ref", "Certificate pin", "The host's certificate, or the CA that issued it, PEM.", true),
+			value("tls_server_name", "Certificate name", "Optional name the certificate is checked against, when it differs from the endpoint's host.", false),
+			value("admin_user", "Administrator", "A local account with the Administrator role on the host (root); never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the local account it rotates (never vpxuser or dcui)."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -648,6 +657,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the user's own partition roles, through its password", "confirmed"
 	case "redfish":
 		return "the controller account's own Redfish role, through its password", "confirmed"
+	case "esxi":
+		return "the host account's own permissions (its roles on the host's inventory), through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

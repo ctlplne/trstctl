@@ -252,12 +252,12 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
 // through them runs only when acknowledged (A240).
-var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true}
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -363,7 +363,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
-	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {},
+	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {}, "esxi": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -382,11 +382,11 @@ var apiKeyProviderTypes = map[string]bool{
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
-var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true}
+var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -631,8 +631,8 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"unix": validateUnixProvider, "windows": validateUnixProvider,
 	"iosxe": validateNetworkDeviceProvider, "junos": validateNetworkDeviceProvider,
 	"eos": validateNetworkAPIProvider, "fortigate": validateNetworkAPIProvider, "bigip": validateNetworkAPIProvider,
-	"redfish": validateNetworkAPIProvider,
-	"okta":    validateClientSecretProvider, "databricks": validateClientSecretProvider,
+	"redfish": validateNetworkAPIProvider, "esxi": validateNetworkAPIProvider,
+	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -2465,8 +2465,8 @@ func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []e
 	} else if err := validateCredentialRef(c.PasswordRef); err != nil || strings.TrimSpace(c.PasswordRef) == "" {
 		errs = append(errs, fmt.Errorf("%s password_ref must name the administrator's password for %s", where, c.Type))
 	}
-	if c.Type == "redfish" && (strings.TrimSpace(c.Addr) != "" || c.HostKeyFingerprint != "") {
-		errs = append(errs, fmt.Errorf("%s redfish has no SSH sessions; addr and host_key_fingerprint are not used", where))
+	if (c.Type == "redfish" || c.Type == "esxi") && (strings.TrimSpace(c.Addr) != "" || c.HostKeyFingerprint != "") {
+		errs = append(errs, fmt.Errorf("%s %s has no SSH sessions; addr and host_key_fingerprint are not used", where, c.Type))
 	} else if (strings.TrimSpace(c.Addr) == "") != (c.HostKeyFingerprint == "") {
 		errs = append(errs, fmt.Errorf("%s %s sessions need both addr (the device's SSH host:port) and host_key_fingerprint, or neither", where, c.Type))
 	} else if c.Addr != "" {
@@ -2492,6 +2492,8 @@ func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []e
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the enable password, which only eos has", where, role))
 		case account == "root" && c.Type == "bigip":
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names root, which is not an iControl REST user", where, role))
+		case (account == "vpxuser" || account == "dcui") && c.Type == "esxi":
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names %s, which vCenter or the console manages", where, role, account))
 		case !networkAPIAccountName.MatchString(account):
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name a device account", where, role))
 		}

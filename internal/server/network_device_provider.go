@@ -117,3 +117,28 @@ func openConfiguredRedfishBackend(o *configuredDynamicBackendOpener) (requestDyn
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredESXiBackend builds a backend that changes an ESXi host's
+// local accounts through the vSphere Web Services API (A271), trusting only
+// the pinned certificate and only the configured egress.
+func openConfiguredESXiBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	caPEM, err := o.resolve(cfg.TLSCARef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClientWithTLS(cfg.Endpoint, cfg.AllowPrivate, false, cfg.PrivateEgressCIDRs, caPEM, cfg.TLSServerName, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewESXiBackend(dynsecret.ESXiConfig{Endpoint: cfg.Endpoint, HTTPClient: client, AdminUser: cfg.AdminUser,
+		AdminPassword: password, RoleAccounts: cfg.RoleBindings})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

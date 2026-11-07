@@ -22355,7 +22355,8 @@
               "eos",
               "fortigate",
               "bigip",
-              "redfish"
+              "redfish",
+              "esxi"
             ],
             "type": "string"
           }
