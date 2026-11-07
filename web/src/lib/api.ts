@@ -542,6 +542,7 @@ import type {
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
   PAMWindowsLocalAccountScan,
+  PAMWindowsLocalAccountHostList,
   PAMWindowsLocalAccountScanList,
   PAMServiceReconciliationApprovalRequest,
   PAMServiceReconciliationApproval,
@@ -1557,6 +1558,7 @@ export type {
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
   PAMWindowsLocalAccountScan,
+  PAMWindowsLocalAccountHostList,
   PAMWindowsLocalAccountScanList,
   PAMServiceReconciliationApprovalRequest,
   PAMServiceReconciliationApproval,
@@ -2615,6 +2617,7 @@ export interface Api {
   applyPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMImportedAccountList>;
   dismissPAMDiscoveredAccount(id: string, reason: string, idempotencyKey?: string): Promise<PAMDiscoveredAccount>;
   pamImportedAccounts(folder?: string): Promise<PAMImportedAccountList>;
+  pamWindowsLocalAccountHosts(after?: string): Promise<PAMWindowsLocalAccountHostList>;
   runPAMWindowsLocalAccountInventory(agentID: string, idempotencyKey?: string): Promise<PAMWindowsLocalAccountScan>;
   pamWindowsLocalAccountScans(agentID: string, after?: string): Promise<PAMWindowsLocalAccountScanList>;
   pamWindowsLocalAccountScan(agentID: string, id: string): Promise<PAMWindowsLocalAccountScan>;
@@ -3596,6 +3599,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PAMImportedAccountList>("POST", `/api/v1/access/discovery/imports/${encodeURIComponent(input.request_id)}/apply`, input, idempotencyKey),
   dismissPAMDiscoveredAccount: (id, reason, idempotencyKey) =>
     mutate<PAMDiscoveredAccount>("POST", `/api/v1/access/discovery/accounts/${encodeURIComponent(id)}/dismiss`, { reason }, idempotencyKey),
+  pamWindowsLocalAccountHosts: (after) =>
+    req<PAMWindowsLocalAccountHostList>("/api/v1/access/discovery/windows-hosts" + (after ? "?after=" + encodeURIComponent(after) : "")),
   runPAMWindowsLocalAccountInventory: (agentID, key) =>
     mutate<PAMWindowsLocalAccountScan>(
       "POST",

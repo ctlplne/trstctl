@@ -743,6 +743,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/windows-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page eligible enrolled hosts for local Windows administrator inventory */
+        get: operations["listPAMWindowsLocalAccountHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs": {
         parameters: {
             query?: never;
@@ -23324,6 +23341,18 @@ export interface components {
             password_required: boolean;
             sid: string;
         };
+        PAMWindowsLocalAccountHost: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_seen_at?: string;
+            name: string;
+            status: string;
+        };
+        PAMWindowsLocalAccountHostList: {
+            items: components["schemas"]["PAMWindowsLocalAccountHost"][];
+            next_cursor?: string;
+        };
         PAMWindowsLocalAccountIntent: {
             /** Format: uuid */
             agent_id: string;
@@ -29844,6 +29873,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveryRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMWindowsLocalAccountHosts: {
+        parameters: {
+            query?: {
+                /** @description last host UUID from the previous page */
+                after?: string;
+                /** @description 1-100 hosts, default 25 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMWindowsLocalAccountHostList"];
                 };
             };
             /** @description client error */

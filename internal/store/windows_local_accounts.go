@@ -259,3 +259,32 @@ func (s *Store) bindWindowsDiscoveryOutboxTx(ctx context.Context, tx pgx.Tx, ten
 	_, err := tx.Exec(ctx, `UPDATE pam_discovery_runs SET outbox_id=$3 WHERE tenant_id=$1 AND id=$2`, tenantID, v.ID, *v.OutboxID)
 	return err
 }
+
+// WindowsLocalAccountHost is the public picker projection. It intentionally
+// excludes transport configuration, plug-in grants and general agent posture.
+type WindowsLocalAccountHost struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Status     string     `json:"status"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+}
+
+func (s *Store) ListWindowsLocalAccountHosts(ctx context.Context, tenantID, after string, limit int) ([]WindowsLocalAccountHost, error) {
+	values := []WindowsLocalAccountHost{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id::text,name,status,last_seen_at FROM agents WHERE tenant_id=$1 AND id>$2::uuid AND offboarded_at IS NULL AND roles @> ARRAY['host']::text[] ORDER BY id LIMIT $3`, tenantID, after, limit+1)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var v WindowsLocalAccountHost
+			if err := rows.Scan(&v.ID, &v.Name, &v.Status, &v.LastSeenAt); err != nil {
+				return err
+			}
+			values = append(values, v)
+		}
+		return rows.Err()
+	})
+	return values, err
+}

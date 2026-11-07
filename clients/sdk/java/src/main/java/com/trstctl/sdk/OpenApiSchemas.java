@@ -942,6 +942,8 @@ public final class OpenApiSchemas {
       "PAMTerminalOutput",
       "PAMTerminalRequest",
       "PAMWindowsLocalAccount",
+      "PAMWindowsLocalAccountHost",
+      "PAMWindowsLocalAccountHostList",
       "PAMWindowsLocalAccountIntent",
       "PAMWindowsLocalAccountInventory",
       "PAMWindowsLocalAccountReport",

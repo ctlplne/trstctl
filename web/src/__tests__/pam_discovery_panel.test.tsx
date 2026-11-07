@@ -15,6 +15,7 @@ import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     pamDiscoverySources: vi.fn(),
+    pamWindowsLocalAccountHosts: vi.fn(),
     pamDiscoveredAccounts: vi.fn(),
     pamImportedAccounts: vi.fn(),
     pamServiceDependentHosts: vi.fn(),
@@ -46,6 +47,7 @@ const account = (id: string, name: string, privileges: string[]) => ({
 
 beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
+  apiMock.pamWindowsLocalAccountHosts.mockResolvedValue({ items: [] });
   apiMock.pamDiscoverySources.mockResolvedValue({
     items: [
       {
@@ -247,4 +249,27 @@ it("keeps an admitted source scan queued until the provider result is observed",
   await screen.findByText(/Scan queued-read queued for orders-pg/);
   await screen.findByText(/Scan queued-read queued; waiting for the provider read/);
   expect(screen.getByRole("button", { name: /scan.*orders-pg/i })).toBeDisabled();
+});
+
+it("routes Windows host inventory through its native panel without offering generic source scan or import", async () => {
+  const native = account("native-local", "OwnedLocalAdmin", ["local_administrator"]);
+  apiMock.pamDiscoverySources.mockResolvedValue({
+    items: [
+      {
+        provider_id: "windows-host:11111111-1111-4111-8111-111111111111",
+        provider_type: "windows_local",
+        interval_seconds: 0,
+        saved_at: "2026-11-07T00:00:00Z",
+      },
+    ],
+  });
+  apiMock.pamDiscoveredAccounts.mockResolvedValue({
+    items: [{ ...native, provider_id: "windows-host:11111111-1111-4111-8111-111111111111", kind: "local_user" }],
+  });
+  mount(true);
+  expect(await screen.findByRole("heading", { name: "Windows local administrators" })).toBeInTheDocument();
+  await waitFor(() => expect(apiMock.pamDiscoveredAccounts).toHaveBeenCalled());
+  expect(screen.queryByRole("button", { name: /Scan windows-host:/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: "Select OwnedLocalAdmin for import" })).not.toBeInTheDocument();
+  expect(apiMock.runPAMDiscovery).not.toHaveBeenCalled();
 });

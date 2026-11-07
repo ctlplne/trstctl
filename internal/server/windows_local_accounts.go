@@ -222,3 +222,31 @@ func (s *pamService) canonicalWindowsLocalAccountScan(ctx context.Context, tenan
 	}
 	return nil
 }
+
+func (s *pamService) ListPAMWindowsLocalAccountHosts(ctx context.Context, tenantID, after string, limit int) (api.PAMWindowsLocalAccountHostList, error) {
+	result := api.PAMWindowsLocalAccountHostList{Items: []store.WindowsLocalAccountHost{}}
+	if after == "" {
+		after = store.ZeroUUID
+	} else if !validUUID(after) {
+		return result, fmt.Errorf("%w: after must be a host UUID", api.ErrPAMInvalid)
+	}
+	if limit < 1 || limit > 100 {
+		return result, fmt.Errorf("%w: limit must be 1-100", api.ErrPAMInvalid)
+	}
+	values, err := s.store.ListWindowsLocalAccountHosts(ctx, tenantID, after, limit)
+	if err != nil {
+		return result, err
+	}
+	if len(values) > limit {
+		values = values[:limit]
+		result.NextCursor = values[len(values)-1].ID
+	}
+	result.Items = values
+	return result, nil
+}
+func (s *Server) ListPAMWindowsLocalAccountHosts(ctx context.Context, t, c string, n int) (api.PAMWindowsLocalAccountHostList, error) {
+	if s.pam == nil {
+		return api.PAMWindowsLocalAccountHostList{}, api.ErrPAMUnavailable
+	}
+	return s.pam.ListPAMWindowsLocalAccountHosts(ctx, t, c, n)
+}

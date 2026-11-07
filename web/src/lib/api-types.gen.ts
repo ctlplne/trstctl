@@ -9461,6 +9461,18 @@ export interface PAMWindowsLocalAccount {
   sid: string;
 }
 
+export interface PAMWindowsLocalAccountHost {
+  id: string;
+  last_seen_at?: string;
+  name: string;
+  status: string;
+}
+
+export interface PAMWindowsLocalAccountHostList {
+  items: PAMWindowsLocalAccountHost[];
+  next_cursor?: string;
+}
+
 export interface PAMWindowsLocalAccountIntent {
   agent_id: string;
   binding_digest: string;

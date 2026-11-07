@@ -43825,6 +43825,47 @@
         ],
         "type": "object"
       },
+      "PAMWindowsLocalAccountHost": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountHostList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMWindowsLocalAccountHost"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "PAMWindowsLocalAccountIntent": {
         "properties": {
           "agent_id": {
@@ -63286,6 +63327,71 @@
         ],
         "summary": "Scan a source's target now, read-only, and stage the privileged accounts it finds",
         "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/windows-hosts": {
+      "get": {
+        "operationId": "listPAMWindowsLocalAccountHosts",
+        "parameters": [
+          {
+            "description": "last host UUID from the previous page",
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-100 hosts, default 25",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMWindowsLocalAccountHostList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Page eligible enrolled hosts for local Windows administrator inventory",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs": {

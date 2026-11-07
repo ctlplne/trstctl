@@ -3069,6 +3069,12 @@ describe("CLI-parity client methods (S3.3)", () => {
       path: "/api/v1/access/discovery/accounts/account%2Fid/dependents/agent%2Fid",
     },
     {
+      name: "pamWindowsLocalAccountHosts",
+      call: () => api.pamWindowsLocalAccountHosts("agent/id"),
+      method: "GET",
+      path: "/api/v1/access/discovery/windows-hosts?after=agent%2Fid",
+    },
+    {
       name: "runPAMWindowsLocalAccountInventory",
       call: () => api.runPAMWindowsLocalAccountInventory("agent/id"),
       method: "POST",

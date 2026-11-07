@@ -13,6 +13,7 @@ func TestWindowsLocalAccountInventoryCommandsA268(t *testing.T) {
 		method, path string
 		args         []string
 	}{
+		{"GET", "/api/v1/access/discovery/windows-hosts", []string{"access", "discovery", "windows-local", "hosts", "--limit", "1", "--after", "host"}},
 		{"POST", "/api/v1/access/discovery/windows-hosts/host/local-administrators/runs", []string{"access", "discovery", "windows-local", "scan", "host"}},
 		{"GET", "/api/v1/access/discovery/windows-hosts/host/local-administrators/runs", []string{"access", "discovery", "windows-local", "runs", "host", "--limit", "1", "--after", "run"}},
 		{"GET", "/api/v1/access/discovery/windows-hosts/host/local-administrators/runs/run", []string{"access", "discovery", "windows-local", "run", "host", "run"}},

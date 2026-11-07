@@ -1,6 +1,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The named table overflow regions need keyboard focus for horizontal scrolling. */
 import { useEffect, useId, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { PAMWindowsLocalAccounts } from "./PAMWindowsLocalAccounts";
 import { PAMDependentRotation } from "./PAMDependentRotation";
 import { api, type PAMDiscoveredAccount, type PAMDiscoveryImportRequest, type PAMDiscoveryImportReview } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
@@ -139,7 +140,8 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
     });
 
   const discoverable = (providers.data?.configured_providers ?? []).filter((p) => DISCOVERABLE.has(p.type));
-  const stagedItems = staged.data?.items ?? [];
+  const stagedItems = (staged.data?.items ?? []).filter((account) => !account.provider_id.startsWith("windows-host:"));
+  const providerSources = (sources.data?.items ?? []).filter((source) => source.provider_type !== "windows_local");
   const importedNativeByID = new Map((importedNative.data?.items ?? []).map((a) => [a.id, a]));
   return (
     <section aria-labelledby="pam-discovery-heading" className="grid gap-3">
@@ -157,8 +159,8 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
       {error ? <ErrorState title={t("admin.access.discovery.failed")}>{error}</ErrorState> : null}
 
       {sources.loading ? <LoadingState>{t("admin.access.discovery.loading")}</LoadingState> : null}
-      {sources.data && sources.data.items.length === 0 ? <UnavailableState title={t("admin.access.discovery.noSources")} /> : null}
-      {sources.data && sources.data.items.length > 0 ? (
+      {sources.data && providerSources.length === 0 ? <UnavailableState title={t("admin.access.discovery.noSources")} /> : null}
+      {sources.data && providerSources.length > 0 ? (
         <div className="overflow-auto" tabIndex={0} role="region" aria-label={t("admin.access.discovery.sources")}>
           <table className="ui-table">
             <caption className="sr-only">{t("admin.access.discovery.sources")}</caption>
@@ -171,7 +173,7 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {sources.data.items.map((source) => (
+              {providerSources.map((source) => (
                 <tr key={source.provider_id}>
                   <td>
                     {source.provider_id} <span className="text-muted-foreground">({source.provider_type})</span>
@@ -253,6 +255,8 @@ export function PAMDiscoveryPanel({ canManage }: { canManage: boolean }) {
           </Button>
         </form>
       ) : null}
+
+      <PAMWindowsLocalAccounts canManage={canManage} />
 
       <h4 className="text-sm font-semibold">{t("admin.access.discovery.staged")}</h4>
       {staged.data && stagedItems.length === 0 ? <UnavailableState title={t("admin.access.discovery.noStaged")} /> : null}

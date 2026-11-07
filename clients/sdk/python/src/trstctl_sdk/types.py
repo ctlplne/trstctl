@@ -13175,6 +13175,26 @@ PAMWindowsLocalAccount = TypedDict(
     total=False,
 )
 
+PAMWindowsLocalAccountHost = TypedDict(
+    'PAMWindowsLocalAccountHost',
+    {
+        'id': str,
+        'last_seen_at': str,
+        'name': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountHostList = TypedDict(
+    'PAMWindowsLocalAccountHostList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 PAMWindowsLocalAccountIntent = TypedDict(
     'PAMWindowsLocalAccountIntent',
     {

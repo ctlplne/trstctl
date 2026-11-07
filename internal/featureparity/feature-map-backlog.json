@@ -14631,7 +14631,8 @@
                 "listPAMServiceDependentRotationSteps",
                 "runPAMWindowsLocalAccountInventory",
                 "listPAMWindowsLocalAccountScans",
-                "getPAMWindowsLocalAccountScan"
+                "getPAMWindowsLocalAccountScan",
+                "listPAMWindowsLocalAccountHosts"
             ],
             "api_na": "",
             "cli_surface": [
@@ -14748,7 +14749,8 @@
                 "access discovery rotation steps",
                 "access discovery windows-local scan",
                 "access discovery windows-local runs",
-                "access discovery windows-local run"
+                "access discovery windows-local run",
+                "access discovery windows-local hosts"
             ],
             "cli_na": "",
             "facet_evidence": {

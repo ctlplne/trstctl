@@ -1236,9 +1236,16 @@ This grant permits a local read only. It grants no credential redemption,
 password change, filesystem root or command execution. Domain controllers are
 refused; their account database is the directory rather than a member host's SAM.
 
-Use the enrolled host UUID shown by the agent inventory:
+Open **Windows local administrators** in Access discovery, select an enrolled
+host and choose **Scan local administrators**. The picker needs Access read
+permission and does not expose general agent configuration. Only a host role is
+eligible; a selected non-Windows host returns explicit unavailable coverage.
+The scan and host stay in the URL so a reader can reopen the same signed result.
+
+Use the CLI to page the same eligible hosts and scans:
 
 ```sh
+trstctl access discovery windows-local hosts --limit 25
 trstctl access discovery windows-local scan HOST_UUID
 trstctl access discovery windows-local runs HOST_UUID --limit 25
 trstctl access discovery windows-local run HOST_UUID RUN_UUID
@@ -1260,6 +1267,6 @@ bounded reason rather than raw operating-system errors. The signed public report
 is limited to one MiB and 5,000 local accounts; the native reader has one worker
 slot and a thirty-second request deadline. No password or password hash is read.
 
-This API and CLI inventory path does not yet configure fleet password rotation.
+This inventory path does not yet configure fleet password rotation.
 Scheduled rotation, checkout invalidation and native Windows qualification remain
 separate from discovering an account.

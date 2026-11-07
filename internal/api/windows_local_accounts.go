@@ -15,7 +15,12 @@ type PAMWindowsLocalAccountScanList struct {
 	Items      []store.WindowsLocalAccountScan `json:"items"`
 	NextCursor string                          `json:"next_cursor,omitempty"`
 }
+type PAMWindowsLocalAccountHostList struct {
+	Items      []store.WindowsLocalAccountHost `json:"items"`
+	NextCursor string                          `json:"next_cursor,omitempty"`
+}
 type PAMWindowsLocalAccountService interface {
+	ListPAMWindowsLocalAccountHosts(context.Context, string, string, int) (PAMWindowsLocalAccountHostList, error)
 	RunPAMWindowsLocalAccountInventory(context.Context, string, string, string, string) (store.WindowsLocalAccountScan, error)
 	GetPAMWindowsLocalAccountScan(context.Context, string, string, string) (store.WindowsLocalAccountScan, error)
 	ListPAMWindowsLocalAccountScans(context.Context, string, string, string, int) (PAMWindowsLocalAccountScanList, error)
@@ -37,6 +42,7 @@ func windowsLocalAccountError(err error) error {
 func (a *API) pamWindowsLocalAccountRoutes() []route {
 	root := "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs"
 	return []route{
+		{method: "GET", path: "/api/v1/access/discovery/windows-hosts", opID: "listPAMWindowsLocalAccountHosts", summary: "Page eligible enrolled hosts for local Windows administrator inventory", handler: a.listPAMWindowsLocalAccountHosts, query: []param{{name: "after", typ: "string", desc: "last host UUID from the previous page"}, {name: "limit", typ: "integer", desc: "1-100 hosts, default 25"}}, resSchema: "PAMWindowsLocalAccountHostList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: root, opID: "runPAMWindowsLocalAccountInventory", summary: "Queue read-only local administrator inventory on one enrolled Windows host", handler: a.runPAMWindowsLocalAccountInventory, pathParams: []param{pathUUID("agent_id")}, resSchema: "PAMWindowsLocalAccountScan", successCode: "202", perm: authz.AccessTargetsWrite},
 		{method: "GET", path: root, opID: "listPAMWindowsLocalAccountScans", summary: "Page retained local administrator scans for an enrolled host", handler: a.listPAMWindowsLocalAccountScans, pathParams: []param{pathUUID("agent_id")}, query: []param{{name: "after", typ: "string", desc: "last scan UUID from the previous page"}, {name: "limit", typ: "integer", desc: "1-100 scans, default 25"}}, resSchema: "PAMWindowsLocalAccountScanList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: root + "/{id}", opID: "getPAMWindowsLocalAccountScan", summary: "Read exact signed local administrator inventory and delivery state", handler: a.getPAMWindowsLocalAccountScan, pathParams: []param{pathUUID("agent_id"), pathUUID("id")}, resSchema: "PAMWindowsLocalAccountScan", successCode: "200", perm: authz.AccessRead},
@@ -103,6 +109,42 @@ func (a *API) listPAMWindowsLocalAccountScans(w http.ResponseWriter, r *http.Req
 	}
 	a.writeJSON(w, http.StatusOK, v)
 }
+func (a *API) listPAMWindowsLocalAccountHosts(w http.ResponseWriter, r *http.Request) {
+	service, err := a.windowsLocalAccountService()
+	if err != nil {
+		a.writeServiceDependentError(w, err)
+		return
+	}
+	tenant, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	after := r.URL.Query().Get("after")
+	if after != "" {
+		id, err := googleuuid.Parse(after)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "after must be a host UUID"))
+			return
+		}
+		after = id.String()
+	}
+	limit := 25
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > 100 {
+			a.writeError(w, errStatus(http.StatusBadRequest, "limit must be 1-100"))
+			return
+		}
+		limit = n
+	}
+	result, err := service.ListPAMWindowsLocalAccountHosts(r.Context(), tenant, after, limit)
+	if err != nil {
+		a.writeServiceDependentError(w, windowsLocalAccountError(err))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, result)
+}
 func windowsLocalAccountSchemas() map[string]*Schema {
 	integer := func() *Schema { return &Schema{Type: "integer"} }
 	boolean := func() *Schema { return &Schema{Type: "boolean"} }
@@ -110,6 +152,8 @@ func windowsLocalAccountSchemas() map[string]*Schema {
 	id := func() *Schema { return &Schema{Type: "string", Format: "uuid"} }
 	stamp := func() *Schema { return &Schema{Type: "string", Format: "date-time"} }
 	return map[string]*Schema{
+		"PAMWindowsLocalAccountHost":      object(map[string]*Schema{"id": id(), "name": str(), "status": str(), "last_seen_at": stamp()}, "id", "name", "status"),
+		"PAMWindowsLocalAccountHostList":  object(map[string]*Schema{"items": array(ref("PAMWindowsLocalAccountHost")), "next_cursor": str()}, "items"),
 		"PAMWindowsLocalAccountIntent":    object(map[string]*Schema{"run_id": id(), "tenant_id": id(), "agent_id": id(), "binding_digest": str()}, "run_id", "tenant_id", "agent_id", "binding_digest"),
 		"PAMWindowsSAMMachine":            object(map[string]*Schema{"name": str(), "sid": str(), "role": integer()}, "name", "sid", "role"),
 		"PAMWindowsLocalAccount":          object(map[string]*Schema{"name": str(), "sid": str(), "enabled": boolean(), "locked": boolean(), "password_required": boolean()}, "name", "sid", "enabled", "locked", "password_required"),

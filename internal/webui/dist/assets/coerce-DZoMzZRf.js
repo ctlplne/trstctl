@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-CGbx-DYt.js";function r(r){return s(t,r)}export{r as t};
