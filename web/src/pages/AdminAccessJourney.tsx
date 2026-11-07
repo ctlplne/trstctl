@@ -43,6 +43,7 @@ import { PAMFoldersPanel } from "@/pages/PAMFoldersPanel";
 import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
 import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 import { PAMCheckoutPanel } from "@/pages/PAMCheckoutPanel";
+import { PAMBreakGlassPanel } from "@/pages/PAMBreakGlassPanel";
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -858,6 +859,13 @@ export function AdminAccess() {
                   subject={user?.subject ?? ""}
                   canRequest={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:sessions.open")}
                   canCheckInAny={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")}
+                />
+              ) : null}
+              {pamRows ? (
+                <PAMBreakGlassPanel
+                  subject={user?.subject ?? ""}
+                  canRelease={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:sessions.open")}
+                  canReview={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:approve")}
                 />
               ) : null}
             </div>

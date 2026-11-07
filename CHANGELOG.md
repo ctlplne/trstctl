@@ -2,6 +2,10 @@
 
 ### Added
 
+- Break-glass accounts (A272 console): the access targets panel registers `breakglass` targets; a new Break-glass
+  accounts panel releases one as a named responder after a confirmation that every approver is notified, shows its
+  username, password, one-time code and hardware key holders once, checks it in, and lists emergency grants with another
+  approver's post-incident review. Reviewed check-outs no longer offer break-glass or web console accounts.
 - Accounts rotated in place (A271 console): the access targets panel registers `account` targets — an `esxi`,
   `vcenter-sso`, `redfish` or network device provider and one account secret, with no gateway fields — for check-out.
 - Windows local administrator accounts (A268 console): the access targets panel registers `windows_local` targets — a

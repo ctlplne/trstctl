@@ -407,3 +407,27 @@ it("registers an account its provider rotates in place for check-out, with no ga
     ),
   );
 });
+
+it("registers a break-glass identity provider administrator with its provider and no gateway (A272)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "okta-bg");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "breakglass");
+  expect(within(form).queryByRole("textbox", { name: "Gateway agent ID" })).not.toBeInTheDocument();
+  expect(within(form).getByText(/released only through emergency access/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "okta-org");
+  const secret = within(form).getByRole("combobox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "bg/okta");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      { id: "okta-bg", target_type: "breakglass", provider_id: "okta-org", allowed_roles: ["bg/okta"], account_secret: "bg/okta" },
+      expect.any(String),
+    ),
+  );
+});

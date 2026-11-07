@@ -9400,15 +9400,16 @@ named responder, once, with every approver notified, the current TOTP code compu
 provider records; check-in or its deadline rotates it, and its grant takes a
 post-incident review. The A258 health worker checks each break-glass account's vaulted
 password once per interval where the provider has a non-interactive check, never repeating
-a refused one, so it never trips a lockout. Proof today: `TestIdPAdminRotationA272`,
+a refused one, so it never trips a lockout. The console registers `breakglass` targets,
+releases one (after a confirmation that every approver is notified) with its code and key
+holders, checks it in, and records another approver's post-incident review. Proof today:
+`TestIdPAdminRotationA272`,
 `TestServedIdPAdminRotationA272`, `TestServedBreakGlassEmergencyCheckoutA272` and
 `TestServedBreakGlassHealthNeverLocksOutA272` against
 stand-ins built from Okta's, Microsoft's and Google's API references; no live tenant has
 run them.
 
 What comes next:
-- Releasing a break-glass account from the console (today the API and
-  `trstctl access emergency checkout`).
 - Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
 
 ## Internal web admin consoles (A273) — built against a stand-in console

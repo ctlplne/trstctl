@@ -21,7 +21,21 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole", "windows_local", "account"]),
+    target_type: z.enum([
+      "postgres",
+      "ssh",
+      "snowflake",
+      "aws",
+      "gcp",
+      "azure",
+      "aws-console",
+      "rdp",
+      "netdevice",
+      "webconsole",
+      "windows_local",
+      "account",
+      "breakglass",
+    ]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -95,6 +109,8 @@ const emptyTarget: TargetForm = {
 const CHECKOUT_PROVIDER_TYPES: Record<string, string[]> = {
   windows_local: ["windows"],
   account: ["esxi", "vcenter-sso", "redfish", "iosxe", "junos", "eos", "fortigate", "bigip"],
+  // A272: released only through emergency access.
+  breakglass: ["okta-user", "entra-user", "google-workspace-user"],
 };
 function isCheckoutAccount(targetType: string): boolean {
   return targetType in CHECKOUT_PROVIDER_TYPES;
@@ -317,6 +333,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="webconsole">{t("admin.access.webconsole.target")}</option>
               <option value="windows_local">{t("admin.access.windowsLocal.target")}</option>
               <option value="account">{t("admin.access.inPlaceAccount.target")}</option>
+              <option value="breakglass">{t("admin.access.breakglass.target")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
               <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
@@ -436,6 +453,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           {targetType === "webconsole" ? <p>{t("admin.access.webconsole.proof")}</p> : null}
           {targetType === "windows_local" ? <p>{t("admin.access.windowsLocal.proof")}</p> : null}
           {targetType === "account" ? <p>{t("admin.access.inPlaceAccount.proof")}</p> : null}
+          {targetType === "breakglass" ? <p>{t("admin.access.breakglass.proof")}</p> : null}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}

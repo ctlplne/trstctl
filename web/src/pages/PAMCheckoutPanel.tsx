@@ -58,7 +58,11 @@ export function PAMCheckoutPanel({ subject, canRequest, canCheckInAny }: { subje
       setBusy(false);
     }
   }
-  const vaulted = (targets.data?.items ?? []).filter((target) => target.account_secret && target.enabled);
+  // A break-glass account is released only through emergency access (A272)
+  // and a web console account is never shown (A273): neither is checked out.
+  const vaulted = (targets.data?.items ?? []).filter(
+    (target) => target.account_secret && target.enabled && target.target_type !== "breakglass" && target.target_type !== "webconsole",
+  );
   const requestCheckout = () =>
     act(async () => {
       const [targetType, targetID] = form.target.split("/");

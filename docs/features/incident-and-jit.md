@@ -1404,6 +1404,13 @@ same release is never shown again. Checking it in (`trstctl access checkouts che
 its deadline, rotates the password at the identity provider, and the grant waits for a
 post-incident review by someone else (`trstctl access emergency review`).
 
+In the console, register one under the access targets (type **Break-glass identity provider
+administrator**: its provider and account secret, no gateway). The **Break-glass accounts**
+panel releases it — after a confirmation that every approver is notified — and shows the
+username, password, current one-time code and the hardware key holders once, with a check-in
+that rotates the password; its emergency grants table records another approver's
+post-incident review (never the responder's own).
+
 The credential health worker (A258) checks each break-glass account by signing in once
 with its vaulted password where the identity provider allows a non-interactive check
 (Okta's Authentication API; an Entra ID resource-owner sign-in, where an MFA step after

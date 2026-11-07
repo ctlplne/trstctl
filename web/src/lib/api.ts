@@ -567,6 +567,10 @@ import type {
   PAMCheckoutReveal,
   PAMCheckoutRevealRequest,
   PAMCheckoutReview,
+  PAMEmergencyCheckout,
+  PAMEmergencyGrant,
+  PAMEmergencyGrantList,
+  PAMEmergencyReviewRequest,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1583,6 +1587,10 @@ export type {
   PAMCheckoutReveal,
   PAMCheckoutRevealRequest,
   PAMCheckoutReview,
+  PAMEmergencyCheckout,
+  PAMEmergencyGrant,
+  PAMEmergencyGrantList,
+  PAMEmergencyReviewRequest,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2662,6 +2670,11 @@ export interface Api {
   requestPAMCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMCheckoutReview>;
   revealPAMCheckout(requestID: string, input: PAMCheckoutRevealRequest, idempotencyKey?: string): Promise<PAMCheckoutReveal>;
   checkInPAMCheckout(requestID: string, idempotencyKey?: string): Promise<PAMCheckout>;
+  /** A272: release a break-glass account once as a named responder; every approver is notified. */
+  openPAMEmergencyCheckout(input: PAMCheckoutRequest, idempotencyKey?: string): Promise<PAMEmergencyCheckout>;
+  /** A258/A272: emergency grants, newest first, with their post-incident reviews. */
+  pamEmergencyGrants(): Promise<PAMEmergencyGrantList>;
+  reviewPAMEmergencyGrant(id: string, input: PAMEmergencyReviewRequest, idempotencyKey?: string): Promise<PAMEmergencyGrant>;
   pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
   pamRecordingVerify(id: string): Promise<PAMRecordingVerification>;
   pamRecordingFrames(id: string, from: number): Promise<PAMRecordingFrames>;
@@ -3699,6 +3712,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PAMCheckoutReveal>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/reveal`, input, idempotencyKey),
   checkInPAMCheckout: (requestID, idempotencyKey) =>
     mutate<PAMCheckout>("POST", `/api/v1/access/checkouts/${encodeURIComponent(requestID)}/checkin`, undefined, idempotencyKey),
+  openPAMEmergencyCheckout: (input, idempotencyKey) => mutate<PAMEmergencyCheckout>("POST", "/api/v1/access/emergency-checkouts", input, idempotencyKey),
+  pamEmergencyGrants: () => req<PAMEmergencyGrantList>("/api/v1/access/emergency-sessions"),
+  reviewPAMEmergencyGrant: (id, input, idempotencyKey) =>
+    mutate<PAMEmergencyGrant>("POST", `/api/v1/access/emergency-sessions/${encodeURIComponent(id)}/review`, input, idempotencyKey),
   pamCommandActions: (id, options) =>
     req<PAMCommandActionList>(
       `/api/v1/access/sessions/${encodeURIComponent(id)}/actions?limit=50${options?.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`,
