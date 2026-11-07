@@ -174,28 +174,33 @@ func (a *API) validateCanonicalManifest(ctx context.Context, tenantID string, st
 	return previous, nil
 }
 func (a *API) validateManifestHostSource(ctx context.Context, tenantID string, header servicedependents.RotationManifestHeader, host servicedependents.RotationManifestHost) error {
+	_, err := a.manifestHostSource(ctx, tenantID, header, host)
+	return err
+}
+func (a *API) manifestHostSource(ctx context.Context, tenantID string, header servicedependents.RotationManifestHeader, host servicedependents.RotationManifestHost) (servicedependents.RotationHostInput, error) {
+	var none servicedependents.RotationHostInput
 	if host.Validate(header) != nil {
-		return manifestConflict()
+		return none, manifestConflict()
 	}
 	saved, err := a.store.GetServiceDependentScan(ctx, tenantID, host.InventoryRunID)
 	if err != nil {
-		return err
+		return none, err
 	}
 	if saved.Report == nil || saved.Status != "complete" || saved.Intent.Binding != host.Binding || saved.ReportDigest != host.InventoryDigest || !saved.Report.ObservedAt.Equal(host.ObservedAt) {
-		return manifestConflict()
+		return none, manifestConflict()
 	}
 	if err := a.validateDependentScanSource(ctx, tenantID, saved); err != nil {
-		return err
+		return none, err
 	}
 	queued, found, err := a.log.EventByID(ctx, saved.QueuedEventID)
 	if err != nil {
-		return err
+		return none, err
 	}
 	var native projections.ServiceDependentScanQueued
 	if !found || queued.TenantID != tenantID || queued.Type != projections.EventServiceDependentScanQueued || json.Unmarshal(queued.Data, &native) != nil || native.Intent.Binding != host.Binding {
-		return manifestConflict()
+		return none, manifestConflict()
 	}
-	return nil
+	return servicedependents.RotationHostInput{Binding: saved.Intent.Binding, Inventory: *saved.Report, InventoryDigest: saved.ReportDigest}, nil
 }
 func (a *API) appendManifestSource(ctx context.Context, tenantID, id, kind string, at time.Time, value any) error {
 	raw, err := json.Marshal(value)
@@ -363,25 +368,31 @@ func (a *API) currentManifestAuthority(ctx context.Context, tenantID string, hea
 	return nil
 }
 func (a *API) currentManifestHost(ctx context.Context, tenantID string, header servicedependents.RotationManifestHeader, host servicedependents.RotationManifestHost) error {
-	if err := a.validateManifestHostSource(ctx, tenantID, header, host); err != nil {
-		return err
+	_, err := a.currentManifestHostInput(ctx, tenantID, header, host)
+	return err
+}
+func (a *API) currentManifestHostInput(ctx context.Context, tenantID string, header servicedependents.RotationManifestHeader, host servicedependents.RotationManifestHost) (servicedependents.RotationHostInput, error) {
+	var none servicedependents.RotationHostInput
+	input, err := a.manifestHostSource(ctx, tenantID, header, host)
+	if err != nil {
+		return none, err
 	}
 	saved, err := a.store.GetServiceDependentHost(ctx, tenantID, header.Account.AccountID, host.Binding.AgentID)
 	if err != nil {
-		return err
+		return none, err
 	}
 	if saved.Binding != host.Binding || host.Binding.Revision <= 0 {
-		return manifestConflict()
+		return none, manifestConflict()
 	}
 	event, found, err := a.log.EventAtSequence(ctx, uint64(host.Binding.Revision))
 	if err != nil {
-		return err
+		return none, err
 	}
 	var selected projections.ServiceDependentHostSaved
 	if !found || event.TenantID != tenantID || event.Type != projections.EventServiceDependentHostSaved || json.Unmarshal(event.Data, &selected) != nil || selected.Account != host.Binding.Account || selected.AgentID != host.Binding.AgentID || !selected.Enabled {
-		return manifestConflict()
+		return none, manifestConflict()
 	}
-	return nil
+	return input, nil
 }
 
 //trstctl:mutation
@@ -614,7 +625,26 @@ func (a *API) getPAMServiceDependentReview(w http.ResponseWriter, r *http.Reques
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, state)
+	view := struct {
+		store.ServiceDependentManifest
+		Intent       *servicedependents.RotationIntent `json:"intent,omitempty"`
+		IntentDigest string                            `json:"intent_digest,omitempty"`
+	}{ServiceDependentManifest: state}
+	if state.Seal != nil {
+		intent, err := servicedependents.NewRotationIntentFromManifest(state.Header, *state.Seal)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		digest, err := intent.Digest()
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		view.Intent = &intent
+		view.IntentDigest = digest
+	}
+	a.writeJSON(w, http.StatusOK, view)
 }
 func (a *API) getPAMServiceDependentReviewPage(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)

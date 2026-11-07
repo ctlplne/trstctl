@@ -2826,8 +2826,13 @@ Native Windows execution and the combined final-image journey remain unverified.
 A headless operator can record an entire selected account's public native scope
 in immutable pages. Each page is at most 64 KiB; the account has one header and
 one final seal. Header, page and seal creation do not reset a directory password
-or send a credential to a host. Large-manifest execution and console authoring
-remain under construction; the existing inline rotation workflow remains available.
+or send a credential to a host. Once sealed, the review's GET response includes
+an `intent` and `intent_digest` computed by the server. Queue those exact values
+through the existing dependent rotation endpoint, with
+`acknowledge_single_phase: true`; the CLI's `rotation queue` also requires
+`--force`. The whole account keeps one operation and one directory generation.
+Paged console authoring remains under construction; use the API or CLI for this
+path.
 
 ```sh
 trstctl access discovery reviews open ACCOUNT_ID -f review.json
@@ -2836,6 +2841,21 @@ trstctl access discovery reviews page REVIEW_ID 0
 trstctl access discovery reviews get REVIEW_ID
 trstctl access discovery reviews seal REVIEW_ID -f seal.json
 ```
+
+A reconciliation uses the same sealed intent with `mode: "reconcile"`. Request
+its independent approval before queuing. An approver with `access:approve` can
+read each proposed page using `access discovery reviews approval-page REVIEW_ID
+PAGE`; the page must belong to an actual frozen reconciliation review. The
+approver does not need a vault credential. Read all pages and the final seal
+before approving the complete account.
+
+Execution keeps the global order: preflight every reference, stop active services
+and pools in reverse order, update password-bearing dependents, start what was
+active, then collect useful-work probes. Each step names its exact page and
+position. Advancing that position requires the original event record and a
+successful signed report, or a frozen snapshot proving the stage has no effect.
+A pending event whose SQL projection was lost blocks the old host grant until
+that exact metadata is restored; it never grants permission to rerun native work.
 
 `review.json` contains the `secret_name` and optional `mode: "reconcile"`. The
 server freezes the exact AD account, provider configuration, current vault version,

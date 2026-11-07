@@ -114,13 +114,10 @@ func (a *API) requestPAMServiceReconciliationApproval(w http.ResponseWriter, r *
 		if !now.Before(req.Intent.Plan.ExpiresAt) || req.Intent.Plan.CreatedAt.After(now.Add(time.Minute)) {
 			return 0, nil, errStatus(http.StatusConflict, "review expired; rescan before requesting reconciliation")
 		}
-		inputs, err := a.dependentRotationInputs(ctx, tenantID, r.PathValue("account_id"))
-		if err != nil {
-			return 0, nil, err
-		}
-		if err = req.Intent.Validate(inputs); err != nil {
+		if err := a.validateDependentIntentCurrent(ctx, tenantID, req.Intent); err != nil {
 			return 0, nil, errWithStatus(http.StatusConflict, err)
 		}
+
 		if _, err = a.dependentIntentProvider(tenantID, req.Intent); err != nil {
 			return 0, nil, err
 		}
@@ -201,6 +198,9 @@ func (a *API) appendDependentRotationQueued(ctx context.Context, tenantID string
 	next := events.Event{ID: queued.Intent.Plan.ID, TenantID: tenantID, Type: projections.EventServiceDependentRotationQueued, SchemaVersion: 1, Time: queued.At, Data: raw}
 	if queued.Intent.Mode == servicedependents.Reconcile {
 		next.SchemaVersion = projections.ServiceDependentReconcileSchemaVersion
+	}
+	if queued.Intent.Plan.Manifest != nil {
+		next.SchemaVersion = projections.ServiceDependentManifestSchemaVersion
 	}
 	if err := projections.ValidateServiceDependentRotationSource(next, queued); err != nil {
 		return err

@@ -11966,6 +11966,26 @@ PAMDependentInventoryReport = TypedDict(
     total=False,
 )
 
+PAMDependentManifestCursor = TypedDict(
+    'PAMDependentManifestCursor',
+    {
+        'direction': str,
+        'position': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMDependentManifestPosition = TypedDict(
+    'PAMDependentManifestPosition',
+    {
+        'entry_index': int,
+        'entry_ordinal': int,
+        'page_number': int,
+        'stage': str,
+    },
+    total=False,
+)
+
 PAMDependentNativePool = TypedDict(
     'PAMDependentNativePool',
     {
@@ -12058,6 +12078,7 @@ PAMDependentRotationPlan = TypedDict(
         'expires_at': str,
         'hosts': list[dict[str, Any]],
         'id': str,
+        'manifest': dict[str, Any],
         'order': list[dict[str, Any]],
         'secret_name': str,
         'version': int,
@@ -12073,6 +12094,7 @@ PAMDependentRotationStep = TypedDict(
         'challenge': str,
         'deadline': str,
         'direction': str,
+        'manifest_position': dict[str, Any],
         'not_before': str,
         'plan_digest': str,
         'pool': dict[str, Any],
@@ -12628,6 +12650,8 @@ PAMServiceDependentReview = TypedDict(
         'header': dict[str, Any],
         'header_digest': str,
         'host_count': int,
+        'intent': dict[str, Any],
+        'intent_digest': str,
         'page_count': int,
         'seal': dict[str, Any],
     },
@@ -12745,6 +12769,9 @@ PAMServiceDependentRotation = TypedDict(
         'id': str,
         'intent': dict[str, Any],
         'intent_digest': str,
+        'manifest_cursor': dict[str, Any],
+        'manifest_cursor_sequence': int,
+        'manifest_cursor_source_id': str,
         'tenant_epoch': str,
         'updated_at': str,
     },

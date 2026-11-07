@@ -847,6 +847,8 @@ public final class OpenApiSchemas {
       "PAMDependentHostBinding",
       "PAMDependentInventoryIntent",
       "PAMDependentInventoryReport",
+      "PAMDependentManifestCursor",
+      "PAMDependentManifestPosition",
       "PAMDependentNativePool",
       "PAMDependentNativeService",
       "PAMDependentNativeTask",

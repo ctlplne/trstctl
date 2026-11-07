@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"net/http"
@@ -300,6 +301,9 @@ func TestServedDependentReconciliationRequiresIndependentReviewA267(t *testing.T
 }
 
 type dependentRotationOptions struct {
+	ManifestExecution       bool
+	ManifestResetScopeFault bool
+	ManifestCursorFaults    bool
 	ManifestReviewOnly      bool
 	ManifestDependencyOrder bool
 	ManifestLargeReview     bool
@@ -483,7 +487,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		t.Fatal("inventory not accepted", e)
 	}
 	if scenario.ManifestLargeReview {
-		servedLargeDependentManifestReview(t, h, token, root, inventoryIntent.Binding, inventory, directory, projector)
+		servedLargeDependentManifestReview(t, h, token, root, inventoryIntent.Binding, inventory, directory, projector, scenario.ManifestExecution)
 		return
 	}
 	if scenario.ManifestReviewOnly {
@@ -537,6 +541,17 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 	}
 	if code != 200 || json.Unmarshal(body, &preview) != nil || preview.Digest == "" {
 		t.Fatalf("reviewed dependent rotation: status=%d body=%s", code, body)
+	}
+	if scenario.ManifestExecution {
+		preview.Intent = servedDependentExecutionManifest(t, h, token, root, inventoryIntent.Binding, inventory, reconcile)
+		preview.Digest, e = preview.Intent.Digest()
+		if e != nil {
+			t.Fatal(e)
+		}
+		body, e = json.Marshal(preview)
+		if e != nil {
+			t.Fatal(e)
+		}
 	}
 	request := map[string]any{"intent": preview.Intent, "intent_digest": preview.Digest, "acknowledge_single_phase": true}
 	if reconcile {
@@ -617,6 +632,26 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		}
 		if status, _ := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/discovery/reconciliation-reviews/"+preview.Intent.Plan.ID, token, nil); status != http.StatusForbidden {
 			t.Fatalf("review manifest omitted independent review permission: %d", status)
+		}
+		if scenario.ManifestExecution {
+			count := int64(0)
+			previous := preview.Intent.Plan.Manifest.HeaderDigest
+			for number := int64(0); number < preview.Intent.Plan.Manifest.PageCount; number++ {
+				path := fmt.Sprintf("/api/v1/access/discovery/reconciliation-reviews/%s/pages/%d", preview.Intent.Plan.ID, number)
+				status, raw := secretsReq(t, h.servedHarness, http.MethodGet, path, reviewer, nil)
+				var page servicedependents.RotationManifestPage
+				if status != http.StatusOK || json.Unmarshal(raw, &page) != nil || page.Number != number || page.HeaderDigest != preview.Intent.Plan.Manifest.HeaderDigest || page.PreviousDigest != previous {
+					t.Fatalf("independent approver cannot read exact native page: %d %s", status, raw)
+				}
+				previous = page.Digest
+				count += int64(len(page.Entries))
+				if status, _ := secretsReq(t, h.servedHarness, http.MethodGet, path, token, nil); status != http.StatusForbidden {
+					t.Fatal("requester acquired independent page review authority")
+				}
+			}
+			if count != preview.Intent.Plan.Manifest.EntryCount || previous != preview.Intent.Plan.Manifest.TailDigest {
+				t.Fatal("approver manifest omitted native effects")
+			}
 		}
 		code, body = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/approval-requests/"+review.RequestID+"/approvals", reviewer, "approve-exact-reconciliation", map[string]string{"intent_digest": review.Digest})
 		if code != http.StatusOK {
@@ -904,6 +939,10 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		if receipt, e := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, outcome, string(raw), crypto.SHA256Hex(raw))); e != nil || !receipt.Accepted {
 			t.Fatalf("native step report rejected %s %s: %v", step.Direction, step.Action, e)
 		}
+		if scenario.ManifestResetScopeFault && step.Action == servicedependents.Preflight && len(seen) == 3 {
+			proveDependentFinalPreflightScopeFence(t, h, token, root, queued.Rotation.CommandID, directory)
+			return
+		}
 		if recoverThisStep {
 			requestDependentInverseRecovery(t, h, token, step)
 			recoveredInverse = true
@@ -926,6 +965,9 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 				return e
 			}); e != nil {
 				t.Fatal(e)
+			}
+			if scenario.ManifestCursorFaults {
+				proveDependentCursorProjectionGap(t, h, step, directory)
 			}
 		}
 		if !movedVault && step.Direction == servicedependents.Forward && (staleVault && step.Action == servicedependents.Preflight || lateVault && step.Action == servicedependents.Update) {
@@ -1068,7 +1110,11 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		if err != nil || !found || json.Unmarshal(event.Data, &source) != nil || source.Approval == nil || source.Approval.Action != "reconcile" || source.Approval.ResourceKind != "pam_service_reconcile" || source.Approval.Requester != "owned-rotation-operator" {
 			t.Fatal("completed reconciliation lacks exact audited authority", err)
 		}
-		if event.SchemaVersion != 2 {
+		expectedSchema := 2
+		if scenario.ManifestExecution {
+			expectedSchema = 3
+		}
+		if event.SchemaVersion != expectedSchema {
 			t.Fatal("reconciliation widened the historical ordinary source schema")
 		}
 		approval, err := h.store.GetOperationApproval(ctx, h.tenant, source.Approval.RequestID)

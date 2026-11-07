@@ -96,3 +96,24 @@ func TestServedNativeADReconciliationCoordinatorA267(t *testing.T) {
 		t.Log("A267_NATIVE_RECONCILE_COORDINATOR_OK: real Samba drift and designated reset, independent approved public manifest, durable audit and vault barriers, forward/inverse stock LDAP; signed host boundary fixtures")
 	}
 }
+
+func TestServedNativePagedADReconciliationCoordinatorA267(t *testing.T) {
+	if os.Getenv("TRSTCTL_AD_RECONCILE_LAB") != "1" {
+		t.Skip("owned Samba paged reconciliation lab not requested")
+	}
+	if runtime.GOOS != "linux" {
+		t.Fatal("native paged reconciliation requires the retained Linux lab")
+	}
+	for _, failure := range []bool{false, true} {
+		name := "forward"
+		if failure {
+			name = "inverse"
+		}
+		t.Run(name, func(t *testing.T) {
+			servedDependentRotationScenario(t, nativeReconcileDirectoryFixture(t), failure, dependentRotationOptions{Reconcile: true, ManifestExecution: true})
+		})
+	}
+	if !t.Failed() {
+		t.Log("A267_NATIVE_PAGED_RECONCILE_OK: one sealed account, real Samba designated reset and stored inverse, stock LDAP; signed host boundary fixtures, not Windows runtime")
+	}
+}

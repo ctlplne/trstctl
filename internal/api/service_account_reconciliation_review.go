@@ -21,14 +21,18 @@ type dependentReconcileReviewView struct {
 
 func (a *API) retainServiceReconciliationReview(ctx context.Context, tenantID, actor string, intent servicedependents.RotationIntent) error {
 	value := projections.ServiceReconciliationReview{Intent: intent, Actor: actor, At: intent.Plan.CreatedAt}
-	if err := projections.ValidateServiceReconciliationReview(value); err != nil {
-		return err
-	}
+
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
 	next := events.Event{ID: servicedependents.ReconciliationReviewSourceID(tenantID, intent.Plan.ID), TenantID: tenantID, Type: projections.EventServiceReconciliationReviewProposed, SchemaVersion: 1, Data: raw}
+	if intent.Plan.Manifest != nil {
+		next.SchemaVersion = projections.ServiceDependentManifestReviewSchemaVersion
+	}
+	if err := projections.ValidateServiceReconciliationReviewSource(next, value); err != nil {
+		return err
+	}
 	if actor, ok := events.ActorFromContext(ctx); ok {
 		next.Actor = &actor
 	}
@@ -54,7 +58,7 @@ func (a *API) loadServiceReconciliationReview(ctx context.Context, tenantID, id 
 	if !found || event.TenantID != tenantID || event.Type != projections.EventServiceReconciliationReviewProposed {
 		return value, "", errStatus(http.StatusNotFound, "reconciliation review not found")
 	}
-	if event.SchemaVersion != 1 || json.Unmarshal(event.Data, &value) != nil || value.Intent.Plan.ID != id || projections.ValidateServiceReconciliationReview(value) != nil {
+	if json.Unmarshal(event.Data, &value) != nil || value.Intent.Plan.ID != id || projections.ValidateServiceReconciliationReviewSource(event, value) != nil {
 		return value, "", errStatus(http.StatusConflict, "canonical reconciliation review differs")
 	}
 	digest, err := value.Intent.Digest()
@@ -72,4 +76,59 @@ func (a *API) getPAMServiceReconciliationReview(w http.ResponseWriter, r *http.R
 		return
 	}
 	a.writeJSON(w, http.StatusOK, dependentReconcileReviewView{value.Intent, digest, value.At})
+}
+
+// An independent approver reads the exact pages attached to a real frozen
+// reconciliation review. Approval permission is sufficient for this public
+// effect metadata; the requester never lends the approver a vault credential.
+func (a *API) getPAMServiceReconciliationReviewPage(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	id, err := manifestPathID(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	number, err := manifestPageNumber(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	review, digest, err := a.loadServiceReconciliationReview(r.Context(), tenantID, id)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if review.Intent.Plan.Manifest == nil || number >= review.Intent.Plan.Manifest.PageCount {
+		a.writeError(w, errStatus(http.StatusNotFound, "native reconciliation review page not found"))
+		return
+	}
+	state, err := a.canonicalManifestHeader(r.Context(), tenantID, id)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if state.Seal == nil {
+		a.writeError(w, manifestConflict())
+		return
+	}
+	intent, err := servicedependents.NewRotationIntentFromManifest(state.Header, *state.Seal)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	exact, err := intent.Digest()
+	if err != nil || exact != digest {
+		a.writeError(w, manifestConflict())
+		return
+	}
+	page, err := a.canonicalManifestPage(r.Context(), tenantID, state, number)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, page)
 }

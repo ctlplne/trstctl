@@ -90,6 +90,11 @@ func (a *API) dependentRotationParent(ctx context.Context, cmd store.SecretStati
 	if parent.Direction != direction || parent.DirectoryRestored != hasRestored {
 		return parent, errors.New("api: native recovery state differs from its canonical source")
 	}
+	if parent.Intent.Plan.Manifest != nil {
+		if _, _, err := a.dependentManifestCursor(ctx, parent); err != nil {
+			return parent, err
+		}
+	}
 	return parent, nil
 }
 func (a *API) dependentNativePreparation(ctx context.Context, parent store.ServiceDependentRotation, cmd store.SecretStaticRotationCommand) error {
@@ -123,8 +128,39 @@ func (a *API) selectDependentInverse(ctx context.Context, parent store.ServiceDe
 	eventID := servicedependents.InverseSourceID(parent.ID)
 	return a.appendAndProjectStaticRotation(ctx, parent.TenantID, eventID, projections.EventServiceDependentRotationInverse, projections.ServiceDependentRotationInverse{RotationID: parent.ID, IntentDigest: parent.IntentDigest, Failure: failure, At: time.Now().UTC()})
 }
+
+// A cursor transition records metadata, not another native effect. Coalesce a
+// bounded number in one delivery so projection recovery does not cost an extra
+// worker turn for every report. Each transition rereads canonical authority.
+var errDependentManifestProgress = errors.New("api: dependent manifest metadata progressed")
+
 func (a *API) driveDependentSteps(ctx context.Context, parent store.ServiceDependentRotation, preflight bool) error {
+	for range 4 {
+		err := a.driveDependentStep(ctx, parent, preflight)
+		if !errors.Is(err, errDependentManifestProgress) {
+			return err
+		}
+		cmd, err := a.store.GetSecretStaticRotationCommand(ctx, parent.TenantID, parent.CommandID)
+		if err != nil {
+			return err
+		}
+		fresh, err := a.dependentRotationParent(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		if fresh.Direction != parent.Direction {
+			return orchestrator.DeferDelivery(errors.New("native dependent direction changed"))
+		}
+		parent = fresh
+	}
+	return orchestrator.DeferDelivery(errors.New("bounded native cursor metadata progressed"))
+}
+
+func (a *API) driveDependentStep(ctx context.Context, parent store.ServiceDependentRotation, preflight bool) error {
 	next, e := a.nextDependentStep(ctx, parent, preflight)
+	if errors.Is(e, store.ErrServiceDependentCursorAdvanceRequired) && parent.Intent.Plan.Manifest != nil {
+		return a.advanceDependentManifestCursor(ctx, parent)
+	}
 	if e != nil {
 		return e
 	}
@@ -149,7 +185,11 @@ func (a *API) driveDependentSteps(ctx context.Context, parent store.ServiceDepen
 	next.Deadline = next.NotBefore.Add(2 * time.Minute)
 	// The retained stop result supplies the exact predecessor process set to the
 	// later start/probe. It cannot be invented by a caller of the queue API.
-	if next.Action == servicedependents.Start || next.Action == servicedependents.Probe {
+	if parent.Intent.Plan.Manifest != nil {
+		if err := a.setManifestPreviousPIDs(ctx, parent, next); err != nil {
+			return err
+		}
+	} else if next.Action == servicedependents.Start || next.Action == servicedependents.Probe {
 		inputs, e := a.dependentRotationStoredInputs(ctx, parent)
 		if e != nil {
 			return e
@@ -198,7 +238,13 @@ func (a *API) driveDependentSteps(ctx context.Context, parent store.ServiceDepen
 		}
 	}
 	value := projections.ServiceDependentStepQueued{Step: *next, At: next.NotBefore}
-	if e := a.appendAndProjectStaticRotation(ctx, parent.TenantID, servicedependents.StepSourceID(parent.ID, next.ID), projections.EventServiceDependentStepQueued, value); e != nil {
+	appendStep := func() error {
+		if next.ManifestPosition != nil {
+			return a.appendDependentRuntimeSource(ctx, parent.TenantID, servicedependents.StepSourceID(parent.ID, next.ID), projections.EventServiceDependentStepQueued, projections.ServiceDependentManifestStepSchemaVersion, value.At, value)
+		}
+		return a.appendAndProjectStaticRotation(ctx, parent.TenantID, servicedependents.StepSourceID(parent.ID, next.ID), projections.EventServiceDependentStepQueued, value)
+	}
+	if e := appendStep(); e != nil {
 		return e
 	}
 	return orchestrator.DeferDelivery(errors.New("exact native dependent work queued"))
@@ -245,10 +291,12 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 		}
 		return a.rollbackStaticRotation(ctx, cmd, provider)
 	}
-	inputs, e := a.dependentRotationInputs(ctx, cmd.TenantID, parent.Intent.Plan.Account.AccountID)
-	if e == nil {
-		e = parent.Intent.Validate(inputs)
+	// Paged selection validates one exact host per preflight. Full current
+	// membership is rechecked once at the final reset barrier, after all preflights.
+	if parent.Intent.Plan.Manifest == nil || parent.ManifestCursor.Position.Stage != servicedependents.Preflight {
+		e = a.validateDependentIntentCurrent(ctx, cmd.TenantID, parent.Intent)
 	}
+
 	if e != nil {
 		if parent.Intent.Mode == servicedependents.Reconcile {
 			return a.failUnstartedReconciliation(ctx, cmd, "reviewed inventory changed")
@@ -264,6 +312,32 @@ func (a *API) beforeDependentDirectoryApply(ctx context.Context, cmd store.Secre
 	}
 	if e != nil {
 		return e
+	}
+	if parent.Intent.Plan.Manifest != nil {
+		// The final preflight may have advanced the cursor during this call.
+		// Recheck the whole reviewed scope at this exact reset barrier.
+		parent, e = a.dependentRotationParent(ctx, cmd)
+		if e != nil {
+			return e
+		}
+		if parent.Direction == servicedependents.Inverse {
+			return a.rollbackStaticRotation(ctx, cmd, provider)
+		}
+		failure, detail := "", ""
+		if !time.Now().Before(parent.Intent.Plan.ExpiresAt) {
+			failure, detail = "deadline_expired", "review deadline expired"
+		} else if e = a.validateDependentIntentCurrent(ctx, cmd.TenantID, parent.Intent); e != nil {
+			failure, detail = "source_changed", "reviewed inventory changed"
+		}
+		if failure != "" {
+			if parent.Intent.Mode == servicedependents.Reconcile {
+				return a.failUnstartedReconciliation(ctx, cmd, detail)
+			}
+			if e := a.selectDependentInverse(ctx, parent, failure); e != nil {
+				return e
+			}
+			return a.rollbackStaticRotation(ctx, cmd, provider)
+		}
 	}
 	return a.appendAndProjectStaticRotation(ctx, parent.TenantID, servicedependents.DirectoryApplyStartedSourceID(parent.ID), projections.EventServiceDependentDirectoryApplyStarted, projections.ServiceDependentDirectoryApplyStarted{RotationID: parent.ID, IntentDigest: parent.IntentDigest, At: time.Now().UTC()})
 }
@@ -333,6 +407,12 @@ func (a *API) OpenDependentRotationCredential(ctx context.Context, tenantID stri
 	parent, e := a.store.GetServiceDependentRotation(ctx, tenantID, step.RotationID)
 	if e != nil {
 		return nil, e
+	}
+	if parent.Intent.Plan.Manifest != nil {
+		_, pending, err := a.dependentManifestCursor(ctx, parent)
+		if err != nil || pending != nil || step.ManifestPosition == nil || parent.ManifestCursor == nil || *step.ManifestPosition != parent.ManifestCursor.Position {
+			return nil, errors.New("api: native credential position was superseded or is not yet projected")
+		}
 	}
 	if parent.Direction != step.Direction || parent.IntentDigest != step.PlanDigest {
 		return nil, errors.New("api: native step generation was superseded")

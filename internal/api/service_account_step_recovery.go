@@ -193,6 +193,9 @@ func (a *API) queuePAMServiceDependentRecovery(w http.ResponseWriter, r *http.Re
 				return err
 			}
 			event := events.Event{ID: sourceID, TenantID: tenantID, Type: projections.EventServiceDependentStepRecoveryQueued, SchemaVersion: 1, Time: now, Data: raw}
+			if next.ManifestPosition != nil {
+				event.SchemaVersion = projections.ServiceDependentManifestStepSchemaVersion
+			}
 			if requester, ok := events.ActorFromContext(ctx); ok {
 				event.Actor = &requester
 			}

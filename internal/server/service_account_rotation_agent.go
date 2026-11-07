@@ -66,6 +66,15 @@ func (a *agentService) boundServiceDependentStep(ctx context.Context, tenantID, 
 	if !found || parentSource.TenantID != tenantID || parentSource.Type != projections.EventServiceDependentRotationQueued || json.Unmarshal(parentSource.Data, &authority) != nil {
 		return step, errors.New("native dependent step has no canonical parent")
 	}
+	if err := projections.ValidateServiceDependentRotationSource(parentSource, authority); err != nil {
+		return step, err
+	}
+	if parent.Intent.Plan.Manifest != nil {
+		_, pending, err := projections.ResolveServiceDependentManifestCursor(ctx, a.log, parent)
+		if err != nil || pending != nil || step.ManifestPosition == nil || parent.ManifestCursor == nil || *step.ManifestPosition != parent.ManifestCursor.Position {
+			return step, errors.New("native dependent page position was superseded or is not yet projected")
+		}
+	}
 	digest, e := authority.Intent.Digest()
 	if e != nil || digest != step.PlanDigest || digest != parent.IntentDigest {
 		return step, errors.New("native parent intent differs")

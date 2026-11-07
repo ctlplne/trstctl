@@ -44,6 +44,7 @@ func (a *API) pamServiceDependentRotationRoutes() []route {
 	root := "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations"
 	return []route{
 		{method: "GET", path: root + "/reviews/{id}", opID: "getPAMServiceReconciliationPendingReview", summary: "Resume your exact reviewed reconciliation and read its current approval without approving it", handler: a.getPAMServiceReconciliationPendingReview, pathParams: []param{pathUUID("account_id"), pathUUID("id")}, query: []param{{name: "approval_request_id", typ: "string", format: "uuid", required: true}}, resSchema: "PAMServiceReconciliationPendingReview", successCode: "200", perm: authz.AccessTargetsWrite},
+		{method: "GET", path: "/api/v1/access/discovery/reconciliation-reviews/{id}/pages/{page}", opID: "getPAMServiceReconciliationReviewPage", summary: "Read one exact native page of an independently proposed reconciliation", handler: a.getPAMServiceReconciliationReviewPage, pathParams: []param{pathUUID("id"), pathInteger("page", "zero-based native review page")}, resSchema: "PAMServiceDependentReviewPage", successCode: "200", perm: authz.AccessApprove},
 		{method: "GET", path: "/api/v1/access/discovery/reconciliation-reviews/{id}", opID: "getPAMServiceReconciliationReview", summary: "Open the frozen native reconciliation effect before independent approval", handler: a.getPAMServiceReconciliationReview, pathParams: []param{pathUUID("id")}, resSchema: "PAMServiceReconciliationReview", successCode: "200", perm: authz.AccessApprove},
 		{method: "POST", path: root + "/preview", opID: "previewPAMServiceDependentRotation", summary: "Review complete native dependent inventory, restart order and useful-work bindings before AD rotation", handler: a.previewPAMServiceDependentRotation, pathParams: []param{pathUUID("account_id")}, reqSchema: "PAMServiceDependentRotationPreviewRequest", resSchema: "PAMServiceDependentRotationPreview", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "POST", path: root + "/approval", opID: "requestPAMServiceReconciliationApproval", summary: "Request independent review of exact designated AD reconciliation authority", handler: a.requestPAMServiceReconciliationApproval, pathParams: []param{pathUUID("account_id")}, reqSchema: "PAMServiceReconciliationApprovalRequest", resSchema: "PAMServiceReconciliationApproval", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},
@@ -257,13 +258,10 @@ func (a *API) queuePAMServiceDependentRotation(w http.ResponseWriter, r *http.Re
 			if !now.Before(req.Intent.Plan.ExpiresAt) || req.Intent.Plan.CreatedAt.After(now.Add(time.Minute)) {
 				return errStatus(http.StatusConflict, "reviewed native inventory expired; rescan before resetting AD")
 			}
-			inputs, e := a.dependentRotationInputs(ctx, tenantID, r.PathValue("account_id"))
-			if e != nil {
-				return e
-			}
-			if e = req.Intent.Validate(inputs); e != nil {
+			if e := a.validateDependentIntentCurrent(ctx, tenantID, req.Intent); e != nil {
 				return errWithStatus(http.StatusConflict, e)
 			}
+
 			current, e := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Intent.Plan.SecretName)
 			if e != nil {
 				return e
@@ -339,6 +337,9 @@ func (a *API) dependentRotationView(ctx context.Context, parent store.ServiceDep
 			return view, err
 		}
 		next, err := a.nextDependentStep(ctx, canonical, false)
+		if errors.Is(err, store.ErrServiceDependentCursorAdvanceRequired) {
+			return view, nil
+		}
 		if err != nil && !errors.Is(err, store.ErrServiceDependentStepFailed) {
 			return view, err
 		}
@@ -384,6 +385,9 @@ func (a *API) getPAMServiceDependentRotation(w http.ResponseWriter, r *http.Requ
 // Every publication gate reads the exact canonical queued and observed source
 // before using a projected status to advance the native sequence.
 func (a *API) nextDependentStep(ctx context.Context, parent store.ServiceDependentRotation, preflight bool) (*servicedependents.RotationStep, error) {
+	if parent.Intent.Plan.Manifest != nil {
+		return a.nextDependentManifestStep(ctx, parent, preflight)
+	}
 	inputs, err := a.dependentRotationStoredInputs(ctx, parent)
 	if err != nil {
 		return nil, err

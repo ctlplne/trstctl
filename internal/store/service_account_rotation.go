@@ -19,19 +19,22 @@ var ErrServiceDependentStepFailed = errors.New("store: dependent native step fai
 var ErrServiceDependentStepNotFound = errors.New("store: service-account rotation step not found")
 
 type ServiceDependentRotation struct {
-	DirectoryApplyStarted bool                             `json:"directory_apply_started"`
-	DirectoryRestored     bool                             `json:"directory_restored"`
-	TenantID              string                           `json:"-"`
-	ID                    string                           `json:"id"`
-	Intent                servicedependents.RotationIntent `json:"intent"`
-	IntentDigest          string                           `json:"intent_digest"`
-	CommandID             string                           `json:"command_id"`
-	TenantEpoch           string                           `json:"tenant_epoch"`
-	Direction             string                           `json:"direction"`
-	Actor                 string                           `json:"actor"`
-	Failure               string                           `json:"failure,omitempty"`
-	CreatedAt             time.Time                        `json:"created_at"`
-	UpdatedAt             time.Time                        `json:"updated_at"`
+	ManifestCursor         *servicedependents.ManifestCursor `json:"manifest_cursor,omitempty"`
+	ManifestCursorSourceID string                            `json:"manifest_cursor_source_id,omitempty"`
+	ManifestCursorSequence uint64                            `json:"manifest_cursor_sequence,omitempty"`
+	DirectoryApplyStarted  bool                              `json:"directory_apply_started"`
+	DirectoryRestored      bool                              `json:"directory_restored"`
+	TenantID               string                            `json:"-"`
+	ID                     string                            `json:"id"`
+	Intent                 servicedependents.RotationIntent  `json:"intent"`
+	IntentDigest           string                            `json:"intent_digest"`
+	CommandID              string                            `json:"command_id"`
+	TenantEpoch            string                            `json:"tenant_epoch"`
+	Direction              string                            `json:"direction"`
+	Actor                  string                            `json:"actor"`
+	Failure                string                            `json:"failure,omitempty"`
+	CreatedAt              time.Time                         `json:"created_at"`
+	UpdatedAt              time.Time                         `json:"updated_at"`
 }
 type ServiceDependentStep struct {
 	DeliveryStatus    string                         `json:"delivery_status,omitempty"`
@@ -68,6 +71,9 @@ func (s *Store) ServiceDependentRotationInputsTx(ctx context.Context, tx pgx.Tx,
 	return inputs, nil
 }
 func (s *Store) ValidateServiceDependentRotationSourcesTx(ctx context.Context, tx pgx.Tx, tenantID string, intent servicedependents.RotationIntent, current bool) error {
+	if intent.Plan.Version == servicedependents.RotationManifestPlanVersion {
+		return s.validateServiceDependentManifestIntentTx(ctx, tx, tenantID, intent, current)
+	}
 	if _, e := s.ServiceDependentRotationInputsTx(ctx, tx, tenantID, intent); e != nil {
 		return e
 	}
@@ -132,8 +138,30 @@ func (s *Store) ApplyServiceDependentRotationQueuedTx(ctx context.Context, tx pg
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO service_account_rotations(tenant_id,id,intent,intent_digest,command_id,tenant_epoch,direction,actor,created_at,updated_at)
- VALUES($1,$2,$3::jsonb,$4,$5,$6,'forward',$7,$8,$8) ON CONFLICT(tenant_id,id) DO NOTHING`, parent.TenantID, parent.ID, raw, digest, parent.CommandID, parent.TenantEpoch, parent.Actor, parent.CreatedAt)
+	var cursor []byte
+	sourceID := ""
+	sequence := uint64(0)
+	if parent.Intent.Plan.Manifest != nil {
+		r, err := s.ServiceDependentManifestResolverTx(ctx, tx, parent.TenantID, parent.Intent)
+		if err != nil {
+			return err
+		}
+		initial, err := r.Initial(servicedependents.Forward)
+		if err != nil {
+			return err
+		}
+		cursor, err = json.Marshal(initial)
+		if err != nil {
+			return err
+		}
+		sourceID = parent.ID
+		sequence = parent.ManifestCursorSequence
+		if sequence == 0 || sequence > uint64(1<<63-1) {
+			return errors.New("store: initial manifest cursor needs its exact source sequence")
+		}
+	}
+	_, e = tx.Exec(ctx, `INSERT INTO service_account_rotations(tenant_id,id,intent,intent_digest,command_id,tenant_epoch,direction,actor,created_at,updated_at,manifest_cursor,manifest_cursor_source_id,manifest_cursor_sequence)
+ VALUES($1,$2,$3::jsonb,$4,$5,$6,'forward',$7,$8,$8,$9::jsonb,$10,$11) ON CONFLICT(tenant_id,id) DO NOTHING`, parent.TenantID, parent.ID, raw, digest, parent.CommandID, parent.TenantEpoch, parent.Actor, parent.CreatedAt, cursor, sourceID, sequence)
 	if e != nil {
 		return e
 	}
@@ -148,8 +176,8 @@ func (s *Store) ApplyServiceDependentRotationQueuedTx(ctx context.Context, tx pg
 }
 func (s *Store) GetServiceDependentRotationTx(ctx context.Context, tx pgx.Tx, tenantID, id string) (ServiceDependentRotation, error) {
 	var v ServiceDependentRotation
-	var raw []byte
-	e := tx.QueryRow(ctx, `SELECT id::text,intent,intent_digest,command_id::text,tenant_epoch,direction,actor,failure,created_at,updated_at,directory_restored,directory_apply_started FROM service_account_rotations WHERE tenant_id=$1 AND id=$2`, tenantID, id).Scan(&v.ID, &raw, &v.IntentDigest, &v.CommandID, &v.TenantEpoch, &v.Direction, &v.Actor, &v.Failure, &v.CreatedAt, &v.UpdatedAt, &v.DirectoryRestored, &v.DirectoryApplyStarted)
+	var raw, cursor []byte
+	e := tx.QueryRow(ctx, `SELECT id::text,intent,intent_digest,command_id::text,tenant_epoch,direction,actor,failure,created_at,updated_at,directory_restored,directory_apply_started,manifest_cursor,manifest_cursor_source_id,manifest_cursor_sequence FROM service_account_rotations WHERE tenant_id=$1 AND id=$2`, tenantID, id).Scan(&v.ID, &raw, &v.IntentDigest, &v.CommandID, &v.TenantEpoch, &v.Direction, &v.Actor, &v.Failure, &v.CreatedAt, &v.UpdatedAt, &v.DirectoryRestored, &v.DirectoryApplyStarted, &cursor, &v.ManifestCursorSourceID, &v.ManifestCursorSequence)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return v, ErrServiceDependentRotationNotFound
 	}
@@ -158,6 +186,15 @@ func (s *Store) GetServiceDependentRotationTx(ctx context.Context, tx pgx.Tx, te
 	}
 	if e = json.Unmarshal(raw, &v.Intent); e != nil {
 		return v, e
+	}
+	if v.Intent.Plan.Manifest != nil {
+		var value servicedependents.ManifestCursor
+		if json.Unmarshal(cursor, &value) != nil || value.Validate(*v.Intent.Plan.Manifest) != nil || value.Direction != v.Direction || !dependentCanonicalUUID(v.ManifestCursorSourceID) || v.ManifestCursorSequence == 0 {
+			return v, errors.New("store: manifest cursor projection differs")
+		}
+		v.ManifestCursor = &value
+	} else if len(cursor) != 0 || v.ManifestCursorSourceID != "" || v.ManifestCursorSequence != 0 {
+		return v, errors.New("store: inline rotation cannot carry paged progress")
 	}
 	v.TenantID = tenantID
 	digest, e := v.Intent.Digest()
@@ -178,11 +215,37 @@ func (s *Store) GetServiceDependentRotation(ctx context.Context, tenantID, id st
 	})
 	return v, e
 }
-func (s *Store) ApplyServiceDependentRotationInverseTx(ctx context.Context, tx pgx.Tx, tenantID, id, digest, failure string, at time.Time) error {
+func (s *Store) ApplyServiceDependentRotationInverseTx(ctx context.Context, tx pgx.Tx, tenantID, id, digest, failure string, at time.Time, sourceSequence ...uint64) error {
 	switch failure {
 	case "dependent_failed", "dependent_uncertain", "native_apply_failed", "source_changed", "deadline_expired", "vault_version_changed":
 	default:
 		return errors.New("store: unknown dependent inverse reason")
+	}
+	parent, err := s.GetServiceDependentRotationTx(ctx, tx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if parent.Intent.Plan.Manifest != nil {
+		if len(sourceSequence) != 1 || sourceSequence[0] == 0 || sourceSequence[0] > uint64(1<<63-1) {
+			return errors.New("store: inverse manifest cursor needs exact source sequence")
+		}
+		if sourceSequence[0] > parent.ManifestCursorSequence {
+			r, err := s.ServiceDependentManifestResolverTx(ctx, tx, tenantID, parent.Intent)
+			if err != nil {
+				return err
+			}
+			initial, err := r.Initial(servicedependents.Inverse)
+			if err != nil {
+				return err
+			}
+			raw, err := json.Marshal(initial)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE service_account_rotations SET manifest_cursor=$3::jsonb,manifest_cursor_source_id=$4,manifest_cursor_sequence=$5 WHERE tenant_id=$1 AND id=$2`, tenantID, id, raw, servicedependents.InverseSourceID(id), sourceSequence[0]); err != nil {
+				return err
+			}
+		}
 	}
 	tag, e := tx.Exec(ctx, `UPDATE service_account_rotations SET direction='inverse',failure=CASE WHEN direction='forward' THEN $4 ELSE failure END,updated_at=$5 WHERE tenant_id=$1 AND id=$2 AND intent_digest=$3`, tenantID, id, digest, failure, at)
 	if e != nil {
@@ -252,6 +315,9 @@ func (s *Store) GetServiceDependentStep(ctx context.Context, tenantID, rotationI
 // NextServiceDependentStepTx is also the cutover/inverse barrier: only a complete
 // sequence of validated signed receipts can return no remaining step.
 func (s *Store) NextServiceDependentStepTx(ctx context.Context, tx pgx.Tx, parent ServiceDependentRotation, preflightOnly bool) (*servicedependents.RotationStep, error) {
+	if parent.Intent.Plan.Manifest != nil {
+		return s.nextServiceDependentManifestStepTx(ctx, tx, parent, preflightOnly)
+	}
 	inputs, e := s.ServiceDependentRotationInputsTx(ctx, tx, parent.TenantID, parent.Intent)
 	if e != nil {
 		return nil, e

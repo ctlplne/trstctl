@@ -40175,6 +40175,59 @@
         ],
         "type": "object"
       },
+      "PAMDependentManifestCursor": {
+        "properties": {
+          "direction": {
+            "enum": [
+              "forward",
+              "inverse"
+            ],
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/PAMDependentManifestPosition"
+          }
+        },
+        "required": [
+          "direction",
+          "position"
+        ],
+        "type": "object"
+      },
+      "PAMDependentManifestPosition": {
+        "properties": {
+          "entry_index": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entry_ordinal": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stage": {
+            "enum": [
+              "preflight",
+              "stop",
+              "update",
+              "start",
+              "probe",
+              "complete"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "entry_ordinal",
+          "page_number",
+          "entry_index"
+        ],
+        "type": "object"
+      },
       "PAMDependentNativePool": {
         "properties": {
           "account_sid": {
@@ -40412,6 +40465,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "manifest": {
+            "$ref": "#/components/schemas/PAMServiceDependentReviewSeal"
+          },
           "order": {
             "items": {
               "$ref": "#/components/schemas/PAMDependentRef"
@@ -40468,6 +40524,9 @@
               "inverse"
             ],
             "type": "string"
+          },
+          "manifest_position": {
+            "$ref": "#/components/schemas/PAMDependentManifestPosition"
           },
           "not_before": {
             "format": "date-time",
@@ -42222,6 +42281,12 @@
             "format": "int64",
             "type": "integer"
           },
+          "intent": {
+            "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
           "page_count": {
             "format": "int64",
             "type": "integer"
@@ -42537,6 +42602,17 @@
             "$ref": "#/components/schemas/PAMServiceDependentRotationIntent"
           },
           "intent_digest": {
+            "type": "string"
+          },
+          "manifest_cursor": {
+            "$ref": "#/components/schemas/PAMDependentManifestCursor"
+          },
+          "manifest_cursor_sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "manifest_cursor_source_id": {
+            "format": "uuid",
             "type": "string"
           },
           "tenant_epoch": {
@@ -62530,6 +62606,73 @@
           }
         ],
         "summary": "Open the frozen native reconciliation effect before independent approval",
+        "x-trstctl-permission": "access:approve"
+      }
+    },
+    "/api/v1/access/discovery/reconciliation-reviews/{id}/pages/{page}": {
+      "get": {
+        "operationId": "getPAMServiceReconciliationReviewPage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "zero-based native review page",
+            "in": "path",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMServiceDependentReviewPage"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one exact native page of an independently proposed reconciliation",
         "x-trstctl-permission": "access:approve"
       }
     },

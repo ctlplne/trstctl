@@ -9242,7 +9242,11 @@ The headless account-review API and CLI collect public native scope in bounded
 immutable pages and seal one complete account. Portable served proofs cover signed
 host metadata, complete/missing reference checks, service order across pages,
 source/projection interruption, cache changes, tenant isolation and author erasure.
-The original inline intent still has a 1 MiB bound. Large-manifest queue/approval,
-bounded execution and console authoring remain under construction. Review
-collection alone does not qualify AD rotation, Windows runtime or final-image
-recovery. Per-host inventory and native evidence keep their original wire bounds.
+The original inline intent still has a 1 MiB bound. The headless paged path now
+queues one sealed account, supports independent reconciliation approval and
+approver page reads, and advances bounded native work through source-bound
+positions. Portable signed-host fixtures cover forward rotation, inverse,
+reconciliation, explicit inverse recovery and lost cursor projection. They do not
+qualify native Windows execution. Paged console authoring, the combined native
+journey and final-image recovery remain separate obligations. Per-host inventory
+and native evidence keep their original wire bounds.

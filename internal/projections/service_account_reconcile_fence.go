@@ -23,7 +23,7 @@ func ServiceReconcileSemanticDigest(e events.Event, v ServiceDependentRotationQu
 	if err := ValidateServiceDependentRotationSource(e, v); err != nil {
 		return "", err
 	}
-	if v.Approval == nil || schemaVersionOf(e) != ServiceDependentReconcileSchemaVersion || e.Time.IsZero() || !e.Time.Equal(e.Time.UTC().Truncate(time.Microsecond)) {
+	if v.Approval == nil || (schemaVersionOf(e) != ServiceDependentReconcileSchemaVersion && schemaVersionOf(e) != ServiceDependentManifestSchemaVersion) || e.Time.IsZero() || !e.Time.Equal(e.Time.UTC().Truncate(time.Microsecond)) {
 		return "", errors.New("dependent reconcile: incomplete PostgreSQL-exact first command")
 	}
 	digest, err := v.Intent.Digest()

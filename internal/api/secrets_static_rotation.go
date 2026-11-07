@@ -242,6 +242,7 @@ func (a *API) advanceStaticRotation(ctx context.Context, cmd store.SecretStaticR
 // delivery attempt, used only to give a failing verification a few tries
 // before the command rolls back.
 func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, commandID string, attempt int) error {
+	ctx = withDependentManifestAttempt(ctx)
 	if a.secrets == nil {
 		return errors.New("api: secrets are disabled")
 	}

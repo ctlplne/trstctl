@@ -2631,6 +2631,7 @@ export interface Api {
     idempotencyKey?: string,
   ): Promise<PAMServiceReconciliationApproval>;
   pamServiceReconciliationReview(id: string): Promise<PAMServiceReconciliationReview>;
+  pamServiceReconciliationReviewPage(id: string, page: number): Promise<PAMServiceDependentReviewPage>;
   pamServiceReconciliationPendingReview(accountID: string, id: string, approvalID: string): Promise<PAMServiceReconciliationPendingReview>;
   openPAMServiceDependentReview(accountID: string, input: PAMServiceDependentReviewOpenRequest, key: string): Promise<PAMServiceDependentReview>;
   pamServiceDependentReview(id: string): Promise<PAMServiceDependentReview>;
@@ -3624,6 +3625,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       key,
     ),
   pamServiceReconciliationReview: (id) => req<PAMServiceReconciliationReview>("/api/v1/access/discovery/reconciliation-reviews/" + encodeURIComponent(id)),
+  pamServiceReconciliationReviewPage: (id, page) =>
+    req<PAMServiceDependentReviewPage>("/api/v1/access/discovery/reconciliation-reviews/" + encodeURIComponent(id) + "/pages/" + encodeURIComponent(page)),
   pamServiceReconciliationPendingReview: (accountID, id, approvalID) =>
     req<PAMServiceReconciliationPendingReview>(
       "/api/v1/access/discovery/accounts/" +

@@ -51,7 +51,7 @@ func validProbeID(id string) bool {
 	return true
 }
 func (intent RotationIntent) Digest() (string, error) {
-	if intent.Plan.Version == RotationManifestPlanVersion && len(intent.Probes) != 0 {
+	if intent.Plan.Version == RotationManifestPlanVersion && (intent.Probes == nil || len(intent.Probes) != 0) {
 		return "", errors.New("service dependents: paged probes must come from the sealed native manifest")
 	}
 
@@ -458,4 +458,8 @@ func DecodeFunctionalProof(raw []byte, out *FunctionalProof) error {
 
 func DirectoryApplyStartedSourceID(rotationID string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl.service-dependent-directory-apply.v1\x00"+rotationID)).String()
+}
+
+func RotationStepID(rotationID, digest, direction, action string, ref DependentRef) string {
+	return crypto.SHA256Hex([]byte(rotationID + "\x00" + digest + "\x00" + direction + "\x00" + action + "\x00" + dependentKey(ref)))[:32]
 }

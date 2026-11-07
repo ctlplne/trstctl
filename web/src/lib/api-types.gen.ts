@@ -8632,6 +8632,18 @@ export interface PAMDependentInventoryReport {
   tasks?: PAMDependentNativeTask[];
 }
 
+export interface PAMDependentManifestCursor {
+  direction: "forward" | "inverse";
+  position: PAMDependentManifestPosition;
+}
+
+export interface PAMDependentManifestPosition {
+  entry_index: number;
+  entry_ordinal: number;
+  page_number: number;
+  stage: "preflight" | "stop" | "update" | "start" | "probe" | "complete";
+}
+
 export interface PAMDependentNativePool {
   account_sid: string;
   config_sha256: string;
@@ -8694,6 +8706,7 @@ export interface PAMDependentRotationPlan {
   expires_at: string;
   hosts: PAMDependentRotationHost[];
   id: string;
+  manifest?: PAMServiceDependentReviewSeal;
   order: PAMDependentRef[];
   secret_name: string;
   version: number;
@@ -8705,6 +8718,7 @@ export interface PAMDependentRotationStep {
   challenge?: string;
   deadline: string;
   direction: "forward" | "inverse";
+  manifest_position?: PAMDependentManifestPosition;
   not_before: string;
   plan_digest: string;
   pool?: PAMDependentNativePool;
@@ -9072,6 +9086,8 @@ export interface PAMServiceDependentReview {
   header: PAMServiceDependentReviewHeader;
   header_digest: string;
   host_count: number;
+  intent?: PAMServiceDependentRotationIntent;
+  intent_digest?: string;
   page_count: number;
   seal?: PAMServiceDependentReviewSeal;
 }
@@ -9153,6 +9169,9 @@ export interface PAMServiceDependentRotation {
   id: string;
   intent: PAMServiceDependentRotationIntent;
   intent_digest: string;
+  manifest_cursor?: PAMDependentManifestCursor;
+  manifest_cursor_sequence?: number;
+  manifest_cursor_source_id?: string;
   tenant_epoch: string;
   updated_at: string;
 }

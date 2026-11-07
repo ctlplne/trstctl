@@ -640,6 +640,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/reconciliation-reviews/{id}/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one exact native page of an independently proposed reconciliation */
+        get: operations["getPAMServiceReconciliationReviewPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/runs": {
         parameters: {
             query?: never;
@@ -22223,6 +22240,21 @@ export interface components {
             services?: components["schemas"]["PAMDependentNativeService"][];
             tasks?: components["schemas"]["PAMDependentNativeTask"][];
         };
+        PAMDependentManifestCursor: {
+            /** @enum {string} */
+            direction: "forward" | "inverse";
+            position: components["schemas"]["PAMDependentManifestPosition"];
+        };
+        PAMDependentManifestPosition: {
+            /** Format: int64 */
+            entry_index: number;
+            /** Format: int64 */
+            entry_ordinal: number;
+            /** Format: int64 */
+            page_number: number;
+            /** @enum {string} */
+            stage: "preflight" | "stop" | "update" | "start" | "probe" | "complete";
+        };
         PAMDependentNativePool: {
             account_sid: string;
             config_sha256: string;
@@ -22287,6 +22319,7 @@ export interface components {
             hosts: components["schemas"]["PAMDependentRotationHost"][];
             /** Format: uuid */
             id: string;
+            manifest?: components["schemas"]["PAMServiceDependentReviewSeal"];
             order: components["schemas"]["PAMDependentRef"][];
             secret_name: string;
             /** Format: int64 */
@@ -22302,6 +22335,7 @@ export interface components {
             deadline: string;
             /** @enum {string} */
             direction: "forward" | "inverse";
+            manifest_position?: components["schemas"]["PAMDependentManifestPosition"];
             /** Format: date-time */
             not_before: string;
             plan_digest: string;
@@ -22770,6 +22804,8 @@ export interface components {
             header_digest: string;
             /** Format: int64 */
             host_count: number;
+            intent?: components["schemas"]["PAMServiceDependentRotationIntent"];
+            intent_digest?: string;
             /** Format: int64 */
             page_count: number;
             seal?: components["schemas"]["PAMServiceDependentReviewSeal"];
@@ -22865,6 +22901,11 @@ export interface components {
             id: string;
             intent: components["schemas"]["PAMServiceDependentRotationIntent"];
             intent_digest: string;
+            manifest_cursor?: components["schemas"]["PAMDependentManifestCursor"];
+            /** Format: int64 */
+            manifest_cursor_sequence?: number;
+            /** Format: uuid */
+            manifest_cursor_source_id?: string;
             tenant_epoch: string;
             /** Format: date-time */
             updated_at: string;
@@ -29400,6 +29441,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMServiceReconciliationReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceReconciliationReviewPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                /** @description zero-based native review page */
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReviewPage"];
                 };
             };
             /** @description client error */

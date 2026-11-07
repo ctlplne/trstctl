@@ -14,13 +14,13 @@ func NewRotationIntentFromManifest(header RotationManifestHeader, seal RotationM
 	if err := seal.Validate(header); err != nil {
 		return RotationIntent{}, err
 	}
-	plan := RotationPlan{Version: RotationManifestPlanVersion, ID: header.ID, Account: header.Account, SecretName: header.SecretName, CreatedAt: header.CreatedAt, ExpiresAt: seal.ExpiresAt, Manifest: &seal}
+	plan := RotationPlan{Hosts: []RotationHost{}, Order: []DependentRef{}, Version: RotationManifestPlanVersion, ID: header.ID, Account: header.Account, SecretName: header.SecretName, CreatedAt: header.CreatedAt, ExpiresAt: seal.ExpiresAt, Manifest: &seal}
 	var err error
 	plan.Digest, err = plan.contentDigest()
 	if err != nil {
 		return RotationIntent{}, err
 	}
-	intent := RotationIntent{Mode: header.Mode, Plan: plan, ExpectedVersion: header.ExpectedVersion, ProviderBinding: header.ProviderBinding}
+	intent := RotationIntent{Probes: []ProbeBinding{}, Mode: header.Mode, Plan: plan, ExpectedVersion: header.ExpectedVersion, ProviderBinding: header.ProviderBinding}
 	if header.Reconcile != nil {
 		copy := *header.Reconcile
 		intent.Reconcile = &copy
@@ -31,7 +31,7 @@ func NewRotationIntentFromManifest(header RotationManifestHeader, seal RotationM
 	return intent, nil
 }
 func (p RotationPlan) validateManifestPlan() error {
-	if !canonicalID(p.ID) || p.Account.Validate() != nil || p.CreatedAt.IsZero() || !p.ExpiresAt.After(p.CreatedAt) || p.ExpiresAt.After(p.CreatedAt.Add(RotationInventoryMaxAge)) || p.Manifest == nil || len(p.Hosts) != 0 || len(p.Order) != 0 || p.Manifest.ValidateShape() != nil || p.Manifest.ID != p.ID || !p.Manifest.ExpiresAt.Equal(p.ExpiresAt) {
+	if !canonicalID(p.ID) || p.Account.Validate() != nil || p.CreatedAt.IsZero() || !p.ExpiresAt.After(p.CreatedAt) || p.ExpiresAt.After(p.CreatedAt.Add(RotationInventoryMaxAge)) || p.Manifest == nil || p.Hosts == nil || p.Order == nil || len(p.Hosts) != 0 || len(p.Order) != 0 || p.Manifest.ValidateShape() != nil || p.Manifest.ID != p.ID || !p.Manifest.ExpiresAt.Equal(p.ExpiresAt) {
 		return errors.New("service dependents: exact sealed account manifest without inline authority required")
 	}
 	if err := validateRotationSecretName(p.SecretName); err != nil {

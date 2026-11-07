@@ -34,7 +34,7 @@ func largeManifestInventory(report servicedependents.InventoryReport, sid string
 	}
 	return report
 }
-func servedLargeDependentManifestReview(t *testing.T, h *roleHarness, token, root string, binding servicedependents.HostBinding, inventory servicedependents.InventoryReport, directory *dependentDirectoryBoundary, projector *projections.Projector) {
+func servedLargeDependentManifestReview(t *testing.T, h *roleHarness, token, root string, binding servicedependents.HostBinding, inventory servicedependents.InventoryReport, directory *dependentDirectoryBoundary, projector *projections.Projector, execute bool) {
 	t.Helper()
 	ctx := t.Context()
 	scan, err := h.store.GetServiceDependentScan(ctx, h.tenant, inventory.RunID)
@@ -184,5 +184,8 @@ func servedLargeDependentManifestReview(t *testing.T, h *roleHarness, token, roo
 	if code != http.StatusOK || json.Unmarshal(raw, &rebuilt) != nil || rebuilt.Seal == nil || rebuilt.Seal.Digest != sealed.Seal.Digest {
 		t.Fatal("large manifest rebuild changed complete native scope")
 	}
-	t.Logf("A267_LARGE_REVIEW_OK native_refs=%d pages=%d total_public_page_bytes=%d; each page<=%d; no directory effect; signed host metadata fixtures", len(entries), pages, totalBytes, servicedependents.MaxRotationManifestPageBytes)
+	t.Logf("A267_LARGE_REVIEW_OK native_refs=%d pages=%d total_public_page_bytes=%d; each page<=%d; review authoring caused no directory effect; signed host metadata fixtures", len(entries), pages, totalBytes, servicedependents.MaxRotationManifestPageBytes)
+	if execute {
+		servedLargeDependentExecution(t, h, second, token, root, path, sealed, entries, directory)
+	}
 }

@@ -63,15 +63,30 @@ func ServiceDependentRecoveryReviewDigest(previous servicedependents.RotationSte
 	return crypto.SHA256Hex(append([]byte("trstctl.service-dependent.inverse-recovery-review.v1\x00"), raw...)), nil
 }
 func ValidateServiceDependentStepRecovery(e events.Event, v ServiceDependentStepRecoveryQueued) error {
-	if len(e.Data) > 0 {
-		var historical privacyServiceDependentStepRecoveryQueuedV1
-		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+	version := schemaVersionOf(e)
+	switch version {
+	case 1:
+		if len(e.Data) > 0 {
+			var historical privacyServiceDependentStepRecoveryQueuedV1
+			if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+				return err
+			}
+		}
+		if v.Previous.ManifestPosition != nil || v.Step.ManifestPosition != nil {
+			return errors.New("dependent recovery: published schema cannot carry paged manifest position")
+		}
+	case ServiceDependentManifestStepSchemaVersion:
+		var exact ServiceDependentStepRecoveryQueued
+		if err := decodePublishedDependentSource(e.Data, &exact); err != nil {
 			return err
 		}
+		if v.Previous.ManifestPosition == nil || v.Step.ManifestPosition == nil {
+			return errors.New("dependent recovery: paged source needs exact predecessor position")
+		}
+	default:
+		return errors.New("dependent recovery: unsupported source version")
 	}
-	if v.Previous.ManifestPosition != nil || v.Step.ManifestPosition != nil {
-		return errors.New("dependent recovery: published schema cannot carry paged manifest position")
-	}
+
 	digest, err := ServiceDependentRecoveryReviewDigest(v.Previous, v.PreviousStatus, v.PreviousReportDigest, v.CurrentVersion)
 	if err != nil {
 		return err
@@ -82,7 +97,7 @@ func ValidateServiceDependentStepRecovery(e events.Event, v ServiceDependentStep
 	}
 	a, _ := json.Marshal(next)
 	b, _ := json.Marshal(v.Step)
-	if crypto.SHA256Hex(a) != crypto.SHA256Hex(b) || digest != v.ReviewDigest || v.Actor == "" || len(v.Actor) > 512 || len(v.Reason) > 4096 || !e.Time.Equal(v.At) || v.At.IsZero() || e.Type != EventServiceDependentStepRecoveryQueued || schemaVersionOf(e) != 1 || e.ID != servicedependents.RecoverySourceID(v.Previous.RotationID, v.Previous.ID) {
+	if crypto.SHA256Hex(a) != crypto.SHA256Hex(b) || digest != v.ReviewDigest || v.Actor == "" || len(v.Actor) > 512 || len(v.Reason) > 4096 || !e.Time.Equal(v.At) || v.At.IsZero() || e.Type != EventServiceDependentStepRecoveryQueued || e.ID != servicedependents.RecoverySourceID(v.Previous.RotationID, v.Previous.ID) {
 		return errors.New("dependent recovery: exact first replacement source differs")
 	}
 	if err := validateApprovalActor(e, v.Actor); err != nil {
@@ -97,21 +112,29 @@ func ValidateServiceDependentStepRecovery(e events.Event, v ServiceDependentStep
 // DecodeServiceDependentStepSource keeps ordinary schema1 closed. Recovery has
 // its own source type and must bind an unchanged inverse effect to a predecessor.
 func DecodeServiceDependentStepSource(e events.Event) (servicedependents.RotationStep, time.Time, *ServiceDependentStepRecoveryQueued, error) {
-	if schemaVersionOf(e) != 1 {
+	if schemaVersionOf(e) != 1 && schemaVersionOf(e) != ServiceDependentManifestStepSchemaVersion {
 		return servicedependents.RotationStep{}, time.Time{}, nil, errors.New("dependent step: unsupported source version")
 	}
 	var step servicedependents.RotationStep
 	var at time.Time
 	switch e.Type {
 	case EventServiceDependentStepQueued:
-		var historical privacyServiceDependentStepQueuedV1
-		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
-			return step, at, nil, err
+		if schemaVersionOf(e) == 1 {
+			var historical privacyServiceDependentStepQueuedV1
+			if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
+				return step, at, nil, err
+			}
+		} else {
+			var exact privacyServiceDependentPagedStepQueuedV2
+			if err := decodePublishedDependentSource(e.Data, &exact); err != nil {
+				return step, at, nil, err
+			}
 		}
 		var v ServiceDependentStepQueued
-		if json.Unmarshal(e.Data, &v) != nil || v.Step.Recovery != nil || v.Step.ManifestPosition != nil {
-			return step, at, nil, errors.New("dependent step: ordinary source cannot carry recovery authority")
+		if json.Unmarshal(e.Data, &v) != nil || v.Step.Recovery != nil || schemaVersionOf(e) == 1 && v.Step.ManifestPosition != nil || schemaVersionOf(e) == ServiceDependentManifestStepSchemaVersion && v.Step.ManifestPosition == nil {
+			return step, at, nil, errors.New("dependent step: exact published version and position required")
 		}
+
 		step, at = v.Step, v.At
 	case EventServiceDependentStepRecoveryQueued:
 		var v ServiceDependentStepRecoveryQueued

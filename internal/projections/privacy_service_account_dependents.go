@@ -104,6 +104,28 @@ type privacyServiceDependentStepRecoveryQueuedV1 struct {
 	Reason               string                                `json:"reason"`
 	At                   time.Time                             `json:"at"`
 }
+type privacyServiceDependentPagedStepV2 struct {
+	ManifestPosition *servicedependents.ManifestPosition `json:"manifest_position"`
+	RotationID       string                              `json:"rotation_id"`
+	PlanDigest       string                              `json:"plan_digest"`
+	ID               string                              `json:"step_id"`
+	Direction        string                              `json:"direction"`
+	Action           string                              `json:"action"`
+	Ref              servicedependents.DependentRef      `json:"ref"`
+	AccountSID       string                              `json:"account_sid"`
+	ProbeID          string                              `json:"probe_id"`
+	Service          *windependents.Service              `json:"service,omitempty"`
+	Task             *windependents.Task                 `json:"task,omitempty"`
+	Pool             *windependents.Pool                 `json:"pool,omitempty"`
+	PreviousPIDs     []uint32                            `json:"previous_pids,omitempty"`
+	Challenge        string                              `json:"challenge,omitempty"`
+	NotBefore        time.Time                           `json:"not_before"`
+	Deadline         time.Time                           `json:"deadline"`
+}
+type privacyServiceDependentPagedStepQueuedV2 struct {
+	Step privacyServiceDependentPagedStepV2 `json:"step"`
+	At   time.Time                          `json:"at"`
+}
 type privacyServiceDependentStepQueuedV1 struct {
 	Step privacyServiceDependentStepV1 `json:"step"`
 	At   time.Time                     `json:"at"`
@@ -132,8 +154,15 @@ func addServiceDependentPrivacyPolicies(policies map[privacyEventPolicyKey]event
 	policies[privacyEventPolicyKey{EventServiceDependentScanObserved, 1}] = privacyRules(privacyRule("/job_id", exact), privacyRule("/attempt", exact), privacyRule("/report", exact), privacyRule("/evidence_digest", exact), privacyRule("/receipt_statement", exact), privacyRule("/receipt_signature_base64", exact), privacyRule("/signer_fingerprint", exact), privacyRule("/at", exact))
 	policies[privacyEventPolicyKey{EventServiceDependentScanFailed, 1}] = privacyRules(privacyRule("/run_id", exact), privacyRule("/job_id", exact), privacyRule("/attempt", exact), privacyRule("/reason", exact), privacyRule("/receipt_statement", exact), privacyRule("/receipt_signature_base64", exact), privacyRule("/signer_fingerprint", exact), privacyRule("/at", exact))
 	closePublishedDependentPrivacyContainers(policies)
+	addPagedDependentPrivacyPolicies(policies)
 }
 func addServiceDependentPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
+	shapes[privacyEventPolicyKey{EventServiceDependentRotationQueued, ServiceDependentManifestSchemaVersion}] = privacyPayloadShape[ServiceDependentRotationQueued]()
+	shapes[privacyEventPolicyKey{EventServiceReconciliationReviewProposed, ServiceDependentManifestReviewSchemaVersion}] = privacyPayloadShape[ServiceReconciliationReview]()
+	shapes[privacyEventPolicyKey{EventServiceDependentStepQueued, ServiceDependentManifestStepSchemaVersion}] = privacyPayloadShape[privacyServiceDependentPagedStepQueuedV2]()
+	shapes[privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, ServiceDependentManifestStepSchemaVersion}] = privacyPayloadShape[ServiceDependentStepRecoveryQueued]()
+	shapes[privacyEventPolicyKey{EventServiceDependentCursorAdvanced, 1}] = privacyPayloadShape[ServiceDependentCursorAdvanced]()
+
 	shapes[privacyEventPolicyKey{EventServiceDependentManifestOpened, 1}] = privacyPayloadShape[ServiceDependentManifestOpened]()
 	shapes[privacyEventPolicyKey{EventServiceDependentManifestPageRecorded, 1}] = privacyPayloadShape[ServiceDependentManifestPageRecorded]()
 	shapes[privacyEventPolicyKey{EventServiceDependentManifestSealed, 1}] = privacyPayloadShape[ServiceDependentManifestSealed]()
@@ -187,4 +216,29 @@ func closePublishedDependentPrivacyContainers(policies map[privacyEventPolicyKey
 	recovery := append(append([]string(nil), fields...), "recovery")
 	replace(privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, 1}, "/step", recovery)
 	replace(privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, 1}, "/previous_step", recovery)
+}
+
+func addPagedDependentPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
+	for _, spec := range []struct {
+		kind     string
+		old, new int
+	}{{EventServiceDependentRotationQueued, 2, 3}, {EventServiceReconciliationReviewProposed, 1, 2}, {EventServiceDependentStepQueued, 1, 2}, {EventServiceDependentStepRecoveryQueued, 1, 2}} {
+		old := policies[privacyEventPolicyKey{spec.kind, spec.old}]
+		rules := append([]events.PrivacyFieldRule(nil), old.Rules...)
+		field := "/intent/plan/manifest"
+		if spec.kind == EventServiceDependentStepQueued || spec.kind == EventServiceDependentStepRecoveryQueued {
+			field = "/step/manifest_position"
+		}
+		rules = append(rules, privacyRule(field, events.PrivacyFieldOpaqueExact))
+		if spec.kind == EventServiceDependentStepRecoveryQueued {
+			rules = append(rules, privacyRule("/previous_step/manifest_position", events.PrivacyFieldOpaqueExact))
+		}
+		policies[privacyEventPolicyKey{spec.kind, spec.new}] = privacyRules(rules...)
+	}
+	fields := []string{"rotation_id", "intent_digest", "previous_source_id", "from", "to", "cause", "step_id", "report_digest", "at"}
+	rules := make([]events.PrivacyFieldRule, 0, len(fields))
+	for _, field := range fields {
+		rules = append(rules, privacyRule("/"+field, events.PrivacyFieldOpaqueExact))
+	}
+	policies[privacyEventPolicyKey{EventServiceDependentCursorAdvanced, 1}] = privacyRules(rules...)
 }

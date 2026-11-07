@@ -59,18 +59,11 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 	}
 	switch e.Type {
 	case EventServiceReconciliationReviewProposed:
-		var historical privacyServiceReconciliationReviewV1
-		if err := decodePublishedDependentSource(e.Data, &historical); err != nil {
-			return true, err
-		}
 		var v ServiceReconciliationReview
 		if err := decode(e, &v); err != nil {
 			return true, err
 		}
-		if e.ID != servicedependents.ReconciliationReviewSourceID(e.TenantID, v.Intent.Plan.ID) {
-			return true, errors.New("dependent reconciliation: frozen review source identity differs")
-		}
-		return true, ValidateServiceReconciliationReview(v)
+		return true, ValidateServiceReconciliationReviewSource(e, v)
 
 	case EventServiceDependentRotationQueued:
 		var v ServiceDependentRotationQueued
@@ -102,7 +95,7 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 				return true, err
 			}
 		}
-		parent := store.ServiceDependentRotation{TenantID: e.TenantID, ID: e.ID, Intent: v.Intent, IntentDigest: digest, CommandID: v.Child.ID, TenantEpoch: v.Child.TenantEpoch, Direction: servicedependents.Forward, Actor: v.Actor, CreatedAt: v.At}
+		parent := store.ServiceDependentRotation{ManifestCursorSequence: e.Sequence, TenantID: e.TenantID, ID: e.ID, Intent: v.Intent, IntentDigest: digest, CommandID: v.Child.ID, TenantEpoch: v.Child.TenantEpoch, Direction: servicedependents.Forward, Actor: v.Actor, CreatedAt: v.At}
 		if err = p.store.ApplyServiceDependentRotationQueuedTx(ctx, tx, parent); err != nil {
 			return true, err
 		}
@@ -129,7 +122,20 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 		if v.At.IsZero() {
 			return true, errors.New("dependent inverse source needs time")
 		}
-		return true, p.store.ApplyServiceDependentRotationInverseTx(ctx, tx, e.TenantID, v.RotationID, v.IntentDigest, v.Failure, v.At)
+		return true, p.store.ApplyServiceDependentRotationInverseTx(ctx, tx, e.TenantID, v.RotationID, v.IntentDigest, v.Failure, v.At, e.Sequence)
+	case EventServiceDependentCursorAdvanced:
+		var v ServiceDependentCursorAdvanced
+		if err := decodePublishedDependentSource(e.Data, &v); err != nil {
+			return true, err
+		}
+		parent, err := p.store.GetServiceDependentRotationTx(ctx, tx, e.TenantID, v.RotationID)
+		if err != nil {
+			return true, err
+		}
+		if err := ValidateServiceDependentCursorAdvanceSource(e, v, parent.Intent); err != nil {
+			return true, err
+		}
+		return true, p.store.ApplyServiceDependentCursorAdvanceTx(ctx, tx, e.TenantID, e.ID, e.Sequence, v)
 	case EventServiceDependentDirectoryApplyStarted:
 		var v ServiceDependentDirectoryApplyStarted
 		if err := decode(e, &v); err != nil {

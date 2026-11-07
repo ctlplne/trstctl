@@ -92,6 +92,7 @@ func TestBoundedNativeReviewCommandsA267(t *testing.T) {
 	}{
 		{"POST", "/api/v1/access/discovery/accounts/account/dependents/reviews", `{"secret_name":"ad/svc"}`, []string{"access", "discovery", "reviews", "open", "account", "-f", "-"}},
 		{"GET", "/api/v1/access/discovery/dependent-reviews/review", "", []string{"access", "discovery", "reviews", "get", "review"}},
+		{"GET", "/api/v1/access/discovery/reconciliation-reviews/review/pages/2", "", []string{"access", "discovery", "reviews", "approval-page", "review", "2"}},
 		{"GET", "/api/v1/access/discovery/dependent-reviews/review/pages/2", "", []string{"access", "discovery", "reviews", "page", "review", "2"}},
 		{"PUT", "/api/v1/access/discovery/dependent-reviews/review/pages/2", `{"header_digest":"header","previous_digest":"previous","entries":[]}`, []string{"access", "discovery", "reviews", "append", "review", "2", "-f", "-"}},
 		{"POST", "/api/v1/access/discovery/dependent-reviews/review/seal", `{"header_digest":"header","tail_digest":"tail"}`, []string{"access", "discovery", "reviews", "seal", "review", "-f", "-"}},

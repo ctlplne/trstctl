@@ -29,6 +29,9 @@ func TestSealedManifestIntentBindsOneAccountWithoutInlineArraysA267(t *testing.T
 	if intent.Plan.Version != RotationManifestPlanVersion || intent.Plan.Manifest == nil || len(intent.Plan.Hosts) != 0 || len(intent.Plan.Order) != 0 || len(intent.Probes) != 0 || intent.Plan.Account != header.Account || intent.ExpectedVersion != header.ExpectedVersion || intent.ProviderBinding != header.ProviderBinding || !intent.Plan.ExpiresAt.Equal(seal.ExpiresAt) {
 		t.Fatal("sealed root split or changed exact account authority")
 	}
+	if intent.Plan.Hosts == nil || intent.Plan.Order == nil || intent.Probes == nil {
+		t.Fatal("server-derived sealed authority must retain the published array wire types")
+	}
 	if intent.Plan.Validate() != nil {
 		t.Fatal("valid sealed plan refused")
 	}

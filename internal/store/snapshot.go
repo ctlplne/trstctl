@@ -299,7 +299,8 @@ import (
 // Version 101 retains queued provider scan intents and nullable completion times.
 // Version102 retains service-account rotation parent/step source projections.
 // Version103 retains the complete bounded rotation-review manifest and ordered pages.
-const SnapshotFormatVersion = 103
+// Version104 retains canonical source-bound native execution cursors.
+const SnapshotFormatVersion = 104
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

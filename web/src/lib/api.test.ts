@@ -40,6 +40,14 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("reads an independent reconciliation page without a mutation key", async () => {
+    mockFetch(200, JSON.stringify({ page_number: 2, entries: [], digest: "exact-page" }));
+    const page = await api.pamServiceReconciliationReviewPage("review/one", 2);
+    expect(page.digest).toBe("exact-page");
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/access/discovery/reconciliation-reviews/review%2Fone/pages/2");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBeUndefined();
+  });
+
   it("keeps CA re-protection preview read-only and sends bound mutations to the served routes", async () => {
     mockFetch(200, "{}");
     const selection = {

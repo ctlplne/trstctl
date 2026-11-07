@@ -14626,6 +14626,7 @@
                 "requestPAMServiceReconciliationApproval",
                 "getPAMServiceReconciliationPendingReview",
                 "getPAMServiceReconciliationReview",
+                "getPAMServiceReconciliationReviewPage",
                 "getPAMServiceDependentRotation",
                 "listPAMServiceDependentRotationSteps"
             ],
@@ -14738,6 +14739,7 @@
                 "access discovery reviews open",
                 "access discovery reviews get",
                 "access discovery reviews page",
+                "access discovery reviews approval-page",
                 "access discovery reviews append",
                 "access discovery reviews seal",
                 "access discovery rotation steps"

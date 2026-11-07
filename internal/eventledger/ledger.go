@@ -183,6 +183,7 @@ const (
 	EventServiceDependentManifestSealed        = "pam.service_dependents.manifest_sealed"
 	EventServiceDependentStepRecoveryQueued    = "pam.service_dependents.step_recovery_queued"
 	EventServiceDependentStepQueued            = "pam.service_dependents.step_queued"
+	EventServiceDependentCursorAdvanced        = "pam.service_dependents.cursor_advanced"
 	EventServiceDependentStepObserved          = "pam.service_dependents.step_observed"
 
 	EventServiceDependentHostSaved    = "pam.service_dependents.host_saved"
@@ -422,7 +423,7 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "select_service_account_host", "savePAMServiceDependentHost", []string{EventServiceDependentHostSaved}},
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
 	{"F33", "Just-in-time issuance with approval flows", "review_service_account_reconciliation", "requestPAMServiceReconciliationApproval", []string{EventServiceReconciliationReviewProposed, EventApprovalRequested}},
-	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved}},
+	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved, EventServiceDependentCursorAdvanced}},
 	{"F33", "Just-in-time issuance with approval flows", "open_service_account_review", "openPAMServiceDependentReview", []string{EventServiceDependentManifestOpened}},
 	{"F33", "Just-in-time issuance with approval flows", "append_service_account_review", "appendPAMServiceDependentReviewPage", []string{EventServiceDependentManifestPageRecorded}},
 	{"F33", "Just-in-time issuance with approval flows", "seal_service_account_review", "sealPAMServiceDependentReview", []string{EventServiceDependentManifestSealed}},

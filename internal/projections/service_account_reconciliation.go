@@ -40,6 +40,17 @@ const ServiceDependentReconcileSchemaVersion = 2
 // is readable only in schema two, including on canonical worker recovery.
 func ValidateServiceDependentRotationSource(event events.Event, v ServiceDependentRotationQueued) error {
 	version := schemaVersionOf(event)
+	if version == ServiceDependentManifestSchemaVersion {
+		var exact ServiceDependentRotationQueued
+		if err := decodePublishedDependentSource(event.Data, &exact); err != nil {
+			return err
+		}
+		if event.Type != EventServiceDependentRotationQueued || event.ID != v.Intent.Plan.ID || v.Child.ID != event.ID || v.Child.DependentChangeID != event.ID || v.Intent.Plan.Version != servicedependents.RotationManifestPlanVersion || v.Intent.Plan.Manifest == nil || v.At.IsZero() || !event.Time.Equal(v.At) {
+			return errors.New("dependent rotation: exact sealed manifest source required")
+		}
+		return ValidateServiceDependentRotationApproval(v)
+	}
+
 	if len(event.Data) > 0 {
 		if version == 1 {
 			var historical privacyServiceDependentRotationQueuedV1
