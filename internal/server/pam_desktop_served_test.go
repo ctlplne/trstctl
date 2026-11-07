@@ -44,6 +44,20 @@ func TestServedDesktopVaultedRegistrationA263(t *testing.T) {
 	}
 	runNativeDesktopJourney(t, false)
 }
+
+// TestServedDesktopClipboardPolicyA269: a session through a template whose
+// reviewed clipboard policy is "both" moves the stock viewer's clipboard into
+// the desktop session's own clipboard and the session's copied text back to
+// the viewer; the index records each direction without its content.
+func TestServedDesktopClipboardPolicyA269(t *testing.T) {
+	if os.Getenv("TRSTCTL_RDP_NATIVE_LAB") != "1" {
+		if os.Getenv("TRSTCTL_REQUIRE_RDP_LAB") == "1" {
+			t.Fatal("native desktop served lab required")
+		}
+		t.Skip("native Linux desktop served lab not requested")
+	}
+	runNativeDesktopJourneyPolicy(t, false, "both")
+}
 func TestServedADDesktopA263(t *testing.T) {
 	if os.Getenv("TRSTCTL_AD_DESKTOP_LAB") != "1" {
 		t.Skip("owned Samba-backed desktop not requested")
@@ -51,6 +65,11 @@ func TestServedADDesktopA263(t *testing.T) {
 	runNativeDesktopJourney(t, true)
 }
 func runNativeDesktopJourney(t *testing.T, directory bool) {
+	t.Helper()
+	runNativeDesktopJourneyPolicy(t, directory, "deny")
+}
+
+func runNativeDesktopJourneyPolicy(t *testing.T, directory bool, clipboard string) {
 	t.Helper()
 	ctx := t.Context()
 	st := nativeDesktopOwnedStore(t)
@@ -235,7 +254,20 @@ func runNativeDesktopJourney(t *testing.T, directory bool) {
 	go h.srv.RunPAMSessionExpiry(running)
 	f.api = httptest.NewServer(h.srv.Handler())
 	defer f.api.Close()
-	session := f.open("desktop-approved", map[string]any{"target_type": "rdp", "target_id": "desktop-lab", "role": "desktop/account", "ttl_seconds": 120})
+	request := map[string]any{"target_type": "rdp", "target_id": "desktop-lab", "role": "desktop/account", "ttl_seconds": 120}
+	if clipboard != "deny" {
+		// A269: the clipboard policy comes from a template its reviewers approve.
+		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/templates", registrar, "desktop-clipboard-template",
+			map[string]any{"name": "desktop-clipboard", "reason": "desktop support", "required_approvals": 2, "max_ttl_seconds": 180, "desktop_clipboard": clipboard})
+		var template struct {
+			ID string `json:"id"`
+		}
+		if status != http.StatusCreated || json.Unmarshal(body, &template) != nil || template.ID == "" {
+			t.Fatalf("create the clipboard template: %d %s", status, body)
+		}
+		request["template_id"] = template.ID
+	}
+	session := f.open("desktop-approved", request)
 	if session.Delivery != "gateway" || session.Gateway == nil || session.Postgres != nil {
 		t.Fatal("desktop did not use gateway-only delivery")
 	}
@@ -254,7 +286,7 @@ func runNativeDesktopJourney(t *testing.T, directory bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runDesktopViewerTask(t, ctx, port, username, password, func(exited <-chan struct{}) {
+	runDesktopViewerTask(t, ctx, port, username, password, clipboard, func(exited <-chan struct{}) {
 		if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "desktop-terminate", map[string]any{"reason": "desktop proof complete"}); status != http.StatusAccepted {
 			t.Fatalf("terminate desktop: %d %s", status, body)
 		}
@@ -294,9 +326,17 @@ func runNativeDesktopJourney(t *testing.T, directory bool) {
 		bytes.Contains(indexed, []byte("operator-clipboard")) {
 		t.Fatalf("desktop recording index = %d %s", status, indexed)
 	}
-	status, refused := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/recording/index?q=clipboard", f.auditor, nil)
-	if status != http.StatusOK || !bytes.Contains(refused, []byte(`"kind":"clipboard_refused"`)) || bytes.Contains(refused, []byte(`"kind":"desktop_started"`)) {
-		t.Fatalf("the index did not find the refused clipboard: %d %s", status, refused)
+	if !bytes.Contains(indexed, []byte(`; clipboard `+clipboard+`"`)) {
+		t.Fatalf("the index does not name the reviewed clipboard policy: %s", indexed)
+	}
+	if clipboard == "deny" {
+		status, refused := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/recording/index?q=refused", f.auditor, nil)
+		if status != http.StatusOK || !bytes.Contains(refused, []byte(`"kind":"clipboard_refused"`)) || bytes.Contains(refused, []byte(`"kind":"desktop_started"`)) {
+			t.Fatalf("the index did not find the refused clipboard: %d %s", status, refused)
+		}
+	} else if !bytes.Contains(indexed, []byte(`"kind":"clipboard_to_target"`)) || !bytes.Contains(indexed, []byte(`"kind":"clipboard_from_target"`)) ||
+		bytes.Contains(indexed, []byte(`"kind":"clipboard_refused"`)) {
+		t.Fatalf("the index does not record both allowed clipboard directions: %s", indexed)
 	}
 	if bytes.Contains(exported, []byte("operator-clipboard")) {
 		t.Fatal("the refused clipboard reached the recording")
@@ -343,7 +383,7 @@ func runNativeDesktopJourney(t *testing.T, directory bool) {
 
 }
 
-func runDesktopViewerTask(t *testing.T, parent context.Context, port int, username string, password []byte, after func(<-chan struct{})) {
+func runDesktopViewerTask(t *testing.T, parent context.Context, port int, username string, password []byte, clipboard string, after func(<-chan struct{})) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -354,7 +394,7 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 	defer func() { _ = x.Process.Kill(); _ = x.Wait() }()
 	desktopAwait(t, "owned display ready", func() bool { _, e := os.Stat("/tmp/.X11-unix/X94"); return e == nil })
 	home := t.TempDir()
-	viewer := exec.CommandContext(ctx, "/usr/bin/vncviewer", "-SecurityTypes=None", "-SendClipboard=1", "-SendPrimary=0", "-AcceptClipboard=0", "-RemoteResize=0", "-AutoSelect=0", "-FullColor=1", "-PreferredEncoding=Raw", "-ReconnectOnError=0", "-AlertOnFatalError=0", fmt.Sprintf("127.0.0.1::%d", port)) // #nosec G204 -- stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78)
+	viewer := exec.CommandContext(ctx, "/usr/bin/vncviewer", "-SecurityTypes=None", "-SendClipboard=1", "-SendPrimary=0", "-AcceptClipboard="+map[bool]string{true: "1", false: "0"}[clipboard == "both"], "-RemoteResize=0", "-AutoSelect=0", "-FullColor=1", "-PreferredEncoding=Raw", "-ReconnectOnError=0", "-AlertOnFatalError=0", fmt.Sprintf("127.0.0.1::%d", port)) // #nosec G204 -- stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78)
 	viewer.Env = []string{"DISPLAY=:94", "HOME=" + home, "LANG=C"}
 	if e := viewer.Start(); e != nil {
 		t.Fatal(e)
@@ -386,7 +426,11 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 	// viewer itself; the gateway refuses it and the session continues.
 	clip := exec.CommandContext(ctx, "/usr/bin/xclip", "-selection", "clipboard", "-i") // #nosec G204 -- fixed tool on the owned viewer display, no shell (CWE-78)
 	clip.Env = []string{"DISPLAY=:94", "PATH=/usr/bin:/bin"}
-	clip.Stdin = strings.NewReader("operator-clipboard-must-not-reach-the-target")
+	offered := "operator-clipboard-must-not-reach-the-target"
+	if clipboard == "both" {
+		offered = "operator-clipboard-for-the-target"
+	}
+	clip.Stdin = strings.NewReader(offered)
 	if e := clip.Run(); e != nil {
 		t.Fatal("set the viewer's clipboard:", e)
 	}
@@ -398,7 +442,15 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 	if _, e := tool("windowfocus", window); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := tool("type", "--window", window, "--clearmodifiers", "--delay", "10", "(printf approved-desktop-proven:; id -un) > "+proof); e != nil {
+	task := "(printf approved-desktop-proven:; id -un) > " + proof
+	fromTarget := fmt.Sprintf("session-clipboard-%d", time.Now().UnixNano())
+	if clipboard == "both" {
+		// A269: read the session's own clipboard (the viewer's offered text)
+		// and copy new text there for the viewer to receive.
+		task += "; xclip -o -selection clipboard > " + proof + ".clip; printf " + fromTarget + " | xclip -i -selection clipboard"
+	}
+	defer func() { _ = os.Remove(proof + ".clip") }()
+	if _, e := tool("type", "--window", window, "--clearmodifiers", "--delay", "10", task); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := tool("key", "--window", window, "Return"); e != nil {
@@ -408,6 +460,18 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 		raw, e := os.ReadFile(proof) // #nosec G304 -- unique owned task file under fixed lab account home (CWE-22)
 		return e == nil && string(raw) == "approved-desktop-proven:"+username+"\n"
 	})
+	if clipboard == "both" {
+		desktopAwait(t, "the viewer's clipboard in the session", func() bool {
+			raw, e := os.ReadFile(proof + ".clip") // #nosec G304 -- unique owned task file under fixed lab account home (CWE-22)
+			return e == nil && string(raw) == offered
+		})
+		desktopAwait(t, "the session's clipboard at the viewer", func() bool {
+			out := exec.CommandContext(ctx, "/usr/bin/xclip", "-selection", "clipboard", "-o") // #nosec G204 -- fixed tool on the owned viewer display, no shell (CWE-78)
+			out.Env = []string{"DISPLAY=:94", "PATH=/usr/bin:/bin"}
+			raw, e := out.Output()
+			return e == nil && string(raw) == fromTarget
+		})
+	}
 	for _, name := range []string{"cmdline", "environ"} {
 		raw, e := os.ReadFile(fmt.Sprintf("/proc/%d/%s", viewer.Process.Pid, name))
 		if e != nil || bytes.Contains(raw, password) {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -103,3 +104,54 @@ func FuzzPacket(f *testing.F) {
 		}
 	})
 }
+
+// A269: the reviewed clipboard policy is two request flags beside TLS-only;
+// the target's clipboard is a bounded text packet; the operator's text is
+// refused without a to-target policy and framed exactly with one.
+func TestDesktopClipboardPolicyWireA269(t *testing.T) {
+	base := Target{Address: "127.0.0.1:3389", Username: "u", CertificateSHA256: strings.Repeat("ab", 32), Width: 800, Height: 600}
+	for _, tc := range []struct {
+		target Target
+		flags  byte
+	}{
+		{base, 0},
+		{Target{Address: base.Address, Username: "u", CertificateSHA256: base.CertificateSHA256, Width: 800, Height: 600, TLSOnly: true, ClipboardToTarget: true}, 3},
+		{Target{Address: base.Address, Username: "u", CertificateSHA256: base.CertificateSHA256, Width: 800, Height: 600, ClipboardFromTarget: true}, 4},
+	} {
+		b, err := request(tc.target, []byte("pw"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := b.Bytes()[14]; got != tc.flags {
+			t.Errorf("flags = %d, want %d", got, tc.flags)
+		}
+		b.Destroy()
+	}
+	if p, err := DecodePacket(append([]byte{4}, []byte("from the target")...)); err != nil || p.Kind != 4 || string(p.Text) != "from the target" {
+		t.Fatalf("text packet = %+v %v", p, err)
+	}
+	if _, err := DecodePacket(append([]byte{4}, make([]byte, MaxClipboard+1)...)); err == nil {
+		t.Fatal("an over-bound clipboard packet decoded")
+	}
+	refused := &Stream{}
+	if err := refused.Clipboard([]byte("x")); !errors.Is(err, ErrClipboardRefused) {
+		t.Fatal("clipboard reached the helper without a to-target policy", err)
+	}
+	var wire bytes.Buffer
+	allowed := &Stream{toTarget: true, input: nopWriteCloser{&wire}}
+	if err := allowed.Clipboard([]byte("café")); err != nil {
+		t.Fatal(err)
+	}
+	if got := wire.Bytes(); !bytes.Equal(got[:7], []byte{6, 0, 0, 0, 5, 0, 0}) || string(got[7:]) != "café" {
+		t.Fatalf("clipboard input frame = %x", got)
+	}
+	for _, bad := range [][]byte{nil, []byte("a\x00b"), make([]byte, MaxClipboard+1)} {
+		if err := allowed.Clipboard(bad); err == nil {
+			t.Fatalf("clipboard input %d bytes accepted", len(bad))
+		}
+	}
+}
+
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }

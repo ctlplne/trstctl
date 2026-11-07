@@ -5,6 +5,7 @@
 package rdp
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -24,6 +25,13 @@ const MaxPixels = 1280 * 1024 * 4
 
 var errProtocol = errors.New("rdp: invalid desktop packet")
 
+// ErrClipboardRefused is the operator's clipboard under a reviewed policy that
+// keeps it from the target (A269).
+var ErrClipboardRefused = errors.New("rdp: clipboard to the target is not allowed")
+
+// MaxClipboard bounds clipboard text in either direction (A269).
+const MaxClipboard = 65536
+
 // Target is public, reviewed desktop routing. TLSOnly is for explicitly configured
 // xrdp installations; Windows targets use network-level authentication by default.
 type Target struct {
@@ -34,6 +42,10 @@ type Target struct {
 	Width             uint16
 	Height            uint16
 	TLSOnly           bool
+	// ClipboardToTarget and ClipboardFromTarget are the reviewed clipboard
+	// policy (A269); with neither, the clipboard channel is never loaded.
+	ClipboardToTarget   bool
+	ClipboardFromTarget bool
 }
 
 // Validate accepts bounded routing and an exact DER certificate SHA-256 pin.
@@ -63,6 +75,7 @@ type Stream struct {
 	input    io.WriteCloser
 	output   io.ReadCloser
 	stop     func() error
+	toTarget bool
 	mu       sync.Mutex
 	once     sync.Once
 	closeErr error
@@ -104,7 +117,13 @@ func request(t Target, password []byte) (*secret.Buffer, error) {
 	binary.BigEndian.PutUint16(wire[10:12], t.Width)
 	binary.BigEndian.PutUint16(wire[12:14], t.Height)
 	if t.TLSOnly {
-		wire[14] = 1
+		wire[14] |= 1
+	}
+	if t.ClipboardToTarget {
+		wire[14] |= 2
+	}
+	if t.ClipboardFromTarget {
+		wire[14] |= 4
 	}
 	at := 15
 	for _, f := range fields {
@@ -121,16 +140,24 @@ func request(t Target, password []byte) (*secret.Buffer, error) {
 	return b, nil
 }
 
-// Packet is a transport-ready notice (1) or a full BGRX framebuffer (2).
+// Packet is a transport-ready notice (1), a full BGRX framebuffer (2) or the
+// target's clipboard text (4, UTF-8, only under a policy that lets it out).
 // Pixel content is personal data, not a text transcript with regex masking.
 type Packet struct {
 	Kind          byte
 	Width, Height uint16
 	Pixels        []byte
+	Text          []byte
 }
 
 // DecodePacket validates one bounded native frame. It does not retain data on error.
 func DecodePacket(raw []byte) (Packet, error) {
+	if len(raw) >= 2 && raw[0] == 4 {
+		if len(raw)-1 > MaxClipboard {
+			return Packet{}, errProtocol
+		}
+		return Packet{Kind: 4, Text: raw[1:]}, nil
+	}
 	if len(raw) < 5 || len(raw) > MaxPixels+5 || (raw[0] != 1 && raw[0] != 2) {
 		return Packet{}, errProtocol
 	}
@@ -199,6 +226,28 @@ func (s *Stream) Input(kind byte, flags, a, b uint16) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.input.Write(wire[:])
+	return err
+}
+
+// Clipboard offers the operator's text (UTF-8) to the target's clipboard when
+// the reviewed policy sends it there (A269); otherwise ErrClipboardRefused.
+func (s *Stream) Clipboard(text []byte) error {
+	if !s.toTarget {
+		return ErrClipboardRefused
+	}
+	if len(text) == 0 || len(text) > MaxClipboard || bytes.IndexByte(text, 0) >= 0 {
+		return errProtocol
+	}
+	n := uint32(len(text)) // #nosec G115 -- len(text) is at most MaxClipboard (CWE-190)
+	wire := make([]byte, 7+len(text))
+	defer secret.Wipe(wire)
+	wire[0] = 6
+	binary.BigEndian.PutUint16(wire[1:3], uint16(n>>16))
+	binary.BigEndian.PutUint16(wire[3:5], uint16(n&0xffff))
+	copy(wire[7:], text)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.input.Write(wire)
 	return err
 }
 

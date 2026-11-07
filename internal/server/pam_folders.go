@@ -179,6 +179,11 @@ func (s *pamService) pamRequestTemplate(ctx context.Context, tenantID, targetTyp
 		return nil, nil, false, err
 	}
 	refs = append(refs, fmt.Sprintf("pam-template:%s@%d", t.Name, t.Revision), "pam-template-id:"+t.ID)
+	if policy := pamDesktopClipboard(t.DesktopClipboard); policy != "deny" {
+		// A269: reviewers see, and the session's gateway reads, the clipboard
+		// policy as it was reviewed.
+		refs = append(refs, "pam-desktop-clipboard:"+policy)
+	}
 	return &t, refs, target.GatewayAgentID != "" && s.recordings != nil && target.TargetType != pamTargetAWSConsole, nil
 }
 

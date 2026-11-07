@@ -38848,6 +38848,16 @@
             },
             "type": "array"
           },
+          "desktop_clipboard": {
+            "description": "remote desktop clipboard policy for sessions through the template (A269); deny when unset",
+            "enum": [
+              "deny",
+              "to_target",
+              "from_target",
+              "both"
+            ],
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -38928,6 +38938,16 @@
               "$ref": "#/components/schemas/PAMCommandRule"
             },
             "type": "array"
+          },
+          "desktop_clipboard": {
+            "description": "remote desktop clipboard policy (A269); deny when unset",
+            "enum": [
+              "deny",
+              "to_target",
+              "from_target",
+              "both"
+            ],
+            "type": "string"
           },
           "max_ttl_seconds": {
             "type": "integer"

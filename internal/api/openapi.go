@@ -5931,6 +5931,7 @@ func componentSchemas() map[string]*Schema {
 		"id":            uuid(), "name": str(), "reason": str(), "required_approvals": {Type: "integer"},
 		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
 		"require_recording": {Type: "boolean", Description: "refuses a session through the template that would not be recorded, and every check-out (A261 part 3)"},
+		"desktop_clipboard": {Type: "string", Enum: []string{"deny", "to_target", "from_target", "both"}, Description: "remote desktop clipboard policy for sessions through the template (A269); deny when unset"},
 	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "require_recording", "revision", "saved_at")
 	pamDiscoveredAccountInfo := map[string]*Schema{
 		"key": str(), "name": str(),
@@ -8856,6 +8857,7 @@ func componentSchemas() map[string]*Schema {
 			"command_rules": {Type: "array", Items: ref("PAMCommandRule")},
 			"name":          str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
 			"require_recording": {Type: "boolean", Description: "refuse an unrecorded session and every check-out through the template"},
+			"desktop_clipboard": {Type: "string", Enum: []string{"deny", "to_target", "from_target", "both"}, Description: "remote desktop clipboard policy (A269); deny when unset"},
 			"revision":          {Type: "integer", Description: "the revision being replaced (PUT only)"},
 		}, "name", "reason", "required_approvals", "max_ttl_seconds"),
 		"PAMAccessTemplateDeleted": object(map[string]*Schema{"id": uuid(), "deleted": {Type: "boolean"}}, "id", "deleted"),

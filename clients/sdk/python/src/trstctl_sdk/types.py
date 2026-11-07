@@ -11628,6 +11628,7 @@ PAMAccessTemplate = TypedDict(
     'PAMAccessTemplate',
     {
         'command_rules': list[dict[str, Any]],
+        'desktop_clipboard': str,
         'id': str,
         'max_ttl_seconds': int,
         'name': str,
@@ -11662,6 +11663,7 @@ PAMAccessTemplateRequest = TypedDict(
     'PAMAccessTemplateRequest',
     {
         'command_rules': list[dict[str, Any]],
+        'desktop_clipboard': str,
         'max_ttl_seconds': int,
         'name': str,
         'reason': str,

@@ -27,7 +27,11 @@ type PAMAccessTemplate struct {
 	MaxTTLSeconds     int    `json:"max_ttl_seconds"`
 	// RequireRecording (A261 part 3) refuses a session through the template
 	// that would not be recorded, and every check-out.
-	RequireRecording bool               `json:"require_recording"`
+	RequireRecording bool `json:"require_recording"`
+	// DesktopClipboard (A269) is the remote desktop clipboard policy a reviewed
+	// session through the template gets: deny (the default), to_target,
+	// from_target or both.
+	DesktopClipboard string             `json:"desktop_clipboard,omitempty"`
 	CommandRules     []accessrules.Rule `json:"command_rules,omitempty"`
 	Revision         int64              `json:"revision"`
 	SavedBy          string             `json:"saved_by,omitempty"`

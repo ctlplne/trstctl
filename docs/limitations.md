@@ -9293,7 +9293,7 @@ What comes next:
   lists, checks out and checks in registered ones).
 - Real-image replay (replay-owed.md).
 
-## Remote desktop, production grade (A269) — part 1 of 3: refused redirection and the recording index
+## Remote desktop, production grade (A269) — parts 1–2 of 3: redirection policy and the recording index
 
 Status: in progress. A stock VNC viewer's clipboard is no longer a session-ending
 error: the gateway reads the offered text only to refuse it (bounded to 1 MiB,
@@ -9307,9 +9307,22 @@ recording-index`, `recordings:read`, each read audited). The xrdp lab journey
 proves it with the stock viewer's own clipboard: refused, indexed, and the
 in-session task still completes; the index never carries the clipboard text.
 
+An access template's `desktop_clipboard` (deny by default, `to_target`,
+`from_target` or `both`) sets the clipboard for desktop sessions requested
+through it. The policy is part of the review's evidence and the gateway reads it
+from the approval the session consumed, so a session gets exactly what its
+reviewers approved. The native helper loads the RDP clipboard channel only when a
+direction is allowed: the operator's text is offered to the session only under
+`to_target`/`both`, and the session's text is read only under
+`from_target`/`both` (each bounded to 64 KiB). Each direction is indexed by
+length, never content. Proofs: the xrdp lab's native helper test (both ways under
+`both`, neither under deny, the session's own clipboard read back inside it) and
+the stock-viewer journey through a `both` template (viewer → session clipboard,
+session → viewer clipboard, index entries); the fast served test proves the
+template reaches the gateway's session intent, and a session without a template
+carries deny. Sessions now keep the approval they consumed when read back.
+
 What comes next:
-- Per-template clipboard policy (deny, to target, from target, both) through the
-  native helper's clipboard channel (part 2).
 - Window titles in the index where the protocol carries them (part 3).
 - Windows network-level authentication on windows-latest: the gateway's native
   helper is Linux-only and a hosted Windows runner cannot be reached from a Linux

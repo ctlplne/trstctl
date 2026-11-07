@@ -29,7 +29,10 @@ openssl rand -hex 24 | tr -d "\n" > /run/rdp-password
 { printf "desktop-proof:"; cat /run/rdp-password; printf "\n"; } | chpasswd
 openssl req -x509 -newkey rsa:2048 -nodes -keyout /run/rdp.key -out /run/rdp.crt -days 2 -subj /CN=localhost > /run/cert-build.log 2>&1
 openssl x509 -in /run/rdp.crt -outform DER | openssl dgst -sha256 | awk "{print \$2}" > /run/rdp-pin
-sed -i "s|^certificate=.*|certificate=/run/rdp.crt|;s|^key_file=.*|key_file=/run/rdp.key|;s|^security_layer=.*|security_layer=tls|;s|^allow_channels=.*|allow_channels=false|" /etc/xrdp/xrdp.ini
+sed -i "s|^certificate=.*|certificate=/run/rdp.crt|;s|^key_file=.*|key_file=/run/rdp.key|;s|^security_layer=.*|security_layer=tls|;s|^allow_channels=.*|allow_channels=true|;s|^rdpdr=.*|rdpdr=false|;s|^rdpsnd=.*|rdpsnd=false|;s|^drdynvc=.*|drdynvc=false|;s|^cliprdr=.*|cliprdr=true|;s|^rail=.*|rail=false|;s|^xrdpvr=.*|xrdpvr=false|;s|^tcutils=.*|tcutils=false|" /etc/xrdp/xrdp.ini
+# Each connection gets its own X session: tests never share an xterm, and no
+# proof depends on reattaching a disconnected session.
+sed -i "s|^Policy=.*|Policy=UBDC|" /etc/xrdp/sesman.ini
 printf "#!/bin/sh\nexec /usr/bin/xterm -geometry 90x28+0+0 -bg navy -fg white\n" > /etc/xrdp/startwm.sh
 chmod 755 /etc/xrdp/startwm.sh
 mkdir -p /run/xrdp/sockdir /run/sshd /run/dbus
@@ -46,7 +49,7 @@ docker cp internal/crypto/rdp/native "$lab:/run/rdp-native"
 docker cp "$proof/server-test" "$lab:/run/server-test"
 docker cp "$proof/rdp-test" "$lab:/run/rdp-test"
 docker exec "$lab" sh -c 'sh /run/rdp-native/build.sh /run/rdp-helper; /run/rdp-helper --check' > "$proof/native-build.log" 2>&1
-docker exec -w /run "$lab" sh -c 'TRSTCTL_RDP_NATIVE_LAB=1 TRSTCTL_REQUIRE_RDP_LAB=1 /run/server-test -test.v -test.run ^TestServedDesktopVaultedRegistrationA263$ -test.timeout=3m' > "$proof/served.log" 2>&1
+docker exec -w /run "$lab" sh -c 'TRSTCTL_RDP_NATIVE_LAB=1 TRSTCTL_REQUIRE_RDP_LAB=1 /run/server-test -test.v -test.run "^(TestServedDesktopVaultedRegistrationA263|TestServedDesktopClipboardPolicyA269)\$" -test.timeout=5m' > "$proof/served.log" 2>&1
 docker exec "$lab" sh -c 'TRSTCTL_REQUIRE_RDP_LAB=1 TRSTCTL_RDP_HELPER=/run/rdp-helper TRSTCTL_RDP_PIN=$(cat /run/rdp-pin) /run/rdp-test -test.v -test.run "^TestNative|^TestDesktop"' > "$proof/native.log" 2>&1
 docker cp "$lab:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 docker exec "$lab" dpkg-query -W > "$proof/package-versions.tsv"

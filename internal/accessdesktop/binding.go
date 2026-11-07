@@ -25,9 +25,17 @@ type Binding struct {
 	Width             uint16         `json:"width"`
 	Height            uint16         `json:"height"`
 	TLSOnly           bool           `json:"tls_only,omitempty"`
+	// Clipboard is the reviewed clipboard policy (A269): deny (empty),
+	// to_target, from_target or both.
+	Clipboard string `json:"clipboard,omitempty"`
 }
 
 func (b Binding) Validate() error {
+	switch b.Clipboard {
+	case "", "deny", "to_target", "from_target", "both":
+	default:
+		return errors.New("desktop clipboard policy must be deny, to_target, from_target or both")
+	}
 	host, port, err := net.SplitHostPort(b.Address)
 	p, e := strconv.ParseUint(port, 10, 16)
 	pin, pe := hex.DecodeString(b.CertificateSHA256)

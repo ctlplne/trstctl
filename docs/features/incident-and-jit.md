@@ -1341,6 +1341,17 @@ prove that an earlier unknown attempt left the password unchanged. Generic
 rollback therefore cannot publish the predecessor without native recovery
 proof. Automatic inverse recovery is not yet served by this transport.
 
+#### Desktop clipboard policy
+
+A desktop session's clipboard follows the access template it was requested
+through: set `desktop_clipboard` on the template (`deny`, the default;
+`to_target`; `from_target`; or `both`), in the console's template table or with
+the templates API. Reviewers see the policy in the request's evidence; the
+gateway applies exactly what they approved. With `deny`, text the viewer offers is
+refused and indexed (`clipboard_refused`), and the session continues. Search a
+recording's index with `trstctl access sessions recording-index <session-id> --q
+clipboard`. Drives and printers are never redirected through the gateway.
+
 #### Check out an enrolled host's local administrator password
 
 Register the vaulted account as a `windows_local` access target: it names only

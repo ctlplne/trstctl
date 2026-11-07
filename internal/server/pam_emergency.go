@@ -46,7 +46,7 @@ var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 	return api.PAMAccessTemplate{ID: t.ID, Name: t.Name, Reason: t.Reason, RequiredApprovals: t.RequiredApprovals,
-		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
+		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), CommandRules: t.CommandRules, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
 }
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
@@ -74,6 +74,8 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 	case t.RequiredApprovals < s.requiredApprovals || t.RequiredApprovals > pamTemplateMaxApprovals:
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: required_approvals must be %d-%d (never below the deployment's)", api.ErrPAMInvalid,
 			s.requiredApprovals, pamTemplateMaxApprovals)
+	case t.DesktopClipboard != "" && t.DesktopClipboard != "deny" && t.DesktopClipboard != "to_target" && t.DesktopClipboard != "from_target" && t.DesktopClipboard != "both":
+		return api.PAMAccessTemplate{}, fmt.Errorf("%w: desktop_clipboard must be deny, to_target, from_target or both", api.ErrPAMInvalid)
 	case t.MaxTTLSeconds < 60 || time.Duration(t.MaxTTLSeconds)*time.Second > s.maxTTL:
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: max_ttl_seconds must be 60-%d", api.ErrPAMInvalid, int(s.maxTTL/time.Second))
 	}
@@ -106,7 +108,7 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMTemplateSaved, projections.PAMTemplateSaved{ID: t.ID, Name: t.Name,
 		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: revision,
-		Actor: actor, At: s.clock().UTC()}); err != nil {
+		DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), Actor: actor, At: s.clock().UTC()}); err != nil {
 		return api.PAMAccessTemplate{}, err
 	}
 	saved, err := s.store.GetPAMTemplate(ctx, tenantID, t.ID)
@@ -465,4 +467,12 @@ func (s *Server) ReviewPAMEmergencyGrant(ctx context.Context, tenantID, sessionI
 		return api.PAMEmergencyGrant{}, api.ErrPAMUnavailable
 	}
 	return s.pam.ReviewPAMEmergencyGrant(ctx, tenantID, sessionID, reviewer, outcome, notes)
+}
+
+// pamDesktopClipboard is a template's clipboard policy, deny when unset (A269).
+func pamDesktopClipboard(policy string) string {
+	if policy == "" {
+		return "deny"
+	}
+	return policy
 }

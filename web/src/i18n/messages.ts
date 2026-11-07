@@ -2245,6 +2245,24 @@ export const messages = {
   "admin.access.folders.required": { defaultMessage: "Recording required", description: "Account folder policy and recording workflow." },
   "admin.access.folders.optional": { defaultMessage: "Recording optional", description: "Account folder policy and recording workflow." },
   "admin.access.folders.requireRecording": { defaultMessage: "Require recording", description: "Account folder policy and recording workflow." },
+  "admin.access.folders.desktopClipboard": {
+    defaultMessage: "Desktop clipboard",
+    description: "Column of the template table: the remote desktop clipboard policy (A269).",
+  },
+  "admin.access.folders.desktopClipboardFor": {
+    defaultMessage: "Desktop clipboard for {template}",
+    description: "Accessible name of a template's clipboard policy picker (A269).",
+  },
+  "admin.access.folders.clipboard.deny": { defaultMessage: "Blocked", description: "Clipboard policy: no clipboard in either direction (A269)." },
+  "admin.access.folders.clipboard.toTarget": {
+    defaultMessage: "To the target only",
+    description: "Clipboard policy: the operator's clipboard may reach the target (A269).",
+  },
+  "admin.access.folders.clipboard.fromTarget": {
+    defaultMessage: "From the target only",
+    description: "Clipboard policy: the target's clipboard may reach the operator (A269).",
+  },
+  "admin.access.folders.clipboard.both": { defaultMessage: "Both ways", description: "Clipboard policy: both directions (A269)." },
   "admin.access.folders.allowUnrecorded": { defaultMessage: "Allow unrecorded access", description: "Account folder policy and recording workflow." },
   "admin.access.folders.membership": { defaultMessage: "Account folder membership", description: "Account folder policy and recording workflow." },
   "admin.access.folders.forTarget": { defaultMessage: "Folder for {target}", description: "Account folder policy and recording workflow." },

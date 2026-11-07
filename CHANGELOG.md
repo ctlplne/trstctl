@@ -2,6 +2,10 @@
 
 ### Added
 
+- Remote desktop (A269 part 2): access templates gain `desktop_clipboard` (deny, to_target, from_target, both); the
+  reviewed policy reaches the gateway and its native helper loads the RDP clipboard channel only for an allowed
+  direction (bounded, indexed by length). Sessions now return the approval they consumed when read back. Migration 0424,
+  snapshot format 107.
 - Remote desktop (A269 part 1): a viewer's clipboard is refused without ending the desktop session (its text is never
   forwarded and the refusal is indexed without content), and desktop recordings carry a searchable index
   (`GET /api/v1/access/sessions/{id}/recording/index?q=`, `trstctl access sessions recording-index`). OpenAPI census

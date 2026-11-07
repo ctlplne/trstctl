@@ -170,7 +170,7 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -193,7 +193,7 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -232,7 +232,7 @@ func (s *Store) ListLivePAMSessionsRequestedBy(ctx context.Context, tenantID str
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND status = 'active' AND requested_by = ANY($2::text[])
 			  ORDER BY started_at, id
@@ -267,7 +267,7 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -302,7 +302,7 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -334,6 +334,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
 		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal, &out.GatewayEndedAt, &out.GatewayEnded, &policyJSON,
+		&out.ApprovalRequestID,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows

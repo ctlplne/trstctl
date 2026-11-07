@@ -33,7 +33,12 @@ func serveDesktop(parent context.Context, client net.Conn, raw []byte, intent Se
 	ctx, cancel := context.WithDeadline(parent, intent.ExpiresAt)
 	defer cancel()
 	binding := *intent.Desktop
-	target := rdp.Target{Address: binding.Address, Username: username, Domain: binding.Domain, CertificateSHA256: binding.CertificateSHA256, Width: binding.Width, Height: binding.Height, TLSOnly: binding.TLSOnly}
+	target := rdp.Target{Address: binding.Address, Username: username, Domain: binding.Domain, CertificateSHA256: binding.CertificateSHA256, Width: binding.Width, Height: binding.Height, TLSOnly: binding.TLSOnly,
+		ClipboardToTarget: binding.Clipboard == "to_target" || binding.Clipboard == "both", ClipboardFromTarget: binding.Clipboard == "from_target" || binding.Clipboard == "both"}
+	policy := binding.Clipboard
+	if policy == "" {
+		policy = "deny"
+	}
 	var backend *rdp.Stream
 	err = held.Use(func(password []byte) error {
 		var e error
@@ -49,7 +54,7 @@ func serveDesktop(parent context.Context, client net.Conn, raw []byte, intent Se
 	// A269: the recording's index names what happened: who signed in where,
 	// each refused redirection and the end — never pixels, keys or clipboard.
 	if rec != nil {
-		if err := rec.index(ctx, "desktop_started", username+" at "+binding.Address); err != nil {
+		if err := rec.index(ctx, "desktop_started", username+" at "+binding.Address+"; clipboard "+policy); err != nil {
 			_ = backend.Close()
 			return err
 		}

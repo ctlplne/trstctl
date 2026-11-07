@@ -7,6 +7,8 @@ import "trstctl.com/trstctl/internal/events"
 func pamCommandTemplatePrivacy(base events.PrivacyEventPolicy) events.PrivacyEventPolicy {
 	base.Rules = append([]events.PrivacyFieldRule(nil), base.Rules...)
 	base.Rules = append(base.Rules,
+		// A269: the template's remote desktop clipboard policy.
+		privacyRule("/desktop_clipboard", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/id", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/name", events.PrivacyFieldFreeTextClear),
 		privacyRule("/command_rules/*/enabled", events.PrivacyFieldOpaqueExact),

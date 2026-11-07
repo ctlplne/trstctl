@@ -273,6 +273,11 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 				if e != nil {
 					return accessgateway.SessionIntent{}, e
 				}
+				// A269: the clipboard policy is the one its reviewers approved,
+				// read from the consumed approval's evidence; none is deny.
+				if binding.Clipboard, e = s.reviewedDesktopClipboard(ctx, rec); e != nil {
+					return accessgateway.SessionIntent{}, e
+				}
 				intent.Desktop = &binding
 				break
 			}
@@ -444,7 +449,8 @@ func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempote
 		return api.PAMSession{}, err
 	}
 	rec := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, ExpiresAt: expiresAt,
-		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: payload.CommandPolicy}
+		GatewayTicketDigest: payload.GatewayTicketDigest, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: payload.CommandPolicy,
+		ApprovalRequestID: payload.ApprovalRequestID}
 	if intent, err := s.gatewaySessionIntent(ctx, rec); err == nil {
 		_ = s.enqueueGatewaySession(ctx, tenantID, intent)
 	}
@@ -570,4 +576,23 @@ func (s *Server) pamSignGatewaySSHKey() func(ctx context.Context, tenantID, agen
 		return nil
 	}
 	return s.pam.signGatewaySSHKey
+}
+
+// reviewedDesktopClipboard is a desktop session's clipboard policy as its
+// reviewers approved it (A269): the approval's pam-desktop-clipboard evidence,
+// deny when it has none (or the session had no approval).
+func (s *pamService) reviewedDesktopClipboard(ctx context.Context, rec store.PAMSession) (string, error) {
+	if rec.ApprovalRequestID == "" {
+		return "deny", nil
+	}
+	approval, err := s.store.GetOperationApproval(ctx, rec.TenantID, rec.ApprovalRequestID)
+	if err != nil {
+		return "", err
+	}
+	for _, ref := range approval.EvidenceRefs {
+		if policy, ok := strings.CutPrefix(ref, "pam-desktop-clipboard:"); ok {
+			return policy, nil
+		}
+	}
+	return "deny", nil
 }

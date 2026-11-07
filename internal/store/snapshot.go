@@ -301,7 +301,8 @@ import (
 // Version103 retains the complete bounded rotation-review manifest and ordered pages.
 // Version104 retains canonical source-bound native execution cursors.
 // Version106 retains sealed-command native host generation and signed receipts.
-const SnapshotFormatVersion = 106
+// Version 107 carries A269's per-template desktop clipboard policy.
+const SnapshotFormatVersion = 107
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

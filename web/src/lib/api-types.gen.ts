@@ -8396,6 +8396,7 @@ export interface OwnershipResolveInput {
 
 export interface PAMAccessTemplate {
   command_rules?: PAMCommandRule[];
+  desktop_clipboard?: "deny" | "to_target" | "from_target" | "both";
   id: string;
   max_ttl_seconds: number;
   name: string;
@@ -8418,6 +8419,7 @@ export interface PAMAccessTemplateList {
 
 export interface PAMAccessTemplateRequest {
   command_rules?: PAMCommandRule[];
+  desktop_clipboard?: "deny" | "to_target" | "from_target" | "both";
   max_ttl_seconds: number;
   name: string;
   reason: string;

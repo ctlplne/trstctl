@@ -50,6 +50,12 @@ type Event struct {
 // Events receives each session event as it happens; an error ends the session.
 type Events func(context.Context, Event) error
 
+// clipboardBackend is a backend that can offer the operator's clipboard to the
+// target under its reviewed policy (A269).
+type clipboardBackend interface {
+	Clipboard(text []byte) error
+}
+
 type pixelFormat struct{ bits, endian byte }
 type updateRequest struct {
 	x, y, w, h  uint16
@@ -112,6 +118,7 @@ func ServeEvents(ctx context.Context, conn net.Conn, backend Backend, record Rec
 			select {
 			case p := <-frames:
 				secret.Wipe(p.Pixels)
+				secret.Wipe(p.Text)
 			default:
 				return
 			}
@@ -136,9 +143,11 @@ func ServeEvents(ctx context.Context, conn net.Conn, backend Backend, record Rec
 			case frames <- p:
 			case <-done:
 				secret.Wipe(p.Pixels)
+				secret.Wipe(p.Text)
 				return
 			case <-ctx.Done():
 				secret.Wipe(p.Pixels)
+				secret.Wipe(p.Text)
 				return
 			}
 		}
@@ -165,6 +174,29 @@ func ServeEvents(ctx context.Context, conn net.Conn, backend Backend, record Rec
 		case req := <-requestQueue:
 			pending = &req
 		case p := <-frames:
+			if p.Kind == 4 {
+				// The target's clipboard, already limited by the reviewed policy
+				// in the native helper: hand it to the viewer and index its length.
+				n := len(p.Text)
+				deadline := time.Now().Add(30 * time.Second)
+				if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+					deadline = d
+				}
+				err = conn.SetWriteDeadline(deadline)
+				if err == nil {
+					err = writeCutText(conn, p.Text)
+				}
+				secret.Wipe(p.Text)
+				if err != nil {
+					return err
+				}
+				if events != nil {
+					if err = events(ctx, Event{Kind: "clipboard_from_target", Detail: fmt.Sprintf("from_target %d bytes", n)}); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			if p.Kind != 2 || p.Width != ready.Width || p.Height != ready.Height || len(p.Pixels) != int(p.Width)*int(p.Height)*4 {
 				secret.Wipe(p.Pixels)
 				return ErrProtocol
@@ -357,15 +389,30 @@ func readViewer(ctx context.Context, conn net.Conn, state *viewerState, backend 
 			}
 			buttons = raw[0]
 		case 6:
-			// A viewer's clipboard is not forwarded to the target: its text is
-			// read only to refuse it, wiped, and the refusal is indexed
-			// without its content. The session continues.
-			n, err := discardClientCutText(conn)
+			// A viewer's clipboard reaches the target only under a reviewed
+			// policy that sends it there; otherwise its text is read only to
+			// refuse it and wiped. Either way the index records the length,
+			// never the content, and the session continues.
+			n, text, err := readClientCutText(conn)
 			if err != nil {
 				return err
 			}
+			kind := "clipboard_refused"
+			if cb, ok := backend.(clipboardBackend); ok && len(text) > 0 {
+				utf8 := latin1ToUTF8(text)
+				err = cb.Clipboard(utf8)
+				secret.Wipe(utf8)
+				switch {
+				case err == nil:
+					kind = "clipboard_to_target"
+				case !errors.Is(err, rdp.ErrClipboardRefused):
+					secret.Wipe(text)
+					return err
+				}
+			}
+			secret.Wipe(text)
 			if events != nil {
-				if err := events(ctx, Event{Kind: "clipboard_refused", Detail: fmt.Sprintf("to_target %d bytes", n)}); err != nil {
+				if err := events(ctx, Event{Kind: kind, Detail: fmt.Sprintf("to_target %d bytes", n)}); err != nil {
 					return err
 				}
 			}
@@ -474,15 +521,25 @@ func writeAll(w io.Writer, raw []byte) error {
 	return nil
 }
 
-// discardClientCutText reads one ClientCutText body (RFB 7.5.6) and wipes it.
-func discardClientCutText(conn net.Conn) (uint32, error) {
+// readClientCutText reads one ClientCutText body (RFB 7.5.6). Text within
+// the clipboard bound is returned for the caller to forward or refuse and
+// wipe; longer text is read only to wipe it.
+func readClientCutText(conn net.Conn) (uint32, []byte, error) {
 	var head [7]byte
 	if _, err := io.ReadFull(conn, head[:]); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	n := binary.BigEndian.Uint32(head[3:7])
 	if n > maxClientCutText {
-		return 0, ErrCapacity
+		return 0, nil, ErrCapacity
+	}
+	if n <= rdp.MaxClipboard {
+		text := make([]byte, n)
+		if _, err := io.ReadFull(conn, text); err != nil {
+			secret.Wipe(text)
+			return 0, nil, err
+		}
+		return n, text, nil
 	}
 	const chunk = 4096
 	var buf [chunk]byte
@@ -491,9 +548,49 @@ func discardClientCutText(conn net.Conn) (uint32, error) {
 		k, err := io.ReadFull(conn, buf[:min(left, chunk)])
 		secret.Wipe(buf[:k])
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		left -= uint32(k) // #nosec G115 -- k is at most chunk (4096) (CWE-190)
 	}
-	return n, nil
+	return n, nil, nil
+}
+
+// latin1ToUTF8 converts RFB clipboard text (ISO 8859-1) to UTF-8, dropping NUL.
+func latin1ToUTF8(text []byte) []byte {
+	out := make([]byte, 0, 2*len(text))
+	for _, b := range text {
+		switch {
+		case b == 0:
+		case b < 0x80:
+			out = append(out, b)
+		default:
+			out = append(out, 0xc0|b>>6, 0x80|b&0x3f)
+		}
+	}
+	return out
+}
+
+// utf8ToLatin1 converts the target's clipboard text to RFB's ISO 8859-1;
+// characters outside it become '?'.
+func utf8ToLatin1(text []byte) []byte {
+	out := make([]byte, 0, len(text))
+	for _, r := range string(text) {
+		if r > 0xff {
+			r = '?'
+		}
+		out = append(out, byte(r))
+	}
+	return out
+}
+
+// writeCutText sends the target's clipboard text to the viewer (RFB 7.6.4).
+func writeCutText(w io.Writer, text []byte) error {
+	latin := utf8ToLatin1(text)
+	defer secret.Wipe(latin)
+	head := []byte{3, 0, 0, 0, 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(head[4:8], uint32(len(latin))) // #nosec G115 -- the target's text is bounded by rdp.MaxClipboard (CWE-190)
+	if err := writeAll(w, head); err != nil {
+		return err
+	}
+	return writeAll(w, latin)
 }

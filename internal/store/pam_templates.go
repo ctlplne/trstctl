@@ -28,6 +28,9 @@ type PAMAccessTemplate struct {
 	// that would not be recorded, and every check-out.
 	CommandRules     []accessrules.Rule
 	RequireRecording bool
+	// DesktopClipboard (A269) is the remote desktop clipboard policy: deny,
+	// to_target, from_target or both.
+	DesktopClipboard string
 	Revision         int64
 	SavedBy          string
 	SavedAt          time.Time
@@ -47,11 +50,11 @@ type PAMEmergencyGrant struct {
 	ReviewedAt                   *time.Time
 }
 
-const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, revision, saved_by, saved_at, deleted_at, command_rules`
+const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules`
 
 func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 	var t PAMAccessTemplate
-	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.Revision, &t.SavedBy, &t.SavedAt,
+	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.DesktopClipboard, &t.Revision, &t.SavedBy, &t.SavedAt,
 		&t.DeletedAt, &t.CommandRules)
 	return t, err
 }
@@ -70,14 +73,16 @@ func (s *Store) ApplyPAMTemplateSavedTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, require_recording, revision,
-		    saved_by, saved_at, command_rules)
-		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb)
+		    saved_by, saved_at, command_rules, desktop_clipboard)
+		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb, $12)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		    name = EXCLUDED.name, reason = EXCLUDED.reason, required_approvals = EXCLUDED.required_approvals,
 		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, require_recording = EXCLUDED.require_recording, revision = EXCLUDED.revision,
-		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at, command_rules = EXCLUDED.command_rules
+		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at, command_rules = EXCLUDED.command_rules,
+		    desktop_clipboard = EXCLUDED.desktop_clipboard
 		  WHERE cur.revision < EXCLUDED.revision AND cur.deleted_at IS NULL`,
-		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording, rawRules)
+		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording, rawRules,
+		pamDesktopClipboardOrDeny(t.DesktopClipboard))
 	return err
 }
 
@@ -255,4 +260,12 @@ func (s *Store) ListRecentPAMEmergencyGrants(ctx context.Context, since time.Tim
 		out = append(out, g)
 	}
 	return out, rows.Err()
+}
+
+// pamDesktopClipboardOrDeny stores an unset clipboard policy as deny.
+func pamDesktopClipboardOrDeny(policy string) string {
+	if policy == "" {
+		return "deny"
+	}
+	return policy
 }

@@ -4474,7 +4474,9 @@ type PAMTemplateSaved struct {
 	MaxTTLSeconds     int                `json:"max_ttl_seconds"`
 	// RequireRecording (A261 part 3) refuses an unrecorded session and every
 	// check-out through the template.
-	RequireRecording bool      `json:"require_recording,omitempty"`
+	RequireRecording bool `json:"require_recording,omitempty"`
+	// DesktopClipboard (A269) is the remote desktop clipboard policy.
+	DesktopClipboard string    `json:"desktop_clipboard,omitempty"`
 	Revision         int64     `json:"revision"`
 	Actor            string    `json:"actor"`
 	At               time.Time `json:"at"`
@@ -8745,7 +8747,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
-			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, CommandRules: pl.CommandRules,
+			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, DesktopClipboard: pl.DesktopClipboard, CommandRules: pl.CommandRules,
 			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
 	case EventCloudMachineChangeProposed:
 		var pl CloudMachineChangeProposed

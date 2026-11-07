@@ -40,7 +40,7 @@ func startNative(ctx context.Context, helper string, target Target, password []b
 		return nil, errors.New("rdp: helper failed to start")
 	}
 	stop := func() error { _ = cmd.Process.Kill(); _ = cmd.Wait(); return nil }
-	stream := &Stream{input: input, output: output, stop: stop, pid: cmd.Process.Pid}
+	stream := &Stream{input: input, output: output, stop: stop, pid: cmd.Process.Pid, toTarget: target.ClipboardToTarget}
 	if _, err = input.Write(wire.Bytes()); err != nil {
 		_ = stream.Close()
 		return nil, errors.New("rdp: helper request failed")

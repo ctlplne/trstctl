@@ -22022,6 +22022,11 @@ export interface components {
         };
         PAMAccessTemplate: {
             command_rules?: components["schemas"]["PAMCommandRule"][];
+            /**
+             * @description remote desktop clipboard policy for sessions through the template (A269); deny when unset
+             * @enum {string}
+             */
+            desktop_clipboard?: "deny" | "to_target" | "from_target" | "both";
             /** Format: uuid */
             id: string;
             max_ttl_seconds: number;
@@ -22045,6 +22050,11 @@ export interface components {
         };
         PAMAccessTemplateRequest: {
             command_rules?: components["schemas"]["PAMCommandRule"][];
+            /**
+             * @description remote desktop clipboard policy (A269); deny when unset
+             * @enum {string}
+             */
+            desktop_clipboard?: "deny" | "to_target" | "from_target" | "both";
             max_ttl_seconds: number;
             name: string;
             reason: string;

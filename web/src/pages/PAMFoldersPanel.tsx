@@ -25,6 +25,15 @@ type FolderForm = z.infer<typeof folderSchema>;
 
 /** Folder membership applies the same access template to every account.
  * Recording is enforced by the server, including check-out refusals. */
+// A269: a template's remote desktop clipboard policy.
+const CLIPBOARD_POLICIES = ["deny", "to_target", "from_target", "both"] as const;
+const CLIPBOARD_LABEL = {
+  deny: "admin.access.folders.clipboard.deny",
+  to_target: "admin.access.folders.clipboard.toTarget",
+  from_target: "admin.access.folders.clipboard.fromTarget",
+  both: "admin.access.folders.clipboard.both",
+} as const;
+
 export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation();
   const cache = useQueryClient();
@@ -185,6 +194,30 @@ export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
             id: "recording",
             header: t("admin.access.folders.recording"),
             cell: (r) => t(r.require_recording ? "admin.access.folders.required" : "admin.access.folders.optional"),
+          },
+          {
+            id: "clipboard",
+            header: t("admin.access.folders.desktopClipboard"),
+            cell: (r) =>
+              canManage ? (
+                <Select
+                  aria-label={t("admin.access.folders.desktopClipboardFor", { template: r.name })}
+                  value={r.desktop_clipboard ?? "deny"}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const desktop_clipboard = event.target.value as NonNullable<typeof r.desktop_clipboard>;
+                    void act(() => api.updatePAMTemplate(r.id, { ...r, desktop_clipboard }));
+                  }}
+                >
+                  {CLIPBOARD_POLICIES.map((policy) => (
+                    <option key={policy} value={policy}>
+                      {t(CLIPBOARD_LABEL[policy])}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                t(CLIPBOARD_LABEL[r.desktop_clipboard ?? "deny"])
+              ),
           },
           {
             id: "action",

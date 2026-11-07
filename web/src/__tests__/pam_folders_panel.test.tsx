@@ -65,6 +65,11 @@ it("saves a folder with a known template, moves an account, and updates the exac
   await waitFor(() => expect(mocks.setPAMTargetFolder).toHaveBeenCalledWith("postgres", "orders", "prod"));
   await user.click(screen.getByRole("button", { name: "Allow unrecorded access" }));
   await waitFor(() => expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, { ...template, require_recording: false }));
+  // A269: the template's desktop clipboard policy, blocked by default.
+  const clipboard = screen.getByRole("combobox", { name: "Desktop clipboard for production" });
+  expect(clipboard).toHaveValue("deny");
+  await user.selectOptions(clipboard, "both");
+  await waitFor(() => expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, { ...template, desktop_clipboard: "both" }));
   expect(await axe(view.container)).toHaveNoViolations();
 });
 it("preserves a revision conflict for the operator and gates configuration by permission", async () => {
