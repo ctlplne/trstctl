@@ -134,7 +134,7 @@ func forwardMySQLCommand(ctx context.Context, server io.Writer, m *mysqlRelay, c
 			sql, ok := mysqlRuleQuery(f.payload[1:], m.queryAttributes)
 			if ok {
 				var err error
-				operations, err = accessrules.MySQLOperations(sql)
+				operations, err = accessrules.MySQLRuleOperations(sql)
 				message = sql
 				phase = "query"
 				if err != nil {

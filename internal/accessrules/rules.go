@@ -318,7 +318,7 @@ func OperationNames(protocol string) []string {
 		return slices.Clone(mongoOperationNames)
 	}
 	if protocol == "ssh" {
-		return slices.Clone(sshOperationNames)
+		return append(slices.Clone(sshOperationNames), sshRiskNames...)
 	}
 	if protocol == "netdevice" {
 		return slices.Clone(netDeviceOperationNames)
@@ -327,10 +327,10 @@ func OperationNames(protocol string) []string {
 		return slices.Clone(redisOperationNames)
 	}
 	if protocol == "mysql" {
-		return slices.Clone(mysqlOperationNames)
+		return append(slices.Clone(mysqlOperationNames), sqlRiskNames...)
 	}
 	if protocol == "postgres" {
-		return PostgresOperationNames()
+		return append(PostgresOperationNames(), sqlRiskNames...)
 	}
 	return nil
 }
@@ -345,21 +345,23 @@ func KnownOperation(protocol, operation string) bool {
 		return slices.Contains(redisOperationNames, operation)
 	}
 	if protocol == "ssh" {
-		return slices.Contains(sshOperationNames, operation)
+		return slices.Contains(sshOperationNames, operation) || slices.Contains(sshRiskNames, operation)
 	}
 	if protocol == "netdevice" {
 		return slices.Contains(netDeviceOperationNames, operation)
 	}
 	if protocol == "mysql" {
-		return slices.Contains(mysqlOperationNames, operation)
+		return slices.Contains(mysqlOperationNames, operation) || slices.Contains(sqlRiskNames, operation)
 	}
-	return protocol == "postgres" && knownPostgresRuleOperation(operation)
+	return protocol == "postgres" && (knownPostgresRuleOperation(operation) || slices.Contains(sqlRiskNames, operation))
 }
 func KnownAnyOperation(operation string) bool {
-	return knownPostgresRuleOperation(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(netDeviceOperationNames, operation) || slices.Contains(mysqlOperationNames, operation) || slices.Contains(redisOperationNames, operation) || slices.Contains(mongoOperationNames, operation) || slices.Contains(clickhouseOperationNames, operation)
+	return knownPostgresRuleOperation(operation) || RiskCategory(operation) || slices.Contains(sshOperationNames, operation) || slices.Contains(netDeviceOperationNames, operation) || slices.Contains(mysqlOperationNames, operation) || slices.Contains(redisOperationNames, operation) || slices.Contains(mongoOperationNames, operation) || slices.Contains(clickhouseOperationNames, operation)
 }
 func AllOperationNames() []string {
 	out := append(PostgresOperationNames(), sshOperationNames...)
+	out = append(out, sqlRiskNames...)
+	out = append(out, sshRiskNames...)
 	out = append(out, mysqlOperationNames...)
 	out = append(out, redisOperationNames...)
 	out = append(out, mongoOperationNames...)

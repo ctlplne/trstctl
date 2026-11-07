@@ -363,7 +363,7 @@ func (p *pgCommandRelay) frontend(f pgCommandFrame) error {
 		if !ok || len(rest) != 0 {
 			return p.refuse(raw, "uninspectable", nil, "", true)
 		}
-		operations, err := accessrules.PostgresOperations(query)
+		operations, err := accessrules.PostgresRuleOperations(query)
 		if err != nil {
 			return p.refuse(raw, "uninspectable", nil, "", true)
 		}
@@ -393,7 +393,7 @@ func (p *pgCommandRelay) frontend(f pgCommandFrame) error {
 			return p.refuse(raw, "uninspectable", nil, "", false)
 		}
 		key := crypto.SHA256Hex(name)
-		operations, err := accessrules.PostgresOperations(query)
+		operations, err := accessrules.PostgresRuleOperations(query)
 		if err != nil || accessrules.UnsupportedPostgresControl(operations) {
 			return p.refuse(raw, "uninspectable", nil, "", false)
 		}

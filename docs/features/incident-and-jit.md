@@ -631,6 +631,20 @@ runs complete commands only).
 In the console, choose **Alert** as the rule effect under Access → Privileged access
 → Command rules; the session's actions list shows the action as alerted.
 
+Rules for PostgreSQL, MySQL and SSH can also name **risk categories**, which the
+gateway reads from the statement or command itself and turns into one more operation
+name — only the category's name leaves the gateway:
+
+| Category | PostgreSQL / MySQL (`CREDENTIAL_READ` …) | SSH exec (`credential_read` …) |
+|---|---|---|
+| Credential reads | `pg_authid`, `pg_shadow`, user mappings; `mysql.user`, `authentication_string` | readers (`cat`, `head`, `base64`, `cp`, …) of `/etc/shadow`, private SSH keys, cloud, kube, Docker and database credential files; `getent shadow` |
+| Audit tampering | `ALTER SYSTEM`, `SET log_*`/`pgaudit.*`, `set_config('log_…')`, `DROP EXTENSION pgaudit`; `SET GLOBAL general_log`/`sql_log_bin`/`audit_log_*`, `UNINSTALL`, `PURGE`/`RESET` binary logs | stopping `auditd`/syslog/journald, `auditctl -D`/`-e 0`, `journalctl --vacuum*`, `history -c`, `HISTFILE` changes, removing or overwriting `/var/log` or a shell history |
+| Bulk deletes | `TRUNCATE`, `DROP TABLE`/`SCHEMA`/`DATABASE`, `DELETE` without `WHERE` | recursive `rm`, `find -delete`, writes to block devices, `mkfs`/`wipefs` |
+| Privilege changes | `GRANT`/`REVOKE`, roles and users, `OWNER TO`, `SET ROLE` | `passwd`, `usermod`, user and group tools, `visudo`, set-user-ID `chmod`, writes to sudoers or `authorized_keys` |
+
+They read through `sudo`-style wrappers but not through stored programs, dynamic SQL
+or nested interpreters; like the operation rules, they are guardrails.
+
 Automatic approval rules apply to normal session and vaulted check-out requests, never the
 emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
 with `GET /api/v1/access/auto-approval-rules`, or with the CLI:

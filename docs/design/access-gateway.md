@@ -430,6 +430,15 @@ decision is durable, the decision's projection queues a `pam.session.risk` alert
 `notification.risk` in the same transaction, and the PostgreSQL recording marks the
 action. A matching block wins; otherwise matching review rules use the largest quorum
 and shortest deadline, ahead of any alert rule matched beside them.
+
+Rules may also name a risk category (A275): `CREDENTIAL_READ`, `AUDIT_TAMPERING`,
+`BULK_DELETE` or `PRIVILEGE_CHANGE` for PostgreSQL and MySQL, the same in lowercase
+for SSH exec. The gateway derives them locally from the statement's tokens (quoted
+identifiers, string literals and executable comments read; comments and literal
+content never become categories on their own) or from the command's programs, flags,
+paths and redirections, reading through `sudo`, `env` and similar wrappers. A
+statement or command offers its operation names and its categories together; only
+those names enter an observation, so no table, path or argument leaves the gateway.
 Session auto-approval rules do not vote on commands. The original requester cannot
 approve their own command, even if they also hold `access:approve`.
 

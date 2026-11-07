@@ -1021,6 +1021,26 @@ export const messages = {
   },
   "admin.access.rules.disabled": { defaultMessage: "Disabled", description: "Gateway command guardrail configuration or durable action evidence." },
   "admin.access.rules.alert": { defaultMessage: "Alert", description: "Session risk alerts (A275): a rule effect." },
+  "admin.access.rules.riskCategories": {
+    defaultMessage: "Risk categories (read from the command itself)",
+    description: "Session risk alerts (A275): the operation picker's group of risk categories.",
+  },
+  "admin.access.rules.riskCredentialRead": {
+    defaultMessage: "Credential reads (password hashes, private keys, stored credentials)",
+    description: "Session risk alerts (A275): a risk category.",
+  },
+  "admin.access.rules.riskAuditTampering": {
+    defaultMessage: "Audit tampering (stopping, clearing or redirecting logs and history)",
+    description: "Session risk alerts (A275): a risk category.",
+  },
+  "admin.access.rules.riskBulkDelete": {
+    defaultMessage: "Bulk deletes (whole tables, schemas, databases, recursive removal)",
+    description: "Session risk alerts (A275): a risk category.",
+  },
+  "admin.access.rules.riskPrivilegeChange": {
+    defaultMessage: "Privilege changes (grants, roles, users, sudoers, set-user-ID)",
+    description: "Session risk alerts (A275): a risk category.",
+  },
   "admin.access.rules.alertWarning": { defaultMessage: " (warning)", description: "Session risk alerts (A275): an alert rule's severity after its effect." },
   "admin.access.rules.alertCritical": { defaultMessage: " (critical)", description: "Session risk alerts (A275): an alert rule's severity after its effect." },
   "admin.access.rules.severity": { defaultMessage: "Alert severity", description: "Session risk alerts (A275)." },

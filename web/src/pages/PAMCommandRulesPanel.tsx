@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type PAMAccessTemplate, type PAMCommandRule } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
+import type { MessageKey } from "@/i18n/messages";
 
 // Operation names are public configuration, never arbitrary shell/SQL tokens.
 const postgresOperations = [
@@ -45,6 +46,11 @@ const postgresOperations = [
   "UPDATE",
   "VACUUM",
   "WITH",
+  // A275: risk categories the gateway reads from the statement itself.
+  "AUDIT_TAMPERING",
+  "BULK_DELETE",
+  "CREDENTIAL_READ",
+  "PRIVILEGE_CHANGE",
 ] as const;
 const sshOperations = [
   "bash",
@@ -79,6 +85,11 @@ const sshOperations = [
   "umount",
   "useradd",
   "userdel",
+  // A275: risk categories the gateway reads from the command itself.
+  "audit_tampering",
+  "bulk_delete",
+  "credential_read",
+  "privilege_change",
 ] as const;
 const mysqlOperations = [
   "ALTER",
@@ -111,6 +122,10 @@ const mysqlOperations = [
   "UNLOCK",
   "UPDATE",
   "USE",
+  "AUDIT_TAMPERING",
+  "BULK_DELETE",
+  "CREDENTIAL_READ",
+  "PRIVILEGE_CHANGE",
 ] as const;
 const redisOperations = [
   "APPEND",
@@ -246,6 +261,17 @@ const netdeviceOperations = [
   "start",
   "write",
 ] as const;
+// riskCategories are offered apart from operation names, with their meaning.
+const riskCategories: Partial<Record<string, MessageKey>> = {
+  AUDIT_TAMPERING: "admin.access.rules.riskAuditTampering",
+  BULK_DELETE: "admin.access.rules.riskBulkDelete",
+  CREDENTIAL_READ: "admin.access.rules.riskCredentialRead",
+  PRIVILEGE_CHANGE: "admin.access.rules.riskPrivilegeChange",
+  audit_tampering: "admin.access.rules.riskAuditTampering",
+  bulk_delete: "admin.access.rules.riskBulkDelete",
+  credential_read: "admin.access.rules.riskCredentialRead",
+  privilege_change: "admin.access.rules.riskPrivilegeChange",
+};
 const operationChoices = {
   postgres: postgresOperations,
   ssh: sshOperations,
@@ -574,11 +600,24 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
               >
                 {(control) => (
                   <Select {...control} multiple {...register("operations")}>
-                    {operationChoices[protocol].map((op) => (
-                      <option key={op} value={op}>
-                        {op}
-                      </option>
-                    ))}
+                    {operationChoices[protocol]
+                      .filter((op) => !riskCategories[op])
+                      .map((op) => (
+                        <option key={op} value={op}>
+                          {op}
+                        </option>
+                      ))}
+                    {operationChoices[protocol].some((op) => riskCategories[op]) ? (
+                      <optgroup label={t("admin.access.rules.riskCategories")}>
+                        {operationChoices[protocol]
+                          .filter((op) => riskCategories[op])
+                          .map((op) => (
+                            <option key={op} value={op}>
+                              {t(riskCategories[op] ?? "admin.access.rules.riskCategories")}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ) : null}
                   </Select>
                 )}
               </Field>

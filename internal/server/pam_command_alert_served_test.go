@@ -211,3 +211,171 @@ func TestServedGatewayCommandAlertRaisesOneAlertWithTheRecordingA275(t *testing.
 		t.Fatalf("the recording does not mark the alerted action %s (%d frames)", actionID, len(frames.Frames))
 	}
 }
+
+// TestServedRiskCategoriesAlertAndBlockA275: a template's rules name risk
+// categories the gateway reads from the statement or command itself. Over
+// PostgreSQL a credential read and an audit-setting change are alerted
+// (allowed to run, one critical alert each) and a DELETE without WHERE is
+// blocked with the rows unchanged, while a scoped DELETE and a string that
+// mentions the catalogs pass with no action; over SSH a read of
+// /etc/shadow is alerted and a recursive removal is blocked, while a plain
+// removal passes. No table, path or argument reaches an action or an alert.
+func TestServedRiskCategoriesAlertAndBlockA275(t *testing.T) {
+	receiver := newA275SIEM(t)
+	f := startGatewayFixture(t, gatewayFixtureOptions{commandRules: true, notificationChannels: []notify.Notifier{receiver.channel()}})
+	status, body := secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, "a275-risk-template", map[string]any{
+		"name": "a275-risk-categories", "reason": "Production maintenance", "required_approvals": 2, "max_ttl_seconds": 60,
+		"command_rules": []map[string]any{
+			{"id": uuid.NewString(), "name": "Alert on credential reads and audit changes", "enabled": true, "protocol": "postgres",
+				"operations": []string{"CREDENTIAL_READ", "AUDIT_TAMPERING"}, "effect": "alert", "severity": "critical"},
+			{"id": uuid.NewString(), "name": "Refuse bulk deletes", "enabled": true, "protocol": "postgres", "operations": []string{"BULK_DELETE"}, "effect": "block"},
+			{"id": uuid.NewString(), "name": "Alert on credential reads", "enabled": true, "protocol": "ssh", "operations": []string{"credential_read"}, "effect": "alert", "severity": "warning"},
+			{"id": uuid.NewString(), "name": "Refuse recursive removal", "enabled": true, "protocol": "ssh", "operations": []string{"bulk_delete"}, "effect": "block"},
+		},
+	})
+	var template struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &template) != nil || template.ID == "" {
+		t.Fatalf("save the risk template = %d %s", status, body)
+	}
+	t.Cleanup(func() {
+		_, _ = secretsReqKey(t, f.h.servedHarness, http.MethodDelete, "/api/v1/access/templates/"+template.ID, f.operator, "a275-risk-template-cleanup", nil)
+	})
+	revoke := func(id, key string) {
+		_, _ = secretsReqKey(t, f.h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+id+"/revoke", f.requester, key, map[string]any{"reason": "A275 fixture complete"})
+		a201Await(t, "the session is revoked before target shutdown", func() bool {
+			work, cancel := context.WithTimeout(f.ctx, 20*time.Second)
+			defer cancel()
+			_ = f.h.srv.Drain(work)
+			return f.sessionRead(id)["status"] == "revoked"
+		})
+	}
+	actions := func(id string) []map[string]any {
+		t.Helper()
+		status, body := secretsReq(t, f.h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+id+"/actions", f.requester, nil)
+		var page struct {
+			Items []map[string]any `json:"items"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &page) != nil {
+			t.Fatalf("session actions = %d %s", status, body)
+		}
+		for _, forbidden := range []string{"pg_authid", "a275_risk", "log_statement", "/etc/shadow", "/tmp/a275"} {
+			if strings.Contains(string(body), forbidden) {
+				t.Fatalf("command content reached the actions: %s", forbidden)
+			}
+		}
+		return page.Items
+	}
+	statuses := func(items []map[string]any) map[string]int {
+		out := map[string]int{}
+		for _, a := range items {
+			s, _ := a["status"].(string)
+			ops, _ := a["operations"].([]any)
+			for _, op := range ops {
+				out[s+":"+op.(string)]++
+			}
+		}
+		return out
+	}
+
+	// PostgreSQL.
+	pgSession := f.open("a275-risk-pg-open", map[string]any{"target_type": "postgres", "target_id": "pg-gw", "role": "readonly", "ttl_seconds": 60, "template_id": template.ID})
+	t.Cleanup(func() { revoke(pgSession.ID, "a275-risk-pg-cleanup") })
+	local, stop := f.postgresTunnel(pgSession)
+	defer stop()
+	conn, err := pgconn.Connect(f.ctx, "postgres://uncredentialed-client@"+local+"/postgres?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	query := func(sql string) error { _, err := conn.Exec(f.ctx, sql).ReadAll(); return err }
+	count := func(want string) {
+		t.Helper()
+		r := conn.ExecParams(f.ctx, "SELECT count(*) FROM a275_risk", nil, nil, nil, nil).Read()
+		if r.Err != nil || len(r.Rows) != 1 || string(r.Rows[0][0]) != want {
+			t.Fatalf("rows = %v %v, want %s", r.Rows, r.Err, want)
+		}
+	}
+	if err := query("CREATE TEMP TABLE a275_risk(value text); INSERT INTO a275_risk VALUES ('a'), ('b')"); err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{"DELETE FROM a275_risk WHERE value = 'a'", "SELECT 'GRANT ALL ON pg_authid TO PUBLIC' AS note"} {
+		if err := query(sql); err != nil {
+			t.Fatalf("an ordinary statement %q: %v", sql, err)
+		}
+	}
+	count("1")
+	if got := actions(pgSession.ID); len(got) != 0 {
+		t.Fatalf("ordinary statements recorded actions: %+v", got)
+	}
+	// Alerted: they reach the database, which refuses this login (an error
+	// from PostgreSQL, not the gateway's policy marker).
+	for _, sql := range []string{"SELECT rolname, rolpassword FROM pg_authid", "SET log_statement = 'none'"} {
+		if err := query(sql); err != nil && strings.Contains(err.Error(), "TRSTCTL") {
+			t.Fatalf("an alerted statement %q was refused by policy: %v", sql, err)
+		}
+	}
+	if err := query("DELETE FROM a275_risk"); err == nil || !strings.Contains(err.Error(), "TRSTCTL") {
+		t.Fatalf("a bulk delete was not refused by policy: %v", err)
+	}
+	count("1")
+	if got := statuses(actions(pgSession.ID)); got["alerted:CREDENTIAL_READ"] != 1 || got["alerted:AUDIT_TAMPERING"] != 1 || got["blocked:BULK_DELETE"] != 1 || len(got) != 3 {
+		t.Fatalf("PostgreSQL actions = %v", got)
+	}
+
+	// SSH.
+	sshSession := f.open("a275-risk-ssh-open", map[string]any{"target_type": "ssh", "target_id": "ssh-gw", "role": "user", "ssh_principal": "alice", "ttl_seconds": 60, "template_id": template.ID})
+	t.Cleanup(func() { revoke(sshSession.ID, "a275-risk-ssh-cleanup") })
+	command, stopSSH := f.sshTunnel(sshSession)
+	defer stopSSH()
+	dir, file := "/tmp/a275-dir-"+uuid.NewString(), "/tmp/a275-file-"+uuid.NewString()
+	if out, err := command("mkdir", "-p", dir+"/inner").CombinedOutput(); err != nil {
+		t.Fatalf("mkdir: %v %s", err, out)
+	}
+	if out, err := command("touch", file).CombinedOutput(); err != nil {
+		t.Fatalf("touch: %v %s", err, out)
+	}
+	if out, err := command("rm", file).CombinedOutput(); err != nil {
+		t.Fatalf("a plain removal was refused: %v %s", err, out)
+	}
+	// Alerted: cat runs on the host, which refuses this login the file.
+	out, _ := command("cat", "/etc/shadow").CombinedOutput()
+	if strings.Contains(string(out), "TRSTCTL") {
+		t.Fatalf("an alerted command was refused by policy: %s", out)
+	}
+	if out, err := command("rm", "-rf", dir).CombinedOutput(); err == nil {
+		t.Fatalf("a recursive removal escaped the rule: %s", out)
+	}
+	if out, err := command("test", "-d", dir+"/inner").CombinedOutput(); err != nil {
+		t.Fatalf("the blocked removal changed the host: %v %s", err, out)
+	}
+	if got := statuses(actions(sshSession.ID)); got["alerted:credential_read"] != 1 || got["blocked:bulk_delete"] != 1 || len(got) != 2 {
+		t.Fatalf("SSH actions = %v", got)
+	}
+
+	// Three alerts: two critical from PostgreSQL, one warning from SSH; none
+	// names a table, path or argument.
+	work, cancel := context.WithTimeout(f.ctx, 30*time.Second)
+	defer cancel()
+	_ = f.h.srv.Drain(work)
+	var alerts []a275SIEMEvent
+	a201Await(t, "the three risk alerts reach the SIEM", func() bool { alerts = receiver.sessionRisk(); return len(alerts) >= 3 })
+	_ = f.h.srv.Drain(work)
+	if alerts = receiver.sessionRisk(); len(alerts) != 3 {
+		t.Fatalf("%d alerts, want 3", len(alerts))
+	}
+	severities := map[string]int{}
+	for _, a := range alerts {
+		severities[a.Severity]++
+		raw, _ := json.Marshal(a)
+		for _, forbidden := range []string{"pg_authid", "a275_risk", "log_statement", "/etc/shadow", "/tmp/a275"} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Fatalf("command content reached an alert: %s in %s", forbidden, raw)
+			}
+		}
+	}
+	if severities["critical"] != 2 || severities["warning"] != 1 {
+		t.Fatalf("alert severities = %v", severities)
+	}
+}

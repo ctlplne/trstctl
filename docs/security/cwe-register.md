@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2806 annotated sites across 31 rules. Each row is
+2808 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (603 sites)
+### G101 — CWE-798 Use of hardcoded credentials (605 sites)
 
 | Location | Reason |
 |---|---|
@@ -102,6 +102,8 @@ not this file.
 | `ee/provider/scim_bulk_test.go:27` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `ee/provider/scim_groups_test.go:36` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
+| `internal/accessrules/risk.go:22` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/accessrules/risk.go:30` | a risk category's name matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
 | `internal/agent/csisecrets/driver_test.go:423` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:36` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |

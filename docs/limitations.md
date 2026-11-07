@@ -9136,7 +9136,7 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
-## Session risk alerts and recording search (A275) — part 1: alert rules
+## Session risk alerts and recording search (A275) — parts 1–2: alert rules and risk categories
 
 Status: in progress. A template rule's `alert` effect (severity `warning` or
 `critical`) lets a matching command run once its `alerted` decision is durable and
@@ -9148,10 +9148,18 @@ action. Proof today: `TestServedGatewayCommandAlertRaisesOneAlertWithTheRecordin
 exactly one alert at the SIEM receiver, critical, with the recording link and no
 statement text; the outbox entry is delivered; the recording marks the action; an
 alert rule without a severity is refused) and the unit and console tests.
+Part 2: rules name risk categories the gateway reads from PostgreSQL and MySQL
+statements and SSH exec commands (credential reads, audit tampering, bulk deletes,
+privilege changes). Proof: `TestServedRiskCategoriesAlertAndBlockA275` (a `pg_authid`
+read and a `log_statement` change are alerted — reaching the database, which refuses
+the login — and a `DELETE` without `WHERE` is blocked with rows unchanged, while a
+scoped delete and a string naming the catalogs pass; over SSH `cat /etc/shadow` is
+alerted and `rm -rf` blocked with the directory intact, while a plain `rm` passes;
+three alerts, no table, path or argument in any action or alert), and the classifier
+tables in `TestSQLRiskCategoriesA275`/`TestSSHRiskCategoriesA275`. Redis, MongoDB,
+ClickHouse and network devices have no categories.
 
 What comes next:
-- Argument-aware risk categories at the gateway (credential reads, audit tampering,
-  bulk deletes) beyond operation names (part 2).
 - Full-text search across SSH and SQL transcripts and remote desktop indexes,
   scoped, masked and audited (part 3).
 - Alerts for interactive SSH shells need typed-line inspection (A270-L1); ruled

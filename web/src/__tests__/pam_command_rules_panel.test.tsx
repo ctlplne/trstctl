@@ -315,3 +315,32 @@ it("saves an alert rule with its severity and no review bounds, and shows an ale
   expect(await screen.findByText("Alerted; allowed to run")).toBeInTheDocument();
   expect(await screen.findByText(/Alert \(critical\)/)).toBeInTheDocument();
 });
+
+it("offers risk categories apart from operation names and saves them as the protocol spells them (A275)", async () => {
+  const user = userEvent.setup();
+  mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access template" }), template.id);
+  await user.type(within(dialog).getByRole("textbox", { name: "Rule name" }), "Alert on credential reads");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Protocol" }), "ssh");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  const ops = await within(dialog).findByRole("listbox", { name: "Operation names" });
+  expect(within(ops).getByRole("group", { name: "Risk categories (read from the command itself)" })).toBeInTheDocument();
+  await user.selectOptions(ops, within(ops).getByRole("option", { name: /Credential reads/ }));
+  for (const selected of Array.from((ops as HTMLSelectElement).selectedOptions)) {
+    if (selected.value !== "credential_read") await user.deselectOptions(ops, selected);
+  }
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Rule effect" }), "alert");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Save reviewed rule" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(
+      template.id,
+      expect.objectContaining({
+        command_rules: [expect.objectContaining({ protocol: "ssh", operations: ["credential_read"], effect: "alert", severity: "warning" })],
+      }),
+      expect.any(String),
+    ),
+  );
+});

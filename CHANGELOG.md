@@ -2,6 +2,11 @@
 
 ### Added
 
+- Risk categories (A275 part 2): command rules for PostgreSQL, MySQL and SSH can name `CREDENTIAL_READ`,
+  `AUDIT_TAMPERING`, `BULK_DELETE` and `PRIVILEGE_CHANGE` (lowercase for SSH), which the gateway reads from the
+  statement's tokens or the command's programs, flags, paths and redirections (through `sudo`-style wrappers); only
+  the category name leaves the gateway. Any effect applies: alert, block or review. The console groups them apart
+  from operation names.
 - Session risk alerts (A275 part 1): command rules gain the `alert` effect with a `warning` or `critical` severity. A
   matching command runs once its `alerted` decision is durable, and its projection queues a `pam.session.risk` alert on
   the `notification.risk` channels naming the operations, target, person, rule and action, with the console link

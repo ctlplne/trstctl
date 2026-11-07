@@ -24,7 +24,7 @@ func (c *commandConnection) sshRequest(ctx context.Context, kind string, payload
 		if valid {
 			message = command
 			var err error
-			operations, err = accessrules.SSHOperations(command)
+			operations, err = accessrules.SSHRuleOperations(command)
 			if err != nil {
 				phase = "uninspectable"
 			}
