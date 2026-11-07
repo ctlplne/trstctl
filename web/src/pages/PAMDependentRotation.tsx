@@ -16,6 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PAMDependentRecovery } from "./PAMDependentRecovery";
 import { PAMReconciliationIntent } from "./PAMReconciliationIntent";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
@@ -390,6 +391,14 @@ export function PAMDependentRotation({
               ) : (
                 <p className="text-sm text-muted-foreground">{t("admin.access.rotation.pendingHelp")}</p>
               )}
+              {canManage && value.recovery_step_id ? (
+                <PAMDependentRecovery
+                  key={id + ":" + value.recovery_step_id}
+                  id={id}
+                  stepID={value.recovery_step_id}
+                  intentDigest={value.rotation.intent_digest}
+                />
+              ) : null}
               <DataGrid<PAMServiceDependentRotationStep>
                 ariaLabel={t("admin.access.rotation.steps")}
                 rows={steps.data?.items ?? []}
@@ -418,6 +427,7 @@ export function PAMDependentRotation({
                     cell: (s) => (
                       <>
                         <p>{s.status}</p>
+                        {s.intent.recovery ? <p>{t("admin.access.rotation.recovery.history", { previous: s.intent.recovery.previous_step_id })}</p> : null}
                         {s.report?.failure ? <p>{s.report.failure}</p> : null}
                         <details>
                           <summary>{t("admin.access.rotation.exactEvidence")}</summary>

@@ -178,6 +178,7 @@ const (
 	EventServiceDependentRotationInverse       = "pam.service_dependents.rotation_inverse"
 	EventServiceDependentDirectoryApplyStarted = "pam.service_dependents.directory_apply_started"
 	EventServiceDependentDirectoryRestored     = "pam.service_dependents.directory_restored"
+	EventServiceDependentStepRecoveryQueued    = "pam.service_dependents.step_recovery_queued"
 	EventServiceDependentStepQueued            = "pam.service_dependents.step_queued"
 	EventServiceDependentStepObserved          = "pam.service_dependents.step_observed"
 
@@ -419,6 +420,7 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
 	{"F33", "Just-in-time issuance with approval flows", "review_service_account_reconciliation", "requestPAMServiceReconciliationApproval", []string{EventServiceReconciliationReviewProposed, EventApprovalRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved}},
+	{"F33", "Just-in-time issuance with approval flows", "recover_service_account_dependents", "queuePAMServiceDependentRecovery", []string{EventServiceDependentStepRecoveryQueued}},
 	// F33 — Just-in-time privileged access sessions.
 	// Gateway checks continue the exact outbox-backed admitted session job.
 	{"F33", "Just-in-time issuance with approval flows", "evaluate_pam_command", "openPAMSession", []string{EventPAMCommandBlocked, EventPAMCommandReviewRequested, EventPAMCommandApprovalRequested, EventPAMCommandReviewDecided}},

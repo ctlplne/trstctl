@@ -63,6 +63,15 @@ func FuzzDependentRotationWireA267(f *testing.F) {
 		f.Fatal(err)
 	}
 	f.Add(seed)
+	recovery, err := NewInverseRecoveryStep(ownedRecoveryStep(), "57800000-0000-4000-8000-000000000006", ownedRecoveryStep().Deadline.Add(time.Hour))
+	if err != nil {
+		f.Fatal(err)
+	}
+	recoverySeed, err := json.Marshal(recovery)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(recoverySeed)
 	f.Add([]byte(`{"status":"failed","status":"succeeded"}`))
 	f.Add([]byte(`{"probe_id":"owned","challenge":"same","unknown":true}`))
 	f.Add([]byte(strings.Repeat("[", 18) + strings.Repeat("]", 18)))

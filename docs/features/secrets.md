@@ -2607,8 +2607,8 @@ never be retried or reported successful through this operation. Fully settled
 history is archived with the existing fsync and collision checks; an unacknowledged
 original report still blocks new work. After acknowledgement, separately authorized
 work can use the active slot. Restarting the agent does not revive an expired job
-or change an already failed or uncertain server step. Coordinator recovery for
-those cases remains a separate obligation. Windows runtime qualification of this
+or change an already failed or uncertain server step. Use the separate explicit
+inverse recovery review below after resolving local uncertainty. Windows runtime qualification of this
 terminal-observation path and final-image recovery remain unverified; portable
 journal/CLI contracts and Windows cross-compilation are separate evidence.
 
@@ -2770,3 +2770,52 @@ that coordinator proof are fixtures. Separate adapter proof also refuses a forei
 target without the grant. Native Windows dependent execution, the combined domain
 journey, final-image replay and forest replication remain unverified. Existing
 lockout checks remain in force; this workflow does not unlock an account.
+
+
+### Recovering an inverse dependent step
+
+When directory restoration has been canonically recorded and the next inverse
+step has failed, is uncertain, or has passed its immutable execution deadline plus
+one minute of receipt grace, progress exposes `recovery_step_id`. An operator with
+`access:targets.write` and write access to the exact vault key can choose **Review
+inverse recovery** in the account's rotation progress. Read the complete effect,
+enter a reason, and acknowledge that the original result stays in the record.
+
+The review freezes the original native action, host, SID, service/task/pool
+configuration, useful-work probe, predecessor PIDs, original report digest, and
+current vault version. Queueing creates a separate step with a fresh challenge
+and two-minute lease. An update uses the already retained predecessor credential.
+It does not repeat the AD reset, create a new password, or reuse the original
+reconciliation approval. Changed provider identity, source evidence, review digest
+or vault version requires opening a new review. A successful original step and
+forward work cannot be replaced this way.
+
+Headless operators use the same review and queue:
+
+```sh
+trstctl access discovery rotation get ROTATION_ID
+trstctl access discovery rotation recovery-preview ROTATION_ID --step-id STEP_ID
+trstctl access discovery rotation recovery-queue ROTATION_ID --force -f recovery.json
+```
+
+`recovery.json` contains `step_id`, `intent_digest`, `recovery_digest`, a bounded
+`reason`, and `acknowledge_original_outcome: true`, copied from the exact review.
+Keep the same idempotency key when retrying a lost response. The first immutable
+recovery command also binds the actor and reason; a different request cannot
+replace it after an append acknowledgement or a lost projection transaction.
+
+The old row keeps its original failed/uncertain report. An expired unobserved row
+remains queued with cancelled delivery. Replacement rows carry `intent.recovery`
+with root and previous IDs and a depth. Paging retains both histories. At most
+127 replacements can follow one original step; reaching that retained-history
+bound refuses further work without deleting evidence. Exact late signed receipts
+are retained for audit without applying the old step to current state. Removing
+SQL lineage cannot revive an old host grant. Only separate successful replacement
+evidence can let the existing inverse coordinator continue toward vault recovery.
+
+A new server lease cannot clear an agent's unknown-start fence. Stop the agent,
+complete the exact native terminal observation described above, acknowledge its
+original report, then restart it. This is a distributed recovery: a queued response
+is not native completion. Portable served tests cover uncertainty, actual lease
+expiry, late signed receipts, lost projection, tamper refusal and privacy/rebuild.
+Native Windows execution and the combined final-image journey remain unverified.

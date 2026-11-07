@@ -115,6 +115,7 @@ func (intent RotationIntent) Validate(inputs []RotationHostInput) error {
 // RotationStep is exact native authority for one bounded host effect. There is
 // one typed snapshot, a parent intent digest, a direction and a fixed operation.
 type RotationStep struct {
+	Recovery     *StepRecoveryBinding   `json:"recovery,omitempty"`
 	RotationID   string                 `json:"rotation_id"`
 	PlanDigest   string                 `json:"plan_digest"`
 	ID           string                 `json:"step_id"`
@@ -167,6 +168,13 @@ func (step RotationStep) Validate() error {
 		return errors.New("service dependents: one exact native object required")
 	}
 	expected := crypto.SHA256Hex([]byte(step.RotationID + "\x00" + step.PlanDigest + "\x00" + step.Direction + "\x00" + step.Action + "\x00" + dependentKey(step.Ref)))[:32]
+	if step.Recovery != nil {
+		binding := step.Recovery
+		if step.Direction != Inverse || binding.Version != 1 || binding.Depth < 1 || binding.Depth >= MaxInverseRecoveryDepth || binding.RootStepID != expected || !validRecoveryStepID(binding.PreviousStepID) || binding.PreviousStepID == step.ID {
+			return errors.New("service dependents: inverse recovery lineage differs")
+		}
+		expected = RecoveryStepID(step.RotationID, binding.PreviousStepID)
+	}
 	if step.ID != expected {
 		return errors.New("service dependents: native step identity differs")
 	}

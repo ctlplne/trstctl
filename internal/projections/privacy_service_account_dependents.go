@@ -3,6 +3,7 @@ package projections
 
 import (
 	"time"
+	"trstctl.com/trstctl/internal/crypto/windependents"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/servicedependents"
 )
@@ -21,10 +22,34 @@ type privacyServiceDependentRotationQueuedV1 struct {
 	At     time.Time                               `json:"at"`
 }
 
+// The original step source cannot grow replacement authority retroactively.
+type privacyServiceDependentStepV1 struct {
+	RotationID   string                         `json:"rotation_id"`
+	PlanDigest   string                         `json:"plan_digest"`
+	ID           string                         `json:"step_id"`
+	Direction    string                         `json:"direction"`
+	Action       string                         `json:"action"`
+	Ref          servicedependents.DependentRef `json:"ref"`
+	AccountSID   string                         `json:"account_sid"`
+	ProbeID      string                         `json:"probe_id"`
+	Service      *windependents.Service         `json:"service,omitempty"`
+	Task         *windependents.Task            `json:"task,omitempty"`
+	Pool         *windependents.Pool            `json:"pool,omitempty"`
+	PreviousPIDs []uint32                       `json:"previous_pids,omitempty"`
+	Challenge    string                         `json:"challenge,omitempty"`
+	NotBefore    time.Time                      `json:"not_before"`
+	Deadline     time.Time                      `json:"deadline"`
+}
+type privacyServiceDependentStepQueuedV1 struct {
+	Step privacyServiceDependentStepV1 `json:"step"`
+	At   time.Time                     `json:"at"`
+}
+
 // Native selectors, configuration hashes and signed metadata are exact
 // operational evidence. The human requesting the read remains an erasable identity.
 func addServiceDependentPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
 	exact := events.PrivacyFieldOpaqueExact
+	policies[privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, 1}] = privacyRules(privacyRule("/previous_step", exact), privacyRule("/step", exact), privacyRule("/previous_status", exact), privacyRule("/previous_report_digest", exact), privacyRule("/current_vault_version", exact), privacyRule("/recovery_digest", exact), privacyRule("/actor", events.PrivacyFieldIdentityExact), privacyRule("/reason", events.PrivacyFieldFreeTextClear), privacyRule("/at", exact))
 	identity := events.PrivacyFieldIdentityExact
 	policies[privacyEventPolicyKey{EventServiceReconciliationReviewProposed, 1}] = privacyRules(privacyRule("/intent", exact), privacyRule("/actor", identity), privacyRule("/at", exact))
 	policies[privacyEventPolicyKey{EventServiceDependentRotationQueued, 1}] = privacyRules(privacyRule("/intent", exact), privacyRule("/child", exact), privacyRule("/actor", identity), privacyRule("/at", exact))
@@ -46,7 +71,8 @@ func addServiceDependentPrivacyShapes(shapes map[privacyEventPolicyKey]events.Pr
 	shapes[privacyEventPolicyKey{EventServiceDependentRotationInverse, 1}] = privacyPayloadShape[ServiceDependentRotationInverse]()
 	shapes[privacyEventPolicyKey{EventServiceDependentDirectoryApplyStarted, 1}] = privacyPayloadShape[ServiceDependentDirectoryApplyStarted]()
 	shapes[privacyEventPolicyKey{EventServiceDependentDirectoryRestored, 1}] = privacyPayloadShape[ServiceDependentDirectoryRestored]()
-	shapes[privacyEventPolicyKey{EventServiceDependentStepQueued, 1}] = privacyPayloadShape[ServiceDependentStepQueued]()
+	shapes[privacyEventPolicyKey{EventServiceDependentStepQueued, 1}] = privacyPayloadShape[privacyServiceDependentStepQueuedV1]()
+	shapes[privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, 1}] = privacyPayloadShape[ServiceDependentStepRecoveryQueued]()
 	shapes[privacyEventPolicyKey{EventServiceDependentStepObserved, 1}] = privacyPayloadShape[ServiceDependentStepObserved]()
 	shapes[privacyEventPolicyKey{EventServiceDependentHostSaved, 1}] = privacyPayloadShape[ServiceDependentHostSaved]()
 	shapes[privacyEventPolicyKey{EventServiceDependentScanQueued, 1}] = privacyPayloadShape[ServiceDependentScanQueued]()

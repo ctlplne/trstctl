@@ -452,6 +452,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/dependent-rotations/{id}/recoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicitly queue a fresh inverse lease for the unchanged retained effect */
+        post: operations["queuePAMServiceDependentRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-rotations/{id}/recoveries/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review one exact inverse recovery while retaining its original failed or uncertain evidence */
+        get: operations["previewPAMServiceDependentRecovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/dependent-rotations/{id}/steps": {
         parameters: {
             query?: never;
@@ -22205,6 +22239,7 @@ export interface components {
             pool?: components["schemas"]["PAMDependentNativePool"];
             previous_pids?: number[];
             probe_id: string;
+            recovery?: components["schemas"]["PAMDependentStepRecoveryBinding"];
             ref: components["schemas"]["PAMDependentRef"];
             /** Format: uuid */
             rotation_id: string;
@@ -22217,6 +22252,14 @@ export interface components {
             /** Format: int64 */
             process_id?: number;
             running: boolean;
+        };
+        PAMDependentStepRecoveryBinding: {
+            /** Format: int64 */
+            depth: number;
+            previous_step_id: string;
+            root_step_id: string;
+            /** Format: int64 */
+            version: number;
         };
         PAMDependentStepReport: {
             /** @enum {string} */
@@ -22627,6 +22670,29 @@ export interface components {
         PAMServiceDependentHostRequest: {
             enabled: boolean;
         };
+        PAMServiceDependentRecoveryQueued: {
+            recovery_digest: string;
+            step: components["schemas"]["PAMDependentRotationStep"];
+        };
+        PAMServiceDependentRecoveryRequest: {
+            acknowledge_original_outcome: boolean;
+            intent_digest: string;
+            reason: string;
+            recovery_digest: string;
+            step_id: string;
+        };
+        PAMServiceDependentRecoveryReview: {
+            /** Format: int64 */
+            current_vault_version: number;
+            intent_digest: string;
+            previous_report_digest?: string;
+            /** @enum {string} */
+            previous_status: "queued" | "failed" | "uncertain";
+            previous_step: components["schemas"]["PAMDependentRotationStep"];
+            recovery_digest: string;
+            /** Format: int64 */
+            retained_generation_version: number;
+        };
         PAMServiceDependentRotation: {
             actor: string;
             /** Format: uuid */
@@ -22704,6 +22770,7 @@ export interface components {
             /** Format: uuid */
             approval_request_id?: string;
             command: components["schemas"]["SecretStaticRotation"];
+            recovery_step_id?: string;
             rotation: components["schemas"]["PAMServiceDependentRotation"];
         };
         PAMServiceDependentScan: {
@@ -28645,6 +28712,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMServiceDependentRotationView"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    queuePAMServiceDependentRecovery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRecoveryQueued"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewPAMServiceDependentRecovery: {
+        parameters: {
+            query: {
+                step_id: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentRecoveryReview"];
                 };
             };
             /** @description client error */

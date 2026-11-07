@@ -5302,6 +5302,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventServiceDependentDirectoryRestored:        {1: true},
 	EventServiceDependentDirectoryApplyStarted:    {1: true},
 	EventServiceDependentStepQueued:               {1: true},
+	EventServiceDependentStepRecoveryQueued:       {1: true},
 	EventServiceDependentStepObserved:             {1: true},
 	EventServiceDependentHostSaved:                {1: true},
 	EventServiceDependentScanQueued:               {1: true},

@@ -138,9 +138,21 @@ func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.
 			return true, err
 		}
 		return true, p.store.ApplyServiceDependentDirectoryRestoredTx(ctx, tx, e.TenantID, v.RotationID, v.IntentDigest, v.At)
+	case EventServiceDependentStepRecoveryQueued:
+		var v ServiceDependentStepRecoveryQueued
+		if err := decode(e, &v); err != nil {
+			return true, err
+		}
+		if err := ValidateServiceDependentStepRecovery(e, v); err != nil {
+			return true, err
+		}
+		return true, p.store.ApplyServiceDependentStepRecoveryQueuedTx(ctx, tx, e.TenantID, v.Previous, v.Step, v.PreviousStatus, v.PreviousReportDigest, v.At)
 	case EventServiceDependentStepQueued:
 		var v ServiceDependentStepQueued
 		if err := decode(e, &v); err != nil {
+			return true, err
+		}
+		if _, _, _, err := DecodeServiceDependentStepSource(e); err != nil {
 			return true, err
 		}
 		if e.ID != servicedependents.StepSourceID(v.Step.RotationID, v.Step.ID) {

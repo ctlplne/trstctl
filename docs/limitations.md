@@ -9226,7 +9226,11 @@ A stopped host agent can inspect an existing registration-bound task fence and
 retain a separate exact-instance terminal observation without running, stopping
 or updating the task. It requires dated native evidence and full administrator
 visibility of all instances. The original uncertain execution remains uncertain;
-nonzero action results remain failures. Legacy undated unknown starts, expired
-coordinator jobs, already failed inverse steps, native Windows runtime and final
-packaged recovery remain separate obligations. The operator contract is in the
+nonzero action results remain failures. Legacy undated unknown starts cannot be
+recovered by inventing a timestamp. The coordinator has a separate explicit
+inverse recovery review for the next failed, uncertain or actually expired step
+once canonical directory restoration exists. It preserves original evidence and
+creates a fresh lease for the same retained effect. Portable served proof covers
+that path; native Windows runtime, the combined journey and final packaged
+recovery remain separate obligations. The operator contract is in the
 [service-account dependent workflow](features/secrets.md).

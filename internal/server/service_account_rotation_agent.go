@@ -30,11 +30,20 @@ func (a *agentService) boundServiceDependentStep(ctx context.Context, tenantID, 
 	if e != nil {
 		return step, e
 	}
-	var queued projections.ServiceDependentStepQueued
-	if !found || source.TenantID != tenantID || source.Type != projections.EventServiceDependentStepQueued || json.Unmarshal(source.Data, &queued) != nil {
+	stepAuthority, _, _, sourceErr := projections.DecodeServiceDependentStepSource(source)
+	if !found || source.TenantID != tenantID || sourceErr != nil {
 		return step, errors.New("native dependent step has no canonical queued source")
 	}
-	canonical, e := json.Marshal(queued.Step)
+	rootStepID := step.ID
+	if step.Recovery != nil {
+		rootStepID = step.Recovery.RootStepID
+	}
+	head, headErr := projections.ResolveServiceDependentStepHead(ctx, a.log, tenantID, step.RotationID, rootStepID)
+	if headErr != nil || head.ID != step.ID {
+		return step, errors.New("native dependent step was superseded by explicit recovery")
+	}
+
+	canonical, e := json.Marshal(stepAuthority)
 	if e != nil {
 		return step, e
 	}
@@ -122,12 +131,18 @@ func (a *agentService) projectServiceDependentRotationClaim(ctx context.Context,
 	if !time.Now().Before(step.Deadline) {
 		return nil, errors.New("native dependent execution lease expired")
 	}
-	if saved.Status != "queued" || saved.OutboxID == nil || *saved.OutboxID != job.ID {
+	savedIntent, marshalErr := json.Marshal(saved.Intent)
+	canonicalIntent, canonicalErr := json.Marshal(step)
+	if marshalErr != nil || canonicalErr != nil || crypto.SHA256Hex(savedIntent) != crypto.SHA256Hex(canonicalIntent) || saved.Status != "queued" || saved.OutboxID == nil || *saved.OutboxID != job.ID {
 		return nil, errors.New("native dependent job was already observed or replaced")
 	}
 	return job.Payload, nil
 }
 func (a *agentService) ingestServiceDependentRotation(ctx context.Context, info mtls.PeerCertInfo, agentID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	return a.store.WithPAMCatalogLock(ctx, info.TenantID, func() error { return a.ingestServiceDependentRotationUnderCatalog(ctx, info, agentID, claim, req) })
+}
+func (a *agentService) ingestServiceDependentRotationUnderCatalog(ctx context.Context, info mtls.PeerCertInfo, agentID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+
 	step, e := a.boundServiceDependentStep(ctx, info.TenantID, agentID, claim.IdempotencyKey, claim.Payload)
 	if e != nil {
 		return errServiceDependentRotationReportRefused

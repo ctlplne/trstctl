@@ -39,6 +39,48 @@ export const messages = {
   },
   "admin.access.rotation.approveSummary": { defaultMessage: "Reconcile external password drift for {resource}", description: "AD reconciliation workflow." },
   "admin.access.rotation.title": { defaultMessage: "Rotate account and dependents", description: "AD dependent rotation workflow." },
+  "admin.access.rotation.recovery.open": {
+    defaultMessage: "Review inverse recovery",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.queue": {
+    defaultMessage: "Queue inverse recovery",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.close": {
+    defaultMessage: "Close recovery review",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.reason": { defaultMessage: "Recovery reason", description: "Explicit inverse recovery; retains original native evidence." },
+  "admin.access.rotation.recovery.ack": {
+    defaultMessage: "I reviewed this exact effect; the original failed, uncertain or expired outcome remains in the record.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.help": {
+    defaultMessage:
+      "This queues the same inverse action with a fresh two-minute lease and the retained predecessor credential when required. It does not reset the AD password again. An agent with an unknown task start stays blocked until its local terminal observation proves the exact task has finished and no instances are running.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.versions": {
+    defaultMessage: "Current vault version: {current}. Retained generation version: {retained}.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.effect": {
+    defaultMessage: "{direction} {action}: {family} {name} on {agent}. Previous outcome: {status}.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.exact": {
+    defaultMessage: "Full inverse recovery effect",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.changed": {
+    defaultMessage: "The recovery review differs from this operation. Refresh its progress and reopen the review.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
+  "admin.access.rotation.recovery.history": {
+    defaultMessage: "Replacement of step {previous}; original outcome remains in its own row.",
+    description: "Explicit inverse recovery; retains original native evidence.",
+  },
   "admin.access.rotation.required": { defaultMessage: "Choose a value before continuing.", description: "AD dependent rotation workflow." },
   "admin.access.rotation.incomplete": {
     defaultMessage: "Every enabled host needs a current complete native inventory before rotation. Scan missing or partial hosts first.",

@@ -37,7 +37,7 @@ func serviceDependentError(err error) error {
 }
 func (a *API) pamServiceDependentRoutes() []route {
 	root := "/api/v1/access/discovery/accounts/{account_id}/dependents"
-	return append(a.pamServiceDependentRotationRoutes(), []route{
+	return append(append(a.dependentRecoveryRoutes(), a.pamServiceDependentRotationRoutes()...), []route{
 		{method: "GET", path: root, opID: "listPAMServiceDependentHosts", summary: "List selected enrolled hosts for an AD account, with a cursor", handler: a.listPAMServiceDependentHosts, pathParams: []param{pathUUID("account_id")}, query: []param{{name: "after", typ: "string", desc: "the last agent UUID from the previous page"}, {name: "limit", typ: "integer", desc: "1-256 hosts, default 50"}}, resSchema: "PAMServiceDependentHostList", successCode: "200", perm: authz.AccessRead},
 		{method: "PUT", path: root + "/{agent_id}", opID: "savePAMServiceDependentHost", summary: "Bind or disable one enrolled host for read-only AD account dependent inventory", handler: a.savePAMServiceDependentHost, pathParams: []param{pathUUID("account_id"), pathUUID("agent_id")}, reqSchema: "PAMServiceDependentHostRequest", resSchema: "PAMServiceDependentHost", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 		{method: "POST", path: root + "/{agent_id}/runs", opID: "runPAMServiceDependentInventory", summary: "Queue a read-only service, task and IIS account inventory on the exact enrolled host", handler: a.runPAMServiceDependentInventory, pathParams: []param{pathUUID("account_id"), pathUUID("agent_id")}, resSchema: "PAMServiceDependentScan", successCode: "202", mutation: true, perm: authz.AccessTargetsWrite},

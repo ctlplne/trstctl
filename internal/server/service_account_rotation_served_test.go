@@ -300,6 +300,8 @@ func TestServedDependentReconciliationRequiresIndependentReviewA267(t *testing.T
 }
 
 type dependentRotationOptions struct {
+	RecoverInverse         bool
+	ExpiredInverse         bool
 	ExpireBeforeApply      bool
 	InvalidRecovery        bool
 	EraseClaim             bool
@@ -371,7 +373,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		ownedStore = native.store
 	}
 	var eventOptions []events.OpenOption
-	if native == nil && !injectFailure && !staleVault && !lateVault {
+	if native == nil && (!injectFailure || scenario.RecoverInverse) && !staleVault && !lateVault {
 		// The source-erasure proof uses the production coordinator/verifier and
 		// the same real audit key in the server's continuity callbacks.
 		ownedStore = newServerTestStore(t)
@@ -648,6 +650,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		assertDependentNoEffectAdmission(t, h, directory, root, token, queued.Rotation.CommandID, preview.Intent.Plan.ExpiresAt, scenario.ExpireBeforeApply)
 		return
 	}
+	recoveredInverse := false
 	checkedAuthority := false
 	checkedStepSource := false
 	failed := false
@@ -655,6 +658,10 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 	var seen []string
 	var final store.SecretStaticRotationCommand
 	deadline := time.Now().Add(45 * time.Second)
+	var expiredInverseID string
+	if scenario.ExpiredInverse {
+		deadline = deadline.Add(181 * time.Second)
+	}
 	for time.Now().Before(deadline) {
 		command, e := h.store.GetSecretStaticRotationCommand(ctx, h.tenant, queued.Rotation.CommandID)
 		if e != nil {
@@ -809,6 +816,15 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 				report.Functional.TaskInstanceID = instance
 			}
 		}
+		recoverThisStep := scenario.RecoverInverse && !recoveredInverse && step.Direction == servicedependents.Inverse && step.Action == servicedependents.Probe && step.Task != nil
+		if recoverThisStep && !scenario.ExpiredInverse {
+			report.Status = "uncertain"
+			report.Failure = "task_start_uncertain"
+			report.Runtime = nil
+			report.TaskProof = nil
+			report.PoolProof = nil
+			report.Functional = nil
+		}
 		raw, e := json.Marshal(report)
 		if e != nil {
 			t.Fatal(e)
@@ -847,6 +863,14 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 				t.Fatal(e)
 			}
 		}
+		if recoverThisStep && scenario.ExpiredInverse {
+			expiredInverseID = step.ID
+			waitForExpiredDependentLease(t, step)
+			requestDependentInverseRecovery(t, h, token, step)
+			assertLateDependentReceipt(t, h, job.JobID, job.Attempt, report)
+			recoveredInverse = true
+			continue
+		}
 		outcome := transport.JobOutcomeExecuted
 		if report.Status != "succeeded" {
 			// A failed native task must remain a failed report so the host's
@@ -856,10 +880,16 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 				t.Fatal("failed native status accepted as successful execution")
 			}
 			outcome = transport.JobOutcomeFailed
-			failedJobID = job.JobID
+			if !recoverThisStep {
+				failedJobID = job.JobID
+			}
 		}
 		if receipt, e := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, outcome, string(raw), crypto.SHA256Hex(raw))); e != nil || !receipt.Accepted {
 			t.Fatalf("native step report rejected %s %s: %v", step.Direction, step.Action, e)
+		}
+		if recoverThisStep {
+			requestDependentInverseRecovery(t, h, token, step)
+			recoveredInverse = true
 		}
 		if !checkedStepSource {
 			checkedStepSource = true
@@ -981,7 +1011,11 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 			t.Fatal("native step paging failed")
 		}
 		for _, step := range page.Items {
-			if seenSteps[step.Intent.ID] || step.Report == nil || step.Status == "queued" || step.DeliveryStatus == "" {
+			if step.Intent.ID == expiredInverseID {
+				if seenSteps[step.Intent.ID] || step.Report != nil || step.Status != "queued" || step.DeliveryStatus != "cancelled" {
+					t.Fatal("expired predecessor gained invented evidence or remained deliverable")
+				}
+			} else if seenSteps[step.Intent.ID] || step.Report == nil || step.Status == "queued" || step.DeliveryStatus == "" {
 				t.Fatal("public progress lost, duplicated or invented native evidence")
 			}
 			seenSteps[step.Intent.ID] = true
@@ -1042,7 +1076,7 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 	if e != nil || len(reclaimed.Jobs) != 0 {
 		t.Fatal("completed native effects replayed after rebuild", e)
 	}
-	if native == nil && !injectFailure && !staleVault && !lateVault {
+	if native == nil && (!injectFailure || scenario.RecoverInverse) && !staleVault && !lateVault {
 		const subject = "owned-rotation-operator"
 		admin := seedScopedTokenSubject(t, h.store, h.tenant, "owned-privacy-operator", "privacy:read", "privacy:write", "access:read", "secrets:read")
 		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/privacy/subject-erasures", admin, "erase-owned-dependent-operator", map[string]string{"subject": subject, "reason": "owned source privacy proof"})

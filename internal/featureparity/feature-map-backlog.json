@@ -14616,6 +14616,8 @@
                 "getPAMServiceDependentScan",
                 "previewPAMServiceDependentRotation",
                 "queuePAMServiceDependentRotation",
+                "previewPAMServiceDependentRecovery",
+                "queuePAMServiceDependentRecovery",
                 "requestPAMServiceReconciliationApproval",
                 "getPAMServiceReconciliationPendingReview",
                 "getPAMServiceReconciliationReview",
@@ -14726,6 +14728,8 @@
                 "access discovery rotation preview",
                 "access discovery rotation queue",
                 "access discovery rotation get",
+                "access discovery rotation recovery-preview",
+                "access discovery rotation recovery-queue",
                 "access discovery rotation steps"
             ],
             "cli_na": "",

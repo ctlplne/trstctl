@@ -156,6 +156,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventServiceDependentRotationInverse:          "EventServiceDependentRotationInverse",
 	projections.EventServiceDependentDirectoryApplyStarted:    "EventServiceDependentDirectoryApplyStarted",
 	projections.EventServiceDependentDirectoryRestored:        "EventServiceDependentDirectoryRestored",
+	projections.EventServiceDependentStepRecoveryQueued:       "EventServiceDependentStepRecoveryQueued",
 	projections.EventServiceDependentStepQueued:               "EventServiceDependentStepQueued",
 	projections.EventServiceDependentStepObserved:             "EventServiceDependentStepObserved",
 	projections.EventServiceDependentHostSaved:                "EventServiceDependentHostSaved",

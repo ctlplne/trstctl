@@ -8710,6 +8710,7 @@ export interface PAMDependentRotationStep {
   pool?: PAMDependentNativePool;
   previous_pids?: number[];
   probe_id: string;
+  recovery?: PAMDependentStepRecoveryBinding;
   ref: PAMDependentRef;
   rotation_id: string;
   service?: PAMDependentNativeService;
@@ -8721,6 +8722,13 @@ export interface PAMDependentRuntime {
   account_sid?: string;
   process_id?: number;
   running: boolean;
+}
+
+export interface PAMDependentStepRecoveryBinding {
+  depth: number;
+  previous_step_id: string;
+  root_step_id: string;
+  version: number;
 }
 
 export interface PAMDependentStepReport {
@@ -9035,6 +9043,29 @@ export interface PAMServiceDependentHostRequest {
   enabled: boolean;
 }
 
+export interface PAMServiceDependentRecoveryQueued {
+  recovery_digest: string;
+  step: PAMDependentRotationStep;
+}
+
+export interface PAMServiceDependentRecoveryRequest {
+  acknowledge_original_outcome: boolean;
+  intent_digest: string;
+  reason: string;
+  recovery_digest: string;
+  step_id: string;
+}
+
+export interface PAMServiceDependentRecoveryReview {
+  current_vault_version: number;
+  intent_digest: string;
+  previous_report_digest?: string;
+  previous_status: "queued" | "failed" | "uncertain";
+  previous_step: PAMDependentRotationStep;
+  recovery_digest: string;
+  retained_generation_version: number;
+}
+
 export interface PAMServiceDependentRotation {
   actor: string;
   command_id: string;
@@ -9103,6 +9134,7 @@ export interface PAMServiceDependentRotationView {
   approval_intent_digest?: string;
   approval_request_id?: string;
   command: SecretStaticRotation;
+  recovery_step_id?: string;
   rotation: PAMServiceDependentRotation;
 }
 

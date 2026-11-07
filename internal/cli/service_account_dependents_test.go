@@ -46,6 +46,8 @@ func TestServiceDependentRotationCommandsA267(t *testing.T) {
 		{"review", "GET", "/api/v1/access/discovery/reconciliation-reviews/change", "", []string{"access", "discovery", "rotation", "review", "change"}},
 		{"queue", "POST", "/api/v1/access/discovery/accounts/account/dependents/rotations", `{"intent_digest":"reviewed","acknowledge_single_phase":true}`, []string{"access", "discovery", "rotation", "queue", "account", "-f", "-"}},
 		{"get", "GET", "/api/v1/access/discovery/dependent-rotations/change", "", []string{"access", "discovery", "rotation", "get", "change"}},
+		{"recovery-preview", "GET", "/api/v1/access/discovery/dependent-rotations/change/recoveries/preview", "", []string{"access", "discovery", "rotation", "recovery-preview", "change", "--step-id", "step"}},
+		{"recovery-queue", "POST", "/api/v1/access/discovery/dependent-rotations/change/recoveries", `{"step_id":"step","reason":"observed terminal","acknowledge_original_outcome":true}`, []string{"access", "discovery", "rotation", "recovery-queue", "change", "-f", "-", "--force"}},
 		{"steps", "GET", "/api/v1/access/discovery/dependent-rotations/change/steps", "", []string{"access", "discovery", "rotation", "steps", "change", "--limit", "1", "--after", "step"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -64,9 +66,21 @@ func TestServiceDependentRotationCommandsA267(t *testing.T) {
 			if tc.name == "pending" && captured.Query != "approval_request_id=review" {
 				t.Fatal("pending review lost its exact approval request")
 			}
+			if tc.name == "recovery-preview" && captured.Query != "step_id=step" {
+				t.Fatal("exact recovery step query lost")
+			}
 			if tc.name == "steps" && captured.Query != "after=step&limit=1" {
 				t.Fatal("step cursor lost")
 			}
 		})
+	}
+}
+
+func TestInverseRecoveryCLIRequiresExplicitForceA267(t *testing.T) {
+	var captured capture
+	server := mockServer(t, http.StatusAccepted, `{}`, &captured)
+	code, _, stderr := run(t, []string{"access", "discovery", "rotation", "recovery-queue", "change", "-f", "-"}, cli.Env{Server: server.URL, Token: "owned-token", Tenant: "owned-tenant", HTTPClient: server.Client()}, `{"step_id":"step"}`)
+	if code != 2 || !strings.Contains(stderr, "--force") || captured.Method != "" {
+		t.Fatal("inverse native recovery reached server without explicit force")
 	}
 }

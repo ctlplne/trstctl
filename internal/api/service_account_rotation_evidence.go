@@ -39,10 +39,11 @@ func (a *API) canonicalDependentStep(ctx context.Context, tenantID, rotationID, 
 	if err != nil {
 		return saved, err
 	}
-	var authority projections.ServiceDependentStepQueued
-	if !found || queued.TenantID != tenantID || queued.Type != projections.EventServiceDependentStepQueued || json.Unmarshal(queued.Data, &authority) != nil || authority.Step.Validate() != nil || authority.Step.RotationID != rotationID || authority.Step.ID != stepID || !dependentCanonicalJSON(saved.Intent, authority.Step) || authority.At.IsZero() || saved.QueuedAt.UnixMicro() != authority.At.UnixMicro() {
+	authority, at, _, decodeErr := projections.DecodeServiceDependentStepSource(queued)
+	if !found || queued.TenantID != tenantID || decodeErr != nil || authority.RotationID != rotationID || authority.ID != stepID || !dependentCanonicalJSON(saved.Intent, authority) || at.IsZero() || saved.QueuedAt.UnixMicro() != at.UnixMicro() {
 		return saved, refused
 	}
+
 	observed, found, err := a.log.EventByID(ctx, servicedependents.StepObservedSourceID(rotationID, stepID))
 	if err != nil {
 		return saved, err
@@ -54,7 +55,7 @@ func (a *API) canonicalDependentStep(ctx context.Context, tenantID, rotationID, 
 		return saved, nil
 	}
 	var proof projections.ServiceDependentStepObserved
-	if !found || observed.TenantID != tenantID || observed.Type != projections.EventServiceDependentStepObserved || json.Unmarshal(observed.Data, &proof) != nil || proof.Report.Validate(authority.Step) != nil || proof.JobID <= 0 || proof.Attempt <= 0 || proof.At.IsZero() || proof.ReceiptStatement == "" || proof.ReceiptSignature == "" || proof.SignerFingerprint == "" {
+	if !found || observed.TenantID != tenantID || observed.Type != projections.EventServiceDependentStepObserved || json.Unmarshal(observed.Data, &proof) != nil || proof.Report.Validate(authority) != nil || proof.JobID <= 0 || proof.Attempt <= 0 || proof.At.IsZero() || proof.ReceiptStatement == "" || proof.ReceiptSignature == "" || proof.SignerFingerprint == "" {
 		return saved, refused
 	}
 	if saved.Report == nil || !dependentCanonicalJSON(saved.Report, proof.Report) || saved.Status != proof.Report.Status || saved.ReceiptJobID == nil || *saved.ReceiptJobID != proof.JobID || saved.Attempt == nil || *saved.Attempt != proof.Attempt || saved.ReceiptStatement != proof.ReceiptStatement || saved.ReceiptSignature != proof.ReceiptSignature || saved.SignerFingerprint != proof.SignerFingerprint || saved.ReceivedAt == nil || saved.ReceivedAt.UnixMicro() != proof.At.UnixMicro() {

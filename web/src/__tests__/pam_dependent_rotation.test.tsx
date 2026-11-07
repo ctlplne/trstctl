@@ -8,6 +8,8 @@ import { PAMDependentRotation } from "@/pages/PAMDependentRotation";
 const { mock } = vi.hoisted(() => ({
   mock: {
     secretPage: vi.fn(),
+    previewPAMServiceDependentRecovery: vi.fn(),
+    queuePAMServiceDependentRecovery: vi.fn(),
     requestPAMServiceReconciliationApproval: vi.fn(),
     pamServiceReconciliationPendingReview: vi.fn(),
     pamServiceDependentHosts: vi.fn(),
@@ -38,7 +40,7 @@ const intent = {
   probes: [{ ref, probe_id: "owned-http" }],
 };
 const progress = {
-  rotation: { id: "change-1", intent, direction: "inverse", directory_restored: true, failure: "native_update_failed" },
+  rotation: { id: "change-1", intent_digest: "original-intent", intent, direction: "inverse", directory_restored: true, failure: "native_update_failed" },
   command: { phase: "staged", error: "dependent_inverse_pending" },
 };
 beforeEach(() => {
@@ -226,4 +228,56 @@ it("reopens a claimed first command after reload and retries only the frozen pay
     ),
   );
   expect(mock.requestPAMServiceReconciliationApproval).not.toHaveBeenCalled();
+});
+
+it("reviews the exact inverse effect and requires a reason and uncertainty acknowledgement before a replacement lease", async () => {
+  const user = userEvent.setup();
+  mock.pamServiceDependentRotation.mockResolvedValue({ ...progress, recovery_step_id: "step-1" });
+  mock.previewPAMServiceDependentRecovery.mockResolvedValue({
+    recovery_digest: "exact-effect",
+    intent_digest: "original-intent",
+    previous_step: {
+      step_id: "step-1",
+      ref,
+      action: "probe",
+      direction: "inverse",
+      account_sid: "S-1-5-21-1-2-3-1001",
+      probe_id: "owned-http",
+      not_before: "2026-11-07T00:00:00Z",
+      deadline: "2026-11-07T00:02:00Z",
+    },
+    previous_status: "uncertain",
+    current_vault_version: 8,
+    retained_generation_version: 7,
+  });
+  mock.queuePAMServiceDependentRecovery.mockResolvedValue({ step: { step_id: "replacement" }, recovery_digest: "exact-effect" });
+  mount("change-1");
+  await user.click(await screen.findByRole("button", { name: "Review inverse recovery" }));
+  await screen.findByText("S-1-5-21-1-2-3-1001");
+  expect(mock.previewPAMServiceDependentRecovery).toHaveBeenCalledWith("change-1", "step-1");
+  const queue = screen.getByRole("button", { name: "Queue inverse recovery" });
+  expect(queue).toBeDisabled();
+  await user.type(screen.getByLabelText("Recovery reason"), "Observed exact terminal task and no running instances");
+  expect(queue).toBeDisabled();
+  await user.click(screen.getByLabelText("I reviewed this exact effect; the original failed, uncertain or expired outcome remains in the record."));
+  await user.click(queue);
+  await waitFor(() =>
+    expect(mock.queuePAMServiceDependentRecovery).toHaveBeenCalledWith(
+      "change-1",
+      {
+        step_id: "step-1",
+        intent_digest: "original-intent",
+        recovery_digest: "exact-effect",
+        reason: "Observed exact terminal task and no running instances",
+        acknowledge_original_outcome: true,
+      },
+      expect.any(String),
+    ),
+  );
+});
+it("does not expose inverse recovery to a read-only operator", async () => {
+  mock.pamServiceDependentRotation.mockResolvedValue({ ...progress, recovery_step_id: "step-1" });
+  mount("change-1", false);
+  await screen.findByText("dependent_inverse_pending");
+  expect(screen.queryByRole("button", { name: "Review inverse recovery" })).not.toBeInTheDocument();
 });

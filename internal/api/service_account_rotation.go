@@ -33,6 +33,7 @@ type dependentRotationRequest struct {
 	AcknowledgeSinglePhase bool                             `json:"acknowledge_single_phase"`
 }
 type dependentRotationView struct {
+	RecoveryStepID       string                         `json:"recovery_step_id,omitempty"`
 	ApprovalRequestID    string                         `json:"approval_request_id,omitempty"`
 	ApprovalIntentDigest string                         `json:"approval_intent_digest,omitempty"`
 	Rotation             store.ServiceDependentRotation `json:"rotation"`
@@ -332,6 +333,25 @@ func (a *API) dependentRotationView(ctx context.Context, parent store.ServiceDep
 		}
 		view.ApprovalRequestID, view.ApprovalIntentDigest = source.Approval.RequestID, source.Approval.IntentDigest
 	}
+	if !child.Terminal() && parent.Direction == servicedependents.Inverse && parent.DirectoryRestored {
+		canonical, err := a.dependentRotationParent(ctx, child)
+		if err != nil {
+			return view, err
+		}
+		next, err := a.nextDependentStep(ctx, canonical, false)
+		if err != nil && !errors.Is(err, store.ErrServiceDependentStepFailed) {
+			return view, err
+		}
+		if next != nil {
+			saved, err := a.canonicalDependentStep(ctx, parent.TenantID, parent.ID, next.ID)
+			if err != nil {
+				return view, err
+			}
+			if saved.Status == "failed" || saved.Status == "uncertain" || saved.Status == "queued" && time.Now().After(next.Deadline.Add(time.Minute)) {
+				view.RecoveryStepID = next.ID
+			}
+		}
+	}
 	return view, nil
 }
 func (a *API) getPAMServiceDependentRotation(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +396,21 @@ func (a *API) nextDependentStep(ctx context.Context, parent store.ServiceDepende
 		if preflight && step.Action != servicedependents.Preflight {
 			return nil, nil
 		}
-		saved, err := a.canonicalDependentStep(ctx, parent.TenantID, parent.ID, step.ID)
+		source, found, sourceErr := a.log.EventByID(ctx, servicedependents.StepSourceID(parent.ID, step.ID))
+		if sourceErr != nil {
+			return nil, sourceErr
+		}
+		effective := step
+		if found {
+			if source.TenantID != parent.TenantID {
+				return nil, errDependentCanonicalEvidence
+			}
+			effective, sourceErr = projections.ResolveServiceDependentStepHead(ctx, a.log, parent.TenantID, parent.ID, step.ID)
+			if sourceErr != nil {
+				return nil, sourceErr
+			}
+		}
+		saved, err := a.canonicalDependentStep(ctx, parent.TenantID, parent.ID, effective.ID)
 		if errors.Is(err, store.ErrServiceDependentStepNotFound) {
 			return &step, nil
 		}

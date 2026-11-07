@@ -12078,6 +12078,7 @@ PAMDependentRotationStep = TypedDict(
         'pool': dict[str, Any],
         'previous_pids': list[int],
         'probe_id': str,
+        'recovery': dict[str, Any],
         'ref': dict[str, Any],
         'rotation_id': str,
         'service': dict[str, Any],
@@ -12093,6 +12094,17 @@ PAMDependentRuntime = TypedDict(
         'account_sid': str,
         'process_id': int,
         'running': bool,
+    },
+    total=False,
+)
+
+PAMDependentStepRecoveryBinding = TypedDict(
+    'PAMDependentStepRecoveryBinding',
+    {
+        'depth': int,
+        'previous_step_id': str,
+        'root_step_id': str,
+        'version': int,
     },
     total=False,
 )
@@ -12573,6 +12585,41 @@ PAMServiceDependentHostRequest = TypedDict(
     total=False,
 )
 
+PAMServiceDependentRecoveryQueued = TypedDict(
+    'PAMServiceDependentRecoveryQueued',
+    {
+        'recovery_digest': str,
+        'step': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMServiceDependentRecoveryRequest = TypedDict(
+    'PAMServiceDependentRecoveryRequest',
+    {
+        'acknowledge_original_outcome': bool,
+        'intent_digest': str,
+        'reason': str,
+        'recovery_digest': str,
+        'step_id': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentRecoveryReview = TypedDict(
+    'PAMServiceDependentRecoveryReview',
+    {
+        'current_vault_version': int,
+        'intent_digest': str,
+        'previous_report_digest': str,
+        'previous_status': str,
+        'previous_step': dict[str, Any],
+        'recovery_digest': str,
+        'retained_generation_version': int,
+    },
+    total=False,
+)
+
 PAMServiceDependentRotation = TypedDict(
     'PAMServiceDependentRotation',
     {
@@ -12671,6 +12718,7 @@ PAMServiceDependentRotationView = TypedDict(
         'approval_intent_digest': str,
         'approval_request_id': str,
         'command': dict[str, Any],
+        'recovery_step_id': str,
         'rotation': dict[str, Any],
     },
     total=False,

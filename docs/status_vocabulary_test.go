@@ -18,6 +18,7 @@ import (
 
 var servedVerdictFields = map[string]bool{
 	"effective_status": true,
+	"previous_status":  true,
 	"status":           true,
 	"outcome":          true,
 	"verdict":          true,
@@ -123,7 +124,7 @@ func TestANewServedVerdictFailsClosedUntilBound(t *testing.T) {
 	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
 		t.Fatalf("decode generated OpenAPI status census: %v", err)
 	}
-	for _, field := range []string{"status", "effective_status"} {
+	for _, field := range []string{"status", "effective_status", "previous_status"} {
 		doc.Components.Schemas["FutureUnreviewedVerdict"] = openAPIVerdictSchema{
 			Properties: map[string]json.RawMessage{field: json.RawMessage(`{"type":"string"}`)},
 		}

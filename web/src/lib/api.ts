@@ -545,6 +545,9 @@ import type {
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
   PAMServiceReconciliationPendingReview,
+  PAMServiceDependentRecoveryReview,
+  PAMServiceDependentRecoveryRequest,
+  PAMServiceDependentRecoveryQueued,
   PAMServiceDependentRotationPreviewRequest,
   PAMServiceDependentRotationPreview,
   PAMServiceDependentRotationRequest,
@@ -1550,6 +1553,9 @@ export type {
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
   PAMServiceReconciliationPendingReview,
+  PAMServiceDependentRecoveryReview,
+  PAMServiceDependentRecoveryRequest,
+  PAMServiceDependentRecoveryQueued,
   PAMServiceDependentRotationPreviewRequest,
   PAMServiceDependentRotationPreview,
   PAMServiceDependentRotationRequest,
@@ -2616,6 +2622,8 @@ export interface Api {
   ): Promise<PAMServiceReconciliationApproval>;
   pamServiceReconciliationReview(id: string): Promise<PAMServiceReconciliationReview>;
   pamServiceReconciliationPendingReview(accountID: string, id: string, approvalID: string): Promise<PAMServiceReconciliationPendingReview>;
+  previewPAMServiceDependentRecovery(id: string, stepID: string): Promise<PAMServiceDependentRecoveryReview>;
+  queuePAMServiceDependentRecovery(id: string, input: PAMServiceDependentRecoveryRequest, key: string): Promise<PAMServiceDependentRecoveryQueued>;
   pamServiceDependentRotation(id: string): Promise<PAMServiceDependentRotationView>;
   pamServiceDependentRotationSteps(id: string, after?: string): Promise<PAMServiceDependentRotationStepList>;
 
@@ -3605,6 +3613,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
         "?approval_request_id=" +
         encodeURIComponent(approvalID),
     ),
+  previewPAMServiceDependentRecovery: (id, stepID) =>
+    req<PAMServiceDependentRecoveryReview>(
+      "/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id) + "/recoveries/preview?step_id=" + encodeURIComponent(stepID),
+    ),
+  queuePAMServiceDependentRecovery: (id, input, key) =>
+    mutate<PAMServiceDependentRecoveryQueued>("POST", "/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id) + "/recoveries", input, key),
   pamServiceDependentRotation: (id) => req<PAMServiceDependentRotationView>("/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id)),
   pamServiceDependentRotationSteps: (id, after) =>
     req<PAMServiceDependentRotationStepList>(

@@ -264,7 +264,7 @@ func (s *Store) NextServiceDependentStepTx(ctx context.Context, tx pgx.Tx, paren
 		if preflightOnly && step.Action != servicedependents.Preflight {
 			return nil, nil
 		}
-		saved, e := s.GetServiceDependentStepTx(ctx, tx, parent.TenantID, parent.ID, step.ID)
+		saved, e := s.EffectiveServiceDependentStepTx(ctx, tx, parent.TenantID, parent.ID, step.ID)
 		if errors.Is(e, ErrServiceDependentStepNotFound) {
 			return &step, nil
 		}
@@ -340,6 +340,9 @@ func (s *Store) ApplyServiceDependentStepQueuedTx(ctx context.Context, tx pgx.Tx
 	if crypto.SHA256Hex(a) != crypto.SHA256Hex(b) {
 		return errors.New("store: issued native snapshot differs from reviewed sequence")
 	}
+	return s.insertServiceDependentStepTx(ctx, tx, tenantID, parent, step, at)
+}
+func (s *Store) insertServiceDependentStepTx(ctx context.Context, tx pgx.Tx, tenantID string, parent ServiceDependentRotation, step servicedependents.RotationStep, at time.Time) error {
 	raw, e := json.Marshal(step)
 	if e != nil {
 		return e
