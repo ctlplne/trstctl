@@ -480,3 +480,17 @@ func TestDerivedKeyOriginColumnsAreSnapshotSafe(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v60 payload cannot restore derived key origins", SnapshotFormatVersion)
 	}
 }
+
+// TestPAMSignInRecordsUseEventRecoveryAndSnapshotsA274: recorded sign-ins
+// are erased with their tenant, rebuilt from events and carried by
+// snapshots; the format that first carries them invalidates older snapshots,
+// whose covered offset would skip the events that recorded them.
+func TestPAMSignInRecordsUseEventRecoveryAndSnapshotsA274(t *testing.T) {
+	const table = "pam_signin_records"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 108 {
+		t.Fatalf("snapshot format %d could restore a payload without recorded sign-ins", SnapshotFormatVersion)
+	}
+}

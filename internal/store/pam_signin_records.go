@@ -85,7 +85,7 @@ func (s *Store) ListTenantsWithPAMSignInsBefore(ctx context.Context, before time
 		limit = 200
 	}
 	rows, err := s.pool.Query(ctx,
-		//trstctl:system-query — the sign-in retention purge finds every tenant holding sign-ins past the deployment's horizon; each purge is then appended under its own tenant's context.
+		//trstctl:system-query — cross-tenant system worker: the sign-in retention purge finds which tenants hold sign-ins past the deployment's horizon; it reads tenant_id only, and each purge is appended and projected under the owning tenant's RLS context.
 		`SELECT DISTINCT tenant_id::text FROM pam_signin_records WHERE signed_in_at < $1 LIMIT $2`, before.UTC(), limit)
 	if err != nil {
 		return nil, err

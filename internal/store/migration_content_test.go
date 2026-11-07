@@ -1156,6 +1156,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	404: true, // TestMigration0404AddsNoAutomaticAuthority
 	405: true, // TestMigration0405AddsNoCommandPolicyToLegacyAccess
 	424: true, // TestMigration0424KeepsTemplatesWithoutClipboard
+	428: true, // TestMigration0428PreservesTargetsAndAdmitsWebConsoles
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod

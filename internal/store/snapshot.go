@@ -302,7 +302,10 @@ import (
 // Version104 retains canonical source-bound native execution cursors.
 // Version106 retains sealed-command native host generation and signed receipts.
 // Version 107 carries A269's per-template desktop clipboard policy.
-const SnapshotFormatVersion = 107
+// Version 108 carries A274's recorded sign-ins: without them a restored store
+// would lose which sign-ins bypass detection read and what explained each,
+// while its covered offset skipped their events.
+const SnapshotFormatVersion = 108
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -413,6 +416,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",
+	// Format 108: A274's recorded sign-ins.
+	"pam_signin_records",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -794,6 +799,7 @@ SELECT jsonb_build_object(
   'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
   'cloud_machine_changes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cloud_machine_changes t),
   'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),
+  'pam_signin_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_signin_records t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),

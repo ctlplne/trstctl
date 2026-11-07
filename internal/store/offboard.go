@@ -299,6 +299,8 @@ var TenantScopedTables = []string{
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",
+	// A274: recorded sign-ins of managed accounts; no foreign keys.
+	"pam_signin_records",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.
