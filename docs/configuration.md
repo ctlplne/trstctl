@@ -2203,6 +2203,16 @@ Each allowed role names one account in `role_bindings`, rotated in place
 (a `netdevice` access target), also set `addr` to the device's SSH `host:port` and
 `host_key_fingerprint` to its SSH host key; both or neither.
 
+A `redfish` provider (A271) changes local account passwords on a server management
+controller (HPE iLO first, then any controller conforming to Redfish) through its
+AccountService. It sets `endpoint` to the controller's `https://host[:port]`,
+`tls_ca_ref` to its certificate or CA (PEM; `tls_server_name` when needed),
+`allow_private_endpoint: true` with `private_egress_cidrs` covering the controller,
+`admin_user` and `password_ref` to an account whose role may configure users, and
+`allow_static_rotation: true`; each allowed role names one account `UserName` in
+`role_bindings`, rotated in place (single-phase), never the administrator. `addr` and
+`host_key_fingerprint` are not used.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2210,7 +2220,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate` and `bigip`. Sync `type` values are
+`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip` and `redfish`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

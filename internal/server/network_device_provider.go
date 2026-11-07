@@ -92,3 +92,28 @@ func (p *configuredNetworkDeviceProvider) DynamicSecretGatewaySSH(role string) (
 	}
 	return strings.TrimSpace(p.cfg.Addr), account, []string{p.cfg.HostKeyFingerprint}, nil
 }
+
+// openConfiguredRedfishBackend builds a backend that changes a server
+// management controller's accounts through Redfish (A271), trusting only the
+// pinned certificate and only the configured egress.
+func openConfiguredRedfishBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	caPEM, err := o.resolve(cfg.TLSCARef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClientWithTLS(cfg.Endpoint, cfg.AllowPrivate, false, cfg.PrivateEgressCIDRs, caPEM, cfg.TLSServerName, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewRedfishBackend(dynsecret.RedfishConfig{Endpoint: cfg.Endpoint, HTTPClient: client, AdminUser: cfg.AdminUser,
+		AdminPassword: password, RoleAccounts: cfg.RoleBindings})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

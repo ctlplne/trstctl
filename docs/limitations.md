@@ -5292,7 +5292,7 @@ when off, requiring a KEK when on):
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
   `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog`, `openai`,
   `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240; `okta`,
-  `databricks` and `windows` rotate only), and `iosxe`, `junos`, `eos`, `fortigate` and `bigip` (A270, rotate only). Issuance is
+  `databricks` and `windows` rotate only), and `iosxe`, `junos`, `eos`, `fortigate` and `bigip` (A270) and `redfish` (A271) (rotate only). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -9362,4 +9362,21 @@ What comes next:
   FortiGate administrators in other VDOMs.
 - Accounts held in a TACACS+ or RADIUS server rotate there, not on the device; today
   only device-local accounts rotate.
+
+## Hypervisors and server management controllers (A271) — part 1: Redfish controllers
+
+Status: in progress. A `redfish` provider rotates a server management controller's
+account passwords through Redfish's AccountService (HPE iLO first, then any
+conforming controller), proves each change with a new session on the new password,
+rolls an unproven change back, and discovery stages each account with its `RoleId`.
+Proof today: `TestRedfishRotationA271` and `TestServedRedfishRotationA271` against a
+stand-in built from the DMTF Redfish specification and HPE's iLO Redfish reference; no
+controller has run them.
+
+What comes next:
+- VMware ESXi local accounts and vCenter's local single sign-on users.
+- Check-out of these accounts (a vaulted account target that is checked out, never
+  opened as a session).
+- A real controller run (HPE iLO's Track B row): iLO-specific privileges
+  (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.
 

@@ -2,6 +2,9 @@
 
 ### Added
 
+- Server management controllers (A271 part 1): a `redfish` dynamic-secret provider rotates controller account passwords
+  through Redfish's AccountService (HPE iLO first), proved by a new session on the new password, single-phase with
+  acknowledgement and rollback; discovery lists accounts with their RoleId. Provider catalog 50 -> 51 recipes.
 - Network devices (A270 part 3): `netdevice` access targets broker SSH sessions to a device account its provider rotates;
   the gateway signs in with the vaulted password (new job kinds `access.gateway.session.netdevice.v1` and
   `access.gateway.session.rules.netdevice.v1`), sessions are recorded, and `netdevice` command rules block device verbs

@@ -635,9 +635,10 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns fifty safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fifty-one safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
-  `junos`, `eos`, `fortigate`, `bigip`, `okta` and `databricks`, which only rotate). Each states its `authority` (what a
+  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `okta` and `databricks`, which only
+  rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -953,6 +954,17 @@ never kept. The served proof runs against stand-ins of all three APIs: each acco
 rotates with its level kept and the configuration saved, the old password stops, EOS's
 enable password rotates, a FortiGate that reports the change but keeps the old password
 is rolled back, and discovery stages every account with its level.
+
+`redfish` (A271) rotates server management controller accounts through Redfish's
+AccountService (HPE iLO first, then any conforming controller): the administrator
+opens a Redfish session, finds the bound account's `ManagerAccount` by `UserName`,
+PATCHes its `Password` (sending the account's ETag as `If-Match` when the controller
+gives one) and logs the session out. The change is proved by opening a new session
+with the new password; a change the controller does not prove is put back to the
+predecessor. Discovery lists every account with its `RoleId`; Redfish never returns a
+password. The served proof runs against a Redfish stand-in: the account moves to the
+published password alone, a controller that answers but keeps the old password is
+rolled back, discovery stages each account's role, and no session is left open.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

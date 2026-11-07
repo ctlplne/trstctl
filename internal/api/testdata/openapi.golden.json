@@ -22354,7 +22354,8 @@
               "junos",
               "eos",
               "fortigate",
-              "bigip"
+              "bigip",
+              "redfish"
             ],
             "type": "string"
           }

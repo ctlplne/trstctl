@@ -521,6 +521,15 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the user it rotates (never root)."),
 		)},
+		{Type: "redfish", Label: "Server management controller accounts (Redfish)", Purpose: "Changes local account passwords on a server management controller through Redfish's AccountService over HTTPS (the controller's certificate pinned), HPE iLO first and any conforming controller after: the administrator opens a Redfish session, finds the bound account's ManagerAccount by UserName and PATCHes its Password (with the account's ETag when the controller sends one), then logs the session out. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); the change is proved by opening a new session with the new password, and a change the controller does not prove is put back. Discovery lists the controller's accounts with their RoleId, never a password. It rotates only; it issues no leases. Built against a stand-in of the Redfish service; no controller proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Redfish service", "The controller's https://host[:port].", true),
+			credential("tls_ca_ref", "Certificate pin", "The controller's certificate, or the CA that issued it, PEM.", true),
+			value("tls_server_name", "Certificate name", "Optional name the certificate is checked against, when it differs from the endpoint's host.", false),
+			value("admin_user", "Administrator", "An account whose role may configure users (Administrator); never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the account UserName it rotates."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -637,6 +646,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the administrator's own access profile, through its password", "confirmed"
 	case "bigip":
 		return "the user's own partition roles, through its password", "confirmed"
+	case "redfish":
+		return "the controller account's own Redfish role, through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":
