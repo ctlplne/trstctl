@@ -635,10 +635,10 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns fifty-two safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fifty-three safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
-  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `okta` and `databricks`,
-  which only rotate). Each states its `authority` (what a
+  `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi`, `vcenter-sso`, `okta` and
+  `databricks`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -975,6 +975,17 @@ with the new password, and a change the host does not prove is put back. `vpxuse
 (`RetrieveUserGroups`) and the roles their permissions grant (`RetrieveAllPermissions`),
 marking `vpxuser` and `dcui` as system accounts. The served proof runs against a stand-in
 of the API with the same checks as the Redfish proof.
+
+`vcenter-sso` (A271) resets vCenter's local single sign-on users' passwords: vCenter
+offers no public API that sets another SSO user's password, so the provider runs the
+documented `dir-cli password reset --account <user> --new '<password>' --login
+<administrator@domain>` in the appliance's root shell over SSH (a key, the host key
+pinned, shell history off), typing the SSO administrator's password at `dir-cli`'s prompt
+so it never appears on a command line. The new password is `--new`'s argument, as
+`dir-cli` documents it. The change is proved by opening a vSphere Automation API session
+(`POST /api/session`) as the user, and a reset the appliance does not prove is put back.
+Discovery lists the SSO `Administrators` group. The served proof runs against a stand-in
+of the appliance's shell and REST API.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

@@ -142,3 +142,33 @@ func openConfiguredESXiBackend(o *configuredDynamicBackendOpener) (requestDynami
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredVCenterSSOBackend builds a backend that resets vCenter
+// single sign-on users' passwords through dir-cli in the appliance's root
+// shell and proves them through its REST API (A271).
+func openConfiguredVCenterSSOBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	caPEM, err := o.resolve(cfg.TLSCARef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClientWithTLS(cfg.Endpoint, cfg.AllowPrivate, false, cfg.PrivateEgressCIDRs, caPEM, cfg.TLSServerName, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	rootKey, err := o.resolve(cfg.PrivateKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewVCenterSSOBackend(dynsecret.VCenterSSOConfig{Endpoint: cfg.Endpoint, HTTPClient: client, SSHAddress: cfg.Addr,
+		HostKeyFingerprint: cfg.HostKeyFingerprint, RootUser: cfg.AdminUser, RootKeyPKCS8: rootKey, SSOAdmin: cfg.SSOAdmin,
+		SSOAdminPassword: password, RoleAccounts: cfg.RoleBindings})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

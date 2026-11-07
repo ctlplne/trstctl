@@ -22356,7 +22356,8 @@
               "fortigate",
               "bigip",
               "redfish",
-              "esxi"
+              "esxi",
+              "vcenter-sso"
             ],
             "type": "string"
           }

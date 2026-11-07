@@ -2,6 +2,10 @@
 
 ### Added
 
+- Hypervisors (A271 part 3): a `vcenter-sso` dynamic-secret provider resets vCenter single sign-on users' passwords
+  with `dir-cli` in the appliance's root shell (administrator password only at its prompt) and proves each reset with a
+  vSphere Automation API session; discovery lists the SSO Administrators group. New config field `sso_admin`. Provider
+  catalog 52 -> 53 recipes.
 - Hypervisors (A271 part 2): an `esxi` dynamic-secret provider rotates ESXi local account passwords through the vSphere
   Web Services API (`UpdateUser`, proved by signing in), never `vpxuser` or `dcui`, single-phase with acknowledgement and
   rollback; discovery lists local users with their roles. Provider catalog 51 -> 52 recipes.

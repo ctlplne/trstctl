@@ -539,6 +539,18 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the local account it rotates (never vpxuser or dcui)."),
 		)},
+		{Type: "vcenter-sso", Label: "vCenter single sign-on users", Purpose: "Changes vCenter Server's local single sign-on users' passwords the documented way: SSH to the appliance as root with a key (root's login shell set to bash, its host key pinned) and run dir-cli password reset as the SSO administrator, whose password is typed at dir-cli's prompt and never on a command line; the new password is dir-cli's --new argument, single-quoted, with shell history off. Each role's one user changes in place (single phase: a rotation runs only when acknowledged); the change is proved by opening a vSphere Automation API session (POST /api/session, the appliance's certificate pinned) as the user, and a change the appliance does not prove is put back. Discovery lists the SSO Administrators group. It rotates only; it issues no leases. Built against a stand-in of the appliance; no vCenter proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Appliance", "The appliance's https://host[:port] (the REST session proof).", true),
+			credential("tls_ca_ref", "Certificate pin", "The appliance's certificate, or the CA that issued it, PEM.", true),
+			value("addr", "Appliance SSH", "The appliance's SSH host:port.", true),
+			value("host_key_fingerprint", "SSH host key pin", "The appliance's SSH host key SHA256 fingerprint.", true),
+			value("admin_user", "Shell account", "The appliance account whose bash shell runs dir-cli (root).", true),
+			credential("private_key_ref", "Shell key reference", "That account's SSH private key, PKCS#8 PEM.", true),
+			value("sso_admin", "SSO administrator", "The SSO administrator's user@domain (administrator@vsphere.local).", true),
+			credential("password_ref", "SSO administrator password reference", "The SSO administrator's password.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the SSO user (without its domain) it rotates."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -659,6 +671,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the controller account's own Redfish role, through its password", "confirmed"
 	case "esxi":
 		return "the host account's own permissions (its roles on the host's inventory), through its password", "confirmed"
+	case "vcenter-sso":
+		return "the SSO user's own vCenter roles and group memberships, through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

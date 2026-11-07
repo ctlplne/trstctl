@@ -2221,6 +2221,15 @@ with the Administrator role (root), and `allow_static_rotation: true`; each allo
 names one local account, rotated in place, never the administrator, `vpxuser` (vCenter's
 own account) or `dcui`.
 
+A `vcenter-sso` provider (A271) resets vCenter Server's local single sign-on users'
+passwords with `dir-cli` in the appliance's root shell. It sets `endpoint` to the
+appliance's `https://host[:port]` with `tls_ca_ref` (the REST session that proves each
+change), `addr` and `host_key_fingerprint` to the appliance's SSH, `admin_user` and
+`private_key_ref` to the account whose bash shell runs `dir-cli` (root, its login shell
+set to `/bin/bash`, a PKCS#8 key), `sso_admin` to the SSO administrator's `user@domain`
+with `password_ref` its password, and `allow_static_rotation: true`; each allowed role
+names one SSO user without its domain, never the administrator.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2228,7 +2237,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish` and `esxi`. Sync `type` values are
+`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate`, `bigip`, `redfish`, `esxi` and `vcenter-sso`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

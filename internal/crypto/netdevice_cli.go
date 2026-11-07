@@ -57,7 +57,30 @@ func RunNetworkDeviceCLI(ctx context.Context, target SSHAccountTarget, user stri
 	if !ValidSSHAccountName(user) || len(password) == 0 || initialPrompt == "" {
 		return nil, errors.New("network device CLI requires an account, its password and the device's prompt")
 	}
-	client, closeClient, err := dialPinnedSSH(ctx, target, user, passwordAuth(password)...)
+	return runCLI(ctx, target, user, passwordAuth(password), initialPrompt, steps)
+}
+
+// RunSSHKeyCLI is RunNetworkDeviceCLI for an administrator that signs in
+// with a key (target.AdminUser and its PKCS#8 key): the vCenter appliance's
+// root shell (A271).
+func RunSSHKeyCLI(ctx context.Context, target SSHAccountTarget, adminPKCS8 []byte, initialPrompt string, steps []CLIStep) ([]byte, error) {
+	if !ValidSSHAccountName(target.AdminUser) || initialPrompt == "" {
+		return nil, errors.New("SSH CLI requires an administrator and the shell's prompt")
+	}
+	key, err := LockedKeyFromPKCS8PEM(adminPKCS8)
+	if err != nil {
+		return nil, errors.New("SSH CLI requires a supported PKCS#8 administrator key")
+	}
+	defer key.Destroy()
+	signer, err := sshSignerFromDigestSigner(key)
+	if err != nil {
+		return nil, errors.New("SSH CLI administrator key cannot authenticate")
+	}
+	return runCLI(ctx, target, target.AdminUser, []ssh.AuthMethod{ssh.PublicKeys(signer)}, initialPrompt, steps)
+}
+
+func runCLI(ctx context.Context, target SSHAccountTarget, user string, auth []ssh.AuthMethod, initialPrompt string, steps []CLIStep) ([]byte, error) {
+	client, closeClient, err := dialPinnedSSH(ctx, target, user, auth...)
 	if err != nil {
 		return nil, err
 	}

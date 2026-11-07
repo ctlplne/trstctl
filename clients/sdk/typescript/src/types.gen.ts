@@ -17588,7 +17588,7 @@ export interface components {
             /** @enum {string} */
             revocation: "confirmed" | "ttl_only";
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql" | "auth0" | "datadog" | "openai" | "unix" | "cassandra" | "oracle" | "hana" | "openrouter" | "fireworks" | "litellm" | "supabase" | "convex" | "dbt" | "cloudflare" | "cloudflare-r2" | "okta" | "databricks" | "windows" | "iosxe" | "junos" | "eos" | "fortigate" | "bigip" | "redfish" | "esxi";
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp" | "oauth-client-credentials" | "clickhouse" | "elasticsearch" | "rabbitmq" | "tailscale" | "mongodb-atlas" | "kafka" | "couchbase" | "milvus" | "github-app" | "snowflake" | "aws-elasticache" | "aws-memorydb" | "ibm-api-connect" | "mssql" | "azure-sql" | "auth0" | "datadog" | "openai" | "unix" | "cassandra" | "oracle" | "hana" | "openrouter" | "fireworks" | "litellm" | "supabase" | "convex" | "dbt" | "cloudflare" | "cloudflare-r2" | "okta" | "databricks" | "windows" | "iosxe" | "junos" | "eos" | "fortigate" | "bigip" | "redfish" | "esxi" | "vcenter-sso";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;

@@ -217,6 +217,10 @@ type DynamicSecretProviderConfig struct {
 	// credentials and ACLs, or the role a cassandra provider creates, grants and
 	// drops login roles as (its password is password_ref, A239).
 	AdminUser string `json:"admin_user,omitempty"`
+	// SSOAdmin is a vcenter-sso provider's single sign-on administrator,
+	// user@domain, whose password is password_ref; admin_user and
+	// private_key_ref are the appliance's root shell (A271).
+	SSOAdmin string `json:"sso_admin,omitempty"`
 	// Tailnet is a tailscale provider's tailnet, "-" (the API token's own) by
 	// default; its API token is bearer_token_ref (A239).
 	Tailnet      string   `json:"tailnet,omitempty"`
@@ -252,12 +256,12 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
 // through them runs only when acknowledged (A240).
-var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -363,7 +367,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
-	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {}, "esxi": {},
+	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {}, "redfish": {}, "esxi": {}, "vcenter-sso": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -382,11 +386,11 @@ var apiKeyProviderTypes = map[string]bool{
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
-var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true}
+var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true, "eos": true, "fortigate": true, "bigip": true, "redfish": true, "esxi": true, "vcenter-sso": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -631,7 +635,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"unix": validateUnixProvider, "windows": validateUnixProvider,
 	"iosxe": validateNetworkDeviceProvider, "junos": validateNetworkDeviceProvider,
 	"eos": validateNetworkAPIProvider, "fortigate": validateNetworkAPIProvider, "bigip": validateNetworkAPIProvider,
-	"redfish": validateNetworkAPIProvider, "esxi": validateNetworkAPIProvider,
+	"redfish": validateNetworkAPIProvider, "esxi": validateNetworkAPIProvider, "vcenter-sso": validateVCenterSSOProvider,
 	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
@@ -1249,10 +1253,13 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
 	}
-	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.PrivateKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix and windows", where))
+	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && c.PrivateKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix, windows and vcenter-sso", where))
 	}
-	if c.Type != "unix" && c.Type != "windows" && !networkDeviceProviderTypes[c.Type] && !networkAPIDeviceTypes[c.Type] && c.HostKeyFingerprint != "" {
+	if c.Type != "vcenter-sso" && c.SSOAdmin != "" {
+		errs = append(errs, fmt.Errorf("%s sso_admin is only valid for vcenter-sso", where))
+	}
+	if c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && !networkDeviceProviderTypes[c.Type] && !networkAPIDeviceTypes[c.Type] && c.HostKeyFingerprint != "" {
 		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix, windows and network devices", where))
 	}
 	if c.Type != "unix" && c.Sudo {
@@ -2505,3 +2512,59 @@ func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []e
 // optional addr and host_key_fingerprint are the device's SSH route for
 // gateway sessions (A270).
 var networkAPIDeviceTypes = map[string]bool{"eos": true, "fortigate": true, "bigip": true}
+
+var vcenterSSOAdmin = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
+
+// validateVCenterSSOProvider checks a vCenter single sign-on provider
+// (A271): the appliance's HTTPS endpoint with its certificate pinned (the
+// REST proof), its SSH address and host key with root's key (admin_user,
+// private_key_ref) for dir-cli, the SSO administrator (sso_admin,
+// user@domain) and its password, and static rotation of one SSO user (no
+// domain) per role, never the administrator.
+func validateVCenterSSOProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if u, err := url.Parse(strings.TrimSpace(c.Endpoint)); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		errs = append(errs, fmt.Errorf("%s endpoint must be the appliance's https://host[:port] for vcenter-sso", where))
+	}
+	if c.AllowInsecureLoopback || c.AllowPlaintext {
+		errs = append(errs, fmt.Errorf("%s vcenter-sso reaches the appliance over HTTPS only", where))
+	}
+	if err := validateCredentialRef(c.TLSCARef); err != nil || strings.TrimSpace(c.TLSCARef) == "" {
+		errs = append(errs, fmt.Errorf("%s tls_ca_ref must pin the appliance's certificate or its CA for vcenter-sso", where))
+	}
+	if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
+		errs = append(errs, fmt.Errorf("%s addr must be the appliance's SSH host:port for vcenter-sso", where))
+	}
+	if !strings.HasPrefix(c.HostKeyFingerprint, "SHA256:") || len(c.HostKeyFingerprint) < 20 {
+		errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the appliance's SSH host key for vcenter-sso", where))
+	}
+	if !unixAccountName.MatchString(c.AdminUser) {
+		errs = append(errs, fmt.Errorf("%s admin_user must name the appliance account whose shell runs dir-cli (root) for vcenter-sso", where))
+	}
+	if err := validateCredentialRef(c.PrivateKeyRef); err != nil || strings.TrimSpace(c.PrivateKeyRef) == "" {
+		errs = append(errs, fmt.Errorf("%s private_key_ref must name admin_user's SSH key (PKCS#8) for vcenter-sso", where))
+	}
+	if !vcenterSSOAdmin.MatchString(c.SSOAdmin) {
+		errs = append(errs, fmt.Errorf("%s sso_admin must be the SSO administrator's user@domain for vcenter-sso", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil || strings.TrimSpace(c.PasswordRef) == "" {
+		errs = append(errs, fmt.Errorf("%s password_ref must name the SSO administrator's password for vcenter-sso", where))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s vcenter-sso rotates SSO user passwords and issues no leases: set allow_static_rotation", where))
+	}
+	if len(c.RotationAccounts) != 0 {
+		errs = append(errs, fmt.Errorf("%s vcenter-sso rotates one bound user per role in place; rotation_accounts is not used", where))
+	}
+	admin, _, _ := strings.Cut(c.SSOAdmin, "@")
+	for role, account := range c.RoleBindings {
+		account = strings.TrimSpace(account)
+		switch {
+		case strings.EqualFold(account, admin):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the SSO administrator that makes the change", where, role))
+		case !networkAPIAccountName.MatchString(account):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name an SSO user, without its domain", where, role))
+		}
+	}
+	return errs
+}

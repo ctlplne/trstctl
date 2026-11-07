@@ -5292,7 +5292,7 @@ when off, requiring a KEK when on):
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
   `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog`, `openai`,
   `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240; `okta`,
-  `databricks` and `windows` rotate only), and `iosxe`, `junos`, `eos`, `fortigate` and `bigip` (A270) and `redfish` and `esxi` (A271) (rotate only). Issuance is
+  `databricks` and `windows` rotate only), and `iosxe`, `junos`, `eos`, `fortigate` and `bigip` (A270) and `redfish`, `esxi` and `vcenter-sso` (A271) (rotate only). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -9363,21 +9363,26 @@ What comes next:
 - Accounts held in a TACACS+ or RADIUS server rotate there, not on the device; today
   only device-local accounts rotate.
 
-## Hypervisors and server management controllers (A271) — parts 1–2: Redfish controllers and ESXi hosts
+## Hypervisors and server management controllers (A271) — parts 1–3: Redfish controllers, ESXi hosts and vCenter single sign-on
 
 Status: in progress. A `redfish` provider rotates a server management controller's
 account passwords through Redfish's AccountService (HPE iLO first, then any
 conforming controller), proves each change with a new session on the new password,
 rolls an unproven change back, and discovery stages each account with its `RoleId`. An
 `esxi` provider does the same for ESXi local accounts through the vSphere Web Services
-API (`UpdateUser`, proved by signing in), never touching `vpxuser` or `dcui`. Proof
-today: `TestRedfishRotationA271`, `TestServedRedfishRotationA271`,
-`TestESXiRotationA271` and `TestServedESXiRotationA271` against stand-ins built from the
-DMTF Redfish specification, HPE's iLO Redfish reference and the vSphere Web Services
-SDK; no controller or host has run them.
+API (`UpdateUser`, proved by signing in), never touching `vpxuser` or `dcui`. A
+`vcenter-sso` provider resets vCenter single sign-on users with `dir-cli` in the
+appliance's root shell (the administrator's password only at its prompt; the new one is
+`dir-cli`'s documented `--new` argument, so it is briefly on that command line inside the
+appliance) and proves each reset with a REST session. Proof today:
+`TestRedfishRotationA271`, `TestServedRedfishRotationA271`, `TestESXiRotationA271`,
+`TestServedESXiRotationA271`, `TestVCenterSSORotationA271` and
+`TestServedVCenterSSORotationA271` against stand-ins built from the DMTF Redfish
+specification, HPE's iLO Redfish reference, the vSphere Web Services SDK and VMware's
+dir-cli articles; no controller, host or appliance has run them.
 
 What comes next:
-- vCenter's local single sign-on users.
+- A vCenter run that also confirms `dir-cli`'s output on vSphere 8.
 - Check-out of these accounts (a vaulted account target that is checked out, never
   opened as a session).
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
