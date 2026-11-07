@@ -49,6 +49,10 @@ type privacyServiceDependentStepQueuedV1 struct {
 // operational evidence. The human requesting the read remains an erasable identity.
 func addServiceDependentPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
 	exact := events.PrivacyFieldOpaqueExact
+	policies[privacyEventPolicyKey{EventServiceDependentManifestOpened, 1}] = privacyRules(privacyRule("/header", exact), privacyRule("/actor", events.PrivacyFieldIdentityExact), privacyRule("/at", exact))
+	policies[privacyEventPolicyKey{EventServiceDependentManifestPageRecorded, 1}] = privacyRules(privacyRule("/page", exact), privacyRule("/actor", events.PrivacyFieldIdentityExact), privacyRule("/at", exact))
+	policies[privacyEventPolicyKey{EventServiceDependentManifestSealed, 1}] = privacyRules(privacyRule("/seal", exact), privacyRule("/actor", events.PrivacyFieldIdentityExact), privacyRule("/at", exact))
+
 	policies[privacyEventPolicyKey{EventServiceDependentStepRecoveryQueued, 1}] = privacyRules(privacyRule("/previous_step", exact), privacyRule("/step", exact), privacyRule("/previous_status", exact), privacyRule("/previous_report_digest", exact), privacyRule("/current_vault_version", exact), privacyRule("/recovery_digest", exact), privacyRule("/actor", events.PrivacyFieldIdentityExact), privacyRule("/reason", events.PrivacyFieldFreeTextClear), privacyRule("/at", exact))
 	identity := events.PrivacyFieldIdentityExact
 	policies[privacyEventPolicyKey{EventServiceReconciliationReviewProposed, 1}] = privacyRules(privacyRule("/intent", exact), privacyRule("/actor", identity), privacyRule("/at", exact))
@@ -65,6 +69,10 @@ func addServiceDependentPrivacyPolicies(policies map[privacyEventPolicyKey]event
 	policies[privacyEventPolicyKey{EventServiceDependentScanFailed, 1}] = privacyRules(privacyRule("/run_id", exact), privacyRule("/job_id", exact), privacyRule("/attempt", exact), privacyRule("/reason", exact), privacyRule("/receipt_statement", exact), privacyRule("/receipt_signature_base64", exact), privacyRule("/signer_fingerprint", exact), privacyRule("/at", exact))
 }
 func addServiceDependentPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
+	shapes[privacyEventPolicyKey{EventServiceDependentManifestOpened, 1}] = privacyPayloadShape[ServiceDependentManifestOpened]()
+	shapes[privacyEventPolicyKey{EventServiceDependentManifestPageRecorded, 1}] = privacyPayloadShape[ServiceDependentManifestPageRecorded]()
+	shapes[privacyEventPolicyKey{EventServiceDependentManifestSealed, 1}] = privacyPayloadShape[ServiceDependentManifestSealed]()
+
 	shapes[privacyEventPolicyKey{EventServiceReconciliationReviewProposed, 1}] = privacyPayloadShape[ServiceReconciliationReview]()
 	shapes[privacyEventPolicyKey{EventServiceDependentRotationQueued, 1}] = privacyPayloadShape[privacyServiceDependentRotationQueuedV1]()
 	shapes[privacyEventPolicyKey{EventServiceDependentRotationQueued, ServiceDependentReconcileSchemaVersion}] = privacyPayloadShape[ServiceDependentRotationQueued]()

@@ -12620,6 +12620,118 @@ PAMServiceDependentRecoveryReview = TypedDict(
     total=False,
 )
 
+PAMServiceDependentReview = TypedDict(
+    'PAMServiceDependentReview',
+    {
+        'actor': str,
+        'entry_count': int,
+        'header': dict[str, Any],
+        'header_digest': str,
+        'host_count': int,
+        'page_count': int,
+        'seal': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewEntry = TypedDict(
+    'PAMServiceDependentReviewEntry',
+    {
+        'host': dict[str, Any],
+        'probe_id': str,
+        'ref': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewHeader = TypedDict(
+    'PAMServiceDependentReviewHeader',
+    {
+        'account': dict[str, Any],
+        'created_at': str,
+        'expected_version': int,
+        'expires_at': str,
+        'id': str,
+        'mode': str,
+        'provider_binding': str,
+        'reconcile': dict[str, Any],
+        'secret_name': str,
+        'version': int,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewHost = TypedDict(
+    'PAMServiceDependentReviewHost',
+    {
+        'binding': dict[str, Any],
+        'inventory_digest': str,
+        'inventory_run_id': str,
+        'observed_at': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewOpenRequest = TypedDict(
+    'PAMServiceDependentReviewOpenRequest',
+    {
+        'mode': str,
+        'secret_name': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewPage = TypedDict(
+    'PAMServiceDependentReviewPage',
+    {
+        'digest': str,
+        'entries': Any,
+        'header_digest': str,
+        'hosts': list[dict[str, Any]],
+        'id': str,
+        'page_number': int,
+        'previous_digest': str,
+        'version': int,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewPageRequest = TypedDict(
+    'PAMServiceDependentReviewPageRequest',
+    {
+        'entries': list[dict[str, Any]],
+        'header_digest': str,
+        'hosts': list[dict[str, Any]],
+        'previous_digest': str,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewSeal = TypedDict(
+    'PAMServiceDependentReviewSeal',
+    {
+        'digest': str,
+        'entry_count': int,
+        'expires_at': str,
+        'header_digest': str,
+        'host_count': int,
+        'id': str,
+        'page_count': int,
+        'tail_digest': str,
+        'version': int,
+    },
+    total=False,
+)
+
+PAMServiceDependentReviewSealRequest = TypedDict(
+    'PAMServiceDependentReviewSealRequest',
+    {
+        'header_digest': str,
+        'tail_digest': str,
+    },
+    total=False,
+)
+
 PAMServiceDependentRotation = TypedDict(
     'PAMServiceDependentRotation',
     {

@@ -84,3 +84,31 @@ func TestInverseRecoveryCLIRequiresExplicitForceA267(t *testing.T) {
 		t.Fatal("inverse native recovery reached server without explicit force")
 	}
 }
+
+func TestBoundedNativeReviewCommandsA267(t *testing.T) {
+	for _, tc := range []struct {
+		method, path, body string
+		args               []string
+	}{
+		{"POST", "/api/v1/access/discovery/accounts/account/dependents/reviews", `{"secret_name":"ad/svc"}`, []string{"access", "discovery", "reviews", "open", "account", "-f", "-"}},
+		{"GET", "/api/v1/access/discovery/dependent-reviews/review", "", []string{"access", "discovery", "reviews", "get", "review"}},
+		{"GET", "/api/v1/access/discovery/dependent-reviews/review/pages/2", "", []string{"access", "discovery", "reviews", "page", "review", "2"}},
+		{"PUT", "/api/v1/access/discovery/dependent-reviews/review/pages/2", `{"header_digest":"header","previous_digest":"previous","entries":[]}`, []string{"access", "discovery", "reviews", "append", "review", "2", "-f", "-"}},
+		{"POST", "/api/v1/access/discovery/dependent-reviews/review/seal", `{"header_digest":"header","tail_digest":"tail"}`, []string{"access", "discovery", "reviews", "seal", "review", "-f", "-"}},
+	} {
+		t.Run(strings.Join(tc.args[3:5], "-"), func(t *testing.T) {
+			var captured capture
+			server := mockServer(t, http.StatusOK, `{"header_digest":"exact","page_count":3,"entry_count":768}`, &captured)
+			code, out, stderr := run(t, tc.args, cli.Env{Server: server.URL, Token: "owned-token", Tenant: "owned-tenant", HTTPClient: server.Client()}, tc.body)
+			if code != 0 || stderr != "" || captured.Method != tc.method || captured.Path != tc.path || strings.TrimSpace(string(captured.Body)) != tc.body {
+				t.Fatalf("bounded review CLI: code=%d err=%s method=%s path=%s", code, stderr, captured.Method, captured.Path)
+			}
+			if (captured.Header.Get("Idempotency-Key") != "") != (tc.method != "GET") {
+				t.Fatal("review mutation/read idempotency differs")
+			}
+			if !strings.Contains(out, "768") || !strings.Contains(out, "exact") {
+				t.Fatal("CLI lost exact manifest coverage/digest")
+			}
+		})
+	}
+}

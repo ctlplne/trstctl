@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/crypto"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -124,13 +123,8 @@ func (p RotationPlan) Validate() error {
 	if p.Version != RotationPlanVersion || !canonicalID(p.ID) || p.Account.Validate() != nil || p.CreatedAt.IsZero() || !p.ExpiresAt.After(p.CreatedAt) || p.ExpiresAt.After(p.CreatedAt.Add(RotationInventoryMaxAge)) || len(p.Hosts) == 0 {
 		return errors.New("service dependents: incomplete reviewed rotation plan")
 	}
-	if len(p.SecretName) == 0 || len(p.SecretName) > 512 || strings.TrimSpace(p.SecretName) != p.SecretName || !utf8.ValidString(p.SecretName) {
-		return errors.New("service dependents: exact application secret reference required")
-	}
-	for _, c := range p.SecretName {
-		if unicode.IsControl(c) {
-			return errors.New("service dependents: invalid application secret reference")
-		}
+	if err := validateRotationSecretName(p.SecretName); err != nil {
+		return err
 	}
 	hosts := map[string]bool{}
 	expected := map[string]bool{}

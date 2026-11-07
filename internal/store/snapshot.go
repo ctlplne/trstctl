@@ -298,7 +298,8 @@ import (
 // Version 100 retains exact AD account/host bindings and signed dependent scans.
 // Version 101 retains queued provider scan intents and nullable completion times.
 // Version102 retains service-account rotation parent/step source projections.
-const SnapshotFormatVersion = 102
+// Version103 retains the complete bounded rotation-review manifest and ordered pages.
+const SnapshotFormatVersion = 103
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -405,6 +406,7 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_folders",
 	"service_account_hosts", "service_account_host_scans",
 	"service_account_rotations", "service_account_rotation_steps",
+	"service_account_rotation_manifests", "service_account_rotation_manifest_pages", "service_account_rotation_manifest_hosts", "service_account_rotation_manifest_entries",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",
@@ -780,6 +782,10 @@ SELECT jsonb_build_object(
   'service_account_host_scans', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_host_scans t),
   'service_account_rotations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotations t),
   'service_account_rotation_steps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_steps t),
+  'service_account_rotation_manifests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_manifests t),
+  'service_account_rotation_manifest_pages', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_manifest_pages t),
+  'service_account_rotation_manifest_hosts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_manifest_hosts t),
+  'service_account_rotation_manifest_entries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM service_account_rotation_manifest_entries t),
   'pam_auto_approval_rules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_auto_approval_rules t),
   'cloud_machine_changes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cloud_machine_changes t),
   'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),

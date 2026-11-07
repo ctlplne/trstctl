@@ -295,6 +295,7 @@ var TenantScopedTables = []string{
 	"pam_folders",
 	"service_account_hosts", "service_account_host_scans",
 	"service_account_rotations", "service_account_rotation_steps",
+	"service_account_rotation_manifests", "service_account_rotation_manifest_pages", "service_account_rotation_manifest_hosts", "service_account_rotation_manifest_entries",
 	"pam_auto_approval_rules",
 	"cloud_machine_changes",
 	"pam_command_actions",

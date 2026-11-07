@@ -316,6 +316,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/accounts/{account_id}/dependents/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a complete native account review assembled from bounded immutable pages */
+        post: operations["openPAMServiceDependentReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/discovery/accounts/{account_id}/dependents/rotations": {
         parameters: {
             query?: never;
@@ -429,6 +446,58 @@ export interface paths {
         put?: never;
         /** Set a staged account aside with the reason; a scan that finds it changed stages it again */
         post: operations["dismissPAMDiscoveredAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read native review authority, exact coverage and whole-account seal without queuing a reset */
+        get: operations["getPAMServiceDependentReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-reviews/{id}/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one complete bounded page of frozen native scope and useful-work probes */
+        get: operations["getPAMServiceDependentReviewPage"];
+        /** Record the exact next ordered native host and dependent page */
+        put: operations["appendPAMServiceDependentReviewPage"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/dependent-reviews/{id}/seal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Seal complete ordered native scope without resetting the directory credential */
+        post: operations["sealPAMServiceDependentReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22693,6 +22762,94 @@ export interface components {
             /** Format: int64 */
             retained_generation_version: number;
         };
+        PAMServiceDependentReview: {
+            actor: string;
+            /** Format: int64 */
+            entry_count: number;
+            header: components["schemas"]["PAMServiceDependentReviewHeader"];
+            header_digest: string;
+            /** Format: int64 */
+            host_count: number;
+            /** Format: int64 */
+            page_count: number;
+            seal?: components["schemas"]["PAMServiceDependentReviewSeal"];
+        };
+        PAMServiceDependentReviewEntry: {
+            host: components["schemas"]["PAMServiceDependentReviewHost"];
+            probe_id: string;
+            ref: components["schemas"]["PAMDependentRef"];
+        };
+        PAMServiceDependentReviewHeader: {
+            account: components["schemas"]["PAMDependentAccountBinding"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            expected_version: number;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            mode?: "reconcile";
+            provider_binding: string;
+            reconcile?: components["schemas"]["PAMReconcilePrincipal"];
+            secret_name: string;
+            /** Format: int64 */
+            version: number;
+        };
+        PAMServiceDependentReviewHost: {
+            binding: components["schemas"]["PAMDependentHostBinding"];
+            inventory_digest: string;
+            /** Format: uuid */
+            inventory_run_id: string;
+            /** Format: date-time */
+            observed_at: string;
+        };
+        PAMServiceDependentReviewOpenRequest: {
+            /** @enum {string} */
+            mode?: "reconcile";
+            secret_name: string;
+        };
+        PAMServiceDependentReviewPage: {
+            digest: string;
+            entries: components["schemas"]["PAMServiceDependentReviewEntry"][] | null;
+            header_digest: string;
+            hosts: components["schemas"]["PAMServiceDependentReviewHost"][];
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            page_number: number;
+            previous_digest: string;
+            /** Format: int64 */
+            version: number;
+        };
+        PAMServiceDependentReviewPageRequest: {
+            entries?: components["schemas"]["PAMServiceDependentReviewEntry"][];
+            header_digest: string;
+            hosts?: components["schemas"]["PAMServiceDependentReviewHost"][];
+            previous_digest: string;
+        };
+        PAMServiceDependentReviewSeal: {
+            digest: string;
+            /** Format: int64 */
+            entry_count: number;
+            /** Format: date-time */
+            expires_at: string;
+            header_digest: string;
+            /** Format: int64 */
+            host_count: number;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            page_count: number;
+            tail_digest: string;
+            /** Format: int64 */
+            version: number;
+        };
+        PAMServiceDependentReviewSealRequest: {
+            header_digest: string;
+            tail_digest: string;
+        };
         PAMServiceDependentRotation: {
             actor: string;
             /** Format: uuid */
@@ -28371,6 +28528,53 @@ export interface operations {
             };
         };
     };
+    openPAMServiceDependentReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentReviewOpenRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     queuePAMServiceDependentRotation: {
         parameters: {
             query?: never;
@@ -28672,6 +28876,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveredAccount"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceDependentReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMServiceDependentReviewPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                /** @description zero-based native review page */
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReviewPage"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    appendPAMServiceDependentReviewPage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                /** @description zero-based native review page */
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentReviewPageRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReviewPage"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sealPAMServiceDependentReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMServiceDependentReviewSealRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMServiceDependentReview"];
                 };
             };
             /** @description client error */

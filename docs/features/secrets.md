@@ -2819,3 +2819,54 @@ original report, then restart it. This is a distributed recovery: a queued respo
 is not native completion. Portable served tests cover uncertainty, actual lease
 expiry, late signed receipts, lost projection, tamper refusal and privacy/rebuild.
 Native Windows execution and the combined final-image journey remain unverified.
+
+
+### Bounded pages for a complete account review
+
+A headless operator can record an entire selected account's public native scope
+in immutable pages. Each page is at most 64 KiB; the account has one header and
+one final seal. Header, page and seal creation do not reset a directory password
+or send a credential to a host. Large-manifest execution and console authoring
+remain under construction; the existing inline rotation workflow remains available.
+
+```sh
+trstctl access discovery reviews open ACCOUNT_ID -f review.json
+trstctl access discovery reviews append REVIEW_ID 0 -f page-0.json
+trstctl access discovery reviews page REVIEW_ID 0
+trstctl access discovery reviews get REVIEW_ID
+trstctl access discovery reviews seal REVIEW_ID -f seal.json
+```
+
+`review.json` contains the `secret_name` and optional `mode: "reconcile"`. The
+server freezes the exact AD account, provider configuration, current vault version,
+designated writer where applicable, and original fifteen-minute review window.
+Writes need `access:targets.write` and write access to the exact vault key; only
+the opening author can append or seal that review. Reads need account access and
+read access to its key. No credential value or designated-writer credential
+reference belongs in these public files.
+
+A page contains `header_digest`, `previous_digest`, `hosts`, and ordered `entries`.
+The first `previous_digest` is the header digest; later pages use the previous
+page's returned digest. Each host supplies the exact enabled binding, signed
+inventory run ID, inventory digest and observation time. An entry supplies that
+host reference, its native `ref`, and the host's configured `probe_id`. Services,
+tasks and pools retain their native selectors. A complete selected host with no
+matching objects still needs a host declaration; it does not acquire a fabricated
+entry. Use page numbers starting at zero and split files before the per-page limit.
+
+`seal.json` contains `header_digest` and the final page's `tail_digest`. Sealing
+requires every native reference from every enabled selected host exactly once,
+consistent scan references, a fresh unchanged provider/vault binding, and native
+service dependency order across pages. The final digest binds the whole account,
+its exact counts, last page, and earliest scan expiry. A partial page set, duplicate,
+wrong host, changed scan, unsafe order or expired review is refused. Pages cannot
+be appended after sealing. These checks preserve one account scope; pages are
+not independently rotated password groups.
+
+Keep the same idempotency key when retrying a lost response. The first immutable
+page/seal source also prevents a changed request from replacing it after an append
+acknowledgement but before SQL projection. A pending or changed cache returns a
+conflict with retry/rebuild guidance. Canonical sources preserve ordered scope
+through snapshots, rebuilds, and author erasure. Native selectors remain exact;
+the human author becomes a pseudonym. A seal is a reviewed-data commitment,
+not evidence of a native password change or completed rotation.

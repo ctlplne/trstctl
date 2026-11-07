@@ -545,6 +545,11 @@ import type {
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
   PAMServiceReconciliationPendingReview,
+  PAMServiceDependentReviewOpenRequest,
+  PAMServiceDependentReview,
+  PAMServiceDependentReviewPageRequest,
+  PAMServiceDependentReviewPage,
+  PAMServiceDependentReviewSealRequest,
   PAMServiceDependentRecoveryReview,
   PAMServiceDependentRecoveryRequest,
   PAMServiceDependentRecoveryQueued,
@@ -1553,6 +1558,11 @@ export type {
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
   PAMServiceReconciliationPendingReview,
+  PAMServiceDependentReviewOpenRequest,
+  PAMServiceDependentReview,
+  PAMServiceDependentReviewPageRequest,
+  PAMServiceDependentReviewPage,
+  PAMServiceDependentReviewSealRequest,
   PAMServiceDependentRecoveryReview,
   PAMServiceDependentRecoveryRequest,
   PAMServiceDependentRecoveryQueued,
@@ -2622,6 +2632,16 @@ export interface Api {
   ): Promise<PAMServiceReconciliationApproval>;
   pamServiceReconciliationReview(id: string): Promise<PAMServiceReconciliationReview>;
   pamServiceReconciliationPendingReview(accountID: string, id: string, approvalID: string): Promise<PAMServiceReconciliationPendingReview>;
+  openPAMServiceDependentReview(accountID: string, input: PAMServiceDependentReviewOpenRequest, key: string): Promise<PAMServiceDependentReview>;
+  pamServiceDependentReview(id: string): Promise<PAMServiceDependentReview>;
+  appendPAMServiceDependentReviewPage(
+    id: string,
+    page: number,
+    input: PAMServiceDependentReviewPageRequest,
+    key: string,
+  ): Promise<PAMServiceDependentReviewPage>;
+  pamServiceDependentReviewPage(id: string, page: number): Promise<PAMServiceDependentReviewPage>;
+  sealPAMServiceDependentReview(id: string, input: PAMServiceDependentReviewSealRequest, key: string): Promise<PAMServiceDependentReview>;
   previewPAMServiceDependentRecovery(id: string, stepID: string): Promise<PAMServiceDependentRecoveryReview>;
   queuePAMServiceDependentRecovery(id: string, input: PAMServiceDependentRecoveryRequest, key: string): Promise<PAMServiceDependentRecoveryQueued>;
   pamServiceDependentRotation(id: string): Promise<PAMServiceDependentRotationView>;
@@ -3613,6 +3633,20 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
         "?approval_request_id=" +
         encodeURIComponent(approvalID),
     ),
+  openPAMServiceDependentReview: (accountID, input, key) =>
+    mutate<PAMServiceDependentReview>("POST", "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents/reviews", input, key),
+  pamServiceDependentReview: (id) => req<PAMServiceDependentReview>("/api/v1/access/discovery/dependent-reviews/" + encodeURIComponent(id)),
+  appendPAMServiceDependentReviewPage: (id, page, input, key) =>
+    mutate<PAMServiceDependentReviewPage>(
+      "PUT",
+      "/api/v1/access/discovery/dependent-reviews/" + encodeURIComponent(id) + "/pages/" + encodeURIComponent(page),
+      input,
+      key,
+    ),
+  pamServiceDependentReviewPage: (id, page) =>
+    req<PAMServiceDependentReviewPage>("/api/v1/access/discovery/dependent-reviews/" + encodeURIComponent(id) + "/pages/" + encodeURIComponent(page)),
+  sealPAMServiceDependentReview: (id, input, key) =>
+    mutate<PAMServiceDependentReview>("POST", "/api/v1/access/discovery/dependent-reviews/" + encodeURIComponent(id) + "/seal", input, key),
   previewPAMServiceDependentRecovery: (id, stepID) =>
     req<PAMServiceDependentRecoveryReview>(
       "/api/v1/access/discovery/dependent-rotations/" + encodeURIComponent(id) + "/recoveries/preview?step_id=" + encodeURIComponent(stepID),

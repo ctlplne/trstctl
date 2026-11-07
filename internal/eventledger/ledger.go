@@ -178,6 +178,9 @@ const (
 	EventServiceDependentRotationInverse       = "pam.service_dependents.rotation_inverse"
 	EventServiceDependentDirectoryApplyStarted = "pam.service_dependents.directory_apply_started"
 	EventServiceDependentDirectoryRestored     = "pam.service_dependents.directory_restored"
+	EventServiceDependentManifestOpened        = "pam.service_dependents.manifest_opened"
+	EventServiceDependentManifestPageRecorded  = "pam.service_dependents.manifest_page_recorded"
+	EventServiceDependentManifestSealed        = "pam.service_dependents.manifest_sealed"
 	EventServiceDependentStepRecoveryQueued    = "pam.service_dependents.step_recovery_queued"
 	EventServiceDependentStepQueued            = "pam.service_dependents.step_queued"
 	EventServiceDependentStepObserved          = "pam.service_dependents.step_observed"
@@ -420,6 +423,9 @@ var ledger = []FeatureEvent{
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
 	{"F33", "Just-in-time issuance with approval flows", "review_service_account_reconciliation", "requestPAMServiceReconciliationApproval", []string{EventServiceReconciliationReviewProposed, EventApprovalRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved}},
+	{"F33", "Just-in-time issuance with approval flows", "open_service_account_review", "openPAMServiceDependentReview", []string{EventServiceDependentManifestOpened}},
+	{"F33", "Just-in-time issuance with approval flows", "append_service_account_review", "appendPAMServiceDependentReviewPage", []string{EventServiceDependentManifestPageRecorded}},
+	{"F33", "Just-in-time issuance with approval flows", "seal_service_account_review", "sealPAMServiceDependentReview", []string{EventServiceDependentManifestSealed}},
 	{"F33", "Just-in-time issuance with approval flows", "recover_service_account_dependents", "queuePAMServiceDependentRecovery", []string{EventServiceDependentStepRecoveryQueued}},
 	// F33 — Just-in-time privileged access sessions.
 	// Gateway checks continue the exact outbox-backed admitted session job.

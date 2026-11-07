@@ -54,6 +54,9 @@ type ServiceDependentStepObserved struct {
 }
 
 func (p *Projector) applyServiceDependentRotationTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
+	if handled, err := p.applyServiceDependentManifestTx(ctx, tx, e); handled {
+		return true, err
+	}
 	switch e.Type {
 	case EventServiceReconciliationReviewProposed:
 		var v ServiceReconciliationReview

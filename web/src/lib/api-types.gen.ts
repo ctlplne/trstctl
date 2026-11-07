@@ -9066,6 +9066,82 @@ export interface PAMServiceDependentRecoveryReview {
   retained_generation_version: number;
 }
 
+export interface PAMServiceDependentReview {
+  actor: string;
+  entry_count: number;
+  header: PAMServiceDependentReviewHeader;
+  header_digest: string;
+  host_count: number;
+  page_count: number;
+  seal?: PAMServiceDependentReviewSeal;
+}
+
+export interface PAMServiceDependentReviewEntry {
+  host: PAMServiceDependentReviewHost;
+  probe_id: string;
+  ref: PAMDependentRef;
+}
+
+export interface PAMServiceDependentReviewHeader {
+  account: PAMDependentAccountBinding;
+  created_at: string;
+  expected_version: number;
+  expires_at: string;
+  id: string;
+  mode?: "reconcile";
+  provider_binding: string;
+  reconcile?: PAMReconcilePrincipal;
+  secret_name: string;
+  version: number;
+}
+
+export interface PAMServiceDependentReviewHost {
+  binding: PAMDependentHostBinding;
+  inventory_digest: string;
+  inventory_run_id: string;
+  observed_at: string;
+}
+
+export interface PAMServiceDependentReviewOpenRequest {
+  mode?: "reconcile";
+  secret_name: string;
+}
+
+export interface PAMServiceDependentReviewPage {
+  digest: string;
+  entries: unknown;
+  header_digest: string;
+  hosts: PAMServiceDependentReviewHost[];
+  id: string;
+  page_number: number;
+  previous_digest: string;
+  version: number;
+}
+
+export interface PAMServiceDependentReviewPageRequest {
+  entries?: PAMServiceDependentReviewEntry[];
+  header_digest: string;
+  hosts?: PAMServiceDependentReviewHost[];
+  previous_digest: string;
+}
+
+export interface PAMServiceDependentReviewSeal {
+  digest: string;
+  entry_count: number;
+  expires_at: string;
+  header_digest: string;
+  host_count: number;
+  id: string;
+  page_count: number;
+  tail_digest: string;
+  version: number;
+}
+
+export interface PAMServiceDependentReviewSealRequest {
+  header_digest: string;
+  tail_digest: string;
+}
+
 export interface PAMServiceDependentRotation {
   actor: string;
   command_id: string;

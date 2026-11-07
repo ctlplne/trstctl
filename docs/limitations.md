@@ -9234,3 +9234,15 @@ creates a fresh lease for the same retained effect. Portable served proof covers
 that path; native Windows runtime, the combined journey and final packaged
 recovery remain separate obligations. The operator contract is in the
 [service-account dependent workflow](features/secrets.md).
+
+
+### Large dependent reviews
+
+The headless account-review API and CLI collect public native scope in bounded
+immutable pages and seal one complete account. Portable served proofs cover signed
+host metadata, complete/missing reference checks, service order across pages,
+source/projection interruption, cache changes, tenant isolation and author erasure.
+The original inline intent still has a 1 MiB bound. Large-manifest queue/approval,
+bounded execution and console authoring remain under construction. Review
+collection alone does not qualify AD rotation, Windows runtime or final-image
+recovery. Per-host inventory and native evidence keep their original wire bounds.

@@ -300,14 +300,17 @@ func TestServedDependentReconciliationRequiresIndependentReviewA267(t *testing.T
 }
 
 type dependentRotationOptions struct {
-	RecoverInverse         bool
-	ExpiredInverse         bool
-	ExpireBeforeApply      bool
-	InvalidRecovery        bool
-	EraseClaim             bool
-	LoseQueueProjection    bool
-	Reconcile              bool
-	RefusePublicationProof bool
+	ManifestReviewOnly      bool
+	ManifestDependencyOrder bool
+	ManifestLargeReview     bool
+	RecoverInverse          bool
+	ExpiredInverse          bool
+	ExpireBeforeApply       bool
+	InvalidRecovery         bool
+	EraseClaim              bool
+	LoseQueueProjection     bool
+	Reconcile               bool
+	RefusePublicationProof  bool
 }
 
 func servedDependentRotationCaseWithMode(t *testing.T, native *dependentNativeDirectoryFixture, injectFailure, reconcile bool, moved ...bool) {
@@ -463,6 +466,12 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 		Services: []windependents.Service{{Name: "owned-service", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("b", 64), WasRunning: true}},
 		Tasks:    []windependents.Task{{Path: "\\owned\\task", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("c", 64), Enabled: true, LogonType: 1, ActionCount: 1}},
 		Pools:    []windependents.Pool{{Name: "owned-pool", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("d", 64), EncryptionProvider: "native", PasswordProtected: true, WasStarted: true}}}
+	if scenario.ManifestLargeReview {
+		inventory = largeManifestInventory(inventory, identity.SID)
+	}
+	if scenario.ManifestDependencyOrder {
+		inventory.Services = []windependents.Service{{Name: "base", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("b", 64), WasRunning: true}, {Name: "child", AccountSID: identity.SID, ConfigSHA256: strings.Repeat("c", 64), Dependencies: []string{"BASE"}, WasRunning: true}}
+	}
 	if scenario.ExpireBeforeApply {
 		inventory.ObservedAt = time.Now().UTC().Add(-servicedependents.RotationInventoryMaxAge + 8*time.Second)
 	}
@@ -472,6 +481,14 @@ func servedDependentRotationScenario(t *testing.T, native *dependentNativeDirect
 	}
 	if receipt, e := h.client.ReportJobResult(ctx, h.report(t, inventoryJob.JobID, inventoryJob.Attempt, transport.JobOutcomeExecuted, string(raw), crypto.SHA256Hex(raw))); e != nil || !receipt.Accepted {
 		t.Fatal("inventory not accepted", e)
+	}
+	if scenario.ManifestLargeReview {
+		servedLargeDependentManifestReview(t, h, token, root, inventoryIntent.Binding, inventory, directory, projector)
+		return
+	}
+	if scenario.ManifestReviewOnly {
+		servedDependentManifestReview(t, h, token, root, inventoryIntent.Binding, inventory, directory, projector, scenario.ManifestDependencyOrder)
+		return
 	}
 	order := []servicedependents.DependentRef{{AgentID: hostID, Family: "services", Name: "owned-service"}, {AgentID: hostID, Family: "tasks", Name: "\\owned\\task"}, {AgentID: hostID, Family: "iis", Name: "owned-pool"}}
 	probes := []servicedependents.ProbeBinding{}
