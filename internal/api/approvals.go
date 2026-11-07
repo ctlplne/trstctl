@@ -440,6 +440,10 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		// A260: importing discovered privileged accounts into a folder is
 		// reviewed by those who approve privileged access.
 		return authz.AccessApprove, action == "import"
+	case "pam_account":
+		// A276: reassigning a flagged brokered account's owner, or rotating
+		// and disabling it, is reviewed by those who approve privileged access.
+		return authz.AccessApprove, action == "reassign" || action == "rotate_disable"
 	default:
 		return "", false
 	}

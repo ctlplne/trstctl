@@ -494,3 +494,16 @@ func TestPAMSignInRecordsUseEventRecoveryAndSnapshotsA274(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without recorded sign-ins", SnapshotFormatVersion)
 	}
 }
+
+// TestPAMAccountFlagsUseEventRecoveryAndSnapshotsA276: brokered account
+// flags are erased with their tenant, rebuilt from events and carried by
+// snapshots from format 109.
+func TestPAMAccountFlagsUseEventRecoveryAndSnapshotsA276(t *testing.T) {
+	const table = "pam_account_flags"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 109 {
+		t.Fatalf("snapshot format %d could restore a payload without account flags", SnapshotFormatVersion)
+	}
+}

@@ -9144,9 +9144,19 @@ assignment names their owners, and targets read them back. Proof:
 privileged account with no owner; an assignment makes the owner show on the record and the
 target; another tenant neither sees nor can assign it) and the console tests.
 
+Part 2: orphaned (no owner, owner deleted, person owner offboarded) and unused (no
+session or check-out past `pam.unused_after`) accounts are flagged by a scan; a proposed
+`reassign` or `rotate_disable` needs two approvals and is applied once, consuming its
+approval. Proof: `TestServedOrphanedAccountActionIsApprovedAppliedAndReadBackA276` (an
+ownerless vaulted account is flagged orphaned, then unused once the window has passed; a
+reassignment refused before its review is applied after two approvals and reads back as the
+target's owner, re-applying returns the same result, and a rescan keeps it resolved; the
+owner's member offboarded flags it again; a rotation without the account in use is
+refused, and the approved rotate-and-disable queues the two-account rotation, which
+completes, and disables the target) and the console tests. Operator-configured accounts are
+reassigned but disabled by removing them from the configuration.
+
 What comes next:
-- Orphaned and unused accounts flagged with a proposed action that needs approval, then
-  applied and read back (part 2).
 - Periodic certification of brokered accounts, templates and approver lists through the
   access reviews, with a signed result (part 3).
 

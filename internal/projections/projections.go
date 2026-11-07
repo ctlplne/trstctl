@@ -350,7 +350,12 @@ const (
 	// A274: the sign-ins a bypass detection run read, and their purge.
 	EventPAMSignInsCollected = "pam.signin.collected"
 	EventPAMSignInsPurged    = "pam.signin.records_purged"
-	EventPAMRecordingRead    = "pam.session.recording_read"
+	// A276: a brokered account flagged as orphaned or unused, the flag
+	// cleared, and the approved action that resolved it.
+	EventPAMAccountFlagged      = "pam.account.flagged"
+	EventPAMAccountFlagCleared  = "pam.account.flag_cleared"
+	EventPAMAccountFlagActioned = "pam.account.flag_actioned"
+	EventPAMRecordingRead       = "pam.session.recording_read"
 	// EventPAMRecordingSearched (A275): who searched the tenant's recordings,
 	// for what (masked), and what the search found.
 	EventPAMRecordingSearched    = "pam.recording.searched"
@@ -4755,6 +4760,41 @@ type PAMRecordingRead struct {
 	At    time.Time `json:"at"`
 }
 
+// PAMAccountFlagged opens a brokered account's flag (A276): why — its owner
+// is gone (orphaned) or it sat unused past the window — its owner then, and
+// when it was last used.
+type PAMAccountFlagged struct {
+	TargetType string     `json:"target_type"`
+	TargetID   string     `json:"target_id"`
+	Reasons    []string   `json:"reasons"`
+	Detail     string     `json:"detail,omitempty"`
+	OwnerID    string     `json:"owner_id,omitempty"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	At         time.Time  `json:"at"`
+}
+
+// PAMAccountFlagCleared closes a flag whose reasons no longer hold.
+type PAMAccountFlagCleared struct {
+	TargetType string    `json:"target_type"`
+	TargetID   string    `json:"target_id"`
+	At         time.Time `json:"at"`
+}
+
+// PAMAccountFlagActioned is the approved action applied to a flag: a new
+// owner, or the account's credential rotation queued and the target
+// disabled; it consumes the action's approval.
+type PAMAccountFlagActioned struct {
+	TargetType string                     `json:"target_type"`
+	TargetID   string                     `json:"target_id"`
+	Action     string                     `json:"action"`
+	OwnerID    string                     `json:"owner_id,omitempty"`
+	RotationID string                     `json:"rotation_id,omitempty"`
+	Reason     string                     `json:"reason"`
+	Approval   store.OperationApprovalUse `json:"approval"`
+	Actor      string                     `json:"actor"`
+	At         time.Time                  `json:"at"`
+}
+
 // PAMRecordingSearched is one search across a tenant's recordings (A275):
 // the searcher, the query as masked, its filters, how many recordings it
 // read, how many lines matched and in which sessions.
@@ -5385,6 +5425,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMRecordingDeleted:                      {1: true},
 	EventPAMSignInsCollected:                      {1: true},
 	EventPAMSignInsPurged:                         {1: true},
+	EventPAMAccountFlagged:                        {1: true},
+	EventPAMAccountFlagCleared:                    {1: true},
+	EventPAMAccountFlagActioned:                   {1: true},
 	EventPAMRecordingRead:                         {1: true},
 	EventPAMRecordingSearched:                     {1: true},
 	EventPAMAccountHealthChecked:                  {1: true},
@@ -9182,6 +9225,45 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMRecordingDeletedTx(ctx, tx, e.TenantID, pl.ID, pl.DeletedAt)
+	case EventPAMAccountFlagged:
+		var pl PAMAccountFlagged
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.TargetType == "" || pl.TargetID == "" || len(pl.Reasons) == 0 || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMAccountFlaggedTx(ctx, tx, e.TenantID, store.PAMAccountFlag{TargetType: pl.TargetType, TargetID: pl.TargetID,
+			Reasons: pl.Reasons, Detail: pl.Detail, OwnerID: pl.OwnerID, LastUsedAt: pl.LastUsedAt, FlaggedAt: pl.At})
+	case EventPAMAccountFlagCleared:
+		var pl PAMAccountFlagCleared
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.TargetType == "" || pl.TargetID == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMAccountFlagClearedTx(ctx, tx, e.TenantID, pl.TargetType, pl.TargetID, pl.At)
+	case EventPAMAccountFlagActioned:
+		var pl PAMAccountFlagActioned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.TargetType == "" || pl.TargetID == "" || (pl.Action != "reassign" && pl.Action != "rotate_disable") || pl.Actor == "" || pl.At.IsZero() ||
+			(pl.Action == "reassign") != (pl.OwnerID != "") {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		use := pl.Approval
+		if use.ResourceKind != "pam_account" || use.ResourceID != "pam-account:"+pl.TargetType+"/"+pl.TargetID || use.Action != pl.Action {
+			return fmt.Errorf("projections: %s consumes another resource's approval", e.Type)
+		}
+		if err := p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, use, e.ID, e.Time); err != nil {
+			return err
+		}
+		at := pl.At
+		return p.store.ApplyPAMAccountFlagActionedTx(ctx, tx, e.TenantID, store.PAMAccountFlag{TargetType: pl.TargetType, TargetID: pl.TargetID,
+			Action: pl.Action, ActionOwnerID: pl.OwnerID, ActionRotationID: pl.RotationID, ActionReason: pl.Reason,
+			ApprovalRequestID: use.RequestID, ActionedBy: pl.Actor, ActionedAt: &at})
 	case EventPAMRecordingRead, EventPAMRecordingSearched:
 		// Audit facts only: who read which recording, how; who searched the
 		// recordings for what.

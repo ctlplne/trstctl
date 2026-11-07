@@ -577,6 +577,10 @@ import type {
   PAMSignInList,
   PAMRecordingSearchHit,
   PAMRecordingSearchResult,
+  PAMAccountFlag,
+  PAMAccountFlagList,
+  PAMAccountActionRequest,
+  PAMAccountActionReview,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1603,6 +1607,10 @@ export type {
   PAMSignInList,
   PAMRecordingSearchHit,
   PAMRecordingSearchResult,
+  PAMAccountFlag,
+  PAMAccountFlagList,
+  PAMAccountActionRequest,
+  PAMAccountActionReview,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2694,6 +2702,11 @@ export interface Api {
   openPAMEmergencySession(input: PAMEmergencySessionRequest, idempotencyKey?: string): Promise<PAMSession>;
   /** A274: the sign-ins bypass detection read for managed accounts, newest first, with what explained each. */
   pamSignIns(options?: { providerId?: string; unexplained?: boolean; limit?: number; signal?: AbortSignal }): Promise<PAMSignInList>;
+  /** A276: brokered accounts flagged orphaned or unused, and approved actions on them. */
+  pamAccountFlags(status?: "open" | "cleared" | "actioned"): Promise<PAMAccountFlagList>;
+  scanPAMAccountFlags(idempotencyKey?: string): Promise<PAMAccountFlagList>;
+  requestPAMAccountAction(targetType: string, id: string, input: PAMAccountActionRequest, idempotencyKey?: string): Promise<PAMAccountActionReview>;
+  applyPAMAccountAction(targetType: string, id: string, input: PAMAccountActionRequest, idempotencyKey?: string): Promise<PAMAccountFlag>;
   /** A275: search the tenant's session recordings; results are masked and every search is recorded. */
   searchPAMRecordings(options: {
     q: string;
@@ -3749,6 +3762,22 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   pamEmergencyResponders: () => req<PAMEmergencyResponders>("/api/v1/access/emergency/responders"),
   setPAMEmergencyResponders: (input, idempotencyKey) => mutate<PAMEmergencyResponders>("PUT", "/api/v1/access/emergency/responders", input, idempotencyKey),
   openPAMEmergencySession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/emergency-sessions", input, idempotencyKey),
+  pamAccountFlags: (status) => req<PAMAccountFlagList>(`/api/v1/access/account-flags${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  scanPAMAccountFlags: (idempotencyKey) => mutate<PAMAccountFlagList>("POST", "/api/v1/access/account-flags/scan", undefined, idempotencyKey),
+  requestPAMAccountAction: (targetType, id, input, idempotencyKey) =>
+    mutate<PAMAccountActionReview>(
+      "POST",
+      `/api/v1/access/account-flags/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/actions`,
+      input,
+      idempotencyKey,
+    ),
+  applyPAMAccountAction: (targetType, id, input, idempotencyKey) =>
+    mutate<PAMAccountFlag>(
+      "POST",
+      `/api/v1/access/account-flags/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/actions/apply`,
+      input,
+      idempotencyKey,
+    ),
   searchPAMRecordings: (options) => {
     const query = new URLSearchParams({ q: options.q });
     if (options.since) query.set("since", options.since);

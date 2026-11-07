@@ -8431,6 +8431,49 @@ export interface PAMAccessTemplateRequest {
   web_sign_in?: PAMWebSignIn;
 }
 
+export interface PAMAccountActionRequest {
+  action: "reassign" | "rotate_disable";
+  approval_request_id?: string;
+  intent_digest?: string;
+  owner_id?: string;
+  reason: string;
+  request_id: string;
+  rotation_old_ref?: string;
+}
+
+export interface PAMAccountActionReview {
+  approval_count: number;
+  approval_request_id: string;
+  expires_at: string;
+  intent_digest: string;
+  request_id: string;
+  required_approvals: number;
+  status: string;
+}
+
+export interface PAMAccountFlag {
+  action?: "reassign" | "rotate_disable";
+  action_owner_id?: string;
+  action_reason?: string;
+  action_rotation_id?: string;
+  actioned_at?: string;
+  actioned_by?: string;
+  approval_request_id?: string;
+  cleared_at?: string;
+  detail?: string;
+  flagged_at: string;
+  last_used_at?: string;
+  owner_id?: string;
+  reasons: ("orphaned" | "unused")[];
+  status: "open" | "cleared" | "actioned";
+  target_id: string;
+  target_type: string;
+}
+
+export interface PAMAccountFlagList {
+  items: PAMAccountFlag[];
+}
+
 export interface PAMApprovalRequest {
   approval_count: number;
   approval_request_id: string;

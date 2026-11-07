@@ -214,8 +214,8 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:3348` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4134` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3351` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4137` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -991,10 +991,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7218` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7235` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7248` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7282` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7261` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7278` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7291` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7325` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1166,8 +1166,8 @@ not this file.
 | `internal/store/pam.go:127` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:735` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:815` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1042` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:1056` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1043` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:1057` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1187,8 +1187,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:820` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:840` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:827` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:847` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -2250,9 +2250,9 @@ not this file.
 | `internal/cli/switching_import.go:42` | the operator names the export file to read (CWE-22 not applicable) |
 | `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3443` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4778` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4797` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3446` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:4781` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4800` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:310` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -2960,8 +2960,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4778` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4797` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4781` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4800` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

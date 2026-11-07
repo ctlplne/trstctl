@@ -301,6 +301,8 @@ var TenantScopedTables = []string{
 	"pam_command_actions",
 	// A274: recorded sign-ins of managed accounts; no foreign keys.
 	"pam_signin_records",
+	// A276: brokered account flags; no foreign keys.
+	"pam_account_flags",
 	// N2: Key Vault disables; no foreign keys.
 	"certificate_key_vault_disables",
 	// M4: single-use records of machine login tokens.

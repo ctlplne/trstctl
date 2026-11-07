@@ -1181,6 +1181,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMRecordingRead, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/mode", opaque), privacyRule("/at", opaque),
 		),
+		{EventPAMAccountFlagged, 1}: privacyRules(
+			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/reasons/*", opaque),
+			privacyRule("/detail", clear), privacyRule("/owner_id", opaque), privacyRule("/last_used_at", opaque), privacyRule("/at", opaque),
+		),
+		{EventPAMAccountFlagCleared, 1}: privacyRules(
+			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/at", opaque),
+		),
+		{EventPAMAccountFlagActioned, 1}: pamAccountFlagActionedPrivacy(),
 		{EventPAMRecordingSearched, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/actor", exact), privacyRule("/query", clear), privacyRule("/since", opaque),
 			privacyRule("/until", opaque), privacyRule("/target_type", opaque), privacyRule("/target_id", opaque),
@@ -1779,6 +1787,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
 		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
 		{EventPAMRecordingSearched, 1}:                                                       privacyPayloadShape[PAMRecordingSearched](),
+		{EventPAMAccountFlagged, 1}:                                                          privacyPayloadShape[PAMAccountFlagged](),
+		{EventPAMAccountFlagCleared, 1}:                                                      privacyPayloadShape[PAMAccountFlagCleared](),
+		{EventPAMAccountFlagActioned, 1}:                                                     privacyPayloadShape[PAMAccountFlagActioned](),
 		{EventPAMAccountHealthChecked, 1}:                                                    privacyPayloadShape[PAMAccountHealthChecked](),
 		{EventPAMSignInsCollected, 1}:                                                        privacyPayloadShape[PAMSignInsCollected](),
 		{EventPAMSignInsPurged, 1}:                                                           privacyPayloadShape[PAMSignInsPurged](),

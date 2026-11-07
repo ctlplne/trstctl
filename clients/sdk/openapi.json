@@ -39004,6 +39004,184 @@
         ],
         "type": "object"
       },
+      "PAMAccountActionRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "reassign",
+              "rotate_disable"
+            ],
+            "type": "string"
+          },
+          "approval_request_id": {
+            "description": "apply only: the approved request",
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent_digest": {
+            "description": "apply only: the approved intent's digest",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "reassign only: the new owner",
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "rotation_old_ref": {
+            "description": "rotate_disable of an account its provider rotates between two: the account its consumers use now",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "action",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PAMAccountActionReview": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approval_request_id",
+          "intent_digest",
+          "status",
+          "approval_count",
+          "required_approvals",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "PAMAccountFlag": {
+        "properties": {
+          "action": {
+            "enum": [
+              "reassign",
+              "rotate_disable"
+            ],
+            "type": "string"
+          },
+          "action_owner_id": {
+            "type": "string"
+          },
+          "action_reason": {
+            "type": "string"
+          },
+          "action_rotation_id": {
+            "description": "the rotation command a rotate_disable action queued for the account's vaulted credential",
+            "type": "string"
+          },
+          "actioned_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "actioned_by": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "cleared_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "flagged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "the owner when flagged, if any",
+            "type": "string"
+          },
+          "reasons": {
+            "description": "orphaned: the owner is gone (none, deleted or offboarded); unused: no session or check-out past pam.unused_after",
+            "items": {
+              "enum": [
+                "orphaned",
+                "unused"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "cleared",
+              "actioned"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "reasons",
+          "flagged_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PAMAccountFlagList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMAccountFlag"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "PAMApprovalRequest": {
         "properties": {
           "approval_count": {
@@ -60324,6 +60502,293 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/access/account-flags": {
+      "get": {
+        "operationId": "listPAMAccountFlags",
+        "parameters": [
+          {
+            "description": "open, cleared or actioned",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccountFlagList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List brokered accounts flagged as orphaned (owner gone) or unused past the window, with what an approved action did",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/account-flags/scan": {
+      "post": {
+        "operationId": "scanPAMAccountFlags",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccountFlagList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Flag the tenant's brokered accounts now: orphaned when the owner is gone, unused past pam.unused_after; clear flags that no longer hold",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/account-flags/{target_type}/{id}/actions": {
+      "post": {
+        "operationId": "requestPAMAccountAction",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the brokered account's target type",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the brokered account's target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMAccountActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccountActionReview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Propose an action on a flagged account — reassign its owner, or rotate its credential and disable it — for approval",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/account-flags/{target_type}/{id}/actions/apply": {
+      "post": {
+        "operationId": "applyPAMAccountAction",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the brokered account's target type",
+            "in": "path",
+            "name": "target_type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the brokered account's target id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMAccountActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMAccountFlag"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply an approved action on a flagged account once, and read the flag back",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
     "/api/v1/access/accounts": {
       "get": {
         "operationId": "listPAMImportedAccounts",

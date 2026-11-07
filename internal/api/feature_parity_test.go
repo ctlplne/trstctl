@@ -386,9 +386,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// reviewed dependent-rotation and retained-evidence operations (787).
 	// A269 adds the recording index search (788). A272 adds the break-glass
 	// emergency check-out (789). A274 adds the recorded sign-ins (790). A275
-	// adds the recording search (791).
-	if len(out) != 791 {
-		t.Fatalf("OpenAPI operationIds = %d, want 791", len(out))
+	// adds the recording search (791). A276 adds the account flags (795).
+	if len(out) != 795 {
+		t.Fatalf("OpenAPI operationIds = %d, want 795", len(out))
 	}
 	return out
 }

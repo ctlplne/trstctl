@@ -47,6 +47,7 @@ import { PAMBreakGlassPanel } from "@/pages/PAMBreakGlassPanel";
 import { PAMEmergencyRespondersPanel } from "@/pages/PAMEmergencyRespondersPanel";
 import { PAMSignInsPanel } from "@/pages/PAMSignInsPanel";
 import { PAMRecordingSearchPanel } from "@/pages/PAMRecordingSearchPanel";
+import { PAMAccountFlagsPanel } from "@/pages/PAMAccountFlagsPanel";
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -971,6 +972,9 @@ export function AdminAccess() {
                 />
               ) : null}
               {pamRows ? <PAMSignInsPanel /> : null}
+              {pamRows ? (
+                <PAMAccountFlagsPanel canAct={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
+              ) : null}
               {pamRows && user?.permissions?.some((permission) => permission === "*" || permission === "recordings:read") ? <PAMRecordingSearchPanel /> : null}
             </div>
           ) : null}

@@ -11677,6 +11677,65 @@ PAMAccessTemplateRequest = TypedDict(
     total=False,
 )
 
+PAMAccountActionRequest = TypedDict(
+    'PAMAccountActionRequest',
+    {
+        'action': str,
+        'approval_request_id': str,
+        'intent_digest': str,
+        'owner_id': str,
+        'reason': str,
+        'request_id': str,
+        'rotation_old_ref': str,
+    },
+    total=False,
+)
+
+PAMAccountActionReview = TypedDict(
+    'PAMAccountActionReview',
+    {
+        'approval_count': int,
+        'approval_request_id': str,
+        'expires_at': str,
+        'intent_digest': str,
+        'request_id': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMAccountFlag = TypedDict(
+    'PAMAccountFlag',
+    {
+        'action': str,
+        'action_owner_id': str,
+        'action_reason': str,
+        'action_rotation_id': str,
+        'actioned_at': str,
+        'actioned_by': str,
+        'approval_request_id': str,
+        'cleared_at': str,
+        'detail': str,
+        'flagged_at': str,
+        'last_used_at': str,
+        'owner_id': str,
+        'reasons': list[str],
+        'status': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+PAMAccountFlagList = TypedDict(
+    'PAMAccountFlagList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 PAMApprovalRequest = TypedDict(
     'PAMApprovalRequest',
     {

@@ -4,6 +4,74 @@
  */
 
 export interface paths {
+    "/api/v1/access/account-flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List brokered accounts flagged as orphaned (owner gone) or unused past the window, with what an approved action did */
+        get: operations["listPAMAccountFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/account-flags/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Flag the tenant's brokered accounts now: orphaned when the owner is gone, unused past pam.unused_after; clear flags that no longer hold */
+        post: operations["scanPAMAccountFlags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/account-flags/{target_type}/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose an action on a flagged account — reassign its owner, or rotate its credential and disable it — for approval */
+        post: operations["requestPAMAccountAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/account-flags/{target_type}/{id}/actions/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply an approved action on a flagged account once, and read the flag back */
+        post: operations["applyPAMAccountAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/accounts": {
         parameters: {
             query?: never;
@@ -22119,6 +22187,70 @@ export interface components {
             revision?: number;
             web_sign_in?: components["schemas"]["PAMWebSignIn"];
         };
+        PAMAccountActionRequest: {
+            /** @enum {string} */
+            action: "reassign" | "rotate_disable";
+            /**
+             * Format: uuid
+             * @description apply only: the approved request
+             */
+            approval_request_id?: string;
+            /** @description apply only: the approved intent's digest */
+            intent_digest?: string;
+            /**
+             * Format: uuid
+             * @description reassign only: the new owner
+             */
+            owner_id?: string;
+            reason: string;
+            /** Format: uuid */
+            request_id: string;
+            /** @description rotate_disable of an account its provider rotates between two: the account its consumers use now */
+            rotation_old_ref?: string;
+        };
+        PAMAccountActionReview: {
+            approval_count: number;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            intent_digest: string;
+            /** Format: uuid */
+            request_id: string;
+            required_approvals: number;
+            status: string;
+        };
+        PAMAccountFlag: {
+            /** @enum {string} */
+            action?: "reassign" | "rotate_disable";
+            action_owner_id?: string;
+            action_reason?: string;
+            /** @description the rotation command a rotate_disable action queued for the account's vaulted credential */
+            action_rotation_id?: string;
+            /** Format: date-time */
+            actioned_at?: string;
+            actioned_by?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: date-time */
+            cleared_at?: string;
+            detail?: string;
+            /** Format: date-time */
+            flagged_at: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** @description the owner when flagged, if any */
+            owner_id?: string;
+            /** @description orphaned: the owner is gone (none, deleted or offboarded); unused: no session or check-out past pam.unused_after */
+            reasons: ("orphaned" | "unused")[];
+            /** @enum {string} */
+            status: "open" | "cleared" | "actioned";
+            target_id: string;
+            target_type: string;
+        };
+        PAMAccountFlagList: {
+            items: components["schemas"]["PAMAccountFlag"][];
+        };
         PAMApprovalRequest: {
             approval_count: number;
             /** Format: uuid */
@@ -27861,6 +27993,188 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPAMAccountFlags: {
+        parameters: {
+            query?: {
+                /** @description open, cleared or actioned */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccountFlagList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    scanPAMAccountFlags: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccountFlagList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestPAMAccountAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description the brokered account's target type */
+                target_type: string;
+                /** @description the brokered account's target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMAccountActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccountActionReview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applyPAMAccountAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description the brokered account's target type */
+                target_type: string;
+                /** @description the brokered account's target id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMAccountActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMAccountFlag"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listPAMImportedAccounts: {
         parameters: {
             query?: {

@@ -698,6 +698,11 @@ access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
 (A272: `{"request_id", "target_type": "breakglass", "target_id", "reason",
 "ttl_seconds"}` up to 3600); `access checkouts checkin <request-id>` rotates it, and its
 grant is reviewed with `access emergency review <request-id> -f`.
+`access account-flags list|scan` lists or refreshes the brokered accounts flagged orphaned
+or unused (A276); `access account-flags propose <type> <id> -f` proposes `reassign`
+(`owner_id`) or `rotate_disable` (`rotation_old_ref` for a two-account rotation) with a
+`request_id` and `reason`, and `access account-flags apply <type> <id> -f` applies it once
+approved (the same body plus `approval_request_id` and `intent_digest`).
 `access recordings search --q TEXT` searches the tenant's session recordings (A275:
 `--since`, `--until`, `--target_type`, `--target_id`, `--sessions` 1-200, `--limit` 1-500;
 `recordings:read`; results are masked and every search is recorded).

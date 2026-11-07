@@ -655,6 +655,20 @@ record's (`POST /api/v1/ownership/assignments` with that inventory ID and a reas
 the privileged access targets table shows each account's owner, or **No owner**, and
 **Assign owner** sets one.
 
+Accounts are flagged (`GET /api/v1/access/account-flags`; the PAM worker scans every 15
+minutes, `POST /api/v1/access/account-flags/scan` scans now) when they are **orphaned** —
+no owner, the owner record deleted, or a person owner whose member was offboarded — or
+**unused**: no session or check-out for `pam.unused_after` (default 90 days; a registered
+account never used counts from its registration). A flag clears itself when its reasons no
+longer hold. An action on an open flag is proposed for approval
+(`POST /api/v1/access/account-flags/{type}/{id}/actions`, `access:targets.write`):
+`reassign` to an owner, or `rotate_disable` — queue the rotation of the account's vaulted
+credential and disable the target (for an account its provider rotates between two,
+`rotation_old_ref` names the one in use). Two people with `access:approve` approve it like
+any other request; `.../actions/apply` then applies it once with the approval's exact
+identifiers, consuming the approval, and the flag and the target read back what it did. In
+the console: Access → Privileged access → **Orphaned and unused accounts**.
+
 #### Search across recordings (A275)
 
 Holders of `recordings:read` search every recorded gateway session of the tenant at once:

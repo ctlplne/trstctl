@@ -2,6 +2,12 @@
 
 ### Added
 
+- Orphaned and unused accounts (A276 part 2): brokered accounts are flagged orphaned (no owner, owner deleted, owner
+  offboarded) or unused past `pam.unused_after` (default 90 days) by the PAM worker or `POST
+  /api/v1/access/account-flags/scan`; `reassign` and `rotate_disable` actions are proposed for approval, applied once
+  with the approval consumed, and read back on the flag and the target. Migration 0430, snapshot format 109, CLI
+  `access account-flags list|scan|propose|apply` (CLI 858 -> 862, OpenAPI 791 -> 795), console **Orphaned and unused
+  accounts**.
 - Owners of brokered accounts (A276 part 1): every privileged access target is an NHI inventory record
   (`pam-account/<type>/<id>`, kind `privileged_account`, `privileged_account_records` in the record summary), so
   ownership assignments name its owner; targets read `owner_id` back; the console's targets table shows owners and
