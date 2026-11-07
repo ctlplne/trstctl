@@ -765,6 +765,25 @@ export const messages = {
     defaultMessage: "{count, plural, one {# responder saved} other {# responders saved}}",
     description: "Emergency access (A258).",
   },
+  "admin.access.sessionType.redis": { defaultMessage: "Redis", description: "Privileged session dialog: gateway session types (A273)." },
+  "admin.access.sessionType.mysql": { defaultMessage: "MySQL", description: "Privileged session dialog: gateway session types (A273)." },
+  "admin.access.sessionType.mongodb": { defaultMessage: "MongoDB", description: "Privileged session dialog: gateway session types (A273)." },
+  "admin.access.sessionType.clickhouse": { defaultMessage: "ClickHouse", description: "Privileged session dialog: gateway session types (A273)." },
+  "admin.access.gatewayClientHint": {
+    defaultMessage: "This session is reached through its gateway with the CLI tunnel; its ticket is shown once when it opens.",
+    description: "Privileged session dialog: gateway session types (A273).",
+  },
+  "admin.access.gatewayConnect": { defaultMessage: "Connect", description: "Privileged session dialog: gateway session types (A273)." },
+  "admin.access.gatewayConnectHelp": {
+    defaultMessage: "Save the ticket (reveal it below) to ticket.txt and run this; it prints how your client connects.",
+    description: "Privileged session dialog: gateway session types (A273).",
+  },
+  "admin.access.gatewayConnectWebHelp": {
+    defaultMessage:
+      "Save the ticket (reveal it below) to ticket.txt and run this, then open the address it prints in your browser: the gateway signs in to the console for you.",
+    description: "Privileged session dialog: gateway session types (A273).",
+  },
+  "admin.access.gatewayTicket": { defaultMessage: "Gateway ticket (shown once)", description: "Privileged session dialog: gateway session types (A273)." },
   "admin.access.inPlaceAccount.target": {
     defaultMessage: "Account rotated in place (check-out)",
     description: "Account target registration (A271): hypervisors, server controllers and network devices.",

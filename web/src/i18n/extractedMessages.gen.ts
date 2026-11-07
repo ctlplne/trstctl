@@ -6,7 +6,13 @@
 // copy unless the catalog is intentionally regenerated.
 
 export const extractedMessages: Array<{ key: string; defaultMessage: string; sources: string[] }> = [
-
+  {
+    key: "source.trstctl.access.sessions.connect.value1.tic.25112346a0",
+    defaultMessage: "trstctl access sessions connect {value1} --ticket-file ticket.txt",
+    sources: [
+      "src/pages/AdminAccessJourney.tsx:1529",
+    ],
+  },
 ] as const;
 
 export type ExtractedMessageKey = (typeof extractedMessages)[number]["key"];

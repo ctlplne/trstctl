@@ -2,6 +2,10 @@
 
 ### Added
 
+- Gateway sessions from the console (A273 console): the privileged session dialog requests every gateway session type
+  (Redis, MySQL, MongoDB, ClickHouse, Snowflake, cloud APIs, the AWS console, remote desktop, network devices, web
+  consoles), not only PostgreSQL, SSH and Kubernetes; an opened gateway session shows the CLI connect command and its
+  one-time gateway ticket on request. The browser option is offered only for the types the browser opens itself.
 - Emergency access (A258 console): an Emergency responders panel names the responders; the session dialog opens a
   session at once as a named responder after a confirmation that every approver is notified (a reason is required);
   post-incident reviews are recorded from the emergency grants table.

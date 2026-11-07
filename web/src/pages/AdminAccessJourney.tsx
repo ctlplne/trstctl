@@ -48,9 +48,30 @@ import { PAMEmergencyRespondersPanel } from "@/pages/PAMEmergencyRespondersPanel
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
+// Every session type a request may name: the browser opens SSH, PostgreSQL
+// and Kubernetes sessions itself (A259); every other type is reached through
+// its gateway with the CLI tunnel.
+const PAM_SESSION_TYPES = [
+  "postgres",
+  "ssh",
+  "kubernetes",
+  "redis",
+  "mysql",
+  "mongodb",
+  "clickhouse",
+  "snowflake",
+  "aws",
+  "gcp",
+  "azure",
+  "aws-console",
+  "rdp",
+  "netdevice",
+  "webconsole",
+] as const;
+const PAM_BROWSER_TYPES = new Set<string>(["postgres", "ssh", "kubernetes"]);
 const pamFormSchema = z
   .object({
-    target_type: z.enum(["postgres", "ssh", "kubernetes"]),
+    target_type: z.enum(PAM_SESSION_TYPES),
     target_id: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
     role: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
     method: z.string().trim().min(1, translateNow("admin.access.fieldRequired")),
@@ -427,7 +448,7 @@ export function AdminAccess() {
         ...(form.target_type === "ssh" && form.ssh_principal ? { ssh_principal: form.ssh_principal } : {}),
         ...(form.target_type === "ssh" && !form.browser ? { ssh_public_key: form.ssh_public_key } : {}),
       };
-      setPAMBrowser(form.browser);
+      setPAMBrowser(form.browser && PAM_BROWSER_TYPES.has(form.target_type));
       setPAMExact(input);
       setPAMPending(await api.requestPAMSession(input, `pam-request:${requestID}`));
     } catch (err) {
@@ -445,7 +466,7 @@ export function AdminAccess() {
       setPAMFormError(t("admin.access.emergency.reasonRequired"));
       return;
     }
-    if (form.browser) {
+    if (form.browser && PAM_BROWSER_TYPES.has(form.target_type)) {
       setPAMFormError(t("admin.access.emergency.noBrowser"));
       return;
     }
@@ -1501,6 +1522,19 @@ function PAMFormDialog({
               <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">{created.ssh.certificate}</pre>
             </DetailRow>
           ) : null}
+          {created.gateway && !browser ? (
+            <DetailRow term={t("admin.access.gatewayConnect")}>
+              <span className="grid gap-1">
+                <span>{t(created.target_type === "webconsole" ? "admin.access.gatewayConnectWebHelp" : "admin.access.gatewayConnectHelp")}</span>
+                <code className="break-all font-mono text-xs">{`trstctl access sessions connect ${created.id} --ticket-file ticket.txt`}</code>
+              </span>
+            </DetailRow>
+          ) : null}
+          {showCredential && created.gateway?.ticket && !browser ? (
+            <DetailRow term={t("admin.access.gatewayTicket")}>
+              <code className="break-all font-mono text-xs">{created.gateway.ticket}</code>
+            </DetailRow>
+          ) : null}
           <p className="text-xs text-muted-foreground">{t("admin.access.credentialOnce")}</p>
           <div className="flex justify-end">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -1583,6 +1617,18 @@ function PAMFormDialog({
                 <option value="postgres">{t("admin.access.postgresql")}</option>
                 <option value="ssh">{t("admin.access.ssh")}</option>
                 <option value="kubernetes">{t("admin.access.kubernetes")}</option>
+                <option value="redis">{t("admin.access.sessionType.redis")}</option>
+                <option value="mysql">{t("admin.access.sessionType.mysql")}</option>
+                <option value="mongodb">{t("admin.access.sessionType.mongodb")}</option>
+                <option value="clickhouse">{t("admin.access.sessionType.clickhouse")}</option>
+                <option value="snowflake">{t("admin.access.snowflake")}</option>
+                <option value="aws">{t("admin.access.awsAPI")}</option>
+                <option value="gcp">{t("admin.access.gcpAPI")}</option>
+                <option value="azure">{t("admin.access.azureAPI")}</option>
+                <option value="aws-console">{t("admin.access.awsConsole")}</option>
+                <option value="rdp">{t("admin.access.desktop.target")}</option>
+                <option value="netdevice">{t("admin.access.netdevice.target")}</option>
+                <option value="webconsole">{t("admin.access.webconsole.target")}</option>
               </Select>
             </FormField>
             <FormField label={t("admin.access.targetId")} hint={errors.target_id?.message}>
@@ -1601,10 +1647,14 @@ function PAMFormDialog({
               <Input type="number" min={1} {...register("ttl_seconds")} aria-invalid={Boolean(errors.ttl_seconds)} />
             </FormField>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register("browser")} />
-            {t("admin.access.openInBrowser")}
-          </label>
+          {PAM_BROWSER_TYPES.has(targetType) ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" {...register("browser")} />
+              {t("admin.access.openInBrowser")}
+            </label>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("admin.access.gatewayClientHint")}</p>
+          )}
           {targetType === "ssh" ? (
             <>
               <FormField label={t("admin.access.sshPrincipal")}>

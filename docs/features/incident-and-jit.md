@@ -1513,4 +1513,7 @@ credential and password-like fields masked, and terminating the session ends the
 access. The account cannot be checked out: its credential is never shown.
 In the console, register one under the access targets (type **Web admin console**: account
 secret, console address, optional CA and certificate name, gateway) and set a template's
-web sign-in from the template table.
+web sign-in from the template table. Request the session from the privileged session dialog
+(type **Web admin console**); once it is approved and activated, the dialog shows the
+`trstctl access sessions connect` command and, on request, the one-time gateway ticket to
+save for it. The dialog requests every gateway session type the same way.

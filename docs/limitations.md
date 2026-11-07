@@ -9432,7 +9432,8 @@ credential, the console's cookie values and sensitive-looking form and JSON fiel
 `pam.web_console_allow_loopback`; the gateway refuses a name that resolves to its own host or
 a link-local address); an access template's `web_sign_in` sets the sign-in, bound into the
 reviewed request and kept on the session; the account cannot be checked out. The console
-registers `webconsole` targets and sets a template's web sign-in.
+registers `webconsole` targets, sets a template's web sign-in and requests a web console
+session (showing the CLI connect command and the one-time gateway ticket).
 
 Proof today: `TestWebConsoleFormSignInKeepsTheCredentialFromTheBrowserA273`,
 `TestWebConsoleRefusedSignInIsNeverRepeatedA273` and `TestWebConsoleBasicAndHeaderSignInA273`
