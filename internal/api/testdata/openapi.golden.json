@@ -39532,6 +39532,7 @@
               "denied",
               "expired",
               "canceled",
+              "alerted",
               "review_deadline_elapsed"
             ],
             "type": "string"
@@ -39746,6 +39747,7 @@
           "reason": {
             "enum": [
               "matched_rule",
+              "matched_alert_rule",
               "unsupported_control",
               "uninspectable",
               "review_required",
@@ -39783,7 +39785,8 @@
               "authorized",
               "denied",
               "expired",
-              "canceled"
+              "canceled",
+              "alerted"
             ],
             "type": "string"
           }
@@ -39860,7 +39863,8 @@
           "effect": {
             "enum": [
               "block",
-              "require_approval"
+              "require_approval",
+              "alert"
             ],
             "type": "string"
           },
@@ -40075,6 +40079,14 @@
           "review_ttl_seconds": {
             "description": "require_approval only: 5-45 seconds; session expiry can shorten this deadline",
             "type": "integer"
+          },
+          "severity": {
+            "description": "alert only (A275): the matching command runs once its decision is durable and raises a risk alert of this severity, linking the session's recording",
+            "enum": [
+              "warning",
+              "critical"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -41638,7 +41650,8 @@
           "effect": {
             "enum": [
               "block",
-              "require_approval"
+              "require_approval",
+              "alert"
             ],
             "type": "string"
           },
@@ -41847,6 +41860,14 @@
           "review_ttl_seconds": {
             "description": "require_approval only: 5-45 seconds; session expiry can shorten this deadline",
             "type": "integer"
+          },
+          "severity": {
+            "description": "alert only (A275): the matching command runs once its decision is durable and raises a risk alert of this severity, linking the session's recording",
+            "enum": [
+              "warning",
+              "critical"
+            ],
+            "type": "string"
           }
         },
         "required": [

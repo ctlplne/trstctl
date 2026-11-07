@@ -26,6 +26,8 @@ func pamCommandTemplatePrivacy(base events.PrivacyEventPolicy) events.PrivacyEve
 		privacyRule("/command_rules/*/effect", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/required_approvals", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/review_ttl_seconds", events.PrivacyFieldOpaqueExact),
+		// A275: an alert rule's severity.
+		privacyRule("/command_rules/*/severity", events.PrivacyFieldOpaqueExact),
 	)
 	return base
 }
@@ -42,6 +44,7 @@ func pamCommandSessionPrivacy(base events.PrivacyEventPolicy) events.PrivacyEven
 		privacyRule("/command_policy/rules/*/effect", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_policy/rules/*/required_approvals", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_policy/rules/*/review_ttl_seconds", events.PrivacyFieldOpaqueExact),
+		privacyRule("/command_policy/rules/*/severity", events.PrivacyFieldOpaqueExact),
 		// A273: the web console sign-in the session's reviewers approved.
 		privacyRule("/web_sign_in/mode", events.PrivacyFieldOpaqueExact),
 		privacyRule("/web_sign_in/login_path", events.PrivacyFieldOpaqueExact),
@@ -65,6 +68,16 @@ func pamCommandDecisionPrivacy() events.PrivacyEventPolicy {
 		privacyRule("/reason", events.PrivacyFieldOpaqueExact), privacyRule("/decided_at", events.PrivacyFieldOpaqueExact),
 		privacyRule("/observed_at", events.PrivacyFieldOpaqueExact), privacyRule("/review_expires_at", events.PrivacyFieldOpaqueExact),
 	)
+}
+
+// pamCommandAlertPrivacy (A275): an alerted decision and the session context
+// its alert names — the target, the person and the severity.
+func pamCommandAlertPrivacy() events.PrivacyEventPolicy {
+	base := pamCommandDecisionPrivacy()
+	base.Rules = append(base.Rules,
+		privacyRule("/target_type", events.PrivacyFieldOpaqueExact), privacyRule("/target_id", events.PrivacyFieldOpaqueExact),
+		privacyRule("/subject", events.PrivacyFieldIdentityExact), privacyRule("/severity", events.PrivacyFieldOpaqueExact))
+	return base
 }
 
 func pamCommandReviewPrivacy() events.PrivacyEventPolicy {

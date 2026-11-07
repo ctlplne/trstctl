@@ -19,7 +19,13 @@ const (
 	StatusDenied     = "denied"
 	StatusExpired    = "expired"
 	StatusCanceled   = "canceled"
+	// StatusAlerted (A275): only alert rules matched; the command runs once
+	// this decision, and the alert it raises, are durable.
+	StatusAlerted = "alerted"
 )
+
+// Permits reports whether a durable decision lets its command run.
+func Permits(status string) bool { return status == StatusAuthorized || status == StatusAlerted }
 
 // Observation carries public identifiers and a one-way message digest only.
 // Operation names come from the finite public selector vocabulary;
@@ -134,6 +140,12 @@ func ValidateDecision(d Decision) error {
 		}
 		return nil
 	}
+	if d.Status == StatusAlerted {
+		if d.ReviewExpiresAt != nil || d.Reason != "matched_alert_rule" || d.Phase == "control" || d.Phase == "uninspectable" {
+			return errors.New("command rules: invalid alerted decision")
+		}
+		return nil
+	}
 	if d.ReviewExpiresAt == nil || !d.ReviewExpiresAt.After(d.ObservedAt) || d.ReviewExpiresAt.Sub(d.ObservedAt) > 45*time.Second {
 		return errors.New("command rules: invalid review deadline")
 	}
@@ -173,7 +185,7 @@ func ReviewRequirement(p *Policy, o Observation) (int, int) {
 	}
 	quorum, ttl := 0, 46
 	for _, r := range p.Rules {
-		if !slices.Contains(o.RuleIDs, r.ID) {
+		if !slices.Contains(o.RuleIDs, r.ID) || r.Effect == EffectAlert {
 			continue
 		}
 		if r.Effect == EffectBlock {
@@ -186,5 +198,38 @@ func ReviewRequirement(p *Policy, o Observation) (int, int) {
 			ttl = r.ReviewTTLSeconds
 		}
 	}
+	if quorum == 0 {
+		return 0, 0
+	}
 	return quorum, ttl
+}
+
+// Alerting reports whether every rule an inspected action matched is an
+// alert rule (A275), and the highest severity among them. A block or review
+// rule matched beside one takes precedence; uninspected traffic is refused
+// by every rule, alert rules included.
+func Alerting(p *Policy, o Observation) (bool, string) {
+	if p == nil || len(o.RuleIDs) == 0 || (o.Phase != "query" && o.Phase != "bind" && o.Phase != "exec" && o.Phase != "command" && o.Phase != "document") {
+		return false, ""
+	}
+	severity := ""
+	for _, id := range o.RuleIDs {
+		found := false
+		for _, r := range p.Rules {
+			if r.ID != id {
+				continue
+			}
+			found = true
+			if r.Effect != EffectAlert {
+				return false, ""
+			}
+			if severity != SeverityCritical {
+				severity = r.Severity
+			}
+		}
+		if !found {
+			return false, ""
+		}
+	}
+	return true, severity
 }

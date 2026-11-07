@@ -246,3 +246,72 @@ it("reviews ClickHouse SQL classes without offering encoded input modes", async 
     ),
   );
 });
+
+it("saves an alert rule with its severity and no review bounds, and shows an alerted action as allowed (A275)", async () => {
+  const user = userEvent.setup();
+  const view = mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Access template" }), template.id);
+  await user.type(within(dialog).getByRole("textbox", { name: "Rule name" }), "Alert on privilege changes");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  const ops = await within(dialog).findByRole("listbox", { name: "Operation names" });
+  await user.selectOptions(ops, ["GRANT", "REVOKE"]);
+  await user.deselectOptions(ops, "DROP");
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Rule effect" }), "alert");
+  expect(within(dialog).queryByRole("spinbutton", { name: "Distinct human reviewers" })).not.toBeInTheDocument();
+  expect(within(dialog).getByText(/a risk alert naming the operation, the target and the person goes to the alert channels/i)).toBeInTheDocument();
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Alert severity" }), "critical");
+  await user.click(within(dialog).getByRole("button", { name: "Next" }));
+  expect(await axe(view.container)).toHaveNoViolations();
+  await user.click(await within(dialog).findByRole("button", { name: "Save reviewed rule" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(
+      template.id,
+      expect.objectContaining({
+        command_rules: [
+          expect.objectContaining({ name: "Alert on privilege changes", operations: ["GRANT", "REVOKE"], effect: "alert", severity: "critical" }),
+        ],
+      }),
+      expect.any(String),
+    ),
+  );
+  const saved = mocks.updatePAMTemplate.mock.calls[0][1].command_rules[0];
+  expect(saved).not.toHaveProperty("required_approvals");
+  expect(saved).not.toHaveProperty("review_ttl_seconds");
+  view.unmount();
+
+  mocks.pamTemplates.mockResolvedValue({ items: [{ ...template, command_rules: [saved] }] });
+  mocks.pamCommandActions.mockResolvedValue({
+    items: [
+      {
+        id: "a2750000-0000-4000-8000-000000000010",
+        session_id: "session",
+        job_id: 7,
+        attempt: 1,
+        protocol: "postgres",
+        connection_id: "connection",
+        ordinal: 1,
+        phase: "query",
+        rule_ids: [saved.id],
+        message_digest: "message-digest",
+        policy_digest: "policy-digest",
+        status: "alerted",
+        effective_status: "alerted",
+        operations: ["GRANT"],
+        reason: "matched_alert_rule",
+        observed_at: "2026-11-07T12:00:00Z",
+        decided_at: "2026-11-07T12:00:00Z",
+        source_event_id: "source",
+      },
+    ],
+  });
+  mount(
+    <>
+      <PAMCommandRulesPanel canManage />
+      <PAMCommandActions sessionID="session" />
+    </>,
+  );
+  expect(await screen.findByText("Alerted; allowed to run")).toBeInTheDocument();
+  expect(await screen.findByText(/Alert \(critical\)/)).toBeInTheDocument();
+});

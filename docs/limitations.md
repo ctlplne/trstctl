@@ -9136,6 +9136,27 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
+## Session risk alerts and recording search (A275) — part 1: alert rules
+
+Status: in progress. A template rule's `alert` effect (severity `warning` or
+`critical`) lets a matching command run once its `alerted` decision is durable and
+queues a `pam.session.risk` alert, transactionally with the decision's projection,
+on the `notification.risk` channels with the operation names, target, person, rule,
+action and the console page of the session's recording; the recording marks the
+action. Proof today: `TestServedGatewayCommandAlertRaisesOneAlertWithTheRecordingA275`
+(benign statements raise nothing; a `GRANT` through the gateway runs and raises
+exactly one alert at the SIEM receiver, critical, with the recording link and no
+statement text; the outbox entry is delivered; the recording marks the action; an
+alert rule without a severity is refused) and the unit and console tests.
+
+What comes next:
+- Argument-aware risk categories at the gateway (credential reads, audit tampering,
+  bulk deletes) beyond operation names (part 2).
+- Full-text search across SSH and SQL transcripts and remote desktop indexes,
+  scoped, masked and audited (part 3).
+- Alerts for interactive SSH shells need typed-line inspection (A270-L1); ruled
+  SSH sessions run complete commands only.
+
 
 ### Google Cloud API accounts (A263, stand-in proof)
 

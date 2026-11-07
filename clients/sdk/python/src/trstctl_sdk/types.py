@@ -11896,6 +11896,7 @@ PAMCommandRule = TypedDict(
         'protocol': str,
         'required_approvals': int,
         'review_ttl_seconds': int,
+        'severity': str,
     },
     total=False,
 )
@@ -12435,6 +12436,7 @@ PAMFrozenCommandRule = TypedDict(
         'protocol': str,
         'required_approvals': int,
         'review_ttl_seconds': int,
+        'severity': str,
     },
     total=False,
 )

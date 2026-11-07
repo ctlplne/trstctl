@@ -123,14 +123,17 @@ const (
 	KindCAValidityCompression = "ca.validity_compression"
 	// KindRevocationHealth marks a CRL or OCSP endpoint whose signed evidence is
 	// stale, nearing expiry, unreachable, or invalid.
-	KindRevocationHealth          = "revocation.health"
-	KindOwnershipReattestation    = "ownership.reattestation_requested"
-	KindOwnershipHandoff          = "ownership.handoff"
-	KindComplianceReportReady     = "compliance.report_ready"
-	KindRestoreDrillFailed        = "backup.restore_drill_failed"
-	KindRestoreDrillSkipped       = "backup.restore_drill_skipped"
-	KindRestoreDrillObjective     = "backup.restore_drill_objective_breached"
-	KindUrgentRisk                = "risk.urgent"
+	KindRevocationHealth       = "revocation.health"
+	KindOwnershipReattestation = "ownership.reattestation_requested"
+	KindOwnershipHandoff       = "ownership.handoff"
+	KindComplianceReportReady  = "compliance.report_ready"
+	KindRestoreDrillFailed     = "backup.restore_drill_failed"
+	KindRestoreDrillSkipped    = "backup.restore_drill_skipped"
+	KindRestoreDrillObjective  = "backup.restore_drill_objective_breached"
+	KindUrgentRisk             = "risk.urgent"
+	// KindSessionRiskAlert (A275): a command in a privileged session matched
+	// an alert rule of its access template; the alert links the recording.
+	KindSessionRiskAlert          = "pam.session.risk"
 	KindHoneyTokenTriggered       = "honeytoken.triggered"
 	KindEndpointContainmentFailed = "endpoint.containment_failed"
 )
@@ -169,24 +172,28 @@ type Alert struct {
 	IdentityID           string `json:"identity_id,omitempty"`
 	// These fields identify historical completed deployment evidence captured
 	// with a renewal failure. NotAfter refers to that certificate, not a probe.
-	CertificateFingerprint string           `json:"certificate_fingerprint,omitempty"`
-	DeploymentReceiptID    string           `json:"deployment_receipt_id,omitempty"`
-	DeploymentRecordedAt   *time.Time       `json:"deployment_recorded_at,omitempty"`
-	RotationRunID          string           `json:"rotation_run_id,omitempty"`
-	RenewalJobID           int64            `json:"renewal_job_id,omitempty"`
-	RenewalAttempt         int              `json:"renewal_attempt,omitempty"`
-	Subject                string           `json:"subject,omitempty"`
-	Serial                 string           `json:"serial,omitempty"`
-	NotAfter               time.Time        `json:"not_after,omitempty"`
-	Detail                 string           `json:"detail,omitempty"`
-	Severity               string           `json:"severity,omitempty"`
-	RoutingPolicyID        string           `json:"routing_policy_id,omitempty"`
-	TargetChannel          string           `json:"target_channel,omitempty"`
-	ThresholdDays          *int             `json:"threshold_days,omitempty"`
-	OwnerID                string           `json:"owner_id,omitempty"`
-	OwnerName              string           `json:"owner_name,omitempty"`
-	OwnerEmail             string           `json:"owner_email,omitempty"`
-	EscalationRecipients   []AlertRecipient `json:"escalation_recipients,omitempty"`
+	CertificateFingerprint string     `json:"certificate_fingerprint,omitempty"`
+	DeploymentReceiptID    string     `json:"deployment_receipt_id,omitempty"`
+	DeploymentRecordedAt   *time.Time `json:"deployment_recorded_at,omitempty"`
+	RotationRunID          string     `json:"rotation_run_id,omitempty"`
+	// SessionID and RecordingPath name a privileged session and the console
+	// page that opens its recording (A275).
+	SessionID            string           `json:"session_id,omitempty"`
+	RecordingPath        string           `json:"recording_path,omitempty"`
+	RenewalJobID         int64            `json:"renewal_job_id,omitempty"`
+	RenewalAttempt       int              `json:"renewal_attempt,omitempty"`
+	Subject              string           `json:"subject,omitempty"`
+	Serial               string           `json:"serial,omitempty"`
+	NotAfter             time.Time        `json:"not_after,omitempty"`
+	Detail               string           `json:"detail,omitempty"`
+	Severity             string           `json:"severity,omitempty"`
+	RoutingPolicyID      string           `json:"routing_policy_id,omitempty"`
+	TargetChannel        string           `json:"target_channel,omitempty"`
+	ThresholdDays        *int             `json:"threshold_days,omitempty"`
+	OwnerID              string           `json:"owner_id,omitempty"`
+	OwnerName            string           `json:"owner_name,omitempty"`
+	OwnerEmail           string           `json:"owner_email,omitempty"`
+	EscalationRecipients []AlertRecipient `json:"escalation_recipients,omitempty"`
 
 	// CA calendar fields (H5), set only on KindCAHorizon and
 	// KindCAValidityCompression. AuthorityID names the CA rather than a

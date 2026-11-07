@@ -72,10 +72,18 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 		reason = "uninspectable"
 	}
 	expected := accessrules.Decision{ID: id, SessionID: intent.SessionID, JobID: jobID, Attempt: attempt, Protocol: intent.TargetType, Observation: observation, PolicyDigest: policyDigest, Status: accessrules.StatusBlocked, Reason: reason}
-	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(projections.EventPAMCommandBlocked+"\x00"+tenantID+"\x00"+id)).String()
 	if quorum, ttl := accessrules.ReviewRequirement(intent.CommandPolicy, observation); quorum > 0 {
 		return s.reviewGatewayCommand(ctx, tenantID, agentID, intent, expected, quorum, ttl, cancel)
 	}
+	// A275: a command only alert rules matched is alerted — it runs once the
+	// decision, and the risk alert its projection queues, are durable.
+	eventType := projections.EventPAMCommandBlocked
+	alerting, severity := accessrules.Alerting(intent.CommandPolicy, observation)
+	if alerting {
+		eventType = projections.EventPAMCommandAlerted
+		expected.Status, expected.Reason = accessrules.StatusAlerted, "matched_alert_rule"
+	}
+	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(eventType+"\x00"+tenantID+"\x00"+id)).String()
 	var result accessrules.Decision
 	err = s.store.WithTenantResourceCreation(ctx, tenantID, id, func(work context.Context) error {
 		canonical, found, err := s.log.EventByID(work, eventID)
@@ -100,11 +108,16 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 			candidate := expected
 			candidate.DecidedAt = s.clock().UTC().Truncate(time.Microsecond)
 			candidate.ObservedAt = candidate.DecidedAt
-			data, err := json.Marshal(candidate)
+			var payload any = candidate
+			if alerting {
+				payload = projections.PAMCommandAlerted{Decision: candidate, TargetType: session.TargetType, TargetID: session.TargetID,
+					Subject: session.Subject, Severity: severity}
+			}
+			data, err := json.Marshal(payload)
 			if err != nil {
 				return err
 			}
-			event := events.Event{ID: eventID, Type: projections.EventPAMCommandBlocked, TenantID: tenantID, Time: candidate.DecidedAt, Data: data}
+			event := events.Event{ID: eventID, Type: eventType, TenantID: tenantID, Time: candidate.DecidedAt, Data: data}
 			if actor, ok := events.ActorFromContext(work); ok {
 				event.Actor = &actor
 			}
@@ -113,13 +126,19 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 				return err
 			}
 		}
-		if canonical.Type != projections.EventPAMCommandBlocked || canonical.TenantID != tenantID || canonical.SchemaVersion != events.DefaultSchemaVersion || len(canonical.Data) > 8<<10 {
+		if canonical.Type != eventType || canonical.TenantID != tenantID || canonical.SchemaVersion != events.DefaultSchemaVersion || len(canonical.Data) > 8<<10 {
 			return orchestrator.ErrIdempotencyConflict
 		}
 		var got accessrules.Decision
 		decoder := json.NewDecoder(bytes.NewReader(canonical.Data))
 		decoder.DisallowUnknownFields()
-		if decoder.Decode(&got) != nil {
+		if alerting {
+			var alerted projections.PAMCommandAlerted
+			if decoder.Decode(&alerted) != nil || alerted.Severity != severity {
+				return errors.New("invalid canonical command alert")
+			}
+			got = alerted.Decision
+		} else if decoder.Decode(&got) != nil {
 			return errors.New("invalid canonical command decision")
 		}
 		var extra any

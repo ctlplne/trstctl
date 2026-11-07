@@ -421,10 +421,15 @@ SSH exec, MySQL, Redis, MongoDB and ClickHouse guardrails use separate enforcing
 job kinds below. Unsupported protocols cannot be configured with these rules.
 
 Each rule has a stable UUID, name, enabled flag, `protocol: "postgres"`, known
-`operations`, and `effect: "block"` or `"require_approval"`. A review rule also
+`operations`, and `effect: "block"`, `"require_approval"` or `"alert"`. A review rule also
 requires `required_approvals` (1–3 distinct humans) and `review_ttl_seconds`
-(5–45 seconds). The session deadline can shorten that wait. A matching block wins;
-otherwise matching review rules use the largest quorum and shortest deadline.
+(5–45 seconds). The session deadline can shorten that wait. An alert rule (A275)
+requires `severity` (`warning` or `critical`) and nothing else: an occurrence only
+alert rules matched is decided `alerted` — the gateway forwards it once that
+decision is durable, the decision's projection queues a `pam.session.risk` alert on
+`notification.risk` in the same transaction, and the PostgreSQL recording marks the
+action. A matching block wins; otherwise matching review rules use the largest quorum
+and shortest deadline, ahead of any alert rule matched beside them.
 Session auto-approval rules do not vote on commands. The original requester cannot
 approve their own command, even if they also hold `access:approve`.
 

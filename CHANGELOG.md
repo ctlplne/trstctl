@@ -2,6 +2,12 @@
 
 ### Added
 
+- Session risk alerts (A275 part 1): command rules gain the `alert` effect with a `warning` or `critical` severity. A
+  matching command runs once its `alerted` decision is durable, and its projection queues a `pam.session.risk` alert on
+  the `notification.risk` channels naming the operations, target, person, rule and action, with the console link
+  `/admin/access?session=<id>` that opens the session and its recording; the recording marks the action. The console's
+  rule editor offers Alert and its severity, session actions show "Alerted; allowed to run", and the access page opens
+  a linked session.
 - Bypass detection on MySQL (A274 part 3): a MySQL connection, dated when a run first sees it, keeps one fingerprint
   while later runs see it still open (its connection id and the server's start), so a held outside connection raises
   one finding and one recorded sign-in rather than one per run; served proof against MySQL 8.4.

@@ -8549,7 +8549,7 @@ export interface PAMCommandAction {
   attempt: number;
   connection_id: string;
   decided_at: string;
-  effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "review_deadline_elapsed";
+  effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "alerted" | "review_deadline_elapsed";
   id: string;
   job_id: number;
   message_digest: string;
@@ -8559,12 +8559,12 @@ export interface PAMCommandAction {
   phase: string;
   policy_digest: string;
   protocol: string;
-  reason: "matched_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
+  reason: "matched_rule" | "matched_alert_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
   review_expires_at?: string;
   rule_ids: string[];
   session_id: string;
   source_event_id: string;
-  status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled";
+  status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "alerted";
 }
 
 export interface PAMCommandActionList {
@@ -8580,7 +8580,7 @@ export interface PAMCommandPolicy {
 }
 
 export interface PAMCommandRule {
-  effect: "block" | "require_approval";
+  effect: "block" | "require_approval" | "alert";
   enabled: boolean;
   id: string;
   name: string;
@@ -8588,6 +8588,7 @@ export interface PAMCommandRule {
   protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
   required_approvals?: number;
   review_ttl_seconds?: number;
+  severity?: "warning" | "critical";
 }
 
 export interface PAMDependentAccountBinding {
@@ -8941,12 +8942,13 @@ export interface PAMFolderRequest {
 }
 
 export interface PAMFrozenCommandRule {
-  effect: "block" | "require_approval";
+  effect: "block" | "require_approval" | "alert";
   id: string;
   operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
   protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
   required_approvals?: number;
   review_ttl_seconds?: number;
+  severity?: "warning" | "critical";
 }
 
 export interface PAMImportedAccount {

@@ -64,9 +64,10 @@ func (a *API) listPAMCommandActions(w http.ResponseWriter, r *http.Request) {
 }
 
 func pamCommandRuleSchema(frozen bool) *Schema {
-	properties := map[string]*Schema{"id": uuid(), "protocol": {Type: "string", Enum: []string{"postgres", "ssh", "mysql", "redis", "mongodb", "clickhouse", "netdevice"}}, "operations": {Type: "array", Items: &Schema{Type: "string", Enum: accessrules.AllOperationNames()}, Description: "Protocol-specific public selectors: uppercase SQL operations, lowercase direct SSH program names, or lowercase network device command verbs (an abbreviation names every verb it starts). Arguments and quoted nested commands are excluded"}, "effect": {Type: "string", Enum: []string{"block", "require_approval"}}}
+	properties := map[string]*Schema{"id": uuid(), "protocol": {Type: "string", Enum: []string{"postgres", "ssh", "mysql", "redis", "mongodb", "clickhouse", "netdevice"}}, "operations": {Type: "array", Items: &Schema{Type: "string", Enum: accessrules.AllOperationNames()}, Description: "Protocol-specific public selectors: uppercase SQL operations, lowercase direct SSH program names, or lowercase network device command verbs (an abbreviation names every verb it starts). Arguments and quoted nested commands are excluded"}, "effect": {Type: "string", Enum: []string{"block", "require_approval", "alert"}}}
 	properties["required_approvals"] = &Schema{Type: "integer", Description: "require_approval only: 1-3 distinct humans; requester cannot approve"}
 	properties["review_ttl_seconds"] = &Schema{Type: "integer", Description: "require_approval only: 5-45 seconds; session expiry can shorten this deadline"}
+	properties["severity"] = &Schema{Type: "string", Enum: []string{"warning", "critical"}, Description: "alert only (A275): the matching command runs once its decision is durable and raises a risk alert of this severity, linking the session's recording"}
 	required := []string{"id", "protocol", "operations", "effect"}
 	if !frozen {
 		properties["name"] = str()
@@ -85,8 +86,8 @@ func pamCommandActionSchema() *Schema {
 		"id": uuid(), "session_id": uuid(), "job_id": {Type: "integer"}, "attempt": {Type: "integer"}, "protocol": str(),
 		"connection_id": uuid(), "ordinal": {Type: "integer"}, "phase": str(), "rule_ids": {Type: "array", Items: uuid()},
 		"operations":       {Type: "array", Items: &Schema{Type: "string", Enum: accessrules.AllOperationNames()}},
-		"effective_status": {Type: "string", Enum: []string{"blocked", "pending", "authorized", "denied", "expired", "canceled", "review_deadline_elapsed"}, Description: "Current view of the recorded decision; an elapsed pending deadline never grants authority and does not invent a terminal event"},
-		"message_digest":   str(), "policy_digest": str(), "status": {Type: "string", Enum: []string{"blocked", "pending", "authorized", "denied", "expired", "canceled"}}, "reason": {Type: "string", Enum: []string{"matched_rule", "unsupported_control", "uninspectable", "review_required", "review_approved", "review_denied", "review_expired", "client_canceled", "session_ended"}},
+		"effective_status": {Type: "string", Enum: []string{"blocked", "pending", "authorized", "denied", "expired", "canceled", "alerted", "review_deadline_elapsed"}, Description: "Current view of the recorded decision; an elapsed pending deadline never grants authority and does not invent a terminal event"},
+		"message_digest":   str(), "policy_digest": str(), "status": {Type: "string", Enum: []string{"blocked", "pending", "authorized", "denied", "expired", "canceled", "alerted"}}, "reason": {Type: "string", Enum: []string{"matched_rule", "matched_alert_rule", "unsupported_control", "uninspectable", "review_required", "review_approved", "review_denied", "review_expired", "client_canceled", "session_ended"}},
 		"decided_at": {Type: "string", Format: "date-time", Description: "time of the durable gateway decision; authorized does not claim target execution"}, "observed_at": {Type: "string", Format: "date-time"}, "review_expires_at": {Type: "string", Format: "date-time"}, "source_event_id": uuid(),
 		"approval_request_id": uuid(), "approval_intent_digest": str(),
 	}, "id", "session_id", "job_id", "attempt", "protocol", "connection_id", "ordinal", "phase", "rule_ids", "message_digest", "policy_digest", "operations", "effective_status", "status", "reason", "decided_at", "observed_at", "source_event_id")

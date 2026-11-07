@@ -295,10 +295,12 @@ func (p *pgCommandRelay) check(phase string, operations []string, raw []byte, pa
 	if p.ctx.Err() != nil {
 		return true, "", p.ctx.Err()
 	}
-	if err == nil && check.decision.Status == accessrules.StatusAuthorized {
+	if err == nil && accessrules.Permits(check.decision.Status) {
+		// An authorized command runs before its review deadline; an alerted
+		// one (A275) has none. The recording marks which it was.
 		p.lastAuthorization = check.decision.ReviewExpiresAt
 		if p.rec != nil {
-			p.rec.conn.event("policy", "authorized", check.decision.ID, 0)
+			p.rec.conn.event("policy", check.decision.Status, check.decision.ID, 0)
 		}
 		return false, "", nil
 	}

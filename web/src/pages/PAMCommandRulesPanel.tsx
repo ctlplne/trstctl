@@ -270,7 +270,8 @@ const schema = z
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
-    effect: z.enum(["block", "require_approval"]),
+    effect: z.enum(["block", "require_approval", "alert"]),
+    severity: z.enum(["warning", "critical"]),
     enabled: z.boolean(),
     quorum: z.coerce.number().int().min(1).max(3),
     ttl: z.coerce.number().int().min(5).max(45),
@@ -281,7 +282,17 @@ const schema = z
 type Form = z.input<typeof schema>;
 type Values = z.output<typeof schema>;
 type Saved = { template: PAMAccessTemplate; rule: PAMCommandRule };
-const defaults: Form = { protocol: "postgres", templateID: "", name: "", operations: ["DROP"], effect: "block", enabled: true, quorum: 2, ttl: 30 };
+const defaults: Form = {
+  protocol: "postgres",
+  templateID: "",
+  name: "",
+  operations: ["DROP"],
+  effect: "block",
+  severity: "warning",
+  enabled: true,
+  quorum: 2,
+  ttl: 30,
+};
 
 /** A template edit affects new sessions. Existing sessions keep their reviewed snapshot. */
 export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
@@ -328,6 +339,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
             name: row.rule.name,
             operations: row.rule.operations as Values["operations"],
             effect: row.rule.effect,
+            severity: row.rule.severity ?? "warning",
             enabled: row.rule.enabled,
             quorum: row.rule.required_approvals ?? 2,
             ttl: row.rule.review_ttl_seconds ?? 30,
@@ -359,6 +371,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
       operations: v.operations,
       effect: v.effect,
       ...(v.effect === "require_approval" ? { required_approvals: v.quorum, review_ttl_seconds: v.ttl } : {}),
+      ...(v.effect === "alert" ? { severity: v.severity } : {}),
     });
     setStep(2);
   };
@@ -433,9 +446,12 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                   r.rule.enabled
                     ? r.rule.effect === "block"
                       ? "admin.access.rules.block"
-                      : "admin.access.rules.requireReview"
+                      : r.rule.effect === "alert"
+                        ? "admin.access.rules.alert"
+                        : "admin.access.rules.requireReview"
                     : "admin.access.rules.disabled",
                 )}
+                {r.rule.effect === "alert" ? t(r.rule.severity === "critical" ? "admin.access.rules.alertCritical" : "admin.access.rules.alertWarning") : null}
                 {r.rule.effect === "require_approval"
                   ? t("admin.access.rules.reviewLimits", { count: r.rule.required_approvals ?? 0, seconds: r.rule.review_ttl_seconds ?? 0 })
                   : null}
@@ -581,9 +597,20 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                   >
                     <option value="block">{t("admin.access.rules.block")}</option>
                     <option value="require_approval">{t("admin.access.rules.requireReview")}</option>
+                    <option value="alert">{t("admin.access.rules.alert")}</option>
                   </Select>
                 )}
               </Field>
+              {effect === "alert" ? (
+                <Field label={t("admin.access.rules.severity")} description={t("admin.access.rules.alertHelp")} required>
+                  {(control) => (
+                    <Select {...control} {...register("severity")}>
+                      <option value="warning">{t("admin.access.rules.severityWarning")}</option>
+                      <option value="critical">{t("admin.access.rules.severityCritical")}</option>
+                    </Select>
+                  )}
+                </Field>
+              ) : null}
               <Field label={t("admin.access.rules.enabled")}>{(control) => <Input {...control} type="checkbox" {...register("enabled")} />}</Field>
               {effect === "require_approval" ? (
                 <>

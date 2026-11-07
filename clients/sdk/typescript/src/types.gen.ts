@@ -22253,7 +22253,7 @@ export interface components {
              * @description Current view of the recorded decision; an elapsed pending deadline never grants authority and does not invent a terminal event
              * @enum {string}
              */
-            effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "review_deadline_elapsed";
+            effective_status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "alerted" | "review_deadline_elapsed";
             /** Format: uuid */
             id: string;
             job_id: number;
@@ -22266,7 +22266,7 @@ export interface components {
             policy_digest: string;
             protocol: string;
             /** @enum {string} */
-            reason: "matched_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
+            reason: "matched_rule" | "matched_alert_rule" | "unsupported_control" | "uninspectable" | "review_required" | "review_approved" | "review_denied" | "review_expired" | "client_canceled" | "session_ended";
             /** Format: date-time */
             review_expires_at?: string;
             rule_ids: string[];
@@ -22275,7 +22275,7 @@ export interface components {
             /** Format: uuid */
             source_event_id: string;
             /** @enum {string} */
-            status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled";
+            status: "blocked" | "pending" | "authorized" | "denied" | "expired" | "canceled" | "alerted";
         };
         PAMCommandActionList: {
             items: components["schemas"]["PAMCommandAction"][];
@@ -22291,7 +22291,7 @@ export interface components {
         };
         PAMCommandRule: {
             /** @enum {string} */
-            effect: "block" | "require_approval";
+            effect: "block" | "require_approval" | "alert";
             enabled: boolean;
             /** Format: uuid */
             id: string;
@@ -22304,6 +22304,11 @@ export interface components {
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
             review_ttl_seconds?: number;
+            /**
+             * @description alert only (A275): the matching command runs once its decision is durable and raises a risk alert of this severity, linking the session's recording
+             * @enum {string}
+             */
+            severity?: "warning" | "critical";
         };
         PAMDependentAccountBinding: {
             /** Format: uuid */
@@ -22754,7 +22759,7 @@ export interface components {
         };
         PAMFrozenCommandRule: {
             /** @enum {string} */
-            effect: "block" | "require_approval";
+            effect: "block" | "require_approval" | "alert";
             /** Format: uuid */
             id: string;
             /** @description Protocol-specific public selectors: uppercase SQL operations, lowercase direct SSH program names, or lowercase network device command verbs (an abbreviation names every verb it starts). Arguments and quoted nested commands are excluded */
@@ -22765,6 +22770,11 @@ export interface components {
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
             review_ttl_seconds?: number;
+            /**
+             * @description alert only (A275): the matching command runs once its decision is durable and raises a risk alert of this severity, linking the session's recording
+             * @enum {string}
+             */
+            severity?: "warning" | "critical";
         };
         PAMImportedAccount: {
             /** Format: uuid */

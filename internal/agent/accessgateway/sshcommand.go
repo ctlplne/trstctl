@@ -36,7 +36,7 @@ func (c *commandConnection) sshRequest(ctx context.Context, kind string, payload
 	if err != nil {
 		return false
 	}
-	return result.decision.ID == "" || result.durable && result.decision.Status == accessrules.StatusAuthorized
+	return result.decision.ID == "" || result.durable && accessrules.Permits(result.decision.Status)
 }
 
 // netDeviceRequest is sshRequest for a network device (A270): an exec
@@ -69,5 +69,5 @@ func (c *commandConnection) netDeviceRequest(ctx context.Context, kind string, p
 	if err != nil {
 		return false
 	}
-	return result.decision.ID == "" || result.durable && result.decision.Status == accessrules.StatusAuthorized
+	return result.decision.ID == "" || result.durable && accessrules.Permits(result.decision.Status)
 }

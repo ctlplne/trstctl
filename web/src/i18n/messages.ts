@@ -1020,6 +1020,22 @@ export const messages = {
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.disabled": { defaultMessage: "Disabled", description: "Gateway command guardrail configuration or durable action evidence." },
+  "admin.access.rules.alert": { defaultMessage: "Alert", description: "Session risk alerts (A275): a rule effect." },
+  "admin.access.rules.alertWarning": { defaultMessage: " (warning)", description: "Session risk alerts (A275): an alert rule's severity after its effect." },
+  "admin.access.rules.alertCritical": { defaultMessage: " (critical)", description: "Session risk alerts (A275): an alert rule's severity after its effect." },
+  "admin.access.rules.severity": { defaultMessage: "Alert severity", description: "Session risk alerts (A275)." },
+  "admin.access.rules.severityWarning": { defaultMessage: "Warning", description: "Session risk alerts (A275)." },
+  "admin.access.rules.severityCritical": { defaultMessage: "Critical", description: "Session risk alerts (A275)." },
+  "admin.access.rules.alertHelp": {
+    defaultMessage:
+      "The command runs. Before it does, a risk alert naming the operation, the target and the person goes to the alert channels, with a link to the session's recording.",
+    description: "Session risk alerts (A275).",
+  },
+  "admin.access.rules.alerted": { defaultMessage: "Alerted; allowed to run", description: "Session risk alerts (A275): an action's status." },
+  "admin.access.linkedSessionUnavailable": {
+    defaultMessage: "The linked session could not be opened",
+    description: "Session risk alerts (A275): an alert's recording link names a session this person cannot read.",
+  },
   "admin.access.rules.reviewLimits": {
     defaultMessage: " \u00b7 {count} reviewers \u00b7 {seconds}s",
     description: "Gateway command guardrail configuration or durable action evidence.",

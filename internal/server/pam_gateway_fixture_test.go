@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/objectstore/s3test"
 )
 
@@ -96,6 +97,8 @@ type gatewayFixtureOptions struct {
 	// maxTTL raises the broker's session cap (a Kubernetes token lives at
 	// least ten minutes); zero keeps three minutes.
 	maxTTL time.Duration
+	// notificationChannels are the deployment's alert channels (A275).
+	notificationChannels []notify.Notifier
 }
 
 func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixture {
@@ -148,6 +151,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 		kinds = append(kinds, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession)
 	}
 	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, kinds, eventOptions, func(d *Deps) {
+		if opts.notificationChannels != nil {
+			d.NotificationChannels = opts.notificationChannels
+		}
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
 		if opts.vaulted {

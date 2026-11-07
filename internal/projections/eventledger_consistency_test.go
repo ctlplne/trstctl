@@ -132,6 +132,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMAccountHealthChecked:                  "EventPAMAccountHealthChecked",
 	projections.EventPAMTemplateSaved:                         "EventPAMTemplateSaved",
 	projections.EventPAMCommandBlocked:                        "EventPAMCommandBlocked",
+	projections.EventPAMCommandAlerted:                        "EventPAMCommandAlerted",
 	projections.EventPAMCommandApprovalRequested:              "EventPAMCommandApprovalRequested",
 	projections.EventPAMCommandReviewRequested:                "EventPAMCommandReviewRequested",
 	projections.EventPAMCommandReviewDecided:                  "EventPAMCommandReviewDecided",

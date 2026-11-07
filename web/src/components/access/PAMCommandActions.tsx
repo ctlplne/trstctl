@@ -25,6 +25,7 @@ export function PAMCommandActions({ sessionID, live = false }: { sessionID: stri
           denied: "admin.access.rules.denied",
           expired: "admin.access.rules.expired",
           canceled: "admin.access.rules.canceled",
+          alerted: "admin.access.rules.alerted",
           review_deadline_elapsed: "admin.access.rules.elapsed",
         } as const
       )[row.effective_status] ?? "admin.access.rules.unavailable",

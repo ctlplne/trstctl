@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { ChevronDown, History, KeyRound, Loader2, Pencil, Plus, RefreshCw, ShieldCheck, UserMinus, Users } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -167,6 +167,38 @@ export function AdminAccess() {
   const [offboardReason, setOffboardReason] = useState("");
 
   const [pamDetail, setPAMDetail] = useState<PAMSession | null>(null);
+  // A275: a risk alert links a session's recording as ?session=<id>.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedSession = searchParams.get("session");
+  const [linkedSessionError, setLinkedSessionError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkedSession) return;
+    let current = true;
+    setLinkedSessionError(null);
+    api
+      .pamSession(linkedSession)
+      .then((session) => {
+        if (current) setPAMDetail(session);
+      })
+      .catch((err: unknown) => {
+        if (current) setLinkedSessionError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      current = false;
+    };
+  }, [linkedSession]);
+  const closePAMDetail = useCallback(() => {
+    setPAMDetail(null);
+    if (linkedSession) {
+      setSearchParams(
+        (params) => {
+          params.delete("session");
+          return params;
+        },
+        { replace: true },
+      );
+    }
+  }, [linkedSession, setPAMDetail, setSearchParams]);
   const [pamFormOpen, setPAMFormOpen] = useState(false);
   const [pamBusy, setPAMBusy] = useState(false);
   const [pamFormError, setPAMFormError] = useState<string | null>(null);
@@ -540,6 +572,7 @@ export function AdminAccess() {
         technicalDetails={t("admin.access.technical")}
         actions={<AdminHeaderActions />}
       />
+      {linkedSessionError ? <ErrorState title={t("admin.access.linkedSessionUnavailable")}>{linkedSessionError}</ErrorState> : null}
 
       <section aria-labelledby="access-overview-heading" className="ui-panel grid gap-4 p-comfortable">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1162,7 +1195,7 @@ export function AdminAccess() {
           formatPolicy={formatPolicy}
           canRevoke={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")}
           onUpdate={updatePAMSession}
-          onClose={() => setPAMDetail(null)}
+          onClose={closePAMDetail}
         />
       ) : null}
       {pamFormOpen ? (

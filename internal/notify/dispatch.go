@@ -707,6 +707,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Approval requested")
 	case KindEmergencyAccess:
 		b.WriteString("Emergency access opened without approval")
+	case KindSessionRiskAlert:
+		b.WriteString("Risky command in a privileged session")
 	case KindEndpointVerificationFailed:
 		// The wording is chosen to be unmistakable at 3am. "Verification
 		// failed" would read as a tooling problem; this says what is actually
@@ -749,6 +751,9 @@ func FormatMessage(a Alert) string {
 	}
 	if a.Detail != "" {
 		b.WriteString(" — " + a.Detail)
+	}
+	if a.RecordingPath != "" {
+		b.WriteString(" — recording: " + a.RecordingPath)
 	}
 	return b.String()
 }

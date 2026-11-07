@@ -159,7 +159,7 @@ func forwardMySQLCommand(ctx context.Context, server io.Writer, m *mysqlRelay, c
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	allowed := err == nil && (result.decision.ID == "" || result.durable && result.decision.Status == accessrules.StatusAuthorized)
+	allowed := err == nil && (result.decision.ID == "" || result.durable && accessrules.Permits(result.decision.Status))
 	if allowed && result.decision.ReviewExpiresAt != nil && !time.Now().Before(*result.decision.ReviewExpiresAt) {
 		allowed = false
 	}

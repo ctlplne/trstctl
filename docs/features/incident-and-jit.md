@@ -608,6 +608,29 @@ and database privileges provide containment. An authorization record does not
 prove that the target executed the action. See the [command rule behavior and
 limits](../design/access-gateway.md#postgresql-command-guardrails-a262-first-protocol).
 
+#### Session risk alerts (A275)
+
+A template rule's effect can also be `alert` with a `severity` (`warning` or
+`critical`): a matching statement or command is allowed to run, but only after its
+decision is durable. That decision (`alerted`) is an event whose projection queues,
+in the same transaction, a `pam.session.risk` alert on the `notification.risk`
+channels (SIEM, chat, paging and ITSM receivers, as routed): what ran as its known
+operation names (never the statement or its arguments), the target, who held the
+session, the rule, the action ID and the console page of the session's recording
+(`/admin/access?session=<id>`). The recording marks the alerted action. A block or
+review rule matched beside an alert rule takes precedence; traffic the gateway cannot
+inspect is refused by every rule, alert rules included (so a ruled SSH session still
+runs complete commands only).
+
+```json
+{"id": "<uuid>", "name": "Alert on privilege changes", "enabled": true,
+ "protocol": "postgres", "operations": ["GRANT", "REVOKE"],
+ "effect": "alert", "severity": "critical"}
+```
+
+In the console, choose **Alert** as the rule effect under Access → Privileged access
+→ Command rules; the session's actions list shows the action as alerted.
+
 Automatic approval rules apply to normal session and vaulted check-out requests, never the
 emergency-session endpoint. Manage them in the console's Automatic access approvals panel,
 with `GET /api/v1/access/auto-approval-rules`, or with the CLI:

@@ -24,6 +24,12 @@ const (
 	MaxStatementBytes = 1 << 20
 	EffectBlock       = "block"
 	EffectReview      = "require_approval"
+	// EffectAlert (A275) lets a matching command run once its alert is
+	// durable and raises a risk alert with the session's recording link.
+	EffectAlert = "alert"
+	// Alert severities: what a matching command's alert is raised as.
+	SeverityWarning  = "warning"
+	SeverityCritical = "critical"
 )
 
 // Rule is one template-owned guardrail. Its identifiers and operation names are
@@ -37,6 +43,8 @@ type Rule struct {
 	Effect            string   `json:"effect"`
 	RequiredApprovals int      `json:"required_approvals,omitempty"`
 	ReviewTTLSeconds  int      `json:"review_ttl_seconds,omitempty"`
+	// Severity is an alert rule's (A275): warning or critical.
+	Severity string `json:"severity,omitempty"`
 }
 
 // PolicyRule contains enforcement facts only. Display names stay outside the
@@ -48,6 +56,7 @@ type PolicyRule struct {
 	Effect            string   `json:"effect"`
 	RequiredApprovals int      `json:"required_approvals,omitempty"`
 	ReviewTTLSeconds  int      `json:"review_ttl_seconds,omitempty"`
+	Severity          string   `json:"severity,omitempty"`
 }
 
 // Policy is the exact template revision approved for a session. Editing the
@@ -96,8 +105,18 @@ func CanonicalRules(in []Rule) ([]Rule, error) {
 			if r.RequiredApprovals < 1 || r.RequiredApprovals > 3 || r.ReviewTTLSeconds < 5 || r.ReviewTTLSeconds > 45 {
 				return nil, errors.New("command rules: review needs 1-3 distinct humans and a 5-45 second deadline")
 			}
+		case EffectAlert:
+			if r.RequiredApprovals != 0 || r.ReviewTTLSeconds != 0 {
+				return nil, errors.New("command rules: alert rules have no review quorum or deadline")
+			}
+			if r.Severity != SeverityWarning && r.Severity != SeverityCritical {
+				return nil, errors.New("command rules: an alert rule is raised as warning or critical")
+			}
 		default:
-			return nil, errors.New("command rules: choose block or require_approval")
+			return nil, errors.New("command rules: choose block, require_approval or alert")
+		}
+		if r.Effect != EffectAlert && r.Severity != "" {
+			return nil, errors.New("command rules: only an alert rule has a severity")
 		}
 		if len(r.Operations) < 1 || len(r.Operations) > MaxOperations {
 			return nil, fmt.Errorf("command rules: 1-%d operation names are required", MaxOperations)
@@ -129,7 +148,7 @@ func ForTarget(templateID string, revision int64, rules []Rule, target string) *
 	for _, r := range rules {
 		if r.Enabled && r.Protocol == target {
 			r.Operations = slices.Clone(r.Operations)
-			selected = append(selected, PolicyRule{ID: r.ID, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds})
+			selected = append(selected, PolicyRule{ID: r.ID, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds, Severity: r.Severity})
 		}
 	}
 	if len(selected) == 0 {
@@ -150,14 +169,14 @@ func ValidatePolicy(p *Policy, target string) error {
 	}
 	source := make([]Rule, 0, len(p.Rules))
 	for _, r := range p.Rules {
-		source = append(source, Rule{ID: r.ID, Name: "frozen operation rule", Enabled: true, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds})
+		source = append(source, Rule{ID: r.ID, Name: "frozen operation rule", Enabled: true, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds, Severity: r.Severity})
 	}
 	canonical, err := CanonicalRules(source)
 	if err != nil {
 		return err
 	}
 	for i, r := range canonical {
-		want := PolicyRule{ID: r.ID, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds}
+		want := PolicyRule{ID: r.ID, Protocol: r.Protocol, Operations: r.Operations, Effect: r.Effect, RequiredApprovals: r.RequiredApprovals, ReviewTTLSeconds: r.ReviewTTLSeconds, Severity: r.Severity}
 		if !reflect.DeepEqual(want, p.Rules[i]) || r.Protocol != target {
 			return errors.New("command rules: policy snapshot is not canonical for this protocol")
 		}

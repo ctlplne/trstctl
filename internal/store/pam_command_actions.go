@@ -3,9 +3,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -135,4 +137,34 @@ func (s *Store) ListPAMCommandActions(ctx context.Context, tenantID, sessionID s
 // by reviewer decisions and authorization projection. It never waits for a human.
 func (s *Store) GetPAMCommandActionForUpdateTx(ctx context.Context, tx pgx.Tx, tenant, id string) (PAMCommandAction, error) {
 	return scanPAMCommandAction(tx.QueryRow(ctx, `SELECT `+pamCommandActionColumns+pamCommandActionRead+` WHERE a.tenant_id=$1 AND a.id=$2 FOR UPDATE OF a`, tenant, id))
+}
+
+// ApplyPAMCommandAlertedTx projects an alerted command (A275): its action
+// row, and in the same transaction the risk alert its outbox entry delivers.
+// A replay finds the alert already queued with the same payload.
+func (s *Store) ApplyPAMCommandAlertedTx(ctx context.Context, tx pgx.Tx, tenantID string, a PAMCommandAction, destination string, alert []byte, key string) error {
+	if err := s.ApplyPAMCommandBlockedTx(ctx, tx, tenantID, a); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "pam-command-alert\x1f"+tenantID+"\x1f"+key); err != nil {
+		return fmt.Errorf("store: lock session risk alert: %w", err)
+	}
+	var existingDestination string
+	var existingPayload []byte
+	err := tx.QueryRow(ctx, `SELECT destination, payload FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2 ORDER BY id LIMIT 1`,
+		tenantID, key).Scan(&existingDestination, &existingPayload)
+	if err == nil {
+		if existingDestination != destination || !bytes.Equal(existingPayload, alert) {
+			return fmt.Errorf("%w: session risk alert key is already bound", ErrIdempotencyConflict)
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO outbox (tenant_id, destination, effect_lane, payload, idempotency_key) VALUES ($1, $2, $2, $3, $4)`,
+		tenantID, destination, alert, key); err != nil {
+		return fmt.Errorf("store: enqueue session risk alert: %w", err)
+	}
+	return nil
 }

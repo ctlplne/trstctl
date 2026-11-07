@@ -348,12 +348,15 @@ const (
 	EventPAMRecordingLegalHold          = "pam.session.recording_legal_hold"
 	EventPAMRecordingDeleted            = "pam.session.recording_deleted"
 	// A274: the sign-ins a bypass detection run read, and their purge.
-	EventPAMSignInsCollected       = "pam.signin.collected"
-	EventPAMSignInsPurged          = "pam.signin.records_purged"
-	EventPAMRecordingRead          = "pam.session.recording_read"
-	EventPAMAccountHealthChecked   = "pam.account.health_checked"
-	EventPAMTemplateSaved          = "pam.template.saved"
-	EventPAMCommandBlocked         = "pam.command.blocked"
+	EventPAMSignInsCollected     = "pam.signin.collected"
+	EventPAMSignInsPurged        = "pam.signin.records_purged"
+	EventPAMRecordingRead        = "pam.session.recording_read"
+	EventPAMAccountHealthChecked = "pam.account.health_checked"
+	EventPAMTemplateSaved        = "pam.template.saved"
+	EventPAMCommandBlocked       = "pam.command.blocked"
+	// EventPAMCommandAlerted (A275): a command only alert rules matched ran
+	// once this was recorded; its projection queues the risk alert.
+	EventPAMCommandAlerted         = "pam.command.alerted"
 	EventPAMCommandReviewRequested = "pam.command.review_requested"
 	EventPAMCommandReviewDecided   = "pam.command.review_decided"
 	EventPAMTemplateDeleted        = "pam.template.deleted"
@@ -4507,6 +4510,17 @@ type PAMAccountHealthChecked struct {
 // PAMTemplateSaved records an access template at a revision (A258).
 // PAMCommandBlocked is immutable occurrence metadata, with no traffic values.
 type PAMCommandBlocked = accessrules.Decision
+
+// PAMCommandAlerted is an alerted decision (A275) with what its alert names:
+// the session's target, who held the session, and the highest severity of
+// the alert rules it matched.
+type PAMCommandAlerted struct {
+	accessrules.Decision
+	TargetType string `json:"target_type"`
+	TargetID   string `json:"target_id"`
+	Subject    string `json:"subject"`
+	Severity   string `json:"severity"`
+}
 type PAMCommandReviewRequested = accessrules.Decision
 type PAMCommandReviewDecided struct {
 	accessrules.Decision
@@ -5354,6 +5368,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMAccountHealthChecked:                  {1: true},
 	EventPAMTemplateSaved:                         {1: true, PAMCommandRulesEventSchemaVersion: true},
 	EventPAMCommandBlocked:                        {1: true},
+	EventPAMCommandAlerted:                        {1: true},
 	EventPAMCommandReviewRequested:                {1: true},
 	EventPAMCommandReviewDecided:                  {1: true},
 	EventPAMTemplateDeleted:                       {1: true},
@@ -8808,6 +8823,23 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: command decision time differs from its envelope")
 		}
 		return p.store.ApplyPAMCommandBlockedTx(ctx, tx, e.TenantID, store.PAMCommandAction{Decision: pl, SourceEventID: e.ID})
+	case EventPAMCommandAlerted:
+		var pl PAMCommandAlerted
+		if err := decodeClosedPAMCommand(e, &pl); err != nil {
+			return err
+		}
+		if err := accessrules.ValidateDecision(pl.Decision); err != nil {
+			return err
+		}
+		if pl.Status != accessrules.StatusAlerted || !pl.DecidedAt.Equal(e.Time) || pl.TargetType == "" || pl.TargetID == "" || pl.Subject == "" ||
+			(pl.Severity != accessrules.SeverityWarning && pl.Severity != accessrules.SeverityCritical) {
+			return fmt.Errorf("projections: invalid alerted command")
+		}
+		alert, key, err := PAMCommandRiskAlert(e.TenantID, pl)
+		if err != nil {
+			return err
+		}
+		return p.store.ApplyPAMCommandAlertedTx(ctx, tx, e.TenantID, store.PAMCommandAction{Decision: pl.Decision, SourceEventID: e.ID}, "notification.risk", alert, key)
 	case EventPAMCommandReviewDecided:
 		var pl PAMCommandReviewDecided
 		if err := decodeClosedPAMCommand(e, &pl); err != nil {
@@ -9888,6 +9920,43 @@ type discoveryRiskAlert struct {
 	Subject     string `json:"subject"`
 	Detail      string `json:"detail"`
 	Severity    string `json:"severity"`
+}
+
+// pamCommandRiskAlertPayload mirrors the subset of notify.Alert a session
+// risk alert carries (A275); JSON is the outbox contract, as for discovery.
+type pamCommandRiskAlertPayload struct {
+	Kind          string `json:"kind"`
+	TenantID      string `json:"tenant_id"`
+	OperationID   string `json:"operation_id"`
+	Subject       string `json:"subject"`
+	Detail        string `json:"detail"`
+	Severity      string `json:"severity"`
+	SessionID     string `json:"session_id"`
+	RecordingPath string `json:"recording_path"`
+}
+
+// PAMSessionRecordingPath is the console page that opens a session's
+// recording (A275).
+func PAMSessionRecordingPath(sessionID string) string { return "/admin/access?session=" + sessionID }
+
+// PAMCommandRiskAlert is the risk alert an alerted command raises: what ran
+// (its known operation names, never its text), where, by whom, and a link to
+// the session's recording. It is built from the event alone, so a replay
+// queues the same alert.
+func PAMCommandRiskAlert(tenantID string, pl PAMCommandAlerted) ([]byte, string, error) {
+	key := "pam-command-alert:" + pl.ID
+	what := strings.Join(pl.Operations, ", ")
+	payload, err := json.Marshal(pamCommandRiskAlertPayload{
+		Kind: "pam.session.risk", TenantID: tenantID, OperationID: key,
+		Subject: pl.TargetType + "/" + pl.TargetID,
+		Detail: fmt.Sprintf("%s ran %s on %s/%s in privileged session %s, matching command rule %s (action %s).",
+			pl.Subject, what, pl.TargetType, pl.TargetID, pl.SessionID, strings.Join(pl.RuleIDs, ", "), pl.ID),
+		Severity: pl.Severity, SessionID: pl.SessionID, RecordingPath: PAMSessionRecordingPath(pl.SessionID),
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("projections: encode session risk alert: %w", err)
+	}
+	return payload, key, nil
 }
 
 func discoveryUrgentRiskAlert(finding store.DiscoveryFinding) (string, []byte, string, error) {
