@@ -1563,7 +1563,7 @@ over TLS verified against its agent certificate; the client never receives the c
 For an SSH session it writes the gateway's host key to the known_hosts file and prints the
 ssh command to run. `trstctl-cli access sessions watch <session-id>` follows a gateway
 session's recording live (`recordings:read`); `access sessions terminate`, `recording`,
-`recording-verify`, `recording-frames`, `recording-export`, `recording-hold` and
+`recording-verify`, `recording-frames`, `recording-index` (A269: search a recording's index), `recording-export`, `recording-hold` and
 `recording-release` are the matching API calls (A255). A session opened for the browser
 (A259) is worked in through the control plane: `access sessions terminal-open` (an SSH
 shell, or for a Kubernetes session an exec in the pod the body names), `terminal-output`

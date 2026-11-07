@@ -61,9 +61,27 @@ type PAMRecordingService interface {
 	GetPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecording, error)
 	VerifyPAMRecording(ctx context.Context, tenantID, sessionID string) (PAMRecordingVerification, error)
 	ReadPAMRecordingFrames(ctx context.Context, tenantID, sessionID, actor string, from, limit int, wait time.Duration) (PAMRecordingFrames, error)
+	ReadPAMRecordingIndex(ctx context.Context, tenantID, sessionID, actor, query string, limit int) (PAMRecordingIndex, error)
 	ExportPAMRecording(ctx context.Context, tenantID, sessionID, actor string) (PAMRecordingExport, error)
 	SetPAMRecordingLegalHold(ctx context.Context, tenantID, sessionID, actor string, hold bool, reason string) (PAMRecording, error)
 	TerminatePAMSession(ctx context.Context, tenantID, id, actor, reason, idempotencyKey string) (PAMSession, error)
+}
+
+// PAMRecordingIndex is a recording's index (A269): what happened in the
+// session — who signed in where, each refused redirection, window titles where
+// the protocol carries them, the end — never pixels, keystrokes or clipboard.
+type PAMRecordingIndex struct {
+	SessionID string                   `json:"session_id"`
+	Status    string                   `json:"status"`
+	Items     []PAMRecordingIndexEntry `json:"items"`
+}
+
+// PAMRecordingIndexEntry is one index entry, at its time in the recording.
+type PAMRecordingIndexEntry struct {
+	AtMillis int64  `json:"t"`
+	Conn     int    `json:"conn"`
+	Kind     string `json:"kind"`
+	Text     string `json:"text,omitempty"`
 }
 
 // PAMRecordingFrames is one page of a recording's frames, each a JSON object
@@ -539,6 +557,14 @@ func (a *API) readPAMRecordingFrames(w http.ResponseWriter, r *http.Request) {
 	waitSeconds, _ := strconv.Atoi(q.Get("wait"))
 	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
 		return svc.ReadPAMRecordingFrames(r.Context(), tenantID, id, principalSubject(r.Context()), from, limit, time.Duration(waitSeconds)*time.Second)
+	})
+}
+
+func (a *API) readPAMRecordingIndex(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	a.pamRecordingRead(w, r, func(svc PAMRecordingService, tenantID, id string) (any, error) {
+		return svc.ReadPAMRecordingIndex(r.Context(), tenantID, id, principalSubject(r.Context()), q.Get("q"), limit)
 	})
 }
 

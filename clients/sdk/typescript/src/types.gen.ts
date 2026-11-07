@@ -1296,6 +1296,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions/{id}/recording/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search a gateway session recording's index: who signed in where, refused redirections, window titles and the end */
+        get: operations["readPAMSessionRecordingIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/sessions/{id}/recording/legal-hold": {
         parameters: {
             query?: never;
@@ -22779,6 +22796,20 @@ export interface components {
             /** @enum {string} */
             status: "recording" | "sealed" | "deleted";
         };
+        PAMRecordingIndex: {
+            items: {
+                conn: number;
+                /** @description desktop_started, clipboard_refused, window_title, desktop_ended */
+                kind: string;
+                /** @description milliseconds since the recording began */
+                t: number;
+                text?: string;
+            }[];
+            /** Format: uuid */
+            session_id: string;
+            /** @enum {string} */
+            status: "recording" | "sealed" | "deleted";
+        };
         PAMRecordingLegalHoldRequest: {
             reason: string;
         };
@@ -31656,6 +31687,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMRecordingFrames"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    readPAMSessionRecordingIndex: {
+        parameters: {
+            query?: {
+                /** @description entries whose kind or text contains this, case-insensitively */
+                q?: string;
+                /** @description entries to return, at most 1000 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMRecordingIndex"];
                 };
             };
             /** @description client error */

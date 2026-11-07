@@ -9011,6 +9011,12 @@ export interface PAMRecordingFrames {
   status: "recording" | "sealed" | "deleted";
 }
 
+export interface PAMRecordingIndex {
+  items: { conn: number; kind: string; t: number; text?: string }[];
+  session_id: string;
+  status: "recording" | "sealed" | "deleted";
+}
+
 export interface PAMRecordingLegalHoldRequest {
   reason: string;
 }

@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"net"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/agent/desktop"
@@ -45,12 +46,38 @@ func serveDesktop(parent context.Context, client net.Conn, raw []byte, intent Se
 	// The native child has received its private locked request. Do not retain a
 	// second copy for the lifetime of the interactive desktop.
 	held.Destroy()
-	return desktop.Serve(ctx, client, backend, func(ctx context.Context, p rdp.Packet) error {
+	// A269: the recording's index names what happened: who signed in where,
+	// each refused redirection and the end — never pixels, keys or clipboard.
+	if rec != nil {
+		if err := rec.index(ctx, "desktop_started", username+" at "+binding.Address); err != nil {
+			_ = backend.Close()
+			return err
+		}
+	}
+	err = desktop.ServeEvents(ctx, client, backend, func(ctx context.Context, p rdp.Packet) error {
 		if rec == nil {
 			return nil
 		}
 		return rec.desktop(ctx, p)
+	}, func(ctx context.Context, e desktop.Event) error {
+		if rec == nil {
+			return nil
+		}
+		return rec.index(ctx, e.Kind, e.Detail)
 	})
+	if rec != nil {
+		ended, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		_ = rec.index(ended, "desktop_ended", "")
+		cancel()
+	}
+	return err
+}
+
+// index writes one desktop index entry into the session's recording.
+func (c *connRecorder) index(ctx context.Context, kind, text string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.r.writeContext(ctx, frame{Conn: c.conn, Event: "index", Kind: kind, Text: text})
 }
 
 // desktopTile is a bounded replay unit. Data is a lossless PNG tile, not

@@ -9001,6 +9001,14 @@ func componentSchemas() map[string]*Schema {
 			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
 			"next": {Type: "integer"}, "frames": {Type: "array", Items: &Schema{Type: "object"}},
 		}, "session_id", "status", "next", "frames"),
+		"PAMRecordingIndex": object(map[string]*Schema{
+			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
+			"items": {Type: "array", Items: object(map[string]*Schema{
+				"t": {Type: "integer", Description: "milliseconds since the recording began"}, "conn": {Type: "integer"},
+				"kind": {Type: "string", Description: "desktop_started, clipboard_refused, window_title, desktop_ended"},
+				"text": str(),
+			}, "t", "conn", "kind")},
+		}, "session_id", "status", "items"),
 		"PAMRecordingExport": object(map[string]*Schema{
 			"session_id": uuid(), "manifest": {Type: "object"}, "manifest_signature": str(),
 			"frames": {Type: "array", Items: &Schema{Type: "object"}},

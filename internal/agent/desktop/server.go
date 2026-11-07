@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -21,8 +22,11 @@ import (
 var (
 	ErrProtocol  = errors.New("desktop: invalid RFB message")
 	ErrClipboard = errors.New("desktop: clipboard transfer is disabled")
-	ErrCapacity  = errors.New("desktop: input or update queue capacity exceeded")
-	ErrDeadline  = errors.New("desktop: a session deadline is required")
+	// maxClientCutText bounds one viewer clipboard message the renderer reads
+	// in order to refuse it.
+	maxClientCutText uint32 = 1 << 20
+	ErrCapacity             = errors.New("desktop: input or update queue capacity exceeded")
+	ErrDeadline             = errors.New("desktop: a session deadline is required")
 )
 
 // Backend carries only pixels and input after upstream credential injection.
@@ -35,6 +39,16 @@ type Backend interface {
 // Record accepts each full framebuffer before it can be sent to a viewer. It
 // must backpressure or fail; it must not discard evidence or retain Pixels.
 type Record func(context.Context, rdp.Packet) error
+
+// Event is one entry of a desktop session's index (A269): what happened —
+// never pixels, keystrokes or clipboard content.
+type Event struct {
+	Kind   string
+	Detail string
+}
+
+// Events receives each session event as it happens; an error ends the session.
+type Events func(context.Context, Event) error
 
 type pixelFormat struct{ bits, endian byte }
 type updateRequest struct {
@@ -51,6 +65,11 @@ type viewerState struct {
 // backend before returning. The caller must supply a session-bounded context.
 // Clipboard and arbitrary channels have no upstream forwarding path.
 func Serve(ctx context.Context, conn net.Conn, backend Backend, record Record) error {
+	return ServeEvents(ctx, conn, backend, record, nil)
+}
+
+// ServeEvents is Serve with the session's index events (A269).
+func ServeEvents(ctx context.Context, conn net.Conn, backend Backend, record Record, events Events) error {
 	_, bounded := ctx.Deadline()
 	ctx, cancel := context.WithCancel(ctx)
 	var once sync.Once
@@ -100,7 +119,7 @@ func Serve(ctx context.Context, conn net.Conn, backend Backend, record Record) e
 	}()
 	go func() {
 		defer workers.Done()
-		err := readViewer(conn, state, backend, requests)
+		err := readViewer(ctx, conn, state, backend, requests, events)
 		failures <- err
 		stop()
 	}()
@@ -229,7 +248,7 @@ func handshake(conn net.Conn, state *viewerState) error {
 	return conn.SetDeadline(time.Time{})
 }
 
-func readViewer(conn net.Conn, state *viewerState, backend Backend, requests chan<- updateRequest) error {
+func readViewer(ctx context.Context, conn net.Conn, state *viewerState, backend Backend, requests chan<- updateRequest, events Events) error {
 	var buttons byte
 	messages := 0
 	window := time.Now()
@@ -338,7 +357,18 @@ func readViewer(conn net.Conn, state *viewerState, backend Backend, requests cha
 			}
 			buttons = raw[0]
 		case 6:
-			return ErrClipboard
+			// A viewer's clipboard is not forwarded to the target: its text is
+			// read only to refuse it, wiped, and the refusal is indexed
+			// without its content. The session continues.
+			n, err := discardClientCutText(conn)
+			if err != nil {
+				return err
+			}
+			if events != nil {
+				if err := events(ctx, Event{Kind: "clipboard_refused", Detail: fmt.Sprintf("to_target %d bytes", n)}); err != nil {
+					return err
+				}
+			}
 		default:
 			return ErrProtocol
 		}
@@ -442,4 +472,28 @@ func writeAll(w io.Writer, raw []byte) error {
 		raw = raw[n:]
 	}
 	return nil
+}
+
+// discardClientCutText reads one ClientCutText body (RFB 7.5.6) and wipes it.
+func discardClientCutText(conn net.Conn) (uint32, error) {
+	var head [7]byte
+	if _, err := io.ReadFull(conn, head[:]); err != nil {
+		return 0, err
+	}
+	n := binary.BigEndian.Uint32(head[3:7])
+	if n > maxClientCutText {
+		return 0, ErrCapacity
+	}
+	const chunk = 4096
+	var buf [chunk]byte
+	defer secret.Wipe(buf[:])
+	for left := n; left > 0; {
+		k, err := io.ReadFull(conn, buf[:min(left, chunk)])
+		secret.Wipe(buf[:k])
+		if err != nil {
+			return 0, err
+		}
+		left -= uint32(k) // #nosec G115 -- k is at most chunk (4096) (CWE-190)
+	}
+	return n, nil
 }

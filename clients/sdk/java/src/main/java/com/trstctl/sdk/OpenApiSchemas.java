@@ -894,6 +894,7 @@ public final class OpenApiSchemas {
       "PAMRecording",
       "PAMRecordingExport",
       "PAMRecordingFrames",
+      "PAMRecordingIndex",
       "PAMRecordingLegalHoldRequest",
       "PAMRecordingVerification",
       "PAMRequestProgress",

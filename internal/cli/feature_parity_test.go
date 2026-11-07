@@ -424,9 +424,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// import request|apply`, `access discovery dismiss` and `access accounts`.
 	// A261 adds `access checkouts request|reveal|checkin|list|get`.
 	// A267 adds `access discovery hosts list|save|scan|run`, then
-	// `access discovery rotation preview|queue|get|steps`.
-	if len(out) != 854 {
-		t.Fatalf("CLI commands = %d, want 854", len(out))
+	// `access discovery rotation preview|queue|get|steps`. A269 adds
+	// `access sessions recording-index`.
+	if len(out) != 855 {
+		t.Fatalf("CLI commands = %d, want 855", len(out))
 	}
 	return out
 }

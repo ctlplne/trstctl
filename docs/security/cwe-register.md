@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2775 annotated sites across 31 rules. Each row is
+2777 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -801,7 +801,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (429 sites)
+### G115 — CWE-190 Integer overflow or wraparound (430 sites)
 
 | Location | Reason |
 |---|---|
@@ -834,6 +834,7 @@ not this file.
 | `internal/agent/accessgateway/postgres.go:136` | gateway-built messages are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:17` | test packets are small (CWE-190) |
 | `internal/agent/accessgateway/sftp_test.go:21` | test strings are small (CWE-190) |
+| `internal/agent/desktop/server.go:496` | k is at most chunk (4096) (CWE-190) |
 | `internal/agent/observe/capture_linux.go:34` | snaplen is a small configured frame size |
 | `internal/agent/observe/capture_linux.go:39` | bounded by the check above; MaxWatchedPorts keeps it to tens (CWE-190) |
 | `internal/agent/observe/flows.go:202` | TCP sequence numbers wrap; the difference read as a signed 32-bit distance is RFC 1982 serial arithmetic (CWE-190) |
@@ -1417,7 +1418,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (365 sites)
+### G204 — CWE-78 OS command injection (366 sites)
 
 | Location | Reason |
 |---|---|
@@ -1644,10 +1645,11 @@ not this file.
 | `internal/server/pam_command_mysql_served_test.go:67` | stock client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_command_redis_served_test.go:59` | stock Redis client against this test's owned tunnel (CWE-78) |
 | `internal/server/pam_desktop_served_test.go:95` | fixed lab SSH daemon and test-owned configuration; no shell or credential arguments (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:343` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:352` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:418` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
-| `internal/server/pam_desktop_served_test.go:429` | drops only the exact database this test created, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:357` | stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:366` | fixed tool and test-built public keyboard/window arguments, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:387` | fixed tool on the owned viewer display, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:440` | generated owned database identifier, fixed local test server/tool, no shell (CWE-78) |
+| `internal/server/pam_desktop_served_test.go:451` | drops only the exact database this test created, no shell (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:32` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_ad_served_test.go:47` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_discovery_import_served_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2412,7 +2414,7 @@ not this file.
 | `internal/server/pam_agent_launcher_served_test.go:175` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_agent_launcher_served_test.go:179` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:168` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
-| `internal/server/pam_desktop_served_test.go:386` | unique owned task file under fixed lab account home (CWE-22) |
+| `internal/server/pam_desktop_served_test.go:408` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_gateway_served_test.go:228` | the test's own temporary files (CWE-22) |

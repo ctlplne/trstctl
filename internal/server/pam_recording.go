@@ -639,6 +639,63 @@ func (s *Server) ReadPAMRecordingFrames(ctx context.Context, tenantID, sessionID
 	}
 }
 
+// ReadPAMRecordingIndex returns a recording's index entries, only those whose
+// kind or text contains query when it is set (A269). The read is recorded.
+func (s *Server) ReadPAMRecordingIndex(ctx context.Context, tenantID, sessionID, actor, query string, limit int) (api.PAMRecordingIndex, error) {
+	rec, err := s.pamRecordingOrPending(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecordingIndex{}, err
+	}
+	if rec.Status == "deleted" {
+		return api.PAMRecordingIndex{}, fmt.Errorf("%w: the recording was deleted by retention", api.ErrPAMTerminal)
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 1000
+	}
+	if err := s.pam.recordRead(ctx, tenantID, sessionID, actor, "index"); err != nil {
+		return api.PAMRecordingIndex{}, err
+	}
+	items := []api.PAMRecordingIndexEntry{}
+	for from := 0; len(items) < limit; {
+		frames, next, err := s.pam.recordingFrames(ctx, tenantID, sessionID, from, 50, recordingReadLimit)
+		if err != nil {
+			return api.PAMRecordingIndex{}, err
+		}
+		items = recordingIndexEntries(frames, query, items, limit)
+		if next == from {
+			break
+		}
+		from = next
+	}
+	return api.PAMRecordingIndex{SessionID: sessionID, Status: rec.Status, Items: items}, nil
+}
+
+// recordingIndexEntries appends a recording's index frames to out, up to
+// limit: only those whose kind or text contains query, case-insensitively.
+func recordingIndexEntries(frames []json.RawMessage, query string, out []api.PAMRecordingIndexEntry, limit int) []api.PAMRecordingIndexEntry {
+	query = strings.ToLower(strings.TrimSpace(query))
+	for _, raw := range frames {
+		if len(out) >= limit {
+			break
+		}
+		var f struct {
+			T     int64  `json:"t"`
+			Conn  int    `json:"c"`
+			Event string `json:"e"`
+			Kind  string `json:"kind"`
+			Text  string `json:"v"`
+		}
+		if json.Unmarshal(raw, &f) != nil || f.Event != "index" || f.Kind == "" {
+			continue
+		}
+		if query != "" && !strings.Contains(strings.ToLower(f.Kind+" "+f.Text), query) {
+			continue
+		}
+		out = append(out, api.PAMRecordingIndexEntry{AtMillis: f.T, Conn: f.Conn, Kind: f.Kind, Text: f.Text})
+	}
+	return out
+}
+
 // ExportPAMRecording returns a sealed recording whole: its manifest, the
 // audit key's signature over it, and every frame (A255). The read is
 // recorded.

@@ -587,6 +587,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "sessions", "recording"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording", Summary: "Get a gateway session's recording index"},
 	{Name: []string{"access", "sessions", "recording-verify"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording/verify", Summary: "Verify a sealed gateway session recording against its signed manifest"},
 	{Name: []string{"access", "sessions", "recording-frames"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording/frames", Query: []string{"from", "limit", "wait"}, Summary: "Read a gateway session recording's frames by pages"},
+	{Name: []string{"access", "sessions", "recording-index"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording/index", Query: []string{"q", "limit"}, Summary: "Search a gateway session recording's index: sign-ins, refused redirections, window titles"},
 	{Name: []string{"access", "sessions", "recording-export"}, Method: "GET", Path: "/api/v1/access/sessions/{id}/recording/export", Summary: "Export a sealed gateway session recording with its signed manifest"},
 	{Name: []string{"access", "sessions", "recording-hold"}, Method: "POST", Path: "/api/v1/access/sessions/{id}/recording/legal-hold", Body: bodyFile, Summary: "Keep a gateway session recording past retention"},
 	{Name: []string{"access", "sessions", "recording-release"}, Method: "DELETE", Path: "/api/v1/access/sessions/{id}/recording/legal-hold", Summary: "Release a gateway session recording's legal hold"},

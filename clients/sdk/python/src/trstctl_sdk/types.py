@@ -12533,6 +12533,16 @@ PAMRecordingFrames = TypedDict(
     total=False,
 )
 
+PAMRecordingIndex = TypedDict(
+    'PAMRecordingIndex',
+    {
+        'items': list[dict[str, Any]],
+        'session_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
 PAMRecordingLegalHoldRequest = TypedDict(
     'PAMRecordingLegalHoldRequest',
     {

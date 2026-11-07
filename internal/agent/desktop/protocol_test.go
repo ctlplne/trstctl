@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,28 +58,64 @@ func TestDesktopProtocolBoundsAndPixelConversion(t *testing.T) {
 	}
 }
 
+// A269: a viewer's clipboard is refused without ending the session: its text
+// never reaches the target, the refusal is indexed without its content, and
+// the next input still flows.
 func TestDesktopClipboardRefusedAtRenderer(t *testing.T) {
 	server, client := net.Pipe()
 	defer func() { _ = client.Close() }()
 	_ = client.SetDeadline(time.Now().Add(3 * time.Second))
 	backend := &fixtureBackend{packets: make(chan rdp.Packet, 1), done: make(chan struct{})}
 	backend.packets <- rdp.Packet{Kind: 1, Width: 320, Height: 200}
+	indexed := make(chan Event, 2)
 	result := make(chan error, 1)
-	go func() { result <- Serve(testContext(t), server, backend, nil) }()
+	go func() {
+		result <- ServeEvents(testContext(t), server, backend, nil, func(_ context.Context, e Event) error { indexed <- e; return nil })
+	}()
 	viewerHandshake(t, client)
-	if _, e := client.Write([]byte{6}); e != nil {
+	text := []byte("secret-from-the-operator")
+	if len(text) != 24 {
+		t.Fatal("fixture length")
+	}
+	cut := append([]byte{6, 0, 0, 0, 0, 0, 0, 24}, text...)
+	if _, e := client.Write(cut); e != nil {
+		t.Fatal(e)
+	}
+	select {
+	case e := <-indexed:
+		if e.Kind != "clipboard_refused" || e.Detail != "to_target 24 bytes" || strings.Contains(e.Detail, "secret") {
+			t.Fatalf("clipboard refusal indexed as %+v", e)
+		}
+	case e := <-result:
+		t.Fatalf("a clipboard attempt ended the desktop: %v", e)
+	case <-time.After(time.Second):
+		t.Fatal("clipboard refusal was not indexed")
+	}
+	if backend.inputs.Load() != 0 {
+		t.Fatal("clipboard attempt reached upstream input")
+	}
+	// The session continues: a pointer event still reaches the target.
+	if _, e := client.Write([]byte{5, 0, 0, 10, 0, 10}); e != nil {
+		t.Fatal(e)
+	}
+	deadline := time.Now().Add(time.Second)
+	for backend.inputs.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if backend.inputs.Load() == 0 {
+		t.Fatal("input after a refused clipboard did not reach the target")
+	}
+	// A clipboard message beyond the bound ends the session.
+	if _, e := client.Write([]byte{6, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff}); e != nil {
 		t.Fatal(e)
 	}
 	select {
 	case e := <-result:
-		if !errors.Is(e, ErrClipboard) {
+		if !errors.Is(e, ErrCapacity) {
 			t.Fatal(e)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("clipboard attempt did not close desktop")
-	}
-	if backend.inputs.Load() != 0 {
-		t.Fatal("clipboard attempt reached upstream input")
+		t.Fatal("an oversized clipboard message did not end the desktop")
 	}
 }
 
@@ -153,7 +190,7 @@ func FuzzRFBViewer(f *testing.F) {
 		}
 		backend := &fixtureBackend{done: make(chan struct{})}
 		requests := make(chan updateRequest, 4)
-		e := readViewer(&fuzzConn{bytes.NewReader(raw)}, &viewerState{width: 800, height: 600}, backend, requests)
+		e := readViewer(context.Background(), &fuzzConn{bytes.NewReader(raw)}, &viewerState{width: 800, height: 600}, backend, requests, nil)
 		if !errors.Is(e, io.EOF) && !errors.Is(e, io.ErrUnexpectedEOF) && !errors.Is(e, ErrProtocol) && !errors.Is(e, ErrClipboard) && !errors.Is(e, ErrCapacity) {
 			t.Fatalf("unexpected viewer decoder error: %v", e)
 		}
@@ -163,12 +200,12 @@ func FuzzRFBViewer(f *testing.F) {
 func TestDesktopInputAndUpdateQueueRejectFast(t *testing.T) {
 	backend := &fixtureBackend{done: make(chan struct{})}
 	message := []byte{3, 0, 0, 0, 0, 0, 1, 64, 0, 200}
-	e := readViewer(&fuzzConn{bytes.NewReader(bytes.Repeat(message, 5))}, &viewerState{width: 320, height: 200}, backend, make(chan updateRequest, 4))
+	e := readViewer(context.Background(), &fuzzConn{bytes.NewReader(bytes.Repeat(message, 5))}, &viewerState{width: 320, height: 200}, backend, make(chan updateRequest, 4), nil)
 	if !errors.Is(e, ErrCapacity) {
 		t.Fatal("full update queue did not refuse fast")
 	}
 	key := []byte{4, 1, 0, 0, 0, 0, 0, 'a'}
-	e = readViewer(&fuzzConn{bytes.NewReader(bytes.Repeat(key, 4097))}, &viewerState{width: 320, height: 200}, backend, make(chan updateRequest, 4))
+	e = readViewer(context.Background(), &fuzzConn{bytes.NewReader(bytes.Repeat(key, 4097))}, &viewerState{width: 320, height: 200}, backend, make(chan updateRequest, 4), nil)
 	if !errors.Is(e, ErrCapacity) || backend.inputs.Load() != 4096 {
 		t.Fatal("input flood was not bounded")
 	}

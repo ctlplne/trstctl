@@ -287,6 +287,20 @@ func runNativeDesktopJourney(t *testing.T, directory bool) {
 			} `json:"desktop"`
 		} `json:"frames"`
 	}
+	// A269: the recording's index names the sign-in and the refused clipboard,
+	// never its content.
+	status, indexed := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/recording/index", f.auditor, nil)
+	if status != http.StatusOK || !bytes.Contains(indexed, []byte(`"kind":"desktop_started"`)) || !bytes.Contains(indexed, []byte(`"kind":"desktop_ended"`)) ||
+		bytes.Contains(indexed, []byte("operator-clipboard")) {
+		t.Fatalf("desktop recording index = %d %s", status, indexed)
+	}
+	status, refused := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/recording/index?q=clipboard", f.auditor, nil)
+	if status != http.StatusOK || !bytes.Contains(refused, []byte(`"kind":"clipboard_refused"`)) || bytes.Contains(refused, []byte(`"kind":"desktop_started"`)) {
+		t.Fatalf("the index did not find the refused clipboard: %d %s", status, refused)
+	}
+	if bytes.Contains(exported, []byte("operator-clipboard")) {
+		t.Fatal("the refused clipboard reached the recording")
+	}
 	if json.Unmarshal(exported, &evidence) != nil {
 		t.Fatal("desktop export is not replay data")
 	}
@@ -340,7 +354,7 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 	defer func() { _ = x.Process.Kill(); _ = x.Wait() }()
 	desktopAwait(t, "owned display ready", func() bool { _, e := os.Stat("/tmp/.X11-unix/X94"); return e == nil })
 	home := t.TempDir()
-	viewer := exec.CommandContext(ctx, "/usr/bin/vncviewer", "-SecurityTypes=None", "-SendClipboard=0", "-AcceptClipboard=0", "-RemoteResize=0", "-AutoSelect=0", "-FullColor=1", "-PreferredEncoding=Raw", "-ReconnectOnError=0", "-AlertOnFatalError=0", fmt.Sprintf("127.0.0.1::%d", port)) // #nosec G204 -- stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78)
+	viewer := exec.CommandContext(ctx, "/usr/bin/vncviewer", "-SecurityTypes=None", "-SendClipboard=1", "-SendPrimary=0", "-AcceptClipboard=0", "-RemoteResize=0", "-AutoSelect=0", "-FullColor=1", "-PreferredEncoding=Raw", "-ReconnectOnError=0", "-AlertOnFatalError=0", fmt.Sprintf("127.0.0.1::%d", port)) // #nosec G204 -- stock viewer and port from this owned CLI tunnel; no shell or upstream credential (CWE-78)
 	viewer.Env = []string{"DISPLAY=:94", "HOME=" + home, "LANG=C"}
 	if e := viewer.Start(); e != nil {
 		t.Fatal(e)
@@ -367,6 +381,14 @@ func runDesktopViewerTask(t *testing.T, parent context.Context, port int, userna
 	})
 	if _, e := strconv.ParseUint(window, 10, 32); e != nil {
 		t.Fatal(e)
+	}
+	// A269: the operator's clipboard is offered to the target by the stock
+	// viewer itself; the gateway refuses it and the session continues.
+	clip := exec.CommandContext(ctx, "/usr/bin/xclip", "-selection", "clipboard", "-i") // #nosec G204 -- fixed tool on the owned viewer display, no shell (CWE-78)
+	clip.Env = []string{"DISPLAY=:94", "PATH=/usr/bin:/bin"}
+	clip.Stdin = strings.NewReader("operator-clipboard-must-not-reach-the-target")
+	if e := clip.Run(); e != nil {
+		t.Fatal("set the viewer's clipboard:", e)
 	}
 	// Wait for the actual user desktop rather than treating RDP transport Ready
 	// as authentication. The independent file is the task's completion evidence.

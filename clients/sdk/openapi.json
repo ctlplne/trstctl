@@ -42015,6 +42015,55 @@
         ],
         "type": "object"
       },
+      "PAMRecordingIndex": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "conn": {
+                  "type": "integer"
+                },
+                "kind": {
+                  "description": "desktop_started, clipboard_refused, window_title, desktop_ended",
+                  "type": "string"
+                },
+                "t": {
+                  "description": "milliseconds since the recording began",
+                  "type": "integer"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "t",
+                "conn",
+                "kind"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "sealed",
+              "deleted"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "status",
+          "items"
+        ],
+        "type": "object"
+      },
       "PAMRecordingLegalHoldRequest": {
         "properties": {
           "reason": {
@@ -66034,6 +66083,81 @@
           }
         ],
         "summary": "Play back a gateway session recording by pages; wait long-polls for frames still being recorded",
+        "x-trstctl-permission": "recordings:read",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/sessions/{id}/recording/index": {
+      "get": {
+        "operationId": "readPAMSessionRecordingIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "entries whose kind or text contains this, case-insensitively",
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "entries to return, at most 1000",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMRecordingIndex"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Search a gateway session recording's index: who signed in where, refused redirections, window titles and the end",
         "x-trstctl-permission": "recordings:read",
         "x-trstctl-sensitive-response": true
       }

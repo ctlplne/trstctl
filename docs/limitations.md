@@ -9292,3 +9292,25 @@ What comes next:
 - Console registration of `windows_local` targets (today: API and CLI; the console
   lists, checks out and checks in registered ones).
 - Real-image replay (replay-owed.md).
+
+## Remote desktop, production grade (A269) — part 1 of 3: refused redirection and the recording index
+
+Status: in progress. A stock VNC viewer's clipboard is no longer a session-ending
+error: the gateway reads the offered text only to refuse it (bounded to 1 MiB,
+wiped, never forwarded), indexes the refusal without its content, and the
+desktop continues. The gateway never offers drive or printer redirection: the
+operator's viewer speaks RFB to the gateway, which has no client-device channel
+to forward. Each desktop recording carries an index — who signed in where, each
+refused redirection and the end — searchable through
+`GET /api/v1/access/sessions/{id}/recording/index?q=` (`trstctl access sessions
+recording-index`, `recordings:read`, each read audited). The xrdp lab journey
+proves it with the stock viewer's own clipboard: refused, indexed, and the
+in-session task still completes; the index never carries the clipboard text.
+
+What comes next:
+- Per-template clipboard policy (deny, to target, from target, both) through the
+  native helper's clipboard channel (part 2).
+- Window titles in the index where the protocol carries them (part 3).
+- Windows network-level authentication on windows-latest: the gateway's native
+  helper is Linux-only and a hosted Windows runner cannot be reached from a Linux
+  job, so this is recorded as a limit unless a runner path is found.

@@ -22,7 +22,7 @@ docker exec "$lab" sh -c '
 set -eu
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends build-essential pkg-config freerdp2-dev xrdp xorgxrdp xserver-xorg-core xterm xfonts-base xvfb tigervnc-viewer xdotool openssh-server openssl ca-certificates postgresql-15
+apt-get install -y --no-install-recommends build-essential pkg-config freerdp2-dev xrdp xorgxrdp xserver-xorg-core xterm xfonts-base xvfb tigervnc-viewer xdotool xclip openssh-server openssl ca-certificates postgresql-15
 useradd -m -s /bin/bash desktop-proof
 umask 077
 openssl rand -hex 24 | tr -d "\n" > /run/rdp-password

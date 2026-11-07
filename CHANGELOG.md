@@ -2,6 +2,10 @@
 
 ### Added
 
+- Remote desktop (A269 part 1): a viewer's clipboard is refused without ending the desktop session (its text is never
+  forwarded and the refusal is indexed without content), and desktop recordings carry a searchable index
+  (`GET /api/v1/access/sessions/{id}/recording/index?q=`, `trstctl access sessions recording-index`). OpenAPI census
+  787 -> 788, CLI 854 -> 855.
 - Windows local administrator check-outs (A268): a vaulted local administrator account registered as a `windows_local`
   access target (its native `windows` provider and account secret) is checked out through A261 — reviewed, revealed
   once, never opened as a session — and checking it in, or its deadline, queues its in-place native rotation, which an
