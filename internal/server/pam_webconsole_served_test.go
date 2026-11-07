@@ -14,6 +14,8 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -125,6 +127,15 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 	console := infratest.StartWebConsole("admin", a273ConsolePassword)
 	t.Cleanup(console.Close)
+	// TRSTCTL_A273_BROWSER_DIR (opt-in) holds the session open for a real
+	// browser: the test writes the tunnel's address to <dir>/url, waits for
+	// <dir>/done, checks the browser's traffic too, and after terminating
+	// writes <dir>/terminated and waits for <dir>/exit.
+	browserDir := os.Getenv("TRSTCTL_A273_BROWSER_DIR")
+	ttl, maxTTL := 120, 3*time.Minute
+	if browserDir != "" {
+		ttl, maxTTL = 1500, 30*time.Minute
+	}
 
 	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
 	var err error
@@ -138,7 +149,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	f.gatewayAddr = raw.Addr().String()
 	gatewayID := agentRowID(servedTestTenant, "role-agent")
 	f.h = newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleGateway}, []string{relay.KindAccessGatewayWebSession}, nil, withSecretsEnabled(t, nil), func(d *Deps) {
-		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, ExpiryInterval: 50 * time.Millisecond,
+		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: maxTTL, ExpiryInterval: 50 * time.Millisecond,
 			WebConsoleAllowLoopback: true, Attestors: []attest.Attestor{servedPAMAttestor{}}}
 		d.ArchiveObjectStore = f.objects.Open(t)
 		d.AuditSigningKey = f.auditKey
@@ -195,7 +206,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	template := func(key string, signIn map[string]any) (int, api.PAMAccessTemplate) {
 		t.Helper()
 		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/templates", f.operator, key, map[string]any{
-			"name": "a273-" + key, "reason": "Reviewed console maintenance", "required_approvals": 2, "max_ttl_seconds": 120, "web_sign_in": signIn})
+			"name": "a273-" + key, "reason": "Reviewed console maintenance", "required_approvals": 2, "max_ttl_seconds": ttl, "web_sign_in": signIn})
 		var saved api.PAMAccessTemplate
 		_ = json.Unmarshal(body, &saved)
 		return status, saved
@@ -212,7 +223,7 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 		t.Fatalf("save the console's template = %d %+v", status, signsIn)
 	}
 	request := func(templateID string) map[string]any {
-		r := map[string]any{"target_type": "webconsole", "target_id": "a273-lab-console", "role": account, "ttl_seconds": 120,
+		r := map[string]any{"target_type": "webconsole", "target_id": "a273-lab-console", "role": account, "ttl_seconds": ttl,
 			"reason": "rotate the banner", "method": "stub_pam", "payload_base64": "Z2VudWluZQ=="}
 		if templateID != "" {
 			r["template_id"] = templateID
@@ -334,6 +345,14 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	if console.Failed("admin") != 0 || console.SignIns() != 1 {
 		t.Fatalf("the console saw %d failed and %d good sign-ins", console.Failed("admin"), console.SignIns())
 	}
+	if browserDir != "" {
+		a273AwaitBrowser(t, browserDir, "url", base+"/", "done")
+		for _, leak := range append(leaks, console.SessionCookies()...) {
+			if bytes.Contains(capture.seen(), []byte(leak)) {
+				t.Fatalf("the real browser's traffic carries %q", leak)
+			}
+		}
+	}
 
 	// Terminating the session stops the browser's access.
 	if status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+session.ID+"/terminate", f.operator, "a273-terminate",
@@ -364,5 +383,25 @@ func TestServedWebConsoleSessionA273(t *testing.T) {
 	}
 	if served := strings.Join(console.Served(), "\n"); !strings.Contains(served, "POST /settings") || strings.Contains(served, "POST /login") {
 		t.Fatalf("the console served:\n%s", served)
+	}
+	if browserDir != "" {
+		a273AwaitBrowser(t, browserDir, "terminated", "terminated\n", "exit")
+	}
+}
+
+// a273AwaitBrowser writes note to <dir>/<write> and waits (up to half an
+// hour) for <dir>/<await>.
+func a273AwaitBrowser(t *testing.T, dir, write, note, await string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, write), []byte(note), 0o600); err != nil { // #nosec G703 -- the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22)
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(30 * time.Minute); ; time.Sleep(time.Second) {
+		if _, err := os.Stat(filepath.Join(dir, await)); err == nil { // #nosec G703 -- the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22)
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no browser wrote %s", await)
+		}
 	}
 }

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2798 annotated sites across 31 rules. Each row is
+2800 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2913,7 +2913,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (142 sites)
+### G703 — CWE-22 Path traversal (taint) (144 sites)
 
 | Location | Reason |
 |---|---|
@@ -3001,6 +3001,8 @@ not this file.
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:46` | test reads the cluster CA its runner wrote (CWE-22) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:396` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pam_webconsole_served_test.go:400` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:692` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |

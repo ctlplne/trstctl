@@ -666,6 +666,61 @@ export const messages = {
 
   "admin.access.desktop.target": { defaultMessage: "Remote desktop (RDP)", description: "Desktop target registration and proof limits." },
   "admin.access.netdevice.target": { defaultMessage: "Network device (SSH)", description: "Network device target registration (A270)." },
+  "admin.access.webconsole.target": { defaultMessage: "Web admin console (HTTPS)", description: "Web console target registration (A273)." },
+  "admin.access.webconsole.url": { defaultMessage: "Console address", description: "Web console target registration (A273): its https origin." },
+  "admin.access.webconsole.urlHelp": {
+    defaultMessage: "Enter the console's origin over https, such as https://console.internal.example, with no path.",
+    description: "Web console target registration (A273).",
+  },
+  "admin.access.webconsole.caPEM": {
+    defaultMessage: "Console CA (PEM, optional)",
+    description: "Web console target registration (A273): the CA its certificate is checked against.",
+  },
+  "admin.access.webconsole.serverName": {
+    defaultMessage: "Certificate name (optional)",
+    description: "Web console target registration (A273): the name its certificate is checked against.",
+  },
+  "admin.access.webconsole.oneAccount": {
+    defaultMessage: "Name the one application secret that holds the console's account.",
+    description: "Web console target registration (A273).",
+  },
+  "admin.access.webconsole.proof": {
+    defaultMessage:
+      "The gateway signs in to the console for the operator, as the session's access template says, and keeps the console's cookies; the browser never receives the password. Proven against a stand-in console; no vendor console yet.",
+    description: "Web console target registration (A273).",
+  },
+  "admin.access.folders.webSignIn": {
+    defaultMessage: "Web sign-in",
+    description: "Column of the template table: how the gateway signs in to a web console (A273).",
+  },
+  "admin.access.folders.webSignInFor": {
+    defaultMessage: "Web sign-in for {template}",
+    description: "Accessible name of a template's web sign-in editor (A273).",
+  },
+  "admin.access.folders.webSignIn.none": { defaultMessage: "None", description: "A template that sets no web sign-in (A273)." },
+  "admin.access.folders.webSignIn.form": { defaultMessage: "Sign-in form", description: "Web sign-in mode (A273)." },
+  "admin.access.folders.webSignIn.header": { defaultMessage: "Header token", description: "Web sign-in mode (A273)." },
+  "admin.access.folders.webSignIn.basic": { defaultMessage: "Basic authentication", description: "Web sign-in mode (A273)." },
+  "admin.access.folders.webSignIn.edit": { defaultMessage: "Set web sign-in", description: "Opens a template's web sign-in editor (A273)." },
+  "admin.access.folders.webSignIn.mode": { defaultMessage: "Mode", description: "Web sign-in editor field (A273)." },
+  "admin.access.folders.webSignIn.loginPath": { defaultMessage: "Sign-in page", description: "Web sign-in editor field: a path such as /login (A273)." },
+  "admin.access.folders.webSignIn.usernameField": { defaultMessage: "Username field", description: "Web sign-in editor field (A273)." },
+  "admin.access.folders.webSignIn.passwordField": { defaultMessage: "Password field", description: "Web sign-in editor field (A273)." },
+  "admin.access.folders.webSignIn.headerName": { defaultMessage: "Header", description: "Web sign-in editor field (A273)." },
+  "admin.access.folders.webSignIn.headerPrefix": {
+    defaultMessage: "Header prefix",
+    description: "Web sign-in editor field, such as Bearer and a space (A273).",
+  },
+  "admin.access.folders.webSignIn.browserCookies": {
+    defaultMessage: "Cookies the browser may hold (comma-separated, optional)",
+    description: "Web sign-in editor field (A273): a console's script-read CSRF cookie, never its session cookie.",
+  },
+  "admin.access.folders.webSignIn.save": { defaultMessage: "Save sign-in", description: "Web sign-in editor action (A273)." },
+  "admin.access.folders.webSignIn.cancel": { defaultMessage: "Cancel", description: "Web sign-in editor action (A273)." },
+  "admin.access.folders.webSignIn.help": {
+    defaultMessage: "The gateway signs in to a web console as this says; a session to a web console needs it. Field and header names only, never a password.",
+    description: "Web sign-in editor help (A273).",
+  },
   "admin.access.netdevice.proof": {
     defaultMessage:
       "The gateway signs in to the device over SSH with the vaulted account's password; the operator's client holds no credential. The provider names the device's SSH address and host key. Proven against stand-ins of IOS-XE, Junos, EOS, FortiOS and BIG-IP; no real device yet.",

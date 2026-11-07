@@ -21,7 +21,7 @@ const targetSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,64}$/),
-    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice"]),
+    target_type: z.enum(["postgres", "ssh", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole"]),
     provider_id: z.string().trim(),
     gateway_agent_id: z.string().trim(),
     gateway_address: z.string().trim(),
@@ -29,9 +29,20 @@ const targetSchema = z
     host: z.string().trim(),
     port: z.string().trim(),
     principals: z.string().trim(),
+    web_url: z.string().trim(),
+    web_ca_pem: z.string().trim(),
+    web_server_name: z.string().trim(),
   })
   .superRefine((value, ctx) => {
-    if (value.target_type !== "ssh") {
+    if (value.target_type === "webconsole") {
+      // A273: a web console's vaulted account and route; no provider.
+      if (splitList(value.allowed_roles).length !== 1)
+        ctx.addIssue({ code: "custom", path: ["allowed_roles"], message: translateNow("admin.access.webconsole.oneAccount") });
+      if (!/^https:\/\/[^\s/?#@]+\/?$/.test(value.web_url))
+        ctx.addIssue({ code: "custom", path: ["web_url"], message: translateNow("admin.access.webconsole.urlHelp") });
+      if (!value.gateway_agent_id) ctx.addIssue({ code: "custom", path: ["gateway_agent_id"], message: translateNow("admin.access.gatewayRequired") });
+      if (!value.gateway_address) ctx.addIssue({ code: "custom", path: ["gateway_address"], message: translateNow("admin.access.gatewayRequired") });
+    } else if (value.target_type !== "ssh") {
       if (!value.provider_id) ctx.addIssue({ code: "custom", path: ["provider_id"], message: translateNow("admin.access.providerRequired") });
       const roles = splitList(value.allowed_roles);
       if ((value.target_type === "rdp" || value.target_type === "netdevice") && roles.length !== 1)
@@ -74,6 +85,9 @@ const emptyTarget: TargetForm = {
   host: "",
   port: "22",
   principals: "",
+  web_url: "",
+  web_ca_pem: "",
+  web_server_name: "",
 };
 function splitList(value: string): string[] {
   return value
@@ -116,10 +130,22 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
 
   async function createTarget(form: TargetForm) {
     const input: PAMTargetRequest =
-      form.target_type !== "ssh"
-        ? { id: form.id, target_type: form.target_type, provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
-        : { id: form.id, target_type: "ssh", host: form.host, port: Number(form.port), principals: splitList(form.principals) };
-    if (form.target_type === "rdp" || form.target_type === "netdevice") input.account_secret = splitList(form.allowed_roles)[0];
+      form.target_type === "webconsole"
+        ? {
+            id: form.id,
+            target_type: "webconsole",
+            allowed_roles: splitList(form.allowed_roles),
+            web: {
+              url: form.web_url,
+              ...(form.web_ca_pem ? { ca_pem: form.web_ca_pem } : {}),
+              ...(form.web_server_name ? { server_name: form.web_server_name } : {}),
+            },
+          }
+        : form.target_type !== "ssh"
+          ? { id: form.id, target_type: form.target_type, provider_id: form.provider_id, allowed_roles: splitList(form.allowed_roles) }
+          : { id: form.id, target_type: "ssh", host: form.host, port: Number(form.port), principals: splitList(form.principals) };
+    if (form.target_type === "rdp" || form.target_type === "netdevice" || form.target_type === "webconsole")
+      input.account_secret = splitList(form.allowed_roles)[0];
     if (form.folder) input.folder = form.folder;
     if (form.gateway_agent_id) input.gateway_agent_id = form.gateway_agent_id;
     if (form.gateway_address) input.gateway_address = form.gateway_address;
@@ -278,6 +304,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               <option value="aws-console">{t("admin.access.awsConsole")}</option>
               <option value="rdp">{t("admin.access.desktop.target")}</option>
               <option value="netdevice">{t("admin.access.netdevice.target")}</option>
+              <option value="webconsole">{t("admin.access.webconsole.target")}</option>
               <option value="gcp">{t("admin.access.gcpAPI")}</option>
               <option value="azure">{t("admin.access.azureAPI")}</option>
             </Select>
@@ -293,7 +320,28 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
               ))}
             </Select>
           </label>
-          {targetType !== "ssh" ? (
+          {targetType === "webconsole" ? (
+            <>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.desktop.accountSecret")}
+                <Input {...register("allowed_roles")} aria-invalid={!!errors.allowed_roles} />
+                {errors.allowed_roles ? <span role="alert">{t("admin.access.webconsole.oneAccount")}</span> : null}
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.url")}
+                <Input {...register("web_url")} aria-invalid={!!errors.web_url} />
+                {errors.web_url ? <span role="alert">{t("admin.access.webconsole.urlHelp")}</span> : null}
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.caPEM")}
+                <textarea className="min-h-20 rounded-md border border-input bg-background p-2 font-mono text-caption" {...register("web_ca_pem")} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                {t("admin.access.webconsole.serverName")}
+                <Input {...register("web_server_name")} />
+              </label>
+            </>
+          ) : targetType !== "ssh" ? (
             <>
               <label className="grid gap-1 text-sm">
                 {t(targetType !== "postgres" ? "admin.access.accountProviderId" : "admin.access.providerId")}
@@ -367,6 +415,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
           )}
           {targetType === "rdp" ? <p>{t("admin.access.desktop.proof")}</p> : null}
           {targetType === "netdevice" ? <p>{t("admin.access.netdevice.proof")}</p> : null}
+          {targetType === "webconsole" ? <p>{t("admin.access.webconsole.proof")}</p> : null}
           {targetType === "snowflake" ? <p>{t("admin.access.snowflakeProof")}</p> : null}
           {targetType === "aws" ? <p>{t("admin.access.awsAPIProof")}</p> : null}
           {targetType === "aws-console" ? <p>{t("admin.access.awsConsoleProof")}</p> : null}

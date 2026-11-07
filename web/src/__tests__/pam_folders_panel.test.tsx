@@ -72,6 +72,26 @@ it("saves a folder with a known template, moves an account, and updates the exac
   await waitFor(() => expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, { ...template, desktop_clipboard: "both" }));
   expect(await axe(view.container)).toHaveNoViolations();
 });
+it("sets a template's web sign-in for web admin consoles, field names only (A273)", async () => {
+  const user = userEvent.setup();
+  const view = mount();
+  await user.click(await screen.findByRole("button", { name: "Set web sign-in" }));
+  const editor = screen.getByRole("group", { name: "Web sign-in for production" });
+  await user.selectOptions(screen.getByRole("combobox", { name: "Mode" }), "form");
+  const path = screen.getByRole("textbox", { name: "Sign-in page" });
+  await user.clear(path);
+  await user.type(path, "/ui/login");
+  await user.type(screen.getByRole("textbox", { name: "Cookies the browser may hold (comma-separated, optional)" }), "XSRF-TOKEN");
+  expect(editor).toHaveTextContent("never a password");
+  await user.click(screen.getByRole("button", { name: "Save sign-in" }));
+  await waitFor(() =>
+    expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, {
+      ...template,
+      web_sign_in: { mode: "form", login_path: "/ui/login", username_field: "username", password_field: "password", browser_cookies: ["XSRF-TOKEN"] },
+    }),
+  );
+  expect(await axe(view.container)).toHaveNoViolations();
+});
 it("preserves a revision conflict for the operator and gates configuration by permission", async () => {
   const user = userEvent.setup();
   mocks.savePAMFolder.mockRejectedValue(new Error("the folder changed; read it again"));

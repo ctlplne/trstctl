@@ -1497,3 +1497,6 @@ shows the password gets asterisks; the browser cannot post to the sign-in page; 
 sign-in is not tried again in the session. Each request and response is recorded with the
 credential and password-like fields masked, and terminating the session ends the browser's
 access. The account cannot be checked out: its credential is never shown.
+In the console, register one under the access targets (type **Web admin console**: account
+secret, console address, optional CA and certificate name, gateway) and set a template's
+web sign-in from the template table.

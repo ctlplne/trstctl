@@ -2,6 +2,9 @@
 
 ### Added
 
+- Internal web admin consoles (A273 part 3): the console registers `webconsole` targets (account secret, https origin,
+  CA, certificate name) and sets an access template's web sign-in (mode, sign-in page and fields or header, browser
+  cookies). The served proof can hold its session open for a real browser (`TRSTCTL_A273_BROWSER_DIR`).
 - Internal web admin consoles (A273 part 2): `webconsole` access targets vault a console's account and name its route
   (`web`: origin, CA, server name; loopback only with `pam.web_console_allow_loopback`); access templates set
   `web_sign_in` (`form`, `header` or `basic`, and `browser_cookies`), bound into the reviewed request and kept on the

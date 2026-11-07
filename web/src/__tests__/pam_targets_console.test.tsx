@@ -312,3 +312,43 @@ it("registers a vaulted network device with one account secret and explicit gate
     ),
   );
 });
+
+it("registers a web admin console with its vaulted account, its https origin and explicit gateway references (A273)", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "grafana-admin");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "webconsole");
+  expect(within(form).queryByRole("combobox", { name: "Account provider ID" })).not.toBeInTheDocument();
+  const secret = within(form).getByRole("textbox", { name: "Account secret" });
+  await user.clear(secret);
+  await user.type(secret, "consoles/grafana-admin");
+  const address = within(form).getByRole("textbox", { name: "Console address" });
+  await user.type(address, "http://grafana.internal.example/admin");
+  expect(within(form).getByText(/the browser never receives the password/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  expect(await within(form).findByText(/origin over https/)).toBeInTheDocument();
+  expect(apiMock.registerPAMTarget).not.toHaveBeenCalled();
+  await user.clear(address);
+  await user.type(address, "https://grafana.internal.example");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "grafana-admin",
+        target_type: "webconsole",
+        allowed_roles: ["consoles/grafana-admin"],
+        account_secret: "consoles/grafana-admin",
+        web: { url: "https://grafana.internal.example" },
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});

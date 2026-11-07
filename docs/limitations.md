@@ -9413,33 +9413,40 @@ What comes next:
   `trstctl access emergency checkout`).
 - Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
 
-## Internal web admin consoles (A273) — parts 1–2: the gateway's web console proxy, targets, templates and sessions
+## Internal web admin consoles (A273) — built against a stand-in console
 
-Status: in progress. The access gateway serves a `webconsole` session: the browser reaches
-the console only through the session's tunnel, and the gateway signs in for the operator as
-the reviewed access template says — it fetches the console's own sign-in page, fills its form
-(hidden fields such as a CSRF token kept) and posts it itself, or adds the vaulted token in a
-named header, or HTTP basic authentication, to every request. Every cookie the console sets
-stays at the gateway (in locked memory, wiped when the session ends) except the few the
-template names for the console's own scripts; the browser's credentials and cookies never
-reach the console; the credential is masked out of every page the console returns; the
-browser cannot post to the console's sign-in; a refused sign-in is never sent again in the
-session; a console that signs the session out is signed in to again. Each request and
-response is recorded, with the credential, the console's cookie values and sensitive-looking
-form and JSON fields masked. A `webconsole` target vaults the account and names the
-console's route (loopback only with `pam.web_console_allow_loopback`; the gateway refuses a
-name that resolves to its own host or a link-local address); an access template's
-`web_sign_in` sets the sign-in, bound into the reviewed request and kept on the session; the
-account cannot be checked out. Proof today: `TestWebConsoleFormSignInKeepsTheCredentialFromTheBrowserA273`,
+Status: built; vendor consoles (and single sign-on consoles) are what comes next. The access
+gateway serves a `webconsole` session: the browser reaches the console only through the
+session's tunnel, and the gateway signs in for the operator as the reviewed access template
+says — it fetches the console's own sign-in page, fills its form (hidden fields such as a CSRF
+token kept) and posts it itself, or adds the vaulted token in a named header, or HTTP basic
+authentication, to every request. Every cookie the console sets stays at the gateway (in
+locked memory, wiped when the session ends) except the few the template names for the
+console's own scripts; the browser's credentials and cookies never reach the console; the
+credential is masked out of every page the console returns; the browser cannot post to the
+console's sign-in; a refused sign-in is never sent again in the session; a console that signs
+the session out is signed in to again. Each request and response is recorded, with the
+credential, the console's cookie values and sensitive-looking form and JSON fields masked. A
+`webconsole` target vaults the account and names the console's route (loopback only with
+`pam.web_console_allow_loopback`; the gateway refuses a name that resolves to its own host or
+a link-local address); an access template's `web_sign_in` sets the sign-in, bound into the
+reviewed request and kept on the session; the account cannot be checked out. The console
+registers `webconsole` targets and sets a template's web sign-in.
+
+Proof today: `TestWebConsoleFormSignInKeepsTheCredentialFromTheBrowserA273`,
 `TestWebConsoleRefusedSignInIsNeverRepeatedA273` and `TestWebConsoleBasicAndHeaderSignInA273`
-at the gateway, and `TestServedWebConsoleSessionA273`: a reviewed session through the CLI
-tunnel where a Go HTTP client with a cookie jar, behind a proxy that keeps all its traffic,
-completes a settings task, and terminating the session ends its access — against a stand-in
-console.
+at the gateway; `TestServedWebConsoleSessionA273`, a reviewed session through the CLI tunnel
+where a client with a cookie jar, behind a proxy that keeps all its traffic, completes a
+settings task and terminating the session ends its access; and the same session held open for
+a real browser (the desktop app's Chromium pane): its cookies held only the template-named
+CSRF cookie, its local, session, IndexedDB and cache storage stayed empty, the page that
+echoes the password showed asterisks, its console logged nothing, its traffic carried neither
+the password nor the console's session cookies, and after terminate the console was gone. All
+against a stand-in console built the way such consoles commonly are; no vendor console has run
+it.
 
 What comes next:
-- The console's screens for `webconsole` targets and `web_sign_in`, and a proof in a real
-  browser (part 3).
 - Consoles that sign in through a single sign-on provider, write their own absolute origin
-  into pages or scripts, or live under a path rather than at an origin.
-
+  into pages or scripts (or their Content-Security-Policy), or live under a path rather than at
+  an origin.
+- Rotating a web console account (today the account is vaulted, not rotated).

@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { api, type PAMFolder, type PAMTarget } from "@/lib/api";
+import { api, type PAMAccessTemplate, type PAMFolder, type PAMTarget } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { DataGrid } from "@/components/DataGrid";
@@ -220,6 +220,18 @@ export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
               ),
           },
           {
+            id: "web-sign-in",
+            header: t("admin.access.folders.webSignIn"),
+            cell: (r) => (
+              <WebSignInEditor
+                template={r}
+                canManage={canManage}
+                disabled={busy}
+                save={(web_sign_in) => act(() => api.updatePAMTemplate(r.id, { ...r, web_sign_in }))}
+              />
+            ),
+          },
+          {
             id: "action",
             header: t("admin.access.targetAction"),
             cell: (r) =>
@@ -296,5 +308,125 @@ function FolderAssignment({
         {t("admin.access.folders.move")}
       </Button>
     </div>
+  );
+}
+
+// A273: how the gateway signs in to a web console for sessions through a
+// template. It names fields and headers only; the credential is the target's.
+type WebSignIn = NonNullable<PAMAccessTemplate["web_sign_in"]>;
+const WEB_SIGN_IN_LABEL = {
+  none: "admin.access.folders.webSignIn.none",
+  form: "admin.access.folders.webSignIn.form",
+  header: "admin.access.folders.webSignIn.header",
+  basic: "admin.access.folders.webSignIn.basic",
+} as const;
+
+function WebSignInEditor({
+  template,
+  canManage,
+  disabled,
+  save,
+}: {
+  template: PAMAccessTemplate;
+  canManage: boolean;
+  disabled: boolean;
+  save: (signIn: WebSignIn | undefined) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const current = template.web_sign_in;
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<WebSignIn["mode"] | "none">(current?.mode ?? "none");
+  const [loginPath, setLoginPath] = useState(current?.login_path ?? "/login");
+  const [usernameField, setUsernameField] = useState(current?.username_field ?? "username");
+  const [passwordField, setPasswordField] = useState(current?.password_field ?? "password");
+  const [header, setHeader] = useState(current?.header ?? "Authorization");
+  const [headerPrefix, setHeaderPrefix] = useState(current?.header_prefix ?? "");
+  const [cookies, setCookies] = useState((current?.browser_cookies ?? []).join(", "));
+  const label = t(WEB_SIGN_IN_LABEL[current?.mode ?? "none"]);
+  if (!canManage || !open) {
+    return (
+      <div className="flex items-center gap-2">
+        <span>{label}</span>
+        {canManage ? (
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
+            {t("admin.access.folders.webSignIn.edit")}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+  const browserCookies = cookies
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const value = (): WebSignIn | undefined => {
+    switch (mode) {
+      case "form":
+        return { mode, login_path: loginPath, username_field: usernameField, password_field: passwordField, browser_cookies: browserCookies };
+      case "header":
+        return { mode, header, ...(headerPrefix ? { header_prefix: headerPrefix } : {}), browser_cookies: browserCookies };
+      case "basic":
+        return { mode, browser_cookies: browserCookies };
+      default:
+        return undefined;
+    }
+  };
+  return (
+    <fieldset className="grid gap-2" aria-label={t("admin.access.folders.webSignInFor", { template: template.name })}>
+      <p className="text-caption text-muted-foreground">{t("admin.access.folders.webSignIn.help")}</p>
+      <Field label={t("admin.access.folders.webSignIn.mode")}>
+        {(control) => (
+          <Select {...control} value={mode} onChange={(e) => setMode(e.target.value as WebSignIn["mode"] | "none")}>
+            {(["none", "form", "header", "basic"] as const).map((m) => (
+              <option key={m} value={m}>
+                {t(WEB_SIGN_IN_LABEL[m])}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      {mode === "form" ? (
+        <>
+          <Field label={t("admin.access.folders.webSignIn.loginPath")}>
+            {(control) => <Input {...control} value={loginPath} onChange={(e) => setLoginPath(e.target.value)} />}
+          </Field>
+          <Field label={t("admin.access.folders.webSignIn.usernameField")}>
+            {(control) => <Input {...control} value={usernameField} onChange={(e) => setUsernameField(e.target.value)} />}
+          </Field>
+          <Field label={t("admin.access.folders.webSignIn.passwordField")}>
+            {(control) => <Input {...control} value={passwordField} onChange={(e) => setPasswordField(e.target.value)} />}
+          </Field>
+        </>
+      ) : null}
+      {mode === "header" ? (
+        <>
+          <Field label={t("admin.access.folders.webSignIn.headerName")}>
+            {(control) => <Input {...control} value={header} onChange={(e) => setHeader(e.target.value)} />}
+          </Field>
+          <Field label={t("admin.access.folders.webSignIn.headerPrefix")}>
+            {(control) => <Input {...control} value={headerPrefix} onChange={(e) => setHeaderPrefix(e.target.value)} />}
+          </Field>
+        </>
+      ) : null}
+      {mode !== "none" ? (
+        <Field label={t("admin.access.folders.webSignIn.browserCookies")}>
+          {(control) => <Input {...control} value={cookies} onChange={(e) => setCookies(e.target.value)} />}
+        </Field>
+      ) : null}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={disabled}
+          onClick={() => {
+            void save(value()).then(() => setOpen(false));
+          }}
+        >
+          {t("admin.access.folders.webSignIn.save")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          {t("admin.access.folders.webSignIn.cancel")}
+        </Button>
+      </div>
+    </fieldset>
   );
 }
