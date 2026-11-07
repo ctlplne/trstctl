@@ -11764,6 +11764,7 @@ PAMCheckout = TypedDict(
     {
         'account_secret': str,
         'approval_request_id': str,
+        'emergency': bool,
         'ended_at': str,
         'ended_by': str,
         'expires_at': str,
@@ -12310,6 +12311,17 @@ PAMDiscoverySourceRequest = TypedDict(
     'PAMDiscoverySourceRequest',
     {
         'interval_seconds': int,
+    },
+    total=False,
+)
+
+PAMEmergencyCheckout = TypedDict(
+    'PAMEmergencyCheckout',
+    {
+        'checkout': dict[str, Any],
+        'credential': str,
+        'emergency': dict[str, Any],
+        'hardware_key_holders': list[str],
     },
     total=False,
 )
@@ -13071,6 +13083,7 @@ PAMTarget = TypedDict(
         'folder': str,
         'gateway_address': str,
         'gateway_agent_id': str,
+        'hardware_key_holders': list[str],
         'health': dict[str, Any],
         'host': str,
         'host_key_fingerprints': list[str],

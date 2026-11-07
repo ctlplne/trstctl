@@ -1378,6 +1378,30 @@ password and authenticates the new one before the vault publishes it. Folders,
 templates and auto-approval rules apply to `windows_local` targets as to other
 vaulted accounts.
 
+#### Release a break-glass identity provider account
+
+An Okta, Entra ID or Google Workspace super administrator, vaulted in the application
+secret its `okta-user`, `entra-user` or `google-workspace-user` provider rotates, is
+registered as a `breakglass` target (its provider and account secret only). It has no
+sessions and no reviewed check-out: only a named emergency responder releases it, at once.
+
+```json
+{"request_id": "<uuid>", "target_type": "breakglass", "target_id": "okta-bg",
+ "reason": "SSO outage locked every admin out", "ttl_seconds": 900}
+```
+
+```sh
+trstctl access emergency checkout -f release.json
+```
+
+Every approver is notified on the approval channels first. The reply shows the credential
+once: the username, the password and, when the provider maps the role to a `totp`
+provider, the current TOTP code and when it stops being valid — never the seed. It also
+lists who holds the account's hardware security keys, which stay with those people. The
+same release is never shown again. Checking it in (`trstctl access checkouts checkin`), or
+its deadline, rotates the password at the identity provider, and the grant waits for a
+post-incident review by someone else (`trstctl access emergency review`).
+
 #### Check out an account its provider rotates in place
 
 An ESXi local account, a vCenter single sign-on user, a server management controller

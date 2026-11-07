@@ -795,6 +795,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/emergency-checkouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release a break-glass account's credential once as a named responder, without review: every approver is notified, checking in or its deadline rotates it, and a post-incident review is required */
+        post: operations["openPAMEmergencyCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/emergency-sessions": {
         parameters: {
             query?: never;
@@ -22138,6 +22155,8 @@ export interface components {
             account_secret: string;
             /** Format: uuid */
             approval_request_id: string;
+            /** @description a break-glass release under emergency access (A272): no review; its emergency grant's ID is this request's */
+            emergency?: boolean;
             /** Format: date-time */
             ended_at?: string;
             ended_by?: string;
@@ -22166,7 +22185,7 @@ export interface components {
             request_id: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "postgres" | "mysql" | "windows_local" | "account";
+            target_type: "postgres" | "mysql" | "windows_local" | "account" | "breakglass";
             /**
              * Format: uuid
              * @description optional access template; a target folder's template cannot be overridden
@@ -22629,6 +22648,14 @@ export interface components {
         PAMDiscoverySourceRequest: {
             /** @description 0 scans on demand only; otherwise at least 3600 */
             interval_seconds: number;
+        };
+        PAMEmergencyCheckout: {
+            checkout: components["schemas"]["PAMCheckout"];
+            /** @description the break-glass account's username and password, and its current TOTP code and when it stops being valid when it has a seed; shown once, never the seed */
+            credential: string;
+            emergency: components["schemas"]["PAMEmergencyGrant"];
+            /** @description who holds the account's hardware security keys */
+            hardware_key_holders?: string[];
         };
         PAMEmergencyGrant: {
             /** Format: date-time */
@@ -23270,6 +23297,8 @@ export interface components {
             folder?: string;
             gateway_address?: string;
             gateway_agent_id?: string;
+            /** @description who holds a break-glass account's hardware security keys (A272); the keys stay with them */
+            hardware_key_holders?: string[];
             health?: {
                 /** @description sign-ins the check took (more than one only when no sign-in exchange took place) */
                 attempts: number;
@@ -23297,7 +23326,7 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -23331,7 +23360,7 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
         };
         PAMTerminal: {
             cols?: number;
@@ -30083,6 +30112,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMWindowsLocalAccountScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    openPAMEmergencyCheckout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMEmergencyCheckout"];
                 };
             };
             /** @description client error */

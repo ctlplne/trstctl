@@ -535,6 +535,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "emergency", "responders"}, Method: "GET", Path: "/api/v1/access/emergency/responders", Summary: "List the named responders who may open emergency access"},
 	{Name: []string{"access", "emergency", "set-responders"}, Method: "PUT", Path: "/api/v1/access/emergency/responders", Body: bodyFile, Summary: "Replace the named emergency responders"},
 	{Name: []string{"access", "emergency", "open"}, Method: "POST", Path: "/api/v1/access/emergency-sessions", Body: bodyFile, Summary: "Open emergency access at once as a named responder; every approver is notified and a post-incident review is required"},
+	{Name: []string{"access", "emergency", "checkout"}, Method: "POST", Path: "/api/v1/access/emergency-checkouts", Body: bodyFile, Summary: "Release a break-glass account's credential once as a named responder; every approver is notified, check-in rotates it, and a post-incident review is required"},
 	{Name: []string{"access", "emergency", "list"}, Method: "GET", Path: "/api/v1/access/emergency-sessions", Summary: "List emergency access grants with their post-incident reviews"},
 	{Name: []string{"access", "emergency", "review"}, Method: "POST", Path: "/api/v1/access/emergency-sessions/{id}/review", Body: bodyFile, Summary: "Record an emergency grant's post-incident review"},
 	{Name: []string{"access", "discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/access/discovery/sources", Summary: "List the providers whose targets privileged account discovery scans, with each one's last run"},

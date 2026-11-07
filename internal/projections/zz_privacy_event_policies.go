@@ -1142,6 +1142,12 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/approval/issuance", opaque),
 			privacyRule("/actor", exact), privacyRule("/at", opaque),
 		),
+		{EventPAMCheckoutEmergencyReleased, 1}: privacyRules(
+			privacyRule("/request_id", opaque), privacyRule("/target_type", opaque), privacyRule("/target_id", opaque),
+			privacyRule("/provider_id", opaque), privacyRule("/account_secret", opaque), privacyRule("/secret_version", opaque),
+			privacyRule("/reason", clear), privacyRule("/expires_at", opaque),
+			privacyRule("/responder", exact), privacyRule("/at", opaque),
+		),
 		{EventPAMCheckoutEnded, 1}: privacyRules(
 			privacyRule("/request_id", opaque), privacyRule("/status", opaque), privacyRule("/rotation_command_id", opaque),
 			privacyRule("/actor", exact), privacyRule("/at", opaque),
@@ -1777,6 +1783,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMDiscoveryDismissed, 1}:                                                      privacyPayloadShape[PAMDiscoveryDismissed](),
 		{EventPAMCheckoutRevealed, 1}:                                                        privacyPayloadShape[PAMCheckoutRevealed](),
 		{EventPAMCheckoutEnded, 1}:                                                           privacyPayloadShape[PAMCheckoutEnded](),
+		{EventPAMCheckoutEmergencyReleased, 1}:                                               privacyPayloadShape[PAMCheckoutEmergencyReleased](),
 		{EventPAMSessionActivationRequested, 1}:                                              privacyPayloadShape[PAMSessionActivationRequested](),
 		{EventPAMSSHSigningRecoveryRequested, 1}:                                             privacyPayloadShape[PAMSSHSigningRecoveryRequested](),
 		{EventPAMSSHSigningRecovered, 1}:                                                     privacyPayloadShape[PAMSSHSigningRecovered](),

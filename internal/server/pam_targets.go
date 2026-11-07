@@ -122,6 +122,24 @@ func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor stri
 			return api.PAMTarget{}, fmt.Errorf("%w: account secret %q is not readable: %v", api.ErrPAMInvalid, target.AccountSecret, err)
 		}
 		secret.Wipe(value)
+	case target.TargetType == pamTargetBreakGlass:
+		// A272: a break-glass identity provider administrator; released only
+		// through emergency access.
+		if target.Host != "" || target.Port != 0 || len(target.Principals) != 0 || target.GatewayAgentID != "" ||
+			target.GatewayAddress != "" || len(target.HostKeyFingerprints) != 0 {
+			return api.PAMTarget{}, fmt.Errorf("%w: a break-glass target names only its provider and account secret", api.ErrPAMInvalid)
+		}
+		if len(target.AllowedRoles) == 0 {
+			target.AllowedRoles = []string{target.AccountSecret}
+		}
+		if _, err := s.breakGlassAccount(tenantID, target.ProviderID, target.AccountSecret, target.AllowedRoles); err != nil {
+			return api.PAMTarget{}, err
+		}
+		value, _, err := s.secretReader(ctx, tenantID, target.AccountSecret)
+		if err != nil {
+			return api.PAMTarget{}, fmt.Errorf("%w: account secret %q is not readable: %v", api.ErrPAMInvalid, target.AccountSecret, err)
+		}
+		secret.Wipe(value)
 	case target.TargetType == pamTargetAccount:
 		// A271: an account its provider rotates in place, vaulted in an
 		// application secret; checked out, never a session.
@@ -245,7 +263,7 @@ func (s *pamService) getPAMTarget(ctx context.Context, tenantID, targetType, id 
 		if t, ok := s.sshTargets[pamTargetID{tenantID, id}]; ok {
 			return operatorSSHTarget(id, t), nil
 		}
-	case targetType == pamTargetWindowsLocal || targetType == pamTargetAccount:
+	case targetType == pamTargetWindowsLocal || targetType == pamTargetAccount || targetType == pamTargetBreakGlass:
 		// Tenant-registered only.
 	default:
 		return api.PAMTarget{}, fmt.Errorf("%w: unknown target type", api.ErrPAMInvalid)
@@ -254,7 +272,11 @@ func (s *pamService) getPAMTarget(ctx context.Context, tenantID, targetType, id 
 	if err != nil {
 		return api.PAMTarget{}, err
 	}
-	return targetFromStore(rec), nil
+	target := targetFromStore(rec)
+	if targetType == pamTargetBreakGlass {
+		target.HardwareKeyHolders = s.breakGlassHardwareKeys(tenantID, rec.ProviderID, rec.AccountSecret)
+	}
+	return target, nil
 }
 
 func (s *pamService) ListPAMTargets(ctx context.Context, tenantID string) ([]api.PAMTarget, error) {

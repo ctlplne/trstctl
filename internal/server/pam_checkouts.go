@@ -105,6 +105,9 @@ func (s *pamService) checkoutTarget(ctx context.Context, tenantID, targetType, t
 	if targetType == pamTargetAccount && targetID != "" {
 		return s.accountCheckoutTarget(ctx, tenantID, targetID)
 	}
+	if targetType == pamTargetBreakGlass {
+		return nil, fmt.Errorf("%w: a break-glass account is released only through emergency access (POST /api/v1/access/emergency-checkouts)", api.ErrPAMInvalid)
+	}
 	if !isPAMDatabaseType(targetType) || targetID == "" {
 		return nil, fmt.Errorf("%w: a check-out names a vaulted postgres, mysql or windows_local target", api.ErrPAMInvalid)
 	}
@@ -152,7 +155,7 @@ func (s *pamService) vaultedAccount(ctx context.Context, tenantID, targetType, a
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("%w: account secret %q is not readable", api.ErrPAMRejected, accountSecret)
 	}
-	if targetType == pamTargetWindowsLocal || targetType == pamTargetAccount {
+	if targetType == pamTargetWindowsLocal || targetType == pamTargetAccount || targetType == pamTargetBreakGlass {
 		// A268, A271: the provider rotates one account in place, so a
 		// rotation names no predecessor account.
 		return value, version, "", nil
@@ -455,7 +458,9 @@ func pamCheckoutView(c store.PAMCheckout) api.PAMCheckout {
 	return api.PAMCheckout{RequestID: c.RequestID, TargetType: c.TargetType, TargetID: c.TargetID, ProviderID: c.ProviderID,
 		AccountSecret: c.AccountSecret, SecretVersion: c.SecretVersion, RequestedBy: c.RequestedBy, Reason: c.Reason,
 		ApprovalRequestID: c.ApprovalRequestID, RevealedAt: c.RevealedAt, ExpiresAt: c.ExpiresAt, Status: c.Status, EndedAt: c.EndedAt,
-		EndedBy: c.EndedBy, RotationCommandID: c.RotationCommandID}
+		EndedBy: c.EndedBy, RotationCommandID: c.RotationCommandID,
+		// A272: an emergency release's grant is the check-out itself.
+		Emergency: c.TargetType == pamTargetBreakGlass && c.ApprovalRequestID == c.RequestID}
 }
 
 func (s *Server) RequestPAMCheckout(ctx context.Context, tenantID, requester string, req api.PAMCheckoutRequest) (api.PAMCheckoutReview, error) {

@@ -8492,6 +8492,7 @@ export interface PAMAutoApprovalWindow {
 export interface PAMCheckout {
   account_secret: string;
   approval_request_id: string;
+  emergency?: boolean;
   ended_at?: string;
   ended_by?: string;
   expires_at: string;
@@ -8515,7 +8516,7 @@ export interface PAMCheckoutRequest {
   reason: string;
   request_id: string;
   target_id: string;
-  target_type: "postgres" | "mysql" | "windows_local" | "account";
+  target_type: "postgres" | "mysql" | "windows_local" | "account" | "breakglass";
   template_id?: string;
   ttl_seconds: number;
 }
@@ -8866,6 +8867,13 @@ export interface PAMDiscoverySourceList {
 
 export interface PAMDiscoverySourceRequest {
   interval_seconds: number;
+}
+
+export interface PAMEmergencyCheckout {
+  checkout: PAMCheckout;
+  credential: string;
+  emergency: PAMEmergencyGrant;
+  hardware_key_holders?: string[];
 }
 
 export interface PAMEmergencyGrant {
@@ -9391,6 +9399,7 @@ export interface PAMTarget {
   folder?: string;
   gateway_address?: string;
   gateway_agent_id?: string;
+  hardware_key_holders?: string[];
   health?: { attempts: number; checked_at: string; failing_since?: string; not_retried: boolean; status: "healthy" | "rejected" | "expired" | "locked" | "unreachable" | "error" | "not_supported" };
   host?: string;
   host_key_fingerprints?: string[];
@@ -9401,7 +9410,7 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
 }
 
 export interface PAMTargetDisableRequest {
@@ -9429,7 +9438,7 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
 }
 
 export interface PAMTerminal {

@@ -2241,7 +2241,11 @@ Privileged Authentication Administrator role). `google-workspace-user` takes `en
 `private_key_ref` (a service account with domain-wide delegation for
 `admin.directory.user`) and `admin_user` (the super administrator it impersonates, never
 a rotated account). Each needs `allow_static_rotation: true`; each allowed role names
-one account as `user@domain`, rotated in place.
+one account as `user@domain`, rotated in place. For a break-glass account, `totp_providers`
+maps its role to a `totp` provider in the same tenant that allows the same role (its
+`seed_ref` holds the account's MFA seed; an emergency release carries the current code,
+never the seed), and `hardware_key_holders` maps the role to who holds its hardware
+security keys (one to ten one-line entries; the keys stay with them).
 
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,

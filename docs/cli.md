@@ -694,6 +694,10 @@ access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
 `payload_base64`, `ttl_seconds` up to 3600), `access emergency list` shows the grants and
 `access emergency review <session-id> -f` records the post-incident review
 (`{"outcome": "justified"|"unjustified", "notes"}`), which the responder cannot record.
+`access emergency checkout -f` releases a break-glass account once as a named responder
+(A272: `{"request_id", "target_type": "breakglass", "target_id", "reason",
+"ttl_seconds"}` up to 3600); `access checkouts checkin <request-id>` rotates it, and its
+grant is reviewed with `access emergency review <request-id> -f`.
 
 ## Bootstrapping or recovering a local API token
 

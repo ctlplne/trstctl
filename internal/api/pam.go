@@ -159,6 +159,9 @@ type PAMTarget struct {
 	// HostKeyFingerprints pin the host keys the gateway accepts from an SSH
 	// target (SHA256:...); a gateway-bound SSH target names at least one.
 	HostKeyFingerprints []string `json:"host_key_fingerprints,omitempty"`
+	// HardwareKeyHolders (A272) is who holds a break-glass account's hardware
+	// security keys, read from its provider; the keys stay with them.
+	HardwareKeyHolders []string `json:"hardware_key_holders,omitempty"`
 	// Health (A258) is the last read-only sign-in check of the credential a
 	// provider-backed target's provider holds; absent before its first check.
 	Health *PAMAccountHealth `json:"health,omitempty"`

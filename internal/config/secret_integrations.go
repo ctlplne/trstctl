@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -221,6 +222,13 @@ type DynamicSecretProviderConfig struct {
 	// user@domain, whose password is password_ref; admin_user and
 	// private_key_ref are the appliance's root shell (A271).
 	SSOAdmin string `json:"sso_admin,omitempty"`
+	// TOTPProviders (A272) maps an identity provider administrator role to
+	// the totp provider holding that account's MFA seed: an emergency
+	// release carries the current code, never the seed.
+	TOTPProviders map[string]string `json:"totp_providers,omitempty"`
+	// HardwareKeyHolders (A272) records, per role, who holds the account's
+	// hardware security keys; the keys stay with those people.
+	HardwareKeyHolders map[string][]string `json:"hardware_key_holders,omitempty"`
 	// Tailnet is a tailscale provider's tailnet, "-" (the API token's own) by
 	// default; its API token is bearer_token_ref (A239).
 	Tailnet      string   `json:"tailnet,omitempty"`
@@ -449,6 +457,7 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		errs = append(errs, validateDynamicProvider(where, item)...)
 		errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
 	}
+	errs = append(errs, validateBreakGlassTOTP(cfg.DynamicProviders)...)
 	syncIDs := map[string]bool{}
 	for i, item := range cfg.SyncTargets {
 		where := fmt.Sprintf("secret_integrations.sync_targets[%d]", i)
@@ -1261,6 +1270,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	}
 	if c.Type != "vcenter-sso" && c.SSOAdmin != "" {
 		errs = append(errs, fmt.Errorf("%s sso_admin is only valid for vcenter-sso", where))
+	}
+	if c.Type != "okta-user" && c.Type != "entra-user" && c.Type != "google-workspace-user" && (len(c.TOTPProviders) != 0 || len(c.HardwareKeyHolders) != 0) {
+		errs = append(errs, fmt.Errorf("%s totp_providers and hardware_key_holders are only valid for okta-user, entra-user and google-workspace-user", where))
 	}
 	if c.Type != "unix" && c.Type != "windows" && c.Type != "vcenter-sso" && !networkDeviceProviderTypes[c.Type] && !networkAPIDeviceTypes[c.Type] && c.HostKeyFingerprint != "" {
 		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix, windows and network devices", where))
@@ -2617,6 +2629,21 @@ func validateIdPAdminProvider(where string, c DynamicSecretProviderConfig) []err
 	if len(c.RotationAccounts) != 0 {
 		errs = append(errs, fmt.Errorf("%s %s rotates one bound account per role in place; rotation_accounts is not used", where, c.Type))
 	}
+	for role, provider := range c.TOTPProviders {
+		if _, bound := c.RoleBindings[role]; !bound || strings.TrimSpace(provider) == "" {
+			errs = append(errs, fmt.Errorf("%s totp_providers[%q] must name a totp provider for a bound role", where, role))
+		}
+	}
+	for role, holders := range c.HardwareKeyHolders {
+		if _, bound := c.RoleBindings[role]; !bound || len(holders) == 0 || len(holders) > 10 {
+			errs = append(errs, fmt.Errorf("%s hardware_key_holders[%q] must list 1-10 holders for a bound role", where, role))
+		}
+		for _, holder := range holders {
+			if strings.TrimSpace(holder) == "" || len(holder) > 200 || strings.ContainsAny(holder, "\r\n\x00") {
+				errs = append(errs, fmt.Errorf("%s hardware_key_holders[%q] has a holder that is not one line of 1-200 characters", where, role))
+			}
+		}
+	}
 	for role, account := range c.RoleBindings {
 		account = strings.TrimSpace(account)
 		switch {
@@ -2624,6 +2651,29 @@ func validateIdPAdminProvider(where string, c DynamicSecretProviderConfig) []err
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name an account as user@domain", where, role))
 		case strings.EqualFold(account, c.AdminUser):
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the administrator the provider acts as", where, role))
+		}
+	}
+	return errs
+}
+
+// validateBreakGlassTOTP checks that every identity provider administrator
+// role's totp_providers entry names a totp provider in the same tenant that
+// allows the same role, whose seed an emergency release turns into a code
+// (A272).
+func validateBreakGlassTOTP(providers []DynamicSecretProviderConfig) []error {
+	totp := map[string]DynamicSecretProviderConfig{}
+	for _, p := range providers {
+		if strings.TrimSpace(p.Type) == "totp" {
+			totp[strings.TrimSpace(p.TenantID)+"\x00"+strings.TrimSpace(p.ID)] = p
+		}
+	}
+	var errs []error
+	for i, p := range providers {
+		for role, id := range p.TOTPProviders {
+			target, ok := totp[strings.TrimSpace(p.TenantID)+"\x00"+strings.TrimSpace(id)]
+			if !ok || !slices.Contains(normalizedStrings(target.AllowedRoles), role) {
+				errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d] totp_providers[%q] must name a totp provider in the same tenant that allows role %q", i, role, role))
+			}
 		}
 	}
 	return errs

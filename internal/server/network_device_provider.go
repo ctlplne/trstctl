@@ -203,3 +203,15 @@ func openConfiguredIdPAdminBackend(o *configuredDynamicBackendOpener) (requestDy
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// BreakGlassTOTPProvider is the totp provider holding a break-glass role's
+// MFA seed, or none (A272).
+func (p *configuredDynamicProvider) BreakGlassTOTPProvider(role string) string {
+	return strings.TrimSpace(p.cfg.TOTPProviders[role])
+}
+
+// BreakGlassHardwareKeyHolders is who holds a break-glass role's hardware
+// security keys (A272).
+func (p *configuredDynamicProvider) BreakGlassHardwareKeyHolders(role string) []string {
+	return append([]string(nil), p.cfg.HardwareKeyHolders[role]...)
+}

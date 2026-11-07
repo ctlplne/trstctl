@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2794 annotated sites across 31 rules. Each row is
+2796 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -801,7 +801,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (432 sites)
+### G115 — CWE-190 Integer overflow or wraparound (433 sites)
 
 | Location | Reason |
 |---|---|
@@ -989,10 +989,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7111` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7128` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7141` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7175` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7133` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7150` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7163` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7197` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1026,6 +1026,7 @@ not this file.
 | `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/pam_breakglass_served_test.go:180` | a positive clock step in a test (CWE-190) |
 | `internal/server/pam_browser.go:337` | offsets within the ring, at most 1 MiB apart (CWE-190) |
 | `internal/server/pam_browser_kube.go:182` | a 7-bit length below 126 (CWE-190) |
 | `internal/server/pam_browser_kube.go:185` | a 16-bit length under 1<<16 (CWE-190) |
@@ -1238,7 +1239,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (70 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (71 sites)
 
 | Location | Reason |
 |---|---|
@@ -1303,6 +1304,7 @@ not this file.
 | `internal/dynsecret/unix_accounts.go:143` | the rotated local-account credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/vcenter_sso.go:133` | the rotated SSO credential; the rotation seals it before storage (CWE-200) |
 | `internal/server/dynamic_secret_oracle_lab_test.go:276` | the lab's own initial password, seeded into the test tenant's secret store (CWE-200) |
+| `internal/server/pam_breakglass.go:187` | the one-time break-glass release the responder asked for; returned as wiped bytes, never stored (CWE-200) |
 | `internal/server/pam_desktop_served_test.go:192` | byte-backed fixture credential goes only to the encrypted secret store and private native pipe (CWE-200) |
 | `internal/server/pam_gateway_aws_console_standin_test.go:122` | native federation protocol returns its owned issued sign-in token (CWE-200) |
 | `internal/server/pam_gateway_azure_standin_test.go:110` | owned Graph addPassword protocol fixture; secret response bytes are wiped and held locked (CWE-200) |

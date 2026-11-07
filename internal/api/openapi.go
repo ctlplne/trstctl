@@ -5847,7 +5847,7 @@ func componentSchemas() map[string]*Schema {
 		"template_id":    {Type: "string", Format: "uuid", Description: "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session"},
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
 		"principals":            {Type: "array", Items: str()},
@@ -5858,7 +5858,7 @@ func componentSchemas() map[string]*Schema {
 		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
@@ -5866,6 +5866,7 @@ func componentSchemas() map[string]*Schema {
 		"disabled_reason": str(), "disabled_at": timestamp(),
 		"gateway_agent_id": str(), "gateway_address": str(),
 		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(), "folder": str(),
+		"hardware_key_holders": {Type: "array", Items: str(), Description: "who holds a break-glass account's hardware security keys (A272); the keys stay with them"},
 		"health": object(map[string]*Schema{
 			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
 				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},
@@ -8905,7 +8906,7 @@ func componentSchemas() map[string]*Schema {
 		}, "id", "provider_id", "key", "name", "kind", "privileges", "folder", "reason", "request_id", "approval_request_id", "imported_by", "imported_at"),
 		"PAMImportedAccountList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
 		"PAMCheckoutRequest": object(map[string]*Schema{
-			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql", "windows_local", "account"}}, "target_id": str(), "reason": str(),
+			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql", "windows_local", "account", "breakglass"}}, "target_id": str(), "reason": str(),
 			"template_id": {Type: "string", Format: "uuid", Description: "optional access template; a target folder's template cannot be overridden"},
 			"ttl_seconds": {Type: "integer", Description: "how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session"},
 		}, "request_id", "target_type", "target_id", "reason", "ttl_seconds"),
@@ -8922,6 +8923,7 @@ func componentSchemas() map[string]*Schema {
 			"requested_by": str(), "reason": str(), "approval_request_id": uuid(), "revealed_at": timestamp(), "expires_at": timestamp(),
 			"status":   {Type: "string", Enum: []string{"revealed", "checked_in", "expired"}},
 			"ended_at": timestamp(), "ended_by": str(), "rotation_command_id": str(),
+			"emergency": {Type: "boolean", Description: "a break-glass release under emergency access (A272): no review; its emergency grant's ID is this request's"},
 		}, "request_id", "target_type", "target_id", "provider_id", "account_secret", "secret_version", "requested_by", "reason",
 			"approval_request_id", "revealed_at", "expires_at", "status"),
 		"PAMCheckoutList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMCheckout")}}, "items"),
@@ -8971,6 +8973,12 @@ func componentSchemas() map[string]*Schema {
 			"checkout":   ref("PAMCheckout"),
 			"credential": {Type: "string", Description: "the vaulted account's credential, shown once; checking in or the deadline rotates it"},
 		}, "checkout", "credential"),
+		"PAMEmergencyCheckout": object(map[string]*Schema{
+			"checkout":             ref("PAMCheckout"),
+			"credential":           {Type: "string", Description: "the break-glass account's username and password, and its current TOTP code and when it stops being valid when it has a seed; shown once, never the seed"},
+			"hardware_key_holders": {Type: "array", Items: str(), Description: "who holds the account's hardware security keys"},
+			"emergency":            ref("PAMEmergencyGrant"),
+		}, "checkout", "credential", "emergency"),
 		"PAMEmergencyReviewRequest": object(map[string]*Schema{"outcome": {Type: "string", Enum: []string{"justified", "unjustified"}}, "notes": str()}, "outcome", "notes"),
 		"PAMQueryRequest":           object(map[string]*Schema{"sql": {Type: "string", Description: "one SQL text (up to 64 KiB); the last statement's result is returned"}}, "sql"),
 		"PAMQueryResult": object(map[string]*Schema{

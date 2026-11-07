@@ -63,6 +63,9 @@ type PAMCheckout struct {
 	EndedAt           *time.Time `json:"ended_at,omitempty"`
 	EndedBy           string     `json:"ended_by,omitempty"`
 	RotationCommandID string     `json:"rotation_command_id,omitempty"`
+	// Emergency (A272) marks a break-glass release under emergency access:
+	// no review, its grant's ID is the request's, every approver notified.
+	Emergency bool `json:"emergency,omitempty"`
 }
 
 // PAMCheckoutReveal is the one reply that carries the credential.
@@ -72,6 +75,25 @@ type PAMCheckoutReveal struct {
 }
 
 func (r *PAMCheckoutReveal) wipeSecrets() { r.Credential.wipe() }
+
+// PAMEmergencyCheckout is a break-glass account released once under
+// emergency access (A272): the credential (its password and, when the account
+// has one, the current TOTP code, never the seed), who holds its hardware
+// security keys, and the emergency grant every approver was notified of.
+type PAMEmergencyCheckout struct {
+	Checkout           PAMCheckout       `json:"checkout"`
+	Credential         secretJSONBytes   `json:"credential"`
+	HardwareKeyHolders []string          `json:"hardware_key_holders,omitempty"`
+	Emergency          PAMEmergencyGrant `json:"emergency"`
+}
+
+func (r *PAMEmergencyCheckout) wipeSecrets() { r.Credential.wipe() }
+
+// PAMEmergencyCheckoutService releases break-glass accounts; the served
+// broker implements it.
+type PAMEmergencyCheckoutService interface {
+	OpenPAMEmergencyCheckout(ctx context.Context, tenantID, idempotencyKey, responder string, req PAMCheckoutRequest) (*PAMEmergencyCheckout, error)
+}
 
 // PAMCheckoutService is check-out; the served broker implements it.
 type PAMCheckoutService interface {
@@ -90,7 +112,36 @@ func (a *API) pamCheckoutRoutes() []route {
 		{method: "POST", path: "/api/v1/access/checkouts/{request_id}/checkin", opID: "checkInPAMCheckout", summary: "Check a check-out in (your own with access:sessions.open; anyone's with access:write): the account is rotated so the revealed credential stops working", handler: a.checkInPAMCheckout, pathParams: request, resSchema: "PAMCheckout", successCode: "200", mutation: true, perm: authz.AccessSessionsOpen},
 		{method: "GET", path: "/api/v1/access/checkouts", opID: "listPAMCheckouts", summary: "List check-outs of vaulted accounts, newest first", handler: a.listPAMCheckouts, resSchema: "PAMCheckoutList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/checkouts/{request_id}", opID: "getPAMCheckout", summary: "Get a check-out", handler: a.getPAMCheckout, pathParams: request, resSchema: "PAMCheckout", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/emergency-checkouts", opID: "openPAMEmergencyCheckout", summary: "Release a break-glass account's credential once as a named responder, without review: every approver is notified, checking in or its deadline rotates it, and a post-incident review is required", handler: a.openPAMEmergencyCheckout, reqSchema: "PAMCheckoutRequest", resSchema: "PAMEmergencyCheckout", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessSessionsOpen},
 	}
+}
+
+//trstctl:mutation
+func (a *API) openPAMEmergencyCheckout(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		svc, ok := a.pam.(PAMEmergencyCheckoutService)
+		if a.pam == nil || !ok {
+			return 0, nil, ErrPAMUnavailable
+		}
+		var body PAMCheckoutRequest
+		if err := decodeJSON(r, &body); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		switch {
+		case principal.Subject == "":
+			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated responder is required")
+		case principal.RunID != "":
+			return 0, nil, errStatus(http.StatusForbidden, "an access bundle run cannot open emergency access")
+		case principal.Delegated:
+			return 0, nil, errStatus(http.StatusForbidden, "a token minted for another principal cannot open emergency access")
+		}
+		released, err := svc.OpenPAMEmergencyCheckout(ctx, tenantID, r.Header.Get("Idempotency-Key"), principal.Subject, body)
+		if err != nil {
+			return 0, nil, pamCheckoutNotFound(err)
+		}
+		return http.StatusCreated, released, nil
+	})
 }
 
 func (a *API) checkouts() (PAMCheckoutService, error) {

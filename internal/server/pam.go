@@ -57,7 +57,11 @@ const (
 	// (ESXi, vCenter single sign-on, Redfish controllers, network devices),
 	// vaulted in an application secret. It is checked out, never opened as a
 	// session.
-	pamTargetAccount    = "account"
+	pamTargetAccount = "account"
+	// pamTargetBreakGlass (A272) is an identity provider's break-glass
+	// administrator, vaulted in an application secret its provider rotates;
+	// released only through emergency access, never a session.
+	pamTargetBreakGlass = "breakglass"
 	pamTargetAWSConsole = accessconsole.TargetAWS
 	pamTargetRDP        = accessdesktop.TargetRDP
 	// pamTargetNetDevice (A270) is a network device's vaulted account: its
@@ -1599,6 +1603,9 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 	}
 	if req.TargetType == pamTargetAccount {
 		return fmt.Errorf("%w: an account target has no sessions; request a check-out (POST /api/v1/access/checkouts)", api.ErrPAMInvalid)
+	}
+	if req.TargetType == pamTargetBreakGlass {
+		return fmt.Errorf("%w: a break-glass account has no sessions; it is released only through emergency access (POST /api/v1/access/emergency-checkouts)", api.ErrPAMInvalid)
 	}
 	if !isPAMDatabaseType(req.TargetType) && req.TargetType != pamTargetSSH {
 		return fmt.Errorf("%w: target_type must be one of %s", api.ErrPAMInvalid, pamTargetTypesText())

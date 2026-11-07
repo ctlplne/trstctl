@@ -2,6 +2,11 @@
 
 ### Added
 
+- Break-glass identity provider accounts (A272 part 2): `breakglass` access targets are released only through emergency
+  access (`POST /api/v1/access/emergency-checkouts`, `trstctl access emergency checkout`): a named responder, once, every
+  approver notified, the password plus the current TOTP code of the account's `totp` provider (never the seed), the
+  hardware security key holders the provider records (`totp_providers`, `hardware_key_holders`); check-in rotates it. New
+  event `pam.checkout.emergency_released`; migration 0427. OpenAPI census 788 -> 789, CLI 855 -> 856.
 - Break-glass identity provider accounts (A272 part 1): `okta-user`, `entra-user` and `google-workspace-user`
   dynamic-secret providers rotate super administrator passwords through each provider's administration API, proved by one
   non-interactive sign-in where the provider has one (never retried). Provider catalog 53 -> 56 recipes.

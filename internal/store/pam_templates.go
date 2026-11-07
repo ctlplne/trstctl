@@ -211,6 +211,17 @@ func (s *Store) GetPAMEmergencyGrant(ctx context.Context, tenantID, sessionID st
 	return g, err
 }
 
+// GetPAMEmergencyGrantTx reads a grant inside a projection's transaction
+// (A272: an emergency release checks the grant it was opened under).
+func (s *Store) GetPAMEmergencyGrantTx(ctx context.Context, tx pgx.Tx, tenantID, sessionID string) (PAMEmergencyGrant, error) {
+	g, err := scanPAMEmergencyGrant(tx.QueryRow(ctx, `SELECT `+pamEmergencyColumns+` FROM pam_emergency_grants
+		WHERE tenant_id = $1 AND session_id::text = $2`, tenantID, sessionID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PAMEmergencyGrant{}, ErrPAMEmergencyGrantNotFound
+	}
+	return g, err
+}
+
 // ListPAMEmergencyGrants returns a tenant's emergency grants, newest first.
 func (s *Store) ListPAMEmergencyGrants(ctx context.Context, tenantID string, limit int) ([]PAMEmergencyGrant, error) {
 	if limit <= 0 || limit > 200 {

@@ -39287,6 +39287,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "emergency": {
+            "description": "a break-glass release under emergency access (A272): no review; its emergency grant's ID is this request's",
+            "type": "boolean"
+          },
           "ended_at": {
             "format": "date-time",
             "type": "string"
@@ -39383,7 +39387,8 @@
               "postgres",
               "mysql",
               "windows_local",
-              "account"
+              "account",
+              "breakglass"
             ],
             "type": "string"
           },
@@ -41321,6 +41326,33 @@
         },
         "required": [
           "interval_seconds"
+        ],
+        "type": "object"
+      },
+      "PAMEmergencyCheckout": {
+        "properties": {
+          "checkout": {
+            "$ref": "#/components/schemas/PAMCheckout"
+          },
+          "credential": {
+            "description": "the break-glass account's username and password, and its current TOTP code and when it stops being valid when it has a seed; shown once, never the seed",
+            "type": "string"
+          },
+          "emergency": {
+            "$ref": "#/components/schemas/PAMEmergencyGrant"
+          },
+          "hardware_key_holders": {
+            "description": "who holds the account's hardware security keys",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checkout",
+          "credential",
+          "emergency"
         ],
         "type": "object"
       },
@@ -43627,6 +43659,13 @@
           "gateway_agent_id": {
             "type": "string"
           },
+          "hardware_key_holders": {
+            "description": "who holds a break-glass account's hardware security keys (A272); the keys stay with them",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "health": {
             "properties": {
               "attempts": {
@@ -43722,7 +43761,8 @@
               "ssh",
               "windows_local",
               "netdevice",
-              "account"
+              "account",
+              "breakglass"
             ],
             "type": "string"
           }
@@ -43842,7 +43882,8 @@
               "ssh",
               "windows_local",
               "netdevice",
-              "account"
+              "account",
+              "breakglass"
             ],
             "type": "string"
           }
@@ -63746,6 +63787,75 @@
         ],
         "summary": "Read exact signed local administrator inventory and delivery state",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/emergency-checkouts": {
+      "post": {
+        "operationId": "openPAMEmergencyCheckout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMEmergencyCheckout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Release a break-glass account's credential once as a named responder, without review: every approver is notified, checking in or its deadline rotates it, and a post-incident review is required",
+        "x-trstctl-permission": "access:sessions.open",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/access/emergency-sessions": {

@@ -321,50 +321,54 @@ const (
 	// EventLDAPWritebackRecorded is the audit record of one LDAP directory
 	// writeback (A83): a member change an operator made in trstctl applied to
 	// the directory's role groups.
-	EventLDAPWritebackRecorded                    = "ldap.writeback.recorded" // #nosec G101 -- an event type name, not a credential (CWE-798)
-	EventAPITokenCreated                          = "api_token.created"
-	EventAPITokenRevoked                          = "api_token.revoked"
-	EventHoneyTokenCreated                        = "honeytoken.created"
-	EventHoneyTokenTriggered                      = "honeytoken.triggered"
-	EventHoneyTokenRevoked                        = "honeytoken.revoked"
-	EventAWSHoneyTokenCreated                     = "honeytoken.aws.created"
-	EventAWSHoneyScanPage                         = "honeytoken.aws.scan_page"
-	EventAWSHoneyTrailObjectScanned               = "honeytoken.aws.trail_object_scanned"
-	EventAWSHoneyTokenRearmed                     = "honeytoken.aws.rearmed"
-	EventPAMSessionStarted                        = "pam.session.started"
-	EventPAMTargetRegistered                      = "pam.target.registered"
-	EventPAMTargetDisabled                        = "pam.target.disabled"
-	EventPAMSessionActivationRequested            = "pam.session.activation_requested"
-	EventPAMSSHSigningRecoveryRequested           = "pam.session.ssh_signing_recovery_requested"
-	EventPAMSSHSigningRecovered                   = "pam.session.ssh_signing_recovered"
-	EventPAMSessionExpired                        = "pam.session.expired"
-	EventPAMSessionRevocationRequested            = "pam.session.revocation_requested"
-	EventPAMSessionRevocationFailed               = "pam.session.revocation_failed"
-	EventPAMSessionRevoked                        = "pam.session.revoked"
-	EventPAMRecordingChunkStored                  = "pam.session.recording_chunk_stored"
-	EventPAMRecordingSealed                       = "pam.session.recording_sealed"
-	EventPAMSessionGatewayEnded                   = "pam.session.gateway_ended"
-	EventPAMRecordingLegalHold                    = "pam.session.recording_legal_hold"
-	EventPAMRecordingDeleted                      = "pam.session.recording_deleted"
-	EventPAMRecordingRead                         = "pam.session.recording_read"
-	EventPAMAccountHealthChecked                  = "pam.account.health_checked"
-	EventPAMTemplateSaved                         = "pam.template.saved"
-	EventPAMCommandBlocked                        = "pam.command.blocked"
-	EventPAMCommandReviewRequested                = "pam.command.review_requested"
-	EventPAMCommandReviewDecided                  = "pam.command.review_decided"
-	EventPAMTemplateDeleted                       = "pam.template.deleted"
-	EventPAMFolderSaved                           = "pam.folder.saved"
-	EventPAMFolderDeleted                         = "pam.folder.deleted"
-	EventPAMTargetFolderSet                       = "pam.target.folder_set"
-	EventPAMEmergencyRespondersSet                = "pam.emergency.responders_set"
-	EventPAMEmergencyOpened                       = "pam.emergency.opened"
-	EventPAMEmergencyReviewed                     = "pam.emergency.reviewed"
-	EventPAMDiscoverySourceSaved                  = "pam.discovery.source_saved"
-	EventPAMDiscoverySourceDeleted                = "pam.discovery.source_deleted"
-	EventPAMDiscoveryRunCompleted                 = "pam.discovery.run_completed"
-	EventPAMDiscoveryImported                     = "pam.discovery.imported"
-	EventPAMDiscoveryDismissed                    = "pam.discovery.dismissed"
-	EventPAMCheckoutRevealed                      = "pam.checkout.revealed"
+	EventLDAPWritebackRecorded          = "ldap.writeback.recorded" // #nosec G101 -- an event type name, not a credential (CWE-798)
+	EventAPITokenCreated                = "api_token.created"
+	EventAPITokenRevoked                = "api_token.revoked"
+	EventHoneyTokenCreated              = "honeytoken.created"
+	EventHoneyTokenTriggered            = "honeytoken.triggered"
+	EventHoneyTokenRevoked              = "honeytoken.revoked"
+	EventAWSHoneyTokenCreated           = "honeytoken.aws.created"
+	EventAWSHoneyScanPage               = "honeytoken.aws.scan_page"
+	EventAWSHoneyTrailObjectScanned     = "honeytoken.aws.trail_object_scanned"
+	EventAWSHoneyTokenRearmed           = "honeytoken.aws.rearmed"
+	EventPAMSessionStarted              = "pam.session.started"
+	EventPAMTargetRegistered            = "pam.target.registered"
+	EventPAMTargetDisabled              = "pam.target.disabled"
+	EventPAMSessionActivationRequested  = "pam.session.activation_requested"
+	EventPAMSSHSigningRecoveryRequested = "pam.session.ssh_signing_recovery_requested"
+	EventPAMSSHSigningRecovered         = "pam.session.ssh_signing_recovered"
+	EventPAMSessionExpired              = "pam.session.expired"
+	EventPAMSessionRevocationRequested  = "pam.session.revocation_requested"
+	EventPAMSessionRevocationFailed     = "pam.session.revocation_failed"
+	EventPAMSessionRevoked              = "pam.session.revoked"
+	EventPAMRecordingChunkStored        = "pam.session.recording_chunk_stored"
+	EventPAMRecordingSealed             = "pam.session.recording_sealed"
+	EventPAMSessionGatewayEnded         = "pam.session.gateway_ended"
+	EventPAMRecordingLegalHold          = "pam.session.recording_legal_hold"
+	EventPAMRecordingDeleted            = "pam.session.recording_deleted"
+	EventPAMRecordingRead               = "pam.session.recording_read"
+	EventPAMAccountHealthChecked        = "pam.account.health_checked"
+	EventPAMTemplateSaved               = "pam.template.saved"
+	EventPAMCommandBlocked              = "pam.command.blocked"
+	EventPAMCommandReviewRequested      = "pam.command.review_requested"
+	EventPAMCommandReviewDecided        = "pam.command.review_decided"
+	EventPAMTemplateDeleted             = "pam.template.deleted"
+	EventPAMFolderSaved                 = "pam.folder.saved"
+	EventPAMFolderDeleted               = "pam.folder.deleted"
+	EventPAMTargetFolderSet             = "pam.target.folder_set"
+	EventPAMEmergencyRespondersSet      = "pam.emergency.responders_set"
+	EventPAMEmergencyOpened             = "pam.emergency.opened"
+	EventPAMEmergencyReviewed           = "pam.emergency.reviewed"
+	EventPAMDiscoverySourceSaved        = "pam.discovery.source_saved"
+	EventPAMDiscoverySourceDeleted      = "pam.discovery.source_deleted"
+	EventPAMDiscoveryRunCompleted       = "pam.discovery.run_completed"
+	EventPAMDiscoveryImported           = "pam.discovery.imported"
+	EventPAMDiscoveryDismissed          = "pam.discovery.dismissed"
+	EventPAMCheckoutRevealed            = "pam.checkout.revealed"
+	// EventPAMCheckoutEmergencyReleased (A272) is a break-glass account's
+	// credential released once to a named responder under emergency access,
+	// with no review; its grant notifies every approver.
+	EventPAMCheckoutEmergencyReleased             = "pam.checkout.emergency_released"
 	EventPAMCheckoutEnded                         = "pam.checkout.ended"
 	EventMachineSessionStarted                    = "secrets.session.started"
 	EventMachineSessionRevoked                    = "secrets.session.revoked"
@@ -4636,6 +4640,23 @@ type PAMCheckoutRevealed struct {
 	At            time.Time                  `json:"at"`
 }
 
+// PAMCheckoutEmergencyReleased records a break-glass account's credential
+// released once to a named responder under its emergency grant (A272): the
+// grant's ID is the check-out's request ID, and the secret version shown is
+// recorded, never the credential.
+type PAMCheckoutEmergencyReleased struct {
+	RequestID     string    `json:"request_id"`
+	TargetType    string    `json:"target_type"`
+	TargetID      string    `json:"target_id"`
+	ProviderID    string    `json:"provider_id"`
+	AccountSecret string    `json:"account_secret"`
+	SecretVersion int       `json:"secret_version"`
+	Reason        string    `json:"reason"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Responder     string    `json:"responder"`
+	At            time.Time `json:"at"`
+}
+
 // PAMCheckoutEnded records a check-out checked in or past its deadline, with
 // the rotation queued to retire the revealed credential (A261 part 2).
 type PAMCheckoutEnded struct {
@@ -5327,6 +5348,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMDiscoveryImported:                     {1: true},
 	EventPAMDiscoveryDismissed:                    {1: true},
 	EventPAMCheckoutRevealed:                      {1: true},
+	EventPAMCheckoutEmergencyReleased:             {1: true},
 	EventPAMCheckoutEnded:                         {1: true},
 	EventPAMSessionActivationRequested:            {1: true},
 	EventPAMSSHSigningRecoveryRequested:           {1: true},
@@ -8638,7 +8660,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.RegisteredBy == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account") {
+		if pl.ID == "" || pl.RegisteredBy == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account" && pl.TargetType != "breakglass") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetRegisteredTx(ctx, tx, store.PAMTarget{
@@ -8858,7 +8880,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account") || pl.Actor == "" || pl.At.IsZero() {
+		if pl.ID == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account" && pl.TargetType != "breakglass") || pl.Actor == "" || pl.At.IsZero() {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetFolderSetTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.Folder)
@@ -8978,6 +9000,23 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyPAMCheckoutRevealedTx(ctx, tx, e.TenantID, store.PAMCheckout{RequestID: pl.RequestID, TargetType: pl.TargetType,
 			TargetID: pl.TargetID, ProviderID: pl.ProviderID, AccountSecret: pl.AccountSecret, SecretVersion: pl.SecretVersion, RequestedBy: pl.Actor, Reason: pl.Reason,
 			ApprovalRequestID: pl.Approval.RequestID, RevealedAt: pl.At, ExpiresAt: pl.ExpiresAt})
+	case EventPAMCheckoutEmergencyReleased:
+		var pl PAMCheckoutEmergencyReleased
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || pl.TargetType != "breakglass" || pl.TargetID == "" || pl.ProviderID == "" || pl.AccountSecret == "" || pl.SecretVersion < 1 ||
+			pl.Reason == "" || pl.Responder == "" || pl.At.IsZero() || pl.ExpiresAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		// The emergency grant (its ID the request's) is recorded first.
+		grant, err := p.store.GetPAMEmergencyGrantTx(ctx, tx, e.TenantID, pl.RequestID)
+		if err != nil || grant.Responder != pl.Responder || grant.TargetType != pl.TargetType || grant.TargetID != pl.TargetID {
+			return fmt.Errorf("projections: %s has no matching emergency grant", e.Type)
+		}
+		return p.store.ApplyPAMCheckoutRevealedTx(ctx, tx, e.TenantID, store.PAMCheckout{RequestID: pl.RequestID, TargetType: pl.TargetType,
+			TargetID: pl.TargetID, ProviderID: pl.ProviderID, AccountSecret: pl.AccountSecret, SecretVersion: pl.SecretVersion, RequestedBy: pl.Responder,
+			Reason: pl.Reason, ApprovalRequestID: pl.RequestID, RevealedAt: pl.At, ExpiresAt: pl.ExpiresAt})
 	case EventPAMCheckoutEnded:
 		var pl PAMCheckoutEnded
 		if err := decode(e, &pl); err != nil {
@@ -9022,7 +9061,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account") {
+		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local" && pl.TargetType != "account" && pl.TargetType != "breakglass") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)

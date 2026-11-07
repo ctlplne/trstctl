@@ -875,6 +875,7 @@ public final class OpenApiSchemas {
       "PAMDiscoverySourceDeleted",
       "PAMDiscoverySourceList",
       "PAMDiscoverySourceRequest",
+      "PAMEmergencyCheckout",
       "PAMEmergencyGrant",
       "PAMEmergencyGrantList",
       "PAMEmergencyResponders",

@@ -384,9 +384,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// and read (760); A264 adds four reviewed cloud change operations (764).
 	// A267 adds four native host-inventory operations (768), then four
 	// reviewed dependent-rotation and retained-evidence operations (787).
-	// A269 adds the recording index search (788).
-	if len(out) != 788 {
-		t.Fatalf("OpenAPI operationIds = %d, want 788", len(out))
+	// A269 adds the recording index search (788). A272 adds the break-glass
+	// emergency check-out (789).
+	if len(out) != 789 {
+		t.Fatalf("OpenAPI operationIds = %d, want 789", len(out))
 	}
 	return out
 }
