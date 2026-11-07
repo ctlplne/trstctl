@@ -46,7 +46,8 @@ var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 	return api.PAMAccessTemplate{ID: t.ID, Name: t.Name, Reason: t.Reason, RequiredApprovals: t.RequiredApprovals,
-		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), CommandRules: t.CommandRules, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
+		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), CommandRules: t.CommandRules,
+		WebSignIn: t.WebSignIn, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
 }
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
@@ -79,6 +80,13 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 	case t.MaxTTLSeconds < 60 || time.Duration(t.MaxTTLSeconds)*time.Second > s.maxTTL:
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: max_ttl_seconds must be 60-%d", api.ErrPAMInvalid, int(s.maxTTL/time.Second))
 	}
+	if t.WebSignIn != nil {
+		// A273: how the gateway signs in to a web console; field and header
+		// names only, never a credential.
+		if err := t.WebSignIn.Validate(); err != nil {
+			return api.PAMAccessTemplate{}, fmt.Errorf("%w: web_sign_in: %v", api.ErrPAMInvalid, err)
+		}
+	}
 	rules, err := accessrules.CanonicalRules(t.CommandRules)
 	if err != nil {
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
@@ -108,7 +116,7 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMTemplateSaved, projections.PAMTemplateSaved{ID: t.ID, Name: t.Name,
 		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: revision,
-		DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), Actor: actor, At: s.clock().UTC()}); err != nil {
+		DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), WebSignIn: t.WebSignIn, Actor: actor, At: s.clock().UTC()}); err != nil {
 		return api.PAMAccessTemplate{}, err
 	}
 	saved, err := s.store.GetPAMTemplate(ctx, tenantID, t.ID)
@@ -158,6 +166,7 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 	}
 	req.OriginalTemplateReason = req.Reason
 	req.ResolvedCommandPolicy = nil
+	req.ResolvedWebSignIn = nil
 	req.ResolvedTemplateRefs = nil
 	req.TemplateResolved = false
 	t, refs, recorded, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
@@ -166,6 +175,16 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 	}
 	req.ResolvedTemplateRefs = append([]string{}, refs...)
 	req.TemplateResolved = true
+	if req.TargetType == pamTargetWebConsole {
+		// A273: the gateway signs in to a web console only as a template
+		// says; the request binds that sign-in for its reviewers.
+		if t == nil || t.WebSignIn == nil {
+			return req, 0, nil, fmt.Errorf("%w: a webconsole session is requested through an access template that sets web_sign_in (its folder's, or template_id)", api.ErrPAMInvalid)
+		}
+		signIn := *t.WebSignIn
+		signIn.BrowserCookies = append([]string(nil), t.WebSignIn.BrowserCookies...)
+		req.ResolvedWebSignIn = &signIn
+	}
 	if t == nil {
 		return req, s.requiredApprovals, refs, nil
 	}

@@ -1896,9 +1896,13 @@ type PAM struct {
 	// HealthCheckInterval (A258) is how often each brokered account's stored
 	// credential is signed in with, read-only; empty is an hour. Checks are
 	// spread over the interval.
-	HealthCheckInterval string              `json:"health_check_interval,omitempty"`
-	PostgresTargets     []PAMPostgresTarget `json:"postgres_targets,omitempty"`
-	SSHTargets          []PAMSSHTarget      `json:"ssh_targets,omitempty"`
+	HealthCheckInterval string `json:"health_check_interval,omitempty"`
+	// WebConsoleAllowLoopback admits web console targets (A273) whose route
+	// is a loopback address: a lab's stand-in console. Off by default, so an
+	// access gateway is never pointed at its own host's services.
+	WebConsoleAllowLoopback bool                `json:"web_console_allow_loopback,omitempty"`
+	PostgresTargets         []PAMPostgresTarget `json:"postgres_targets,omitempty"`
+	SSHTargets              []PAMSSHTarget      `json:"ssh_targets,omitempty"`
 	// DatabaseTargets (A256) are provider-backed targets of the other
 	// database kinds, reached only through an access gateway: target_type
 	// redis, mysql, mongodb or clickhouse. Each names a dynamic-secret

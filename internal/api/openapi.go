@@ -5847,7 +5847,7 @@ func componentSchemas() map[string]*Schema {
 		"template_id":    {Type: "string", Format: "uuid", Description: "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session"},
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass", "webconsole"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
 		"principals":            {Type: "array", Items: str()},
@@ -5856,9 +5856,10 @@ func componentSchemas() map[string]*Schema {
 		"host_key_fingerprints": {Type: "array", Items: str(), Description: "SHA256 fingerprints (as ssh-keygen -l prints them) of the host keys the gateway accepts from a gateway-bound SSH target (A254); one to eight."},
 		"folder":                {Type: "string", Description: "A folder (A261 part 3) whose access template the target's session requests and check-outs take."},
 		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
+		"web":                   ref("PAMWebConsoleRoute"),
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local", "netdevice", "account", "breakglass", "webconsole"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
@@ -5867,6 +5868,7 @@ func componentSchemas() map[string]*Schema {
 		"gateway_agent_id": str(), "gateway_address": str(),
 		"host_key_fingerprints": {Type: "array", Items: str()}, "account_secret": str(), "folder": str(),
 		"hardware_key_holders": {Type: "array", Items: str(), Description: "who holds a break-glass account's hardware security keys (A272); the keys stay with them"},
+		"web":                  ref("PAMWebConsoleRoute"),
 		"health": object(map[string]*Schema{
 			"status": {Type: "string", Enum: []string{"healthy", "rejected", "expired", "locked", "unreachable", "error", "not_supported"},
 				Description: "the last read-only sign-in check of the credential the target's provider holds (A258)"},
@@ -5933,6 +5935,7 @@ func componentSchemas() map[string]*Schema {
 		"max_ttl_seconds": {Type: "integer"}, "revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
 		"require_recording": {Type: "boolean", Description: "refuses a session through the template that would not be recorded, and every check-out (A261 part 3)"},
 		"desktop_clipboard": {Type: "string", Enum: []string{"deny", "to_target", "from_target", "both"}, Description: "remote desktop clipboard policy for sessions through the template (A269); deny when unset"},
+		"web_sign_in":       ref("PAMWebSignIn"),
 	}, "id", "name", "reason", "required_approvals", "max_ttl_seconds", "require_recording", "revision", "saved_at")
 	pamDiscoveredAccountInfo := map[string]*Schema{
 		"key": str(), "name": str(),
@@ -8859,8 +8862,23 @@ func componentSchemas() map[string]*Schema {
 			"name":          str(), "reason": str(), "required_approvals": {Type: "integer"}, "max_ttl_seconds": {Type: "integer"},
 			"require_recording": {Type: "boolean", Description: "refuse an unrecorded session and every check-out through the template"},
 			"desktop_clipboard": {Type: "string", Enum: []string{"deny", "to_target", "from_target", "both"}, Description: "remote desktop clipboard policy (A269); deny when unset"},
+			"web_sign_in":       ref("PAMWebSignIn"),
 			"revision":          {Type: "integer", Description: "the revision being replaced (PUT only)"},
 		}, "name", "reason", "required_approvals", "max_ttl_seconds"),
+		"PAMWebConsoleRoute": object(map[string]*Schema{
+			"url":         {Type: "string", Description: "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)"},
+			"ca_pem":      {Type: "string", Description: "PEM certificates the console's certificate is checked against; none: the system roots"},
+			"server_name": {Type: "string", Description: "the name the console's certificate is checked against; none: the URL's host"},
+		}, "url"),
+		"PAMWebSignIn": object(map[string]*Schema{
+			"mode":            {Type: "string", Enum: []string{"form", "header", "basic"}, Description: "how the access gateway signs in to a web console for the operator (A273): its own sign-in form, a header token, or HTTP basic authentication"},
+			"login_path":      {Type: "string", Description: "form: the console's sign-in page (a path)"},
+			"username_field":  {Type: "string", Description: "form: the username field's name"},
+			"password_field":  {Type: "string", Description: "form: the password field's name"},
+			"header":          {Type: "string", Description: "header: the header the vaulted token goes in"},
+			"header_prefix":   {Type: "string", Description: "header: text before the token (e.g. Bearer and a space)"},
+			"browser_cookies": {Type: "array", Items: str(), Description: "up to eight cookies the browser may hold (a console's double-submit CSRF token), never a session cookie; every other cookie stays at the gateway"},
+		}, "mode"),
 		"PAMAccessTemplateDeleted": object(map[string]*Schema{"id": uuid(), "deleted": {Type: "boolean"}}, "id", "deleted"),
 		"PAMEmergencyResponders":   object(map[string]*Schema{"subjects": {Type: "array", Items: str()}}, "subjects"),
 		"PAMEmergencyGrant":        pamEmergencyGrant,

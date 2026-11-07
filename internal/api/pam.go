@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/attest"
@@ -173,6 +174,9 @@ type PAMTarget struct {
 	// Folder (A261 part 3) names the folder whose template the target's
 	// requests take.
 	Folder string `json:"folder,omitempty"`
+	// Web (A273) is a webconsole target's route: the console's origin, CA and
+	// server name.
+	Web *accessweb.Route `json:"web,omitempty"`
 }
 
 // PAMAccountHealth is a brokered account's credential health (A258).
@@ -200,6 +204,7 @@ func WithPAM(svc PAMService) Option {
 type PAMSessionRequest struct {
 	// Resolved metadata is filled by the server; the HTTP request type cannot supply it.
 	ResolvedCommandPolicy  *accessrules.Policy
+	ResolvedWebSignIn      *accessweb.SignIn
 	ResolvedTemplateRefs   []string
 	TemplateResolved       bool
 	OriginalTemplateReason string

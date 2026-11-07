@@ -683,6 +683,55 @@ func (b *webMaskBody) Read(p []byte) (int, error) {
 
 func (b *webMaskBody) Close() error { return b.src.Close() }
 
+// webDial reaches a console by address: a name that resolves to the
+// gateway's own host, a link-local address (a cloud metadata endpoint) or
+// another special address is refused, unless the reviewed route itself is a
+// loopback lab console (which only a deployment's lab opt-in admits), so a
+// registered name re-pointed in DNS never reaches the gateway's neighbours.
+func webDial(dial func(context.Context, string, string) (net.Conn, error), route *url.URL) func(context.Context, string, string) (net.Conn, error) {
+	if dial == nil {
+		d := &net.Dialer{Timeout: 10 * time.Second}
+		dial = d.DialContext
+	}
+	host := strings.ToLower(route.Hostname())
+	lab := host == "localhost"
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		lab = true
+	}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		name, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		var ips []net.IP
+		if ip := net.ParseIP(name); ip != nil {
+			ips = []net.IP{ip}
+		} else {
+			found, err := net.DefaultResolver.LookupIPAddr(ctx, name)
+			if err != nil {
+				return nil, err
+			}
+			for _, a := range found {
+				ips = append(ips, a.IP)
+			}
+		}
+		lastErr := errors.New("accessgateway: the console's name has no address")
+		for _, ip := range ips {
+			special := ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
+			if special && (!lab || !ip.IsLoopback()) {
+				lastErr = fmt.Errorf("accessgateway: the console's address %s is the gateway's own host or a special address", ip)
+				continue
+			}
+			conn, err := dial(ctx, network, net.JoinHostPort(ip.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+		return nil, lastErr
+	}
+}
+
 // webGatewayPage is the gateway's own answer to the browser.
 func webGatewayPage(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -702,7 +751,11 @@ func serveWebConsole(ctx context.Context, client net.Conn, raw []byte, intent Se
 		return err
 	}
 	defer account.wipe()
-	target, transport, err := httpUpstream{URL: intent.UpstreamURL, CAPEM: intent.UpstreamCAPEM, ServerName: intent.UpstreamServerName}.transport(dial)
+	route, err := url.Parse(intent.UpstreamURL)
+	if err != nil {
+		return errors.New("accessgateway: the console session's route is not a URL")
+	}
+	target, transport, err := httpUpstream{URL: intent.UpstreamURL, CAPEM: intent.UpstreamCAPEM, ServerName: intent.UpstreamServerName}.transport(webDial(dial, route))
 	if err != nil {
 		return err
 	}

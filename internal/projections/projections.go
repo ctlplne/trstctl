@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 	"trstctl.com/trstctl/internal/cloudentitlements/change"
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
@@ -4311,7 +4312,10 @@ type AWSHoneyTokenRearmed struct {
 const PAMCommandRulesEventSchemaVersion = 2
 
 type PAMSessionStarted struct {
-	CommandPolicy  *accessrules.Policy `json:"command_policy,omitempty"`
+	CommandPolicy *accessrules.Policy `json:"command_policy,omitempty"`
+	// WebSignIn is the web console sign-in the session's reviewers approved
+	// (A273).
+	WebSignIn      *accessweb.SignIn   `json:"web_sign_in,omitempty"`
 	ID             string              `json:"id"`
 	TargetType     string              `json:"target_type"`
 	TargetID       string              `json:"target_id"`
@@ -4379,7 +4383,7 @@ type PAMSSHSigningRecoveryRequested struct {
 // cluster through a gateway.
 func PAMDatabaseTargetType(targetType string) bool {
 	switch targetType {
-	case "postgres", "clickhouse", "mongodb", "mysql", "redis", "kubernetes", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice":
+	case "postgres", "clickhouse", "mongodb", "mysql", "redis", "kubernetes", "snowflake", "aws", "gcp", "azure", "aws-console", "rdp", "netdevice", "webconsole":
 		return true
 	}
 	return false
@@ -4408,6 +4412,8 @@ type PAMTargetRegistered struct {
 	AccountSecret string `json:"account_secret,omitempty"`
 	// Folder names the folder the target was registered into (A261 part 3).
 	Folder string `json:"folder,omitempty"`
+	// Web is a web console target's route (A273): public facts.
+	Web *accessweb.Route `json:"web,omitempty"`
 }
 
 // PAMRecordingChunkStored records one sealed chunk of a gateway session's
@@ -4480,10 +4486,12 @@ type PAMTemplateSaved struct {
 	// check-out through the template.
 	RequireRecording bool `json:"require_recording,omitempty"`
 	// DesktopClipboard (A269) is the remote desktop clipboard policy.
-	DesktopClipboard string    `json:"desktop_clipboard,omitempty"`
-	Revision         int64     `json:"revision"`
-	Actor            string    `json:"actor"`
-	At               time.Time `json:"at"`
+	DesktopClipboard string `json:"desktop_clipboard,omitempty"`
+	// WebSignIn (A273) is how the gateway signs in to a web console.
+	WebSignIn *accessweb.SignIn `json:"web_sign_in,omitempty"`
+	Revision  int64             `json:"revision"`
+	Actor     string            `json:"actor"`
+	At        time.Time         `json:"at"`
 }
 
 // PAMFolderSaved records an account folder at a revision: the access
@@ -8668,7 +8676,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ProviderID: pl.ProviderID, AllowedRoles: pl.AllowedRoles, Host: pl.Host,
 			Port: pl.Port, Principals: pl.Principals, RegisteredBy: pl.RegisteredBy,
 			RegisteredAt: e.Time, GatewayAgentID: pl.GatewayAgentID, GatewayAddress: pl.GatewayAddress,
-			HostKeyFingerprints: pl.HostKeyFingerprints, AccountSecret: pl.AccountSecret, Folder: pl.Folder,
+			HostKeyFingerprints: pl.HostKeyFingerprints, AccountSecret: pl.AccountSecret, Folder: pl.Folder, Web: pl.Web,
 		})
 	case EventPAMRecordingChunkStored:
 		var pl PAMRecordingChunkStored
@@ -8770,7 +8778,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
 			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, DesktopClipboard: pl.DesktopClipboard, CommandRules: pl.CommandRules,
-			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+			WebSignIn: pl.WebSignIn, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
 	case EventCloudMachineChangeProposed:
 		var pl CloudMachineChangeProposed
 		if err := decode(e, &pl); err != nil {
@@ -9105,7 +9113,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
 			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
 			Delivery: pl.Delivery, GatewayAgentID: pl.GatewayAgentID, GatewayTicketDigest: pl.GatewayTicketDigest,
-			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy,
+			SSHPrincipal: pl.SSHPrincipal, CommandPolicy: pl.CommandPolicy, WebSignIn: pl.WebSignIn,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

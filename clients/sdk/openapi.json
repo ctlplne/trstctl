@@ -38898,6 +38898,9 @@
           },
           "saved_by": {
             "type": "string"
+          },
+          "web_sign_in": {
+            "$ref": "#/components/schemas/PAMWebSignIn"
           }
         },
         "required": [
@@ -38979,6 +38982,9 @@
           "revision": {
             "description": "the revision being replaced (PUT only)",
             "type": "integer"
+          },
+          "web_sign_in": {
+            "$ref": "#/components/schemas/PAMWebSignIn"
           }
         },
         "required": [
@@ -43762,9 +43768,13 @@
               "windows_local",
               "netdevice",
               "account",
-              "breakglass"
+              "breakglass",
+              "webconsole"
             ],
             "type": "string"
+          },
+          "web": {
+            "$ref": "#/components/schemas/PAMWebConsoleRoute"
           }
         },
         "required": [
@@ -43883,9 +43893,13 @@
               "windows_local",
               "netdevice",
               "account",
-              "breakglass"
+              "breakglass",
+              "webconsole"
             ],
             "type": "string"
+          },
+          "web": {
+            "$ref": "#/components/schemas/PAMWebConsoleRoute"
           }
         },
         "required": [
@@ -43993,6 +44007,70 @@
         "required": [
           "cols",
           "rows"
+        ],
+        "type": "object"
+      },
+      "PAMWebConsoleRoute": {
+        "properties": {
+          "ca_pem": {
+            "description": "PEM certificates the console's certificate is checked against; none: the system roots",
+            "type": "string"
+          },
+          "server_name": {
+            "description": "the name the console's certificate is checked against; none: the URL's host",
+            "type": "string"
+          },
+          "url": {
+            "description": "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "PAMWebSignIn": {
+        "properties": {
+          "browser_cookies": {
+            "description": "up to eight cookies the browser may hold (a console's double-submit CSRF token), never a session cookie; every other cookie stays at the gateway",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "header": {
+            "description": "header: the header the vaulted token goes in",
+            "type": "string"
+          },
+          "header_prefix": {
+            "description": "header: text before the token (e.g. Bearer and a space)",
+            "type": "string"
+          },
+          "login_path": {
+            "description": "form: the console's sign-in page (a path)",
+            "type": "string"
+          },
+          "mode": {
+            "description": "how the access gateway signs in to a web console for the operator (A273): its own sign-in form, a header token, or HTTP basic authentication",
+            "enum": [
+              "form",
+              "header",
+              "basic"
+            ],
+            "type": "string"
+          },
+          "password_field": {
+            "description": "form: the password field's name",
+            "type": "string"
+          },
+          "username_field": {
+            "description": "form: the username field's name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
         ],
         "type": "object"
       },

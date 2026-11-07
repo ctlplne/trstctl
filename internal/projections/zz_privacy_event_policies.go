@@ -1007,6 +1007,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/gateway_agent_id", opaque), privacyRule("/gateway_address", opaque),
 			privacyRule("/host_key_fingerprints", opaque), privacyRule("/account_secret", opaque),
 			privacyRule("/folder", opaque),
+			// A273: a web console's route, public facts.
+			privacyRule("/web/url", opaque), privacyRule("/web/ca_pem", opaque), privacyRule("/web/server_name", opaque),
 		),
 		{EventPAMRecordingChunkStored, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/gateway_agent_id", opaque), privacyRule("/ord", opaque),

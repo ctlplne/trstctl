@@ -306,3 +306,38 @@ func TestWebMaskBodyAcrossReadsA273(t *testing.T) {
 		t.Fatalf("masked %d of %d bytes", len(out), len(page))
 	}
 }
+
+// TestWebDialRefusesTheGatewaysNeighboursA273: a console name that resolves
+// to the gateway's own host or a link-local (metadata) address is refused;
+// only a reviewed loopback lab route reaches loopback.
+func TestWebDialRefusesTheGatewaysNeighboursA273(t *testing.T) {
+	var dialed []string
+	base := func(_ context.Context, _, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		a, b := net.Pipe()
+		_ = b.Close()
+		return a, nil
+	}
+	console, _ := url.Parse("https://console.internal.example")
+	guarded := webDial(base, console)
+	for _, addr := range []string{"127.0.0.1:443", "[::1]:443", "169.254.169.254:80", "0.0.0.0:443", "224.0.0.1:443"} {
+		if conn, err := guarded(context.Background(), "tcp", addr); err == nil {
+			_ = conn.Close()
+			t.Fatalf("%s was reached", addr)
+		}
+	}
+	if conn, err := guarded(context.Background(), "tcp", "10.20.30.40:8443"); err != nil {
+		t.Fatalf("a private console address was refused: %v", err)
+	} else {
+		_ = conn.Close()
+	}
+	lab, _ := url.Parse("https://127.0.0.1:9443")
+	if conn, err := webDial(base, lab)(context.Background(), "tcp", "127.0.0.1:9443"); err != nil {
+		t.Fatalf("the lab's loopback console was refused: %v", err)
+	} else {
+		_ = conn.Close()
+	}
+	if len(dialed) != 2 || dialed[0] != "10.20.30.40:8443" || dialed[1] != "127.0.0.1:9443" {
+		t.Fatalf("dialed %v", dialed)
+	}
+}

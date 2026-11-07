@@ -2548,6 +2548,7 @@ func (s *Server) configurePAMSurface(d Deps) error {
 		DesktopJobEnabled:                   AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionDesktop],
 		ADDesktopJobEnabled:                 AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionADDesktop],
 		NetDeviceJobEnabled:                 AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionNetDevice],
+		WebJobEnabled:                       AgentClaimableJobKinds(d.AgentClaimableJobKinds)[accessgateway.KindSessionWeb],
 		WindowsDependentInventoryEnabled:    AgentClaimableJobKinds(d.AgentClaimableJobKinds)[servicedependents.InventoryDestination],
 		WindowsLocalAccountInventoryEnabled: AgentClaimableJobKinds(d.AgentClaimableJobKinds)[hostaccounts.InventoryDestination],
 		Config:                              d.PAM, Store: d.Store, Log: d.Log, Orch: s.orch, SSHCA: sshCA, SSHProtocol: sshSurface,

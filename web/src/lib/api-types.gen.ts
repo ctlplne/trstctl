@@ -8406,6 +8406,7 @@ export interface PAMAccessTemplate {
   revision: number;
   saved_at: string;
   saved_by?: string;
+  web_sign_in?: PAMWebSignIn;
 }
 
 export interface PAMAccessTemplateDeleted {
@@ -8426,6 +8427,7 @@ export interface PAMAccessTemplateRequest {
   require_recording?: boolean;
   required_approvals: number;
   revision?: number;
+  web_sign_in?: PAMWebSignIn;
 }
 
 export interface PAMApprovalRequest {
@@ -9410,7 +9412,8 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass" | "webconsole";
+  web?: PAMWebConsoleRoute;
 }
 
 export interface PAMTargetDisableRequest {
@@ -9438,7 +9441,8 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass" | "webconsole";
+  web?: PAMWebConsoleRoute;
 }
 
 export interface PAMTerminal {
@@ -9468,6 +9472,22 @@ export interface PAMTerminalRequest {
   pod?: string;
   rows: number;
   ssh_command?: string;
+}
+
+export interface PAMWebConsoleRoute {
+  ca_pem?: string;
+  server_name?: string;
+  url: string;
+}
+
+export interface PAMWebSignIn {
+  browser_cookies?: string[];
+  header?: string;
+  header_prefix?: string;
+  login_path?: string;
+  mode: "form" | "header" | "basic";
+  password_field?: string;
+  username_field?: string;
 }
 
 export interface PAMWindowsLocalAccount {

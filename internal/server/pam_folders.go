@@ -184,6 +184,10 @@ func (s *pamService) pamRequestTemplate(ctx context.Context, tenantID, targetTyp
 		// policy as it was reviewed.
 		refs = append(refs, "pam-desktop-clipboard:"+policy)
 	}
+	if t.WebSignIn != nil && targetType == pamTargetWebConsole {
+		// A273: reviewers see how the gateway will sign in to the console.
+		refs = append(refs, "pam-web-sign-in:"+t.WebSignIn.Mode)
+	}
 	return &t, refs, target.GatewayAgentID != "" && s.recordings != nil && target.TargetType != pamTargetAWSConsole, nil
 }
 

@@ -146,6 +146,8 @@ var agentJobKindAllowlist = map[string]bool{
 	// A270: a network device session, and one under command rules.
 	relay.KindAccessGatewayNetDeviceSession:      true,
 	relay.KindAccessGatewayNetDeviceRulesSession: true,
+	// A273: an internal web admin console session.
+	relay.KindAccessGatewayWebSession: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -1074,7 +1076,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("MDM check-in result needs a terminal executed report")
 		}
 		return a.recordMDMCheckInResult(ctx, info.TenantID, info.CommonName, claim.Payload, req.Detail)
-	case relay.KindAccessGatewayADDesktopSession, relay.KindAccessGatewayDesktopSession, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession, relay.KindAccessGatewayNetDeviceSession, relay.KindAccessGatewayNetDeviceRulesSession:
+	case relay.KindAccessGatewayADDesktopSession, relay.KindAccessGatewayDesktopSession, relay.KindAccessGatewaySession, relay.KindAccessGatewayRulesSession, relay.KindAccessGatewaySSHRulesSession, relay.KindAccessGatewayMySQLRulesSession, relay.KindAccessGatewayRedisRulesSession, relay.KindAccessGatewayMongoRulesSession, relay.KindAccessGatewayClickHouseRulesSession, relay.KindAccessGatewayNetDeviceSession, relay.KindAccessGatewayNetDeviceRulesSession, relay.KindAccessGatewayWebSession:
 		// A254: the gateway reports how a session ended; the session itself
 		// is ended by its deadline and revocation, not by this report. A255:
 		// the report is recorded, acknowledging a termination.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -66,12 +67,19 @@ type PAMSession struct {
 	GatewayEndedAt *time.Time
 	GatewayEnded   string
 	CommandPolicy  *accessrules.Policy
+	// WebSignIn (A273) is the web console sign-in the session's reviewers
+	// approved.
+	WebSignIn *accessweb.SignIn
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
 // idempotent on (tenant_id,id).
 func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSession) error {
 	policyJSON, err := encodePAMCommandPolicy(p.CommandPolicy, p.TargetType)
+	if err != nil {
+		return err
+	}
+	webJSON, err := encodeWebJSON(p.WebSignIn)
 	if err != nil {
 		return err
 	}
@@ -83,11 +91,11 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
 		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
-		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy)
+		         approval_request_id, delivery, gateway_agent_id, gateway_ticket_digest, ssh_principal, command_policy, web_sign_in)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
 		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
-		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb)
+		         $20, $21, NULLIF($22,'')::uuid, $23, $24, $25::jsonb, $26::jsonb)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -111,11 +119,12 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        gateway_agent_id = EXCLUDED.gateway_agent_id,
 		        gateway_ticket_digest = EXCLUDED.gateway_ticket_digest,
 		        ssh_principal = EXCLUDED.ssh_principal,
- command_policy = EXCLUDED.command_policy`,
+ command_policy = EXCLUDED.command_policy,
+		        web_sign_in = EXCLUDED.web_sign_in`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
 		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
-		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		p.ApprovalRequestID, pamDelivery(p.Delivery), p.GatewayAgentID, p.GatewayTicketDigest, p.SSHPrincipal, policyJSON, webJSON) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -170,7 +179,7 @@ func (s *Store) GetPAMSession(ctx context.Context, tenantID, id string) (PAMSess
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, ''), web_sign_in
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id)
@@ -193,7 +202,7 @@ func (s *Store) ListPAMSessions(ctx context.Context, tenantID string, limit int)
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, ''), web_sign_in
 			   FROM pam_sessions
 			  WHERE tenant_id = $1
 			  ORDER BY started_at DESC, id DESC
@@ -232,7 +241,7 @@ func (s *Store) ListLivePAMSessionsRequestedBy(ctx context.Context, tenantID str
 			        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, ''), web_sign_in
 			   FROM pam_sessions
 			  WHERE tenant_id = $1 AND status = 'active' AND requested_by = ANY($2::text[])
 			  ORDER BY started_at, id
@@ -267,7 +276,7 @@ func (s *Store) ListDuePAMSessions(ctx context.Context, now time.Time, limit int
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, ''), web_sign_in
 		   FROM pam_sessions
 		  WHERE status = $1 AND expires_at <= $2
 		  ORDER BY expires_at ASC, tenant_id, id
@@ -302,7 +311,7 @@ func (s *Store) ListRevokingPAMSessions(ctx context.Context, limit int) ([]PAMSe
 		        revocation_requested_by, revocation_reason, revocation_requested_at,
 		        revocation_idempotency_key, revocation_failure, revocation_failed_at,
 		        delivery, COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal,
-		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, '')
+		        gateway_ended_at, gateway_ended, command_policy, COALESCE(approval_request_id::text, ''), web_sign_in
 		   FROM pam_sessions WHERE status = 'revoking'
 		  ORDER BY revocation_requested_at, tenant_id, id LIMIT $1`, limit)
 	if err != nil {
@@ -326,7 +335,7 @@ type pamScanner interface {
 
 func scanPAMSession(row pamScanner, out *PAMSession) error {
 	var serial int64
-	var policyJSON []byte
+	var policyJSON, webJSON []byte
 	if err := row.Scan(
 		&out.TenantID, &out.ID, &out.TargetType, &out.TargetID, &out.Role, &out.Status,
 		&out.Subject, &out.RequestedBy, &out.Reason, &out.AttestationID, &out.BackendRef, &out.SSHKeyID,
@@ -334,7 +343,7 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		&out.RevocationRequestedBy, &out.RevocationReason, &out.RevocationRequestedAt,
 		&out.RevocationIdempotencyKey, &out.RevocationFailure, &out.RevocationFailedAt,
 		&out.Delivery, &out.GatewayAgentID, &out.GatewayTicketDigest, &out.SSHPrincipal, &out.GatewayEndedAt, &out.GatewayEnded, &policyJSON,
-		&out.ApprovalRequestID,
+		&out.ApprovalRequestID, &webJSON,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return pgx.ErrNoRows
@@ -350,7 +359,8 @@ func scanPAMSession(row pamScanner, out *PAMSession) error {
 		return err
 	}
 	out.CommandPolicy = policy
-	return nil
+	out.WebSignIn, err = decodeWebSignIn(webJSON)
+	return err
 }
 
 // pamDelivery names a session's delivery; sessions projected before A254 were
@@ -387,7 +397,7 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — the PAM expiry worker checks every tenant's active gateway sessions for a queued job, as it lists due sessions across tenants (ListDuePAMSessions); each job is then queued under its own tenant's RLS context.
 		`SELECT tenant_id::text, id::text, target_type, target_id, expires_at,
-		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal, command_policy
+		        COALESCE(gateway_agent_id::text, ''), gateway_ticket_digest, ssh_principal, command_policy, web_sign_in
 		   FROM pam_sessions
 		  WHERE delivery = 'gateway' AND status = 'active' AND expires_at > $1
 		  ORDER BY expires_at, id
@@ -398,8 +408,11 @@ func (s *Store) ListActiveGatewayPAMSessions(ctx context.Context, now time.Time,
 	defer rows.Close()
 	for rows.Next() {
 		var p PAMSession
-		var policyJSON []byte
-		if err := rows.Scan(&p.TenantID, &p.ID, &p.TargetType, &p.TargetID, &p.ExpiresAt, &p.GatewayAgentID, &p.GatewayTicketDigest, &p.SSHPrincipal, &policyJSON); err != nil {
+		var policyJSON, webJSON []byte
+		if err := rows.Scan(&p.TenantID, &p.ID, &p.TargetType, &p.TargetID, &p.ExpiresAt, &p.GatewayAgentID, &p.GatewayTicketDigest, &p.SSHPrincipal, &policyJSON, &webJSON); err != nil {
+			return nil, err
+		}
+		if p.WebSignIn, err = decodeWebSignIn(webJSON); err != nil {
 			return nil, err
 		}
 		p.Delivery = "gateway"

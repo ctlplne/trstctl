@@ -1418,3 +1418,15 @@ sign-in page signs in again and sends the browser back (home, when the request i
 signed out), at most ten sign-ins a session. Requests (with sensitive-looking form and JSON
 fields masked) and responses are recorded as `request`, `response`, `sign-in` and
 `refused` events with the credential and the console's cookie values masked.
+
+On the control plane a `webconsole` target is a vaulted, gateway-only target with no
+provider: its `account_secret` is its only role and its `web` route (origin, CA, server
+name) is validated at registration, a loopback origin only under
+`pam.web_console_allow_loopback`. The gateway adds a check of its own: it resolves the
+console's name itself and refuses a loopback, link-local (cloud metadata), multicast or
+unspecified address unless the reviewed route is itself a loopback lab console, so a name
+re-pointed in DNS never reaches the gateway's neighbours. A session request resolves its
+template's `web_sign_in` like a command policy: it is part of the request digest the
+reviewers approve (with `pam-web-sign-in:<mode>` in the evidence), is stored on the session
+(`pam_sessions.web_sign_in`, migration 0428) and is what the job's intent carries; a request
+whose template sets none is refused, as is a check-out of the account.

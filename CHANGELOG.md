@@ -2,6 +2,11 @@
 
 ### Added
 
+- Internal web admin consoles (A273 part 2): `webconsole` access targets vault a console's account and name its route
+  (`web`: origin, CA, server name; loopback only with `pam.web_console_allow_loopback`); access templates set
+  `web_sign_in` (`form`, `header` or `basic`, and `browser_cookies`), bound into the reviewed request and kept on the
+  session; `trstctl access sessions connect` prints the address to open in a browser. The account cannot be checked out.
+  The gateway refuses a console name that resolves to its own host or a link-local address. Migration 0428.
 - Internal web admin consoles (A273 part 1): the access gateway serves `webconsole` sessions (agent job kind
   `access.gateway.session.web.v1`): it signs in for the operator through the console's own sign-in form, a header token or
   HTTP basic authentication, keeps the console's cookies, masks the credential out of every page and records each request

@@ -308,6 +308,20 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 				return accessgateway.SessionIntent{}, errors.New("server: reviewed desktop route unavailable")
 			}
 		}
+		if rec.TargetType == pamTargetWebConsole {
+			// A273: the console's route from its target and the sign-in the
+			// session's reviewers approved; the vaulted account is redeemed.
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			if target.cfg.Web == nil || rec.WebSignIn == nil {
+				return accessgateway.SessionIntent{}, errors.New("server: web console session has no reviewed route and sign-in")
+			}
+			signIn := *rec.WebSignIn
+			intent.UpstreamURL, intent.UpstreamCAPEM, intent.UpstreamServerName = target.cfg.Web.URL, target.cfg.Web.CAPEM, target.cfg.Web.ServerName
+			intent.WebSignIn = &signIn
+		}
 		if rec.TargetType == pamTargetAWSConsole {
 			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {

@@ -9,6 +9,15 @@ func pamCommandTemplatePrivacy(base events.PrivacyEventPolicy) events.PrivacyEve
 	base.Rules = append(base.Rules,
 		// A269: the template's remote desktop clipboard policy.
 		privacyRule("/desktop_clipboard", events.PrivacyFieldOpaqueExact),
+		// A273: how the gateway signs in to a web console (field and header
+		// names, never a credential).
+		privacyRule("/web_sign_in/mode", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/login_path", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/username_field", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/password_field", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/header", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/header_prefix", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/browser_cookies/*", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/id", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_rules/*/name", events.PrivacyFieldFreeTextClear),
 		privacyRule("/command_rules/*/enabled", events.PrivacyFieldOpaqueExact),
@@ -33,6 +42,14 @@ func pamCommandSessionPrivacy(base events.PrivacyEventPolicy) events.PrivacyEven
 		privacyRule("/command_policy/rules/*/effect", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_policy/rules/*/required_approvals", events.PrivacyFieldOpaqueExact),
 		privacyRule("/command_policy/rules/*/review_ttl_seconds", events.PrivacyFieldOpaqueExact),
+		// A273: the web console sign-in the session's reviewers approved.
+		privacyRule("/web_sign_in/mode", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/login_path", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/username_field", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/password_field", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/header", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/header_prefix", events.PrivacyFieldOpaqueExact),
+		privacyRule("/web_sign_in/browser_cookies/*", events.PrivacyFieldOpaqueExact),
 	)
 	return base
 }

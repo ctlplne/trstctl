@@ -1458,3 +1458,42 @@ device command verbs (`configure`, `write`, `copy`, `reload`, `request`, `commit
 `wr mem` meets a rule on `write`. Rules read exec commands
 (`ssh ... "show version"`); an interactive shell's typed lines are not read, so a
 shell answers to every rule, as on an SSH host.
+
+#### Open an internal web admin console
+
+Vault the console's account as an application secret (`{"username": ..., "password": ...}`,
+or `{"token": ...}` for a header sign-in) and register it as a `webconsole` access target:
+the account secret (its only role), the console's route — its origin over https, with the
+CA and server name its certificate is checked against — and the gateway that serves it. No
+provider rotates it.
+
+```json
+{"id": "grafana-admin", "target_type": "webconsole",
+ "account_secret": "consoles/grafana-admin", "allowed_roles": ["consoles/grafana-admin"],
+ "web": {"url": "https://grafana.internal.example", "ca_pem": "<PEM>"},
+ "gateway_agent_id": "<gateway agent UUID>", "gateway_address": "gateway.example:8443"}
+```
+
+How the gateway signs in is set per access template, in `web_sign_in`: `form` (the
+console's sign-in page and its username and password fields), `header` (the header the
+token goes in, with an optional prefix such as `Bearer `) or `basic`. `browser_cookies`
+names up to eight cookies the console's own scripts must read, such as a double-submit
+CSRF token; every other cookie the console sets stays at the gateway.
+
+```json
+{"name": "grafana-maintenance", "reason": "Reviewed console maintenance",
+ "required_approvals": 2, "max_ttl_seconds": 1800,
+ "web_sign_in": {"mode": "form", "login_path": "/login",
+                 "username_field": "user", "password_field": "password"}}
+```
+
+A `webconsole` session is requested through such a template (its folder's, or
+`template_id`); reviewers see the sign-in mode in the request's evidence and the gateway
+applies exactly the sign-in they approved. Enable `access.gateway.session.web.v1` in
+`agent_channel.claimable_job_kinds`. `trstctl access sessions connect` prints the tunnel's
+address to open in a browser: the gateway signs in for the operator and the browser never
+receives the password, the token or the console's session cookies. A console page that
+shows the password gets asterisks; the browser cannot post to the sign-in page; a refused
+sign-in is not tried again in the session. Each request and response is recorded with the
+credential and password-like fields masked, and terminating the session ends the browser's
+access. The account cannot be checked out: its credential is never shown.

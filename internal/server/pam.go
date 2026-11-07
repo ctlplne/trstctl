@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -67,6 +68,10 @@ const (
 	// pamTargetNetDevice (A270) is a network device's vaulted account: its
 	// gateway signs in to the device over SSH with the account's password.
 	pamTargetNetDevice = accessgateway.TargetNetDevice
+	// pamTargetWebConsole (A273) is an internal web admin console's vaulted
+	// account: its gateway signs in to the console for the operator's
+	// browser, as the session's template says.
+	pamTargetWebConsole = accessweb.TargetWeb
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -92,10 +97,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetAzure:      "azure-entra",
 	pamTargetRDP:        "desktop",
 	pamTargetNetDevice:  "netdevice",
+	pamTargetWebConsole: "webconsole",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console", pamTargetRDP: "remote desktop", pamTargetNetDevice: "network device"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console", pamTargetRDP: "remote desktop", pamTargetNetDevice: "network device", pamTargetWebConsole: "web console"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -130,9 +136,13 @@ type PAMConfig struct {
 	RecordingRetention time.Duration
 	// HealthInterval is how often each brokered account's stored credential
 	// is signed in with (A258); zero is the default, an hour.
-	HealthInterval  time.Duration
-	Attestors       []attest.Attestor
-	PostgresTargets []PAMPostgresTarget
+	HealthInterval time.Duration
+	// WebConsoleAllowLoopback admits web console routes on a loopback
+	// address (a lab's stand-in console); off, the gateway is never pointed
+	// at its own host's services.
+	WebConsoleAllowLoopback bool
+	Attestors               []attest.Attestor
+	PostgresTargets         []PAMPostgresTarget
 	// DatabaseTargets are provider-backed targets of the other database
 	// types (A256), each reached only through its access gateway.
 	DatabaseTargets []PAMDatabaseTarget
@@ -154,6 +164,8 @@ type PAMDatabaseTarget struct {
 	// AccountSecret (A261) names the application secret holding the vaulted
 	// account the target's sessions sign in as through its gateway.
 	AccountSecret string
+	// Web (A273) is a web console target's route.
+	Web *accessweb.Route
 }
 
 type PAMPostgresTarget struct {
@@ -186,6 +198,7 @@ type pamService struct {
 	desktopJobEnabled                   bool
 	adDesktopJobEnabled                 bool
 	netDeviceJobEnabled                 bool
+	webJobEnabled                       bool
 	commandRuleJobKinds                 map[string]bool
 	store                               *store.Store
 	log                                 *events.Log
@@ -271,6 +284,7 @@ type pamDeps struct {
 	DesktopJobEnabled                   bool
 	ADDesktopJobEnabled                 bool
 	NetDeviceJobEnabled                 bool
+	WebJobEnabled                       bool
 	WindowsDependentInventoryEnabled    bool
 	WindowsLocalAccountInventoryEnabled bool
 	CommandRuleJobKinds                 map[string]bool
@@ -366,7 +380,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled,
+	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled, webJobEnabled: d.WebJobEnabled,
 		commandRuleJobKinds:                 d.CommandRuleJobKinds,
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
@@ -424,12 +438,15 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 		if target.TargetType == pamTargetNetDevice && target.AccountSecret == "" {
 			return nil, fmt.Errorf("server: network device target %q requires a vaulted account_secret", target.ID)
 		}
+		if target.Web != nil && target.TargetType != pamTargetWebConsole {
+			return nil, fmt.Errorf("server: PAM %s target %q has a web console route", kind, target.ID)
+		}
 		if target.AccountSecret != "" {
 			// A261: a vaulted account signs in only through the gateway, and
 			// its one role is the secret's: the static rotation keeping it
 			// current runs as that role.
-			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL && target.TargetType != pamTargetRDP && target.TargetType != pamTargetNetDevice {
-				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL, MySQL, remote desktop or network devices", kind, target.ID)
+			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL && target.TargetType != pamTargetRDP && target.TargetType != pamTargetNetDevice && target.TargetType != pamTargetWebConsole {
+				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL, MySQL, remote desktop, network devices or web consoles", kind, target.ID)
 			}
 			if target.GatewayAgentID == "" || target.GatewayAddress == "" {
 				return nil, fmt.Errorf("server: vaulted PAM target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", target.ID)
@@ -454,6 +471,18 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 				return nil, fmt.Errorf("server: PAM %s target %q repeats role %q", kind, target.ID, role)
 			}
 			roles[role] = struct{}{}
+		}
+		if target.TargetType == pamTargetWebConsole {
+			// A273: a web console's vaulted account and the console's own
+			// route; no provider rotates it, the gateway only signs in with it.
+			if target.AccountSecret == "" || target.ProviderID != "" || target.Web == nil {
+				return nil, fmt.Errorf("server: web console target %q names its vaulted account_secret and its route (web), and no provider", target.ID)
+			}
+			if err := target.Web.Validate(cfg.WebConsoleAllowLoopback); err != nil {
+				return nil, fmt.Errorf("server: web console target %q: %v", target.ID, err)
+			}
+			targets[key] = &pamDatabaseTarget{cfg: target, roles: roles}
+			continue
 		}
 		if target.ProviderID == "" || d.KEK == nil || d.Outbox == nil || d.WakeOutbox == nil {
 			return nil, fmt.Errorf("server: PAM %s target %q requires a durable provider and its outbox dependencies", kind, target.ID)
@@ -758,6 +787,7 @@ func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, reques
 		TTLSeconds                                                                     int64
 		PolicyRefs                                                                     []string            `json:",omitempty"`
 		CommandPolicy                                                                  *accessrules.Policy `json:",omitempty"`
+		WebSignIn                                                                      *accessweb.SignIn   `json:",omitempty"`
 	}{
 		TenantID: tenantID, RequestID: req.RequestID, Requester: requester,
 		TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role, Reason: req.Reason,
@@ -765,6 +795,7 @@ func (s *pamService) approvalCommandDigest(ctx context.Context, tenantID, reques
 		SSHPublicKeyDigest: crypto.SHA256Hex(req.SSHPublicKey), SSHPrincipal: req.SSHPrincipal,
 		Subject: att.Subject, Selectors: att.Selectors, Claims: att.Claims, TargetDigest: targetDigest,
 		TTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second), PolicyRefs: policyRefs, CommandPolicy: req.ResolvedCommandPolicy,
+		WebSignIn: req.ResolvedWebSignIn,
 	}
 	raw, err := json.Marshal(command)
 	if err != nil {
@@ -915,6 +946,9 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		kinds := []string{accessgateway.KindForPolicy(rec.CommandPolicy)}
 		if rec.TargetType == pamTargetNetDevice {
 			kinds = []string{accessgateway.KindSessionNetDevice, accessgateway.KindSessionNetDeviceRules}
+		}
+		if rec.TargetType == pamTargetWebConsole {
+			kinds = []string{accessgateway.KindSessionWeb}
 		}
 		if rec.TargetType == pamTargetRDP {
 			// Recall by the persisted session key across both native versions. The
@@ -1387,6 +1421,12 @@ func (s *pamService) openDatabase(ctx context.Context, tenantID, idempotencyKey,
 	if req.TargetType == pamTargetNetDevice && req.ResolvedCommandPolicy == nil && !s.netDeviceJobEnabled {
 		return api.PAMSession{}, fmt.Errorf("%w: enable %s in agent_channel.claimable_job_kinds", api.ErrPAMInvalid, accessgateway.KindSessionNetDevice)
 	}
+	if req.TargetType == pamTargetWebConsole && !s.webJobEnabled {
+		return api.PAMSession{}, fmt.Errorf("%w: enable %s in agent_channel.claimable_job_kinds", api.ErrPAMInvalid, accessgateway.KindSessionWeb)
+	}
+	if req.TargetType == pamTargetWebConsole && req.ResolvedWebSignIn == nil {
+		return api.PAMSession{}, fmt.Errorf("%w: a webconsole session is requested through an access template that sets web_sign_in", api.ErrPAMInvalid)
+	}
 	target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 	if err != nil {
 		return api.PAMSession{}, err
@@ -1537,6 +1577,7 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 		Reason: req.Reason, AttestationID: att.ID, Attestation: &att, BackendRef: backendRef, SSHKeyID: sshKeyID,
 		SSHSerial: sshSerial, IdempotencyKey: idempotencyKey, Audit: audit,
 		StartedAt: now, ExpiresAt: expiresAt, ApprovalRequestID: req.ApprovalRequestID, CommandPolicy: req.ResolvedCommandPolicy,
+		WebSignIn: req.ResolvedWebSignIn,
 	}
 }
 
@@ -1774,6 +1815,7 @@ func pamFromConfig(c config.PAM) PAMConfig {
 			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
 		})
 	}
+	out.WebConsoleAllowLoopback = c.WebConsoleAllowLoopback
 	for _, target := range c.DatabaseTargets {
 		out.DatabaseTargets = append(out.DatabaseTargets, PAMDatabaseTarget{
 			TargetType: target.TargetType, TenantID: target.TenantID, ID: target.ID, ProviderID: target.ProviderID,

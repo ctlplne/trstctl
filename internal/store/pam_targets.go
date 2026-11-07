@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -37,31 +38,42 @@ type PAMTarget struct {
 	// Folder (A261 part 3) names the folder the target belongs to, whose
 	// access template its requests take; empty for none.
 	Folder string
+	// Web (A273) is a web console target's route; nil for other types.
+	Web *accessweb.Route
 }
 
 const pamTargetColumns = `tenant_id::text, target_type, id, provider_id, allowed_roles,
     host, port, principals, enabled, registered_by, registered_at,
-    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints, account_secret, folder`
+    disabled_by, disabled_reason, disabled_at, COALESCE(gateway_agent_id::text, ''), gateway_address, host_key_fingerprints, account_secret, folder, web_route`
 
 func scanPAMTarget(row pgx.Row) (PAMTarget, error) {
 	var rec PAMTarget
+	var web []byte
 	err := row.Scan(&rec.TenantID, &rec.TargetType, &rec.ID, &rec.ProviderID,
 		&rec.AllowedRoles, &rec.Host, &rec.Port, &rec.Principals, &rec.Enabled,
 		&rec.RegisteredBy, &rec.RegisteredAt, &rec.DisabledBy, &rec.DisabledReason, &rec.DisabledAt,
-		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints, &rec.AccountSecret, &rec.Folder)
+		&rec.GatewayAgentID, &rec.GatewayAddress, &rec.HostKeyFingerprints, &rec.AccountSecret, &rec.Folder, &web)
+	if err != nil {
+		return rec, err
+	}
+	rec.Web, err = decodeWebRoute(web)
 	return rec, err
 }
 
 func (s *Store) ApplyPAMTargetRegisteredTx(ctx context.Context, tx pgx.Tx, rec PAMTarget) error {
-	_, err := tx.Exec(ctx, `INSERT INTO pam_targets
+	web, err := encodeWebJSON(rec.Web)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO pam_targets
         (tenant_id, target_type, id, provider_id, allowed_roles, host, port,
-         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints, account_secret, folder)
+         principals, enabled, registered_by, registered_at, gateway_agent_id, gateway_address, host_key_fingerprints, account_secret, folder, web_route)
 		 VALUES ($1::uuid,$2,$3,$4,COALESCE($5::text[], '{}'::text[]),$6,$7,
-		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]),$14,$15)
+		         COALESCE($8::text[], '{}'::text[]),true,$9,$10,NULLIF($11,'')::uuid,$12,COALESCE($13::text[], '{}'::text[]),$14,$15,$16::jsonb)
         ON CONFLICT (tenant_id,target_type,id) DO NOTHING`,
 		rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, rec.AllowedRoles,
 		rec.Host, rec.Port, rec.Principals, rec.RegisteredBy, rec.RegisteredAt, rec.GatewayAgentID, rec.GatewayAddress, rec.HostKeyFingerprints,
-		rec.AccountSecret, rec.Folder)
+		rec.AccountSecret, rec.Folder, web)
 	return err
 }
 

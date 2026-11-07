@@ -180,6 +180,10 @@ func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHost
 		return fmt.Sprintf("vncviewer -SecurityTypes=None -SendClipboard=0 -AcceptClipboard=0 -RemoteResize=0 %s::%d", host, local.Port), nil
 	case "aws-console":
 		return fmt.Sprintf("Open http://%s/ in your browser", local.String()), nil
+	case "webconsole":
+		// A273: the gateway signs in to the console; the browser holds no
+		// credential and none of the console's session cookies.
+		return fmt.Sprintf("Open http://%s/ in your browser (the gateway signs in to the console for you)", local.String()), nil
 	case "gcp", "azure":
 		return fmt.Sprintf("curl --fail-with-body http://%s:%d/<API-path>", local.IP, local.Port), nil
 	case "snowflake":

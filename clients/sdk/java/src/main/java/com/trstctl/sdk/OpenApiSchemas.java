@@ -943,6 +943,8 @@ public final class OpenApiSchemas {
       "PAMTerminalInput",
       "PAMTerminalOutput",
       "PAMTerminalRequest",
+      "PAMWebConsoleRoute",
+      "PAMWebSignIn",
       "PAMWindowsLocalAccount",
       "PAMWindowsLocalAccountHost",
       "PAMWindowsLocalAccountHostList",

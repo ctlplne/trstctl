@@ -108,6 +108,9 @@ func (s *pamService) checkoutTarget(ctx context.Context, tenantID, targetType, t
 	if targetType == pamTargetBreakGlass {
 		return nil, fmt.Errorf("%w: a break-glass account is released only through emergency access (POST /api/v1/access/emergency-checkouts)", api.ErrPAMInvalid)
 	}
+	if targetType == pamTargetWebConsole {
+		return nil, fmt.Errorf("%w: a web console account is used only through gateway sessions; its credential is never shown", api.ErrPAMInvalid)
+	}
 	if !isPAMDatabaseType(targetType) || targetID == "" {
 		return nil, fmt.Errorf("%w: a check-out names a vaulted postgres, mysql or windows_local target", api.ErrPAMInvalid)
 	}

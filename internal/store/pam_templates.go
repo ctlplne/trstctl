@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -31,10 +32,12 @@ type PAMAccessTemplate struct {
 	// DesktopClipboard (A269) is the remote desktop clipboard policy: deny,
 	// to_target, from_target or both.
 	DesktopClipboard string
-	Revision         int64
-	SavedBy          string
-	SavedAt          time.Time
-	DeletedAt        *time.Time
+	// WebSignIn (A273) is how the gateway signs in to a web console.
+	WebSignIn *accessweb.SignIn
+	Revision  int64
+	SavedBy   string
+	SavedAt   time.Time
+	DeletedAt *time.Time
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting
@@ -50,12 +53,17 @@ type PAMEmergencyGrant struct {
 	ReviewedAt                   *time.Time
 }
 
-const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules`
+const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules, web_sign_in`
 
 func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 	var t PAMAccessTemplate
+	var web []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.DesktopClipboard, &t.Revision, &t.SavedBy, &t.SavedAt,
-		&t.DeletedAt, &t.CommandRules)
+		&t.DeletedAt, &t.CommandRules, &web)
+	if err != nil {
+		return t, err
+	}
+	t.WebSignIn, err = decodeWebSignIn(web)
 	return t, err
 }
 
@@ -71,18 +79,22 @@ func (s *Store) ApplyPAMTemplateSavedTx(ctx context.Context, tx pgx.Tx, tenantID
 	if err != nil {
 		return err
 	}
+	web, err := encodeWebJSON(t.WebSignIn)
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, require_recording, revision,
-		    saved_by, saved_at, command_rules, desktop_clipboard)
-		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb, $12)
+		    saved_by, saved_at, command_rules, desktop_clipboard, web_sign_in)
+		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb, $12, $13::jsonb)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		    name = EXCLUDED.name, reason = EXCLUDED.reason, required_approvals = EXCLUDED.required_approvals,
 		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, require_recording = EXCLUDED.require_recording, revision = EXCLUDED.revision,
 		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at, command_rules = EXCLUDED.command_rules,
-		    desktop_clipboard = EXCLUDED.desktop_clipboard
+		    desktop_clipboard = EXCLUDED.desktop_clipboard, web_sign_in = EXCLUDED.web_sign_in
 		  WHERE cur.revision < EXCLUDED.revision AND cur.deleted_at IS NULL`,
 		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording, rawRules,
-		pamDesktopClipboardOrDeny(t.DesktopClipboard))
+		pamDesktopClipboardOrDeny(t.DesktopClipboard), web)
 	return err
 }
 

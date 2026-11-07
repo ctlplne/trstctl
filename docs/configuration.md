@@ -2457,6 +2457,11 @@ expired or locked, is not signed in with again until it changes (or an operator 
 `trstctl-cli access targets health-check <type> <id>`), so a check never adds to an
 account's failed sign-ins. Each target's health shows on `GET /api/v1/access/targets`.
 
+`pam.web_console_allow_loopback` (a boolean; default `false`) admits `webconsole` targets
+(A273) whose route is a loopback address, for a lab's stand-in console. Leave it off in
+production: the access gateway is then never pointed at its own host's services, and it also
+refuses a console name that resolves to a loopback or link-local address.
+
 Kubernetes targets (A256) are `pam.kubernetes_targets` entries with the same fields and no
 `target_type`: each names a Kubernetes dynamic-secret provider (its roles bind the
 session's service account) and the gateway, which is required. A session's token lives at

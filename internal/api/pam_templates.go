@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/store"
@@ -33,9 +34,12 @@ type PAMAccessTemplate struct {
 	// from_target or both.
 	DesktopClipboard string             `json:"desktop_clipboard,omitempty"`
 	CommandRules     []accessrules.Rule `json:"command_rules,omitempty"`
-	Revision         int64              `json:"revision"`
-	SavedBy          string             `json:"saved_by,omitempty"`
-	SavedAt          time.Time          `json:"saved_at"`
+	// WebSignIn (A273) is how the gateway signs in to a web console for a
+	// session through the template.
+	WebSignIn *accessweb.SignIn `json:"web_sign_in,omitempty"`
+	Revision  int64             `json:"revision"`
+	SavedBy   string            `json:"saved_by,omitempty"`
+	SavedAt   time.Time         `json:"saved_at"`
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting

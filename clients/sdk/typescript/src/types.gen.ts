@@ -22056,6 +22056,7 @@ export interface components {
             /** Format: date-time */
             saved_at: string;
             saved_by?: string;
+            web_sign_in?: components["schemas"]["PAMWebSignIn"];
         };
         PAMAccessTemplateDeleted: {
             deleted: boolean;
@@ -22080,6 +22081,7 @@ export interface components {
             required_approvals: number;
             /** @description the revision being replaced (PUT only) */
             revision?: number;
+            web_sign_in?: components["schemas"]["PAMWebSignIn"];
         };
         PAMApprovalRequest: {
             approval_count: number;
@@ -23326,7 +23328,8 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass" | "webconsole";
+            web?: components["schemas"]["PAMWebConsoleRoute"];
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -23360,7 +23363,8 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice" | "account" | "breakglass" | "webconsole";
+            web?: components["schemas"]["PAMWebConsoleRoute"];
         };
         PAMTerminal: {
             cols?: number;
@@ -23403,6 +23407,33 @@ export interface components {
             rows: number;
             /** @description SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence. */
             ssh_command?: string;
+        };
+        PAMWebConsoleRoute: {
+            /** @description PEM certificates the console's certificate is checked against; none: the system roots */
+            ca_pem?: string;
+            /** @description the name the console's certificate is checked against; none: the URL's host */
+            server_name?: string;
+            /** @description the console's origin (https://host[:port]), without user information, path, query or fragment (A273) */
+            url: string;
+        };
+        PAMWebSignIn: {
+            /** @description up to eight cookies the browser may hold (a console's double-submit CSRF token), never a session cookie; every other cookie stays at the gateway */
+            browser_cookies?: string[];
+            /** @description header: the header the vaulted token goes in */
+            header?: string;
+            /** @description header: text before the token (e.g. Bearer and a space) */
+            header_prefix?: string;
+            /** @description form: the console's sign-in page (a path) */
+            login_path?: string;
+            /**
+             * @description how the access gateway signs in to a web console for the operator (A273): its own sign-in form, a header token, or HTTP basic authentication
+             * @enum {string}
+             */
+            mode: "form" | "header" | "basic";
+            /** @description form: the password field's name */
+            password_field?: string;
+            /** @description form: the username field's name */
+            username_field?: string;
         };
         PAMWindowsLocalAccount: {
             enabled: boolean;

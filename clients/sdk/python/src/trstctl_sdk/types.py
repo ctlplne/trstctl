@@ -11638,6 +11638,7 @@ PAMAccessTemplate = TypedDict(
         'revision': int,
         'saved_at': str,
         'saved_by': str,
+        'web_sign_in': dict[str, Any],
     },
     total=False,
 )
@@ -11670,6 +11671,7 @@ PAMAccessTemplateRequest = TypedDict(
         'require_recording': bool,
         'required_approvals': int,
         'revision': int,
+        'web_sign_in': dict[str, Any],
     },
     total=False,
 )
@@ -13095,6 +13097,7 @@ PAMTarget = TypedDict(
         'registered_by': str,
         'source': str,
         'target_type': str,
+        'web': dict[str, Any],
     },
     total=False,
 )
@@ -13139,6 +13142,7 @@ PAMTargetRequest = TypedDict(
         'principals': list[str],
         'provider_id': str,
         'target_type': str,
+        'web': dict[str, Any],
     },
     total=False,
 )
@@ -13184,6 +13188,30 @@ PAMTerminalRequest = TypedDict(
         'pod': str,
         'rows': int,
         'ssh_command': str,
+    },
+    total=False,
+)
+
+PAMWebConsoleRoute = TypedDict(
+    'PAMWebConsoleRoute',
+    {
+        'ca_pem': str,
+        'server_name': str,
+        'url': str,
+    },
+    total=False,
+)
+
+PAMWebSignIn = TypedDict(
+    'PAMWebSignIn',
+    {
+        'browser_cookies': list[str],
+        'header': str,
+        'header_prefix': str,
+        'login_path': str,
+        'mode': str,
+        'password_field': str,
+        'username_field': str,
     },
     total=False,
 )

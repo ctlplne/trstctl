@@ -90,7 +90,7 @@ func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor stri
 		}
 		if _, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: target.TargetType, TenantID: tenantID, ID: target.ID,
 			ProviderID: target.ProviderID, AllowedRoles: target.AllowedRoles,
-			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress, AccountSecret: target.AccountSecret}); err != nil {
+			GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress, AccountSecret: target.AccountSecret, Web: target.Web}); err != nil {
 			return api.PAMTarget{}, fmt.Errorf("%w: %v", api.ErrPAMInvalid, err)
 		}
 		if target.AccountSecret != "" {
@@ -189,7 +189,7 @@ func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor stri
 	payload := projections.PAMTargetRegistered{TargetType: target.TargetType, ID: target.ID,
 		ProviderID: target.ProviderID, AllowedRoles: roles, Host: target.Host, Port: target.Port,
 		Principals: principals, RegisteredBy: actor, GatewayAgentID: target.GatewayAgentID, GatewayAddress: target.GatewayAddress,
-		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...), AccountSecret: target.AccountSecret, Folder: target.Folder}
+		HostKeyFingerprints: append([]string(nil), target.HostKeyFingerprints...), AccountSecret: target.AccountSecret, Folder: target.Folder, Web: target.Web}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl-pam-target:"+tenantID+":"+target.TargetType+":"+target.ID)).String()
 	if err := s.appendCanonicalPAMTarget(ctx, tenantID, id, projections.EventPAMTargetRegistered, payload); err != nil {
 		return api.PAMTarget{}, err
@@ -223,14 +223,14 @@ func targetFromStore(rec store.PAMTarget) api.PAMTarget {
 		RegisteredAt: &rec.RegisteredAt, DisabledBy: rec.DisabledBy,
 		DisabledReason: rec.DisabledReason, DisabledAt: rec.DisabledAt,
 		GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, HostKeyFingerprints: rec.HostKeyFingerprints,
-		AccountSecret: rec.AccountSecret, Folder: rec.Folder}
+		AccountSecret: rec.AccountSecret, Folder: rec.Folder, Web: rec.Web}
 }
 
 // operatorDatabaseTarget and operatorSSHTarget are the reads of
 // operator-configured targets, with their gateway bindings.
 func operatorDatabaseTarget(id string, t *pamDatabaseTarget) api.PAMTarget {
 	return api.PAMTarget{ID: id, TargetType: t.cfg.TargetType, ProviderID: t.cfg.ProviderID, AllowedRoles: t.cfg.AllowedRoles, Enabled: true, Source: "operator",
-		GatewayAgentID: t.cfg.GatewayAgentID, GatewayAddress: t.cfg.GatewayAddress}
+		GatewayAgentID: t.cfg.GatewayAgentID, GatewayAddress: t.cfg.GatewayAddress, Web: t.cfg.Web}
 }
 
 func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
@@ -355,7 +355,7 @@ func (s *pamService) databaseTarget(ctx context.Context, tenantID, targetType, i
 		return nil, fmt.Errorf("%w: %s target %q is disabled", api.ErrPAMRejected, targetType, id)
 	}
 	target, err := s.buildDatabaseTarget(PAMDatabaseTarget{TargetType: targetType, TenantID: tenantID, ID: id, ProviderID: rec.ProviderID,
-		AllowedRoles: rec.AllowedRoles, GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, AccountSecret: rec.AccountSecret})
+		AllowedRoles: rec.AllowedRoles, GatewayAgentID: rec.GatewayAgentID, GatewayAddress: rec.GatewayAddress, AccountSecret: rec.AccountSecret, Web: rec.Web})
 	if err != nil {
 		return nil, fmt.Errorf("%w: registered %s target %q is no longer valid: %v", api.ErrPAMRejected, targetType, id, err)
 	}
