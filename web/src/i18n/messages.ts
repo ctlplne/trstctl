@@ -10,6 +10,53 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "admin.access.rotation.position": { defaultMessage: "Position", description: "Native review page table." },
+  "admin.access.rotation.dependent": { defaultMessage: "Windows dependent", description: "Native review page table." },
+  "admin.access.rotation.reviewHost": { defaultMessage: "Enrolled host", description: "Native review page table." },
+  "admin.access.rotation.reviewProbe": { defaultMessage: "Useful-work probe", description: "Native review page table." },
+  "admin.access.rotation.hostOnlyPage": {
+    defaultMessage: "Selected host declarations; this page has no dependent effects.",
+    description: "Native review page table.",
+  },
+  "admin.access.rotation.freshReview": { defaultMessage: "Start a fresh review", description: "Recover an unavailable or incomplete native review." },
+  "admin.access.rotation.probeFormat": {
+    defaultMessage: "Use 1–128 letters, digits, underscores, hyphens or dots for a configured local probe ID.",
+    description: "Native useful-work probe identifier.",
+  },
+  "admin.access.rotation.pagedReview": { defaultMessage: "Reviewed Windows dependents", description: "Bounded native dependent review." },
+  "admin.access.rotation.pageSummary": {
+    defaultMessage: "Page {page} of {pages}: {entries} dependents across {hosts} selected hosts.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.pageSources": { defaultMessage: "Signed host inventory sources for this page", description: "Bounded native dependent review." },
+  "admin.access.rotation.reviewExpired": {
+    defaultMessage: "This review expired. Refresh complete host scans and create a new review.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.pagesLoaded": {
+    defaultMessage: "All review pages loaded. Check the identities, order and configured useful-work probes before continuing.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.previousReviewPage": { defaultMessage: "Previous review page", description: "Bounded native dependent review." },
+  "admin.access.rotation.nextReviewPage": { defaultMessage: "Next review page", description: "Bounded native dependent review." },
+  "admin.access.rotation.pageUnavailable": {
+    defaultMessage: "This review page is unavailable or differs from the sealed review. Retry its exact read before continuing.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.reviewBuildFailed": {
+    defaultMessage: "The review could not be built from these exact host scans, references and probes. Refresh complete inventory before retrying.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.saveReview": { defaultMessage: "Save this sealed review for reopening", description: "Bounded native dependent review." },
+  "admin.access.rotation.reviewIncomplete": {
+    defaultMessage: "This review has no complete sealed intent. Reopen current inventory and create a complete review.",
+    description: "Bounded native dependent review.",
+  },
+  "admin.access.rotation.bulkProbe": { defaultMessage: "Useful-work probe for empty entries", description: "Bounded native dependent review." },
+  "admin.access.rotation.fillProbes": { defaultMessage: "Fill empty probes", description: "Bounded native dependent review." },
+  "admin.access.rotation.previousRows": { defaultMessage: "Previous dependent rows", description: "Bounded native dependent review." },
+  "admin.access.rotation.nextRows": { defaultMessage: "Next dependent rows", description: "Bounded native dependent review." },
+  "admin.access.rotation.rowPage": { defaultMessage: "Dependents {first}\u2013{last} of {count}", description: "Bounded native dependent review." },
   "admin.access.rotation.operation": { defaultMessage: "Directory operation", description: "AD reconciliation workflow." },
   "admin.access.rotation.normal": { defaultMessage: "Rotate known password", description: "AD reconciliation workflow." },
   "admin.access.rotation.reconcile": { defaultMessage: "Reconcile external drift", description: "AD reconciliation workflow." },

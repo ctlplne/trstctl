@@ -71,12 +71,13 @@ export function Approvals() {
     selectedRequest?.resource_kind === "cloud_machine" &&
     (!cloudReview.data || cloudReview.error || cloudReview.data.intent_digest !== selectedRequest.intent_digest);
 
+  const [reconcilePagesDigest, setReconcilePagesDigest] = useState<string | null>(null);
   const reconcileReview = useApiQuery(
     ["pam-reconcile-approval", selectedRequest?.resource_id, selectedRequest?.intent_digest],
     () => api.pamServiceReconciliationReview(selectedRequest?.resource_id ?? ""),
     { enabled: reviewDialogOpen && selectedRequest?.resource_kind === "pam_service_reconcile", retry: false },
   );
-  const reconcileUnavailable =
+  const reconcileSourceUnavailable =
     selectedRequest?.resource_kind === "pam_service_reconcile" &&
     (!reconcileReview.data ||
       !!reconcileReview.error ||
@@ -88,6 +89,11 @@ export function Approvals() {
       selectedRequest.from_state !== "version:" + reconcileReview.data.intent.expected_version ||
       selectedRequest.evidence_refs.length !== 1 ||
       selectedRequest.evidence_refs[0] !== "service-dependent-intent:" + reconcileReview.data.intent_digest);
+  const reconcileUnavailable =
+    reconcileSourceUnavailable ||
+    (selectedRequest?.resource_kind === "pam_service_reconcile" &&
+      !!reconcileReview.data?.intent.plan.manifest &&
+      reconcilePagesDigest !== reconcileReview.data.intent_digest);
   const [rejectionOpen, setRejectionOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedIssuance, setSelectedIssuance] = useState<IssuanceRequest | null>(null);
@@ -216,6 +222,7 @@ export function Approvals() {
 
   const approve = useCallback(
     async (row: ApprovalQueueRow) => {
+      if (row.resource_kind === "pam_service_reconcile" && (reconcileUnavailable || selectedRequest?.id !== row.id)) return;
       const key = rowKey(row);
       setBusyKey(key);
       setError(null);
@@ -233,7 +240,7 @@ export function Approvals() {
         setBusyKey(null);
       }
     },
-    [closeReview, queryClient, retainDecision, t],
+    [closeReview, queryClient, retainDecision, t, reconcileUnavailable, selectedRequest?.id],
   );
 
   async function deny(event: FormEvent<HTMLFormElement>, row: ApprovalQueueRow) {
@@ -648,8 +655,13 @@ export function Approvals() {
 
             <GenericRequestSummary row={selectedRequest} detailed />
             {selectedRequest.resource_kind === "pam_service_reconcile" ? (
-              reconcileReview.data && !reconcileUnavailable ? (
-                <PAMReconciliationIntent intent={reconcileReview.data.intent} digest={reconcileReview.data.intent_digest} />
+              reconcileReview.data && !reconcileSourceUnavailable ? (
+                <PAMReconciliationIntent
+                  intent={reconcileReview.data.intent}
+                  digest={reconcileReview.data.intent_digest}
+                  access="approver"
+                  onReadiness={setReconcilePagesDigest}
+                />
               ) : (
                 <ErrorState title={t("admin.access.rotation.manifestUnavailable")}>
                   <Button type="button" variant="outline" onClick={reconcileReview.refetch}>

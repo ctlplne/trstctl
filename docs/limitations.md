@@ -9247,6 +9247,10 @@ queues one sealed account, supports independent reconciliation approval and
 approver page reads, and advances bounded native work through source-bound
 positions. Portable signed-host fixtures cover forward rotation, inverse,
 reconciliation, explicit inverse recovery and lost cursor projection. They do not
-qualify native Windows execution. Paged console authoring, the combined native
-journey and final-image recovery remain separate obligations. Per-host inventory
-and native evidence keep their original wire bounds.
+qualify native Windows execution. The console now authors bounded pages, retains
+empty selected hosts, reopens sealed reviews and gates paged decisions on exact
+page readiness. Component proofs cover authoring, approval-only reads, source
+errors, expiry, row order, response-loss retry and prior-page body eviction. The
+full browser, combined native journey and final-image recovery remain separate
+qualification obligations. Per-host inventory and native evidence keep their
+original wire bounds.

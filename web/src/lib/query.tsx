@@ -86,6 +86,8 @@ export function useHasAppQueryProvider(): boolean {
 }
 
 export interface ApiQueryOptions {
+  /** Bounded-page viewers discard inactive response bodies immediately. */
+  gcTime?: number;
   /** Explicit workflows may surface failure immediately for an operator retry. */
   retry?: boolean | number;
   /** Keeps dependent queries idle until their parent selection exists. */
@@ -123,6 +125,7 @@ export function useApiQuery<T>(
   const query = useQuery({
     queryKey: key,
     queryFn: loader,
+    gcTime: options?.gcTime,
     enabled: options?.enabled,
     retry: (failureCount, error) => !isAccessDenied(error) && (retry === true || (retry !== false && failureCount < retry)),
     meta: live ? { live: true } : undefined,

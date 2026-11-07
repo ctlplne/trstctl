@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { api, type PAMServiceDependentRotationPreview, type PAMServiceReconciliationPendingReview } from "@/lib/api";
-import type { PAMDependentRef, PAMServiceDependentRotationStep } from "@/lib/api-types.gen";
+import type { PAMDependentRef, PAMServiceDependentRotationStep, PAMServiceDependentReviewHost } from "@/lib/api-types.gen";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { StepShell } from "@/components/wizard/StepShell";
@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PAMDependentRecovery } from "./PAMDependentRecovery";
+import { createPAMDependentReview } from "@/lib/createPAMDependentReview";
+import { PAMDependentManifestPages } from "./PAMDependentManifestPages";
 import { PAMReconciliationIntent } from "./PAMReconciliationIntent";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
@@ -24,6 +26,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 // these native references populate review controls, never completion claims.
 async function inventory(accountID: string, incomplete: string) {
   const refs: PAMDependentRef[] = [];
+  const hosts: PAMServiceDependentReviewHost[] = [];
   const seen = new Set<string>();
   let after = "";
   do {
@@ -32,7 +35,9 @@ async function inventory(accountID: string, incomplete: string) {
       if (!host.binding.enabled) continue;
       if (!host.latest_scan?.current || host.latest_scan.status !== "complete") throw new Error(incomplete);
       const scan = await api.pamServiceDependentScan(host.latest_scan.id);
-      if (!scan.report || scan.status !== "complete") throw new Error(incomplete);
+      if (!scan.report || scan.status !== "complete" || scan.report.run_id !== host.latest_scan.id || !scan.report.observed_at || !scan.report_digest)
+        throw new Error(incomplete);
+      hosts.push({ binding: host.binding, inventory_run_id: scan.report.run_id, inventory_digest: scan.report_digest, observed_at: scan.report.observed_at });
       const base = { agent_id: host.binding.agent_id };
       for (const s of scan.report.services ?? []) refs.push({ ...base, family: "services", name: s.name });
       for (const t of scan.report.tasks ?? []) refs.push({ ...base, family: "tasks", name: t.path });
@@ -43,7 +48,7 @@ async function inventory(accountID: string, incomplete: string) {
     seen.add(after);
   } while (after);
   if (!refs.length) throw new Error(incomplete);
-  return refs;
+  return { refs, hosts };
 }
 async function passwordReferences() {
   const names: string[] = [];
@@ -93,12 +98,25 @@ export function PAMDependentRotation({
   const [stage, setStage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedHosts, setSelectedHosts] = useState<PAMServiceDependentReviewHost[]>([]);
+  const [rowPage, setRowPage] = useState(0);
+  const [pagesDigest, setPagesDigest] = useState<string | null>(null);
+  const resumed = useApiQuery(["pam-dependent-review", accountID, reviewID], () => api.pamServiceDependentReview(reviewID ?? ""), {
+    enabled: !!reviewID && !approvalID && !activeRotation,
+    retry: false,
+  });
+  const resumedPreview =
+    !resumed.error && !resumed.fetching && resumed.data?.intent && resumed.data.intent_digest && resumed.data.intent.plan.account.account_id === accountID
+      ? { intent: resumed.data.intent, intent_digest: resumed.data.intent_digest }
+      : null;
   const [localPreview, setPreview] = useState<PAMServiceDependentRotationPreview | null>(null);
-  const preview = pending.data ? { intent: pending.data.intent, intent_digest: pending.data.intent_digest } : localPreview;
+  const preview = pending.data ? { intent: pending.data.intent, intent_digest: pending.data.intent_digest } : reviewID ? resumedPreview : localPreview;
   const reviewing = !!preview;
   const reconcile = preview?.intent.mode === "reconcile";
   const approval = pending.data?.approval;
-  const mayQueue = !reconcile || (!pending.error && !pending.fetching && (approval?.status === "approved" || pending.data?.queue_pending === true));
+  const reviewReady = !preview?.intent.plan.manifest || pagesDigest === preview.intent_digest;
+  const mayQueue =
+    reviewReady && (!reconcile || (!pending.error && !pending.fetching && (approval?.status === "approved" || pending.data?.queue_pending === true)));
   const [after, setAfter] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const requestKeys = useRef(new Map<string, string>());
@@ -115,11 +133,19 @@ export function PAMDependentRotation({
   });
   const schema = z
     .object({
+      bulkProbe: z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z0-9_.-]{0,128}$/, t("admin.access.rotation.probeFormat")),
       secretName: z.string().trim().min(1, t("admin.access.rotation.required")),
       dependents: z.array(
         z.object({
           ref: z.object({ agent_id: z.string(), family: z.enum(["services", "tasks", "iis"]), name: z.string() }),
-          probe: z.string().trim().min(1, t("admin.access.rotation.required")),
+          probe: z
+            .string()
+            .trim()
+            .min(1, t("admin.access.rotation.required"))
+            .regex(/^[A-Za-z0-9_.-]{1,128}$/, t("admin.access.rotation.probeFormat")),
         }),
       ),
       acknowledge: z.boolean(),
@@ -131,10 +157,18 @@ export function PAMDependentRotation({
     });
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { secretName: "", dependents: [], acknowledge: false, mode: "rotate", reason: "" },
+    defaultValues: { bulkProbe: "", secretName: "", dependents: [], acknowledge: false, mode: "rotate", reason: "" },
   });
+  const setFormValue = form.setValue;
+  const previewDigest = preview?.intent_digest;
+  useEffect(() => {
+    setFormValue("acknowledge", false);
+    setPagesDigest(null);
+  }, [previewDigest, setFormValue]);
   const fields = useFieldArray({ control: form.control, name: "dependents" });
   const mode = useWatch({ control: form.control, name: "mode" });
+  const reason = useWatch({ control: form.control, name: "reason" });
+  const bulkProbe = useWatch({ control: form.control, name: "bulkProbe" });
   const acknowledged = useWatch({ control: form.control, name: "acknowledge" });
   async function act(work: () => Promise<void>) {
     setBusy(true);
@@ -155,29 +189,43 @@ export function PAMDependentRotation({
   async function loadDependents() {
     if (!(await form.trigger(["secretName", "mode", "reason"]))) return;
     await act(async () => {
-      const refs = await client.fetchQuery({
+      const selection = await client.fetchQuery({
         queryKey: ["pam-dependent-review-inputs", accountID],
         queryFn: () => inventory(accountID, t("admin.access.rotation.incomplete")),
         staleTime: 0,
       });
-      fields.replace(refs.map((ref) => ({ ref, probe: "" })));
+      setSelectedHosts(selection.hosts);
+      fields.replace(selection.refs.map((ref) => ({ ref, probe: "" })));
+      setRowPage(0);
       setStage(1);
     });
   }
   async function review() {
-    await form.handleSubmit(async (values) =>
-      act(async () => {
-        const input = {
-          ...(values.mode === "reconcile" ? { mode: "reconcile" as const } : {}),
-          secret_name: values.secretName,
-          order: values.dependents.map((d) => d.ref),
-          probes: values.dependents.map((d) => ({ ref: d.ref, probe_id: d.probe })),
-        };
-        setPreview(await api.previewPAMServiceDependentRotation(accountID, input, requestKey(input)));
-        form.setValue("acknowledge", false);
-        setStage(2);
-      }),
+    await form.handleSubmit(
+      async (values) =>
+        act(async () => {
+          const input = {
+            ...(values.mode === "reconcile" ? { mode: "reconcile" as const } : {}),
+            secret_name: values.secretName,
+          };
+          setPagesDigest(null);
+          setPreview(
+            await createPAMDependentReview(api, accountID, input, selectedHosts, values.dependents, requestKey, t("admin.access.rotation.reviewBuildFailed")),
+          );
+          form.setValue("acknowledge", false);
+          setStage(2);
+        }),
+      (errors) => {
+        const first = Object.keys(errors.dependents ?? {})
+          .map(Number)
+          .find((n) => Number.isInteger(n) && n >= 0);
+        if (first !== undefined) setRowPage(Math.floor(first / 25));
+      },
     )();
+  }
+  async function fillProbes() {
+    if (!(await form.trigger("bulkProbe")) || !bulkProbe?.trim()) return;
+    fields.replace(form.getValues("dependents").map((row) => ({ ...row, probe: row.probe.trim() || bulkProbe.trim() })));
   }
   async function queue() {
     if (!preview || !acknowledged || !mayQueue) return;
@@ -195,7 +243,10 @@ export function PAMDependentRotation({
     });
   }
   async function requestApproval() {
-    if (!preview || !reconcile || approval) return;
+    if (!preview || !reconcile || approval || !reviewReady) return;
+    form.setValue("mode", "reconcile");
+    form.setValue("secretName", preview.intent.plan.secret_name);
+    if (!(await form.trigger(["mode", "reason"]))) return;
     await act(async () => {
       const input = { ...preview, reason: form.getValues("reason").trim() };
       const grant = await api.requestPAMServiceReconciliationApproval(accountID, input, requestKey(input));
@@ -225,8 +276,22 @@ export function PAMDependentRotation({
           </Button>
         </ErrorState>
       ) : null}
-      {!!reviewID && pending.loading ? <LoadingState>{t("admin.access.dependents.loading")}</LoadingState> : null}
-      {!id && canManage && (!reviewID || !!pending.data) ? (
+      {!!reviewID && (approvalID ? pending.loading : resumed.loading || resumed.fetching) ? (
+        <LoadingState>{t("admin.access.dependents.loading")}</LoadingState>
+      ) : null}
+      {!!reviewID && !approvalID && !resumed.loading && !resumed.fetching && (!resumedPreview || resumed.error) ? (
+        <ErrorState title={resumed.error ?? t("admin.access.rotation.reviewIncomplete")}>
+          {onReviewID ? (
+            <Button type="button" variant="outline" onClick={() => onReviewID("", "")}>
+              {t("admin.access.rotation.freshReview")}
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={resumed.refetch}>
+            {t("admin.access.dependents.retry")}
+          </Button>
+        </ErrorState>
+      ) : null}
+      {!id && canManage && (!reviewID || !!preview) ? (
         <StepShell
           steps={wizard}
           currentIndex={reviewing ? 2 : stage}
@@ -278,32 +343,63 @@ export function PAMDependentRotation({
               </Field>
             </>
           ) : !reviewing && stage === 1 ? (
-            <ol className="grid gap-3">
-              {fields.fields.map((dependent, index) => (
-                <li key={dependent.id} className="border-b border-border pb-3">
-                  <p>
-                    <Num>{index + 1}</Num> {dependent.ref.family}: {dependent.ref.name}
-                  </p>
-                  <CredentialChip value={dependent.ref.agent_id} />
-                  <Field
-                    label={t("admin.access.rotation.probe", { name: dependent.ref.name })}
-                    description={t("admin.access.rotation.probeHelp")}
-                    error={form.formState.errors.dependents?.[index]?.probe?.message}
-                    required
-                  >
-                    {(control) => <Input {...control} {...form.register(`dependents.${index}.probe`)} disabled={busy} />}
-                  </Field>
-                  <div className="mt-2 flex gap-2">
-                    <Button type="button" variant="outline" disabled={busy || index === 0} onClick={() => fields.move(index, index - 1)}>
-                      {t("admin.access.rotation.earlier", { name: dependent.ref.name })}
-                    </Button>
-                    <Button type="button" variant="outline" disabled={busy || index === fields.fields.length - 1} onClick={() => fields.move(index, index + 1)}>
-                      {t("admin.access.rotation.later", { name: dependent.ref.name })}
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <div className="grid gap-3">
+              <Field label={t("admin.access.rotation.bulkProbe")} error={form.formState.errors.bulkProbe?.message}>
+                {(control) => <Input {...control} {...form.register("bulkProbe")} disabled={busy} />}
+              </Field>
+              <Button type="button" variant="outline" disabled={busy || !bulkProbe?.trim()} onClick={() => void fillProbes()}>
+                {t("admin.access.rotation.fillProbes")}
+              </Button>
+              <p>
+                {t("admin.access.rotation.rowPage", {
+                  first: rowPage * 25 + 1,
+                  last: Math.min((rowPage + 1) * 25, fields.fields.length),
+                  count: fields.fields.length,
+                })}
+              </p>
+              <ol className="grid gap-3">
+                {fields.fields.slice(rowPage * 25, (rowPage + 1) * 25).map((dependent, visibleIndex) => {
+                  const index = rowPage * 25 + visibleIndex;
+                  return (
+                    <li key={dependent.id} className="border-b border-border pb-3">
+                      <p>
+                        <Num>{index + 1}</Num> {dependent.ref.family}: {dependent.ref.name}
+                      </p>
+                      <CredentialChip value={dependent.ref.agent_id} />
+                      <Field
+                        label={t("admin.access.rotation.probe", { name: dependent.ref.name })}
+                        description={t("admin.access.rotation.probeHelp")}
+                        error={form.formState.errors.dependents?.[index]?.probe?.message}
+                        required
+                      >
+                        {(control) => <Input {...control} {...form.register(`dependents.${index}.probe`)} disabled={busy} />}
+                      </Field>
+                      <div className="mt-2 flex gap-2">
+                        <Button type="button" variant="outline" disabled={busy || index === 0} onClick={() => fields.move(index, index - 1)}>
+                          {t("admin.access.rotation.earlier", { name: dependent.ref.name })}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={busy || index === fields.fields.length - 1}
+                          onClick={() => fields.move(index, index + 1)}
+                        >
+                          {t("admin.access.rotation.later", { name: dependent.ref.name })}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" disabled={busy || rowPage === 0} onClick={() => setRowPage((n) => n - 1)}>
+                  {t("admin.access.rotation.previousRows")}
+                </Button>
+                <Button type="button" variant="outline" disabled={busy || (rowPage + 1) * 25 >= fields.fields.length} onClick={() => setRowPage((n) => n + 1)}>
+                  {t("admin.access.rotation.nextRows")}
+                </Button>
+              </div>
+            </div>
           ) : preview ? (
             <div className="grid gap-3">
               <p>
@@ -314,20 +410,26 @@ export function PAMDependentRotation({
                 })}
               </p>
               <CredentialChip value={preview.intent_digest} fullValue />
-              <ol>
-                {preview.intent.plan.order.map((ref) => (
-                  <li key={rowID(ref)}>
-                    {ref.family}: {ref.name} <CredentialChip value={ref.agent_id} />
-                  </li>
-                ))}
-              </ol>
+              {!reconcile ? (
+                preview.intent.plan.manifest ? (
+                  <PAMDependentManifestPages intent={preview.intent} digest={preview.intent_digest} onReadiness={setPagesDigest} />
+                ) : (
+                  <ol>
+                    {preview.intent.plan.order.map((ref) => (
+                      <li key={rowID(ref)}>
+                        {ref.family}: {ref.name} <CredentialChip value={ref.agent_id} />
+                      </li>
+                    ))}
+                  </ol>
+                )
+              ) : null}
               <details>
                 <summary>{t("admin.access.rotation.exactReview")}</summary>
                 <pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview, null, 2)}</pre>
               </details>
               {reconcile ? (
                 <>
-                  <PAMReconciliationIntent intent={preview.intent} digest={preview.intent_digest} />
+                  <PAMReconciliationIntent intent={preview.intent} digest={preview.intent_digest} onReadiness={setPagesDigest} />
                   {approval ? (
                     <>
                       <p>{pending.data?.reason}</p>
@@ -347,14 +449,24 @@ export function PAMDependentRotation({
                       {pending.data?.queue_pending ? <p>{t("admin.access.rotation.queuePending")}</p> : null}
                     </>
                   ) : (
-                    <Button type="button" disabled={busy} onClick={() => void requestApproval()}>
-                      {t("admin.access.rotation.requestApproval")}
-                    </Button>
+                    <div className="grid gap-2">
+                      <Field label={t("admin.access.rotation.reason")} required error={form.formState.errors.reason?.message}>
+                        {(control) => <Textarea {...control} {...form.register("reason")} disabled={busy} />}
+                      </Field>
+                      <Button type="button" disabled={busy || !reviewReady || !reason?.trim()} onClick={() => void requestApproval()}>
+                        {t("admin.access.rotation.requestApproval")}
+                      </Button>
+                    </div>
                   )}
                 </>
               ) : null}
+              {preview.intent.plan.manifest && onReviewID && !reviewID ? (
+                <Button type="button" variant="outline" disabled={busy} onClick={() => onReviewID(preview.intent.plan.id, approval?.approval_request_id ?? "")}>
+                  {t("admin.access.rotation.saveReview")}
+                </Button>
+              ) : null}
               <label className="flex items-start gap-2">
-                <input type="checkbox" {...form.register("acknowledge")} disabled={busy} />
+                <input type="checkbox" {...form.register("acknowledge")} disabled={busy || !reviewReady} />
                 <span>{t("admin.access.rotation.acknowledge")}</span>
               </label>
               <Button type="button" disabled={busy || !acknowledged || !mayQueue} loading={busy} onClick={() => void queue()}>
@@ -385,6 +497,7 @@ export function PAMDependentRotation({
                 })}
               </p>
               {value.rotation.failure ? <p>{value.rotation.failure}</p> : null}
+              {value.rotation.intent.plan.manifest ? <PAMDependentManifestPages intent={value.rotation.intent} digest={value.rotation.intent_digest} /> : null}
               {value.command.error ? <p>{value.command.error}</p> : null}
               {value.command.phase === "completed" ? (
                 <p>{t("admin.access.rotation.complete")}</p>

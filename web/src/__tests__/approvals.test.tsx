@@ -16,6 +16,8 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     approvalRequests: vi.fn(),
     pamServiceReconciliationReview: vi.fn(),
+    pamServiceReconciliationReviewPage: vi.fn(),
+    pamServiceDependentReviewPage: vi.fn(),
     approvalRequestHistory: vi.fn(),
     profileEditApprovals: vi.fn(),
     approveProfileEditApproval: vi.fn(),
@@ -822,4 +824,103 @@ it.each(["digest", "plan", "version"])("A267 refuses a reconciliation manifest w
   expect(await within(dialog).findByText(/exact reconciliation manifest is unavailable/)).toBeInTheDocument();
   expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
   expect(apiMock.approveApprovalRequest).not.toHaveBeenCalled();
+});
+
+it("A267 keeps paged reconciliation approval closed until every exact page is available with approver-only access", async () => {
+  for (const mock of Object.values(apiMock)) mock.mockReset();
+  apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });
+  apiMock.me.mockResolvedValue({ permissions: ["access:approve"], subject: "independent-reviewer", tenant_id: "owned-tenant", email: "reviewer@example.test" });
+  apiMock.approvalRequestHistory.mockResolvedValue({ items: [] });
+  apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
+  apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
+  apiMock.ticketIntakeSchedules.mockResolvedValue({ items: [] });
+  apiMock.approveApprovalRequest.mockResolvedValue({ status: "approved", approval_count: 2, required_approvals: 2 });
+  const digest = "d".repeat(64),
+    header = "a".repeat(64),
+    first = "b".repeat(64),
+    tail = "c".repeat(64);
+  const id = "58200000-0000-4000-8000-000000000001";
+  const account = {
+    account_id: "58200000-0000-4000-8000-000000000002",
+    dn: "CN=owned-service,DC=example,DC=test",
+    sid: "S-1-5-21-1-2-3-1001",
+    guid: "a".repeat(32),
+  };
+  const host = {
+    binding: { account, agent_id: "58200000-0000-4000-8000-000000000003", enabled: true, revision: 7 },
+    inventory_run_id: "58200000-0000-4000-8000-000000000004",
+    inventory_digest: header,
+    observed_at: "2099-01-01T00:00:00Z",
+  };
+  const intent = {
+    mode: "reconcile",
+    expected_version: 7,
+    reconcile: { dn: "CN=owned-reset,DC=example,DC=test", sid: "S-1-5-21-1-2-3-1002", guid: "e".repeat(32) },
+    plan: {
+      version: 2,
+      id,
+      account,
+      secret_name: "ad/service",
+      expires_at: "2099-01-01T00:00:00Z",
+      order: [],
+      hosts: [],
+      manifest: {
+        version: 1,
+        id,
+        header_digest: header,
+        digest,
+        tail_digest: tail,
+        page_count: 2,
+        entry_count: 2,
+        host_count: 1,
+        expires_at: "2099-01-01T00:00:00Z",
+      },
+    },
+    probes: [],
+  };
+  const pages = [first, tail].map((hash, n) => ({
+    version: 1,
+    id,
+    header_digest: header,
+    page_number: n,
+    previous_digest: n ? first : header,
+    digest: hash,
+    hosts: [host],
+    entries: [{ host, ref: { agent_id: host.binding.agent_id, family: "services", name: `owned-service-${n}` }, probe_id: `useful-work-${n}` }],
+  }));
+  apiMock.approvalRequests.mockResolvedValue([
+    approvalRequest({
+      resource_kind: "pam_service_reconcile",
+      resource_id: id,
+      action: "reconcile",
+      to_state: digest,
+      from_state: "version:7",
+      target_version: "7",
+      evidence_refs: ["service-dependent-intent:" + digest],
+    }),
+  ]);
+  apiMock.pamServiceReconciliationReview.mockResolvedValue({ intent, intent_digest: digest });
+  let release!: (page: unknown) => void;
+  apiMock.pamServiceReconciliationReviewPage.mockImplementation(async (_id, n) =>
+    n
+      ? new Promise((resolve) => {
+          release = resolve;
+        })
+      : pages[0],
+  );
+  const user = userEvent.setup();
+  renderAt("/approvals?request=approval-request-1");
+  const dialog = await screen.findByRole("dialog", { name: "Review request" });
+  await within(dialog).findByText("CN=owned-reset,DC=example,DC=test");
+  expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+  await within(dialog).findByText("owned-service-0", { exact: false });
+  await user.click(within(dialog).getByRole("button", { name: "Next review page" }));
+  await waitFor(() => expect(apiMock.pamServiceReconciliationReviewPage).toHaveBeenCalledWith(id, 1));
+  expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeDisabled();
+  release(pages[1]);
+  await within(dialog).findByText("owned-service-1", { exact: false });
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Approve request" })).toBeEnabled());
+  expect(apiMock.pamServiceDependentReviewPage).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole("button", { name: "Approve request" }));
+  await waitFor(() => expect(apiMock.approveApprovalRequest).toHaveBeenCalledWith("approval-request-1", "sha256:8ec59a9c"));
 });

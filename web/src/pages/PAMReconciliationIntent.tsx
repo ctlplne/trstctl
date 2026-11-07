@@ -1,8 +1,19 @@
+import { PAMDependentManifestPages } from "./PAMDependentManifestPages";
 import type { PAMServiceDependentRotationIntent } from "@/lib/api-types.gen";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { CredentialChip } from "@/components/CredentialChip";
 
-export function PAMReconciliationIntent({ intent, digest }: { intent: PAMServiceDependentRotationIntent; digest: string }) {
+export function PAMReconciliationIntent({
+  intent,
+  digest,
+  access,
+  onReadiness,
+}: {
+  intent: PAMServiceDependentRotationIntent;
+  digest: string;
+  access?: "operator" | "approver";
+  onReadiness?: (digest: string | null) => void;
+}) {
   const { t } = useTranslation();
   return (
     <section className="grid gap-3 rounded-control border border-border p-3" aria-label={t("admin.access.rotation.reconcileManifest")}>
@@ -31,14 +42,18 @@ export function PAMReconciliationIntent({ intent, digest }: { intent: PAMService
         </dd>
       </dl>
       <p>{t("admin.access.rotation.reviewVersion", { name: intent.plan.secret_name, version: intent.expected_version, expires: intent.plan.expires_at })}</p>
-      <ol className="grid gap-1">
-        {intent.plan.order.map((ref, index) => (
-          <li key={JSON.stringify(ref)}>
-            {index + 1}. {ref.family}: {ref.name} <CredentialChip value={ref.agent_id} />{" "}
-            <span>{intent.probes.find((p) => JSON.stringify(p.ref) === JSON.stringify(ref))?.probe_id}</span>
-          </li>
-        ))}
-      </ol>
+      {intent.plan.manifest ? (
+        <PAMDependentManifestPages intent={intent} digest={digest} access={access} onReadiness={onReadiness} />
+      ) : (
+        <ol className="grid gap-1">
+          {intent.plan.order.map((ref, index) => (
+            <li key={JSON.stringify(ref)}>
+              {index + 1}. {ref.family}: {ref.name} <CredentialChip value={ref.agent_id} />{" "}
+              <span>{intent.probes.find((p) => JSON.stringify(p.ref) === JSON.stringify(ref))?.probe_id}</span>
+            </li>
+          ))}
+        </ol>
+      )}
       <details>
         <summary>{t("admin.access.rotation.exactReview")}</summary>
         <pre className="overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(intent, null, 2)}</pre>

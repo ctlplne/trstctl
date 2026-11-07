@@ -2831,8 +2831,21 @@ an `intent` and `intent_digest` computed by the server. Queue those exact values
 through the existing dependent rotation endpoint, with
 `acknowledge_single_phase: true`; the CLI's `rotation queue` also requires
 `--force`. The whole account keeps one operation and one directory generation.
-Paged console authoring remains under construction; use the API or CLI for this
-path.
+The console authors this same paged review. It keeps every enabled host,
+including hosts with no dependents, and packs pages by UTF-8 wire size. Edit
+restart order in bounded row pages; a configured useful-work probe can fill empty
+entries without overwriting per-dependent overrides. Review pages show the exact
+native reference, global position, enrolled host and probe. All pages must load
+before acknowledgement or independent approval is available. This is a review
+aid; loading pages does not prove that a person inspected every entry.
+
+Use **Save this sealed review for reopening** to retain its URL before requesting
+approval. Reopening reads the frozen server intent without rescanning or rewriting
+its scope. A reconciliation requester must supply a reason and obtain the separate
+approval. Reviewers use the approval page reader with `access:approve`; they do
+not need secret-read access. A failed, changed or expired page blocks the console
+control. Existing operations expose the same frozen pages to read-only operators.
+The server rechecks authority when the exact sealed intent is queued.
 
 ```sh
 trstctl access discovery reviews open ACCOUNT_ID -f review.json

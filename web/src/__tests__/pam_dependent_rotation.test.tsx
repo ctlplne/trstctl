@@ -8,6 +8,11 @@ import { PAMDependentRotation } from "@/pages/PAMDependentRotation";
 const { mock } = vi.hoisted(() => ({
   mock: {
     secretPage: vi.fn(),
+    openPAMServiceDependentReview: vi.fn(),
+    appendPAMServiceDependentReviewPage: vi.fn(),
+    sealPAMServiceDependentReview: vi.fn(),
+    pamServiceDependentReview: vi.fn(),
+    pamServiceDependentReviewPage: vi.fn(),
     previewPAMServiceDependentRecovery: vi.fn(),
     queuePAMServiceDependentRecovery: vi.fn(),
     requestPAMServiceReconciliationApproval: vi.fn(),
@@ -29,7 +34,15 @@ const ref = { agent_id: "56900000-0000-4000-8000-000000000001", family: "service
 const intent = {
   plan: {
     id: "change-1",
-    account: { account_id: accountID, sid: "S-1-5-21-1-2-3-1001" },
+    account: {
+      account_id: accountID,
+      sid: "S-1-5-21-1-2-3-1001",
+      dn: "CN=owned-service,DC=example,DC=test",
+      guid: "a".repeat(32),
+      provider_id: "owned-directory",
+      domain: "EXAMPLE",
+      name: "owned-service",
+    },
     secret_name: "ad/svc",
     order: [ref],
     hosts: [],
@@ -39,6 +52,69 @@ const intent = {
   provider_binding: "native-binding",
   probes: [{ ref, probe_id: "owned-http" }],
 };
+const reviewedDigest = "d".repeat(64);
+const reviewHeader = "a".repeat(64),
+  reviewFirst = "b".repeat(64),
+  reviewTail = "c".repeat(64);
+const reviewHost = {
+  binding: { account: intent.plan.account, agent_id: ref.agent_id, enabled: true, revision: 7 },
+  inventory_run_id: "scan",
+  inventory_digest: reviewHeader,
+  observed_at: "2026-11-07T06:00:00Z",
+};
+const pagedIntent = {
+  ...intent,
+  probes: [],
+  plan: {
+    ...intent.plan,
+    version: 2,
+    order: [],
+    hosts: [],
+    manifest: {
+      version: 1,
+      id: intent.plan.id,
+      header_digest: reviewHeader,
+      digest: "e".repeat(64),
+      tail_digest: reviewTail,
+      page_count: 2,
+      entry_count: 1,
+      host_count: 1,
+      expires_at: intent.plan.expires_at,
+    },
+  },
+};
+function mockPagedReview(exact: typeof pagedIntent, hosts = [reviewHost]) {
+  const root = {
+    header: { id: exact.plan.id, account: exact.plan.account, secret_name: exact.plan.secret_name, mode: "mode" in exact ? exact.mode : undefined },
+    header_digest: reviewHeader,
+  };
+  const makePage = (n: number, body: unknown) => ({ ...(body as object), version: 1, id: exact.plan.id, page_number: n, digest: n ? reviewTail : reviewFirst });
+  const pages = new Map<number, unknown>([
+    [0, makePage(0, { header_digest: reviewHeader, previous_digest: reviewHeader, hosts, entries: null })],
+    [
+      1,
+      makePage(1, { header_digest: reviewHeader, previous_digest: reviewFirst, hosts: [hosts[0]], entries: [{ host: hosts[0], ref, probe_id: "owned-http" }] }),
+    ],
+  ]);
+  const sealed = {
+    ...root,
+    intent: exact,
+    intent_digest: reviewedDigest,
+    page_count: 2,
+    entry_count: exact.plan.manifest.entry_count,
+    host_count: hosts.length,
+    seal: { ...exact.plan.manifest, host_count: hosts.length },
+  };
+  mock.openPAMServiceDependentReview.mockResolvedValue(root);
+  mock.appendPAMServiceDependentReviewPage.mockImplementation(async (_id, n, body) => {
+    const page = makePage(n, body);
+    pages.set(n, page);
+    return page;
+  });
+  mock.sealPAMServiceDependentReview.mockResolvedValue(sealed);
+  mock.pamServiceDependentReview.mockResolvedValue(sealed);
+  mock.pamServiceDependentReviewPage.mockImplementation(async (_id, n) => pages.get(n));
+}
 const progress = {
   rotation: { id: "change-1", intent_digest: "original-intent", intent, direction: "inverse", directory_restored: true, failure: "native_update_failed" },
   command: { phase: "staged", error: "dependent_inverse_pending" },
@@ -47,9 +123,15 @@ beforeEach(() => {
   for (const m of Object.values(mock)) m.mockReset();
   mock.secretPage.mockResolvedValue({ items: [{ name: "ad/svc", version: 7 }] });
   mock.pamServiceDependentHosts.mockResolvedValue({
-    items: [{ binding: { agent_id: ref.agent_id, enabled: true }, latest_scan: { id: "scan", current: true, status: "complete" } }],
+    items: [{ binding: reviewHost.binding, latest_scan: { id: "scan", current: true, status: "complete" } }],
   });
-  mock.pamServiceDependentScan.mockResolvedValue({ status: "complete", report: { services: [{ name: ref.name }], tasks: [], pools: [] } });
+  mock.pamServiceDependentScan.mockResolvedValue({
+    id: "scan",
+    status: "complete",
+    report_digest: reviewHeader,
+    report: { run_id: "scan", observed_at: reviewHost.observed_at, services: [{ name: ref.name }], tasks: [], pools: [] },
+  });
+  mockPagedReview(pagedIntent);
   mock.previewPAMServiceDependentRotation.mockResolvedValue({ intent, intent_digest: "reviewed-digest" });
   mock.queuePAMServiceDependentRotation.mockResolvedValue(progress);
   mock.pamServiceDependentRotation.mockResolvedValue(progress);
@@ -86,7 +168,9 @@ it("requires exact review and acknowledgement before queuing and shows inverse u
   const probe = await screen.findByLabelText("Useful-work probe for owned-web");
   await user.type(probe, "owned-http");
   await user.click(screen.getByRole("button", { name: "Preview rotation" }));
-  await screen.findByText("reviewed-digest");
+  await screen.findByText(reviewedDigest);
+  await user.click(screen.getByRole("button", { name: "Next review page" }));
+  await screen.findByText("All review pages loaded.", { exact: false });
   expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Rotate account and dependents" })).toBeDisabled();
   await user.click(screen.getByRole("checkbox", { name: /I accept the single-phase/ }));
@@ -94,7 +178,7 @@ it("requires exact review and acknowledgement before queuing and shows inverse u
   await waitFor(() =>
     expect(mock.queuePAMServiceDependentRotation).toHaveBeenCalledWith(
       accountID,
-      { intent, intent_digest: "reviewed-digest", acknowledge_single_phase: true },
+      { intent: pagedIntent, intent_digest: reviewedDigest, acknowledge_single_phase: true },
       expect.any(String),
     ),
   );
@@ -155,11 +239,12 @@ const reconcileApproval = {
   expires_at: intent.plan.expires_at,
 };
 it("requests independent reconciliation consent and refreshes the exact requester review before queuing", async () => {
-  mock.previewPAMServiceDependentRotation.mockResolvedValue({ intent: reconcileIntent, intent_digest: "reviewed-digest" });
+  const exact = { ...pagedIntent, mode: "reconcile", reconcile: reconcileIntent.reconcile };
+  mockPagedReview(exact);
   mock.requestPAMServiceReconciliationApproval.mockResolvedValue(reconcileApproval);
   mock.pamServiceReconciliationPendingReview.mockResolvedValue({
-    intent: reconcileIntent,
-    intent_digest: "reviewed-digest",
+    intent: exact,
+    intent_digest: reviewedDigest,
     approval: { ...reconcileApproval, status: "approved", approval_count: 1 },
     reason: "Recover external drift",
   });
@@ -173,6 +258,8 @@ it("requests independent reconciliation consent and refreshes the exact requeste
   await user.type(await screen.findByLabelText("Useful-work probe for owned-web"), "owned-http");
   await user.click(screen.getByRole("button", { name: "Preview rotation" }));
   await screen.findByText(reconcileIntent.reconcile.dn);
+  await user.click(screen.getByRole("button", { name: "Next review page" }));
+  await screen.findByText("All review pages loaded.", { exact: false });
   expect(screen.getByRole("button", { name: "Rotate account and dependents" })).toBeDisabled();
   await user.click(screen.getByRole("button", { name: "Request independent reconciliation approval" }));
   expect(await screen.findByRole("link", { name: "Open independent approval" })).toHaveAttribute("href", "/approvals?request=approval-1");
@@ -185,8 +272,8 @@ it("requests independent reconciliation consent and refreshes the exact requeste
     expect(mock.queuePAMServiceDependentRotation).toHaveBeenCalledWith(
       accountID,
       {
-        intent: reconcileIntent,
-        intent_digest: "reviewed-digest",
+        intent: exact,
+        intent_digest: reviewedDigest,
         acknowledge_single_phase: true,
         approval_request_id: "approval-1",
         approval_intent_digest: "approval-digest",
@@ -280,4 +367,168 @@ it("does not expose inverse recovery to a read-only operator", async () => {
   mount("change-1", false);
   await screen.findByText("dependent_inverse_pending");
   expect(screen.queryByRole("button", { name: "Review inverse recovery" })).not.toBeInTheDocument();
+});
+
+it("authors one paged account review, retains an empty selected host, and queues only the server's exact sealed intent", async () => {
+  const empty = { ...reviewHost, binding: { ...reviewHost.binding, agent_id: "56900000-0000-4000-8000-000000000003" }, inventory_run_id: "empty-scan" };
+  const exact = { ...pagedIntent, plan: { ...pagedIntent.plan, manifest: { ...pagedIntent.plan.manifest, host_count: 2 } } };
+  mockPagedReview(exact, [reviewHost, empty]);
+  mock.pamServiceDependentHosts.mockResolvedValue({
+    items: [reviewHost, empty].map((host) => ({ binding: host.binding, latest_scan: { id: host.inventory_run_id, current: true, status: "complete" } })),
+  });
+  mock.pamServiceDependentScan.mockImplementation(async (id) => ({
+    id,
+    status: "complete",
+    report_digest: reviewHeader,
+    report: { run_id: id, observed_at: reviewHost.observed_at, services: id === "scan" ? [{ name: ref.name }] : [], tasks: [], pools: [] },
+  }));
+  mount();
+  const user = userEvent.setup();
+  await screen.findByRole("option", { name: "ad/svc" });
+  await user.selectOptions(screen.getByLabelText("Stored password reference"), "ad/svc");
+  await user.click(screen.getByRole("button", { name: "Review dependents" }));
+  await user.type(await screen.findByLabelText("Useful-work probe for owned-web"), "owned-http");
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await waitFor(() => expect(mock.openPAMServiceDependentReview).toHaveBeenCalledTimes(1));
+  expect(mock.previewPAMServiceDependentRotation).not.toHaveBeenCalled();
+  expect(mock.appendPAMServiceDependentReviewPage).toHaveBeenNthCalledWith(
+    1,
+    "change-1",
+    0,
+    expect.objectContaining({ hosts: [reviewHost, empty], entries: [] }),
+    expect.any(String),
+  );
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Rotate account and dependents" })).toBeDisabled();
+  await user.click(await screen.findByRole("button", { name: "Next review page" }));
+  await screen.findByText("All review pages loaded.", { exact: false });
+  await user.click(screen.getByRole("checkbox", { name: /I accept the single-phase/ }));
+  await user.click(screen.getByRole("button", { name: "Rotate account and dependents" }));
+  await waitFor(() =>
+    expect(mock.queuePAMServiceDependentRotation).toHaveBeenCalledWith(
+      accountID,
+      { intent: exact, intent_digest: reviewedDigest, acknowledge_single_phase: true },
+      expect.any(String),
+    ),
+  );
+});
+
+it("reopens a sealed review before approval without rescanning or rewriting its scope", async () => {
+  const exact = { ...pagedIntent, mode: "reconcile", reconcile: reconcileIntent.reconcile };
+  mockPagedReview(exact);
+  mock.requestPAMServiceReconciliationApproval.mockResolvedValue(reconcileApproval);
+  render(
+    <AppQueryProvider>
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <MemoryRouter>
+          <PAMDependentRotation accountID={accountID} canManage reviewID="change-1" onRotationID={vi.fn()} />
+        </MemoryRouter>
+      </IntlProvider>
+    </AppQueryProvider>,
+  );
+  const user = userEvent.setup();
+  await screen.findByText(reconcileIntent.reconcile.dn);
+  expect(mock.pamServiceDependentReview).toHaveBeenCalledWith("change-1");
+  expect(mock.pamServiceDependentHosts).not.toHaveBeenCalled();
+  expect(mock.openPAMServiceDependentReview).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Next review page" }));
+  await screen.findByText("All review pages loaded.", { exact: false });
+  const request = screen.getByRole("button", { name: "Request independent reconciliation approval" });
+  expect(request).toBeDisabled();
+  await user.type(screen.getByLabelText("Reason for reconciliation"), "Recover external drift from this exact sealed review");
+  await user.click(request);
+  await waitFor(() =>
+    expect(mock.requestPAMServiceReconciliationApproval).toHaveBeenCalledWith(
+      accountID,
+      { intent: exact, intent_digest: reviewedDigest, reason: "Recover external drift from this exact sealed review" },
+      expect.any(String),
+    ),
+  );
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
+  expect(mock.appendPAMServiceDependentReviewPage).not.toHaveBeenCalled();
+});
+it("keeps authoring rows bounded, fills empty probes without overwriting custom work, and preserves global order across row pages", async () => {
+  const exact = { ...pagedIntent, plan: { ...pagedIntent.plan, manifest: { ...pagedIntent.plan.manifest, entry_count: 28 } } };
+  mockPagedReview(exact);
+  mock.pamServiceDependentScan.mockResolvedValue({
+    id: "scan",
+    status: "complete",
+    report_digest: reviewHeader,
+    report: {
+      run_id: "scan",
+      observed_at: reviewHost.observed_at,
+      services: Array.from({ length: 28 }, (_, n) => ({ name: `owned-${n}` })),
+      tasks: [],
+      pools: [],
+    },
+  });
+  mount();
+  const user = userEvent.setup();
+  await screen.findByRole("option", { name: "ad/svc" });
+  await user.selectOptions(screen.getByLabelText("Stored password reference"), "ad/svc");
+  await user.click(screen.getByRole("button", { name: "Review dependents" }));
+  await user.type(await screen.findByLabelText("Useful-work probe for owned-0"), "custom-health");
+  expect(screen.getAllByLabelText(/^Useful-work probe for owned-/)).toHaveLength(25);
+  await user.type(screen.getByLabelText("Useful-work probe for empty entries"), "shared-health");
+  await user.click(screen.getByRole("button", { name: "Fill empty probes" }));
+  expect(screen.getByLabelText("Useful-work probe for owned-0")).toHaveValue("custom-health");
+  await user.click(screen.getByRole("button", { name: "Move owned-24 later" }));
+  await user.click(screen.getByRole("button", { name: "Next dependent rows" }));
+  expect(await screen.findByLabelText("Useful-work probe for owned-24")).toHaveValue("shared-health");
+  expect(screen.getAllByLabelText(/^Useful-work probe for owned-/)).toHaveLength(3);
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await waitFor(() => expect(mock.appendPAMServiceDependentReviewPage).toHaveBeenCalledTimes(2));
+  const entries = mock.appendPAMServiceDependentReviewPage.mock.calls[1][2].entries;
+  expect(entries.slice(24, 27).map((v: { ref: { name: string } }) => v.ref.name)).toEqual(["owned-25", "owned-24", "owned-26"]);
+  expect(entries[0].probe_id).toBe("custom-health");
+  expect(entries[27].probe_id).toBe("shared-health");
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
+});
+it("retries a lost page response with identical write keys", async () => {
+  mock.appendPAMServiceDependentReviewPage.mockRejectedValueOnce(new Error("owned page response lost"));
+  mount();
+  const user = userEvent.setup();
+  await screen.findByRole("option", { name: "ad/svc" });
+  await user.selectOptions(screen.getByLabelText("Stored password reference"), "ad/svc");
+  await user.click(screen.getByRole("button", { name: "Review dependents" }));
+  await user.type(await screen.findByLabelText("Useful-work probe for owned-web"), "owned-http");
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await screen.findByText("owned page response lost");
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await waitFor(() => expect(mock.sealPAMServiceDependentReview).toHaveBeenCalledTimes(1));
+  expect(mock.openPAMServiceDependentReview.mock.calls[0]).toEqual(mock.openPAMServiceDependentReview.mock.calls[1]);
+  expect(mock.appendPAMServiceDependentReviewPage.mock.calls[0]).toEqual(mock.appendPAMServiceDependentReviewPage.mock.calls[1]);
+});
+
+it("opens a different immutable draft when a probe changes after an interrupted write", async () => {
+  mock.appendPAMServiceDependentReviewPage.mockRejectedValueOnce(new Error("owned interrupted write"));
+  mount();
+  const user = userEvent.setup();
+  await screen.findByRole("option", { name: "ad/svc" });
+  await user.selectOptions(screen.getByLabelText("Stored password reference"), "ad/svc");
+  await user.click(screen.getByRole("button", { name: "Review dependents" }));
+  const probe = await screen.findByLabelText("Useful-work probe for owned-web");
+  await user.type(probe, "owned-http");
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await screen.findByText("owned interrupted write");
+  await user.clear(probe);
+  await user.type(probe, "different-health");
+  await user.click(screen.getByRole("button", { name: "Preview rotation" }));
+  await waitFor(() => expect(mock.sealPAMServiceDependentReview).toHaveBeenCalledTimes(1));
+  expect(mock.openPAMServiceDependentReview.mock.calls[0][2]).not.toEqual(mock.openPAMServiceDependentReview.mock.calls[1][2]);
+  expect(mock.appendPAMServiceDependentReviewPage.mock.calls[2][2].entries[0].probe_id).toBe("different-health");
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
+});
+
+it("lets a read-only operator inspect the frozen pages of an existing operation", async () => {
+  mock.pamServiceDependentRotation.mockResolvedValue({ ...progress, rotation: { ...progress.rotation, intent: pagedIntent, intent_digest: reviewedDigest } });
+  mount("change-1", false);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "Next review page" }));
+  await screen.findByText("owned-http");
+  expect(mock.pamServiceDependentReviewPage).toHaveBeenCalledWith("change-1", 1);
+  expect(mock.secretPage).not.toHaveBeenCalled();
+  expect(mock.openPAMServiceDependentReview).not.toHaveBeenCalled();
+  expect(mock.queuePAMServiceDependentRotation).not.toHaveBeenCalled();
 });
