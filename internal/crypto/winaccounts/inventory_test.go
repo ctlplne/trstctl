@@ -179,3 +179,28 @@ func TestNativeSIDOnlyEnumerationStillConfirmsTheLocalUserA268(t *testing.T) {
 		t.Fatal("SID-only read guessed an unresolved local user's identity")
 	}
 }
+
+func TestRemoteInventoryValidationRefusesDuplicateForeignOrUnboundedRowsA268(t *testing.T) {
+	base := Inventory{Machine: Machine{Name: "OWNED", SID: "S-1-5-21-1-2-3", Role: 3}, Accounts: []Account{{Name: "OwnedAdmin", SID: "S-1-5-21-1-2-3-1001"}}}
+	if err := base.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*Inventory){
+		func(v *Inventory) { v.Accounts = append(v.Accounts, v.Accounts[0]) },
+		func(v *Inventory) {
+			v.Accounts = append(v.Accounts, Account{Name: "ownedadmin", SID: "S-1-5-21-1-2-3-1002"})
+		},
+		func(v *Inventory) { v.Accounts[0].SID = "S-1-5-21-4-5-6-1001" },
+		func(v *Inventory) { v.Machine.Role = 4 },
+		func(v *Inventory) { v.Machine.Name = "host\n" },
+		func(v *Inventory) { v.ExternalMembers = -1 },
+		func(v *Inventory) { v.GroupMembers = MaxInventoryBytes },
+	} {
+		value := base
+		value.Accounts = append([]Account{}, base.Accounts...)
+		mutate(&value)
+		if value.Validate() == nil {
+			t.Fatal("invalid remote native inventory accepted")
+		}
+	}
+}

@@ -1258,3 +1258,24 @@ separate inverse. The parent restores native effects before publishing vault
 recovery, and preserves an unrelated concurrent vault edit as an explicit conflict.
 The Windows local SAM fixture and directory/host boundary fixtures have separate
 qualification limits; neither establishes an AD forest deployment.
+
+
+### Local administrator inventory boundary
+
+The local-account reader enumerates the local Administrators alias by its built-in
+SID, so a translated group name does not change what it reads. It keeps local
+account SIDs, names and account flags; foreign members and nested groups are
+counted separately. Domain controllers are refused because their account database
+is the directory, rather than a member host's local SAM.
+
+The host inventory wire contract binds one tenant, enrolled host and run. Its
+report carries either complete public metadata or a bounded unavailable reason.
+Unknown fields, duplicate fields, Unicode key aliases, malformed Unicode escapes,
+foreign SAM prefixes and partial failed reads are refused. The independent native
+reader has one worker slot and a thirty-second deadline. The operator-owned host
+profile's `windows_local_accounts_inventory` grant permits only this read; it
+adds no file roots, commands, credential redemption or password-write authority.
+
+This reader and executor foundation is not yet exposed as a fleet workflow.
+Native Windows execution, fleet discovery, scheduled rotation and checkout-driven
+invalidation remain separate proof obligations.

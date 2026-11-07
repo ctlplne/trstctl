@@ -53,8 +53,11 @@ type LocalAction struct {
 // AllowedRoots and Action come from operator startup config, never from a tenant
 // deployment target.
 type LocalOpsConfig struct {
-	WindowsDependentWrites []WindowsDependentWriteGrant
-	WindowsDependentProbes []WindowsDependentProbe
+	// WindowsLocalAccountsInventory grants read-only local-SAM discovery.
+	// It grants no password write, file access, or general process execution.
+	WindowsLocalAccountsInventory bool
+	WindowsDependentWrites        []WindowsDependentWriteGrant
+	WindowsDependentProbes        []WindowsDependentProbe
 	// WindowsDependentSIDs authorizes only native account-dependent reads.
 	// It is loaded from the host operator's profile, never target/job JSON.
 	WindowsDependentSIDs []string

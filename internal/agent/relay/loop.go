@@ -336,6 +336,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	if job.Kind == KindWindowsDependentRotation {
 		return runWindowsDependentRotation(ctx, ch, hostProfile, job)
 	}
+	if job.Kind == KindWindowsLocalAccountsInventory {
+		return runWindowsLocalAccountsInventory(ctx, ch, hostProfile, job)
+	}
 	if job.Kind == KindWindowsDependentInventory {
 		return runWindowsDependentInventory(ctx, ch, hostProfile, job)
 	}

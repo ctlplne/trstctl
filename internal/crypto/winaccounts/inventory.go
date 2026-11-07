@@ -10,11 +10,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 )
 
 const MaxInventoryBytes = 1 << 20
+const MaxLocalAccounts = 5000
 
 var (
 	ErrUnsupported    = errors.New("windows local accounts: native member or standalone Windows host required")
@@ -143,12 +145,8 @@ func (a Adapter) Inventory(ctx context.Context) (Inventory, error) {
 	if err := ctx.Err(); err != nil {
 		return none, err
 	}
-	encoded, err := json.Marshal(result)
-	if err != nil {
+	if err := result.Validate(); err != nil {
 		return none, err
-	}
-	if len(encoded) > MaxInventoryBytes {
-		return none, ErrInventoryBound
 	}
 	sort.Slice(result.Accounts, func(i, j int) bool { return result.Accounts[i].SID < result.Accounts[j].SID })
 	return result, nil
@@ -201,4 +199,44 @@ func validName(name string) bool {
 		units += utf16.RuneLen(r)
 	}
 	return units <= 20
+}
+
+// Validate checks public native metadata again at the remote receipt boundary.
+// An authenticated agent is not permission to persist foreign or partial rows.
+func (value Inventory) Validate() error {
+	machine := value.Machine
+	if machine.Role > 3 || !validMachineSID(machine.SID) || machine.Name == "" || len(machine.Name) > 255 || !utf8.ValidString(machine.Name) {
+		return ErrInventory
+	}
+	for _, r := range machine.Name {
+		if unicode.IsControl(r) {
+			return ErrInventory
+		}
+	}
+	if len(value.Accounts) > MaxLocalAccounts {
+		return ErrInventoryBound
+	}
+	for _, count := range []int{value.ExternalMembers, value.GroupMembers, value.DeletedMembers} {
+		if count < 0 || count > MaxInventoryBytes/4 {
+			return ErrInventoryBound
+		}
+	}
+	seenSID := map[string]bool{}
+	seenName := map[string]bool{}
+	for _, account := range value.Accounts {
+		name := strings.ToUpper(account.Name)
+		if !validSID(account.SID) || !localSID(machine.SID, account.SID) || !validName(account.Name) || seenSID[account.SID] || seenName[name] {
+			return ErrInventory
+		}
+		seenSID[account.SID] = true
+		seenName[name] = true
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ErrInventory
+	}
+	if len(raw) > MaxInventoryBytes {
+		return ErrInventoryBound
+	}
+	return nil
 }
