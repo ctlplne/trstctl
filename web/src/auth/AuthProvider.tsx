@@ -241,9 +241,13 @@ export function useAuth(): AuthState {
   return useContext(AuthContext);
 }
 
-/** beginLogin sends the browser into the OIDC flow. */
-export function beginLogin(returnTo?: string) {
-  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+/** beginLogin sends the browser into the OIDC flow; reauth asks the provider
+ * for a fresh sign-in (A277). */
+export function beginLogin(returnTo?: string, options?: { reauth?: boolean }) {
+  const params = new URLSearchParams();
+  if (returnTo) params.set("return_to", returnTo);
+  if (options?.reauth) params.set("reauth", "1");
+  const query = params.toString();
   window.location.assign(query ? `${loginURL}?${query}` : loginURL);
 }
 

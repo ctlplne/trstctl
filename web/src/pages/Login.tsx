@@ -13,10 +13,18 @@ const LDAPLoginForm = lazy(() => import("./login/LDAPLoginForm"));
 export function Login() {
   const { oidcAvailable, samlAvailable, ldapAvailable, kerberosAvailable, ntlmAvailable, ldapPasswordChangeAvailable, previewAvailable, startPreview } =
     useAuth();
-  const browserLoginAvailable = oidcAvailable || samlAvailable || ldapAvailable || kerberosAvailable || ntlmAvailable;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const needsTenantAccess = searchParams.get("error") === "tenant_access_not_configured";
+  // A277: a fresh sign-in offers only the methods that can prove one — the
+  // identity provider asked to sign the person in again, or the directory
+  // password typed now. SAML, Kerberos and NTLM reuse an earlier sign-in.
+  const reauth = searchParams.get("reauth") === "1";
+  const reauthNotProven = reauth && searchParams.get("error") === "reauthentication_not_proven";
+  const showSAML = samlAvailable && !reauth;
+  const showKerberos = kerberosAvailable && !reauth;
+  const showNTLM = ntlmAvailable && !reauth;
+  const browserLoginAvailable = oidcAvailable || showSAML || ldapAvailable || showKerberos || showNTLM;
 
   function enterPreview() {
     startPreview();
@@ -36,7 +44,9 @@ export function Login() {
 
         <Card className="border-border/90 shadow-elevation1">
           <CardHeader>
-            <CardTitle>{translateNow(browserLoginAvailable ? "auth.login.title" : "auth.browserLoginDisabled.title")}</CardTitle>
+            <CardTitle>
+              {translateNow(reauth ? "auth.login.reauthTitle" : browserLoginAvailable ? "auth.login.title" : "auth.browserLoginDisabled.title")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {needsTenantAccess && (
@@ -44,13 +54,28 @@ export function Login() {
                 <ErrorState title={translateNow("auth.login.tenantAccessTitle")}>{translateNow("auth.login.tenantAccessBody")}</ErrorState>
               </div>
             )}
-            <p className="mb-4 text-body text-muted-foreground">{translateNow(browserLoginAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}</p>
+            {reauthNotProven && (
+              <div className="mb-4">
+                <ErrorState title={translateNow("auth.login.reauthNotProvenTitle")}>{translateNow("auth.login.reauthNotProvenBody")}</ErrorState>
+              </div>
+            )}
+            <p className="mb-4 text-body text-muted-foreground">
+              {translateNow(
+                reauth
+                  ? browserLoginAvailable
+                    ? "auth.login.reauthBody"
+                    : "auth.login.reauthUnavailable"
+                  : browserLoginAvailable
+                    ? "auth.login.body"
+                    : "auth.browserLoginDisabled.body",
+              )}
+            </p>
             {oidcAvailable && (
-              <Button className="min-h-11 w-full" onClick={() => beginLogin(searchParams.get("return_to") ?? undefined)}>
+              <Button className="min-h-11 w-full" onClick={() => beginLogin(searchParams.get("return_to") ?? undefined, { reauth })}>
                 {translateNow("auth.login.action")}
               </Button>
             )}
-            {samlAvailable && (
+            {showSAML && (
               <Button
                 className="mt-3 min-h-11 w-full"
                 variant={oidcAvailable ? "outline" : "default"}
@@ -59,19 +84,19 @@ export function Login() {
                 {translateNow("auth.saml.action")}
               </Button>
             )}
-            {kerberosAvailable && (
+            {showKerberos && (
               <Button
                 className="mt-3 min-h-11 w-full"
-                variant={oidcAvailable || samlAvailable ? "outline" : "default"}
+                variant={oidcAvailable || showSAML ? "outline" : "default"}
                 onClick={() => beginKerberosLogin(searchParams.get("return_to") ?? undefined)}
               >
                 {translateNow("auth.kerberos.action")}
               </Button>
             )}
-            {ntlmAvailable && (
+            {showNTLM && (
               <Button
                 className="mt-3 min-h-11 w-full"
-                variant={oidcAvailable || samlAvailable || kerberosAvailable ? "outline" : "default"}
+                variant={oidcAvailable || showSAML || showKerberos ? "outline" : "default"}
                 onClick={() => beginNTLMLogin(searchParams.get("return_to") ?? undefined)}
               >
                 {translateNow("auth.ntlm.action")}
@@ -87,12 +112,12 @@ export function Login() {
               >
                 <LDAPLoginForm
                   returnTo={searchParams.get("return_to") ?? undefined}
-                  secondary={oidcAvailable || samlAvailable || kerberosAvailable || ntlmAvailable}
+                  secondary={oidcAvailable || showSAML || showKerberos || showNTLM}
                   passwordChange={ldapPasswordChangeAvailable}
                 />
               </Suspense>
             )}
-            {previewAvailable && (
+            {previewAvailable && !reauth && (
               <div className="mt-4 border-t border-border pt-4">
                 <p className="mb-3 text-caption text-muted-foreground">{translateNow("source.preview.uses.sample.data.in.this.browser.a.7b39b478d2")}</p>
                 <Button className="w-full" variant="outline" onClick={enterPreview}>

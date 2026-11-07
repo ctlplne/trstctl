@@ -309,7 +309,8 @@ import (
 // store would lose which accounts were flagged orphaned or unused and what
 // approved action resolved each, while its covered offset skipped their
 // events.
-const SnapshotFormatVersion = 109
+// Version 110 carries A277's per-template fresh-sign-in window.
+const SnapshotFormatVersion = 110
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

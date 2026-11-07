@@ -780,6 +780,20 @@ responders (one per line), the session dialog's **Open now in an emergency** ope
 after a confirmation that every approver is notified (a reason is required), and the
 **Break-glass accounts** panel's emergency grants table records the post-incident review.
 
+A template is made high-risk with `reauthenticate_within_seconds` (A277; 60–3600, the
+console's **Fresh sign-in** column offers 5, 15 or 60 minutes): a session through it — an
+approved activation or an emergency session — and a check-out reveal start only when the
+caller signed in to the console within that window. Otherwise the request is refused,
+before anything is attested, granted or revealed, with `401` and an RFC 9470 step-up
+challenge (`WWW-Authenticate: Bearer error="insufficient_user_authentication",
+max_age="300"`); an API token never satisfies it, so a high-risk template needs a person.
+The console answers the challenge with **Sign in again**, which opens the sign-in in its own
+window so the approved request survives, and the person retries. The sign-in time is what
+the sign-in proved: an OIDC id_token's `auth_time` (a fresh sign-in asks the provider for
+`prompt=login` and `max_age=0`, and is refused when the provider reused its session instead)
+or the moment a directory password was verified. SAML, Kerberos and NTLM sign-ins reuse an
+earlier authentication, so they do not count as fresh.
+
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations
 (never file contents), PostgreSQL and MySQL statements, Redis and MongoDB commands and ClickHouse requests with bounded results,

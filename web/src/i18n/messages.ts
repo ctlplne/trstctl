@@ -803,6 +803,43 @@ export const messages = {
   "admin.access.recordingSearch.sourceIndex": { defaultMessage: "Desktop index", description: "Recording search (A275)." },
   "admin.access.recordingSearch.sourceRequest": { defaultMessage: "Recorded request", description: "Recording search (A275)." },
   "admin.access.flags.heading": { defaultMessage: "Orphaned and unused accounts", description: "Account flags (A276)." },
+  "auth.reauth.required": {
+    defaultMessage: "This needs a fresh sign-in: sign in again (within the last {minutes} min), then try again.",
+    description: "A277 step-up challenge: a high-risk template needs a recent sign-in before its session or check-out.",
+  },
+  "auth.reauth.action": { defaultMessage: "Sign in again", description: "Opens the fresh sign-in window (A277)." },
+  "auth.reauth.signedIn": { defaultMessage: "You signed in again. Try again now.", description: "After the fresh sign-in window reported success (A277)." },
+  "auth.reauth.popupBlocked": { defaultMessage: "Your browser blocked the sign-in window.", description: "The fresh sign-in pop-up was blocked (A277)." },
+  "auth.reauth.openTab": { defaultMessage: "Sign in again in a new tab", description: "Fallback link when the sign-in pop-up is blocked (A277)." },
+  "auth.reauth.done": {
+    defaultMessage: "You signed in again. Return to the trstctl window that asked; this one can be closed.",
+    description: "Shown in the fresh sign-in window after it completes (A277).",
+  },
+  "auth.login.reauthTitle": { defaultMessage: "Sign in again", description: "Login page heading in fresh sign-in mode (A277)." },
+  "auth.login.reauthBody": {
+    defaultMessage: "A high-risk action needs a fresh sign-in. Sign in with your identity provider or your directory password.",
+    description: "Login page body in fresh sign-in mode (A277).",
+  },
+  "auth.login.reauthNotProvenTitle": {
+    defaultMessage: "Your identity provider did not sign you in again",
+    description: "The provider reused an earlier sign-in during a fresh sign-in (A277).",
+  },
+  "auth.login.reauthNotProvenBody": {
+    defaultMessage:
+      "It reused an earlier sign-in, so the action stays refused. Sign in again; if this repeats, ask your administrator whether the provider honors fresh sign-in requests.",
+    description: "Next steps when the provider did not re-authenticate (A277).",
+  },
+  "auth.login.reauthUnavailable": {
+    defaultMessage: "No sign-in method here can prove a fresh sign-in. Ask your administrator to enable OIDC or directory sign-in.",
+    description: "Fresh sign-in mode without OIDC or directory sign-in configured (A277).",
+  },
+  "admin.access.folders.freshSignIn": { defaultMessage: "Fresh sign-in", description: "Template column: high-risk fresh sign-in window (A277)." },
+  "admin.access.folders.freshSignInFor": {
+    defaultMessage: "Fresh sign-in for {template}",
+    description: "Accessible name of a template's fresh sign-in choice (A277).",
+  },
+  "admin.access.folders.freshSignInNone": { defaultMessage: "Not required", description: "Template needs no fresh sign-in (A277)." },
+  "admin.access.folders.freshSignInWithin": { defaultMessage: "Within {minutes} min", description: "Template needs a sign-in this recent (A277)." },
   "admin.access.flags.description": {
     defaultMessage:
       "Brokered accounts whose owner is gone — none, deleted or offboarded — or that went unused past the window. Propose reassigning the owner, or rotating the credential and disabling the account; two people approve it on the approvals page before it is applied.",

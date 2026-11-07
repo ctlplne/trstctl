@@ -26,6 +26,9 @@ type PAMCheckoutRequest struct {
 	Reason     string `json:"reason"`
 	TTLSeconds int    `json:"ttl_seconds"`
 	TemplateID string `json:"template_id,omitempty"`
+	// SignedInAt (A277) is when the caller last authenticated, from its
+	// browser session; the request body cannot supply it.
+	SignedInAt time.Time `json:"-"`
 }
 
 // PAMCheckoutRevealRequest reveals an approved check-out with the approval's
@@ -33,6 +36,9 @@ type PAMCheckoutRequest struct {
 type PAMCheckoutRevealRequest struct {
 	ApprovalRequestID string `json:"approval_request_id"`
 	IntentDigest      string `json:"intent_digest"`
+	// SignedInAt (A277) is when the caller last authenticated, from its
+	// browser session; the request body cannot supply it.
+	SignedInAt time.Time `json:"-"`
 }
 
 // PAMCheckoutReview is a check-out's review: the approval request.
@@ -136,6 +142,7 @@ func (a *API) openPAMEmergencyCheckout(w http.ResponseWriter, r *http.Request) {
 		case principal.Delegated:
 			return 0, nil, errStatus(http.StatusForbidden, "a token minted for another principal cannot open emergency access")
 		}
+		body.SignedInAt = principal.AuthTime
 		released, err := svc.OpenPAMEmergencyCheckout(ctx, tenantID, r.Header.Get("Idempotency-Key"), principal.Subject, body)
 		if err != nil {
 			return 0, nil, pamCheckoutNotFound(err)
@@ -189,6 +196,8 @@ func (a *API) revealPAMCheckout(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		body.SignedInAt = principal.AuthTime
 		revealed, err := svc.RevealPAMCheckout(ctx, tenantID, principalSubject(ctx), r.PathValue("request_id"), body)
 		if err != nil {
 			return 0, nil, pamCheckoutNotFound(err)

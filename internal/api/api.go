@@ -1931,7 +1931,11 @@ func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) (authz.Pr
 			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
 		}
 	}
-	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}, nil
+	principal := authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
+	if sess.AuthTime > 0 {
+		principal.AuthTime = time.Unix(sess.AuthTime, 0).UTC()
+	}
+	return principal, nil
 }
 
 func (a *API) sessionRoleNames(ctx context.Context, sess auth.Session) ([]string, error) {

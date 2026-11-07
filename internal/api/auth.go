@@ -341,7 +341,10 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC pre-login store is not configured"))
 		return
 	}
-	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent(), safeLoginReturnPath(r.URL.Query().Get("return_to")))
+	// A277: reauth=1 asks the provider for a fresh sign-in, which the
+	// callback then proves from the id_token's auth_time.
+	reauth := r.URL.Query().Get("reauth") == "1"
+	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent(), safeLoginReturnPath(r.URL.Query().Get("return_to")), reauth)
 	if err != nil {
 		var capacityErr oidcPreLoginCapacityError
 		if errors.As(err, &capacityErr) {
@@ -355,7 +358,11 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	a.setTransientCookie(w, stateCookieName, state)
 	a.setTransientCookie(w, nonceCookieName, nonce)
 	a.setTransientCookie(w, pkceCookieName, pkceVerifier)
-	redirectURL, err := auth.AuthCodeURL(a.auth.AuthEndpoint, a.auth.ClientID, a.auth.RedirectURI, state, nonce, pkceChallenge)
+	codeURL := auth.AuthCodeURL
+	if reauth {
+		codeURL = auth.ReauthenticationCodeURL
+	}
+	redirectURL, err := codeURL(a.auth.AuthEndpoint, a.auth.ClientID, a.auth.RedirectURI, state, nonce, pkceChallenge)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -422,6 +429,28 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 	claims, err := a.auth.VerifyIDToken(idToken, preLogin.Nonce)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "id_token verification failed"))
+		return
+	}
+	// A277: a fresh sign-in must be one. A provider that reused its session
+	// (an auth_time before this sign-in began, or none) did not authenticate
+	// the person again, so no session is minted and the old one stays as it
+	// was. One minute allows for the provider's clock.
+	if preLogin.Reauth && (claims.AuthTime == 0 || claims.AuthTime < preLogin.StartedAt.Add(-time.Minute).Unix()) {
+		for _, name := range []string{preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName} {
+			a.clearCookie(w, name)
+		}
+		if prefersLoginRecoveryPage(r) {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			recovery := "/login?reauth=1&error=reauthentication_not_proven"
+			if preLogin.ReturnTo != "" {
+				recovery += "&return_to=" + url.QueryEscape(preLogin.ReturnTo)
+			}
+			http.Redirect(w, r, recovery, http.StatusSeeOther)
+			return
+		}
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "the identity provider did not sign you in again; a fresh sign-in is required").
+			WithExtension("error", "insufficient_user_authentication"))
 		return
 	}
 	// Per-user → tenant mapping (TENANT-004 / RED-004): resolve THIS user's tenant and
@@ -654,6 +683,9 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
+	// A277: the directory just verified the password the person typed, so
+	// this sign-in is fresh as of now.
+	claims.AuthTime = time.Now().Unix()
 	a.issueLoginSession(w, r, claims, tenantID, roles)
 }
 
@@ -727,16 +759,14 @@ func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request
 // session binding the login path verified: OIDC (back-channel logout) or SAML
 // (single logout, A78). A SAML binding without a NameID issues a plain session.
 func (a *API) issueLoginSessionWithBindings(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, binding *auth.OIDCSessionBinding, samlBinding *auth.SAMLSessionBinding, clearCookies ...string) {
-	var token string
-	var err error
-	switch {
-	case binding != nil:
-		token, err = a.auth.Sessions.IssueOIDCContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *binding)
-	case samlBinding != nil && samlBinding.NameID != "":
-		token, err = a.auth.Sessions.IssueSAMLContext(r.Context(), claims.Subject, tenantID, claims.Email, roles, *samlBinding)
-	default:
-		token, err = a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
+	in := auth.SignIn{Subject: claims.Subject, TenantID: tenantID, Email: claims.Email, Roles: roles, OIDC: binding}
+	if samlBinding != nil && samlBinding.NameID != "" && binding == nil {
+		in.SAML = samlBinding
 	}
+	if claims.AuthTime > 0 {
+		in.AuthTime = time.Unix(claims.AuthTime, 0)
+	}
+	token, err := a.auth.Sessions.IssueSignIn(r.Context(), in)
 	if err != nil {
 		if errors.Is(err, auth.ErrOIDCSessionLoggedOut) {
 			a.writeError(w, errStatus(http.StatusUnauthorized, "identity provider session has signed out; start a new sign-in"))

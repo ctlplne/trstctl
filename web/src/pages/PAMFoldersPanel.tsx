@@ -33,6 +33,8 @@ const CLIPBOARD_LABEL = {
   from_target: "admin.access.folders.clipboard.fromTarget",
   both: "admin.access.folders.clipboard.both",
 } as const;
+// A277: a high-risk template's fresh sign-in window, in seconds (0: none).
+const FRESH_SIGN_IN_WINDOWS = [0, 300, 900, 3600] as const;
 
 export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
   const { t } = useTranslation();
@@ -218,6 +220,37 @@ export function PAMFoldersPanel({ canManage }: { canManage: boolean }) {
               ) : (
                 t(CLIPBOARD_LABEL[r.desktop_clipboard ?? "deny"])
               ),
+          },
+          {
+            id: "fresh-sign-in",
+            header: t("admin.access.folders.freshSignIn"),
+            cell: (r) => {
+              const current = r.reauthenticate_within_seconds ?? 0;
+              const label = (seconds: number) =>
+                seconds === 0 ? t("admin.access.folders.freshSignInNone") : t("admin.access.folders.freshSignInWithin", { minutes: Math.round(seconds / 60) });
+              const windows: number[] = FRESH_SIGN_IN_WINDOWS.includes(current as (typeof FRESH_SIGN_IN_WINDOWS)[number])
+                ? [...FRESH_SIGN_IN_WINDOWS]
+                : [...FRESH_SIGN_IN_WINDOWS, current].sort((a, b) => a - b);
+              return canManage ? (
+                <Select
+                  aria-label={t("admin.access.folders.freshSignInFor", { template: r.name })}
+                  value={String(current)}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const reauthenticate_within_seconds = Number(event.target.value);
+                    void act(() => api.updatePAMTemplate(r.id, { ...r, reauthenticate_within_seconds }));
+                  }}
+                >
+                  {windows.map((seconds) => (
+                    <option key={seconds} value={String(seconds)}>
+                      {label(seconds)}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                label(current)
+              );
+            },
           },
           {
             id: "web-sign-in",

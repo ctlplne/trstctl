@@ -1421,6 +1421,14 @@ are ignored. With an absent or invalid destination, OIDC uses its configured
 `auth.oidc.login_redirect`, or `/` when unset. The LDAP console form resumes its
 validated local destination after confirming the new session.
 
+A high-risk access template (A277, `reauthenticate_within_seconds`) needs a fresh sign-in:
+`/auth/login?reauth=1` asks the provider for `prompt=login` and `max_age=0`, and the callback
+mints a session only when the id_token's `auth_time` is no earlier than that sign-in's
+start (one minute of clock allowance); otherwise it answers `401` and the console's login
+page says the provider reused its session. A provider must therefore honor `prompt=login`
+and send `auth_time` for high-risk templates to be usable through OIDC. A directory (LDAP)
+sign-in is fresh as of the moment its password was verified.
+
 A console-started SAML login passes the same local `return_to` input to
 `/auth/saml/login`. The server binds its raw value to the random state and SAML
 request ID in a signed, ten-minute browser context. The destination is never sent

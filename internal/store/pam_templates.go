@@ -34,10 +34,14 @@ type PAMAccessTemplate struct {
 	DesktopClipboard string
 	// WebSignIn (A273) is how the gateway signs in to a web console.
 	WebSignIn *accessweb.SignIn
-	Revision  int64
-	SavedBy   string
-	SavedAt   time.Time
-	DeletedAt *time.Time
+	// ReauthenticateWithinSeconds (A277) makes the template high-risk: a
+	// session or credential release through it needs a sign-in no older
+	// than this. Zero means no fresh sign-in is required.
+	ReauthenticateWithinSeconds int
+	Revision                    int64
+	SavedBy                     string
+	SavedAt                     time.Time
+	DeletedAt                   *time.Time
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting
@@ -53,13 +57,13 @@ type PAMEmergencyGrant struct {
 	ReviewedAt                   *time.Time
 }
 
-const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules, web_sign_in`
+const pamTemplateColumns = `id::text, name, reason, required_approvals, max_ttl_seconds, require_recording, desktop_clipboard, revision, saved_by, saved_at, deleted_at, command_rules, web_sign_in, reauthenticate_within_seconds`
 
 func scanPAMTemplate(row pgx.Row) (PAMAccessTemplate, error) {
 	var t PAMAccessTemplate
 	var web []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Reason, &t.RequiredApprovals, &t.MaxTTLSeconds, &t.RequireRecording, &t.DesktopClipboard, &t.Revision, &t.SavedBy, &t.SavedAt,
-		&t.DeletedAt, &t.CommandRules, &web)
+		&t.DeletedAt, &t.CommandRules, &web, &t.ReauthenticateWithinSeconds)
 	if err != nil {
 		return t, err
 	}
@@ -85,16 +89,17 @@ func (s *Store) ApplyPAMTemplateSavedTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO pam_access_templates AS cur (tenant_id, id, name, reason, required_approvals, max_ttl_seconds, require_recording, revision,
-		    saved_by, saved_at, command_rules, desktop_clipboard, web_sign_in)
-		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb, $12, $13::jsonb)
+		    saved_by, saved_at, command_rules, desktop_clipboard, web_sign_in, reauthenticate_within_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $10, $7, $8, $9, $11::jsonb, $12, $13::jsonb, $14)
 		ON CONFLICT (tenant_id, id) DO UPDATE SET
 		    name = EXCLUDED.name, reason = EXCLUDED.reason, required_approvals = EXCLUDED.required_approvals,
 		    max_ttl_seconds = EXCLUDED.max_ttl_seconds, require_recording = EXCLUDED.require_recording, revision = EXCLUDED.revision,
 		    saved_by = EXCLUDED.saved_by, saved_at = EXCLUDED.saved_at, command_rules = EXCLUDED.command_rules,
-		    desktop_clipboard = EXCLUDED.desktop_clipboard, web_sign_in = EXCLUDED.web_sign_in
+		    desktop_clipboard = EXCLUDED.desktop_clipboard, web_sign_in = EXCLUDED.web_sign_in,
+		    reauthenticate_within_seconds = EXCLUDED.reauthenticate_within_seconds
 		  WHERE cur.revision < EXCLUDED.revision AND cur.deleted_at IS NULL`,
 		tenantID, t.ID, t.Name, t.Reason, t.RequiredApprovals, t.MaxTTLSeconds, t.Revision, t.SavedBy, t.SavedAt.UTC(), t.RequireRecording, rawRules,
-		pamDesktopClipboardOrDeny(t.DesktopClipboard), web)
+		pamDesktopClipboardOrDeny(t.DesktopClipboard), web, t.ReauthenticateWithinSeconds)
 	return err
 }
 

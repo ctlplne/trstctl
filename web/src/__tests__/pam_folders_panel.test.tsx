@@ -70,6 +70,12 @@ it("saves a folder with a known template, moves an account, and updates the exac
   expect(clipboard).toHaveValue("deny");
   await user.selectOptions(clipboard, "both");
   await waitFor(() => expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, { ...template, desktop_clipboard: "both" }));
+  // A277: a template is made high-risk by its fresh sign-in window.
+  const freshSignIn = screen.getByRole("combobox", { name: "Fresh sign-in for production" });
+  expect(freshSignIn).toHaveValue("0");
+  expect(Array.from((freshSignIn as HTMLSelectElement).options).map((o) => o.text)).toEqual(["Not required", "Within 5 min", "Within 15 min", "Within 60 min"]);
+  await user.selectOptions(freshSignIn, "300");
+  await waitFor(() => expect(mocks.updatePAMTemplate).toHaveBeenCalledWith(template.id, { ...template, reauthenticate_within_seconds: 300 }));
   expect(await axe(view.container)).toHaveNoViolations();
 });
 it("sets a template's web sign-in for web admin consoles, field names only (A273)", async () => {

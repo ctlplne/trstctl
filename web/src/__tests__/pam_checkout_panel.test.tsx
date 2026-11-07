@@ -128,3 +128,27 @@ it("shows a reader the check-outs without the request form", async () => {
   expect(apiMock.pamTargets).not.toHaveBeenCalled();
   expect(await axe(view.container)).toHaveNoViolations();
 });
+
+it("asks for a fresh sign-in before revealing a high-risk template's credential (A277)", async () => {
+  const { ReauthenticationRequiredError } = await import("@/lib/apiTransport");
+  const user = userEvent.setup();
+  apiMock.requestPAMCheckout.mockResolvedValue({
+    request_id: "req-2",
+    approval_request_id: "appr-2",
+    intent_digest: "digest-2",
+    status: "pending",
+    approval_count: 0,
+    required_approvals: 2,
+    expires_at: "2026-11-05T02:00:00Z",
+  });
+  apiMock.revealPAMCheckout.mockRejectedValueOnce(new ReauthenticationRequiredError("{}", 900));
+  mount(true);
+  await user.selectOptions(await screen.findByRole("combobox", { name: "Account" }), "postgres/orders-vault");
+  await user.type(screen.getByRole("textbox", { name: "Reason" }), "INC-4472");
+  await user.click(screen.getByRole("button", { name: "Request review" }));
+  await user.click(await screen.findByRole("button", { name: "Reveal credential" }));
+  expect(await screen.findByText("This needs a fresh sign-in: sign in again (within the last 15 min), then try again.")).toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  // The approved check-out waits for the retry.
+  expect(screen.getByRole("button", { name: "Reveal credential" })).toBeEnabled();
+});

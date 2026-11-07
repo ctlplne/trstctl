@@ -9,6 +9,8 @@ func pamCommandTemplatePrivacy(base events.PrivacyEventPolicy) events.PrivacyEve
 	base.Rules = append(base.Rules,
 		// A269: the template's remote desktop clipboard policy.
 		privacyRule("/desktop_clipboard", events.PrivacyFieldOpaqueExact),
+		// A277: a high-risk template's fresh-sign-in window.
+		privacyRule("/reauthenticate_within_seconds", events.PrivacyFieldOpaqueExact),
 		// A273: how the gateway signs in to a web console (field and header
 		// names, never a credential).
 		privacyRule("/web_sign_in/mode", events.PrivacyFieldOpaqueExact),

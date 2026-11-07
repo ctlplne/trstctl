@@ -1013,6 +1013,11 @@ func (s *pamService) OpenPAMSession(ctx context.Context, tenantID, idempotencyKe
 	if err != nil {
 		return api.PAMSession{}, err
 	}
+	// A277: a high-risk template's session starts only after a fresh
+	// sign-in, before any attestation is bound or target touched.
+	if err := s.requireFreshSignIn(req.ResolvedReauthenticateWithin, req.SignedInAt); err != nil {
+		return api.PAMSession{}, err
+	}
 	if err := s.validate(ctx, tenantID, idempotencyKey, requester, req); err != nil {
 		return api.PAMSession{}, err
 	}
@@ -1067,6 +1072,10 @@ func (s *pamService) activatePAMSession(ctx context.Context, tenantID, idempoten
 		var err error
 		req, _, _, err = s.withTemplate(ctx, tenantID, req)
 		if err != nil {
+			return err
+		}
+		// The template may have become high-risk since the first check.
+		if err := s.requireFreshSignIn(req.ResolvedReauthenticateWithin, req.SignedInAt); err != nil {
 			return err
 		}
 		now, err = s.authorizeActivation(ctx, tenantID, idempotencyKey, requester, id, req, att)

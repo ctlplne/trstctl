@@ -289,6 +289,11 @@ func (s *pamService) RevealPAMCheckout(ctx context.Context, tenantID, requester,
 	if err != nil {
 		return nil, err
 	}
+	// A277: a high-risk template's credential is revealed only after a
+	// fresh sign-in.
+	if err := s.requireFreshSignIn(pamTemplateReauthWindow(template), req.SignedInAt); err != nil {
+		return nil, err
+	}
 	if template != nil && accessrules.ForTarget(template.ID, template.Revision, template.CommandRules, targetType) != nil {
 		return nil, fmt.Errorf("%w: command rules cannot be enforced after credential reveal", api.ErrPAMInvalid)
 	}

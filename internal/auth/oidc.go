@@ -45,6 +45,10 @@ type Claims struct {
 	// string is treated as a one-element slice). It lets the served login map an
 	// IdP group → tenant/roles when no direct tenant claim is carried.
 	Groups []string
+	// AuthTime is when the person last authenticated, as the sign-in proved
+	// it (A277): an OIDC id_token's auth_time, or the moment a directory
+	// password was verified. Zero when the sign-in path cannot say.
+	AuthTime int64
 }
 
 type idTokenClaims struct {
@@ -59,6 +63,9 @@ type idTokenClaims struct {
 	// Nbf/Jti are validated (GAP-002/003) when present; not surfaced in Claims.
 	Nbf int64  `json:"nbf"`
 	Jti string `json:"jti"`
+	// AuthTime is when the person last authenticated at the provider; a
+	// provider MUST send it when max_age was requested (OIDC Core 3.1.2.1).
+	AuthTime int64 `json:"auth_time"`
 }
 
 // OIDCVerifier verifies id_tokens from a configured provider.
@@ -129,6 +136,11 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	if c.Iat > now+leeway {
 		return Claims{}, fmt.Errorf("auth: id_token issued in the future (iat)")
 	}
+	// A277: an authentication time in the future is a forged or mis-clocked
+	// token, never a fresh sign-in.
+	if c.AuthTime > now+leeway {
+		return Claims{}, fmt.Errorf("auth: id_token authenticated in the future (auth_time)")
+	}
 	// The nonce is mandatory: an empty expected nonce is a rejection, not a skip
 	// (closing the replay window). The token must carry a nonce that matches.
 	if expectedNonce == "" {
@@ -139,7 +151,7 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	}
 	out := Claims{
 		Subject: c.Sub, SID: c.SID, Email: c.Email, Issuer: c.Iss, Audience: v.ClientID,
-		Nonce: c.Nonce, ExpiresAt: c.Exp, IssuedAt: c.Iat,
+		Nonce: c.Nonce, ExpiresAt: c.Exp, IssuedAt: c.Iat, AuthTime: c.AuthTime,
 	}
 	// Per-user → tenant mapping inputs (TENANT-004): extract the configured tenant /
 	// groups claims out of the SAME verified payload (no second JWT parse, AN-3). A
@@ -219,4 +231,16 @@ func AuthCodeURL(authEndpoint, clientID, redirectURI, state, nonce, pkceChalleng
 	q.Set("code_challenge", pkceChallenge)
 	q.Set("code_challenge_method", PKCEChallengeMethodS256)
 	return authEndpoint + "?" + q.Encode(), nil
+}
+
+// ReauthenticationCodeURL is AuthCodeURL for a fresh sign-in (A277):
+// prompt=login and max_age=0 ask the provider to authenticate the person
+// again rather than reuse its session, and a provider asked for max_age MUST
+// return auth_time, which the callback then checks.
+func ReauthenticationCodeURL(authEndpoint, clientID, redirectURI, state, nonce, pkceChallenge string) (string, error) {
+	u, err := AuthCodeURL(authEndpoint, clientID, redirectURI, state, nonce, pkceChallenge)
+	if err != nil {
+		return "", err
+	}
+	return u + "&" + url.Values{"prompt": {"login"}, "max_age": {"0"}}.Encode(), nil
 }

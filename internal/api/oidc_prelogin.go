@@ -25,6 +25,11 @@ type oidcPreLoginEntry struct {
 	ClientIP     string
 	UserAgent    string
 	ExpiresAt    time.Time
+	// Reauth marks a fresh sign-in (A277): the provider was asked to
+	// authenticate the person again, so the callback requires an auth_time no
+	// earlier than StartedAt.
+	Reauth    bool
+	StartedAt time.Time
 }
 
 type oidcPreLoginStore struct {
@@ -68,7 +73,7 @@ func newOIDCPreLoginStore(ttl time.Duration, limits oidcPreLoginLimits) *oidcPre
 	}
 }
 
-func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent, returnTo string) (string, error) {
+func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent, returnTo string, reauth ...bool) (string, error) {
 	id, err := auth.RandomState()
 	if err != nil {
 		return "", err
@@ -87,6 +92,7 @@ func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent, 
 	s.entries[id] = oidcPreLoginEntry{
 		State: state, Nonce: nonce, PKCEVerifier: verifier, ReturnTo: returnTo,
 		ClientIP: source, UserAgent: userAgent, ExpiresAt: now.Add(s.ttl),
+		Reauth: len(reauth) > 0 && reauth[0], StartedAt: now,
 	}
 	s.sourceCounts[source]++
 	return id, nil

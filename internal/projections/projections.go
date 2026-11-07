@@ -4549,9 +4549,12 @@ type PAMTemplateSaved struct {
 	DesktopClipboard string `json:"desktop_clipboard,omitempty"`
 	// WebSignIn (A273) is how the gateway signs in to a web console.
 	WebSignIn *accessweb.SignIn `json:"web_sign_in,omitempty"`
-	Revision  int64             `json:"revision"`
-	Actor     string            `json:"actor"`
-	At        time.Time         `json:"at"`
+	// ReauthenticateWithinSeconds (A277) is the high-risk template's
+	// fresh-sign-in window; zero requires none.
+	ReauthenticateWithinSeconds int       `json:"reauthenticate_within_seconds,omitempty"`
+	Revision                    int64     `json:"revision"`
+	Actor                       string    `json:"actor"`
+	At                          time.Time `json:"at"`
 }
 
 // PAMFolderSaved records an account folder at a revision: the access
@@ -8937,12 +8940,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decodePAMTemplateVersion(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.Name == "" || pl.Reason == "" || pl.RequiredApprovals < 1 || pl.MaxTTLSeconds < 1 || pl.Revision < 1 || pl.At.IsZero() {
+		if pl.ID == "" || pl.Name == "" || pl.Reason == "" || pl.RequiredApprovals < 1 || pl.MaxTTLSeconds < 1 || pl.Revision < 1 || pl.At.IsZero() ||
+			(pl.ReauthenticateWithinSeconds != 0 && (pl.ReauthenticateWithinSeconds < 60 || pl.ReauthenticateWithinSeconds > 3600)) {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTemplateSavedTx(ctx, tx, e.TenantID, store.PAMAccessTemplate{ID: pl.ID, Name: pl.Name, Reason: pl.Reason,
 			RequiredApprovals: pl.RequiredApprovals, MaxTTLSeconds: pl.MaxTTLSeconds, RequireRecording: pl.RequireRecording, DesktopClipboard: pl.DesktopClipboard, CommandRules: pl.CommandRules,
-			WebSignIn: pl.WebSignIn, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+			WebSignIn: pl.WebSignIn, ReauthenticateWithinSeconds: pl.ReauthenticateWithinSeconds, Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
 	case EventCloudMachineChangeProposed:
 		var pl CloudMachineChangeProposed
 		if err := decode(e, &pl); err != nil {

@@ -233,6 +233,20 @@ type PAMSessionRequest struct {
 	// Browser is set on an open for the browser (A259); it is not part of
 	// the reviewed command.
 	Browser bool
+	// SignedInAt (A277) is when the caller last authenticated, from its
+	// browser session; zero for an API token. ResolvedReauthenticateWithin
+	// is the template's fresh-sign-in window, filled by the server.
+	SignedInAt                   time.Time
+	ResolvedReauthenticateWithin time.Duration
+}
+
+// PAMReauthenticationRequired refuses a session or credential release
+// through a high-risk template (A277) when the caller signed in longer ago
+// than MaxAge, or cannot say when (an API token).
+type PAMReauthenticationRequired struct{ MaxAge time.Duration }
+
+func (e *PAMReauthenticationRequired) Error() string {
+	return fmt.Sprintf("api: this access template requires a sign-in within the last %d seconds", int64(e.MaxAge/time.Second))
 }
 
 type pamSessionJSON struct {
@@ -489,6 +503,7 @@ func (a *API) openPAMSession(w http.ResponseWriter, r *http.Request) {
 			opErr = err
 			return 0, nil, err
 		}
+		req.SignedInAt = principal.AuthTime
 		session, err := a.pam.OpenPAMSession(ctx, tenantID, idempotencyKey, principal.Subject, req)
 		if err != nil {
 			opErr = err
@@ -735,7 +750,16 @@ func (a *API) requireDelegatedAccount(ctx context.Context, tenantID string, prin
 }
 
 func (a *API) writePAMError(w http.ResponseWriter, err error) bool {
+	var reauth *PAMReauthenticationRequired
 	switch {
+	case errors.As(err, &reauth):
+		// A277 / RFC 9470: a step-up challenge naming how old a sign-in may
+		// be. The console answers it with a fresh sign-in and retries.
+		maxAge := int64(reauth.MaxAge / time.Second)
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="insufficient_user_authentication", error_description="A fresh sign-in is required", max_age="%d"`, maxAge))
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, fmt.Sprintf(
+			"this access template requires a fresh sign-in: sign in again in the console (within %d seconds) and retry; an API token cannot start it", maxAge)).
+			WithExtension("error", "insufficient_user_authentication").WithExtension("max_age", maxAge))
 	case errors.Is(err, ErrPAMUnavailable):
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "PAM broker is not enabled"))
 	case errors.Is(err, ErrPAMInvalid):

@@ -11,7 +11,10 @@
 // tenant boundary.
 package authz
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // Permission is an action on a resource, named "<resource>:<verb>".
 type Permission string
@@ -308,6 +311,10 @@ type Principal struct {
 	// whose live grants give its authority, and whose bundles name the
 	// accounts it may open privileged sessions to (A257).
 	RunID string
+	// AuthTime (A277) is when the person behind a browser session last
+	// authenticated, as the sign-in proved it. It is zero for API tokens and
+	// for sign-ins that cannot say, which never count as a fresh sign-in.
+	AuthTime time.Time
 }
 
 // Can reports whether the principal may perform perm on a target scope. It

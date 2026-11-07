@@ -1,6 +1,6 @@
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The named table overflow regions need keyboard focus for horizontal scrolling. */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { api, type PAMCheckout, type PAMCheckoutReveal, type PAMCheckoutRequest, type PAMCheckoutReview } from "@/lib/api";
+import { api, ReauthenticationRequiredError, type PAMCheckout, type PAMCheckoutReveal, type PAMCheckoutRequest, type PAMCheckoutReview } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDateTime, type FormatPolicy } from "@/i18n/format";
@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Dialog } from "@/components/Dialog";
 import { CredentialChip } from "@/components/CredentialChip";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ReauthenticationNotice } from "@/components/ReauthenticationNotice";
 
 // A261: check-outs of vaulted accounts. A check-out is reviewed by others
 // before its requester reveals the account's credential, once; checking it
@@ -35,6 +36,8 @@ export function PAMCheckoutPanel({ subject, canRequest, canCheckInAny }: { subje
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A277: a high-risk template's step-up challenge, as its max age.
+  const [reauth, setReauth] = useState<number | null>(null);
   const keys = useRef({ request: crypto.randomUUID(), reveal: crypto.randomUUID(), checkin: crypto.randomUUID() });
   const returnFocus = useRef<HTMLButtonElement | null>(null);
   // A revealed check-out past its deadline reads as rotation pending until the
@@ -49,11 +52,13 @@ export function PAMCheckoutPanel({ subject, canRequest, canCheckInAny }: { subje
     setBusy(true);
     setError(null);
     setNotice(null);
+    setReauth(null);
     try {
       setNotice(await work());
       await queryClient.invalidateQueries({ queryKey: ["pam-checkouts"] });
     } catch (err) {
-      setError(errorMessage(err));
+      if (err instanceof ReauthenticationRequiredError) setReauth(err.maxAgeSeconds);
+      else setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -127,6 +132,7 @@ export function PAMCheckoutPanel({ subject, canRequest, canCheckInAny }: { subje
           <div className="grid gap-2 rounded-panel border border-border p-3 text-sm">
             <p>{t("admin.access.checkout.awaitingReview", { count: pending.review.required_approvals })}</p>
             <p className="break-all font-mono text-xs">{pending.review.approval_request_id}</p>
+            {reauth !== null ? <ReauthenticationNotice maxAgeSeconds={reauth} /> : null}
             <div className="flex gap-2">
               <Button type="button" size="sm" disabled={busy} onClick={(event) => void reveal(event.currentTarget)}>
                 {t("admin.access.checkout.reveal")}

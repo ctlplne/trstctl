@@ -8408,6 +8408,7 @@ export interface PAMAccessTemplate {
   max_ttl_seconds: number;
   name: string;
   reason: string;
+  reauthenticate_within_seconds?: number;
   require_recording: boolean;
   required_approvals: number;
   revision: number;
@@ -8431,6 +8432,7 @@ export interface PAMAccessTemplateRequest {
   max_ttl_seconds: number;
   name: string;
   reason: string;
+  reauthenticate_within_seconds?: number;
   require_recording?: boolean;
   required_approvals: number;
   revision?: number;

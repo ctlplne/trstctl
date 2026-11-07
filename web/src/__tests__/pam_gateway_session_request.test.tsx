@@ -106,3 +106,48 @@ it("requests a reviewed web console session and shows how to connect, with its t
   await user.click(within(dialog).getByRole("button", { name: "Reveal one-time credential" }));
   expect(within(dialog).getByText("one-time-gateway-ticket")).toBeInTheDocument();
 });
+
+it("answers a high-risk template's step-up challenge with a fresh sign-in, then starts the session (A277)", async () => {
+  const { ReauthenticationRequiredError } = await import("@/lib/apiTransport");
+  const { REAUTH_MESSAGE } = await import("@/components/ReauthenticationNotice");
+  const user = userEvent.setup();
+  const open = vi.spyOn(window, "open").mockReturnValue({} as Window);
+  apiMock.openPAMSession.mockRejectedValueOnce(new ReauthenticationRequiredError("{}", 300));
+  render(
+    <AppQueryProvider>
+      <ThemeProvider>
+        <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+          <MemoryRouter>
+            <AdminAccess />
+          </MemoryRouter>
+        </IntlProvider>
+      </ThemeProvider>
+    </AppQueryProvider>,
+  );
+  await screen.findByRole("heading", { level: 1, name: "People and roles" });
+  await user.click(screen.getByText("Sessions and access keys", { exact: true }));
+  await user.click(await screen.findByRole("button", { name: "Request privileged session" }));
+  const dialog = screen.getByRole("dialog", { name: "Request privileged session" });
+  await user.selectOptions(within(dialog).getByRole("combobox", { name: "Target type" }), "webconsole");
+  await user.type(within(dialog).getByRole("textbox", { name: "Target ID" }), "grafana-admin");
+  await user.type(within(dialog).getByRole("textbox", { name: "Role" }), "consoles/grafana-admin");
+  await user.type(within(dialog).getByRole("textbox", { name: "Method" }), "oidc");
+  await user.type(within(dialog).getByRole("textbox", { name: "Payload (base64)" }), "Z2VudWluZQ==");
+  await user.click(within(dialog).getByRole("button", { name: "Request review" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Refresh approval status" }));
+  await user.click(await within(dialog).findByRole("button", { name: "Activate approved session" }));
+  // Refused for a stale sign-in: the dialog keeps the approved request and
+  // offers a fresh sign-in rather than an error or a signed-out page.
+  expect(await within(dialog).findByText("This needs a fresh sign-in: sign in again (within the last 5 min), then try again.")).toBeInTheDocument();
+  expect(within(dialog).queryByText("Session opened")).not.toBeInTheDocument();
+  await user.click(within(dialog).getByRole("button", { name: "Sign in again" }));
+  expect(open).toHaveBeenCalledWith("/login?reauth=1&return_to=%2Freauthenticated", "trstctl-reauthenticate", "popup,width=520,height=720");
+  window.dispatchEvent(new MessageEvent("message", { data: { type: REAUTH_MESSAGE }, origin: window.location.origin }));
+  expect(await within(dialog).findByText("You signed in again. Try again now.")).toBeInTheDocument();
+  await user.click(within(dialog).getByRole("button", { name: "Activate approved session" }));
+  expect(await within(dialog).findByText("Session opened")).toBeInTheDocument();
+  // The retry is the same activation under the same key.
+  expect(apiMock.openPAMSession).toHaveBeenCalledTimes(2);
+  expect(apiMock.openPAMSession.mock.calls[1]).toEqual(apiMock.openPAMSession.mock.calls[0]);
+  open.mockRestore();
+});

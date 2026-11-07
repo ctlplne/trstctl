@@ -9136,9 +9136,9 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
-## Approvals where people work, and re-authentication (A277) — part 1: Slack Socket Mode
+## Approvals where people work, and re-authentication (A277) — parts 1–2: Slack Socket Mode and fresh sign-in
 
-Status: in progress. With `slack_app.app_token_ref` trstctl opens Slack's Socket Mode
+Status: built locally. With `slack_app.app_token_ref` trstctl opens Slack's Socket Mode
 connection itself (`apps.connections.open`, then a WebSocket upgraded through the guarded
 egress transport) and serves no Slack endpoint; slash commands and button presses arrive over
 it and are acknowledged on it. Every posted button's decision is signed by trstctl under the
@@ -9151,12 +9151,27 @@ then starts; a replayed press and one with its digest altered are refused and ch
 nothing), the N8 request-URL proof with signed buttons, and
 `TestSlackDecisionsAreSignedForOneActionA277`.
 
+Part 2: a template with `reauthenticate_within_seconds` is high-risk; its sessions,
+emergency sessions and check-out reveals need a console sign-in inside the window, else
+`401` with an RFC 9470 step-up challenge. Proof:
+`TestServedHighRiskSessionNeedsAFreshSignInA277` against a stand-in OIDC provider (the
+opener's sign-in reused a two-hour-old provider session: the approved activation is refused
+from the browser session and from the opener's API token, and nothing starts; the
+re-authentication asks for `prompt=login` and `max_age=0`; a provider that reuses its session
+mints no session and the activation stays refused; after a fresh sign-in the same
+activation, under the same idempotency key, starts the session on its unconsumed approval),
+`TestFreshSignInWindowA277`, `TestFreshSignInIsCarriedFromTheProviderA277`,
+`TestDirectorySignInIsFreshA277`, migration 0432's content test and the console tests (the
+access dialog's and check-out panel's **Sign in again**, the login page's fresh sign-in mode,
+the template's **Fresh sign-in** column).
+
 What comes next:
-- Fresh re-authentication through the sign-in integration before a high-risk template's
-  session starts (part 2).
+- SAML (ForceAuthn and AuthnInstant), Kerberos and NTLM sign-ins cannot prove a fresh sign-in
+  today, so a high-risk template needs OIDC or a directory password; SAML ForceAuthn is the
+  next step in the enterprise sign-in edition.
 - Microsoft Teams: a Teams bot receives its activities on an inbound HTTPS endpoint, so it is
   not built; it goes to the handoff for the owner's decision.
-- A live Slack workspace run (Track B).
+- A live Slack workspace run and a live identity provider's `prompt=login` (Track B).
 
 ## Owners, certification and orphans (A276) — parts 1–3: owners, flags and certification
 

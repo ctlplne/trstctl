@@ -43,6 +43,23 @@ type Session struct {
 	// login path. They ride the signed cookie; the row stores no copy.
 	SAMLNameID       string `json:"saml_name_id,omitempty"`
 	SAMLSessionIndex string `json:"saml_session_index,omitempty"`
+	// AuthTime (A277) is when the person last authenticated, as the sign-in
+	// proved it (Unix seconds; 0 when the sign-in path cannot say). It rides
+	// the signed cookie, so a fresh-sign-in check reads what was verified.
+	AuthTime int64 `json:"auth_time,omitempty"`
+}
+
+// SignIn is a verified sign-in to mint a browser session from (A277).
+type SignIn struct {
+	Subject, TenantID, Email string
+	Roles                    []string
+	// AuthTime is when the person last presented a credential, as the
+	// sign-in proved it: an OIDC id_token's auth_time, or the moment a
+	// directory password was verified. Zero when the sign-in path cannot
+	// say; such a session never counts as a fresh sign-in.
+	AuthTime time.Time
+	OIDC     *OIDCSessionBinding
+	SAML     *SAMLSessionBinding
 }
 
 // SAMLSessionBinding is the IdP-side identity of a SAML login (A78).
@@ -272,6 +289,18 @@ func (s *SessionIssuer) IssueOIDCContext(ctx context.Context, subject, tenantID,
 	return s.issueContext(ctx, subject, tenantID, email, roles, &binding)
 }
 
+// IssueSignIn mints the browser session for a verified sign-in, remembering
+// its identity-provider binding and when the person authenticated (A277).
+func (s *SessionIssuer) IssueSignIn(ctx context.Context, in SignIn) (string, error) {
+	switch {
+	case in.OIDC != nil && (in.OIDC.Issuer == "" || in.OIDC.ClientID == "" || in.OIDC.IssuedAt <= 0 || in.Subject == ""):
+		return "", ErrSessionInvalid
+	case in.SAML != nil && (in.SAML.NameID == "" || in.Subject == ""):
+		return "", ErrSessionInvalid
+	}
+	return s.issueContextFull(ctx, in.Subject, in.TenantID, in.Email, in.Roles, in.OIDC, in.SAML, in.AuthTime)
+}
+
 // IssueSAMLContext mints a session that remembers the IdP's NameID and
 // SessionIndex (A78), so a later sign-out can propagate to the IdP.
 func (s *SessionIssuer) IssueSAMLContext(ctx context.Context, subject, tenantID, email string, roles []string, binding SAMLSessionBinding) (string, error) {
@@ -282,14 +311,14 @@ func (s *SessionIssuer) IssueSAMLContext(ctx context.Context, subject, tenantID,
 }
 
 func (s *SessionIssuer) issueContext(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding) (string, error) {
-	return s.issueContextFull(ctx, subject, tenantID, email, roles, binding, nil)
+	return s.issueContextFull(ctx, subject, tenantID, email, roles, binding, nil, time.Time{})
 }
 
 func (s *SessionIssuer) issueContextWithSAML(ctx context.Context, subject, tenantID, email string, roles []string, saml *SAMLSessionBinding) (string, error) {
-	return s.issueContextFull(ctx, subject, tenantID, email, roles, nil, saml)
+	return s.issueContextFull(ctx, subject, tenantID, email, roles, nil, saml, time.Time{})
 }
 
-func (s *SessionIssuer) issueContextFull(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding, saml *SAMLSessionBinding) (string, error) {
+func (s *SessionIssuer) issueContextFull(ctx context.Context, subject, tenantID, email string, roles []string, binding *OIDCSessionBinding, saml *SAMLSessionBinding, authTime time.Time) (string, error) {
 	now := s.now()
 	id, err := randomSessionID()
 	if err != nil {
@@ -303,6 +332,11 @@ func (s *SessionIssuer) issueContextFull(ctx context.Context, subject, tenantID,
 	}
 	if saml != nil {
 		session.SAMLNameID, session.SAMLSessionIndex = saml.NameID, saml.SessionIndex
+	}
+	if !authTime.IsZero() {
+		// A provider's clock may run a little ahead (the verifier allows its
+		// leeway); a session never claims a sign-in later than its own birth.
+		session.AuthTime = min(authTime.Unix(), now.Unix())
 	}
 	stored := session
 	stored.ID = storedID

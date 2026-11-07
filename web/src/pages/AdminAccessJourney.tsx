@@ -12,6 +12,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ReauthenticationNotice } from "@/components/ReauthenticationNotice";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow, Num } from "@/components/typography";
 import { SSHCommandConsole } from "@/components/access/SSHCommandConsole";
@@ -35,6 +36,7 @@ import {
   type PAMSession,
   type PAMSessionRequest,
   type RoleList,
+  ReauthenticationRequiredError,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
@@ -204,6 +206,8 @@ export function AdminAccess() {
   const [pamFormOpen, setPAMFormOpen] = useState(false);
   const [pamBusy, setPAMBusy] = useState(false);
   const [pamFormError, setPAMFormError] = useState<string | null>(null);
+  // A277: the step-up challenge of a high-risk template, as its max age.
+  const [pamReauth, setPAMReauth] = useState<number | null>(null);
   const [pamRequestID, setPAMRequestID] = useState("");
   const [pamExact, setPAMExact] = useState<PAMSessionRequest | null>(null);
   const [pamPending, setPAMPending] = useState<PAMApprovalRequest | null>(null);
@@ -456,6 +460,7 @@ export function AdminAccess() {
   function closePAMDialog() {
     setPAMFormOpen(false);
     setPAMFormError(null);
+    setPAMReauth(null);
     setPAMRequestID("");
     setPAMExact(null);
     setPAMPending(null);
@@ -507,6 +512,7 @@ export function AdminAccess() {
     }
     setPAMBusy(true);
     setPAMFormError(null);
+    setPAMReauth(null);
     try {
       const created = await api.openPAMEmergencySession(
         {
@@ -526,7 +532,8 @@ export function AdminAccess() {
       setPAMCreated(created);
       setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
     } catch (err) {
-      setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
+      if (err instanceof ReauthenticationRequiredError) setPAMReauth(err.maxAgeSeconds);
+      else setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
     } finally {
       setPAMBusy(false);
     }
@@ -536,6 +543,7 @@ export function AdminAccess() {
     if (!pamPending || !pamExact) return;
     setPAMBusy(true);
     setPAMFormError(null);
+    setPAMReauth(null);
     try {
       const created = await api.openPAMSession(
         {
@@ -550,7 +558,8 @@ export function AdminAccess() {
       setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
       setPAMExact(null);
     } catch (err) {
-      setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
+      if (err instanceof ReauthenticationRequiredError) setPAMReauth(err.maxAgeSeconds);
+      else setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
     } finally {
       setPAMBusy(false);
     }
@@ -1212,6 +1221,7 @@ export function AdminAccess() {
           locked={pamExact !== null}
           busy={pamBusy}
           error={pamFormError}
+          reauth={pamReauth}
           pending={pamPending}
           created={pamCreated}
           browser={pamBrowser}
@@ -1431,6 +1441,7 @@ function PAMFormDialog({
   locked,
   busy,
   error,
+  reauth,
   pending,
   created,
   browser,
@@ -1447,6 +1458,7 @@ function PAMFormDialog({
   locked: boolean;
   busy: boolean;
   error: string | null;
+  reauth: number | null;
   pending: PAMApprovalRequest | null;
   created: PAMSession | null;
   browser: boolean;
@@ -1518,6 +1530,11 @@ function PAMFormDialog({
           {t("admin.access.sessionDescription")}
         </p>
       </header>
+      {reauth !== null && !created ? (
+        <div className="px-5 pt-4">
+          <ReauthenticationNotice maxAgeSeconds={reauth} />
+        </div>
+      ) : null}
       {created ? (
         <div className="grid gap-3 p-5 text-sm">
           <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-status-success">

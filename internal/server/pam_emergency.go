@@ -40,6 +40,9 @@ const (
 	pamEmergencyMaxTTL       = time.Hour
 	pamEmergencyMaxResponder = 50
 	pamEmergencyNotesMax     = 2000
+	// pamReauthenticateMaxSeconds bounds a high-risk template's fresh
+	// sign-in window (A277).
+	pamReauthenticateMaxSeconds = 3600
 )
 
 var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
@@ -47,7 +50,7 @@ var pamTemplateName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 func templateView(t store.PAMAccessTemplate) api.PAMAccessTemplate {
 	return api.PAMAccessTemplate{ID: t.ID, Name: t.Name, Reason: t.Reason, RequiredApprovals: t.RequiredApprovals,
 		MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), CommandRules: t.CommandRules,
-		WebSignIn: t.WebSignIn, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
+		WebSignIn: t.WebSignIn, ReauthenticateWithinSeconds: t.ReauthenticateWithinSeconds, Revision: t.Revision, SavedBy: t.SavedBy, SavedAt: t.SavedAt.UTC()}
 }
 
 func emergencyView(g store.PAMEmergencyGrant) api.PAMEmergencyGrant {
@@ -79,6 +82,8 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: desktop_clipboard must be deny, to_target, from_target or both", api.ErrPAMInvalid)
 	case t.MaxTTLSeconds < 60 || time.Duration(t.MaxTTLSeconds)*time.Second > s.maxTTL:
 		return api.PAMAccessTemplate{}, fmt.Errorf("%w: max_ttl_seconds must be 60-%d", api.ErrPAMInvalid, int(s.maxTTL/time.Second))
+	case t.ReauthenticateWithinSeconds != 0 && (t.ReauthenticateWithinSeconds < 60 || t.ReauthenticateWithinSeconds > pamReauthenticateMaxSeconds):
+		return api.PAMAccessTemplate{}, fmt.Errorf("%w: reauthenticate_within_seconds must be 0 (no fresh sign-in) or 60-%d", api.ErrPAMInvalid, pamReauthenticateMaxSeconds)
 	}
 	if t.WebSignIn != nil {
 		// A273: how the gateway signs in to a web console; field and header
@@ -116,7 +121,8 @@ func (s *pamService) savePAMTemplate(ctx context.Context, tenantID, actor string
 	}
 	if err := s.appendProject(ctx, tenantID, projections.EventPAMTemplateSaved, projections.PAMTemplateSaved{ID: t.ID, Name: t.Name,
 		Reason: t.Reason, RequiredApprovals: t.RequiredApprovals, MaxTTLSeconds: t.MaxTTLSeconds, RequireRecording: t.RequireRecording, CommandRules: t.CommandRules, Revision: revision,
-		DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), WebSignIn: t.WebSignIn, Actor: actor, At: s.clock().UTC()}); err != nil {
+		DesktopClipboard: pamDesktopClipboard(t.DesktopClipboard), WebSignIn: t.WebSignIn, ReauthenticateWithinSeconds: t.ReauthenticateWithinSeconds,
+		Actor: actor, At: s.clock().UTC()}); err != nil {
 		return api.PAMAccessTemplate{}, err
 	}
 	saved, err := s.store.GetPAMTemplate(ctx, tenantID, t.ID)
@@ -156,6 +162,28 @@ func (s *pamService) deletePAMTemplate(ctx context.Context, tenantID, id, actor 
 	return s.appendProject(ctx, tenantID, projections.EventPAMTemplateDeleted, projections.PAMTemplateDeleted{ID: id, Actor: actor, At: s.clock().UTC()})
 }
 
+// requireFreshSignIn refuses a session or credential release through a
+// high-risk template (A277) unless the caller's sign-in is no older than the
+// template's window. An API token, or a sign-in that cannot say when the
+// person authenticated, never counts as fresh.
+func (s *pamService) requireFreshSignIn(within time.Duration, signedInAt time.Time) error {
+	if within <= 0 {
+		return nil
+	}
+	now := s.clock()
+	if signedInAt.IsZero() || now.Sub(signedInAt) > within || signedInAt.After(now.Add(time.Minute)) {
+		return &api.PAMReauthenticationRequired{MaxAge: within}
+	}
+	return nil
+}
+
+func pamTemplateReauthWindow(t *store.PAMAccessTemplate) time.Duration {
+	if t == nil {
+		return 0
+	}
+	return time.Duration(t.ReauthenticateWithinSeconds) * time.Second
+}
+
 // withTemplate applies a request's template, identically at the request and
 // the open so both bind the same reviewed command: the template's reason
 // (with the requester's note after it), its maximum length, and the quorum it
@@ -168,6 +196,7 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 	req.ResolvedCommandPolicy = nil
 	req.ResolvedWebSignIn = nil
 	req.ResolvedTemplateRefs = nil
+	req.ResolvedReauthenticateWithin = 0
 	req.TemplateResolved = false
 	t, refs, recorded, err := s.pamRequestTemplate(ctx, tenantID, req.TargetType, req.TargetID, req.TemplateID)
 	if err != nil {
@@ -188,6 +217,7 @@ func (s *pamService) withTemplate(ctx context.Context, tenantID string, req api.
 	if t == nil {
 		return req, s.requiredApprovals, refs, nil
 	}
+	req.ResolvedReauthenticateWithin = time.Duration(t.ReauthenticateWithinSeconds) * time.Second
 	req.ResolvedCommandPolicy = accessrules.ForTarget(t.ID, t.Revision, t.CommandRules, req.TargetType)
 	if req.ResolvedCommandPolicy != nil {
 		if err := s.requireCommandRuleGateway(ctx, tenantID, req); err != nil {
@@ -256,9 +286,12 @@ func (s *pamService) OpenPAMEmergencySession(ctx context.Context, tenantID, idem
 		return api.PAMSession{}, fmt.Errorf("%w: %s is not a named emergency responder", api.ErrPAMRejected, responder)
 	}
 	// Emergency authority skips the ordinary quorum, never the account's
-	// required recording or lifetime policy.
+	// required recording, lifetime policy or fresh sign-in (A277).
 	req, _, _, err = s.withTemplate(ctx, tenantID, req)
 	if err != nil {
+		return api.PAMSession{}, err
+	}
+	if err := s.requireFreshSignIn(req.ResolvedReauthenticateWithin, req.SignedInAt); err != nil {
 		return api.PAMSession{}, err
 	}
 	if err := s.validate(ctx, tenantID, idempotencyKey, responder, req); err != nil {

@@ -12,6 +12,7 @@ import { CapabilityProvider } from "@/lib/capabilities";
 // Login stays an eager import: it is the pre-auth fast path and must render
 // without waiting on a second chunk.
 import { Login } from "@/pages/Login";
+import { Reauthenticated } from "@/pages/Reauthenticated";
 
 /** S-C3: every authenticated page is lazy-loaded, so the entry chunk is the
  * shell (providers, AppShell, Login) and each surface loads on first visit —
@@ -114,6 +115,8 @@ export function AppRoutes() {
       <ToastProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* A277: where a fresh sign-in window lands before it reports back. */}
+          <Route path="/reauthenticated" element={<Reauthenticated />} />
           {/* L3: provider plane — its own auth, outside the tenant shell. */}
           <Route path="/provider" element={<Provider />} />
           <Route

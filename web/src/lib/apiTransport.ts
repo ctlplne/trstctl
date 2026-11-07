@@ -52,6 +52,27 @@ export class ApiError extends Error {
   }
 }
 
+/** ReauthenticationRequiredError is the server's step-up challenge (A277,
+ * RFC 9470): the action needs a sign-in no older than maxAgeSeconds. The
+ * page answers it with a fresh sign-in and a retry; it is not a signed-out
+ * session, so the auth layer keeps the current one. */
+export class ReauthenticationRequiredError extends ApiError {
+  maxAgeSeconds: number;
+  constructor(body: string, maxAgeSeconds: number) {
+    super(401, body);
+    this.name = "ReauthenticationRequiredError";
+    this.maxAgeSeconds = maxAgeSeconds;
+  }
+}
+
+/** stepUpChallenge reads a WWW-Authenticate header's RFC 9470 challenge, or
+ * null when the 401 is an ordinary missing or expired session. */
+export function stepUpChallenge(header: string | null): { maxAgeSeconds: number } | null {
+  if (!header || !/error="insufficient_user_authentication"/.test(header)) return null;
+  const maxAge = /max_age="?(\d+)"?/.exec(header);
+  return { maxAgeSeconds: maxAge ? Number(maxAge[1]) : 0 };
+}
+
 /** Authorization refusals need an explicit session or permission change, not
  * automatic transport retries. Keep them visible to the query layer. */
 export function isAccessDenied(error: unknown): boolean {
@@ -154,7 +175,11 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { Accept: "application/json", ...csrfHeaders(method), ...(init?.headers ?? {}) },
   });
-  if (res.status === 401) throw new UnauthorizedError();
+  if (res.status === 401) {
+    const challenge = stepUpChallenge(res.headers.get("WWW-Authenticate"));
+    if (challenge) throw new ReauthenticationRequiredError(await res.text(), challenge.maxAgeSeconds);
+    throw new UnauthorizedError();
+  }
   if (res.status === 429) {
     // Rate limited: surface Retry-After so the UI can show a concrete retry hint
     // (SURFACE-007). The server emits Retry-After on its per-tenant bulkhead/limit.

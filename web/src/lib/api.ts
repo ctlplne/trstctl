@@ -13,6 +13,7 @@ import { bootstrapApi, type BootstrapApi } from "./bootstrapApi";
 import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, newIdempotencyKey, req } from "./apiTransport";
 export {
   ApiError,
+  ReauthenticationRequiredError,
   UnauthorizedError,
   apiErrorMessage,
   csrfHeaders,

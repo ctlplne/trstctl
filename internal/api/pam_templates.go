@@ -37,9 +37,13 @@ type PAMAccessTemplate struct {
 	// WebSignIn (A273) is how the gateway signs in to a web console for a
 	// session through the template.
 	WebSignIn *accessweb.SignIn `json:"web_sign_in,omitempty"`
-	Revision  int64             `json:"revision"`
-	SavedBy   string            `json:"saved_by,omitempty"`
-	SavedAt   time.Time         `json:"saved_at"`
+	// ReauthenticateWithinSeconds (A277) makes the template high-risk: a
+	// session, emergency session or check-out reveal through it needs a
+	// console sign-in no older than this (60-3600); zero requires none.
+	ReauthenticateWithinSeconds int       `json:"reauthenticate_within_seconds,omitempty"`
+	Revision                    int64     `json:"revision"`
+	SavedBy                     string    `json:"saved_by,omitempty"`
+	SavedAt                     time.Time `json:"saved_at"`
 }
 
 // PAMEmergencyGrant is a session a named responder opened without waiting
@@ -262,6 +266,7 @@ func (a *API) openPAMEmergencySession(w http.ResponseWriter, r *http.Request) {
 		case principal.Delegated:
 			return 0, nil, errStatus(http.StatusForbidden, "a token minted for another principal cannot open emergency access")
 		}
+		req.SignedInAt = principal.AuthTime
 		session, err := svc.OpenPAMEmergencySession(ctx, tenantID, r.Header.Get("Idempotency-Key"), principal.Subject, req)
 		if err != nil {
 			return 0, nil, err

@@ -2,6 +2,16 @@
 
 ### Added
 
+- High-risk access templates need a fresh sign-in (A277 part 2): `reauthenticate_within_seconds` (60-3600; migration
+  0432, snapshot format 110) refuses a session, emergency session or check-out reveal through the template unless the
+  caller's console sign-in is that recent — `401` with an RFC 9470 step-up challenge
+  (`WWW-Authenticate: Bearer error="insufficient_user_authentication", max_age=...`); API tokens never satisfy it.
+  Browser sessions now carry the time the person authenticated (an OIDC id_token's `auth_time`, rejected when in the
+  future; the moment a directory password bound). `/auth/login?reauth=1` asks the provider for `prompt=login` and
+  `max_age=0` and refuses a callback whose `auth_time` predates it. Console: the access dialog and check-out panel
+  answer the challenge with **Sign in again** in its own window (`/reauthenticated` reports back on this origin), the
+  login page's fresh sign-in mode offers only OIDC and directory sign-in, and templates gain a **Fresh sign-in**
+  column.
 - Slack approvals over Socket Mode (A277 part 1): `slack_app.app_token_ref` makes trstctl open Slack's Socket Mode
   connection itself (outbound only) and stop serving the Slack request URLs; slash commands and button presses arrive
   over it. Buttons now carry trstctl-signed decisions (request, intent digest, action, nonce, expiry under the

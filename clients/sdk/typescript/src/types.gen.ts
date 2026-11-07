@@ -22178,6 +22178,8 @@ export interface components {
             max_ttl_seconds: number;
             name: string;
             reason: string;
+            /** @description a high-risk template (A277): a session, emergency session or check-out reveal through it needs a console sign-in no older than this many seconds (60-3600), else 401 insufficient_user_authentication with max_age; absent or 0 requires none */
+            reauthenticate_within_seconds?: number;
             /** @description refuses a session through the template that would not be recorded, and every check-out (A261 part 3) */
             require_recording: boolean;
             required_approvals: number;
@@ -22205,6 +22207,8 @@ export interface components {
             max_ttl_seconds: number;
             name: string;
             reason: string;
+            /** @description make the template high-risk (A277): a fresh sign-in no older than this many seconds (60-3600) before a session or check-out reveal; 0 requires none */
+            reauthenticate_within_seconds?: number;
             /** @description refuse an unrecorded session and every check-out through the template */
             require_recording?: boolean;
             required_approvals: number;

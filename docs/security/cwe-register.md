@@ -992,10 +992,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:7261` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7278` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:7291` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:7325` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:7264` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7281` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:7294` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:7328` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:241` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:248` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1191,8 +1191,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:827` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:847` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:828` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:848` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1378,10 +1378,10 @@ not this file.
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
 | `internal/agent/accessgateway/webconsole.go:881` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
-| `internal/api/auth.go:1138` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
-| `internal/api/auth.go:1149` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:1173` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:1180` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1168` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
+| `internal/api/auth.go:1179` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1203` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:1210` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:80` | request cookie for the local handler fixture (CWE-1004) |
 | `internal/api/auth_saml_cookie_test.go:83` | request cookie for the local handler fixture (CWE-1004) |
@@ -1419,7 +1419,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4213` | closed test table list above |
+| `internal/store/migration_content_test.go:4214` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 
