@@ -65,6 +65,7 @@ type Gateway struct {
 
 type session struct {
 	console  *consoleState
+	web      *webConsoleState
 	intent   SessionIntent
 	job      relay.Job
 	material relay.Material
@@ -277,6 +278,13 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 			secrets = append(secrets, append([]byte(nil), account...))
 			secret.Wipe(account)
 		}
+	case TargetWeb:
+		if intent.WebSignIn != nil {
+			if account, err := parseWebAccount(material[intent.CredentialRef], intent.WebSignIn.Mode); err == nil {
+				secrets = append(secrets, webSecretForms(account, intent.WebSignIn.Mode)...)
+				account.wipe()
+			}
+		}
 	}
 	var console *consoleState
 	if intent.TargetType == TargetAWSConsole {
@@ -284,8 +292,14 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 		destroyMaterial := destroy
 		destroy = func() { console.destroy(); destroyMaterial() }
 	}
+	var web *webConsoleState
+	if intent.TargetType == TargetWeb {
+		web = newWebConsoleState()
+		destroyMaterial := destroy
+		destroy = func() { web.destroy(); destroyMaterial() }
+	}
 
-	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy, console: console,
+	g.holdSession(ctx, &session{intent: intent, job: job, material: material, destroy: destroy, console: console, web: web,
 		recorder: g.recorderFor(ctx, intent, job, secrets...), conns: map[net.Conn]struct{}{}, ended: make(chan struct{})})
 	for _, b := range secrets {
 		secret.Wipe(b)
@@ -604,6 +618,12 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		defer secret.Wipe(credential)
 		if err := serveAWSConsole(ctx, conn, credential, s.intent, s.console, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: console handoff setup failed: %v", s.intent.SessionID, err)
+		}
+	case TargetWeb:
+		credential := s.credential()
+		defer secret.Wipe(credential)
+		if err := serveWebConsole(ctx, conn, credential, s.intent, s.web, g.cfg.Dial, rec); err != nil {
+			g.cfg.Logf("accessgateway: session %s: web console: %v", s.intent.SessionID, err)
 		}
 
 	case TargetAzure:

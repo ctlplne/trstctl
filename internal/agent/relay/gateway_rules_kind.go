@@ -25,6 +25,11 @@ const KindAccessGatewayNetDeviceRulesSession = "access.gateway.session.rules.net
 // password. An older gateway does not claim it.
 const KindAccessGatewayNetDeviceSession = "access.gateway.session.netdevice.v1"
 
+// KindAccessGatewayWebSession is an internal web admin console session
+// (A273): the gateway signs in to the console for the operator and keeps its
+// cookies. An older gateway does not claim it.
+const KindAccessGatewayWebSession = "access.gateway.session.web.v1"
+
 func IsCommandRulesSession(kind string) bool {
 	return kind == KindAccessGatewayRulesSession || kind == KindAccessGatewaySSHRulesSession || kind == KindAccessGatewayMySQLRulesSession || kind == KindAccessGatewayRedisRulesSession || kind == KindAccessGatewayMongoRulesSession || kind == KindAccessGatewayClickHouseRulesSession || kind == KindAccessGatewayNetDeviceRulesSession
 }
@@ -36,5 +41,5 @@ const KindAccessGatewayDesktopSession = "access.gateway.session.desktop.v1"
 const KindAccessGatewayADDesktopSession = "access.gateway.session.desktop.ad.v1"
 
 func IsAccessGatewaySession(kind string) bool {
-	return kind == KindAccessGatewaySession || kind == KindAccessGatewayDesktopSession || kind == KindAccessGatewayADDesktopSession || kind == KindAccessGatewayNetDeviceSession || IsCommandRulesSession(kind)
+	return kind == KindAccessGatewaySession || kind == KindAccessGatewayDesktopSession || kind == KindAccessGatewayADDesktopSession || kind == KindAccessGatewayNetDeviceSession || kind == KindAccessGatewayWebSession || IsCommandRulesSession(kind)
 }

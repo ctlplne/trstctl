@@ -2,6 +2,10 @@
 
 ### Added
 
+- Internal web admin consoles (A273 part 1): the access gateway serves `webconsole` sessions (agent job kind
+  `access.gateway.session.web.v1`): it signs in for the operator through the console's own sign-in form, a header token or
+  HTTP basic authentication, keeps the console's cookies, masks the credential out of every page and records each request
+  and response, masked. The browser never receives the credential.
 - Break-glass identity provider accounts (A272 part 3): the credential health worker checks each break-glass account's
   vaulted password once per interval with the identity provider's non-interactive sign-in (Okta, Entra ID; Google reads
   not supported) and never repeats a refused password, so a check never trips a lockout.

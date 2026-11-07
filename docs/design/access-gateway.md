@@ -1389,3 +1389,32 @@ commands are read, interactive shells answer to every rule. The proof
 tunnel to SSH stand-ins of all five platforms, seals and checks each recording,
 and blocks `wr mem` under a `write` rule before the device sees it.
 
+
+## Internal web admin consoles (A273)
+
+A `webconsole` session rides `access.gateway.session.web.v1`, so an older gateway
+never claims it. Its job names the console's origin, CA and server name (public facts)
+and the sign-in its template's reviewers approved (`accessweb.SignIn`: `form` with the
+sign-in page and its username and password fields, `header` with the header name and an
+optional prefix, or `basic`), and redeems the vaulted account like a database session's
+credential. The browser's connections reach the gateway through the CLI tunnel; each is
+served as HTTP and relayed to the console. For a form sign-in the gateway fetches the
+sign-in page, fills the first form that has the password field (its hidden fields, such as
+a CSRF token, and its named submit button kept), refuses a form that would send the
+password in a URL or post off the console's origin, and posts it, following same-origin
+redirects; the password is form-encoded into one buffer that is wiped after the request. A
+refused sign-in (or one whose answer was lost after the password was sent) is never sent
+again in the session. The console's cookies are kept per session in locked memory, sent on
+every request, and wiped when the session ends; only the cookies the template names
+(`browser_cookies`, for a console's double-submit CSRF scripts) reach the browser, and the
+browser's value wins for those. The gateway removes the browser's `Authorization`,
+`Cookie` and forwarding headers, rewrites `Origin` and `Referer` to the console's origin,
+asks for uncompressed bodies, rewrites the console's absolute redirects to its own origin
+into paths on the tunnel, drops `WWW-Authenticate` (no password prompt), and replaces each
+shape of the credential (as is, HTML-escaped, form-encoded, the basic value; eight bytes
+or longer) in every non-media response with as many asterisks, so the response's length
+holds. The browser cannot post to the sign-in page or the form's action; a redirect to the
+sign-in page signs in again and sends the browser back (home, when the request itself
+signed out), at most ten sign-ins a session. Requests (with sensitive-looking form and JSON
+fields masked) and responses are recorded as `request`, `response`, `sign-in` and
+`refused` events with the credential and the console's cookie values masked.

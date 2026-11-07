@@ -228,8 +228,8 @@ func TestSessionIntentValidationA254(t *testing.T) {
 	if ValidateSessionIntent(routed) == nil {
 		t.Fatal("a PostgreSQL session carrying SSH routing was accepted")
 	}
-	if got := ClaimableKinds(); len(got) != 9 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules || got[5] != KindSessionMongoRules || got[6] != KindSessionClickHouseRules ||
-		got[7] != KindSessionNetDevice || got[8] != KindSessionNetDeviceRules {
+	if got := ClaimableKinds(); len(got) != 10 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules || got[5] != KindSessionMongoRules || got[6] != KindSessionClickHouseRules ||
+		got[7] != KindSessionNetDevice || got[8] != KindSessionNetDeviceRules || got[9] != KindSessionWeb {
 		t.Fatalf("the gateway claims %v", got)
 	}
 	// A270: a network device session redeems its vaulted account and routes

@@ -9413,3 +9413,27 @@ What comes next:
   `trstctl access emergency checkout`).
 - Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
 
+## Internal web admin consoles (A273) — part 1: the gateway's web console proxy
+
+Status: in progress. The access gateway serves a `webconsole` session: the browser reaches
+the console only through the session's tunnel, and the gateway signs in for the operator as
+the reviewed access template says — it fetches the console's own sign-in page, fills its form
+(hidden fields such as a CSRF token kept) and posts it itself, or adds the vaulted token in a
+named header, or HTTP basic authentication, to every request. Every cookie the console sets
+stays at the gateway (in locked memory, wiped when the session ends) except the few the
+template names for the console's own scripts; the browser's credentials and cookies never
+reach the console; the credential is masked out of every page the console returns; the
+browser cannot post to the console's sign-in; a refused sign-in is never sent again in the
+session; a console that signs the session out is signed in to again. Each request and
+response is recorded, with the credential, the console's cookie values and sensitive-looking
+form and JSON fields masked. Proof today: `TestWebConsoleFormSignInKeepsTheCredentialFromTheBrowserA273`,
+`TestWebConsoleRefusedSignInIsNeverRepeatedA273` and `TestWebConsoleBasicAndHeaderSignInA273`
+against a stand-in console, at the gateway.
+
+What comes next:
+- Registering `webconsole` targets and the templates' `web_sign_in`, opening sessions through
+  the CLI tunnel, and the served proof with terminate (part 2).
+- The console's screens for both, and a real-browser proof (part 3).
+- Consoles that sign in through a single sign-on provider, write their own absolute origin
+  into pages or scripts, or live under a path rather than at an origin.
+

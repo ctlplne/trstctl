@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/accessdesktop"
 	"trstctl.com/trstctl/internal/accessrules"
+	"trstctl.com/trstctl/internal/accessweb"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -36,6 +37,7 @@ const (
 	KindSessionClickHouseRules = relay.KindAccessGatewayClickHouseRulesSession
 	KindSessionNetDevice       = relay.KindAccessGatewayNetDeviceSession
 	KindSessionNetDeviceRules  = relay.KindAccessGatewayNetDeviceRulesSession
+	KindSessionWeb             = relay.KindAccessGatewayWebSession
 	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
 	// TargetRedis, TargetKubernetes and TargetSSH are the session types the
 	// gateway serves.
@@ -55,6 +57,9 @@ const (
 	// TargetNetDevice (A270) is a network device's vaulted account: the
 	// gateway redeems its password and signs in to the device over SSH.
 	TargetNetDevice = "netdevice"
+	// TargetWeb (A273) is an internal web admin console's vaulted account:
+	// the gateway signs in to the console for the operator's browser.
+	TargetWeb = accessweb.TargetWeb
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -66,7 +71,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole, TargetRDP, TargetNetDevice:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole, TargetRDP, TargetNetDevice, TargetWeb:
 		return true
 	}
 	return false
@@ -96,13 +101,17 @@ type SessionIntent struct {
 	AWSService         string                 `json:"aws_service,omitempty"`
 	AWSRegion          string                 `json:"aws_region,omitempty"`
 	CommandPolicy      *accessrules.Policy    `json:"command_policy,omitempty"`
-	SessionID          string                 `json:"session_id"`
-	TargetType         string                 `json:"target_type"`
-	TargetID           string                 `json:"target_id"`
-	ExpiresAt          time.Time              `json:"expires_at"`
-	TicketDigest       string                 `json:"ticket_digest"`
-	CredentialRef      string                 `json:"credential_ref,omitempty"`
-	RequiredAgentID    string                 `json:"required_agent_id"`
+	// WebSignIn (A273) is how the gateway signs in to a web console, as the
+	// template its reviewers approved says; the console's route is
+	// UpstreamURL, UpstreamCAPEM and UpstreamServerName.
+	WebSignIn       *accessweb.SignIn `json:"web_sign_in,omitempty"`
+	SessionID       string            `json:"session_id"`
+	TargetType      string            `json:"target_type"`
+	TargetID        string            `json:"target_id"`
+	ExpiresAt       time.Time         `json:"expires_at"`
+	TicketDigest    string            `json:"ticket_digest"`
+	CredentialRef   string            `json:"credential_ref,omitempty"`
+	RequiredAgentID string            `json:"required_agent_id"`
 	// SSHAddress (host:port), SSHPrincipal and SSHHostKeyFingerprints
 	// (SHA256:...) route an SSH session; they are public facts.
 	SSHAddress             string   `json:"ssh_address,omitempty"`
@@ -131,7 +140,7 @@ type SessionReport struct {
 // ClaimableKinds is what the gateway's own claim loop asks for. Sessions are
 // held for their whole lifetime, so they never enter the shared relay pool.
 func ClaimableKinds() []string {
-	return []string{KindSession, KindSessionRules, KindSessionSSHRules, KindSessionMySQLRules, KindSessionRedisRules, KindSessionMongoRules, KindSessionClickHouseRules, KindSessionNetDevice, KindSessionNetDeviceRules}
+	return []string{KindSession, KindSessionRules, KindSessionSSHRules, KindSessionMySQLRules, KindSessionRedisRules, KindSessionMongoRules, KindSessionClickHouseRules, KindSessionNetDevice, KindSessionNetDeviceRules, KindSessionWeb}
 }
 
 // JobKey is the one outbox key a session's job carries.
@@ -212,6 +221,20 @@ func ValidateSessionIntent(in SessionIntent) error {
 
 	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {
 		return err
+	}
+	if in.TargetType == TargetWeb {
+		route := accessweb.Route{URL: in.UpstreamURL, CAPEM: in.UpstreamCAPEM, ServerName: in.UpstreamServerName}
+		switch {
+		case in.CredentialRef != CredentialRef(in.SessionID):
+			return errors.New("accessgateway: a session redeems only its own credential")
+		case in.SSHAddress != "" || in.SSHPrincipal != "" || len(in.SSHHostKeyFingerprints) != 0:
+			return errors.New("accessgateway: a web console session carries no SSH routing")
+		case in.WebSignIn == nil || in.WebSignIn.Validate() != nil || in.CommandPolicy != nil || route.Validate(true) != nil:
+			return errors.New("accessgateway: a web console session needs its reviewed route and sign-in, and carries no command rules")
+		}
+		return nil
+	} else if in.WebSignIn != nil {
+		return errors.New("accessgateway: only a web console session carries a web sign-in")
 	}
 	if in.TargetType == TargetNetDevice {
 		// A network device session redeems its vaulted account and routes
@@ -294,7 +317,7 @@ func KindForPolicy(p *accessrules.Policy) string {
 	return KindSession
 }
 func MatchesSessionJob(kind string, in SessionIntent) bool {
-	if in.TargetType == TargetRDP || in.TargetType == TargetNetDevice {
+	if in.TargetType == TargetRDP || in.TargetType == TargetNetDevice || in.TargetType == TargetWeb {
 		return kind == KindForIntent(in)
 	}
 	return kind == KindForPolicy(in.CommandPolicy)
@@ -310,6 +333,9 @@ func KindForIntent(in SessionIntent) string {
 	}
 	if in.TargetType == TargetNetDevice && in.CommandPolicy == nil {
 		return KindSessionNetDevice
+	}
+	if in.TargetType == TargetWeb {
+		return KindSessionWeb
 	}
 	return KindForPolicy(in.CommandPolicy)
 }

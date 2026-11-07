@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2796 annotated sites across 31 rules. Each row is
+2798 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1354,7 +1354,7 @@ not this file.
 | `internal/store/store_isolation_test.go:409` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:457` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
-### G124 — CWE-1004 Sensitive cookie without protective attributes (48 sites)
+### G124 — CWE-1004 Sensitive cookie without protective attributes (50 sites)
 
 | Location | Reason |
 |---|---|
@@ -1371,6 +1371,7 @@ not this file.
 | `ee/provider/saml_authenticator.go:234` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:338` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:345` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
+| `internal/agent/accessgateway/webconsole.go:828` | the browser is on the CLI's plain-http loopback tunnel, so a Secure cookie would never come back; only template-named script cookies pass (CWE-614) |
 | `internal/api/auth.go:1138` | short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004) |
 | `internal/api/auth.go:1149` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth.go:1173` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
@@ -1404,6 +1405,7 @@ not this file.
 | `internal/api/csrf_test.go:71` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/rate_limit_guard_test.go:50` | test cookie against the test's own local server (CWE-1004) |
 | `internal/connector/netscaler/netscaler.go:354` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
+| `internal/crypto/infratest/webconsole.go:253` | a double-submit CSRF token the page's scripts must read (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:170` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:179` | test cookie against the test's own local server (CWE-1004) |
 
