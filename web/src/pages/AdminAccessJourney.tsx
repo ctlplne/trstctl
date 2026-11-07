@@ -44,6 +44,7 @@ import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
 import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 import { PAMCheckoutPanel } from "@/pages/PAMCheckoutPanel";
 import { PAMBreakGlassPanel } from "@/pages/PAMBreakGlassPanel";
+import { PAMEmergencyRespondersPanel } from "@/pages/PAMEmergencyRespondersPanel";
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -429,6 +430,45 @@ export function AdminAccess() {
       setPAMBrowser(form.browser);
       setPAMExact(input);
       setPAMPending(await api.requestPAMSession(input, `pam-request:${requestID}`));
+    } catch (err) {
+      setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
+    } finally {
+      setPAMBusy(false);
+    }
+  }
+
+  // A258: a named responder opens a session at once, without review; every
+  // approver is notified and the session needs a post-incident review.
+  const emergencyKey = useRef(crypto.randomUUID());
+  async function openEmergencySession(form: PAMSessionFormState) {
+    if (!form.reason) {
+      setPAMFormError(t("admin.access.emergency.reasonRequired"));
+      return;
+    }
+    if (form.browser) {
+      setPAMFormError(t("admin.access.emergency.noBrowser"));
+      return;
+    }
+    setPAMBusy(true);
+    setPAMFormError(null);
+    try {
+      const created = await api.openPAMEmergencySession(
+        {
+          target_type: form.target_type,
+          target_id: form.target_id,
+          role: form.role,
+          reason: form.reason,
+          method: form.method,
+          payload_base64: form.payload_base64,
+          ...(form.ttl_seconds ? { ttl_seconds: Number(form.ttl_seconds) } : {}),
+          ...(form.target_type === "ssh" && form.ssh_principal ? { ssh_principal: form.ssh_principal } : {}),
+          ...(form.target_type === "ssh" && form.ssh_public_key ? { ssh_public_key: form.ssh_public_key } : {}),
+        },
+        emergencyKey.current,
+      );
+      emergencyKey.current = crypto.randomUUID();
+      setPAMCreated(created);
+      setPAMRows((current) => [created, ...(current ?? []).filter((item) => item.id !== created.id)]);
     } catch (err) {
       setPAMFormError(accessProblemMessage(err, t("admin.access.sessionOpenFailed")));
     } finally {
@@ -862,6 +902,9 @@ export function AdminAccess() {
                 />
               ) : null}
               {pamRows ? (
+                <PAMEmergencyRespondersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
+              ) : null}
+              {pamRows ? (
                 <PAMBreakGlassPanel
                   subject={user?.subject ?? ""}
                   canRelease={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:sessions.open")}
@@ -1111,6 +1154,7 @@ export function AdminAccess() {
           returnFocusRef={pamTriggerRef}
           onClose={closePAMDialog}
           onRequest={requestPrivilegedSession}
+          onEmergency={user?.permissions?.some((permission) => permission === "*" || permission === "access:sessions.open") ? openEmergencySession : undefined}
           onRetry={() => requestPrivilegedSession(defaultPAMSessionForm)}
           onActivate={activatePrivilegedSession}
           onCopy={copyPAMSessionID}
@@ -1329,6 +1373,7 @@ function PAMFormDialog({
   returnFocusRef,
   onClose,
   onRequest,
+  onEmergency,
   onRetry,
   onActivate,
   onCopy,
@@ -1344,6 +1389,7 @@ function PAMFormDialog({
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onRequest: (form: PAMSessionFormState) => Promise<void>;
+  onEmergency?: (form: PAMSessionFormState) => Promise<void>;
   onRetry: () => Promise<void>;
   onActivate: () => Promise<void>;
   onCopy: (id: string) => Promise<void>;
@@ -1352,6 +1398,7 @@ function PAMFormDialog({
   const { t } = useTranslation();
   const [showCredential, setShowCredential] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [emergencyConfirm, setEmergencyConfirm] = useState(false);
   const review = useApiQuery(["pam-request-progress", pending?.approval_request_id], () => api.pamRequestProgress(pending?.approval_request_id ?? ""), {
     enabled: !!pending && !created,
     retry: false,
@@ -1582,6 +1629,36 @@ function PAMFormDialog({
               {t("admin.access.openSessionSubmit")}
             </Button>
           </div>
+          {onEmergency ? (
+            emergencyConfirm ? (
+              <div role="alert" className="grid gap-2 rounded-panel border border-destructive/50 p-3 text-sm">
+                <p>{t("admin.access.emergency.confirm")}</p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => {
+                      setEmergencyConfirm(false);
+                      void handleSubmit(onEmergency)();
+                    }}
+                  >
+                    {t("admin.access.emergency.openNow")}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEmergencyConfirm(false)}>
+                    {t("admin.access.emergency.cancel")}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <Button type="button" size="sm" variant="destructive-outline" disabled={busy} onClick={() => setEmergencyConfirm(true)}>
+                  {t("admin.access.emergency.open")}
+                </Button>
+              </div>
+            )
+          ) : null}
         </form>
       )}
     </Dialog>

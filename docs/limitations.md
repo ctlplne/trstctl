@@ -8882,7 +8882,9 @@ check. `TestServedTemplatesAndEmergencyAccessA258` proves templates (the reason 
 three approvals needed, the session bounded) and emergency access through the gateway: the
 notice on the approval channel, the deadline, the review closed once by another approver,
 and refusals for an unnamed responder, a token minted for the responder, a normal open
-without review and a responder reviewing their own grant.
+without review and a responder reviewing their own grant. The console names the responders,
+opens an emergency session from the session dialog (after a confirmation that every approver
+is notified) and records post-incident reviews.
 
 What comes next:
 - Lockout-aware checks of directory accounts (with the Active Directory account type, A263).

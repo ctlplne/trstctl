@@ -2,6 +2,9 @@
 
 ### Added
 
+- Emergency access (A258 console): an Emergency responders panel names the responders; the session dialog opens a
+  session at once as a named responder after a confirmation that every approver is notified (a reason is required);
+  post-incident reviews are recorded from the emergency grants table.
 - Internal web admin consoles (A273 fix): the published session request, approval, activation and emergency session
   schemas admit `webconsole`, which the API already served.
 - Break-glass accounts (A272 console): the access targets panel registers `breakglass` targets; a new Break-glass

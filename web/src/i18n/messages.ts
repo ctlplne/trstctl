@@ -735,6 +735,36 @@ export const messages = {
     description: "Break-glass release (A272).",
   },
   "admin.access.breakglass.minutes": { defaultMessage: "{count, plural, one {# minute} other {# minutes}}", description: "Break-glass release (A272)." },
+  "admin.access.emergency.open": { defaultMessage: "Open now in an emergency", description: "Emergency access (A258)." },
+  "admin.access.emergency.confirm": {
+    defaultMessage:
+      "You are opening this session at once as a named emergency responder, without review. Every approver is notified now, the session ends at its short deadline, and it needs a post-incident review by someone else.",
+    description: "Emergency access (A258).",
+  },
+  "admin.access.emergency.openNow": { defaultMessage: "Open now", description: "Emergency access (A258)." },
+  "admin.access.emergency.cancel": { defaultMessage: "Cancel", description: "Emergency access (A258)." },
+  "admin.access.emergency.reasonRequired": { defaultMessage: "Emergency access needs a reason.", description: "Emergency access (A258)." },
+  "admin.access.emergency.noBrowser": {
+    defaultMessage: "An emergency session is opened for your own client, not the browser.",
+    description: "Emergency access (A258).",
+  },
+  "admin.access.responders.heading": { defaultMessage: "Emergency responders", description: "Emergency access (A258)." },
+  "admin.access.responders.description": {
+    defaultMessage:
+      "The named people who may open emergency access — an emergency session or a break-glass release — at once, without review. Every approver is notified when one does.",
+    description: "Emergency access (A258).",
+  },
+  "admin.access.responders.failed": { defaultMessage: "The responders could not be saved", description: "Emergency access (A258)." },
+  "admin.access.responders.loading": { defaultMessage: "Loading responders", description: "Emergency access (A258)." },
+  "admin.access.responders.none": { defaultMessage: "No one may open emergency access.", description: "Emergency access (A258)." },
+  "admin.access.responders.edit": { defaultMessage: "Edit responders", description: "Emergency access (A258)." },
+  "admin.access.responders.editor": { defaultMessage: "Responders (one per line)", description: "Emergency access (A258)." },
+  "admin.access.responders.save": { defaultMessage: "Save responders", description: "Emergency access (A258)." },
+  "admin.access.responders.cancel": { defaultMessage: "Cancel", description: "Emergency access (A258)." },
+  "admin.access.responders.saved": {
+    defaultMessage: "{count, plural, one {# responder saved} other {# responders saved}}",
+    description: "Emergency access (A258).",
+  },
   "admin.access.inPlaceAccount.target": {
     defaultMessage: "Account rotated in place (check-out)",
     description: "Account target registration (A271): hypervisors, server controllers and network devices.",

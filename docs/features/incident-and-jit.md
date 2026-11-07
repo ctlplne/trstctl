@@ -635,7 +635,10 @@ an account out. Access templates set a request's reason, approvals and maximum l
 one with `template_id`). When the reviewers cannot be reached, a named emergency responder
 opens access at once (`trstctl-cli access emergency open`): every approver is notified, the
 session lasts at most an hour, and its post-incident review stays open until another
-approver records it.
+approver records it. In the console, the **Emergency responders** panel names the
+responders (one per line), the session dialog's **Open now in an emergency** opens a session
+after a confirmation that every approver is notified (a reason is required), and the
+**Break-glass accounts** panel's emergency grants table records the post-incident review.
 
 With an object store (`audit.archive_object_store`), tenant sealing and the audit signing
 key, every gateway session is recorded (A255): SSH bytes and requests, SFTP operations

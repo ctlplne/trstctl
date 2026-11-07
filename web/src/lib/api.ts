@@ -571,6 +571,8 @@ import type {
   PAMEmergencyGrant,
   PAMEmergencyGrantList,
   PAMEmergencyReviewRequest,
+  PAMEmergencyResponders,
+  PAMEmergencySessionRequest,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1591,6 +1593,8 @@ export type {
   PAMEmergencyGrant,
   PAMEmergencyGrantList,
   PAMEmergencyReviewRequest,
+  PAMEmergencyResponders,
+  PAMEmergencySessionRequest,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2675,6 +2679,11 @@ export interface Api {
   /** A258/A272: emergency grants, newest first, with their post-incident reviews. */
   pamEmergencyGrants(): Promise<PAMEmergencyGrantList>;
   reviewPAMEmergencyGrant(id: string, input: PAMEmergencyReviewRequest, idempotencyKey?: string): Promise<PAMEmergencyGrant>;
+  /** A258: the named responders who may open emergency access. */
+  pamEmergencyResponders(): Promise<PAMEmergencyResponders>;
+  setPAMEmergencyResponders(input: PAMEmergencyResponders, idempotencyKey?: string): Promise<PAMEmergencyResponders>;
+  /** A258: open a session at once as a named responder; every approver is notified. */
+  openPAMEmergencySession(input: PAMEmergencySessionRequest, idempotencyKey?: string): Promise<PAMSession>;
   pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
   pamRecordingVerify(id: string): Promise<PAMRecordingVerification>;
   pamRecordingFrames(id: string, from: number): Promise<PAMRecordingFrames>;
@@ -3716,6 +3725,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   pamEmergencyGrants: () => req<PAMEmergencyGrantList>("/api/v1/access/emergency-sessions"),
   reviewPAMEmergencyGrant: (id, input, idempotencyKey) =>
     mutate<PAMEmergencyGrant>("POST", `/api/v1/access/emergency-sessions/${encodeURIComponent(id)}/review`, input, idempotencyKey),
+  pamEmergencyResponders: () => req<PAMEmergencyResponders>("/api/v1/access/emergency/responders"),
+  setPAMEmergencyResponders: (input, idempotencyKey) => mutate<PAMEmergencyResponders>("PUT", "/api/v1/access/emergency/responders", input, idempotencyKey),
+  openPAMEmergencySession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/emergency-sessions", input, idempotencyKey),
   pamCommandActions: (id, options) =>
     req<PAMCommandActionList>(
       `/api/v1/access/sessions/${encodeURIComponent(id)}/actions?limit=50${options?.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`,
