@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2742 annotated sites across 31 rules. Each row is
+2761 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -674,7 +674,7 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (46 sites)
+### G103 — CWE-? (unmapped rule) (65 sites)
 
 | Location | Reason |
 |---|---|
@@ -687,6 +687,25 @@ not this file.
 | `internal/crypto/secret/mem_windows.go:84` | the address VirtualAlloc returned for this region (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:38` | reads the address of the region alloc returned, to check its alignment (CWE-242) |
 | `internal/crypto/secret/mem_windows_test.go:45` | the region's address, to query its lock and release state (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:54` | synchronous native buffer-size query; raw is owned by NetAPI until the caller frees it (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:61` | borrowed read-only view uses NetApiBufferSize-confirmed length, capped at 1 MiB; caller retains and frees the allocation (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:67` | borrowed nonempty NetAPI buffer base; offset arithmetic never becomes a new pointer (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:79` | SDK SID pointer is range checked against the borrowed native allocation before byte decoding (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:86` | SDK UTF-16 pointer is range checked before bounded, terminated public-name decoding (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:97` | local DSROLE basic result pointer for one synchronous SDK call; separately freed below (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:99` | exactly the pointer allocated by DsRoleGetPrimaryDomainInformation, including any partial error result (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:108` | successful local DSROLE basic result guarantees this four-byte prefix; pointer is non-nil and separately freed (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:113` | local SAM public domain-name/SID result, no remote server parameter (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:122` | exact SDK prefix fits the checked allocation; each pointed field is independently bounded (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:155` | local-only paged alias read, fixed SDK scalar/output pointers, bounded preferred reply size (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:183` | SDK array count is checked against the exact allocation before creating a borrowed view (CWE-242) |
+| `internal/crypto/winaccounts/native_windows.go:239` | checked USER_INFO_23 allocation; only public name, flags and SID are read (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:62` | aligned locked UTF-16 password buffer, NUL-terminated, wiped and destroyed after synchronous owned fixture calls (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:65` | exact USER_INFO_1 ABI for one uniquely named owned fixture; password remains in a locked byte buffer (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:76` | removes only the exact owned SID membership created by this fixture (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:86` | exact newly created account name after current SID equality check; no wildcard or pre-existing account deletion (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:111` | fixed local alias and exact owned SID, one membership only (CWE-242) |
+| `internal/crypto/winaccounts/native_windows_test.go:123` | one correct-password local fixture login; locked password pointer is never converted to a string or argv (CWE-242) |
 | `internal/crypto/windependents/automation_native_windows_test.go:47` | exact PSAPI output for the current process and live locked owned BSTR, no material is copied (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:53` | owned native BSTR allocator length, wiped in views no larger than 1 MiB before SysFreeString; no password string (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:92` | owned SysAllocStringLen or COM BSTR, native length capped below 1 Mi UTF-16 units and locked before private use (CWE-242) |
