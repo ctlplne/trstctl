@@ -783,6 +783,10 @@ export const messages = {
       "Save the ticket (reveal it below) to ticket.txt and run this, then open the address it prints in your browser: the gateway signs in to the console for you.",
     description: "Privileged session dialog: gateway session types (A273).",
   },
+  "admin.access.gatewayConnectCommand": {
+    defaultMessage: "trstctl access sessions connect {id} --ticket-file ticket.txt",
+    description: "Privileged session dialog: the CLI command that opens a gateway session's tunnel (A273); the command is literal.",
+  },
   "admin.access.gatewayTicket": { defaultMessage: "Gateway ticket (shown once)", description: "Privileged session dialog: gateway session types (A273)." },
   "admin.access.inPlaceAccount.target": {
     defaultMessage: "Account rotated in place (check-out)",

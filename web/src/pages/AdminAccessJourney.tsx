@@ -1526,7 +1526,7 @@ function PAMFormDialog({
             <DetailRow term={t("admin.access.gatewayConnect")}>
               <span className="grid gap-1">
                 <span>{t(created.target_type === "webconsole" ? "admin.access.gatewayConnectWebHelp" : "admin.access.gatewayConnectHelp")}</span>
-                <code className="break-all font-mono text-xs">{`trstctl access sessions connect ${created.id} --ticket-file ticket.txt`}</code>
+                <code className="break-all font-mono text-xs">{t("admin.access.gatewayConnectCommand", { id: created.id })}</code>
               </span>
             </DetailRow>
           ) : null}
