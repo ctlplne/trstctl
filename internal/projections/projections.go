@@ -5310,6 +5310,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventServiceDependentStepObserved:             {1: true},
 	EventServiceDependentHostSaved:                {1: true},
 	EventServiceDependentScanQueued:               {1: true},
+	EventWindowsLocalAccountScanQueued:            {1: true},
+	EventWindowsLocalAccountScanObserved:          {1: true},
+	EventWindowsLocalAccountScanFailed:            {1: true},
 	EventServiceDependentScanObserved:             {1: true},
 	EventServiceDependentScanFailed:               {1: true},
 	EventPAMDiscoverySourceSaved:                  {1: true},
@@ -5580,6 +5583,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyServiceDependentRotationTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyWindowsLocalAccountsTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyServiceDependentsTx(ctx, tx, e); handled {

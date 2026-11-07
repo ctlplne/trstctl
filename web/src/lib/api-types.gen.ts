@@ -9453,6 +9453,70 @@ export interface PAMTerminalRequest {
   ssh_command?: string;
 }
 
+export interface PAMWindowsLocalAccount {
+  enabled: boolean;
+  locked: boolean;
+  name: string;
+  password_required: boolean;
+  sid: string;
+}
+
+export interface PAMWindowsLocalAccountIntent {
+  agent_id: string;
+  binding_digest: string;
+  run_id: string;
+  tenant_id: string;
+}
+
+export interface PAMWindowsLocalAccountInventory {
+  accounts: PAMWindowsLocalAccount[];
+  deleted_members: number;
+  external_members: number;
+  group_members: number;
+  machine: PAMWindowsSAMMachine;
+}
+
+export interface PAMWindowsLocalAccountReport {
+  binding_digest: string;
+  failure?: string;
+  inventory?: PAMWindowsLocalAccountInventory;
+  observed_at: string;
+  run_id: string;
+  status: "complete" | "unavailable";
+}
+
+export interface PAMWindowsLocalAccountScan {
+  attempt?: number;
+  delivery_status: string;
+  failure?: string;
+  id: string;
+  intent: PAMWindowsLocalAccountIntent;
+  observed_event_id?: string;
+  outbox_id?: number;
+  queued_at: string;
+  queued_by: string;
+  queued_event_id: string;
+  receipt_job_id?: number;
+  receipt_signature_base64?: string;
+  receipt_statement?: string;
+  received_at?: string;
+  report?: PAMWindowsLocalAccountReport;
+  report_digest?: string;
+  signer_fingerprint?: string;
+  status: "queued" | "complete" | "failed" | "retrying";
+}
+
+export interface PAMWindowsLocalAccountScanList {
+  items: PAMWindowsLocalAccountScan[];
+  next_cursor?: string;
+}
+
+export interface PAMWindowsSAMMachine {
+  name: string;
+  role: number;
+  sid: string;
+}
+
 export interface PKISecret {
   certificate: string;
   certificate_id: string;

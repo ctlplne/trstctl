@@ -95,7 +95,7 @@ const (
 // refuses a connector it cannot run.
 func ClaimableKinds() []string {
 	return []string{
-		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsDependentInventory, KindWindowsDependentRotation,
+		"connector.deploy", "connector.test", KindConnectorRollback, KindWindowsLocalAccountsInventory, KindWindowsDependentInventory, KindWindowsDependentRotation,
 		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindADCSNestedGroups, KindADCSEndpointProbe, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
@@ -289,6 +289,9 @@ func RunOnceWithRoles(
 		// posture. Do not claim file/exec work it cannot perform — but it
 		// still answers its post-upgrade self-check (A71).
 		kinds = []string{KindPQCPosture, KindPQCPostureRollback, KindAgentSelfCheck}
+		if hostProfile.WindowsLocalAccountsInventory {
+			kinds = append(kinds, KindWindowsLocalAccountsInventory)
+		}
 		if len(hostProfile.WindowsDependentSIDs) > 0 {
 			kinds = append(kinds, KindWindowsDependentInventory)
 		}

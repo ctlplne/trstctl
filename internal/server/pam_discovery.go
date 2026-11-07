@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"trstctl.com/trstctl/internal/events"
 
@@ -141,6 +142,23 @@ func (s *pamService) ListPAMDiscoverySources(ctx context.Context, tenantID strin
 func (s *pamService) sourceView(ctx context.Context, tenantID string, src store.PAMDiscoverySource) (api.PAMDiscoverySource, error) {
 	view := api.PAMDiscoverySource{ProviderID: src.ProviderID, ProviderType: src.ProviderType, IntervalSeconds: src.IntervalSeconds,
 		SavedBy: src.SavedBy, SavedAt: src.SavedAt}
+	// The host's own scan/outbox model owns pending delivery; the generic
+	// account-diff timeline is populated only by completed native observations.
+	if src.ProviderType == "windows_local" {
+		agentID := strings.TrimPrefix(src.ProviderID, "windows-host:")
+		latest, err := s.store.LatestWindowsLocalAccountScan(ctx, tenantID, agentID)
+		if err != nil {
+			return view, err
+		}
+		if err = s.canonicalWindowsLocalAccountScan(ctx, tenantID, latest, true); err != nil {
+			return view, err
+		}
+		if latest.Status == "queued" || latest.Status == "retrying" {
+			run := discoveryRunView(store.PAMDiscoveryRun{ID: latest.ID, ProviderID: src.ProviderID, Status: "queued", Failure: latest.Failure, DeliveryStatus: latest.DeliveryStatus, StartedAt: latest.QueuedAt, RequestedBy: latest.QueuedBy})
+			view.LastRun = &run
+			return view, nil
+		}
+	}
 	runs, err := s.store.ListPAMDiscoveryRuns(ctx, tenantID, src.ProviderID, 1)
 	if err != nil {
 		return api.PAMDiscoverySource{}, err

@@ -157,7 +157,7 @@ func (a *API) pamDiscoveryRoutes() []route {
 		{method: "GET", path: "/api/v1/access/accounts", opID: "listPAMImportedAccounts", summary: "List the privileged accounts imported into folders", handler: a.listPAMImportedAccounts, query: []param{{name: "folder", typ: "string", desc: "only this folder's accounts"}, {name: "provider_id", typ: "string", desc: "only this source's accounts"}}, resSchema: "PAMImportedAccountList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/discovery/accounts", opID: "listPAMDiscoveredAccounts", summary: "List the privileged accounts discovery has staged", handler: a.listPAMDiscoveredAccounts, query: []param{{name: "provider_id", typ: "string", desc: "only this source's accounts"}, {name: "status", typ: "string", desc: "staged, imported or dismissed"}, {name: "include_removed", typ: "boolean", desc: "also accounts the last scan no longer found"}}, resSchema: "PAMDiscoveredAccountList", successCode: "200", perm: authz.AccessRead},
 	}
-	return append(routes, a.pamServiceDependentRoutes()...)
+	return append(append(routes, a.pamWindowsLocalAccountRoutes()...), a.pamServiceDependentRoutes()...)
 }
 
 func (a *API) discovery() (PAMDiscoveryService, error) {

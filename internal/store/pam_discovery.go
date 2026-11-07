@@ -198,7 +198,7 @@ func (s *Store) ApplyPAMDiscoveryRunTx(ctx context.Context, tx pgx.Tx, tenantID 
 	return err
 }
 
-const pamDiscoveryRunColumns = `id::text, provider_id, status, failure, started_at, COALESCE(finished_at,'0001-01-01 00:00:00+00'::timestamptz), requested_by, accounts, added, removed, changed, COALESCE((SELECT o.status FROM outbox o WHERE o.tenant_id=$1 AND o.tenant_id=pam_discovery_runs.tenant_id AND o.id=pam_discovery_runs.outbox_id AND o.destination='pam.discovery.scan' AND o.idempotency_key='pam-discovery:'||pam_discovery_runs.id::text),'')`
+const pamDiscoveryRunColumns = `id::text, provider_id, status, failure, started_at, COALESCE(finished_at,'0001-01-01 00:00:00+00'::timestamptz), requested_by, accounts, added, removed, changed, COALESCE((SELECT o.status FROM outbox o WHERE o.tenant_id=$1 AND o.tenant_id=pam_discovery_runs.tenant_id AND o.id=pam_discovery_runs.outbox_id AND ((o.destination='pam.discovery.scan' AND o.idempotency_key='pam-discovery:'||pam_discovery_runs.id::text) OR (o.destination='host.windows_local_accounts.inventory' AND o.idempotency_key='windows-local-inventory:'||pam_discovery_runs.id::text))),'')`
 
 func scanPAMDiscoveryRun(row pgx.Row) (PAMDiscoveryRun, error) {
 	var r PAMDiscoveryRun

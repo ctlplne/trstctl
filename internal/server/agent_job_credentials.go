@@ -73,6 +73,9 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 		}
 	}
+	if job.Destination == relay.KindWindowsLocalAccountsInventory {
+		return nil, status.Error(codes.FailedPrecondition, "local administrator inventory redeems no credential")
+	}
 	if job.Destination == relay.KindWindowsDependentInventory {
 		return nil, status.Error(codes.FailedPrecondition, "native dependent inventory redeems no credential")
 	}

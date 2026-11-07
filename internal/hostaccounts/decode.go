@@ -15,7 +15,32 @@ import (
 func DecodeInventoryReport(raw []byte) (InventoryReport, error) {
 	var value InventoryReport
 	err := decodeInventoryJSON(raw, MaxInventoryReportBytes, &value)
-	return value, err
+	if err != nil {
+		return value, err
+	}
+	fields, err := requiredNativeFields(raw, "run_id", "binding_digest", "observed_at", "status")
+	if err != nil {
+		return value, err
+	}
+	if inventory, ok := fields["inventory"]; ok && !bytes.Equal(bytes.TrimSpace(inventory), []byte("null")) {
+		body, e := requiredNativeFields(inventory, "machine", "accounts", "external_members", "group_members", "deleted_members")
+		if e != nil {
+			return value, e
+		}
+		if _, e = requiredNativeFields(body["machine"], "name", "sid", "role"); e != nil {
+			return value, e
+		}
+		var accounts []json.RawMessage
+		if e = json.Unmarshal(body["accounts"], &accounts); e != nil {
+			return value, errors.New("host accounts: explicit account list required")
+		}
+		for _, account := range accounts {
+			if _, e = requiredNativeFields(account, "name", "sid", "enabled", "locked", "password_required"); e != nil {
+				return value, e
+			}
+		}
+	}
+	return value, nil
 }
 func DecodeInventoryIntent(raw []byte) (InventoryIntent, error) {
 	var value InventoryIntent
@@ -145,4 +170,18 @@ func validJSONSurrogates(raw []byte) bool {
 		}
 	}
 	return true
+}
+
+func requiredNativeFields(raw []byte, keys ...string) (map[string]json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return nil, errors.New("host accounts: explicit native object required")
+	}
+	for _, key := range keys {
+		value, ok := fields[key]
+		if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return nil, errors.New("host accounts: native fact is missing or null")
+		}
+	}
+	return fields, nil
 }

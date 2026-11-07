@@ -541,6 +541,8 @@ import type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMWindowsLocalAccountScan,
+  PAMWindowsLocalAccountScanList,
   PAMServiceReconciliationApprovalRequest,
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
@@ -1554,6 +1556,8 @@ export type {
   PAMServiceDependentHost,
   PAMServiceDependentHostList,
   PAMServiceDependentScan,
+  PAMWindowsLocalAccountScan,
+  PAMWindowsLocalAccountScanList,
   PAMServiceReconciliationApprovalRequest,
   PAMServiceReconciliationApproval,
   PAMServiceReconciliationReview,
@@ -2611,6 +2615,9 @@ export interface Api {
   applyPAMDiscoveryImport(input: PAMDiscoveryImportRequest, idempotencyKey?: string): Promise<PAMImportedAccountList>;
   dismissPAMDiscoveredAccount(id: string, reason: string, idempotencyKey?: string): Promise<PAMDiscoveredAccount>;
   pamImportedAccounts(folder?: string): Promise<PAMImportedAccountList>;
+  runPAMWindowsLocalAccountInventory(agentID: string, idempotencyKey?: string): Promise<PAMWindowsLocalAccountScan>;
+  pamWindowsLocalAccountScans(agentID: string, after?: string): Promise<PAMWindowsLocalAccountScanList>;
+  pamWindowsLocalAccountScan(agentID: string, id: string): Promise<PAMWindowsLocalAccountScan>;
   pamServiceDependentHosts(accountID: string, after?: string): Promise<PAMServiceDependentHostList>;
   savePAMServiceDependentHost(accountID: string, agentID: string, enabled: boolean, idempotencyKey?: string): Promise<PAMServiceDependentHost>;
   runPAMServiceDependentInventory(accountID: string, agentID: string, idempotencyKey?: string): Promise<PAMServiceDependentScan>;
@@ -3589,6 +3596,24 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<PAMImportedAccountList>("POST", `/api/v1/access/discovery/imports/${encodeURIComponent(input.request_id)}/apply`, input, idempotencyKey),
   dismissPAMDiscoveredAccount: (id, reason, idempotencyKey) =>
     mutate<PAMDiscoveredAccount>("POST", `/api/v1/access/discovery/accounts/${encodeURIComponent(id)}/dismiss`, { reason }, idempotencyKey),
+  runPAMWindowsLocalAccountInventory: (agentID, key) =>
+    mutate<PAMWindowsLocalAccountScan>(
+      "POST",
+      "/api/v1/access/discovery/windows-hosts/" + encodeURIComponent(agentID) + "/local-administrators/runs",
+      undefined,
+      key,
+    ),
+  pamWindowsLocalAccountScans: (agentID, after) =>
+    req<PAMWindowsLocalAccountScanList>(
+      "/api/v1/access/discovery/windows-hosts/" +
+        encodeURIComponent(agentID) +
+        "/local-administrators/runs" +
+        (after ? "?after=" + encodeURIComponent(after) : ""),
+    ),
+  pamWindowsLocalAccountScan: (agentID, id) =>
+    req<PAMWindowsLocalAccountScan>(
+      "/api/v1/access/discovery/windows-hosts/" + encodeURIComponent(agentID) + "/local-administrators/runs/" + encodeURIComponent(id),
+    ),
   pamServiceDependentHosts: (accountID, after) =>
     req<PAMServiceDependentHostList>(
       "/api/v1/access/discovery/accounts/" + encodeURIComponent(accountID) + "/dependents" + (after ? "?after=" + encodeURIComponent(after) : ""),

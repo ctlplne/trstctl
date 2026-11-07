@@ -43798,6 +43798,239 @@
         ],
         "type": "object"
       },
+      "PAMWindowsLocalAccount": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password_required": {
+            "type": "boolean"
+          },
+          "sid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sid",
+          "enabled",
+          "locked",
+          "password_required"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountIntent": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "binding_digest": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "tenant_id",
+          "agent_id",
+          "binding_digest"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountInventory": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/PAMWindowsLocalAccount"
+            },
+            "type": "array"
+          },
+          "deleted_members": {
+            "type": "integer"
+          },
+          "external_members": {
+            "type": "integer"
+          },
+          "group_members": {
+            "type": "integer"
+          },
+          "machine": {
+            "$ref": "#/components/schemas/PAMWindowsSAMMachine"
+          }
+        },
+        "required": [
+          "machine",
+          "accounts",
+          "external_members",
+          "group_members",
+          "deleted_members"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountReport": {
+        "properties": {
+          "binding_digest": {
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/PAMWindowsLocalAccountInventory"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "binding_digest",
+          "observed_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountScan": {
+        "properties": {
+          "attempt": {
+            "type": "integer"
+          },
+          "delivery_status": {
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/PAMWindowsLocalAccountIntent"
+          },
+          "observed_event_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "queued_by": {
+            "type": "string"
+          },
+          "queued_event_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "receipt_job_id": {
+            "type": "integer"
+          },
+          "receipt_signature_base64": {
+            "type": "string"
+          },
+          "receipt_statement": {
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/PAMWindowsLocalAccountReport"
+          },
+          "report_digest": {
+            "type": "string"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "complete",
+              "failed",
+              "retrying"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "intent",
+          "status",
+          "delivery_status",
+          "queued_by",
+          "queued_at",
+          "queued_event_id"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsLocalAccountScanList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMWindowsLocalAccountScan"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMWindowsSAMMachine": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "integer"
+          },
+          "sid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sid",
+          "role"
+        ],
+        "type": "object"
+      },
       "PKISecret": {
         "properties": {
           "certificate": {
@@ -63053,6 +63286,203 @@
         ],
         "summary": "Scan a source's target now, read-only, and stage the privileged accounts it finds",
         "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs": {
+      "get": {
+        "operationId": "listPAMWindowsLocalAccountScans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "last scan UUID from the previous page",
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-100 scans, default 25",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMWindowsLocalAccountScanList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Page retained local administrator scans for an enrolled host",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "runPAMWindowsLocalAccountInventory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMWindowsLocalAccountScan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue read-only local administrator inventory on one enrolled Windows host",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs/{id}": {
+      "get": {
+        "operationId": "getPAMWindowsLocalAccountScan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMWindowsLocalAccountScan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read exact signed local administrator inventory and delivery state",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/emergency-sessions": {

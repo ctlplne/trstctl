@@ -743,6 +743,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page retained local administrator scans for an enrolled host */
+        get: operations["listPAMWindowsLocalAccountScans"];
+        put?: never;
+        /** Queue read-only local administrator inventory on one enrolled Windows host */
+        post: operations["runPAMWindowsLocalAccountInventory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read exact signed local administrator inventory and delivery state */
+        get: operations["getPAMWindowsLocalAccountScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/emergency-sessions": {
         parameters: {
             query?: never;
@@ -23282,6 +23317,75 @@ export interface components {
             /** @description SSH only: a complete exec command, 1-65536 bytes. Required in a command-rule session; no interactive shell is opened. Arguments never enter policy evidence. */
             ssh_command?: string;
         };
+        PAMWindowsLocalAccount: {
+            enabled: boolean;
+            locked: boolean;
+            name: string;
+            password_required: boolean;
+            sid: string;
+        };
+        PAMWindowsLocalAccountIntent: {
+            /** Format: uuid */
+            agent_id: string;
+            binding_digest: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        PAMWindowsLocalAccountInventory: {
+            accounts: components["schemas"]["PAMWindowsLocalAccount"][];
+            deleted_members: number;
+            external_members: number;
+            group_members: number;
+            machine: components["schemas"]["PAMWindowsSAMMachine"];
+        };
+        PAMWindowsLocalAccountReport: {
+            binding_digest: string;
+            failure?: string;
+            inventory?: components["schemas"]["PAMWindowsLocalAccountInventory"];
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            status: "complete" | "unavailable";
+        };
+        PAMWindowsLocalAccountScan: {
+            attempt?: number;
+            delivery_status: string;
+            failure?: string;
+            /** Format: uuid */
+            id: string;
+            intent: components["schemas"]["PAMWindowsLocalAccountIntent"];
+            /** Format: uuid */
+            observed_event_id?: string;
+            outbox_id?: number;
+            /** Format: date-time */
+            queued_at: string;
+            queued_by: string;
+            /** Format: uuid */
+            queued_event_id: string;
+            receipt_job_id?: number;
+            receipt_signature_base64?: string;
+            receipt_statement?: string;
+            /** Format: date-time */
+            received_at?: string;
+            report?: components["schemas"]["PAMWindowsLocalAccountReport"];
+            report_digest?: string;
+            signer_fingerprint?: string;
+            /** @enum {string} */
+            status: "queued" | "complete" | "failed" | "retrying";
+        };
+        PAMWindowsLocalAccountScanList: {
+            items: components["schemas"]["PAMWindowsLocalAccountScan"][];
+            next_cursor?: string;
+        };
+        PAMWindowsSAMMachine: {
+            name: string;
+            role: number;
+            sid: string;
+        };
         PKISecret: {
             certificate: string;
             /** Format: uuid */
@@ -29740,6 +29844,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMDiscoveryRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMWindowsLocalAccountScans: {
+        parameters: {
+            query?: {
+                /** @description last scan UUID from the previous page */
+                after?: string;
+                /** @description 1-100 scans, default 25 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMWindowsLocalAccountScanList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runPAMWindowsLocalAccountInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMWindowsLocalAccountScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMWindowsLocalAccountScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMWindowsLocalAccountScan"];
                 };
             };
             /** @description client error */

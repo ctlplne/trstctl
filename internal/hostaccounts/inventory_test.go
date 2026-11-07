@@ -128,3 +128,18 @@ func TestLocalAdministratorWirePreservesExactJSONIdentityA268(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalAdministratorWireRequiresExplicitNativeFactsA268(t *testing.T) {
+	_, report := inventoryFixture(t)
+	raw, _ := json.Marshal(report)
+	for _, bad := range []string{
+		strings.Replace(string(raw), `"enabled":true,`, "", 1),
+		strings.Replace(string(raw), `"role":3`, `"role":null`, 1),
+		strings.Replace(string(raw), `"external_members":0,`, "", 1),
+		strings.Replace(string(raw), `"locked":false`, `"locked":null`, 1),
+	} {
+		if _, err := DecodeInventoryReport([]byte(bad)); err == nil {
+			t.Fatal("missing native fact silently became a zero-value observation")
+		}
+	}
+}

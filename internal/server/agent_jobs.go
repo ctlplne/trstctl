@@ -66,15 +66,16 @@ import (
 // ship. Handing out work nothing can perform is how a queue silently fills while
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
-	relay.KindWindowsDependentInventory: true,
-	relay.KindWindowsDependentRotation:  true,
-	sshcollection.Destination:           true,
-	sshtrustrollout.Destination:         true,
-	"connector.deploy":                  true,
-	"connector.rollback":                true,
-	relay.KindEndpointContain:           true,
-	relay.KindEndpointPurge:             true,
-	relay.KindConnectorTakedown:         true,
+	relay.KindWindowsDependentInventory:     true,
+	relay.KindWindowsLocalAccountsInventory: true,
+	relay.KindWindowsDependentRotation:      true,
+	sshcollection.Destination:               true,
+	sshtrustrollout.Destination:             true,
+	"connector.deploy":                      true,
+	"connector.rollback":                    true,
+	relay.KindEndpointContain:               true,
+	relay.KindEndpointPurge:                 true,
+	relay.KindConnectorTakedown:             true,
 	// A210: the read-only recovery check that follows a containment. It is
 	// enabled with endpoint.contain (see AgentClaimableJobKinds).
 	relay.KindEndpointRecoveryCheck: true,
@@ -280,6 +281,8 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		switch job.Destination {
 		case relay.KindWindowsDependentRotation:
 			payload, projectErr = a.projectServiceDependentRotationClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
+		case relay.KindWindowsLocalAccountsInventory:
+			payload, projectErr = a.projectWindowsLocalInventoryClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
 		case relay.KindWindowsDependentInventory:
 			payload, projectErr = a.projectServiceDependentInventoryClaim(ctx, job, agentRowID(info.TenantID, info.CommonName))
 		default:
@@ -567,6 +570,12 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	}
 
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
+		if claim.Destination == relay.KindWindowsLocalAccountsInventory && errors.Is(ingestErr, errWindowsLocalAccountReportRefused) {
+			if err := a.recordWindowsLocalInventoryFailure(ctx, info, agentID, claim, req, "invalid_native_report"); err != nil {
+				return nil, status.Error(codes.Unavailable, "local inventory refusal could not be retained")
+			}
+			return a.refuseExecutedReportPermanently(ctx, info, agentID, claim, req, now, ingestErr)
+		}
 		if claim.Destination == relay.KindWindowsDependentInventory && errors.Is(ingestErr, errServiceDependentReportRefused) {
 			if err := a.recordServiceDependentFailure(ctx, info, claim, req, "invalid_native_report"); err != nil {
 				return nil, status.Error(codes.Unavailable, "native inventory refusal could not be retained")
@@ -921,6 +930,8 @@ func (a *agentService) ingestExecutedReport(
 	switch claim.Destination {
 	case relay.KindWindowsDependentRotation:
 		return a.ingestServiceDependentRotation(ctx, info, agentID, claim, req)
+	case relay.KindWindowsLocalAccountsInventory:
+		return a.ingestWindowsLocalInventory(ctx, info, agentID, claim, req)
 	case relay.KindWindowsDependentInventory:
 		return a.ingestServiceDependentInventory(ctx, info, agentID, claim, req)
 	case sshtrustrollout.Destination:
@@ -1171,6 +1182,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	if claim.Destination == relay.KindWindowsDependentRotation {
 		if err := a.ingestServiceDependentRotation(ctx, info, agentID, claim, req); err != nil {
 			return nil, status.Error(codes.Unavailable, "native dependent failure observation could not be retained")
+		}
+	}
+	if claim.Destination == relay.KindWindowsLocalAccountsInventory {
+		if err := a.recordWindowsLocalInventoryFailure(ctx, info, agentID, claim, req, "agent_execution_failed"); err != nil {
+			return nil, status.Error(codes.Unavailable, "local inventory failure could not be retained")
 		}
 	}
 	if claim.Destination == relay.KindWindowsDependentInventory {
@@ -1949,7 +1965,7 @@ func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job 
 	if job.Destination == sshtrustrollout.Destination {
 		return a.projectSSHTrustFleetClaim(ctx, job)
 	}
-	if job.Destination == relay.KindWindowsDependentInventory || job.Destination == relay.KindWindowsDependentRotation {
+	if job.Destination == relay.KindWindowsLocalAccountsInventory || job.Destination == relay.KindWindowsDependentInventory || job.Destination == relay.KindWindowsDependentRotation {
 		return nil, errors.New("native inventory claim requires a certificate-bound host identity")
 	}
 

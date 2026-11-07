@@ -1213,3 +1213,53 @@ it is separate from the retained scan result. Changing or deleting a saved sourc
 before its queued read runs records `source_changed` and performs no provider
 read. Retry against the intended current source with a fresh idempotency key after
 a failed run; replaying the old key returns its original queued receipt.
+
+
+## Local administrators on enrolled Windows hosts
+
+Read-only host discovery stages each direct local Administrators member under its
+local SAM SID. Domain accounts and groups are counted separately; they are not
+local password targets. A failed or unsupported reader leaves the last complete
+account inventory intact and reports why the new read is unavailable.
+
+Enable `host.windows_local_accounts.inventory` in the control plane's
+`TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS`, preserving its existing kinds. The
+selected enrolled agent must hold the certificate-bound `host` role. On that
+Windows host, run the agent with `--relay-claim --host-exec-profile <file>` and add
+this property to the operator-owned JSON profile:
+
+```json
+{"windows_local_accounts_inventory":true}
+```
+
+This grant permits a local read only. It grants no credential redemption,
+password change, filesystem root or command execution. Domain controllers are
+refused; their account database is the directory rather than a member host's SAM.
+
+Use the enrolled host UUID shown by the agent inventory:
+
+```sh
+trstctl access discovery windows-local scan HOST_UUID
+trstctl access discovery windows-local runs HOST_UUID --limit 25
+trstctl access discovery windows-local run HOST_UUID RUN_UUID
+```
+
+The equivalent API root is
+`/api/v1/access/discovery/windows-hosts/{agent_id}/local-administrators/runs`:
+POST queues a read with `Idempotency-Key`; GET lists summaries with `after` and
+`limit` (1–100, default 25); GET `/{id}` reads its retained signed report. Target
+write permission queues a read; access read permission reads its results. A host
+that is away keeps its exact queued intent until it polls again. A second fresh
+request while a scan is pending returns a conflict; retry the original key for
+its original response.
+
+Inspect both `status` and `delivery_status`. Complete inventory includes local
+names, SIDs, enabled/locked/password-required flags and the machine SAM identity.
+Unavailable coverage contains no partial account list. Native failures expose a
+bounded reason rather than raw operating-system errors. The signed public report
+is limited to one MiB and 5,000 local accounts; the native reader has one worker
+slot and a thirty-second request deadline. No password or password hash is read.
+
+This API and CLI inventory path does not yet configure fleet password rotation.
+Scheduled rotation, checkout invalidation and native Windows qualification remain
+separate from discovering an account.

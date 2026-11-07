@@ -186,10 +186,13 @@ const (
 	EventServiceDependentCursorAdvanced        = "pam.service_dependents.cursor_advanced"
 	EventServiceDependentStepObserved          = "pam.service_dependents.step_observed"
 
-	EventServiceDependentHostSaved    = "pam.service_dependents.host_saved"
-	EventServiceDependentScanQueued   = "pam.service_dependents.scan_queued"
-	EventServiceDependentScanObserved = "pam.service_dependents.scan_observed"
-	EventServiceDependentScanFailed   = "pam.service_dependents.scan_failed"
+	EventServiceDependentHostSaved       = "pam.service_dependents.host_saved"
+	EventServiceDependentScanQueued      = "pam.service_dependents.scan_queued"
+	EventWindowsLocalAccountScanQueued   = "pam.windows_local_accounts.scan_queued"
+	EventWindowsLocalAccountScanObserved = "pam.windows_local_accounts.scan_observed"
+	EventWindowsLocalAccountScanFailed   = "pam.windows_local_accounts.scan_failed"
+	EventServiceDependentScanObserved    = "pam.service_dependents.scan_observed"
+	EventServiceDependentScanFailed      = "pam.service_dependents.scan_failed"
 
 	EventProfileCreated                     = "profile.created"
 	EventProfileUpdated                     = "profile.updated"
@@ -421,6 +424,7 @@ var ledger = []FeatureEvent{
 
 	{"F33", "Just-in-time issuance with approval flows", "scan_privileged_accounts", "runPAMDiscovery", []string{EventPAMDiscoveryScanQueued, EventPAMDiscoveryRunCompleted}},
 	{"F33", "Just-in-time issuance with approval flows", "select_service_account_host", "savePAMServiceDependentHost", []string{EventServiceDependentHostSaved}},
+	{"F33", "Just-in-time issuance with approval flows", "scan_windows_local_administrators", "runPAMWindowsLocalAccountInventory", []string{EventWindowsLocalAccountScanQueued, EventWindowsLocalAccountScanObserved, EventWindowsLocalAccountScanFailed}},
 	{"F33", "Just-in-time issuance with approval flows", "scan_service_account_dependents", "runPAMServiceDependentInventory", []string{EventServiceDependentScanQueued, EventServiceDependentScanObserved, EventServiceDependentScanFailed}},
 	{"F33", "Just-in-time issuance with approval flows", "review_service_account_reconciliation", "requestPAMServiceReconciliationApproval", []string{EventServiceReconciliationReviewProposed, EventApprovalRequested}},
 	{"F33", "Just-in-time issuance with approval flows", "rotate_service_account_dependents", "queuePAMServiceDependentRotation", []string{EventServiceDependentRotationQueued, EventServiceDependentRotationInverse, EventServiceDependentDirectoryApplyStarted, EventServiceDependentDirectoryRestored, EventServiceDependentStepQueued, EventServiceDependentStepObserved, EventServiceDependentCursorAdvanced}},

@@ -13163,6 +13163,98 @@ PAMTerminalRequest = TypedDict(
     total=False,
 )
 
+PAMWindowsLocalAccount = TypedDict(
+    'PAMWindowsLocalAccount',
+    {
+        'enabled': bool,
+        'locked': bool,
+        'name': str,
+        'password_required': bool,
+        'sid': str,
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountIntent = TypedDict(
+    'PAMWindowsLocalAccountIntent',
+    {
+        'agent_id': str,
+        'binding_digest': str,
+        'run_id': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountInventory = TypedDict(
+    'PAMWindowsLocalAccountInventory',
+    {
+        'accounts': list[dict[str, Any]],
+        'deleted_members': int,
+        'external_members': int,
+        'group_members': int,
+        'machine': dict[str, Any],
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountReport = TypedDict(
+    'PAMWindowsLocalAccountReport',
+    {
+        'binding_digest': str,
+        'failure': str,
+        'inventory': dict[str, Any],
+        'observed_at': str,
+        'run_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountScan = TypedDict(
+    'PAMWindowsLocalAccountScan',
+    {
+        'attempt': int,
+        'delivery_status': str,
+        'failure': str,
+        'id': str,
+        'intent': dict[str, Any],
+        'observed_event_id': str,
+        'outbox_id': int,
+        'queued_at': str,
+        'queued_by': str,
+        'queued_event_id': str,
+        'receipt_job_id': int,
+        'receipt_signature_base64': str,
+        'receipt_statement': str,
+        'received_at': str,
+        'report': dict[str, Any],
+        'report_digest': str,
+        'signer_fingerprint': str,
+        'status': str,
+    },
+    total=False,
+)
+
+PAMWindowsLocalAccountScanList = TypedDict(
+    'PAMWindowsLocalAccountScanList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMWindowsSAMMachine = TypedDict(
+    'PAMWindowsSAMMachine',
+    {
+        'name': str,
+        'role': int,
+        'sid': str,
+    },
+    total=False,
+)
+
 PKISecret = TypedDict(
     'PKISecret',
     {

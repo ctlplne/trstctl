@@ -425,8 +425,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A261 adds `access checkouts request|reveal|checkin|list|get`.
 	// A267 adds `access discovery hosts list|save|scan|run`, then
 	// `access discovery rotation preview|queue|get|steps`.
-	if len(out) != 850 {
-		t.Fatalf("CLI commands = %d, want 850", len(out))
+	if len(out) != 853 {
+		t.Fatalf("CLI commands = %d, want 853", len(out))
 	}
 	return out
 }

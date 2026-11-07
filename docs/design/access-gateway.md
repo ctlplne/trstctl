@@ -1276,6 +1276,6 @@ reader has one worker slot and a thirty-second deadline. The operator-owned host
 profile's `windows_local_accounts_inventory` grant permits only this read; it
 adds no file roots, commands, credential redemption or password-write authority.
 
-This reader and executor foundation is not yet exposed as a fleet workflow.
-Native Windows execution, fleet discovery, scheduled rotation and checkout-driven
-invalidation remain separate proof obligations.
+Host inventory is exposed through source-backed API and CLI commands. Native
+Windows execution, console authoring, scheduled password rotation and
+checkout-driven invalidation remain separate proof obligations.
