@@ -934,6 +934,8 @@ public final class OpenApiSchemas {
       "PAMSessionList",
       "PAMSessionRequest",
       "PAMSessionRevocationRequest",
+      "PAMSignIn",
+      "PAMSignInList",
       "PAMTarget",
       "PAMTargetDisableRequest",
       "PAMTargetFolderRequest",

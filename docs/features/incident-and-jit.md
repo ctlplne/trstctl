@@ -144,6 +144,15 @@ connection that opens and closes between two runs is not seen there; host logs k
 sign-in. In the console, create the source under Discovery → Sources (kind **Privileged
 account sign-ins**: a provider that can read sign-ins, and an optional lookback).
 
+Every sign-in a run reads is also recorded — metadata only — with what explained it: the
+kind of span (gateway session, session, check-out, rotation or health check) and its
+reference. A sign-in keeps the verdict of the run that first read it, the one its finding
+came from; a later run only refreshes when it was last seen. Access readers list them,
+newest first, under Access → Privileged access → **Sign-ins to managed accounts**, with
+`GET /api/v1/access/signins` (`provider_id`, `unexplained=true`, `limit` 1-500) or with
+`trstctl access signins list`. Recorded sign-ins are kept for `pam.signin_retention`
+(default 90 days) and then purged; the findings they raised stay.
+
 ### Fleet re-issuance for CA compromise (F32)
 
 If an X.509 CA is compromised, every active identity whose current certificate is

@@ -698,6 +698,9 @@ access as one of them (`target_type`, `target_id`, `role`, `reason`, `method`,
 (A272: `{"request_id", "target_type": "breakglass", "target_id", "reason",
 "ttl_seconds"}` up to 3600); `access checkouts checkin <request-id>` rotates it, and its
 grant is reviewed with `access emergency review <request-id> -f`.
+`access signins list` lists the sign-ins bypass detection recorded for managed accounts,
+newest first, with what explained each (A274: `--provider_id`, `--unexplained true`,
+`--limit` 1-500).
 
 ## Bootstrapping or recovering a local API token
 

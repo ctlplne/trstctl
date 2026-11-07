@@ -39,6 +39,21 @@ const pamSignInLookbackDefault = time.Hour
 // its sign-in happened.
 const pamSignInHealthSpan = 2 * time.Minute
 
+// pamSignInRetentionDefault is how long recorded sign-ins are kept when the
+// deployment sets no retention.
+const pamSignInRetentionDefault = 90 * 24 * time.Hour
+
+// pamSignInEventMax bounds the sign-ins one collected event records; more are
+// counted, not recorded.
+const pamSignInEventMax = 1000
+
+func signInRetentionOrDefault(d time.Duration) time.Duration {
+	if d <= 0 {
+		return pamSignInRetentionDefault
+	}
+	return d
+}
+
 // pamSignInSource is the provider side of bypass detection.
 type pamSignInSource interface {
 	Name() string
@@ -250,12 +265,82 @@ func normalizedHostPort(address string) string {
 	return strings.ToLower(host) + ":" + port
 }
 
-// collectPAMSignIns is the discovery executor's hook into PAM.
-func (s *Server) collectPAMSignIns(ctx context.Context, tenantID, providerID string, since, now time.Time) (pamSignInCollection, error) {
+// collectPAMSignIns is the discovery executor's hook into PAM: it collects
+// and, unless the run is a dry run, records the run's sign-ins.
+func (s *Server) collectPAMSignIns(ctx context.Context, tenantID, providerID, sourceID, runID string, since, now time.Time, record bool) (pamSignInCollection, error) {
 	if s.pam == nil {
 		return pamSignInCollection{}, api.ErrPAMUnavailable
 	}
-	return s.pam.collectSignIns(ctx, tenantID, providerID, since, now)
+	collection, err := s.pam.collectSignIns(ctx, tenantID, providerID, since, now)
+	if err != nil || !record || len(collection.Matched) == 0 {
+		return collection, err
+	}
+	return collection, s.pam.recordSignIns(ctx, tenantID, sourceID, runID, collection, now)
+}
+
+// recordSignIns appends a run's sign-ins, metadata only, with what explained
+// each.
+func (s *pamService) recordSignIns(ctx context.Context, tenantID, sourceID, runID string, c pamSignInCollection, now time.Time) error {
+	payload := projections.PAMSignInsCollected{SourceID: sourceID, RunID: runID, ProviderID: c.ProviderID, Collector: c.Collector, CollectedAt: now.UTC()}
+	for i, m := range c.Matched {
+		if i >= pamSignInEventMax {
+			payload.Truncated = len(c.Matched) - pamSignInEventMax
+			break
+		}
+		r := projections.PAMSignInRecord{Fingerprint: pamsignin.Fingerprint(c.ProviderID, m.SignIn), Account: m.SignIn.Account, At: m.SignIn.At.UTC(),
+			Source: m.SignIn.Source, Method: m.SignIn.Method, KeyID: m.SignIn.KeyID, Ref: m.SignIn.Ref}
+		if from := m.SignIn.From(); from.Before(m.SignIn.At) {
+			earliest := from.UTC()
+			r.Earliest = &earliest
+		}
+		if m.Window != nil {
+			r.ExplainedBy, r.ExplainedRef = m.Window.Kind, m.Window.Ref
+		}
+		payload.SignIns = append(payload.SignIns, r)
+	}
+	return s.appendProject(ctx, tenantID, projections.EventPAMSignInsCollected, payload)
+}
+
+// purgeExpiredSignIns removes recorded sign-ins past the deployment's
+// retention, tenant by tenant.
+func (s *pamService) purgeExpiredSignIns(ctx context.Context) {
+	before := s.clock().UTC().Add(-s.signInRetention)
+	tenants, err := s.store.ListTenantsWithPAMSignInsBefore(ctx, before, 0)
+	if err != nil {
+		return
+	}
+	for _, tenantID := range tenants {
+		if ctx.Err() != nil {
+			return
+		}
+		_ = s.appendProject(ctx, tenantID, projections.EventPAMSignInsPurged, projections.PAMSignInsPurged{Before: before, At: s.clock().UTC()})
+	}
+}
+
+// ListPAMSignIns is a tenant's recorded sign-ins, newest first.
+func (s *pamService) ListPAMSignIns(ctx context.Context, tenantID, providerID string, unexplainedOnly bool, limit int) ([]api.PAMSignIn, error) {
+	records, err := s.store.ListPAMSignInRecords(ctx, tenantID, strings.TrimSpace(providerID), unexplainedOnly, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.PAMSignIn, 0, len(records))
+	for _, r := range records {
+		v := api.PAMSignIn{ProviderID: r.ProviderID, Fingerprint: r.Fingerprint, Account: r.Account, At: r.At.UTC(), Earliest: r.Earliest,
+			Source: r.Source, Method: r.Method, KeyID: r.KeyID, Ref: r.Ref, Collector: r.Collector, LastSeenAt: r.SeenAt.UTC()}
+		if r.ExplainedBy != "" {
+			v.ExplainedBy = &api.PAMSignInExplanation{Kind: r.ExplainedBy, Ref: r.ExplainedRef}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// ListPAMSignIns serves the recorded sign-ins (A274).
+func (s *Server) ListPAMSignIns(ctx context.Context, tenantID, providerID string, unexplainedOnly bool, limit int) ([]api.PAMSignIn, error) {
+	if s.pam == nil {
+		return nil, api.ErrPAMUnavailable
+	}
+	return s.pam.ListPAMSignIns(ctx, tenantID, providerID, unexplainedOnly, limit)
 }
 
 // pamSignInFailure is the class a failed run records; never the error's
@@ -295,7 +380,7 @@ func (d *issuanceDispatcher) executePAMSignInDiscoveryRun(ctx context.Context, t
 		lookback = time.Duration(cfg.LookbackSeconds) * time.Second
 	}
 	now := time.Now().UTC()
-	collection, err := d.pamSignIns(ctx, tenantID, cfg.ProviderID, now.Add(-lookback), now)
+	collection, err := d.pamSignIns(ctx, tenantID, cfg.ProviderID, src.ID, run.ID, now.Add(-lookback), now, !run.DryRun)
 	if err != nil {
 		return netscan.Report{}, "failed", pamSignInFailure(err), nil
 	}

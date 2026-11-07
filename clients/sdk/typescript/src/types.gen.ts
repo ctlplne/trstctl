@@ -1484,6 +1484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/signins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the sign-ins bypass detection read for managed accounts, newest first, with what explained each (an unexplained one also raised a compromised-credential finding) */
+        get: operations["listPAMSignIns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/targets": {
         parameters: {
             query?: never;
@@ -23288,6 +23305,38 @@ export interface components {
         PAMSessionRevocationRequest: {
             reason: string;
         };
+        PAMSignIn: {
+            account: string;
+            /** Format: date-time */
+            at: string;
+            /** @description what read it: sshd, windows_security_4624, pg_stat_activity, performance_schema_threads, sys_dm_exec_sessions */
+            collector?: string;
+            /**
+             * Format: date-time
+             * @description the earliest the sign-in can have happened, when the target dates it by the collection that first saw it (a MySQL connection)
+             */
+            earliest?: string;
+            explained_by?: {
+                /** @enum {string} */
+                kind: "gateway_session" | "session" | "checkout" | "rotation_check" | "health_check";
+                ref?: string;
+            };
+            fingerprint: string;
+            /** @description an SSH certificate's key ID and serial */
+            key_id?: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** @description how it signed in: password, publickey(-cert), keyboard-interactive, database, a Windows logon type */
+            method?: string;
+            provider_id: string;
+            /** @description the target-side record: a process, connection or logon id */
+            ref?: string;
+            /** @description the client address the target recorded */
+            source?: string;
+        };
+        PAMSignInList: {
+            items: components["schemas"]["PAMSignIn"][];
+        };
         PAMTarget: {
             account_secret?: string;
             allowed_roles?: string[];
@@ -32304,6 +32353,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMSignIns: {
+        parameters: {
+            query?: {
+                /** @description only this provider's sign-ins */
+                provider_id?: string;
+                /** @description only the sign-ins nothing explained */
+                unexplained?: boolean;
+                /** @description at most this many (1-500) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSignInList"];
                 };
             };
             /** @description client error */

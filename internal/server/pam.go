@@ -134,6 +134,9 @@ type PAMConfig struct {
 	// RecordingRetention keeps sealed gateway session recordings this long
 	// (A255); zero keeps them.
 	RecordingRetention time.Duration
+	// SignInRetention keeps the sign-ins bypass detection read this long
+	// (A274); zero is 90 days.
+	SignInRetention time.Duration
 	// HealthInterval is how often each brokered account's stored credential
 	// is signed in with (A258); zero is the default, an hour.
 	HealthInterval time.Duration
@@ -230,6 +233,8 @@ type pamService struct {
 	// recordingRetention deletes sealed ones past it (zero keeps them).
 	recordings         *pamRecordings
 	recordingRetention time.Duration
+	// signInRetention is how long recorded sign-ins are kept (A274).
+	signInRetention time.Duration
 	// healthInterval spaces each brokered account's credential sign-in
 	// checks, and health is their schedule (A258).
 	healthInterval time.Duration
@@ -385,7 +390,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
 		browser:                             newPAMBrowser(),
-		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, healthInterval: healthInterval, health: health,
+		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
@@ -1211,6 +1216,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 		s.ensureGatewayJobs(ctx)
 		s.sealIdleRecordings(ctx)
 		s.deleteExpiredRecordings(ctx)
+		s.purgeExpiredSignIns(ctx)
 		s.expireCheckouts(ctx, s.clock().UTC())
 		select {
 		case <-ctx.Done():
@@ -1804,6 +1810,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.RecordingRetention)); err == nil {
 		out.RecordingRetention = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.SignInRetention)); err == nil {
+		out.SignInRetention = d
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.HealthCheckInterval)); err == nil {
 		out.HealthInterval = d

@@ -1031,6 +1031,18 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMRecordingDeleted, 1}: privacyRules(
 			privacyRule("/id", opaque), privacyRule("/objects", opaque), privacyRule("/deleted_at", opaque),
 		),
+		// A274: a sign-in's account is an identity; everything else is a
+		// protocol value.
+		{EventPAMSignInsCollected, 1}: privacyRules(
+			privacyRule("/source_id", opaque), privacyRule("/run_id", opaque), privacyRule("/provider_id", opaque),
+			privacyRule("/collector", opaque), privacyRule("/collected_at", opaque), privacyRule("/truncated", opaque),
+			privacyRule("/sign_ins/*/fingerprint", opaque), privacyRule("/sign_ins/*/account", exact),
+			privacyRule("/sign_ins/*/at", opaque), privacyRule("/sign_ins/*/earliest", opaque),
+			privacyRule("/sign_ins/*/source", opaque), privacyRule("/sign_ins/*/method", opaque),
+			privacyRule("/sign_ins/*/key_id", opaque), privacyRule("/sign_ins/*/ref", opaque),
+			privacyRule("/sign_ins/*/explained_by", opaque), privacyRule("/sign_ins/*/explained_ref", opaque),
+		),
+		{EventPAMSignInsPurged, 1}: privacyRules(privacyRule("/before", opaque), privacyRule("/at", opaque)),
 		{EventPAMAccountHealthChecked, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/target_id", opaque), privacyRule("/provider_id", opaque),
 			privacyRule("/status", opaque), privacyRule("/attempts", opaque), privacyRule("/checked_at", opaque),
@@ -1760,6 +1772,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMRecordingDeleted, 1}:                                                        privacyPayloadShape[PAMRecordingDeleted](),
 		{EventPAMRecordingRead, 1}:                                                           privacyPayloadShape[PAMRecordingRead](),
 		{EventPAMAccountHealthChecked, 1}:                                                    privacyPayloadShape[PAMAccountHealthChecked](),
+		{EventPAMSignInsCollected, 1}:                                                        privacyPayloadShape[PAMSignInsCollected](),
+		{EventPAMSignInsPurged, 1}:                                                           privacyPayloadShape[PAMSignInsPurged](),
 		{EventPAMTemplateSaved, 1}:                                                           privacyPayloadShape[privacyPAMTemplateSavedV1](),
 		{EventPAMCommandBlocked, 1}:                                                          privacyPayloadShape[PAMCommandBlocked](),
 		{EventPAMCommandReviewRequested, 1}:                                                  privacyPayloadShape[PAMCommandReviewRequested](),

@@ -43641,6 +43641,95 @@
         ],
         "type": "object"
       },
+      "PAMSignIn": {
+        "properties": {
+          "account": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "collector": {
+            "description": "what read it: sshd, windows_security_4624, pg_stat_activity, performance_schema_threads, sys_dm_exec_sessions",
+            "type": "string"
+          },
+          "earliest": {
+            "description": "the earliest the sign-in can have happened, when the target dates it by the collection that first saw it (a MySQL connection)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "explained_by": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "gateway_session",
+                  "session",
+                  "checkout",
+                  "rotation_check",
+                  "health_check"
+                ],
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "key_id": {
+            "description": "an SSH certificate's key ID and serial",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "method": {
+            "description": "how it signed in: password, publickey(-cert), keyboard-interactive, database, a Windows logon type",
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "ref": {
+            "description": "the target-side record: a process, connection or logon id",
+            "type": "string"
+          },
+          "source": {
+            "description": "the client address the target recorded",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "fingerprint",
+          "account",
+          "at",
+          "last_seen_at"
+        ],
+        "type": "object"
+      },
+      "PAMSignInList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMSignIn"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "PAMTarget": {
         "properties": {
           "account_secret": {
@@ -67227,6 +67316,79 @@
         "summary": "End another principal's live gateway session",
         "x-trstctl-permission": "access:terminate",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/access/signins": {
+      "get": {
+        "operationId": "listPAMSignIns",
+        "parameters": [
+          {
+            "description": "only this provider's sign-ins",
+            "in": "query",
+            "name": "provider_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only the sign-ins nothing explained",
+            "in": "query",
+            "name": "unexplained",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "at most this many (1-500)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSignInList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the sign-ins bypass detection read for managed accounts, newest first, with what explained each (an unexplained one also raised a compromised-credential finding)",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/access/targets": {

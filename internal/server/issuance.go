@@ -115,7 +115,7 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 type issuanceDispatcher struct {
 	// pamSignIns reads a provider's managed accounts' sign-ins and explains
 	// each (A274); nil when privileged access is not served.
-	pamSignIns              func(ctx context.Context, tenantID, providerID string, since, now time.Time) (pamSignInCollection, error)
+	pamSignIns              func(ctx context.Context, tenantID, providerID, sourceID, runID string, since, now time.Time, record bool) (pamSignInCollection, error)
 	cloudReplacementPrepare func(context.Context, string, string) (api.CloudReplacementPreparation, error)
 	cmdbExports             *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers

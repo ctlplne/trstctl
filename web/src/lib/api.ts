@@ -573,6 +573,8 @@ import type {
   PAMEmergencyReviewRequest,
   PAMEmergencyResponders,
   PAMEmergencySessionRequest,
+  PAMSignIn,
+  PAMSignInList,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -1595,6 +1597,8 @@ export type {
   PAMEmergencyReviewRequest,
   PAMEmergencyResponders,
   PAMEmergencySessionRequest,
+  PAMSignIn,
+  PAMSignInList,
   PAMTargetRequest,
   PAMQueryResult,
   PAMTerminal,
@@ -2684,6 +2688,8 @@ export interface Api {
   setPAMEmergencyResponders(input: PAMEmergencyResponders, idempotencyKey?: string): Promise<PAMEmergencyResponders>;
   /** A258: open a session at once as a named responder; every approver is notified. */
   openPAMEmergencySession(input: PAMEmergencySessionRequest, idempotencyKey?: string): Promise<PAMSession>;
+  /** A274: the sign-ins bypass detection read for managed accounts, newest first, with what explained each. */
+  pamSignIns(options?: { providerId?: string; unexplained?: boolean; limit?: number; signal?: AbortSignal }): Promise<PAMSignInList>;
   pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
   pamRecordingVerify(id: string): Promise<PAMRecordingVerification>;
   pamRecordingFrames(id: string, from: number): Promise<PAMRecordingFrames>;
@@ -3728,6 +3734,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   pamEmergencyResponders: () => req<PAMEmergencyResponders>("/api/v1/access/emergency/responders"),
   setPAMEmergencyResponders: (input, idempotencyKey) => mutate<PAMEmergencyResponders>("PUT", "/api/v1/access/emergency/responders", input, idempotencyKey),
   openPAMEmergencySession: (input, idempotencyKey) => mutate<PAMSession>("POST", "/api/v1/access/emergency-sessions", input, idempotencyKey),
+  pamSignIns: (options) => {
+    const query = new URLSearchParams({ limit: String(options?.limit ?? 200) });
+    if (options?.providerId) query.set("provider_id", options.providerId);
+    if (options?.unexplained) query.set("unexplained", "true");
+    return req<PAMSignInList>(`/api/v1/access/signins?${query.toString()}`, { signal: options?.signal });
+  },
   pamCommandActions: (id, options) =>
     req<PAMCommandActionList>(
       `/api/v1/access/sessions/${encodeURIComponent(id)}/actions?limit=50${options?.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`,

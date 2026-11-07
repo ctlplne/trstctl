@@ -1893,6 +1893,9 @@ type PAM struct {
 	// recording is kept before its objects are deleted, unless a legal hold
 	// keeps it; empty keeps recordings.
 	RecordingRetention string `json:"recording_retention,omitempty"`
+	// SignInRetention (A274) is how long the sign-ins bypass detection read
+	// are kept; empty is 90 days.
+	SignInRetention string `json:"signin_retention,omitempty"`
 	// HealthCheckInterval (A258) is how often each brokered account's stored
 	// credential is signed in with, read-only; empty is an hour. Checks are
 	// spread over the interval.
@@ -5153,6 +5156,7 @@ func validatePAM(p PAM) []error {
 	_ = parsePositive("expiry_interval", p.ExpiryInterval)
 	_ = parsePositive("approval_ttl", p.ApprovalTTL)
 	_ = parsePositive("recording_retention", p.RecordingRetention)
+	_ = parsePositive("signin_retention", p.SignInRetention)
 	_ = parsePositive("health_check_interval", p.HealthCheckInterval)
 	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {
 		errs = append(errs, errors.New("pam.default_ttl must not exceed pam.max_ttl"))

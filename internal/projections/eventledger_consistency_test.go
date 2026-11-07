@@ -177,6 +177,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventPAMCheckoutRevealed:                      "EventPAMCheckoutRevealed",
 	projections.EventPAMCheckoutEnded:                         "EventPAMCheckoutEnded",
 	projections.EventPAMCheckoutEmergencyReleased:             "EventPAMCheckoutEmergencyReleased",
+	projections.EventPAMSignInsCollected:                      "EventPAMSignInsCollected",
+	projections.EventPAMSignInsPurged:                         "EventPAMSignInsPurged",
 	projections.EventPAMSessionGatewayEnded:                   "EventPAMSessionGatewayEnded",
 	projections.EventPAMRecordingLegalHold:                    "EventPAMRecordingLegalHold",
 	projections.EventPAMRecordingDeleted:                      "EventPAMRecordingDeleted",

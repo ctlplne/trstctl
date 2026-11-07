@@ -2,6 +2,10 @@
 
 ### Added
 
+- Recorded sign-ins (A274 part 2): every sign-in bypass detection reads is recorded, metadata only, with the verdict of
+  the run that first read it (what explained it, or nothing); `GET /api/v1/access/signins` (`listPAMSignIns`, OpenAPI
+  789 -> 790 operations), `trstctl access signins list` (CLI 856 -> 857 commands) and the console's **Sign-ins to
+  managed accounts** list them; `pam.signin_retention` (default 90 days) purges them while their findings stay.
 - Bypass detection (A274 part 1): a `pam_signin` discovery source reads a provider's managed accounts' sign-ins through
   its administrator connection (sshd journal and auth logs, Windows logon events over OpenSSH, PostgreSQL, MySQL and SQL
   Server current sessions), explains each by a session, check-out, rotation or health check, and records each

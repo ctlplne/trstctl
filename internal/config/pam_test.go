@@ -6,7 +6,7 @@ import "testing"
 
 func TestPAMRequiresCompleteOperatorTargetReferences(t *testing.T) {
 	const tenantID = "22222222-2222-4222-8222-222222222222"
-	valid := PAM{Enabled: true, ApprovalTTL: "15m", RequiredApprovals: 2,
+	valid := PAM{Enabled: true, ApprovalTTL: "15m", RequiredApprovals: 2, SignInRetention: "2160h",
 		PostgresTargets: []PAMPostgresTarget{{
 			TenantID: tenantID, ID: "incident-db", ProviderID: "tenant-pg-provider",
 			AllowedRoles: []string{"readonly"},
@@ -29,6 +29,8 @@ func TestPAMRequiresCompleteOperatorTargetReferences(t *testing.T) {
 		{"wildcard principal", func(p *PAM) { p.SSHTargets[0].Principals = []string{"*"} }},
 		{"bad approval TTL", func(p *PAM) { p.ApprovalTTL = "garbage" }},
 		{"negative quorum", func(p *PAM) { p.RequiredApprovals = -1 }},
+		{"negative sign-in retention (A274)", func(p *PAM) { p.SignInRetention = "-1h" }},
+		{"sign-in retention in words (A274)", func(p *PAM) { p.SignInRetention = "90 days" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := valid

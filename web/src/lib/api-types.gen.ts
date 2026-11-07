@@ -9391,6 +9391,25 @@ export interface PAMSessionRevocationRequest {
   reason: string;
 }
 
+export interface PAMSignIn {
+  account: string;
+  at: string;
+  collector?: string;
+  earliest?: string;
+  explained_by?: { kind: "gateway_session" | "session" | "checkout" | "rotation_check" | "health_check"; ref?: string };
+  fingerprint: string;
+  key_id?: string;
+  last_seen_at: string;
+  method?: string;
+  provider_id: string;
+  ref?: string;
+  source?: string;
+}
+
+export interface PAMSignInList {
+  items: PAMSignIn[];
+}
+
 export interface PAMTarget {
   account_secret?: string;
   allowed_roles?: string[];

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -72,13 +73,14 @@ func startLabSSHSignIns(t *testing.T, adminPublic []byte) labSSHAccounts {
 }
 
 type a274Finding struct {
-	ID         string         `json:"id"`
-	Kind       string         `json:"kind"`
-	Ref        string         `json:"ref"`
-	SourceID   string         `json:"source_id"`
-	RiskScore  int            `json:"risk_score"`
-	Provenance string         `json:"provenance"`
-	Metadata   map[string]any `json:"metadata"`
+	ID          string         `json:"id"`
+	Kind        string         `json:"kind"`
+	Ref         string         `json:"ref"`
+	SourceID    string         `json:"source_id"`
+	RiskScore   int            `json:"risk_score"`
+	Provenance  string         `json:"provenance"`
+	Fingerprint string         `json:"fingerprint"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 // TestServedBypassDetectionOnALinuxHostA274: a pam_signin source watches the
@@ -124,7 +126,8 @@ func TestServedBypassDetectionOnALinuxHostA274(t *testing.T) {
 	}
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{tenant: registry.ForTenant(tenant)}
-		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, Attestors: []attest.Attestor{servedPAMAttestor{}}}
+		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, SignInRetention: time.Hour,
+			Attestors: []attest.Attestor{servedPAMAttestor{}}}
 	})
 	registerServedTenantID(t, h, tenant, "A274 bypass detection")
 	tok := seedScopedToken(t, h.store, tenant, "discovery:read", "discovery:write", "secrets:read", "secrets:write")
@@ -241,11 +244,77 @@ func TestServedBypassDetectionOnALinuxHostA274(t *testing.T) {
 		t.Fatalf("after the rotation's own sign-in: %+v", got)
 	}
 
+	// The sign-ins themselves are recorded (A274 part 2), metadata only, for
+	// the tenant's access readers: the outside one unexplained (its finding's
+	// fingerprint), the rotation's proof explained by that rotation.
+	signIns := func(token, query string) (int, []api.PAMSignIn) {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/access/signins"+query, token, nil)
+		if strings.Contains(string(body), directPassword) {
+			t.Fatal("a password reached the recorded sign-ins")
+		}
+		var listed struct {
+			Items []api.PAMSignIn `json:"items"`
+		}
+		if status == http.StatusOK && json.Unmarshal(body, &listed) != nil {
+			t.Fatalf("the recorded sign-ins: %s", body)
+		}
+		return status, listed.Items
+	}
+	if status, _ := signIns(tok, ""); status != http.StatusForbidden {
+		t.Fatalf("a token without access:read read the sign-ins: %d", status)
+	}
+	reader := seedScopedToken(t, h.store, tenant, "access:read")
+	status, recorded := signIns(reader, "?provider_id=a274-host")
+	if status != http.StatusOK || len(recorded) != 2 {
+		t.Fatalf("the recorded sign-ins: %d %+v", status, recorded)
+	}
+	var direct, proof api.PAMSignIn
+	for _, s := range recorded {
+		if s.ExplainedBy == nil {
+			direct = s
+		} else {
+			proof = s
+		}
+	}
+	if direct.Fingerprint != f.Fingerprint || direct.Account != account || direct.Method != "password" || direct.Collector != "sshd" || direct.Source == "" ||
+		proof.Account != account || proof.ExplainedBy == nil || proof.ExplainedBy.Kind != "rotation_check" || proof.ExplainedBy.Ref == "" ||
+		!proof.At.After(direct.At) || !recorded[0].At.Equal(proof.At) {
+		t.Fatalf("the outside sign-in and the rotation's proof, newest first: %+v", recorded)
+	}
+	if status, only := signIns(reader, "?unexplained=true"); status != http.StatusOK || len(only) != 1 || only[0].Fingerprint != f.Fingerprint {
+		t.Fatalf("only the unexplained: %d %+v", status, only)
+	}
+	if status, none := signIns(reader, "?provider_id=another-provider"); status != http.StatusOK || len(none) != 0 {
+		t.Fatalf("another provider's sign-ins: %d %+v", status, none)
+	}
+	if status, _ := signIns(reader, "?limit=0"); status != http.StatusBadRequest {
+		t.Fatalf("a zero limit: %d", status)
+	}
+
+	// Past the configured retention the recorded sign-ins are purged; the
+	// finding they raised stays.
+	previousClock := h.srv.pam.clock
+	h.srv.pam.clock = func() time.Time { return time.Now().UTC().Add(2 * time.Hour) }
+	h.srv.pam.purgeExpiredSignIns(ctx)
+	h.srv.pam.clock = previousClock
+	if status, left := signIns(reader, ""); status != http.StatusOK || len(left) != 0 {
+		t.Fatalf("sign-ins past the retention: %d %+v", status, left)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?limit=100", tok, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), f.ID) {
+		t.Fatalf("the finding after the purge: %d %s", status, body)
+	}
+
 	other := uuid.NewString()
 	registerServedTenantID(t, h, other, "A274 isolation")
 	otherToken := seedScopedToken(t, h.store, other, "discovery:read")
 	if status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?limit=100", otherToken, nil); status != http.StatusOK || strings.Contains(string(body), account) {
 		t.Fatalf("another tenant read the bypass finding: %d %s", status, body)
+	}
+	otherReader := seedScopedToken(t, h.store, other, "access:read")
+	if status, theirs := signIns(otherReader, ""); status != http.StatusOK || len(theirs) != 0 {
+		t.Fatalf("another tenant read the recorded sign-ins: %d %+v", status, theirs)
 	}
 }
 

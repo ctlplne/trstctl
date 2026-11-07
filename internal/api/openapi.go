@@ -8865,6 +8865,21 @@ func componentSchemas() map[string]*Schema {
 			"web_sign_in":       ref("PAMWebSignIn"),
 			"revision":          {Type: "integer", Description: "the revision being replaced (PUT only)"},
 		}, "name", "reason", "required_approvals", "max_ttl_seconds"),
+		"PAMSignIn": object(map[string]*Schema{
+			"provider_id": str(), "fingerprint": str(), "account": str(), "at": timestamp(),
+			"earliest":     {Type: "string", Format: "date-time", Description: "the earliest the sign-in can have happened, when the target dates it by the collection that first saw it (a MySQL connection)"},
+			"source":       {Type: "string", Description: "the client address the target recorded"},
+			"method":       {Type: "string", Description: "how it signed in: password, publickey(-cert), keyboard-interactive, database, a Windows logon type"},
+			"key_id":       {Type: "string", Description: "an SSH certificate's key ID and serial"},
+			"ref":          {Type: "string", Description: "the target-side record: a process, connection or logon id"},
+			"collector":    {Type: "string", Description: "what read it: sshd, windows_security_4624, pg_stat_activity, performance_schema_threads, sys_dm_exec_sessions"},
+			"last_seen_at": timestamp(),
+			"explained_by": object(map[string]*Schema{
+				"kind": {Type: "string", Enum: []string{"gateway_session", "session", "checkout", "rotation_check", "health_check"}},
+				"ref":  str(),
+			}, "kind"),
+		}, "provider_id", "fingerprint", "account", "at", "last_seen_at"),
+		"PAMSignInList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMSignIn")}}, "items"),
 		"PAMWebConsoleRoute": object(map[string]*Schema{
 			"url":         {Type: "string", Description: "the console's origin (https://host[:port]), without user information, path, query or fragment (A273)"},
 			"ca_pem":      {Type: "string", Description: "PEM certificates the console's certificate is checked against; none: the system roots"},

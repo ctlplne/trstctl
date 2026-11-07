@@ -45,6 +45,7 @@ import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 import { PAMCheckoutPanel } from "@/pages/PAMCheckoutPanel";
 import { PAMBreakGlassPanel } from "@/pages/PAMBreakGlassPanel";
 import { PAMEmergencyRespondersPanel } from "@/pages/PAMEmergencyRespondersPanel";
+import { PAMSignInsPanel } from "@/pages/PAMSignInsPanel";
 import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -932,6 +933,7 @@ export function AdminAccess() {
                   canReview={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:approve")}
                 />
               ) : null}
+              {pamRows ? <PAMSignInsPanel /> : null}
             </div>
           ) : null}
         </AccessDisclosure>

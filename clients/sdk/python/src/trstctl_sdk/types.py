@@ -13073,6 +13073,33 @@ PAMSessionRevocationRequest = TypedDict(
     total=False,
 )
 
+PAMSignIn = TypedDict(
+    'PAMSignIn',
+    {
+        'account': str,
+        'at': str,
+        'collector': str,
+        'earliest': str,
+        'explained_by': dict[str, Any],
+        'fingerprint': str,
+        'key_id': str,
+        'last_seen_at': str,
+        'method': str,
+        'provider_id': str,
+        'ref': str,
+        'source': str,
+    },
+    total=False,
+)
+
+PAMSignInList = TypedDict(
+    'PAMSignInList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 PAMTarget = TypedDict(
     'PAMTarget',
     {

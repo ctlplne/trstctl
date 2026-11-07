@@ -57,7 +57,7 @@ func TestPAMOperatorTargetReferencesReachBroker(t *testing.T) {
 	t.Parallel()
 	const tenantID = "22222222-2222-4222-8222-222222222222"
 	out := pamFromConfig(config.PAM{
-		Enabled: true, ApprovalTTL: "12m", RequiredApprovals: 3,
+		Enabled: true, ApprovalTTL: "12m", RequiredApprovals: 3, SignInRetention: "720h",
 		PostgresTargets: []config.PAMPostgresTarget{{
 			TenantID: tenantID, ID: "incident-db", ProviderID: "tenant-pg-provider",
 			AllowedRoles: []string{"readonly"},
@@ -67,7 +67,7 @@ func TestPAMOperatorTargetReferencesReachBroker(t *testing.T) {
 			Principals: []string{"incident"},
 		}},
 	})
-	if !out.Enabled || out.ApprovalTTL != 12*time.Minute || out.RequiredApprovals != 3 ||
+	if !out.Enabled || out.ApprovalTTL != 12*time.Minute || out.RequiredApprovals != 3 || out.SignInRetention != 720*time.Hour ||
 		len(out.PostgresTargets) != 1 || out.PostgresTargets[0].ProviderID != "tenant-pg-provider" ||
 		len(out.SSHTargets) != 1 || out.SSHTargets[0].Host != "host.lab.local" {
 		t.Fatalf("PAM operator references were lost: %+v", out)

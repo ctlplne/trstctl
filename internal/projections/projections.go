@@ -347,25 +347,28 @@ const (
 	EventPAMSessionGatewayEnded         = "pam.session.gateway_ended"
 	EventPAMRecordingLegalHold          = "pam.session.recording_legal_hold"
 	EventPAMRecordingDeleted            = "pam.session.recording_deleted"
-	EventPAMRecordingRead               = "pam.session.recording_read"
-	EventPAMAccountHealthChecked        = "pam.account.health_checked"
-	EventPAMTemplateSaved               = "pam.template.saved"
-	EventPAMCommandBlocked              = "pam.command.blocked"
-	EventPAMCommandReviewRequested      = "pam.command.review_requested"
-	EventPAMCommandReviewDecided        = "pam.command.review_decided"
-	EventPAMTemplateDeleted             = "pam.template.deleted"
-	EventPAMFolderSaved                 = "pam.folder.saved"
-	EventPAMFolderDeleted               = "pam.folder.deleted"
-	EventPAMTargetFolderSet             = "pam.target.folder_set"
-	EventPAMEmergencyRespondersSet      = "pam.emergency.responders_set"
-	EventPAMEmergencyOpened             = "pam.emergency.opened"
-	EventPAMEmergencyReviewed           = "pam.emergency.reviewed"
-	EventPAMDiscoverySourceSaved        = "pam.discovery.source_saved"
-	EventPAMDiscoverySourceDeleted      = "pam.discovery.source_deleted"
-	EventPAMDiscoveryRunCompleted       = "pam.discovery.run_completed"
-	EventPAMDiscoveryImported           = "pam.discovery.imported"
-	EventPAMDiscoveryDismissed          = "pam.discovery.dismissed"
-	EventPAMCheckoutRevealed            = "pam.checkout.revealed"
+	// A274: the sign-ins a bypass detection run read, and their purge.
+	EventPAMSignInsCollected       = "pam.signin.collected"
+	EventPAMSignInsPurged          = "pam.signin.records_purged"
+	EventPAMRecordingRead          = "pam.session.recording_read"
+	EventPAMAccountHealthChecked   = "pam.account.health_checked"
+	EventPAMTemplateSaved          = "pam.template.saved"
+	EventPAMCommandBlocked         = "pam.command.blocked"
+	EventPAMCommandReviewRequested = "pam.command.review_requested"
+	EventPAMCommandReviewDecided   = "pam.command.review_decided"
+	EventPAMTemplateDeleted        = "pam.template.deleted"
+	EventPAMFolderSaved            = "pam.folder.saved"
+	EventPAMFolderDeleted          = "pam.folder.deleted"
+	EventPAMTargetFolderSet        = "pam.target.folder_set"
+	EventPAMEmergencyRespondersSet = "pam.emergency.responders_set"
+	EventPAMEmergencyOpened        = "pam.emergency.opened"
+	EventPAMEmergencyReviewed      = "pam.emergency.reviewed"
+	EventPAMDiscoverySourceSaved   = "pam.discovery.source_saved"
+	EventPAMDiscoverySourceDeleted = "pam.discovery.source_deleted"
+	EventPAMDiscoveryRunCompleted  = "pam.discovery.run_completed"
+	EventPAMDiscoveryImported      = "pam.discovery.imported"
+	EventPAMDiscoveryDismissed     = "pam.discovery.dismissed"
+	EventPAMCheckoutRevealed       = "pam.checkout.revealed"
 	// EventPAMCheckoutEmergencyReleased (A272) is a break-glass account's
 	// credential released once to a named responder under emergency access,
 	// with no review; its grant notifies every approver.
@@ -4457,6 +4460,41 @@ type PAMSessionGatewayEnded struct {
 // PAMAccountHealthChecked records one sign-in check of the credential a
 // brokered account's provider holds (A258): its outcome class and how many
 // sign-ins it took, never the credential.
+// PAMSignInsCollected is one bypass detection run's sign-ins (A274):
+// metadata only — the account, when, from where and how, and what explained
+// each, if anything.
+type PAMSignInsCollected struct {
+	SourceID    string            `json:"source_id"`
+	RunID       string            `json:"run_id"`
+	ProviderID  string            `json:"provider_id"`
+	Collector   string            `json:"collector"`
+	CollectedAt time.Time         `json:"collected_at"`
+	SignIns     []PAMSignInRecord `json:"sign_ins"`
+	// Truncated counts the sign-ins past the event's bound, not recorded.
+	Truncated int `json:"truncated,omitempty"`
+}
+
+// PAMSignInRecord is one sign-in a run read.
+type PAMSignInRecord struct {
+	Fingerprint  string     `json:"fingerprint"`
+	Account      string     `json:"account"`
+	At           time.Time  `json:"at"`
+	Earliest     *time.Time `json:"earliest,omitempty"`
+	Source       string     `json:"source,omitempty"`
+	Method       string     `json:"method,omitempty"`
+	KeyID        string     `json:"key_id,omitempty"`
+	Ref          string     `json:"ref,omitempty"`
+	ExplainedBy  string     `json:"explained_by,omitempty"`
+	ExplainedRef string     `json:"explained_ref,omitempty"`
+}
+
+// PAMSignInsPurged removes a tenant's sign-ins recorded before a time: the
+// deployment's retention (A274).
+type PAMSignInsPurged struct {
+	Before time.Time `json:"before"`
+	At     time.Time `json:"at"`
+}
+
 type PAMAccountHealthChecked struct {
 	TargetType string    `json:"target_type"`
 	TargetID   string    `json:"target_id"`
@@ -5310,6 +5348,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMSessionGatewayEnded:                   {1: true},
 	EventPAMRecordingLegalHold:                    {1: true},
 	EventPAMRecordingDeleted:                      {1: true},
+	EventPAMSignInsCollected:                      {1: true},
+	EventPAMSignInsPurged:                         {1: true},
 	EventPAMRecordingRead:                         {1: true},
 	EventPAMAccountHealthChecked:                  {1: true},
 	EventPAMTemplateSaved:                         {1: true, PAMCommandRulesEventSchemaVersion: true},
@@ -8711,6 +8751,33 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMSessionGatewayEndedTx(ctx, tx, e.TenantID, pl.ID, pl.Ended, pl.EndedAt)
+	case EventPAMSignInsCollected:
+		var pl PAMSignInsCollected
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.SourceID == "" || pl.RunID == "" || pl.ProviderID == "" || pl.CollectedAt.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		records := make([]store.PAMSignInRecord, 0, len(pl.SignIns))
+		for _, s := range pl.SignIns {
+			if s.Fingerprint == "" || s.Account == "" || s.At.IsZero() {
+				return fmt.Errorf("projections: incomplete %s", e.Type)
+			}
+			records = append(records, store.PAMSignInRecord{ProviderID: pl.ProviderID, Fingerprint: s.Fingerprint, Account: s.Account,
+				At: s.At, Earliest: s.Earliest, Source: s.Source, Method: s.Method, KeyID: s.KeyID, Ref: s.Ref,
+				ExplainedBy: s.ExplainedBy, ExplainedRef: s.ExplainedRef, Collector: pl.Collector, RunID: pl.RunID, SeenAt: pl.CollectedAt})
+		}
+		return p.store.ApplyPAMSignInsCollectedTx(ctx, tx, e.TenantID, records)
+	case EventPAMSignInsPurged:
+		var pl PAMSignInsPurged
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Before.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMSignInsPurgedTx(ctx, tx, e.TenantID, pl.Before)
 	case EventPAMAccountHealthChecked:
 		var pl PAMAccountHealthChecked
 		if err := decode(e, &pl); err != nil {
