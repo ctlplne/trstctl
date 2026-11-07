@@ -39349,7 +39349,8 @@
           "target_type": {
             "enum": [
               "postgres",
-              "mysql"
+              "mysql",
+              "windows_local"
             ],
             "type": "string"
           },
@@ -43568,7 +43569,8 @@
               "rdp",
               "redis",
               "snowflake",
-              "ssh"
+              "ssh",
+              "windows_local"
             ],
             "type": "string"
           }
@@ -43685,7 +43687,8 @@
               "rdp",
               "redis",
               "snowflake",
-              "ssh"
+              "ssh",
+              "windows_local"
             ],
             "type": "string"
           }

@@ -2,6 +2,10 @@
 
 ### Added
 
+- Windows local administrator check-outs (A268): a vaulted local administrator account registered as a `windows_local`
+  access target (its native `windows` provider and account secret) is checked out through A261 — reviewed, revealed
+  once, never opened as a session — and checking it in, or its deadline, queues its in-place native rotation, which an
+  offline host runs when it returns. Migration 0423 admits the target type.
 - The Change sets template selector truncates its closed label within the field in WebKit,
   keeping mobile pages within their viewport while retaining every full option name.
 

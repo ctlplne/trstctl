@@ -8513,7 +8513,7 @@ export interface PAMCheckoutRequest {
   reason: string;
   request_id: string;
   target_id: string;
-  target_type: "postgres" | "mysql";
+  target_type: "postgres" | "mysql" | "windows_local";
   template_id?: string;
   ttl_seconds: number;
 }
@@ -9393,7 +9393,7 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
 }
 
 export interface PAMTargetDisableRequest {
@@ -9421,7 +9421,7 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
 }
 
 export interface PAMTerminal {

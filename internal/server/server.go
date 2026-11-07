@@ -2580,6 +2580,9 @@ func (s *Server) configurePAMSurface(d Deps) error {
 				}
 				return s.api.QueueVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount, requestID)
 			},
+			native: func(tenantID, providerID, role string) bool {
+				return s.api != nil && s.api.NativeWindowsAccountBound(tenantID, providerID, role)
+			},
 		},
 	})
 	if err != nil {

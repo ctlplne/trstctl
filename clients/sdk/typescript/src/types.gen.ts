@@ -22139,7 +22139,7 @@ export interface components {
             request_id: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "postgres" | "mysql";
+            target_type: "postgres" | "mysql" | "windows_local";
             /**
              * Format: uuid
              * @description optional access template; a target folder's template cannot be overridden
@@ -23256,7 +23256,7 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -23290,7 +23290,7 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
         };
         PAMTerminal: {
             cols?: number;

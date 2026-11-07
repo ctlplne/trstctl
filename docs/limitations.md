@@ -9254,3 +9254,41 @@ errors, expiry, row order, response-loss retry and prior-page body eviction. The
 full browser, combined native journey and final-image recovery remain separate
 qualification obligations. Per-host inventory and native evidence keep their
 original wire bounds.
+
+## Windows local administrator accounts across a fleet (A268) — built; native qualification owed at FINISH
+
+Status: built, not yet claimed served. Enrolled Windows hosts' agents read their
+local Administrators members under exact SAM SIDs (read-only, domain controllers
+refused) and a `windows` provider with `windows_host_agent_id` rotates each bound
+account in place through the host: the control plane retains one sealed
+successor, queues one exact-host job, and publishes the new version only after the
+host's signed proof that the successor authenticates as the exact SID and the
+predecessor is refused. A host offline at rotation time keeps the same prepared
+generation (retries spend no failure budget) and rotates when it checks in again;
+the queue, receipts and the host's journal carry no plaintext password. Rotation
+schedules rotate these secrets on an interval. A vaulted account registered as a
+`windows_local` access target is checked out through A261 — reviewed, revealed
+once, never a session — and checking it in, or its deadline, queues its native
+rotation, which retires the revealed password when the host runs it.
+
+Proof today: `TestServedPreparedWindowsLocalRotationA268` (served PostgreSQL/NATS/
+mTLS queue, custody, offline retries, cache-forgery and lost-projection refusals,
+snapshot/rebuild, predecessor generations, unknown effects never rolled back) and
+`TestServedWindowsLocalCheckoutRotatesOnHostA268` (registration refusals, no
+sessions, one reveal, check-in waits for the offline host and publishes the host's
+distinct successor, the deadline queues the next host generation). The signed
+native reports in these served tests are fixtures. The windows-latest CI job runs
+the native inventory, rotation (two owned accounts get distinct passwords, the new
+one authenticates, the old one is refused), journal and receipt proofs; their
+results are read at FINISH, which is where A268's Done-when ("on windows-latest")
+is judged.
+
+What comes next:
+- Reading the windows-latest job's native results at FINISH, and a native
+  full-stack fleet run on windows-latest (control plane, NATS and enrolled agents on
+  the runner, using its preinstalled PostgreSQL).
+- Explicit recovery of an unknown native effect (today it stays fenced and
+  prepared for an operator, never rolled back blindly).
+- Console registration of `windows_local` targets (today: API and CLI; the console
+  lists, checks out and checks in registered ones).
+- Real-image replay (replay-owed.md).

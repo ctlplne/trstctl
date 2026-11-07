@@ -917,3 +917,20 @@ func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, provide
 	a.auditSecret(ctx, "secret.rotation.queued", tenantID, key, 0)
 	return cmd.ID, nil
 }
+
+// NativeWindowsAccountBound reports whether providerID rotates role as one
+// exact Windows local account on its enrolled host (A268): a windows_local
+// PAM target may vault only such an account.
+func (a *API) NativeWindowsAccountBound(tenantID, providerID, role string) bool {
+	if a.secrets == nil {
+		return false
+	}
+	for _, p := range a.secrets.dynamicProviders(tenantID) {
+		if p == nil || p.Name() != providerID {
+			continue
+		}
+		native, ok := p.(interface{ StaticRotationBinding(role string) string })
+		return ok && native.StaticRotationBinding(role) != ""
+	}
+	return false
+}

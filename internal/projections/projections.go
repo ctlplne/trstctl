@@ -8636,7 +8636,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.RegisteredBy == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") {
+		if pl.ID == "" || pl.RegisteredBy == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetRegisteredTx(ctx, tx, store.PAMTarget{
@@ -8856,7 +8856,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") || pl.Actor == "" || pl.At.IsZero() {
+		if pl.ID == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local") || pl.Actor == "" || pl.At.IsZero() {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetFolderSetTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.Folder)
@@ -9020,7 +9020,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh") {
+		if pl.ID == "" || pl.DisabledBy == "" || pl.Reason == "" || (!PAMDatabaseTargetType(pl.TargetType) && pl.TargetType != "ssh" && pl.TargetType != "windows_local") {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMTargetDisabledTx(ctx, tx, e.TenantID, pl.TargetType, pl.ID, pl.DisabledBy, pl.Reason, e.Time)

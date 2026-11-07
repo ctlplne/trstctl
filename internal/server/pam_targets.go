@@ -103,6 +103,24 @@ func (s *pamService) registerPAMTarget(ctx context.Context, tenantID, actor stri
 			}
 			secret.Wipe(value)
 		}
+	case target.TargetType == pamTargetWindowsLocal:
+		// A268: one Windows local administrator account, vaulted in the
+		// application secret its native provider rotates on the enrolled host.
+		if target.Host != "" || target.Port != 0 || len(target.Principals) != 0 || target.GatewayAgentID != "" ||
+			target.GatewayAddress != "" || len(target.HostKeyFingerprints) != 0 {
+			return api.PAMTarget{}, fmt.Errorf("%w: a windows_local target names only its native provider and account secret", api.ErrPAMInvalid)
+		}
+		if len(target.AllowedRoles) == 0 {
+			target.AllowedRoles = []string{target.AccountSecret}
+		}
+		if err := s.windowsLocalAccount(tenantID, target.ProviderID, target.AccountSecret, target.AllowedRoles); err != nil {
+			return api.PAMTarget{}, err
+		}
+		value, _, err := s.secretReader(ctx, tenantID, target.AccountSecret)
+		if err != nil {
+			return api.PAMTarget{}, fmt.Errorf("%w: account secret %q is not readable: %v", api.ErrPAMInvalid, target.AccountSecret, err)
+		}
+		secret.Wipe(value)
 	case target.TargetType == pamTargetSSH:
 		if _, ok := s.sshTargets[key]; ok {
 			return api.PAMTarget{}, fmt.Errorf("%w: operator-configured target already exists", api.ErrPAMTargetConflict)
@@ -208,6 +226,8 @@ func (s *pamService) getPAMTarget(ctx context.Context, tenantID, targetType, id 
 		if t, ok := s.sshTargets[pamTargetID{tenantID, id}]; ok {
 			return operatorSSHTarget(id, t), nil
 		}
+	case targetType == pamTargetWindowsLocal:
+		// Tenant-registered only.
 	default:
 		return api.PAMTarget{}, fmt.Errorf("%w: unknown target type", api.ErrPAMInvalid)
 	}
@@ -345,4 +365,20 @@ const pamVaultedRef = "secret:"
 // vaulted account rather than a per-session lease (A261).
 func isPAMVaultedSession(rec store.PAMSession) bool {
 	return isPAMDatabaseType(rec.TargetType) && strings.HasPrefix(rec.BackendRef, pamVaultedRef)
+}
+
+// windowsLocalAccount checks a windows_local target's account (A268): its
+// provider rotates the account secret's role as one exact Windows local SAM
+// account on its enrolled host, and that role is the target's only one.
+func (s *pamService) windowsLocalAccount(tenantID, providerID, accountSecret string, roles []string) error {
+	switch {
+	case providerID == "" || accountSecret == "" || len(roles) != 1 || roles[0] != accountSecret:
+		return fmt.Errorf("%w: a windows_local target names its native Windows provider and one account secret, which is its only role", api.ErrPAMInvalid)
+	case s.secretReader == nil || s.rotation.native == nil:
+		return fmt.Errorf("%w: windows_local accounts need the secrets API", api.ErrPAMInvalid)
+	case !s.rotation.native(tenantID, providerID, accountSecret):
+		return fmt.Errorf("%w: provider %q does not rotate %q as an exact Windows local account on an enrolled host", api.ErrPAMInvalid,
+			providerID, accountSecret)
+	}
+	return nil
 }

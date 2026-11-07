@@ -1339,6 +1339,30 @@ A refusal or uncertain result leaves the command prepared with an explicit
 recovery message and both sealed generations retained. A later refusal cannot
 prove that an earlier unknown attempt left the password unchanged. Generic
 rollback therefore cannot publish the predecessor without native recovery
-proof. Automatic inverse recovery and the native check-out target workflow are
-not yet served by this transport; do not use this configuration as a claim of
-complete fleet or check-out qualification.
+proof. Automatic inverse recovery is not yet served by this transport.
+
+#### Check out an enrolled host's local administrator password
+
+Register the vaulted account as a `windows_local` access target: it names only
+the native provider and the account secret, which is its only role.
+
+```json
+{"id": "owned-host-admin", "target_type": "windows_local",
+ "provider_id": "owned-host-local", "account_secret": "hosts/local-admin"}
+```
+
+```sh
+trstctl access targets register -f windows-local-target.json
+```
+
+Registration is refused unless that provider binds the secret's role to an
+exact local account SID on its enrolled host and the secret is readable. A
+`windows_local` target has no sessions: a session request for it is refused.
+Check it out like any vaulted account (`trstctl access checkouts request`,
+reviewed by others, then `reveal` once): the reveal shows the stored `host`,
+`username` and `password`. Checking it in, or its deadline passing, queues the
+account's native rotation. If the host is offline, the rotation waits in
+`prepared` and runs when the host checks in again; the host retires the revealed
+password and authenticates the new one before the vault publishes it. Folders,
+templates and auto-approval rules apply to `windows_local` targets as to other
+vaulted accounts.

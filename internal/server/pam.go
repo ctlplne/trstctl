@@ -38,19 +38,23 @@ import (
 )
 
 const (
-	pamTargetPostgres   = "postgres"
-	pamTargetSSH        = "ssh"
-	pamTargetRedis      = "redis"
-	pamTargetMySQL      = "mysql"
-	pamTargetMongo      = "mongodb"
-	pamTargetCH         = "clickhouse"
-	pamTargetK8s        = "kubernetes"
-	pamTargetSnowflake  = "snowflake"
-	pamTargetAWS        = "aws"
-	pamTargetGCP        = "gcp"
-	pamTargetAzure      = "azure"
-	pamTargetAWSConsole = accessconsole.TargetAWS
-	pamTargetRDP        = accessdesktop.TargetRDP
+	pamTargetPostgres  = "postgres"
+	pamTargetSSH       = "ssh"
+	pamTargetRedis     = "redis"
+	pamTargetMySQL     = "mysql"
+	pamTargetMongo     = "mongodb"
+	pamTargetCH        = "clickhouse"
+	pamTargetK8s       = "kubernetes"
+	pamTargetSnowflake = "snowflake"
+	pamTargetAWS       = "aws"
+	pamTargetGCP       = "gcp"
+	pamTargetAzure     = "azure"
+	// pamTargetWindowsLocal (A268) is a Windows local administrator account
+	// vaulted in an application secret that its native provider rotates on
+	// the enrolled host. It is checked out (A261), never opened as a session.
+	pamTargetWindowsLocal = "windows_local"
+	pamTargetAWSConsole   = accessconsole.TargetAWS
+	pamTargetRDP          = accessdesktop.TargetRDP
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -1560,6 +1564,9 @@ func (s *pamService) validate(ctx context.Context, tenantID, idempotencyKey, req
 	}
 	if requester == "" {
 		return fmt.Errorf("%w: requester is required", api.ErrPAMInvalid)
+	}
+	if req.TargetType == pamTargetWindowsLocal {
+		return fmt.Errorf("%w: a windows_local account has no sessions; request a check-out (POST /api/v1/access/checkouts)", api.ErrPAMInvalid)
 	}
 	if !isPAMDatabaseType(req.TargetType) && req.TargetType != pamTargetSSH {
 		return fmt.Errorf("%w: target_type must be one of %s", api.ErrPAMInvalid, pamTargetTypesText())

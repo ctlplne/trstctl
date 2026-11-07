@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -50,6 +51,9 @@ type pamAccountRotation struct {
 	check func(ctx context.Context, tenantID, providerID, key, currentAccount string) error
 	// queue queues the check-out's one rotation and returns its command ID.
 	queue func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error)
+	// native says whether a provider rotates a role as one exact Windows
+	// local account on its enrolled host (A268).
+	native func(tenantID, providerID, role string) bool
 }
 
 func pamCheckoutRevealedEventID(tenantID, requestID string) string {
@@ -95,8 +99,11 @@ func pamCheckoutEvidence(refs []string) (targetType, targetID string, ttlSeconds
 
 // checkoutTarget is the vaulted database target a check-out names.
 func (s *pamService) checkoutTarget(ctx context.Context, tenantID, targetType, targetID string) (*pamDatabaseTarget, error) {
+	if targetType == pamTargetWindowsLocal && targetID != "" {
+		return s.windowsLocalCheckoutTarget(ctx, tenantID, targetID)
+	}
 	if !isPAMDatabaseType(targetType) || targetID == "" {
-		return nil, fmt.Errorf("%w: a check-out names a vaulted postgres or mysql target", api.ErrPAMInvalid)
+		return nil, fmt.Errorf("%w: a check-out names a vaulted postgres, mysql or windows_local target", api.ErrPAMInvalid)
 	}
 	target, err := s.databaseTarget(ctx, tenantID, targetType, targetID)
 	if err != nil {
@@ -111,12 +118,41 @@ func (s *pamService) checkoutTarget(ctx context.Context, tenantID, targetType, t
 	return target, nil
 }
 
+// windowsLocalCheckoutTarget is a registered windows_local target as a
+// check-out reads it (A268): only its provider and account secret matter, and
+// both are checked against the native provider again now.
+func (s *pamService) windowsLocalCheckoutTarget(ctx context.Context, tenantID, targetID string) (*pamDatabaseTarget, error) {
+	rec, err := s.store.GetPAMTarget(ctx, tenantID, pamTargetWindowsLocal, targetID)
+	if errors.Is(err, store.ErrPAMTargetNotFound) {
+		return nil, fmt.Errorf("%w: unknown windows_local target %q", api.ErrPAMInvalid, targetID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !rec.Enabled {
+		return nil, fmt.Errorf("%w: windows_local target %q is disabled", api.ErrPAMRejected, targetID)
+	}
+	if err := s.windowsLocalAccount(tenantID, rec.ProviderID, rec.AccountSecret, rec.AllowedRoles); err != nil {
+		return nil, fmt.Errorf("%w: registered windows_local target %q is no longer valid: %v", api.ErrPAMRejected, targetID, err)
+	}
+	if s.rotation.check == nil || s.rotation.queue == nil {
+		return nil, fmt.Errorf("%w: check-outs need the secrets API", api.ErrPAMInvalid)
+	}
+	return &pamDatabaseTarget{cfg: PAMDatabaseTarget{TargetType: pamTargetWindowsLocal, TenantID: tenantID, ID: targetID,
+		ProviderID: rec.ProviderID, AllowedRoles: rec.AllowedRoles, AccountSecret: rec.AccountSecret}}, nil
+}
+
 // vaultedAccount reads a vaulted account's current credential, its version
 // and the account it signs in as. The caller wipes value.
 func (s *pamService) vaultedAccount(ctx context.Context, tenantID, targetType, accountSecret string) (value []byte, version int, account string, err error) {
 	value, version, err = s.secretReader(ctx, tenantID, accountSecret)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("%w: account secret %q is not readable", api.ErrPAMRejected, accountSecret)
+	}
+	if targetType == pamTargetWindowsLocal {
+		// A268: the native provider rotates one account in place, so a
+		// rotation names no predecessor account.
+		return value, version, "", nil
 	}
 	account, ok := dynsecret.CredentialAccount(pamDatabaseProviderTypes[targetType], value)
 	if !ok {

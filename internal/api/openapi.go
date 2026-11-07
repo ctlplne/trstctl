@@ -5847,7 +5847,7 @@ func componentSchemas() map[string]*Schema {
 		"template_id":    {Type: "string", Format: "uuid", Description: "an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session"},
 	}, "request_id", "target_type", "target_id", "role", "method", "payload_base64")
 	pamTargetReq := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"},
 		"principals":            {Type: "array", Items: str()},
@@ -5858,7 +5858,7 @@ func componentSchemas() map[string]*Schema {
 		"account_secret":        {Type: "string", Description: "A vaulted database target (A261): the application secret holding the account its sessions sign in as through the gateway; its provider must allow static rotation of that secret's role, which must be the target's only allowed role."},
 	}, "id", "target_type")
 	pamTarget := object(map[string]*Schema{
-		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh"}},
+		"id": str(), "target_type": {Type: "string", Enum: []string{"aws", "aws-console", "azure", "clickhouse", "gcp", "kubernetes", "mongodb", "mysql", "postgres", "rdp", "redis", "snowflake", "ssh", "windows_local"}},
 		"provider_id": str(), "allowed_roles": {Type: "array", Items: str()},
 		"host": str(), "port": {Type: "integer"}, "principals": {Type: "array", Items: str()},
 		"enabled": {Type: "boolean"}, "source": {Type: "string", Enum: []string{"operator", "tenant"}},
@@ -8903,7 +8903,7 @@ func componentSchemas() map[string]*Schema {
 		}, "id", "provider_id", "key", "name", "kind", "privileges", "folder", "reason", "request_id", "approval_request_id", "imported_by", "imported_at"),
 		"PAMImportedAccountList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMImportedAccount")}}, "items"),
 		"PAMCheckoutRequest": object(map[string]*Schema{
-			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql"}}, "target_id": str(), "reason": str(),
+			"request_id": uuid(), "target_type": {Type: "string", Enum: []string{"postgres", "mysql", "windows_local"}}, "target_id": str(), "reason": str(),
 			"template_id": {Type: "string", Format: "uuid", Description: "optional access template; a target folder's template cannot be overridden"},
 			"ttl_seconds": {Type: "integer", Description: "how long the revealed credential lives before the account is rotated: 60 seconds up to the broker's longest session"},
 		}, "request_id", "target_type", "target_id", "reason", "ttl_seconds"),
