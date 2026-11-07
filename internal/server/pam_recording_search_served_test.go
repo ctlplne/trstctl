@@ -31,7 +31,8 @@ import (
 func TestServedRecordingSearchIsScopedMaskedAndAuditedA275(t *testing.T) {
 	f := startGatewayFixture(t, gatewayFixtureOptions{})
 	h := f.h
-	const needle, secret = "needle-a275-search", "AKIAABCDEFGHIJKLMNOP"
+	// A fake access key ID, built so no scanner reads the source as one.
+	const needle, secret = "needle-a275-search", "AKIA" + "ABCDEFGHIJKLMNOP"
 	await := func(id string) {
 		t.Helper()
 		_, _ = secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/sessions/"+id+"/revoke", f.requester, "a275-search-revoke-"+id, map[string]any{"reason": "A275 search proof"})

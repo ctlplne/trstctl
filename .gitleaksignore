@@ -286,3 +286,8 @@ ce10b30e01a85ed2fcf31ff00e93ee6e708f9d0f:clients/sdk/go/trstctl/secrets_test.go:
 f5851b60f56f5d10c7a76d6a290875b68651c718:internal/agent/discovery/mcpconfig_test.go:generic-api-key:35
 f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_test.go:generic-api-key:73
 f5851b60f56f5d10c7a76d6a290875b68651c718:internal/server/mcp_inventory_served_test.go:generic-api-key:192
+# A275 part 3 (621): a fake AWS access key ID in the recording search tests,
+# rebuilt by concatenation in 622; pinned to 621's exact lines.
+05a1f6b1ece48c497f67b7dc70d8d953ff86919c:internal/server/pam_recording_search_test.go:aws-access-token:64
+05a1f6b1ece48c497f67b7dc70d8d953ff86919c:internal/server/pam_recording_search_test.go:aws-access-token:68
+05a1f6b1ece48c497f67b7dc70d8d953ff86919c:internal/server/pam_recording_search_served_test.go:aws-access-token:34

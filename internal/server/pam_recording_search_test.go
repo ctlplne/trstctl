@@ -61,11 +61,13 @@ func TestRecordingSearchReadsWhatAnOperatorSawA275(t *testing.T) {
 	if got["request|GET needle-redis"] != "redis command" {
 		t.Fatalf("a protocol request's kind: %v", got)
 	}
-	long := strings.Repeat("x", 400) + "needle" + strings.Repeat("y", 400) + " AKIAABCDEFGHIJKLMNOP"
+	// A fake access key ID, built so no scanner reads the source as one.
+	fakeKeyID := "AKIA" + "ABCDEFGHIJKLMNOP"
+	long := strings.Repeat("x", 400) + "needle" + strings.Repeat("y", 400) + " " + fakeKeyID
 	if s := recordingSnippet(long, 400, 6); len([]rune(s)) != recordingSearchSnippet || !strings.Contains(s, "needle") {
 		t.Fatalf("a long line's snippet: %q", s)
 	}
-	if s := recordingSnippet("key AKIAABCDEFGHIJKLMNOP here", 0, 3); strings.Contains(s, "AKIAABCDEFGHIJKLMNOP") || !strings.Contains(s, "[masked:aws-access-key-id]") {
+	if s := recordingSnippet("key "+fakeKeyID+" here", 0, 3); strings.Contains(s, fakeKeyID) || !strings.Contains(s, "[masked:aws-access-key-id]") {
 		t.Fatalf("a snippet is masked: %q", s)
 	}
 }
