@@ -55,6 +55,9 @@ const (
 	pamTargetWindowsLocal = "windows_local"
 	pamTargetAWSConsole   = accessconsole.TargetAWS
 	pamTargetRDP          = accessdesktop.TargetRDP
+	// pamTargetNetDevice (A270) is a network device's vaulted account: its
+	// gateway signs in to the device over SSH with the account's password.
+	pamTargetNetDevice = accessgateway.TargetNetDevice
 
 	defaultPAMTTL            = 15 * time.Minute
 	defaultPAMMaxTTL         = time.Hour
@@ -79,10 +82,11 @@ var pamDatabaseProviderTypes = map[string]string{
 	pamTargetGCP:        "gcp-iam",
 	pamTargetAzure:      "azure-entra",
 	pamTargetRDP:        "desktop",
+	pamTargetNetDevice:  "netdevice",
 }
 
 // pamDatabaseKinds are the database types' names in operator-facing text.
-var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console", pamTargetRDP: "remote desktop"}
+var pamDatabaseKinds = map[string]string{pamTargetPostgres: "PostgreSQL", pamTargetRedis: "Redis", pamTargetMySQL: "MySQL", pamTargetMongo: "MongoDB", pamTargetCH: "ClickHouse", pamTargetK8s: "Kubernetes", pamTargetSnowflake: "Snowflake", pamTargetAWS: "AWS", pamTargetGCP: "Google Cloud", pamTargetAzure: "Azure", pamTargetAWSConsole: "AWS console", pamTargetRDP: "remote desktop", pamTargetNetDevice: "network device"}
 
 // isPAMDatabaseType reports whether a target type is a provider-backed
 // database target.
@@ -172,6 +176,7 @@ type pamService struct {
 	windowsLocalAccountInventoryEnabled bool
 	desktopJobEnabled                   bool
 	adDesktopJobEnabled                 bool
+	netDeviceJobEnabled                 bool
 	commandRuleJobKinds                 map[string]bool
 	store                               *store.Store
 	log                                 *events.Log
@@ -256,6 +261,7 @@ type pamTargetID struct {
 type pamDeps struct {
 	DesktopJobEnabled                   bool
 	ADDesktopJobEnabled                 bool
+	NetDeviceJobEnabled                 bool
 	WindowsDependentInventoryEnabled    bool
 	WindowsLocalAccountInventoryEnabled bool
 	CommandRuleJobKinds                 map[string]bool
@@ -351,7 +357,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled,
+	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled,
 		commandRuleJobKinds:                 d.CommandRuleJobKinds,
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
@@ -406,12 +412,15 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 		if target.TargetType == pamTargetRDP && target.AccountSecret == "" {
 			return nil, fmt.Errorf("server: desktop target %q requires a vaulted account_secret", target.ID)
 		}
+		if target.TargetType == pamTargetNetDevice && target.AccountSecret == "" {
+			return nil, fmt.Errorf("server: network device target %q requires a vaulted account_secret", target.ID)
+		}
 		if target.AccountSecret != "" {
 			// A261: a vaulted account signs in only through the gateway, and
 			// its one role is the secret's: the static rotation keeping it
 			// current runs as that role.
-			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL && target.TargetType != pamTargetRDP {
-				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL, MySQL or remote desktop", kind, target.ID)
+			if target.TargetType != pamTargetPostgres && target.TargetType != pamTargetMySQL && target.TargetType != pamTargetRDP && target.TargetType != pamTargetNetDevice {
+				return nil, fmt.Errorf("server: PAM %s target %q cannot be vaulted: vaulted accounts are PostgreSQL, MySQL, remote desktop or network devices", kind, target.ID)
 			}
 			if target.GatewayAgentID == "" || target.GatewayAddress == "" {
 				return nil, fmt.Errorf("server: vaulted PAM target %q is served only through an access gateway: name its gateway_agent_id and gateway_address", target.ID)
@@ -464,6 +473,15 @@ func buildPAMDatabaseTargets(d pamDeps) (map[pamDatabaseID]*pamDatabaseTarget, e
 				binding, err := source.DynamicSecretGatewayDesktop(target.AllowedRoles[0])
 				if err != nil || binding.Validate() != nil {
 					return nil, fmt.Errorf("server: desktop target %q needs a valid reviewed route", target.ID)
+				}
+			}
+			if target.TargetType == pamTargetNetDevice {
+				route, ok := provider.(pamNetDeviceRoute)
+				if !ok {
+					return nil, fmt.Errorf("server: network device target %q provider has no SSH route", target.ID)
+				}
+				if _, _, _, err := route.DynamicSecretGatewaySSH(target.AllowedRoles[0]); err != nil {
+					return nil, fmt.Errorf("server: network device target %q needs its provider's SSH address and host key pin: %v", target.ID, err)
 				}
 			}
 			if target.TargetType == pamTargetAWS {
@@ -886,6 +904,9 @@ func (s *pamService) RevokePAMSession(ctx context.Context, tenantID, id, request
 		// while the upstream credential's revocation proceeds as for any
 		// session.
 		kinds := []string{accessgateway.KindForPolicy(rec.CommandPolicy)}
+		if rec.TargetType == pamTargetNetDevice {
+			kinds = []string{accessgateway.KindSessionNetDevice, accessgateway.KindSessionNetDeviceRules}
+		}
 		if rec.TargetType == pamTargetRDP {
 			// Recall by the persisted session key across both native versions. The
 			// provider may have changed since review; reconstructing its identity
@@ -1354,6 +1375,9 @@ func (s *pamService) openDatabase(ctx context.Context, tenantID, idempotencyKey,
 			return api.PAMSession{}, err
 		}
 	}
+	if req.TargetType == pamTargetNetDevice && req.ResolvedCommandPolicy == nil && !s.netDeviceJobEnabled {
+		return api.PAMSession{}, fmt.Errorf("%w: enable %s in agent_channel.claimable_job_kinds", api.ErrPAMInvalid, accessgateway.KindSessionNetDevice)
+	}
 	target, err := s.databaseTarget(ctx, tenantID, req.TargetType, req.TargetID)
 	if err != nil {
 		return api.PAMSession{}, err
@@ -1764,5 +1788,19 @@ func pamProviderMatches(targetType, providerType string) bool {
 	if targetType == pamTargetRDP {
 		return providerType == "unix" || providerType == "windows" || providerType == "ldap"
 	}
+	if targetType == pamTargetNetDevice {
+		return pamNetDeviceProviderTypes[providerType]
+	}
 	return pamDatabaseProviderTypes[targetType] == providerType
+}
+
+// pamNetDeviceProviderTypes are the providers a network device target's
+// vaulted account can come from (A270).
+var pamNetDeviceProviderTypes = map[string]bool{"iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
+
+// pamNetDeviceRoute is a network device provider's SSH route for a role: the
+// device's SSH address, the account the role rotates (the session's
+// principal) and the pinned host key.
+type pamNetDeviceRoute interface {
+	DynamicSecretGatewaySSH(role string) (address, principal string, pins []string, err error)
 }

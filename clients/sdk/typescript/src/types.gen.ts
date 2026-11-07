@@ -22080,7 +22080,7 @@ export interface components {
             subject: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
         };
         PAMAutoApprovalRule: {
             applies_to: ("session" | "checkout")[];
@@ -22222,7 +22222,7 @@ export interface components {
             message_digest: string;
             /** Format: date-time */
             observed_at: string;
-            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
+            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
             ordinal: number;
             phase: string;
             policy_digest: string;
@@ -22258,10 +22258,10 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** @description Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded */
-            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
+            /** @description Protocol-specific public selectors: uppercase SQL operations, lowercase direct SSH program names, or lowercase network device command verbs (an abbreviation names every verb it starts). Arguments and quoted nested commands are excluded */
+            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
             /** @enum {string} */
-            protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse";
+            protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
             /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
@@ -22673,7 +22673,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
             /** @description at most 3600: an emergency session lasts an hour at most */
             ttl_seconds?: number;
         };
@@ -22711,10 +22711,10 @@ export interface components {
             effect: "block" | "require_approval";
             /** Format: uuid */
             id: string;
-            /** @description Protocol-specific public selectors: uppercase SQL operations or lowercase direct SSH program names. Arguments and quoted nested commands are excluded */
-            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
+            /** @description Protocol-specific public selectors: uppercase SQL operations, lowercase direct SSH program names, or lowercase network device command verbs (an abbreviation names every verb it starts). Arguments and quoted nested commands are excluded */
+            operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
             /** @enum {string} */
-            protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse";
+            protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
             /** @description require_approval only: 1-3 distinct humans; requester cannot approve */
             required_approvals?: number;
             /** @description require_approval only: 5-45 seconds; session expiry can shorten this deadline */
@@ -23225,7 +23225,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
             /**
              * Format: uuid
              * @description the access template the request named (A258)
@@ -23248,7 +23248,7 @@ export interface components {
             ssh_public_key?: string;
             target_id: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
             /**
              * Format: uuid
              * @description an access template (A258): its reason is recorded, its approvals raise the quorum and its maximum length bounds the session
@@ -23297,7 +23297,7 @@ export interface components {
             /** @enum {string} */
             source: "operator" | "tenant";
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice";
         };
         PAMTargetDisableRequest: {
             reason: string;
@@ -23331,7 +23331,7 @@ export interface components {
             principals?: string[];
             provider_id?: string;
             /** @enum {string} */
-            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
+            target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice";
         };
         PAMTerminal: {
             cols?: number;

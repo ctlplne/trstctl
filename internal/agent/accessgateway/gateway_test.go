@@ -228,7 +228,25 @@ func TestSessionIntentValidationA254(t *testing.T) {
 	if ValidateSessionIntent(routed) == nil {
 		t.Fatal("a PostgreSQL session carrying SSH routing was accepted")
 	}
-	if got := ClaimableKinds(); len(got) != 7 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules || got[5] != KindSessionMongoRules || got[6] != KindSessionClickHouseRules {
+	if got := ClaimableKinds(); len(got) != 9 || got[0] != KindSession || got[1] != KindSessionRules || got[2] != KindSessionSSHRules || got[3] != KindSessionMySQLRules || got[4] != KindSessionRedisRules || got[5] != KindSessionMongoRules || got[6] != KindSessionClickHouseRules ||
+		got[7] != KindSessionNetDevice || got[8] != KindSessionNetDeviceRules {
 		t.Fatalf("the gateway claims %v", got)
+	}
+	// A270: a network device session redeems its vaulted account and routes
+	// like SSH; it needs both, and rides its own job kind.
+	device := ssh
+	device.TargetType, device.CredentialRef = TargetNetDevice, CredentialRef(ssh.SessionID)
+	if err := ValidateSessionIntent(device); err != nil || KindForIntent(device) != KindSessionNetDevice || !MatchesSessionJob(KindSessionNetDevice, device) || MatchesSessionJob(KindSession, device) {
+		t.Fatalf("a routed network device session = %v (kind %s)", err, KindForIntent(device))
+	}
+	unrouted := device
+	unrouted.SSHAddress = ""
+	if ValidateSessionIntent(unrouted) == nil {
+		t.Fatal("a network device session with no SSH route was accepted")
+	}
+	unredeemed := device
+	unredeemed.CredentialRef = ""
+	if ValidateSessionIntent(unredeemed) == nil {
+		t.Fatal("a network device session redeeming nothing was accepted")
 	}
 }

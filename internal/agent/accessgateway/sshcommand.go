@@ -38,3 +38,36 @@ func (c *commandConnection) sshRequest(ctx context.Context, kind string, payload
 	}
 	return result.decision.ID == "" || result.durable && result.decision.Status == accessrules.StatusAuthorized
 }
+
+// netDeviceRequest is sshRequest for a network device (A270): an exec
+// request's command lines are read for device operations; any other session
+// request (a shell, whose typed lines are not inspected) answers to every
+// rule, as an SSH shell does.
+func (c *commandConnection) netDeviceRequest(ctx context.Context, kind string, payload []byte) bool {
+	switch kind {
+	case "pty-req", "window-change", "signal", "break", "keepalive@openssh.com":
+		return true
+	}
+	phase := "control"
+	var operations []string
+	message := payload
+	if kind == "exec" {
+		phase = "exec"
+		command, valid := sshgateway.ExecCommand(payload)
+		if valid {
+			message = command
+			var err error
+			operations, err = accessrules.NetDeviceOperations(command)
+			if err != nil {
+				phase = "uninspectable"
+			}
+		} else {
+			phase = "uninspectable"
+		}
+	}
+	result, err := c.evaluate(ctx, phase, operations, message, "")
+	if err != nil {
+		return false
+	}
+	return result.decision.ID == "" || result.durable && result.decision.Status == accessrules.StatusAuthorized
+}

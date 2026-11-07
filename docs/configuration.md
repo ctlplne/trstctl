@@ -2199,7 +2199,9 @@ BIG-IP: the Administrator or User Manager role on all partitions); FortiGate use
 API administrator's token in `api_key_ref`, with `admin_user` naming that administrator.
 Each allowed role names one account in `role_bindings`, rotated in place
 (single-phase); on EOS the account `enable` rotates the enable password, and BIG-IP's
-`root` is refused (it is not an iControl REST user).
+`root` is refused (it is not an iControl REST user). For gateway sessions to the device
+(a `netdevice` access target), also set `addr` to the device's SSH `host:port` and
+`host_key_fingerprint` to its SSH host key; both or neither.
 
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,

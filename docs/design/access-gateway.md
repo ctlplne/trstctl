@@ -1368,3 +1368,24 @@ proof absent from that journal. The transport fixture uses real mutual TLS and
 verifies detached signatures, with a separately identified native-effect adapter.
 It does not qualify the control-plane queue/broker, scheduled or checkout-driven
 fleet lifecycle, or native Windows execution. Those require their own proofs.
+
+## Network device sessions (A270)
+
+A `netdevice` target is a network device account vaulted in an application secret
+that its provider (`iosxe`, `junos`, `eos`, `fortigate` or `bigip`) rotates. Its
+session rides `access.gateway.session.netdevice.v1`, or
+`access.gateway.session.rules.netdevice.v1` under command rules, so an older
+gateway never claims it. The job redeems the account's secret like a database
+session's credential and routes like an SSH session: the device's SSH
+`host:port`, the account the role rotates as the principal, and the pinned host
+key, all from the provider. The gateway refuses a redeemed secret whose username
+is not that principal, then signs in to the device by password or
+keyboard-interactive authentication (devices do not take the gateway's session
+certificate) and relays session channels exactly as for SSH; the password stays in
+the gateway's locked memory and is masked in the recording. Rules for the
+`netdevice` protocol name device command verbs, matched by abbreviation; exec
+commands are read, interactive shells answer to every rule. The proof
+(`TestServedNetworkDeviceSessionsA270`) runs the stock `ssh` client through the CLI
+tunnel to SSH stand-ins of all five platforms, seals and checks each recording,
+and blocks `wr mem` under a `write` rule before the device sees it.
+

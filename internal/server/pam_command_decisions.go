@@ -31,7 +31,7 @@ func (s *pamService) evaluateGatewayCommand(ctx context.Context, tenantID, agent
 	if err := accessrules.ValidateObservation(observation); err != nil {
 		return accessrules.Decision{}, fmt.Errorf("%w: invalid observation", api.ErrPAMInvalid)
 	}
-	if (observation.Phase == "exec" && intent.TargetType != "ssh") || ((observation.Phase == "query" || observation.Phase == "bind") && intent.TargetType != "postgres" && intent.TargetType != "mysql" && intent.TargetType != "clickhouse") {
+	if (observation.Phase == "exec" && intent.TargetType != "ssh" && intent.TargetType != pamTargetNetDevice) || ((observation.Phase == "query" || observation.Phase == "bind") && intent.TargetType != "postgres" && intent.TargetType != "mysql" && intent.TargetType != "clickhouse") {
 		return accessrules.Decision{}, fmt.Errorf("%w: phase differs from protocol", api.ErrPAMInvalid)
 	}
 	if observation.Phase == "command" && intent.TargetType != "redis" {

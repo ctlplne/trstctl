@@ -15,6 +15,11 @@
 // authentication plain-text-password` (asks "New password:" twice),
 // `set system login user NAME class CLASS`, `commit and-quit`, `rollback 0`,
 // `exit configuration-mode`, `show configuration system login | display set`.
+// EOS, FortiOS and BIG-IP (tmsh) over SSH are the command line a brokered
+// session uses: each vendor's prompt, its version command (`show version`,
+// `get system status`, `show sys version`) and save command, every other
+// line accepted. Every dialect runs an exec request's command as one line
+// and logs each command line it runs (Ran).
 package netdevicetest
 
 import (
@@ -60,11 +65,14 @@ type Device struct {
 	reject   bool
 	drop     int
 	writes   int
+	ran      []string
 }
 
 // Start brings up a stand-in of dialect with one administrator.
 func Start(dialect Dialect, admin, password, role string) (*Device, error) {
-	if dialect != IOSXE && dialect != Junos {
+	switch dialect {
+	case IOSXE, Junos, EOS, FortiOS, BIGIP:
+	default:
 		return nil, errors.New("netdevicetest: unknown dialect")
 	}
 	_, key, err := ed25519.GenerateKey(rand.Reader)
@@ -186,6 +194,20 @@ func (d *Device) Writes() int {
 	return d.writes
 }
 
+// Ran lists the command lines the device ran, in order (shell and exec;
+// never a password typed at a prompt).
+func (d *Device) Ran() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.ran...)
+}
+
+func (d *Device) record(line string) {
+	d.mu.Lock()
+	d.ran = append(d.ran, line)
+	d.mu.Unlock()
+}
+
 func (d *Device) Addr() string              { return d.ln.Addr().String() }
 func (d *Device) FingerprintSHA256() string { return d.fingerprint }
 func (d *Device) Close()                    { _ = d.ln.Close() }
@@ -219,6 +241,20 @@ func (d *Device) serve(conn net.Conn, cfg *ssh.ServerConfig) {
 						_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 						_ = ch.Close()
 					}()
+				case "exec":
+					// A device runs one exec command as if typed at a fresh
+					// session's prompt, then ends the channel.
+					var command struct{ Line string }
+					if ssh.Unmarshal(req.Payload, &command) != nil {
+						_ = req.Reply(false, nil)
+						continue
+					}
+					_ = req.Reply(true, nil)
+					go func() {
+						d.run(&lineReader{r: strings.NewReader(command.Line + "\n")}, func(s string) { _, _ = io.WriteString(ch, s) }, sconn.User())
+						_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+						_ = ch.Close()
+					}()
 				default:
 					_ = req.Reply(false, nil)
 				}
@@ -233,11 +269,51 @@ func (d *Device) shell(ch io.ReadWriter, user string) {
 	// A device echoes the end of each typed line, so output starts on a line
 	// of its own after the prompt.
 	lines := lineReader{r: ch, echo: func() { write("\r\n") }}
+	d.run(&lines, write, user)
+}
+
+func (d *Device) run(lines *lineReader, write func(string), user string) {
 	switch d.dialect {
 	case IOSXE:
-		d.iosxe(&lines, write)
+		d.iosxe(lines, write)
 	case Junos:
-		d.junos(&lines, write, user)
+		d.junos(lines, write, user)
+	default:
+		d.generic(lines, write, user)
+	}
+}
+
+// generic is the EOS, FortiOS and BIG-IP (tmsh) command line a brokered
+// session uses: each vendor's prompt, its version command, its save command,
+// and every other line accepted and logged.
+func (d *Device) generic(lines *lineReader, write func(string), user string) {
+	prompt := map[Dialect]string{EOS: "\r\nswitch#", FortiOS: "\r\nFGT # ", BIGIP: "\r\n" + user + "@(bigip)(cfg-sync Standalone)(Active)(/Common)(tmos)# "}[d.dialect]
+	write(prompt)
+	for {
+		line, ok := lines.next()
+		if !ok {
+			return
+		}
+		switch line = strings.TrimSpace(line); {
+		case line == "exit" || line == "quit" || line == "logout":
+			return
+		case d.dialect == EOS && line == "show version":
+			write("Arista vEOS-lab\r\nSoftware image version: 4.32.0F")
+		case d.dialect == FortiOS && line == "get system status":
+			write("Version: FortiGate-VM64 v7.4.4,build2662,240514 (GA.F)\r\nHostname: FGT")
+		case d.dialect == BIGIP && line == "show sys version":
+			write("Sys::Version\r\nMain Package\r\n  Product     BIG-IP\r\n  Version     17.1.1")
+		case (d.dialect == EOS && (line == "write memory" || line == "copy running-config startup-config")) ||
+			(d.dialect == BIGIP && line == "save sys config"):
+			d.mu.Lock()
+			d.writes++
+			d.mu.Unlock()
+			write("Copy completed successfully.")
+		default:
+			write("% ok")
+		}
+		d.record(line)
+		write(prompt)
 	}
 }
 
@@ -299,6 +375,7 @@ func (d *Device) iosxe(lines *lineReader, write func(string)) {
 		if !ok {
 			return
 		}
+		d.record(line)
 		f := strings.Fields(line)
 		switch {
 		case mode != "config" && line == "terminal length 0":
@@ -383,6 +460,7 @@ func (d *Device) junos(lines *lineReader, write func(string), user string) {
 		if !ok {
 			return
 		}
+		d.record(line)
 		f := strings.Fields(line)
 		switch {
 		case !config && line == "set cli screen-length 0":

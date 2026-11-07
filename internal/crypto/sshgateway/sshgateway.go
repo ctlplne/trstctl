@@ -168,6 +168,37 @@ func ServeGuarded(ctx context.Context, client net.Conn, host *HostKey, key *Sess
 	if signer == nil {
 		return errors.New("sshgateway: the session key is not certified")
 	}
+	return serve(ctx, client, host, []ssh.AuthMethod{ssh.PublicKeys(signer)}, up, rec, guards)
+}
+
+// ServeGuardedPassword is ServeGuarded for a target whose vaulted account
+// signs in with a password (A270, network devices): the gateway signs in
+// upstream as up.User with password, by password or keyboard-interactive
+// authentication as the device asks. The client never holds the password;
+// the caller keeps and wipes it.
+func ServeGuardedPassword(ctx context.Context, client net.Conn, host *HostKey, password []byte, up Upstream, rec Recorder, guards func() *RequestGuard) error {
+	if len(password) == 0 {
+		return errors.New("sshgateway: the session has no vaulted password")
+	}
+	return serve(ctx, client, host, passwordAuth(password), up, rec, guards)
+}
+
+// passwordAuth answers a password or keyboard-interactive sign-in with
+// password. x/crypto/ssh takes it as a string, built per attempt from the
+// caller's bytes and not kept.
+func passwordAuth(password []byte) []ssh.AuthMethod {
+	answer := func() (string, error) { return string(password), nil }
+	interactive := func(_, _ string, questions []string, _ []bool) ([]string, error) {
+		answers := make([]string, len(questions))
+		for i := range answers {
+			answers[i] = string(password)
+		}
+		return answers, nil
+	}
+	return []ssh.AuthMethod{ssh.PasswordCallback(answer), ssh.KeyboardInteractive(interactive)}
+}
+
+func serve(ctx context.Context, client net.Conn, host *HostKey, auth []ssh.AuthMethod, up Upstream, rec Recorder, guards func() *RequestGuard) error {
 	// The ticketed, TLS-verified tunnel is the client's authentication; the
 	// client side asks for none.
 	serverConfig := &ssh.ServerConfig{NoClientAuth: true, ServerVersion: "SSH-2.0-trstctl-access-gateway"}
@@ -178,7 +209,7 @@ func ServeGuarded(ctx context.Context, client net.Conn, host *HostKey, key *Sess
 	}
 	defer func() { _ = sconn.Close() }()
 	go ssh.DiscardRequests(requests) // global requests: no forwarding of any kind
-	upstream, err := dialUpstream(ctx, up, signer)
+	upstream, err := dialUpstream(ctx, up, auth)
 	if err != nil {
 		for nc := range channels {
 			_ = nc.Reject(ssh.ConnectionFailed, "the access gateway could not sign in to the target")
@@ -222,7 +253,7 @@ func ServeGuarded(ctx context.Context, client net.Conn, host *HostKey, key *Sess
 	return nil
 }
 
-func dialUpstream(ctx context.Context, up Upstream, signer ssh.Signer) (*ssh.Client, error) {
+func dialUpstream(ctx context.Context, up Upstream, auth []ssh.AuthMethod) (*ssh.Client, error) {
 	if up.Address == "" || up.User == "" || len(up.HostKeyFingerprints) == 0 {
 		return nil, errors.New("sshgateway: a target address, principal and host key pin are required")
 	}
@@ -240,7 +271,7 @@ func dialUpstream(ctx context.Context, up Upstream, signer ssh.Signer) (*ssh.Cli
 	_ = conn.SetDeadline(time.Now().Add(15 * time.Second))
 	config := &ssh.ClientConfig{
 		User:            up.User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		Auth:            auth,
 		HostKeyCallback: pinnedHostKey(up.HostKeyFingerprints),
 		Timeout:         15 * time.Second,
 	}

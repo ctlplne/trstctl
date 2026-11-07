@@ -279,3 +279,36 @@ it("registers a vaulted desktop with one account secret and explicit gateway ref
     ),
   );
 });
+
+it("registers a vaulted network device with one account secret and explicit gateway references", async () => {
+  const user = userEvent.setup();
+  apiMock.pamTargets.mockResolvedValue({ items: [] });
+  apiMock.registerPAMTarget.mockImplementation(async (input) => ({ ...input, source: "tenant", enabled: true }));
+  mount(true);
+  await user.click(await screen.findByRole("button", { name: "Register target" }));
+  const form = screen.getByRole("dialog", { name: "Register target" });
+  await user.type(within(form).getByRole("textbox", { name: "Target ID" }), "core-ops");
+  await user.selectOptions(within(form).getByRole("combobox", { name: "Target type" }), "netdevice");
+  await user.type(within(form).getByRole("combobox", { name: "Account provider ID" }), "core-device");
+  const role = within(form).getByRole("combobox", { name: "Account secret" });
+  await user.clear(role);
+  await user.type(role, "net/core");
+  expect(within(form).getByText(/no real device yet/)).toBeInTheDocument();
+  await user.type(within(form).getByRole("textbox", { name: "Gateway agent ID" }), "gateway-agent");
+  await user.type(within(form).getByRole("textbox", { name: "Gateway address (host:port)" }), "gateway.example:8443");
+  await user.click(within(form).getByRole("button", { name: "Register target" }));
+  await waitFor(() =>
+    expect(apiMock.registerPAMTarget).toHaveBeenCalledWith(
+      {
+        id: "core-ops",
+        target_type: "netdevice",
+        provider_id: "core-device",
+        allowed_roles: ["net/core"],
+        account_secret: "net/core",
+        gateway_agent_id: "gateway-agent",
+        gateway_address: "gateway.example:8443",
+      },
+      expect.any(String),
+    ),
+  );
+});

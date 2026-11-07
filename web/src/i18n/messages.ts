@@ -665,6 +665,12 @@ export const messages = {
   },
 
   "admin.access.desktop.target": { defaultMessage: "Remote desktop (RDP)", description: "Desktop target registration and proof limits." },
+  "admin.access.netdevice.target": { defaultMessage: "Network device (SSH)", description: "Network device target registration (A270)." },
+  "admin.access.netdevice.proof": {
+    defaultMessage:
+      "The gateway signs in to the device over SSH with the vaulted account's password; the operator's client holds no credential. The provider names the device's SSH address and host key. Proven against stand-ins of IOS-XE, Junos, EOS, FortiOS and BIG-IP; no real device yet.",
+    description: "Network device target registration (A270).",
+  },
   "admin.access.desktop.accountSecret": { defaultMessage: "Account secret", description: "Desktop target registration and proof limits." },
   "admin.access.desktop.oneAccount": {
     defaultMessage: "Choose one vaulted account secret from the provider's roles.",
@@ -818,12 +824,13 @@ export const messages = {
     description: "SSH command guardrail control.",
   },
   "admin.access.rules.clickhouse": { defaultMessage: "ClickHouse", description: "ClickHouse target protocol name." },
+  "admin.access.rules.netdevice": { defaultMessage: "Network device", description: "Network device target protocol name (A270)." },
   "admin.access.rules.mongodb": { defaultMessage: "MongoDB", description: "MongoDB target protocol name." },
   "admin.access.rules.redis": { defaultMessage: "Redis", description: "Redis target protocol name." },
   "admin.access.rules.mysql": { defaultMessage: "MySQL", description: "MySQL target protocol name." },
   "admin.access.rules.protocolHelp": {
     defaultMessage:
-      "PostgreSQL, MySQL or ClickHouse statements, Redis or MongoDB command names, or SSH exec requests. SSH rules require a complete command. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
+      "PostgreSQL, MySQL or ClickHouse statements, Redis or MongoDB command names, SSH exec requests, or network device command verbs (matched by abbreviation). SSH and network device rules read exec commands; an interactive shell answers to every rule. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {

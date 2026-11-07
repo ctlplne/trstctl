@@ -296,6 +296,8 @@ func ShippedJobKinds() []ShippedJobKind {
 		{Kind: KindAccessGatewayRedisRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
 		{Kind: KindAccessGatewayMySQLRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
 		{Kind: KindAccessGatewaySSHRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
+		{Kind: KindAccessGatewayNetDeviceSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
+		{Kind: KindAccessGatewayNetDeviceRulesSession, Flags: []string{"--access-gateway-listen"}, Roles: []string{mtls.AgentRoleGateway}},
 		{
 			Kind:  KindAccessGatewaySession,
 			Flags: []string{"--access-gateway-listen"},

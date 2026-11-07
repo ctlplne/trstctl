@@ -9328,18 +9328,23 @@ What comes next:
   helper is Linux-only and a hosted Windows runner cannot be reached from a Linux
   job, so this is recorded as a limit unless a runner path is found.
 
-## Network devices (A270) — parts 1–2 of 3: rotation and discovery on five platforms
+## Network devices (A270) — built against stand-ins: rotation, discovery and sessions on five platforms
 
-Status: in progress. `iosxe` and `junos` providers change local account passwords
+Status: built; a real device run is owed. `iosxe` and `junos` providers change local account passwords
 (and IOS-XE's enable secret) through the device's own CLI over SSH; `eos`, `fortigate`
 and `bigip` do it through the device's HTTPS management API (eAPI, the FortiOS REST API,
 iControl REST) with the device's certificate pinned. Every rotation is single-phase with
 acknowledgement, keeps each account's privilege, role, class or profile, proves the new
 password signs in and rolls a change the device does not prove back to the predecessor;
 EOS's enable password rotates too. Discovery stages each device's local accounts with
-their level, never a hash. Proof today: `TestNetworkDeviceRotationA270`,
-`TestNetworkAPIRotationA270`, `TestServedNetworkDeviceRotationA270` and
-`TestServedNetworkAPIDeviceRotationA270` against stand-ins built from each vendor's
+their level, never a hash. A `netdevice` access target brokers sessions to each
+device through the gateway, which signs in over SSH with the vaulted password (the
+client holds none); sessions are recorded with the password masked, and `netdevice`
+command rules block device verbs (by abbreviation too) in exec commands, while an
+interactive shell answers to every rule. Proof today: `TestNetworkDeviceRotationA270`,
+`TestNetworkAPIRotationA270`, `TestServedNetworkDeviceRotationA270`,
+`TestServedNetworkAPIDeviceRotationA270`, `TestGatewaySignsInToADeviceWithItsVaultedPasswordA270`
+and `TestServedNetworkDeviceSessionsA270` against stand-ins built from each vendor's
 documentation; no real device has run them.
 
 FortiOS's public documentation on changing another administrator's password through the
@@ -9349,8 +9354,8 @@ password. The stand-in follows the administrator object; a FortiGate run decides
 the provider needs the monitor endpoint with the stored predecessor.
 
 What comes next:
-- Gateway sessions to all five through the vaulted credential, recorded and under the
-  command rules (part 3).
+- Command rules on the typed lines of an interactive device shell (today exec commands
+  are read and a shell answers to every rule).
 - A real device or vendor image run of the same proofs on each platform; none is in the
   lab.
 - BIG-IP's root password (changed through its own endpoint with the old password) and

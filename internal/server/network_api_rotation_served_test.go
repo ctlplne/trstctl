@@ -80,6 +80,7 @@ func TestServedNetworkAPIDeviceRotationA270(t *testing.T) {
 		"plain HTTP": func(c *config.DynamicSecretProviderConfig) {
 			c.Endpoint = strings.Replace(c.Endpoint, "https:", "http:", 1)
 		},
+		"half an SSH route": func(c *config.DynamicSecretProviderConfig) { c.Addr = "127.0.0.1:22" },
 	} {
 		bad := configs[2]
 		bad.RoleBindings = map[string]string{"bigip/ops": "ops"}

@@ -2,6 +2,11 @@
 
 ### Added
 
+- Network devices (A270 part 3): `netdevice` access targets broker SSH sessions to a device account its provider rotates;
+  the gateway signs in with the vaulted password (new job kinds `access.gateway.session.netdevice.v1` and
+  `access.gateway.session.rules.netdevice.v1`), sessions are recorded, and `netdevice` command rules block device verbs
+  by abbreviation. `eos`, `fortigate` and `bigip` providers take an optional SSH `addr` and `host_key_fingerprint` for
+  sessions. Console registration; migration 0425.
 - Network devices (A270 part 2): `eos`, `fortigate` and `bigip` dynamic-secret providers rotate device account passwords
   (and the EOS enable password) through eAPI, the FortiOS REST API and iControl REST over HTTPS with the device's
   certificate pinned, single-phase with acknowledgement and rollback; discovery reads all three. Provider catalog

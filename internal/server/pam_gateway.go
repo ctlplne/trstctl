@@ -254,6 +254,29 @@ func (s *pamService) gatewaySessionIntent(ctx context.Context, rec store.PAMSess
 			}
 		}
 
+		if rec.TargetType == pamTargetNetDevice {
+			// A270: the device's SSH route and the account its role
+			// rotates, from its provider; the vaulted password is redeemed.
+			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
+			if err != nil {
+				return accessgateway.SessionIntent{}, err
+			}
+			for _, provider := range s.providers.ForTenant(rec.TenantID) {
+				if provider == nil || provider.Name() != target.cfg.ProviderID {
+					continue
+				}
+				if route, ok := provider.(pamNetDeviceRoute); ok {
+					intent.SSHAddress, intent.SSHPrincipal, intent.SSHHostKeyFingerprints, err = route.DynamicSecretGatewaySSH(rec.Role)
+					if err != nil {
+						return accessgateway.SessionIntent{}, err
+					}
+				}
+				break
+			}
+			if intent.SSHAddress == "" {
+				return accessgateway.SessionIntent{}, errors.New("server: the network device's SSH route is unavailable")
+			}
+		}
 		if rec.TargetType == pamTargetRDP {
 			target, err := s.databaseTarget(ctx, rec.TenantID, rec.TargetType, rec.TargetID)
 			if err != nil {

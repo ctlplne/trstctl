@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"trstctl.com/trstctl/internal/dynsecret"
 )
@@ -72,4 +73,22 @@ func openConfiguredNetworkAPIBackend(o *configuredDynamicBackendOpener) (request
 		return o.fail(err)
 	}
 	return backend, o.closeWith(backend, nil), nil
+}
+
+// DynamicSecretGatewaySSH is a network device role's SSH route (A270): the
+// device's SSH address and pinned host key (an iosxe or junos provider's own;
+// an eos, fortigate or bigip provider's optional addr and
+// host_key_fingerprint) and the account the role rotates, which a session
+// signs in as. The enable secret has no sessions.
+func (p *configuredNetworkDeviceProvider) DynamicSecretGatewaySSH(role string) (string, string, []string, error) {
+	account := strings.TrimSpace(p.cfg.RoleBindings[role])
+	switch {
+	case !p.AllowsStaticRotation(role) || account == "":
+		return "", "", nil, errors.New("the role rotates no device account")
+	case account == dynsecret.NetworkEnableAccount:
+		return "", "", nil, errors.New("the enable secret signs in no session")
+	case strings.TrimSpace(p.cfg.Addr) == "" || p.cfg.HostKeyFingerprint == "":
+		return "", "", nil, errors.New("the provider names no SSH address and host key pin for sessions")
+	}
+	return strings.TrimSpace(p.cfg.Addr), account, []string{p.cfg.HostKeyFingerprint}, nil
 }

@@ -219,6 +219,33 @@ const clickhouseOperations = [
   "USE",
   "WITH",
 ] as const;
+// Network device command verbs (A270); an abbreviation names every verb it starts.
+const netdeviceOperations = [
+  "bash",
+  "clear",
+  "commit",
+  "configure",
+  "copy",
+  "create",
+  "debug",
+  "delete",
+  "diagnose",
+  "erase",
+  "execute",
+  "format",
+  "load",
+  "modify",
+  "no",
+  "reload",
+  "request",
+  "restart",
+  "rollback",
+  "run",
+  "save",
+  "set",
+  "start",
+  "write",
+] as const;
 const operationChoices = {
   postgres: postgresOperations,
   ssh: sshOperations,
@@ -226,11 +253,20 @@ const operationChoices = {
   redis: redisOperations,
   mongodb: mongoOperations,
   clickhouse: clickhouseOperations,
+  netdevice: netdeviceOperations,
 };
-const operations = [...postgresOperations, ...sshOperations, ...mysqlOperations, ...redisOperations, ...mongoOperations, ...clickhouseOperations] as const;
+const operations = [
+  ...postgresOperations,
+  ...sshOperations,
+  ...mysqlOperations,
+  ...redisOperations,
+  ...mongoOperations,
+  ...clickhouseOperations,
+  ...netdeviceOperations,
+] as const;
 const schema = z
   .object({
-    protocol: z.enum(["postgres", "ssh", "mysql", "redis", "mongodb", "clickhouse"]),
+    protocol: z.enum(["postgres", "ssh", "mysql", "redis", "mongodb", "clickhouse", "netdevice"]),
     templateID: z.string().uuid(),
     name: z.string().trim().min(1).max(80),
     operations: z.array(z.enum(operations)).min(1).max(32),
@@ -488,7 +524,15 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                     {...register("protocol", {
                       onChange: (event) =>
                         setValue("operations", [
-                          event.target.value === "ssh" ? "rm" : event.target.value === "redis" ? "DEL" : event.target.value === "mongodb" ? "delete" : "DROP",
+                          event.target.value === "ssh"
+                            ? "rm"
+                            : event.target.value === "redis"
+                              ? "DEL"
+                              : event.target.value === "mongodb"
+                                ? "delete"
+                                : event.target.value === "netdevice"
+                                  ? "write"
+                                  : "DROP",
                         ]),
                     })}
                   >
@@ -498,6 +542,7 @@ export function PAMCommandRulesPanel({ canManage }: { canManage: boolean }) {
                     <option value="redis">{t("admin.access.rules.redis")}</option>
                     <option value="mongodb">{t("admin.access.rules.mongodb")}</option>
                     <option value="clickhouse">{t("admin.access.rules.clickhouse")}</option>
+                    <option value="netdevice">{t("admin.access.rules.netdevice")}</option>
                   </Select>
                 )}
               </Field>

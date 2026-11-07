@@ -272,6 +272,11 @@ func (g *Gateway) start(ctx context.Context, job relay.Job) {
 	case TargetKubernetes:
 		// The credential is the token itself.
 		secrets = append(secrets, append([]byte(nil), material[intent.CredentialRef]...))
+	case TargetNetDevice:
+		if account, err := parseNetDeviceCredential(material[intent.CredentialRef], intent.SSHPrincipal); err == nil {
+			secrets = append(secrets, append([]byte(nil), account...))
+			secret.Wipe(account)
+		}
 	}
 	var console *consoleState
 	if intent.TargetType == TargetAWSConsole {
@@ -488,7 +493,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 	}
 	var host *sshgateway.HostKey
 	answer := "OK\n"
-	if s.intent.TargetType == TargetSSH {
+	if s.intent.TargetType == TargetSSH || s.intent.TargetType == TargetNetDevice {
 		var err error
 		if host, err = g.hostKey(); err != nil {
 			g.deny(conn, "the gateway has no SSH host key")
@@ -636,6 +641,30 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 		if err := serveKubernetes(ctx, conn, token, upstream, g.cfg.Dial, rec); err != nil {
 			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
 		}
+	case TargetNetDevice:
+		raw := s.credential()
+		password, err := parseNetDeviceCredential(raw, s.intent.SSHPrincipal)
+		secret.Wipe(raw)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+			break
+		}
+		var guards func() *sshgateway.RequestGuard
+		if s.intent.CommandPolicy != nil {
+			guards = func() *sshgateway.RequestGuard {
+				c, err := g.commandConnection(s)
+				if err != nil {
+					return &sshgateway.RequestGuard{Inspect: func(context.Context, string, []byte) bool { return false }, Reserve: func(int) (func(), bool) { return nil, false }}
+				}
+				return &sshgateway.RequestGuard{Inspect: c.netDeviceRequest, Reserve: c.reserveFrame}
+			}
+		}
+		err = sshgateway.ServeGuardedPassword(ctx, conn, host, password, sshgateway.Upstream{Address: s.intent.SSHAddress,
+			User: s.intent.SSHPrincipal, HostKeyFingerprints: s.intent.SSHHostKeyFingerprints, Dial: g.cfg.Dial}, sshRecorder(rec), guards)
+		secret.Wipe(password)
+		if err != nil {
+			g.cfg.Logf("accessgateway: session %s: %v", s.intent.SessionID, err)
+		}
 	case TargetSSH:
 		var guards func() *sshgateway.RequestGuard
 		if s.intent.CommandPolicy != nil {
@@ -734,4 +763,24 @@ func (g *Gateway) claimableKinds() []string {
 		out = append(out, KindSessionDesktop, KindSessionADDesktop)
 	}
 	return out
+}
+
+// parseNetDeviceCredential reads a network device's vaulted account
+// ({"username","password"}, A270) and returns its password, refusing an
+// account other than the session's principal: the secret moved to another
+// account since the session was approved.
+func parseNetDeviceCredential(raw []byte, principal string) ([]byte, error) {
+	var account struct {
+		Username string           `json:"username"`
+		Password secret.JSONBytes `json:"password"`
+	}
+	if err := json.Unmarshal(raw, &account); err != nil || len(account.Password) == 0 {
+		secret.Wipe(account.Password)
+		return nil, errors.New("accessgateway: the vaulted device account is not a username and password")
+	}
+	if account.Username != principal {
+		secret.Wipe(account.Password)
+		return nil, errors.New("accessgateway: the vaulted device account is not the session's principal")
+	}
+	return account.Password, nil
 }

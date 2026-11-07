@@ -75,7 +75,9 @@ func ValidateObservation(o Observation) error {
 		for i, op := range o.Operations {
 			known := KnownOperation("postgres", op) || KnownOperation("mysql", op) || KnownOperation("clickhouse", op)
 			if o.Phase == "exec" {
-				known = KnownOperation("ssh", op)
+				// An exec command is an SSH program or, on a network device
+				// (A270), a device command verb; the decision binds which.
+				known = KnownOperation("ssh", op) || KnownOperation("netdevice", op)
 			}
 			if o.Phase == "command" {
 				known = KnownOperation("redis", op)
@@ -109,10 +111,10 @@ func ValidateDecision(d Decision) error {
 	if err := ValidateObservation(d.Observation); err != nil {
 		return err
 	}
-	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh" && d.Protocol != "mysql" && d.Protocol != "redis" && d.Protocol != "mongodb" && d.Protocol != "clickhouse") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
+	if !validUUID(d.SessionID) || d.JobID < 1 || d.Attempt < 1 || d.ID != ActionID(d.SessionID, d.ConnectionID, d.JobID, d.Attempt, d.Ordinal) || (d.Protocol != "postgres" && d.Protocol != "ssh" && d.Protocol != "mysql" && d.Protocol != "redis" && d.Protocol != "mongodb" && d.Protocol != "clickhouse" && d.Protocol != "netdevice") || !ValidDigest(d.PolicyDigest) || d.DecidedAt.IsZero() || d.ObservedAt.IsZero() || d.DecidedAt.Before(d.ObservedAt) {
 		return errors.New("command rules: invalid bound decision")
 	}
-	if d.Phase == "exec" && d.Protocol != "ssh" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" && d.Protocol != "mysql" && d.Protocol != "clickhouse" {
+	if d.Phase == "exec" && d.Protocol != "ssh" && d.Protocol != "netdevice" || (d.Phase == "query" || d.Phase == "bind") && d.Protocol != "postgres" && d.Protocol != "mysql" && d.Protocol != "clickhouse" {
 		return errors.New("command rules: phase differs from decision protocol")
 	}
 	if d.Phase == "command" && d.Protocol != "redis" {

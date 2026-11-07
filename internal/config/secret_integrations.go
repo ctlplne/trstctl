@@ -1251,7 +1251,7 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "github-app" && c.Type != "snowflake" && c.Type != "unix" && c.Type != "windows" && c.PrivateKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s private_key_ref is only valid for github-app, snowflake, unix and windows", where))
 	}
-	if c.Type != "unix" && c.Type != "windows" && !networkDeviceProviderTypes[c.Type] && c.HostKeyFingerprint != "" {
+	if c.Type != "unix" && c.Type != "windows" && !networkDeviceProviderTypes[c.Type] && !networkAPIDeviceTypes[c.Type] && c.HostKeyFingerprint != "" {
 		errs = append(errs, fmt.Errorf("%s host_key_fingerprint is only valid for unix, windows and network devices", where))
 	}
 	if c.Type != "unix" && c.Sudo {
@@ -2464,6 +2464,16 @@ func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []e
 	} else if err := validateCredentialRef(c.PasswordRef); err != nil || strings.TrimSpace(c.PasswordRef) == "" {
 		errs = append(errs, fmt.Errorf("%s password_ref must name the administrator's password for %s", where, c.Type))
 	}
+	if (strings.TrimSpace(c.Addr) == "") != (c.HostKeyFingerprint == "") {
+		errs = append(errs, fmt.Errorf("%s %s sessions need both addr (the device's SSH host:port) and host_key_fingerprint, or neither", where, c.Type))
+	} else if c.Addr != "" {
+		if host, port, err := net.SplitHostPort(strings.TrimSpace(c.Addr)); err != nil || host == "" || port == "" {
+			errs = append(errs, fmt.Errorf("%s addr must be the device's SSH host:port for %s sessions", where, c.Type))
+		}
+		if !strings.HasPrefix(c.HostKeyFingerprint, "SHA256:") || len(c.HostKeyFingerprint) < 20 {
+			errs = append(errs, fmt.Errorf("%s host_key_fingerprint must pin the device's SSH host key (SHA256:...) for %s sessions", where, c.Type))
+		}
+	}
 	if !c.AllowStaticRotation {
 		errs = append(errs, fmt.Errorf("%s %s rotates device account passwords and issues no leases: set allow_static_rotation", where, c.Type))
 	}
@@ -2485,3 +2495,8 @@ func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []e
 	}
 	return errs
 }
+
+// networkAPIDeviceTypes reach the device's management API over HTTPS; their
+// optional addr and host_key_fingerprint are the device's SSH route for
+// gateway sessions (A270).
+var networkAPIDeviceTypes = map[string]bool{"eos": true, "fortigate": true, "bigip": true}

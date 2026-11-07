@@ -34,6 +34,8 @@ const (
 	KindSessionRedisRules      = relay.KindAccessGatewayRedisRulesSession
 	KindSessionMongoRules      = relay.KindAccessGatewayMongoRulesSession
 	KindSessionClickHouseRules = relay.KindAccessGatewayClickHouseRulesSession
+	KindSessionNetDevice       = relay.KindAccessGatewayNetDeviceSession
+	KindSessionNetDeviceRules  = relay.KindAccessGatewayNetDeviceRulesSession
 	// TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse,
 	// TargetRedis, TargetKubernetes and TargetSSH are the session types the
 	// gateway serves.
@@ -50,6 +52,9 @@ const (
 	TargetAzure      = "azure"
 	TargetAWSConsole = accessconsole.TargetAWS
 	TargetRDP        = accessdesktop.TargetRDP
+	// TargetNetDevice (A270) is a network device's vaulted account: the
+	// gateway redeems its password and signs in to the device over SSH.
+	TargetNetDevice = "netdevice"
 	// Preface opens every client connection: "TRSTCTL-GATEWAY/1 <session> <ticket>\n".
 	Preface = "TRSTCTL-GATEWAY/1"
 	// maxPrefaceBytes bounds the preface line a client may send.
@@ -61,7 +66,7 @@ const (
 // with it itself (A254, A256). An SSH session redeems nothing.
 func RedeemsCredential(targetType string) bool {
 	switch targetType {
-	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole, TargetRDP:
+	case TargetPostgres, TargetMySQL, TargetMongo, TargetClickHouse, TargetRedis, TargetKubernetes, TargetSnowflake, TargetAWS, TargetGCP, TargetAzure, TargetAWSConsole, TargetRDP, TargetNetDevice:
 		return true
 	}
 	return false
@@ -126,7 +131,7 @@ type SessionReport struct {
 // ClaimableKinds is what the gateway's own claim loop asks for. Sessions are
 // held for their whole lifetime, so they never enter the shared relay pool.
 func ClaimableKinds() []string {
-	return []string{KindSession, KindSessionRules, KindSessionSSHRules, KindSessionMySQLRules, KindSessionRedisRules, KindSessionMongoRules, KindSessionClickHouseRules}
+	return []string{KindSession, KindSessionRules, KindSessionSSHRules, KindSessionMySQLRules, KindSessionRedisRules, KindSessionMongoRules, KindSessionClickHouseRules, KindSessionNetDevice, KindSessionNetDeviceRules}
 }
 
 // JobKey is the one outbox key a session's job carries.
@@ -208,6 +213,14 @@ func ValidateSessionIntent(in SessionIntent) error {
 	if err := accessrules.ValidatePolicy(in.CommandPolicy, in.TargetType); err != nil {
 		return err
 	}
+	if in.TargetType == TargetNetDevice {
+		// A network device session redeems its vaulted account and routes
+		// like an SSH session.
+		if in.CredentialRef != CredentialRef(in.SessionID) {
+			return errors.New("accessgateway: a session redeems only its own credential")
+		}
+		return validateSSHRoute(in)
+	}
 	if RedeemsCredential(in.TargetType) {
 		if in.CredentialRef != CredentialRef(in.SessionID) {
 			return errors.New("accessgateway: a session redeems only its own credential")
@@ -226,13 +239,20 @@ func ValidateSessionIntent(in SessionIntent) error {
 		}
 		return nil
 	}
+	if in.CredentialRef != "" {
+		return errors.New("accessgateway: an SSH session redeems no credential")
+	}
+	return validateSSHRoute(in)
+}
+
+// validateSSHRoute checks an SSH or network device session's route: the
+// target's host:port, one principal and one to eight pinned host keys.
+func validateSSHRoute(in SessionIntent) error {
 	if in.UpstreamURL != "" || in.UpstreamCAPEM != "" || in.UpstreamServerName != "" {
 		return errors.New("accessgateway: an SSH session names no upstream")
 	}
 	host, port, err := net.SplitHostPort(in.SSHAddress)
 	switch {
-	case in.CredentialRef != "":
-		return errors.New("accessgateway: an SSH session redeems no credential")
 	case err != nil || host == "" || port == "":
 		return errors.New("accessgateway: an SSH session names its target's host:port")
 	case strings.TrimSpace(in.SSHPrincipal) == "" || strings.ContainsAny(in.SSHPrincipal, " \t\r\n,*"):
@@ -266,12 +286,15 @@ func KindForPolicy(p *accessrules.Policy) string {
 		if len(p.Rules) > 0 && p.Rules[0].Protocol == "ssh" {
 			return KindSessionSSHRules
 		}
+		if len(p.Rules) > 0 && p.Rules[0].Protocol == "netdevice" {
+			return KindSessionNetDeviceRules
+		}
 		return KindSessionRules
 	}
 	return KindSession
 }
 func MatchesSessionJob(kind string, in SessionIntent) bool {
-	if in.TargetType == TargetRDP {
+	if in.TargetType == TargetRDP || in.TargetType == TargetNetDevice {
 		return kind == KindForIntent(in)
 	}
 	return kind == KindForPolicy(in.CommandPolicy)
@@ -284,6 +307,9 @@ func KindForIntent(in SessionIntent) string {
 			return KindSessionADDesktop
 		}
 		return KindSessionDesktop
+	}
+	if in.TargetType == TargetNetDevice && in.CommandPolicy == nil {
+		return KindSessionNetDevice
 	}
 	return KindForPolicy(in.CommandPolicy)
 }

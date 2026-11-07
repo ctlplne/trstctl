@@ -8439,7 +8439,7 @@ export interface PAMApprovalRequest {
   status: "pending" | "approved" | "denied" | "expired" | "superseded" | "consumed";
   subject: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
 }
 
 export interface PAMAutoApprovalRule {
@@ -8551,7 +8551,7 @@ export interface PAMCommandAction {
   job_id: number;
   message_digest: string;
   observed_at: string;
-  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
+  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
   ordinal: number;
   phase: string;
   policy_digest: string;
@@ -8581,8 +8581,8 @@ export interface PAMCommandRule {
   enabled: boolean;
   id: string;
   name: string;
-  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
-  protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse";
+  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
+  protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
   required_approvals?: number;
   review_ttl_seconds?: number;
 }
@@ -8901,7 +8901,7 @@ export interface PAMEmergencySessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
   ttl_seconds?: number;
 }
 
@@ -8933,8 +8933,8 @@ export interface PAMFolderRequest {
 export interface PAMFrozenCommandRule {
   effect: "block" | "require_approval";
   id: string;
-  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "collmod" | "collstats" | "command" | "connectionstatus" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "delete" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "exec" | "explain" | "find" | "findandmodify" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "mkfs" | "mount" | "nft" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "renamecollection" | "rm" | "rmdir" | "rolesinfo" | "ruby" | "scp" | "serverstatus" | "sftp" | "sh" | "ssh" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri")[];
-  protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse";
+  operations: ("ALTER" | "ANALYZE" | "APPEND" | "ATTACH" | "BACKUP" | "BEGIN" | "CALL" | "CHECK" | "CLUSTER" | "COMMENT" | "COMMIT" | "COPY" | "CREATE" | "DECR" | "DECRBY" | "DEL" | "DELETE" | "DESCRIBE" | "DETACH" | "DISCARD" | "DO" | "DROP" | "EVAL" | "EVALSHA" | "EXCHANGE" | "EXISTS" | "EXPIRE" | "EXPLAIN" | "FCALL" | "FCALL_RO" | "FLUSH" | "GET" | "GETDEL" | "GRANT" | "HDEL" | "HGET" | "HMGET" | "HMSET" | "HSET" | "INCR" | "INCRBY" | "INSERT" | "KILL" | "LOCK" | "LPOP" | "LPUSH" | "MERGE" | "MGET" | "MOVE" | "MSET" | "OPTIMIZE" | "PERSIST" | "PEXPIRE" | "REFRESH" | "REINDEX" | "RENAME" | "RENAMENX" | "REPAIR" | "REPLACE" | "RESET" | "RESTORE" | "REVOKE" | "ROLLBACK" | "RPOP" | "RPUSH" | "SADD" | "SELECT" | "SET" | "SHOW" | "SISMEMBER" | "SMEMBERS" | "SREM" | "START" | "SYSTEM" | "TRUNCATE" | "TTL" | "UNDROP" | "UNLINK" | "UNLOCK" | "UPDATE" | "USE" | "VACUUM" | "WITH" | "ZADD" | "ZREM" | "aggregate" | "atlasversion" | "bash" | "buildinfo" | "bulkwrite" | "chmod" | "chown" | "chpasswd" | "clear" | "collmod" | "collstats" | "command" | "commit" | "configure" | "connectionstatus" | "copy" | "count" | "create" | "createindexes" | "dbstats" | "dd" | "debug" | "delete" | "diagnose" | "distinct" | "drop" | "dropdatabase" | "dropindexes" | "endsessions" | "env" | "erase" | "exec" | "execute" | "explain" | "find" | "findandmodify" | "format" | "getmore" | "getparameter" | "insert" | "iptables" | "kill" | "killcursors" | "listcollections" | "listdatabases" | "listindexes" | "load" | "mkfs" | "modify" | "mount" | "nft" | "no" | "node" | "passwd" | "perl" | "ping" | "python" | "python3" | "reboot" | "reload" | "renamecollection" | "request" | "restart" | "rm" | "rmdir" | "rolesinfo" | "rollback" | "ruby" | "run" | "save" | "scp" | "serverstatus" | "set" | "sftp" | "sh" | "ssh" | "start" | "su" | "sudo" | "systemctl" | "umount" | "update" | "useradd" | "userdel" | "usersinfo" | "validate" | "whatsmyuri" | "write")[];
+  protocol: "postgres" | "ssh" | "mysql" | "redis" | "mongodb" | "clickhouse" | "netdevice";
   required_approvals?: number;
   review_ttl_seconds?: number;
 }
@@ -9353,7 +9353,7 @@ export interface PAMSessionActivationRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
   template_id?: string;
   ttl_seconds?: number;
 }
@@ -9372,7 +9372,7 @@ export interface PAMSessionRequest {
   ssh_principal?: string;
   ssh_public_key?: string;
   target_id: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "netdevice";
   template_id?: string;
   ttl_seconds?: number;
 }
@@ -9401,7 +9401,7 @@ export interface PAMTarget {
   registered_at?: string;
   registered_by?: string;
   source: "operator" | "tenant";
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice";
 }
 
 export interface PAMTargetDisableRequest {
@@ -9429,7 +9429,7 @@ export interface PAMTargetRequest {
   port?: number;
   principals?: string[];
   provider_id?: string;
-  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local";
+  target_type: "aws" | "aws-console" | "azure" | "clickhouse" | "gcp" | "kubernetes" | "mongodb" | "mysql" | "postgres" | "rdp" | "redis" | "snowflake" | "ssh" | "windows_local" | "netdevice";
 }
 
 export interface PAMTerminal {

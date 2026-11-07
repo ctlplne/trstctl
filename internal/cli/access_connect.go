@@ -76,7 +76,7 @@ func runAccessConnect(ctx context.Context, args []string, env Env, stdout, stder
 		return 1
 	}
 	var hostKey string
-	if targetType == "ssh" {
+	if targetType == "ssh" || targetType == "netdevice" {
 		if hostKey, err = probeGatewayHostKey(ctx, delivery, sessionID, ticket); err != nil {
 			_, _ = fmt.Fprintln(stderr, "trstctl:", err)
 			return 1
@@ -135,7 +135,9 @@ var awsGatewayCLIRegion = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
 
 func gatewayClientLine(targetType string, local *net.TCPAddr, hostKey, knownHosts, kubeconfig string, scopes ...gatewayDelivery) (string, error) {
 	switch targetType {
-	case "ssh":
+	case "ssh", "netdevice":
+		// A270: a network device session is SSH to the gateway, which signs
+		// in to the device with the vaulted account.
 		entry := fmt.Sprintf("[%s]:%d %s\n", local.IP, local.Port, hostKey)
 		if err := os.WriteFile(knownHosts, []byte(entry), 0o600); err != nil {
 			return "", fmt.Errorf("write known_hosts: %w", err)

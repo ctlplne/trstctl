@@ -1377,3 +1377,32 @@ account's native rotation. If the host is offline, the rotation waits in
 password and authenticates the new one before the vault publishes it. Folders,
 templates and auto-approval rules apply to `windows_local` targets as to other
 vaulted accounts.
+
+#### Open a session on a network device
+
+Register the device account a network device provider rotates (`iosxe`, `junos`,
+`eos`, `fortigate` or `bigip`) as a `netdevice` access target: it names the
+provider, the account secret (its only role) and the gateway that serves it.
+
+```json
+{"id": "core-ops", "target_type": "netdevice", "provider_id": "core-device",
+ "account_secret": "net/core", "allowed_roles": ["net/core"],
+ "gateway_agent_id": "<gateway agent UUID>", "gateway_address": "gateway.example:8443"}
+```
+
+The provider supplies the device's SSH route: an `iosxe` or `junos` provider's
+own `addr` and `host_key_fingerprint`; for `eos`, `fortigate` and `bigip`, set the
+optional `addr` (the device's SSH `host:port`) and `host_key_fingerprint`.
+Registration is refused for the enable secret's role and for a provider with no SSH
+route. Enable `access.gateway.session.netdevice.v1` (and
+`access.gateway.session.rules.netdevice.v1` for command rules) in
+`agent_channel.claimable_job_kinds`. A reviewed session is delivered only through
+the gateway: `trstctl access sessions connect` prints a stock `ssh` command for the
+tunnel, the gateway signs in to the device as the vaulted account with its current
+password, and the client holds no credential. The session is recorded with the
+password masked. A template's command rules for the `netdevice` protocol name
+device command verbs (`configure`, `write`, `copy`, `reload`, `request`, `commit`,
+`execute`, `save`, `modify`, ...); an abbreviation names every verb it starts, so
+`wr mem` meets a rule on `write`. Rules read exec commands
+(`ssh ... "show version"`); an interactive shell's typed lines are not read, so a
+shell answers to every rule, as on an SSH host.
