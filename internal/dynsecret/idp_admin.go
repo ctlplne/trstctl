@@ -302,12 +302,15 @@ func (b *IdPAdminBackend) VerifyCredential(ctx context.Context, credential []byt
 		defer secret.Wipe(body)
 		status, raw, err := b.api.call(ctx, http.MethodPost, "/api/v1/authn", body, nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: okta-user sign-in", ErrSignInUnreachable)
 		}
 		defer secret.Wipe(raw)
 		var answer struct {
 			Status     string           `json:"status"`
 			StateToken secret.JSONBytes `json:"stateToken"`
+		}
+		if status == http.StatusUnauthorized {
+			return fmt.Errorf("%w: okta-user refused the password", ErrSignInRejected)
 		}
 		if status != http.StatusOK || json.Unmarshal(raw, &answer) != nil {
 			return fmt.Errorf("dynsecret okta-user: the sign-in was refused (HTTP %d)", status)
@@ -326,7 +329,9 @@ func (b *IdPAdminBackend) VerifyCredential(ctx context.Context, credential []byt
 		case "SUCCESS", "MFA_REQUIRED", "MFA_ENROLL", "MFA_CHALLENGE":
 			return nil
 		case "LOCKED_OUT":
-			return errors.New("dynsecret okta-user: the account is locked out")
+			return fmt.Errorf("%w: okta-user account locked out", ErrSignInLocked)
+		case "PASSWORD_EXPIRED":
+			return fmt.Errorf("%w: okta-user password expired", ErrSignInExpired)
 		}
 		return fmt.Errorf("dynsecret okta-user: the sign-in ended in %s", answer.Status)
 	case "entra-user":
@@ -343,7 +348,7 @@ func (b *IdPAdminBackend) VerifyCredential(ctx context.Context, credential []byt
 		defer secret.Wipe(form)
 		status, raw, err := b.authority.send(ctx, http.MethodPost, "/"+b.tenant+"/oauth2/v2.0/token", form, "application/x-www-form-urlencoded", nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: entra-user sign-in", ErrSignInUnreachable)
 		}
 		defer secret.Wipe(raw)
 		if status == http.StatusOK {
@@ -358,9 +363,11 @@ func (b *IdPAdminBackend) VerifyCredential(ctx context.Context, credential []byt
 			case entraProven[code]:
 				return nil
 			case code == 50126:
-				return errors.New("dynsecret entra-user: the identity provider refused the password")
+				return fmt.Errorf("%w: entra-user refused the password", ErrSignInRejected)
 			case code == 50053:
-				return errors.New("dynsecret entra-user: the account is locked out")
+				return fmt.Errorf("%w: entra-user account locked out", ErrSignInLocked)
+			case code == 50055:
+				return fmt.Errorf("%w: entra-user password expired", ErrSignInExpired)
 			}
 		}
 		// The tenant refuses the flow (conditional access, a disabled

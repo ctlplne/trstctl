@@ -2,6 +2,9 @@
 
 ### Added
 
+- Break-glass identity provider accounts (A272 part 3): the credential health worker checks each break-glass account's
+  vaulted password once per interval with the identity provider's non-interactive sign-in (Okta, Entra ID; Google reads
+  not supported) and never repeats a refused password, so a check never trips a lockout.
 - Break-glass identity provider accounts (A272 part 2): `breakglass` access targets are released only through emergency
   access (`POST /api/v1/access/emergency-checkouts`, `trstctl access emergency checkout`): a named responder, once, every
   approver notified, the password plus the current TOTP code of the account's `totp` provider (never the seed), the

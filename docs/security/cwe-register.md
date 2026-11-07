@@ -1035,7 +1035,7 @@ not this file.
 | `internal/server/pam_browser_kube_test.go:41` | test frame length under 1<<16 (CWE-190) |
 | `internal/server/pam_browser_kube_test.go:44` | test frame length, never negative (CWE-190) |
 | `internal/server/pam_gateway_mongo_served_test.go:106` | a request id's two's-complement bits (CWE-190) |
-| `internal/server/pam_health.go:91` | a positive interval in nanoseconds, never negative (CWE-190) |
+| `internal/server/pam_health.go:94` | a positive interval in nanoseconds, never negative (CWE-190) |
 | `internal/server/pam_served_test.go:731` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:1026` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/protocol_mounts.go:1028` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |

@@ -1402,6 +1402,15 @@ same release is never shown again. Checking it in (`trstctl access checkouts che
 its deadline, rotates the password at the identity provider, and the grant waits for a
 post-incident review by someone else (`trstctl access emergency review`).
 
+The credential health worker (A258) checks each break-glass account by signing in once
+with its vaulted password where the identity provider allows a non-interactive check
+(Okta's Authentication API; an Entra ID resource-owner sign-in, where an MFA step after
+the right password counts as healthy); Google Workspace reads `not_supported`. A refused
+password is never tried again until the vault changes, not even by an operator's check now
+(`POST /api/v1/access/targets/breakglass/{id}/health-check`, at most once a minute), so a
+password changed outside trstctl costs one failed sign-in, not a lockout. Rotating the
+account through the provider's administration API puts a working password back in the vault.
+
 #### Check out an account its provider rotates in place
 
 An ESXi local account, a vCenter single sign-on user, a server management controller

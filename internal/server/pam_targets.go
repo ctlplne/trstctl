@@ -240,7 +240,7 @@ func operatorSSHTarget(id string, t PAMSSHTarget) api.PAMTarget {
 
 func (s *pamService) GetPAMTarget(ctx context.Context, tenantID, targetType, id string) (api.PAMTarget, error) {
 	target, err := s.getPAMTarget(ctx, tenantID, targetType, id)
-	if err != nil || !isPAMDatabaseType(targetType) {
+	if err != nil || (!isPAMDatabaseType(targetType) && targetType != pamTargetBreakGlass) {
 		return target, err
 	}
 	health, err := s.store.ListPAMAccountHealth(ctx, tenantID)

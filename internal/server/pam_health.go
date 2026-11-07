@@ -40,9 +40,12 @@ const (
 	pamHealthNotSupported    = "not_supported"
 )
 
-// pamHealthAccount names a brokered account.
+// pamHealthAccount names a brokered account. accountSecret is set for a
+// break-glass account (A272), whose check signs in with the vaulted
+// credential itself.
 type pamHealthAccount struct {
 	tenantID, targetType, targetID, providerID string
+	accountSecret                              string
 }
 
 type pamHealthState struct {
@@ -126,7 +129,7 @@ func (s *pamService) healthAccounts(ctx context.Context) ([]pamHealthAccount, er
 	seen := map[pamHealthAccount]bool{}
 	var out []pamHealthAccount
 	for key, target := range s.databases {
-		a := pamHealthAccount{key.tenantID, key.targetType, key.id, target.cfg.ProviderID}
+		a := pamHealthAccount{key.tenantID, key.targetType, key.id, target.cfg.ProviderID, ""}
 		if !seen[a] {
 			seen[a] = true
 			out = append(out, a)
@@ -137,10 +140,19 @@ func (s *pamService) healthAccounts(ctx context.Context) ([]pamHealthAccount, er
 		return nil, err
 	}
 	for _, rec := range registered {
+		if rec.TargetType == pamTargetBreakGlass {
+			// A272: the vaulted break-glass password is what must keep working.
+			a := pamHealthAccount{rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, rec.AccountSecret}
+			if !seen[a] {
+				seen[a] = true
+				out = append(out, a)
+			}
+			continue
+		}
 		if !isPAMDatabaseType(rec.TargetType) {
 			continue
 		}
-		a := pamHealthAccount{rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID}
+		a := pamHealthAccount{rec.TenantID, rec.TargetType, rec.ID, rec.ProviderID, ""}
 		if !seen[a] {
 			seen[a] = true
 			out = append(out, a)
@@ -222,6 +234,13 @@ func (s *pamService) primeHealth(ctx context.Context, accounts []pamHealthAccoun
 
 func (s *pamService) healthChecker(a pamHealthAccount) pamCredentialChecker {
 	for _, provider := range s.providers.ForTenant(a.tenantID) {
+		if provider != nil && provider.Name() == a.providerID && a.targetType == pamTargetBreakGlass {
+			verifier, ok := provider.(dynsecret.StaticRotationProvider)
+			if !ok || s.secretReader == nil {
+				return nil
+			}
+			return breakGlassHealthChecker{s: s, tenantID: a.tenantID, secretName: a.accountSecret, verifier: verifier}
+		}
 		if provider != nil && provider.Name() == a.providerID {
 			checker, _ := provider.(pamCredentialChecker)
 			return checker
@@ -288,7 +307,10 @@ func (s *pamService) signIn(ctx context.Context, a pamHealthAccount, judged *[32
 	if err != nil {
 		return "", 0, nil, false
 	}
-	if !now && (primed || (judged != nil && *judged == digest)) {
+	// A break-glass account (A272) is never signed in again with a password
+	// its identity provider refused, not even by an operator's check: enough
+	// of them would lock out the account the emergency path depends on.
+	if (!now || a.targetType == pamTargetBreakGlass) && (primed || (judged != nil && *judged == digest)) {
 		return "", 0, &digest, false // refused before and unchanged: not tried again
 	}
 	status, attempts := dynsecret.SignInError, 0
@@ -334,22 +356,35 @@ func (s *pamService) CheckPAMAccountHealth(ctx context.Context, tenantID, target
 	if s.health == nil {
 		return api.PAMTarget{}, api.ErrPAMUnavailable
 	}
-	if !isPAMDatabaseType(targetType) {
-		return api.PAMTarget{}, fmt.Errorf("%w: only a provider-backed target has a stored credential to check", api.ErrPAMInvalid)
+	var a pamHealthAccount
+	switch {
+	case targetType == pamTargetBreakGlass:
+		rec, err := s.store.GetPAMTarget(ctx, tenantID, targetType, strings.TrimSpace(id))
+		if err != nil {
+			return api.PAMTarget{}, err
+		}
+		a = pamHealthAccount{tenantID, targetType, rec.ID, rec.ProviderID, rec.AccountSecret}
+	case isPAMDatabaseType(targetType):
+		target, err := s.databaseTarget(ctx, tenantID, targetType, id)
+		if err != nil {
+			return api.PAMTarget{}, err
+		}
+		a = pamHealthAccount{tenantID, targetType, strings.TrimSpace(id), target.cfg.ProviderID, ""}
+	default:
+		return api.PAMTarget{}, fmt.Errorf("%w: only a provider-backed or break-glass target has a stored credential to check", api.ErrPAMInvalid)
 	}
-	target, err := s.databaseTarget(ctx, tenantID, targetType, id)
-	if err != nil {
-		return api.PAMTarget{}, err
-	}
-	a := pamHealthAccount{tenantID, targetType, strings.TrimSpace(id), target.cfg.ProviderID}
 	recorded, err := s.store.ListPAMAccountHealth(ctx, tenantID)
 	if err != nil {
 		return api.PAMTarget{}, err
 	}
-	if h, ok := recorded[[2]string{a.targetType, a.targetID}]; ok && s.clock().Sub(h.CheckedAt) < pamHealthCheckNowSpacing {
+	last, checked := recorded[[2]string{a.targetType, a.targetID}]
+	if checked && s.clock().Sub(last.CheckedAt) < pamHealthCheckNowSpacing {
 		return api.PAMTarget{}, fmt.Errorf("%w: the account was checked less than a minute ago", api.ErrPAMRejected)
 	}
 	if !s.checkAccount(ctx, a, true) {
+		if checked && a.targetType == pamTargetBreakGlass && dynsecret.SignInJudged(last.Status) {
+			return api.PAMTarget{}, fmt.Errorf("%w: the identity provider refused this break-glass password, which is not tried again until the vault holds a new one (rotate the account)", api.ErrPAMRejected)
+		}
 		return api.PAMTarget{}, fmt.Errorf("%w: the account's credential could not be checked now", api.ErrPAMRejected)
 	}
 	return s.GetPAMTarget(ctx, tenantID, targetType, id)
@@ -420,4 +455,39 @@ func (p *configuredDynamicProvider) DynamicSecretCheckSignIn(ctx context.Context
 		return pamHealthNotSupported
 	}
 	return dynsecret.SignInStatusOf(checker.CheckSignIn(ctx))
+}
+
+// breakGlassHealthChecker checks a break-glass account (A272) by signing in
+// with its vaulted credential once through its provider's non-interactive
+// check; a provider with none (Google) reads not supported. The worker's
+// rules keep it from ever adding a second sign-in with a refused password.
+type breakGlassHealthChecker struct {
+	s          *pamService
+	tenantID   string
+	secretName string
+	verifier   dynsecret.StaticRotationProvider
+}
+
+func (c breakGlassHealthChecker) DynamicSecretCredentialDigest(ctx context.Context, key []byte) ([32]byte, error) {
+	value, _, err := c.s.secretReader(ctx, c.tenantID, c.secretName)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	defer secret.Wipe(value)
+	var out [32]byte
+	copy(out[:], crypto.HMACSHA256(key, value))
+	return out, nil
+}
+
+func (c breakGlassHealthChecker) DynamicSecretCheckSignIn(ctx context.Context) string {
+	value, _, err := c.s.secretReader(ctx, c.tenantID, c.secretName)
+	if err != nil {
+		return dynsecret.SignInError
+	}
+	defer secret.Wipe(value)
+	mode, err := c.verifier.VerifyStaticCredential(ctx, "", value)
+	if err == nil && mode == "not_available" {
+		return pamHealthNotSupported
+	}
+	return dynsecret.SignInStatusOf(err)
 }

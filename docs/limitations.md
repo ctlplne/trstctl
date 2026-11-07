@@ -9390,9 +9390,9 @@ What comes next:
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.
 
-## Break-glass identity provider accounts (A272) — parts 1–2: rotation and emergency-only release
+## Break-glass identity provider accounts (A272) — built against stand-ins
 
-Status: in progress. `okta-user`, `entra-user` and `google-workspace-user` providers rotate
+Status: built; live tenant runs are owed. `okta-user`, `entra-user` and `google-workspace-user` providers rotate
 the break-glass super administrators' passwords through each identity provider's
 administration API; Okta and Entra prove each change with one non-interactive sign-in,
 Google cannot be proved. A `breakglass` target vaults one of these accounts; it is
@@ -9400,14 +9400,16 @@ released only through emergency access (`POST /api/v1/access/emergency-checkouts
 named responder, once, with every approver notified, the current TOTP code computed from a
 `totp` provider's seed (never the seed), and the hardware security key holders the
 provider records; check-in or its deadline rotates it, and its grant takes a
-post-incident review. Proof today: `TestIdPAdminRotationA272`,
-`TestServedIdPAdminRotationA272` and `TestServedBreakGlassEmergencyCheckoutA272` against
+post-incident review. The A258 health worker checks each break-glass account's vaulted
+password once per interval where the provider has a non-interactive check, never repeating
+a refused one, so it never trips a lockout. Proof today: `TestIdPAdminRotationA272`,
+`TestServedIdPAdminRotationA272`, `TestServedBreakGlassEmergencyCheckoutA272` and
+`TestServedBreakGlassHealthNeverLocksOutA272` against
 stand-ins built from Okta's, Microsoft's and Google's API references; no live tenant has
 run them.
 
 What comes next:
 - Releasing a break-glass account from the console (today the API and
   `trstctl access emergency checkout`).
-- A health check that never trips a lockout (part 3).
 - Live tenant runs (Track B: Okta, Entra ID, Google Workspace).
 
