@@ -167,9 +167,25 @@ func (b *NetworkDeviceBackend) iosxePrivilege(ctx context.Context, account strin
 
 func line(parts ...[]byte) []byte { return bytes.Join(parts, []byte(" ")) }
 
+// cliPassword refuses a password a device command line would misread: it is
+// typed as one word, so it must be printable ASCII with no space, and IOS
+// answers "?" with help instead of taking it. Generated passwords always
+// pass; this guards restoring a predecessor an operator stored.
+func cliPassword(password []byte) error {
+	for _, c := range password {
+		if c <= ' ' || c > '~' || c == '?' {
+			return errors.New("dynsecret network: the password has a space, a question mark or a character outside printable ASCII, which a device command line cannot take")
+		}
+	}
+	return nil
+}
+
 // set changes account's password (or the enable secret) and saves the
 // configuration.
 func (b *NetworkDeviceBackend) set(ctx context.Context, account string, password []byte) error {
+	if err := cliPassword(password); err != nil {
+		return err
+	}
 	var steps []crypto.CLIStep
 	switch b.vendor {
 	case "iosxe":

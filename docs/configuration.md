@@ -2187,6 +2187,20 @@ in `role_bindings`, rotated in place (single-phase); on IOS-XE the account `enab
 rotates the privileged-mode secret. The administrator is never a bound account, and
 `rotation_accounts` is not used.
 
+An `eos`, `fortigate` or `bigip` provider (A270) changes local account passwords on an
+Arista EOS switch, a FortiGate or an F5 BIG-IP through the device's HTTPS management API.
+It sets `endpoint` to the device's `https://host[:port]`, `tls_ca_ref` to the device's
+certificate or the CA that issued it (PEM; `tls_server_name` when the certificate names
+another host), `allow_private_endpoint: true` with `private_egress_cidrs` covering the
+device's management address, `admin_user` to the account that makes the change, and
+`allow_static_rotation: true`. EOS and BIG-IP sign in with `password_ref` (EOS: an
+account at privilege 15 with exec authorization, so its eAPI sessions start privileged;
+BIG-IP: the Administrator or User Manager role on all partitions); FortiGate uses a REST
+API administrator's token in `api_key_ref`, with `admin_user` naming that administrator.
+Each allowed role names one account in `role_bindings`, rotated in place
+(single-phase); on EOS the account `enable` rotates the enable password, and BIG-IP's
+`root` is refused (it is not an iControl REST user).
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
@@ -2194,7 +2208,7 @@ Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`
 `aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
 `datadog`, `openai`, `unix`, `cassandra`, `oracle`, `hana`, `openrouter`, `fireworks`,
 `litellm`, `supabase`, `convex`, `dbt`, `cloudflare`, `cloudflare-r2`, `okta`,
-`databricks`, `windows`, `iosxe` and `junos`. Sync `type` values are
+`databricks`, `windows`, `iosxe`, `junos`, `eos`, `fortigate` and `bigip`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`,

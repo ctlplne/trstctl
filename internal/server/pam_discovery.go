@@ -38,7 +38,8 @@ const (
 )
 
 // pamDiscoveryTypes are the provider types whose targets discovery reads.
-var pamDiscoveryTypes = map[string]bool{"postgresql": true, "mysql": true, "mssql": true, "unix": true, "ldap": true, "iosxe": true, "junos": true}
+var pamDiscoveryTypes = map[string]bool{"postgresql": true, "mysql": true, "mssql": true, "unix": true, "ldap": true,
+	"iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
 
 // pamAccountDiscoverer is a provider that can read its target's privileged
 // accounts.
@@ -69,7 +70,7 @@ func (s *pamService) discoverer(tenantID, providerID string) (pamAccountDiscover
 		}
 		d, ok := provider.(pamAccountDiscoverer)
 		if !ok || !pamDiscoveryTypes[d.DynamicSecretProviderType()] {
-			return nil, fmt.Errorf("%w: provider %s cannot list its target's accounts (PostgreSQL, MySQL, SQL Server, Active Directory, Linux or Unix hosts and IOS-XE or Junos devices can)",
+			return nil, fmt.Errorf("%w: provider %s cannot list its target's accounts (PostgreSQL, MySQL, SQL Server, Active Directory, Linux or Unix hosts and IOS-XE, Junos, EOS, FortiGate or BIG-IP devices can)",
 				api.ErrPAMInvalid, providerID)
 		}
 		return d, nil

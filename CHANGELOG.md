@@ -2,6 +2,10 @@
 
 ### Added
 
+- Network devices (A270 part 2): `eos`, `fortigate` and `bigip` dynamic-secret providers rotate device account passwords
+  (and the EOS enable password) through eAPI, the FortiOS REST API and iControl REST over HTTPS with the device's
+  certificate pinned, single-phase with acknowledgement and rollback; discovery reads all three. Provider catalog
+  47 -> 50 recipes.
 - Network devices (A270 part 1): `iosxe` and `junos` dynamic-secret providers rotate local account passwords (and the
   IOS-XE enable secret) through the device's CLI over SSH, single-phase with acknowledgement, keeping each account's
   privilege level or login class and rolling an unproven change back; privileged account discovery reads both.

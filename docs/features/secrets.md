@@ -635,9 +635,9 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns forty-seven safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fifty safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`, and `auth0`, `unix`, `windows`, `iosxe`,
-  `junos`, `okta` and `databricks`, which only rotate). Each states its `authority` (what a
+  `junos`, `eos`, `fortigate`, `bigip`, `okta` and `databricks`, which only rotate). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
@@ -937,6 +937,22 @@ class and never their password hashes. The served proof runs against stand-ins o
 CLIs: an account and the enable secret rotate with the privilege kept and the
 configuration saved, the old password stops, a device that reports the change but keeps
 the old password is rolled back, and discovery stages each account with its level.
+
+`eos`, `fortigate` and `bigip` (A270) do the same through each device's HTTPS management
+API, its certificate pinned and egress limited to its address. EOS runs the CLI commands
+through eAPI (`runCmds`): the account's privilege and role are read from the running
+configuration and restated, because omitting them resets them, the change is copied to
+the startup configuration, and a role bound to `enable` rotates the enable password,
+proved by entering privileged mode with it. FortiGate's REST API administrator changes an
+administrator with `PUT /api/v2/cmdb/system/admin/<name>`, and the new password is proved
+at `/logincheck`, whose session is logged out at once. BIG-IP changes a user with
+`PATCH /mgmt/tm/auth/user/<name>` and saves the configuration; every call signs in for a
+token at `/mgmt/shared/authn/login` and deletes it after. A password always travels in a
+request body, never a URL, and a device's error text, which can echo the command, is
+never kept. The served proof runs against stand-ins of all three APIs: each account
+rotates with its level kept and the configuration saved, the old password stops, EOS's
+enable password rotates, a FortiGate that reports the change but keeps the old password
+is rolled back, and discovery stages every account with its level.
 
 A static rotation (or its schedule) can hold the predecessor until its consumers have
 moved (A240): `consumers` names the labels whose delivery reports

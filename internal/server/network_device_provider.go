@@ -44,3 +44,32 @@ func openConfiguredNetworkDeviceBackend(o *configuredDynamicBackendOpener) (requ
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredNetworkAPIBackend builds a backend that changes an EOS,
+// FortiGate or BIG-IP device's accounts through its HTTPS management API,
+// trusting only the pinned certificate and only the configured egress.
+func openConfiguredNetworkAPIBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	caPEM, err := o.resolve(cfg.TLSCARef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClientWithTLS(cfg.Endpoint, cfg.AllowPrivate, false, cfg.PrivateEgressCIDRs, caPEM, cfg.TLSServerName, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	api := dynsecret.NetworkAPIConfig{Vendor: cfg.Type, Endpoint: cfg.Endpoint, HTTPClient: client, AdminUser: cfg.AdminUser, RoleAccounts: cfg.RoleBindings}
+	if cfg.Type == "fortigate" {
+		api.APIToken, err = o.resolve(cfg.APIKeyRef)
+	} else {
+		api.AdminPassword, err = o.resolve(cfg.PasswordRef)
+	}
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewNetworkAPIBackend(api)
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

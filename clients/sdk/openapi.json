@@ -22351,7 +22351,10 @@
               "databricks",
               "windows",
               "iosxe",
-              "junos"
+              "junos",
+              "eos",
+              "fortigate",
+              "bigip"
             ],
             "type": "string"
           }

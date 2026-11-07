@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for cassandra, clickhouse, couchbase, elasticsearch, iosxe, junos, kafka, milvus, rabbitmq, snowflake, unix") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for bigip, cassandra, clickhouse, couchbase, elasticsearch, eos, fortigate, iosxe, junos, kafka, milvus, rabbitmq, snowflake, unix") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }

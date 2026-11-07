@@ -494,6 +494,33 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role maps to the local account it rotates."),
 		)},
+		{Type: "eos", Label: "Arista EOS local accounts", Purpose: "Changes local account passwords on an Arista EOS switch through eAPI (JSON-RPC runCmds over HTTPS, the switch's certificate pinned), as an administrator at privilege 15 with exec authorization signing in with a password: configure, username <account> privilege <its level> role <its role> secret 0 <password>, end and copy running-config startup-config, so the account keeps its privilege and role and the change survives a reload. A role bound to the account enable rotates the enable password. Each role's one account changes in place (single phase: a rotation runs only when acknowledged); a change the switch does not prove is put back. Verified by running a command as the account with the new password, or entering privileged mode with the new enable password. Discovery lists the switch's local accounts with their privilege and role, never their hashes. It rotates only; it issues no leases. Built against a stand-in of eAPI; no switch proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "eAPI", "The switch's https://host[:port] (management api http-commands).", true),
+			credential("tls_ca_ref", "Certificate pin", "The switch's certificate, or the CA that issued it, PEM.", true),
+			value("tls_server_name", "Certificate name", "Optional name the certificate is checked against, when it differs from the endpoint's host.", false),
+			value("admin_user", "Administrator", "A local account at privilege 15 with exec authorization; never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the local account it rotates, or to enable for the enable password."),
+		)},
+		{Type: "fortigate", Label: "FortiGate administrators", Purpose: "Changes FortiGate administrator passwords through the REST API over HTTPS (the firewall's certificate pinned), as a REST API administrator with a token: PUT /api/v2/cmdb/system/admin/<name> with the new password, which FortiOS saves at once. Each role's one administrator changes in place (single phase: a rotation runs only when acknowledged); a change the firewall does not prove is put back. Verified by signing in at /logincheck with the new password and logging out. Discovery lists the administrators with their access profiles, never their hashes. It rotates only; it issues no leases. Built against a stand-in of the REST API; no firewall proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "REST API", "The firewall's https://host[:port].", true),
+			credential("tls_ca_ref", "Certificate pin", "The firewall's certificate, or the CA that issued it, PEM.", true),
+			value("tls_server_name", "Certificate name", "Optional name the certificate is checked against, when it differs from the endpoint's host.", false),
+			value("admin_user", "REST API administrator", "The REST API administrator whose token is api_key_ref (an access profile that may write admin settings); never a rotated account.", true),
+			credential("api_key_ref", "API token reference", "The REST API administrator's token.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the administrator it rotates."),
+		)},
+		{Type: "bigip", Label: "F5 BIG-IP users", Purpose: "Changes BIG-IP user passwords through iControl REST over HTTPS (the device's certificate pinned), as an administrator signing in for a token at /mgmt/shared/authn/login: PATCH /mgmt/tm/auth/user/<name> with the new password, then POST /mgmt/tm/sys/config save; the token is deleted after each call. Each role's one user changes in place (single phase: a rotation runs only when acknowledged); a change the device does not prove is put back. Verified by signing in with the new password for a token, which is then deleted. Discovery lists the users with their partition roles, never their hashes. root is not an iControl REST user and is not rotated here. It rotates only; it issues no leases. Built against a stand-in of iControl REST; no device proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "iControl REST", "The device's https://host[:port] management address.", true),
+			credential("tls_ca_ref", "Certificate pin", "The device's certificate, or the CA that issued it, PEM.", true),
+			value("tls_server_name", "Certificate name", "Optional name the certificate is checked against, when it differs from the endpoint's host.", false),
+			value("admin_user", "Administrator", "A user with the Administrator (or User Manager) role on all partitions; never a rotated account.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
+			roles("Each allowed role maps to the user it rotates (never root)."),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -604,6 +631,12 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the device account's own privilege level (or privileged mode, for the enable secret), through its password", "confirmed"
 	case "junos":
 		return "the device account's own login class, through its password", "confirmed"
+	case "eos":
+		return "the switch account's own privilege and role (or privileged mode, for the enable password), through its password", "confirmed"
+	case "fortigate":
+		return "the administrator's own access profile, through its password", "confirmed"
+	case "bigip":
+		return "the user's own partition roles, through its password", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

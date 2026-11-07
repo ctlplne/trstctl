@@ -252,12 +252,12 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true, "ldap": true, "unix": true, "mongodb": true, "oracle": true, "mssql": true, "azure-sql": true, "openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true, "azure-entra": true, "okta": true, "databricks": true, "windows": true, "gcp-iam": true, "snowflake": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
 // through them runs only when acknowledged (A240).
-var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true}
+var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
 
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
@@ -363,7 +363,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
 	"datadog": {}, "openai": {}, "unix": {}, "cassandra": {}, "oracle": {}, "hana": {},
 	"openrouter": {}, "fireworks": {}, "litellm": {}, "supabase": {}, "convex": {}, "dbt": {}, "cloudflare": {}, "cloudflare-r2": {},
-	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {},
+	"okta": {}, "databricks": {}, "windows": {}, "iosxe": {}, "junos": {}, "eos": {}, "fortigate": {}, "bigip": {},
 }
 
 // clientIDProviderTypes take client_id, and clientSecretProviderTypes
@@ -378,15 +378,15 @@ var (
 var apiKeyProviderTypes = map[string]bool{
 	"ibm-api-connect": true, "datadog": true, "openai": true,
 	"openrouter": true, "fireworks": true, "litellm": true, "supabase": true, "convex": true, "dbt": true, "cloudflare": true, "cloudflare-r2": true,
-	"okta": true,
+	"okta": true, "fortigate": true,
 }
 
 // adminUserProviderTypes take admin_user (A239).
-var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true}
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true, "milvus": true, "snowflake": true, "unix": true, "cassandra": true, "windows": true, "iosxe": true, "junos": true, "eos": true, "fortigate": true, "bigip": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
-var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true}
+var tlsProviderTypes = map[string]bool{"ldap": true, "kafka": true, "cassandra": true, "eos": true, "fortigate": true, "bigip": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -630,6 +630,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"openrouter": validateHostedKeyProvider, "fireworks": validateHostedKeyProvider, "litellm": validateHostedKeyProvider, "supabase": validateHostedKeyProvider, "convex": validateHostedKeyProvider, "dbt": validateHostedKeyProvider, "cloudflare": validateHostedKeyProvider, "cloudflare-r2": validateHostedKeyProvider,
 	"unix": validateUnixProvider, "windows": validateUnixProvider,
 	"iosxe": validateNetworkDeviceProvider, "junos": validateNetworkDeviceProvider,
+	"eos": validateNetworkAPIProvider, "fortigate": validateNetworkAPIProvider, "bigip": validateNetworkAPIProvider,
 	"okta": validateClientSecretProvider, "databricks": validateClientSecretProvider,
 }
 
@@ -2424,6 +2425,61 @@ func validateNetworkDeviceProvider(where string, c DynamicSecretProviderConfig) 
 		case account == "enable" && c.Type != "iosxe":
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the enable secret, which only iosxe has", where, role))
 		case account != "enable" && !unixAccountName.MatchString(account):
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name a device account", where, role))
+		}
+	}
+	return errs
+}
+
+var networkAPIAccountName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// validateNetworkAPIProvider checks an EOS, FortiGate or BIG-IP device (A270):
+// its HTTPS management endpoint with the device's certificate (or its CA)
+// pinned, the administrator that makes each change (its password, or on
+// FortiGate the REST API administrator's token), and static rotation of one
+// bound account per role, never the administrator; on EOS the account
+// "enable" is the enable password, and BIG-IP's root is not an iControl REST
+// user.
+func validateNetworkAPIProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if u, err := url.Parse(strings.TrimSpace(c.Endpoint)); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		errs = append(errs, fmt.Errorf("%s endpoint must be the device's https://host[:port] for %s", where, c.Type))
+	}
+	if c.AllowInsecureLoopback || c.AllowPlaintext {
+		errs = append(errs, fmt.Errorf("%s %s reaches the device over HTTPS only", where, c.Type))
+	}
+	if err := validateCredentialRef(c.TLSCARef); err != nil || strings.TrimSpace(c.TLSCARef) == "" {
+		errs = append(errs, fmt.Errorf("%s tls_ca_ref must pin the device's certificate or its CA for %s", where, c.Type))
+	}
+	if !networkAPIAccountName.MatchString(c.AdminUser) {
+		errs = append(errs, fmt.Errorf("%s admin_user must name the device account that changes passwords for %s", where, c.Type))
+	}
+	if c.Type == "fortigate" {
+		if err := validateCredentialRef(c.APIKeyRef); err != nil || strings.TrimSpace(c.APIKeyRef) == "" {
+			errs = append(errs, fmt.Errorf("%s api_key_ref must name the REST API administrator's token for fortigate", where))
+		}
+		if c.PasswordRef != "" {
+			errs = append(errs, fmt.Errorf("%s fortigate signs in with api_key_ref; password_ref is not used", where))
+		}
+	} else if err := validateCredentialRef(c.PasswordRef); err != nil || strings.TrimSpace(c.PasswordRef) == "" {
+		errs = append(errs, fmt.Errorf("%s password_ref must name the administrator's password for %s", where, c.Type))
+	}
+	if !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s %s rotates device account passwords and issues no leases: set allow_static_rotation", where, c.Type))
+	}
+	if len(c.RotationAccounts) != 0 {
+		errs = append(errs, fmt.Errorf("%s %s rotates one bound account per role in place; rotation_accounts is not used", where, c.Type))
+	}
+	for role, account := range c.RoleBindings {
+		account = strings.TrimSpace(account)
+		switch {
+		case account == c.AdminUser:
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the administrator that makes the change", where, role))
+		case account == "enable" && c.Type != "eos":
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names the enable password, which only eos has", where, role))
+		case account == "root" && c.Type == "bigip":
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] names root, which is not an iControl REST user", where, role))
+		case !networkAPIAccountName.MatchString(account):
 			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name a device account", where, role))
 		}
 	}

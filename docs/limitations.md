@@ -5292,7 +5292,7 @@ when off, requiring a KEK when on):
   `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
   `ibm-api-connect`, `mssql`, `azure-sql`, `cassandra`, `oracle` and `hana` (A239), and `datadog`, `openai`,
   `openrouter`, `fireworks`, `litellm`, `supabase`, `convex`, `dbt`, `cloudflare` and `cloudflare-r2` (A240; `okta`,
-  `databricks` and `windows` rotate only), and `iosxe` and `junos` (A270, rotate only). Issuance is
+  `databricks` and `windows` rotate only), and `iosxe`, `junos`, `eos`, `fortigate` and `bigip` (A270, rotate only). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -9328,24 +9328,33 @@ What comes next:
   helper is Linux-only and a hosted Windows runner cannot be reached from a Linux
   job, so this is recorded as a limit unless a runner path is found.
 
-## Network devices (A270) — part 1 of 3: IOS-XE and Junos account rotation and discovery
+## Network devices (A270) — parts 1–2 of 3: rotation and discovery on five platforms
 
 Status: in progress. `iosxe` and `junos` providers change local account passwords
-(and IOS-XE's enable secret) through the device's own CLI over SSH, single-phase with
-acknowledgement, keeping each account's privilege level or login class, proving the new
-password signs in and rolling a change the device does not prove back to the
-predecessor. Discovery stages each device's local accounts with their privilege or
-class, never a hash. Proof today: `TestNetworkDeviceRotationA270` and
-`TestServedNetworkDeviceRotationA270` against stand-ins built from each vendor's CLI
+(and IOS-XE's enable secret) through the device's own CLI over SSH; `eos`, `fortigate`
+and `bigip` do it through the device's HTTPS management API (eAPI, the FortiOS REST API,
+iControl REST) with the device's certificate pinned. Every rotation is single-phase with
+acknowledgement, keeps each account's privilege, role, class or profile, proves the new
+password signs in and rolls a change the device does not prove back to the predecessor;
+EOS's enable password rotates too. Discovery stages each device's local accounts with
+their level, never a hash. Proof today: `TestNetworkDeviceRotationA270`,
+`TestNetworkAPIRotationA270`, `TestServedNetworkDeviceRotationA270` and
+`TestServedNetworkAPIDeviceRotationA270` against stand-ins built from each vendor's
 documentation; no real device has run them.
 
+FortiOS's public documentation on changing another administrator's password through the
+REST API is thin: some versions are reported to ignore a password sent on the
+administrator object, and the monitor endpoint `system/change-password` asks for the old
+password. The stand-in follows the administrator object; a FortiGate run decides whether
+the provider needs the monitor endpoint with the stored predecessor.
+
 What comes next:
-- Arista EOS (eAPI), FortiGate (REST) and F5 BIG-IP (iControl REST) rotation and
-  discovery (part 2).
 - Gateway sessions to all five through the vaulted credential, recorded and under the
   command rules (part 3).
-- A real IOS-XE or Junos device (or vendor image) run of the same proofs; none is in
-  the lab.
+- A real device or vendor image run of the same proofs on each platform; none is in the
+  lab.
+- BIG-IP's root password (changed through its own endpoint with the old password) and
+  FortiGate administrators in other VDOMs.
 - Accounts held in a TACACS+ or RADIUS server rotate there, not on the device; today
   only device-local accounts rotate.
 

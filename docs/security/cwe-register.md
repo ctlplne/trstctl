@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2784 annotated sites across 31 rules. Each row is
+2786 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -554,7 +554,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:94` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1491` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1494` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1238,7 +1238,7 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:433` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:463` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (65 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (66 sites)
 
 | Location | Reason |
 |---|---|
@@ -1284,6 +1284,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mssql.go:266` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mssql.go:321` | the staged credential is this provider's output: the outbox seals it and only an authorized read opens it (CWE-200) |
+| `internal/dynsecret/network_api.go:137` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/network_device.go:125` | the rotated device credential; the rotation seals it before storage (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/openai.go:125` | the new key is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
@@ -3051,7 +3052,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (34 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (35 sites)
 
 | Location | Reason |
 |---|---|
@@ -3072,6 +3073,7 @@ not this file.
 | `internal/dynsecret/milvus.go:180` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:233` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/mongodb_atlas.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/network_api.go:158` | the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918) |
 | `internal/dynsecret/oauth_client_credentials.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/providers_real.go:1689` | the authority host is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:212` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
