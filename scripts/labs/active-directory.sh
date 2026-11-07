@@ -38,6 +38,7 @@ dc=$(docker run -d --pull=never --label trstctl.lab=ad --hostname ad263 --networ
 printf '%s\n' "$dc" > "$proof/dc.id"
 docker cp scripts/labs/active-directory/provision.py "$dc:/run/provision.py"
 docker cp scripts/labs/active-directory/desktop-users.py "$dc:/run/desktop-users.py"
+docker cp scripts/labs/active-directory/reconcile-users.py "$dc:/run/reconcile-users.py"
 docker exec "$dc" sh -c '
 set -eu
 umask 077
@@ -57,6 +58,7 @@ samba-tool spn add HTTP/a267-discovery.test a267-discovery-spn -s "$cfg" >> /run
 samba-tool domain passwordsettings set --account-lockout-threshold=3 -s "$cfg" >> /run/seed.log 2>&1
 for file in /run/ad-reader-password /run/ad-desktop-password; do { printf "Tr5!"; openssl rand -hex 24 | tr -d "\n"; } > "$file"; done
 python3 /run/desktop-users.py > /run/desktop-users.log 2>&1
+python3 /run/reconcile-users.py > /run/reconcile-users.log 2>&1
 samba -D --no-process-group -s "$cfg"
 ' > "$proof/setup-dc.log" 2>&1
 client=$(docker run -d --pull=never --label trstctl.lab=ad --cap-add IPC_LOCK --ulimit memlock=-1:-1 --network "$network" "$TRSTCTL_AD_CLIENT_BASE" sleep infinity)
@@ -69,6 +71,9 @@ docker cp "$dc:/run/ad-cert.pem" "$proof/ad-ca.pem"
 docker cp "$proof/admin-password" "$client:/run/ad-admin-password"
 rm -f "$proof/admin-password"
 docker cp "$proof/ad-ca.pem" "$client:/run/ad-ca.pem"
+docker exec "$dc" cat /run/ad-reconcile-password | docker exec -i "$client" sh -c 'umask 077; cat > /run/ad-reconcile-password'
+docker cp "$dc:/run/ad-reconcile-public.json" "$proof/reconcile-public.json"
+docker cp "$proof/reconcile-public.json" "$client:/run/ad-reconcile-public.json"
 for file in ad-reader-password ad-desktop-password; do
  docker cp "$dc:/run/$file" "$proof/$file"
  chmod 600 "$proof/$file"
@@ -102,6 +107,8 @@ grep -q A267_AD_DURABLE_DRIFT_OK "$proof/native.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run "^(TestServedADAccountRotationA263|TestServedADStaticRotationRollbackA267|TestServedADPreparedResponseLossA267|TestServedADImportedUnicodeRecoveryA267|TestServedADServiceAccountDiscoveryA267)$" -test.timeout=90s' > "$proof/served.log" 2>&1
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_SERVED_LAB=1 /run/server-test -test.v -test.run ^TestServedNativeADDependentCoordinatorA267$ -test.timeout=90s' > "$proof/coordinator.log" 2>&1
 grep -q A267_NATIVE_AD_COORDINATOR_OK "$proof/coordinator.log"
+docker exec -w /run -e TRSTCTL_AD_RECONCILE_LAB=1 "$client" /run/server-test -test.v -test.run '^TestNativeADDesignatedReconciliationAuthorityA267$' -test.timeout=90s > "$proof/reconcile.log" 2>&1
+grep -q A267_NATIVE_RECONCILE_AUTHORITY_OK "$proof/reconcile.log"
 docker exec -w /run "$client" sh -c 'TRSTCTL_AD_DESKTOP_LAB=1 /run/server-test -test.v -test.run ^TestServedADDesktopA263$ -test.timeout=120s' > "$proof/desktop.log" 2>&1
 docker cp "$client:/run/trstctl-desktop-export.json" "$proof/desktop-export.json"
 

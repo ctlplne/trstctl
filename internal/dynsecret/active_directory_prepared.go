@@ -155,6 +155,9 @@ func (b *LDAPBackend) boundADPreparation(ctx context.Context, req GenerateReques
 		p.destroy()
 		return adStaticPreparation{}, adNativeIdentity{}, errors.New("dynsecret AD: preparation differs from the frozen native account/operation")
 	}
+	if b.reconcile != nil && p.Version != 2 {
+		return reject()
+	}
 	if !b.activeDirectory || !req.Static || p.Role != req.Role || p.OperationID != req.LeaseID || p.Predecessor != req.Predecessor || p.ProviderBinding != binding || !sameADRestoreDN(b.roleGroups[req.Role], p.DN) {
 		return reject()
 	}

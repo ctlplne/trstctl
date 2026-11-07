@@ -16,6 +16,9 @@ import (
 // during AD's old-password grace period. Native authentication must succeed
 // before the worker publishes the recovered value.
 func (b *LDAPBackend) RestoreStaticCredential(ctx context.Context, role, ref string, raw []byte) error {
+	if b.reconcile != nil {
+		return errors.New("dynsecret AD: designated reset authority requires its exact sealed preparation")
+	}
 	if !b.activeDirectory {
 		return errors.New("dynsecret AD: native restoration requires the explicit directory profile")
 	}

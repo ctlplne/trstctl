@@ -23,6 +23,7 @@ import (
 // its role is bound to; revocation removes it from those groups and deletes
 // it, after which the directory refuses its bind.
 type LDAPConfig struct {
+	ADReconcile *ADReconcileAuthority
 	// DirectoryMode is empty for generic LDAP, active_directory for existing AD accounts.
 	DirectoryMode string `json:"directory_mode"`
 	// Addr is the directory's host:port: its LDAPS listener, or, with
@@ -64,6 +65,7 @@ type ldapConn interface {
 
 // LDAPBackend creates and deletes leased directory accounts.
 type LDAPBackend struct {
+	reconcile        *ADReconcileAuthority
 	activeDirectory  bool
 	url              string
 	addr             string
@@ -154,6 +156,9 @@ func NewLDAPBackend(cfg LDAPConfig) (*LDAPBackend, error) {
 			return nil, err
 		}
 	}
+	if err := b.configureADReconcile(cfg.ADReconcile); err != nil {
+		return nil, err
+	}
 	password, err := secret.NewFrom(cfg.BindPassword)
 	if err != nil {
 		return nil, err
@@ -221,6 +226,9 @@ func (b *LDAPBackend) Create(ctx context.Context, role string) (string, []byte, 
 // CreateCredential implements RequestBackend: a lease id makes the entry's
 // name stable, so a retry after an uncertain issue replaces that one entry.
 func (b *LDAPBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	if b.reconcile != nil {
+		return "", nil, errors.New("dynsecret AD: designated reset authority requires its exact sealed preparation")
+	}
 	if b.activeDirectory {
 		return b.createADCredential(ctx, req)
 	}
@@ -374,6 +382,9 @@ func (b *LDAPBackend) VerifyCredential(ctx context.Context, credential []byte) e
 // Revoke implements Backend: removing a gone entry succeeds; a two-user entry
 // is retired, never removed.
 func (b *LDAPBackend) Revoke(ctx context.Context, ref string) error {
+	if b.reconcile != nil {
+		return errors.New("dynsecret AD: designated reset authority requires its exact sealed preparation")
+	}
 	if b.activeDirectory {
 		return b.retireADAccount(ctx, ref)
 	}

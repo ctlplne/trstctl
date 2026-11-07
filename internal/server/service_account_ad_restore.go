@@ -15,6 +15,9 @@ import (
 type configuredADRotationProvider struct{ *configuredDynamicProvider }
 
 func (p *configuredADRotationProvider) RestoreStaticCredential(ctx context.Context, role, ref string, credential []byte) error {
+	if p.reconcileMode {
+		return errors.New("server: designated AD inverse requires its exact sealed preparation")
+	}
 	if !p.AllowsStaticRotation(role) {
 		return errors.New("server: AD restore role is not allowed")
 	}
@@ -37,9 +40,11 @@ func (p *configuredADRotationProvider) StaticRotationBinding(role string) string
 		return ""
 	}
 	raw, err := json.Marshal(struct {
-		Role   string                             `json:"role"`
-		Config config.DynamicSecretProviderConfig `json:"config"`
-	}{role, p.cfg})
+		Role           string                             `json:"role"`
+		Config         config.DynamicSecretProviderConfig `json:"config"`
+		Reconcile      bool                               `json:"reconcile,omitempty"`
+		RotationBindDN string                             `json:"rotation_bind_dn,omitempty"`
+	}{role, p.cfg, p.reconcileMode, p.rotationBindDN})
 	if err != nil {
 		return ""
 	}

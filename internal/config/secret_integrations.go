@@ -105,12 +105,13 @@ type DynamicSecretGatewayConfig struct {
 }
 
 type DynamicSecretProviderConfig struct {
-	Desktop  *accessdesktop.Binding      `json:"desktop,omitempty"`
-	Console  *accessconsole.Binding      `json:"console,omitempty"`
-	Gateway  *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
-	TenantID string                      `json:"tenant_id"`
-	ID       string                      `json:"id"`
-	Type     string                      `json:"type"`
+	ADReconcile *ADReconcileConfig          `json:"ad_reconcile,omitempty"`
+	Desktop     *accessdesktop.Binding      `json:"desktop,omitempty"`
+	Console     *accessconsole.Binding      `json:"console,omitempty"`
+	Gateway     *DynamicSecretGatewayConfig `json:"gateway,omitempty"`
+	TenantID    string                      `json:"tenant_id"`
+	ID          string                      `json:"id"`
+	Type        string                      `json:"type"`
 
 	Endpoint    string `json:"endpoint,omitempty"`
 	AdminDSNRef string `json:"admin_dsn_ref,omitempty"`
@@ -1214,6 +1215,7 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if !tlsProviderTypes[c.Type] && (c.TLSCARef != "" || c.TLSServerName != "" || c.AllowPlaintext) {
 		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
 	}
+	errs = append(errs, validateADReconcile(where, c)...)
 	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "" || c.DirectoryMode != "" || len(c.ADLogonNames) != 0) {
 		errs = append(errs, fmt.Errorf("%s bind_dn, users_dn and directory_mode are only valid for ldap", where))
 	}

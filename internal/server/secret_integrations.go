@@ -201,11 +201,13 @@ func dynamicSecretProvidersFromConfig(
 }
 
 type configuredDynamicProvider struct {
-	id           string
-	tenantID     string
-	cfg          config.DynamicSecretProviderConfig
-	allowedRoles map[string]bool
-	maxTTL       time.Duration
+	reconcileMode  bool
+	rotationBindDN string
+	id             string
+	tenantID       string
+	cfg            config.DynamicSecretProviderConfig
+	allowedRoles   map[string]bool
+	maxTTL         time.Duration
 	// configurationRevision is a runtime-scoped, non-secret identity for the
 	// exact validated provider attachment. A restart creates a new identity, so
 	// an old review cannot authorize work against replacement configuration.
@@ -221,6 +223,7 @@ type configuredDynamicProvider struct {
 // constructor part of buildRunDeps' production call graph.
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
 	if cfg.DirectoryMode == "active_directory" {
+		cfg.ADReconcile = copyADReconcileConfig(cfg.ADReconcile)
 		names := make(map[string]string, len(cfg.ADLogonNames))
 		for ref, name := range cfg.ADLogonNames {
 			names[ref] = name
@@ -401,6 +404,9 @@ func (p *configuredDynamicProvider) DynamicSecretBindsRole(role, binding string)
 func (p *configuredDynamicProvider) MaximumTTL() time.Duration { return p.maxTTL }
 
 func (p *configuredDynamicProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {
+	if p.reconcileMode {
+		return dynsecret.Credential{}, errors.New("server: designated AD authority requires an exact sealed preparation")
+	}
 	return p.generate(ctx, req, nil)
 }
 
@@ -734,7 +740,15 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		if err != nil {
 			return o.fail(err)
 		}
+		var reconcile *dynsecret.ADReconcileAuthority
+		if o.provider.reconcileMode {
+			if cfg.ADReconcile == nil {
+				return o.fail(errors.New("server: designated AD authority is unavailable"))
+			}
+			reconcile = &dynsecret.ADReconcileAuthority{Principal: dynsecret.ADReconcilePrincipal{DN: cfg.BindDN, SID: cfg.ADReconcile.SID, GUID: cfg.ADReconcile.GUID}, RotationBindDN: o.provider.rotationBindDN}
+		}
 		backend, err := dynsecret.NewLDAPBackend(dynsecret.LDAPConfig{
+			ADReconcile:   reconcile,
 			DirectoryMode: cfg.DirectoryMode, Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
 			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
 			UsernamePrefix: cfg.UsernamePrefix, RotationAccounts: o.provider.rotationAccountPairs(),

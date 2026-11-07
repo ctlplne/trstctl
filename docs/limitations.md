@@ -9205,3 +9205,12 @@ executor. Native directory state checks cover password-rotation verification,
 not cross-session RDP lockout prevention. Existing target sessions/background work
 and Kerberos tickets can survive gateway closure/password reset. Final packaged
 recovery and shared recording-control reproof remain owed.
+
+
+Designated AD reconciliation has a native adapter proof against Samba: a separate
+SID/GUID-pinned principal holds only the reset-password right on one owned target.
+Stock LDAP accepts the repaired and recovered generations and refuses the retired
+ones; a foreign target without the grant is refused. Unprepared writes and
+ordinary-writer fallback are blocked. This is not yet the public approved
+reconciliation/audit workflow. Windows dependent execution, the combined journey,
+final-image replay, and AD forest behavior remain separate proof obligations.

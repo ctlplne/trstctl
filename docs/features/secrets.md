@@ -2656,3 +2656,29 @@ limited to 16 KiB and ten seconds, with no proxy or redirect. Implement this
 endpoint against actual application work; echoing a nonce alone is insufficient.
 The endpoint and native process/task identity checks establish different facts,
 and both must pass.
+
+
+### Designated directory reset identity
+
+A separate reset identity can repair a password changed outside the vault. The
+native adapter checks that identity before every prepared reset or recovery,
+using its directory SID and object GUID rather than trusting a reused name.
+
+An explicit `active_directory` provider may define `ad_reconcile` with
+`bind_dn`, protected `password_ref`, `sid`, raw 16-byte `guid` encoded as 32 hex
+characters, and explicit `allowed_roles`. Its DN and credential reference must
+differ from the ordinary writer; each role names one existing target account.
+Grant only the target's [Reset Password extended right](https://learn.microsoft.com/windows/win32/adschema/r-user-force-change-password)
+(`00299570-246d-11d0-a768-00aa006e0529`). The adapter reads public identity and
+DC progress metadata over verified LDAPS. It refuses missing permissions,
+changed identity pins and unprepared writes; it never falls back to the ordinary
+writer. The credential reference remains in the control plane.
+
+Samba native adapter proof covers a separate writer with that right on one
+owned account, drift repair, retained-generation recovery, stock LDAP acceptance
+and retired-password refusal, and a foreign target without the grant. This
+configuration is preparation for the coordinated reconciliation workflow; an
+approved public reconciliation operation and its audit journey are not yet
+served. Restoring after a dependent failure recovers the retained stored value;
+it cannot reconstruct an unknown externally changed password. Existing lockout
+checks remain in force, and neither unlock nor forest replication is qualified.

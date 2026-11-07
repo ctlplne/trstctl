@@ -17,8 +17,9 @@ import (
 // credential and refuse unrelated native progress before another effect.
 type adNativeResetIdentity struct {
 	adNativeIdentity
-	KeyVersion                    uint64
-	DCInvocationID, NativeAddress string
+	ResetPrincipalDN, ResetPrincipalGUID, ResetPrincipalSID string
+	KeyVersion                                              uint64
+	DCInvocationID, NativeAddress                           string
 }
 
 func (b *LDAPBackend) inspectADResetIdentity(ctx context.Context, dn string, route ldapbind.PinnedTLS, forBind ...bool) (adNativeResetIdentity, error) {
@@ -67,6 +68,12 @@ func (b *LDAPBackend) inspectADResetIdentity(ctx context.Context, dn string, rou
 		}
 		identity.GUID = hex.EncodeToString(guid)
 		identity.SID = hex.EncodeToString(sid)
+		identity, e = b.bindADReconcilePrincipal(dn, identity, func(principalDN string) (*ldap.Entry, error) {
+			return read(principalDN, "(&(objectClass=user)(!(objectClass=computer)))", []string{"objectGUID", "objectSid"})
+		})
+		if e != nil {
+			return e
+		}
 		identity.PasswordSetAt = entry.GetAttributeValue("pwdLastSet")
 		versions := entry.GetAttributeValues("msDS-KeyVersionNumber")
 		if len(versions) != 1 {
