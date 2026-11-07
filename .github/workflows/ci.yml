@@ -809,6 +809,15 @@ jobs:
           go test ./internal/crypto/winaccounts -run '^TestNativeWindowsLocalAdministratorInventoryA268$' -v -count=1 -timeout=3m 2>&1 | Tee-Object -Variable a268InventoryOutput
           if ($LASTEXITCODE -ne 0) { throw 'Native local administrator inventory failed' }
           if (($a268InventoryOutput -join "`n") -notmatch 'A268_WINDOWS_LOCAL_INVENTORY_OK') { throw 'Required native inventory proof marker missing' }
+      - name: Native local administrator password rotation
+        shell: pwsh
+        run: |
+          $env:TRSTCTL_A268_WINDOWS_ROTATION = '1'
+          $a268RotationOutput = & go test ./internal/crypto/winaccounts -run '^TestNativeWindowsLocalAdministratorRotationA268$' -count=1 -v -timeout=3m 2>&1
+          $a268RotationOutput | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'Native local administrator rotation failed' }
+          if (($a268RotationOutput -join "`n") -notmatch 'A268_WINDOWS_LOCAL_ROTATION_OK') { throw 'Required native rotation proof marker missing' }
+
 
   # A267: native SCM service APIs and functional work on an owned local account.
   # Samba proves the directory separately; this does not qualify an AD forest.

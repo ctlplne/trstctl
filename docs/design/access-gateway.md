@@ -1277,5 +1277,35 @@ profile's `windows_local_accounts_inventory` grant permits only this read; it
 adds no file roots, commands, credential redemption or password-write authority.
 
 Host inventory is exposed through source-backed API and CLI commands. Native
-Windows execution, console authoring, scheduled password rotation and
-checkout-driven invalidation remain separate proof obligations.
+Windows execution, scheduled password rotation and checkout-driven invalidation
+remain separate proof obligations. The console selects an enrolled host and
+reviews its exact signed inventory result.
+
+
+### Local account password execution boundary
+
+The native password primitive binds a member machine's local SAM and the exact
+administrator account SID, name and flags. It reads the local password and lockout
+policies before a reset and before authentication. Unknown failure counters,
+locked accounts and insufficient remaining failure budget refuse execution; the
+primitive never unlocks an account or changes its policy. Success requires a
+network logon with the successor whose token names the exact SID, followed by one
+refusal of the predecessor. A successful reset alone is insufficient evidence.
+
+Password generation shares the existing Windows account policy. Private UTF-8
+bytes are copied into locked memory and encoded directly into a locked, terminated
+UTF-16 buffer for synchronous native calls. No password string, shell argument,
+command script or plaintext journal is constructed. Every native buffer is
+explicitly destroyed after use.
+
+The caller must durably record the generation's start before the first native
+write and retain the resulting public proof before publishing success. A started
+attempt is never blindly reset or authenticated again after an uncertain outcome.
+Native APIs address a local account by name: SID checks before and after each
+phase detect observed changes but do not provide an atomic SID compare-and-set.
+A trusted local administrator can still race a rename between those calls.
+
+The owned Windows fixture covers two account contexts on one operating system.
+Cross-compilation is separate from execution. The durable host journal, prepared
+credential transport, enrolled fleet scheduling, checkout invalidation and offline
+return each require their own integration and runtime evidence.

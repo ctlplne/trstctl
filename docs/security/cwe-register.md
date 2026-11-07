@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2761 annotated sites across 31 rules. Each row is
+2774 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -674,7 +674,7 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (65 sites)
+### G103 — CWE-? (unmapped rule) (78 sites)
 
 | Location | Reason |
 |---|---|
@@ -706,6 +706,19 @@ not this file.
 | `internal/crypto/winaccounts/native_windows_test.go:86` | exact newly created account name after current SID equality check; no wildcard or pre-existing account deletion (CWE-242) |
 | `internal/crypto/winaccounts/native_windows_test.go:111` | fixed local alias and exact owned SID, one membership only (CWE-242) |
 | `internal/crypto/winaccounts/native_windows_test.go:123` | one correct-password local fixture login; locked password pointer is never converted to a string or argv (CWE-242) |
+| `internal/crypto/winaccounts/rotation_native_windows_test.go:44` | live aligned locked UTF-16 password for one synchronous owned USER_INFO_1 fixture creation (CWE-242) |
+| `internal/crypto/winaccounts/rotation_native_windows_test.go:46` | local-only uniquely named test user; locked secret never becomes a string, file or argv (CWE-242) |
+| `internal/crypto/winaccounts/rotation_native_windows_test.go:58` | removes only the exact owned SID membership this fixture added (CWE-242) |
+| `internal/crypto/winaccounts/rotation_native_windows_test.go:68` | deletes only the newly created name after current SID equality; never a wildcard or pre-existing account (CWE-242) |
+| `internal/crypto/winaccounts/rotation_native_windows_test.go:90` | localized built-in alias, single exact owned local SID, no domain account or unrelated membership (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:42` | local-only public password policy result, freed below; no secret or remote target (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:50` | exact USER_MODALS_INFO_0 prefix fits NetApiBufferSize-checked native allocation (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:51` | local-only public lockout policy result with SDK level 3 and owned output pointer (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:59` | exact USER_MODALS_INFO_3 prefix fits the checked allocation; read-only scalar fields (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:113` | exact USER_INFO_4 ABI in checked allocation; only public identity/flags/counters are accessed, never Password (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:160` | aligned locked UTF-16 byte buffer, terminated and borrowed through Use for the synchronous SDK call (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:162` | local-only password field, fixed SDK level, exact preflighted public account name; no flags, membership, shell or remote target (CWE-242) |
+| `internal/crypto/winaccounts/rotation_windows.go:195` | one bounded local-SAM LOGON_NETWORK authentication, which does not cache credentials; live locked password bytes only (CWE-242) |
 | `internal/crypto/windependents/automation_native_windows_test.go:47` | exact PSAPI output for the current process and live locked owned BSTR, no material is copied (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:53` | owned native BSTR allocator length, wiped in views no larger than 1 MiB before SysFreeString; no password string (CWE-242) |
 | `internal/crypto/windependents/automation_windows.go:92` | owned SysAllocStringLen or COM BSTR, native length capped below 1 Mi UTF-16 units and locked before private use (CWE-242) |

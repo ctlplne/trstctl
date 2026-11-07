@@ -432,34 +432,4 @@ func OpenMSSQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
 // lower case letters and digits (rejection sampling, no modulo bias), with each
 // class present, so a server enforcing Windows password complexity
 // (CHECK_POLICY) accepts it.
-func randomPolicyPassword(n int) ([]byte, error) {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-	const limit = 256 - 256%len(alphabet) // bytes at or above this are redrawn
-	for attempt := 0; attempt < 32; attempt++ {
-		out := make([]byte, 0, n)
-		for len(out) < n {
-			raw, err := crypto.RandomBytes(n)
-			if err != nil {
-				secret.Wipe(out)
-				return nil, err
-			}
-			for _, b := range raw {
-				if int(b) < limit && len(out) < n {
-					out = append(out, alphabet[int(b)%len(alphabet)])
-				}
-			}
-			secret.Wipe(raw)
-		}
-		var upper, lower, digit bool
-		for _, c := range out {
-			upper = upper || (c >= 'A' && c <= 'Z')
-			lower = lower || (c >= 'a' && c <= 'z')
-			digit = digit || (c >= '0' && c <= '9')
-		}
-		if upper && lower && digit {
-			return out, nil
-		}
-		secret.Wipe(out)
-	}
-	return nil, errors.New("dynsecret: could not draw a complex password")
-}
+func randomPolicyPassword(n int) ([]byte, error) { return crypto.RandomAccountPassword(n) }
