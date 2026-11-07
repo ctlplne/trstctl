@@ -145,6 +145,10 @@ func Envelopes() map[string]Envelope {
 		env("nhi_behavior", []AssetClass{AssetNHIBehavior}, PrecondConnectorCredential),
 		env("api_key", []AssetClass{AssetAPIKeyToken}, PrecondConnectorCredential),
 		env("credential_compromise", []AssetClass{AssetCompromisedCred}, PrecondConnectorCredential),
+		// A274: a provider's managed accounts' sign-ins, read through its
+		// administrator connection; a sign-in nothing explains is a
+		// compromised credential.
+		env("pam_signin", []AssetClass{AssetCompromisedCred}, PrecondConnectorCredential),
 		env("k8s_ingress_gateway", []AssetClass{AssetKubernetesTLS}, PrecondClusterCredential),
 		env("secret_repo", []AssetClass{AssetRepositorySecret}, PrecondRepositoryConfigured),
 		env("secret_third_party", []AssetClass{AssetThirdPartySecret}, PrecondConnectorCredential),

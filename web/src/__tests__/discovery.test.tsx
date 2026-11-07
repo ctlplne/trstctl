@@ -28,6 +28,7 @@ const { apiMock } = vi.hoisted(() => ({
     dismissDiscoveryFinding: vi.fn(),
     removeDistrustedRoot: vi.fn(),
     createDiscoverySource: vi.fn(),
+    dynamicSecretProviders: vi.fn(),
     agents: vi.fn(),
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
@@ -1554,6 +1555,34 @@ describe("discovery control-plane surface", () => {
           }),
         ],
       },
+    });
+  });
+
+  it("creates a privileged account sign-in source naming a provider that can read sign-ins (A274)", async () => {
+    const user = userEvent.setup();
+    apiMock.dynamicSecretProviders.mockResolvedValue({
+      configured_providers: [
+        { id: "lab-host", label: "Lab host", type: "unix", ready: true, allowed_roles: ["host/single"] },
+        { id: "orders-db", label: "Orders database", type: "postgresql", ready: true, allowed_roles: ["db/orders"] },
+        { id: "okta-org", label: "Okta", type: "okta-user", ready: true, allowed_roles: ["bg/okta"] },
+      ],
+    });
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form") as HTMLFormElement;
+    await user.type(within(sourceForm).getByLabelText("Name"), "orders-db-signins");
+    await user.selectOptions(within(sourceForm).getByLabelText("Kind"), "pam_signin");
+    const provider = await within(sourceForm).findByLabelText("Provider");
+    expect(within(provider).queryByRole("option", { name: "Okta (okta-user)" })).not.toBeInTheDocument();
+    await user.selectOptions(provider, "orders-db");
+    await user.type(within(sourceForm).getByLabelText("Lookback (seconds, optional)"), "900");
+    await user.click(within(sourceForm).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "orders-db-signins",
+      kind: "pam_signin",
+      config: { provider_id: "orders-db", lookback_seconds: 900 },
     });
   });
 

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2800 annotated sites across 31 rules. Each row is
+2805 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1430,7 +1430,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (367 sites)
+### G204 — CWE-78 OS command injection (372 sites)
 
 | Location | Reason |
 |---|---|
@@ -1537,6 +1537,7 @@ not this file.
 | `internal/crypto/possession_openssl_test.go:25` | the test's own openssl binary and fixed arguments (CWE-78) |
 | `internal/crypto/pqc_x509_test.go:61` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
+| `internal/crypto/ssh_signin_report_windows_test.go:33` | the fixed report script this test proves, run on the test host (CWE-78) |
 | `internal/crypto/tlsprobe/openssl.go:104` | trusted absolute local executable; fixed verb/options; no shell or remote command. |
 | `internal/crypto/windependents/pool_runtime_windows.go:39` | fixed inbox IIS executable in native System32, read-only operation and validated pool name; no shell/credentials (CWE-78) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
@@ -1694,6 +1695,10 @@ not this file.
 | `internal/server/pam_recording_served_test.go:208` | the stock sftp client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_served_test.go:918` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_served_test.go:949` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:323` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:412` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2869,13 +2874,14 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (39 sites)
+### G702 — CWE-78 OS command injection (taint) (40 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
+| `internal/crypto/ssh_signin_report_windows_test.go:33` | the fixed report script this test proves, run on the test host (CWE-78) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |

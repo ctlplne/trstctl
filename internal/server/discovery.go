@@ -48,6 +48,7 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pamsignin"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/scancollect"
 	"trstctl.com/trstctl/internal/secretscan"
@@ -233,16 +234,18 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	// served backends, and a provider outside that set fails with the
 	// connector's clear "unsupported provider" error instead of the
 	// generic no-connector fallback (A0.2b).
-	cloudsecret.SourceKind:          (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
-	"secret_store":                  (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
-	"ct_log":                        (*issuanceDispatcher).executeCTLogDiscoveryRun,
-	"drift":                         (*issuanceDispatcher).executeDriftDiscoveryRun,
-	nhi.SourceKind:                  (*issuanceDispatcher).executeNHICrossSurfaceDiscoveryRun,
-	oauthgrant.SourceKind:           (*issuanceDispatcher).executeOAuthGrantDiscoveryRun,
-	serviceaccount.SourceKind:       (*issuanceDispatcher).executeServiceAccountDiscoveryRun,
-	nhibehavior.SourceKind:          (*issuanceDispatcher).executeNHIBehaviorDiscoveryRun,
-	apikey.SourceKind:               (*issuanceDispatcher).executeAPIKeyOrManualDiscoveryRun,
-	compromise.SourceKind:           (*issuanceDispatcher).executeCompromisedCredentialDiscoveryRun,
+	cloudsecret.SourceKind:    (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
+	"secret_store":            (*issuanceDispatcher).executeCloudSecretDiscoveryRun,
+	"ct_log":                  (*issuanceDispatcher).executeCTLogDiscoveryRun,
+	"drift":                   (*issuanceDispatcher).executeDriftDiscoveryRun,
+	nhi.SourceKind:            (*issuanceDispatcher).executeNHICrossSurfaceDiscoveryRun,
+	oauthgrant.SourceKind:     (*issuanceDispatcher).executeOAuthGrantDiscoveryRun,
+	serviceaccount.SourceKind: (*issuanceDispatcher).executeServiceAccountDiscoveryRun,
+	nhibehavior.SourceKind:    (*issuanceDispatcher).executeNHIBehaviorDiscoveryRun,
+	apikey.SourceKind:         (*issuanceDispatcher).executeAPIKeyOrManualDiscoveryRun,
+	compromise.SourceKind:     (*issuanceDispatcher).executeCompromisedCredentialDiscoveryRun,
+	// A274: a provider's managed accounts' sign-ins outside trstctl.
+	pamsignin.SourceKind:            (*issuanceDispatcher).executePAMSignInDiscoveryRun,
 	k8stls.SourceKind:               (*issuanceDispatcher).executeKubernetesTLSAutoIssuanceRun,
 	secretscan.RepositorySourceKind: (*issuanceDispatcher).executeSecretRepositoryDiscoveryRun,
 	secretscan.ThirdPartySourceKind: (*issuanceDispatcher).executeThirdPartySecretDiscoveryRun,

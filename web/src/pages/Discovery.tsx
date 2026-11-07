@@ -9,6 +9,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
+import { PAMSignInSourceFields } from "./discovery/PAMSignInSourceFields";
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
@@ -87,6 +88,7 @@ const sourceKinds: SourceKind[] = [
   "nhi_behavior",
   "credential_compromise",
   "k8s_ingress_gateway",
+  "pam_signin",
 ];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
@@ -114,6 +116,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   nhi_behavior: "NHI behavior",
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
+  pam_signin: translateNow("discovery.sourceKind.pamSignIn"),
 };
 const structuredSourceKinds = [
   "nhi_cross_surface",
@@ -644,6 +647,8 @@ export function Discovery() {
   const [busy, setBusy] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("nhi_cross_surface");
+  const [pamSignInProvider, setPAMSignInProvider] = useState("");
+  const [pamSignInLookback, setPAMSignInLookback] = useState("");
   const [targets, setTargets] = useState("");
   const [segment, setSegment] = useState("");
   const [relayAgentID, setRelayAgentID] = useState("");
@@ -847,12 +852,14 @@ export function Discovery() {
                 segment: segment.trim(),
                 ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
               }
-            : isStructuredSourceKind(sourceKind)
-              ? {
-                  ...buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind]),
-                  ...(sourceKind === "k8s_ingress_gateway" ? kubernetesDeliveryConfig(kubernetesDelivery) : {}),
-                }
-              : {};
+            : sourceKind === "pam_signin"
+              ? { provider_id: pamSignInProvider, ...(pamSignInLookback.trim() ? { lookback_seconds: Number(pamSignInLookback) } : {}) }
+              : isStructuredSourceKind(sourceKind)
+                ? {
+                    ...buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind]),
+                    ...(sourceKind === "k8s_ingress_gateway" ? kubernetesDeliveryConfig(kubernetesDelivery) : {}),
+                  }
+                : {};
       const request: DiscoverySourceRequest = { name: sourceName.trim(), kind: sourceKind, config };
       if (sourceKind === "api_key") {
         const requestKey = JSON.stringify(request);
@@ -1212,6 +1219,14 @@ export function Discovery() {
               />
             )}
             {sourceKind === "k8s_ingress_gateway" && <KubernetesDeliveryFields value={kubernetesDelivery} onChange={setKubernetesDelivery} />}
+            {sourceKind === "pam_signin" && (
+              <PAMSignInSourceFields
+                providerID={pamSignInProvider}
+                lookback={pamSignInLookback}
+                onProvider={setPAMSignInProvider}
+                onLookback={setPAMSignInLookback}
+              />
+            )}
             {sourceKind === "api_key" && apiKeyPlanIsCurrent && apiKeyDraft && apiKeyPlan ? (
               <section aria-label={t("discovery.importPreview.label")} className="grid gap-4 rounded-panel border border-brand-accent/25 bg-brand-accent/5 p-4">
                 <div className="flex items-start gap-3">

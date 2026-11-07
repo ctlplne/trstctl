@@ -9452,3 +9452,29 @@ What comes next:
   into pages or scripts (or their Content-Security-Policy), or live under a path rather than at
   an origin.
 - Rotating a web console account (today the account is vaulted, not rotated).
+
+## Bypass detection (A274) — part 1: Linux, Unix, Windows-over-SSH and database collectors
+
+Status: in progress. A `pam_signin` discovery source watches a dynamic-secret provider's
+static accounts: each run reads their sign-ins through the provider's administrator
+connection (sshd records from the journal and the auth log files; Windows logon events over
+OpenSSH; PostgreSQL `pg_stat_activity`, MySQL `performance_schema.threads`, SQL Server
+`sys.dm_exec_sessions`), explains each by a session, a revealed check-out, a rotation or a
+health check of that account (30 seconds of clock skew allowed), and records every
+unexplained sign-in as a `compromised_credential` finding. The console creates the source.
+Proof today: `TestServedBypassDetectionOnALinuxHostA274` (an outside password sign-in on a
+Debian host raises a finding with its address and method; the provider's own rotation,
+which signs in to prove the new password, raises none; a re-collection refreshes the finding;
+another tenant reads nothing) and `TestServedBypassDetectionOnADatabaseA274` (an outside
+connection with a vaulted PostgreSQL account raises a finding; the gateway's connection for a
+reviewed session and a revealed check-out's connection raise none).
+
+What comes next:
+- Keeping the collected sign-ins as a tenant read model under a retention policy, with the
+  console's view of explained and unexplained sign-ins (part 2).
+- A MySQL served proof; SQL Server on the x86 lab job; the Windows script's native run on
+  windows-latest (read at the build's final checks) and a Windows proof against a host;
+  Windows hosts enrolled with the native agent (A268), whose logons need the host agent.
+- Database connections shorter than the collection interval are not seen (current sessions
+  only); server login logging would close that.
+

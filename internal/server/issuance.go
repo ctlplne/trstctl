@@ -113,6 +113,9 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	// pamSignIns reads a provider's managed accounts' sign-ins and explains
+	// each (A274); nil when privileged access is not served.
+	pamSignIns              func(ctx context.Context, tenantID, providerID string, since, now time.Time) (pamSignInCollection, error)
 	cloudReplacementPrepare func(context.Context, string, string) (api.CloudReplacementPreparation, error)
 	cmdbExports             *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers

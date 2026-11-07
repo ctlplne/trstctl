@@ -788,6 +788,20 @@ export const messages = {
     description: "Privileged session dialog: the CLI command that opens a gateway session's tunnel (A273); the command is literal.",
   },
   "admin.access.gatewayTicket": { defaultMessage: "Gateway ticket (shown once)", description: "Privileged session dialog: gateway session types (A273)." },
+  "discovery.sourceKind.pamSignIn": { defaultMessage: "Privileged account sign-ins", description: "Discovery: privileged account sign-in source (A274)." },
+  "discovery.pamSignIn.help": {
+    defaultMessage:
+      "Watches the accounts a dynamic-secret provider manages for sign-ins outside trstctl. Each run reads sign-in records through the provider's administrator connection — a host's sshd log or Windows logon events, a database's current sessions — and raises a compromised-credential finding for any sign-in no session, check-out, rotation or health check explains. Schedule the source to run every few minutes.",
+    description: "Discovery: privileged account sign-in source (A274).",
+  },
+  "discovery.pamSignIn.provider": { defaultMessage: "Provider", description: "Discovery: privileged account sign-in source (A274)." },
+  "discovery.pamSignIn.chooseProvider": { defaultMessage: "Choose a provider", description: "Discovery: privileged account sign-in source (A274)." },
+  "discovery.pamSignIn.providerOption": { defaultMessage: "{label} ({type})", description: "Discovery: privileged account sign-in source (A274)." },
+  "discovery.pamSignIn.lookback": { defaultMessage: "Lookback (seconds, optional)", description: "Discovery: privileged account sign-in source (A274)." },
+  "discovery.pamSignIn.lookbackHint": {
+    defaultMessage: "How far back each run reads: 300 to 604800, an hour when empty. Overlapping runs refresh a finding, never repeat it.",
+    description: "Discovery: privileged account sign-in source (A274).",
+  },
   "admin.access.inPlaceAccount.target": {
     defaultMessage: "Account rotated in place (check-out)",
     description: "Account target registration (A271): hypervisors, server controllers and network devices.",

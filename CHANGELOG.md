@@ -2,6 +2,11 @@
 
 ### Added
 
+- Bypass detection (A274 part 1): a `pam_signin` discovery source reads a provider's managed accounts' sign-ins through
+  its administrator connection (sshd journal and auth logs, Windows logon events over OpenSSH, PostgreSQL, MySQL and SQL
+  Server current sessions), explains each by a session, check-out, rotation or health check, and records each
+  unexplained one as a `compromised_credential` finding. Discovery source catalog 25 -> 26 kinds; the console's
+  Discovery source form creates it.
 - Gateway sessions from the console (A273 console): the privileged session dialog requests every gateway session type
   (Redis, MySQL, MongoDB, ClickHouse, Snowflake, cloud APIs, the AWS console, remote desktop, network devices, web
   consoles), not only PostgreSQL, SSH and Kubernetes; an opened gateway session shows the CLI connect command and its

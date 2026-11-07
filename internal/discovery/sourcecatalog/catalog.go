@@ -147,6 +147,17 @@ var items = []Capability{
 	structured("service_account", "Service accounts", "accounts", "Inventory Active Directory and cloud service-account metadata and credential references without collecting passwords or private keys."),
 	structured("nhi_behavior", "Identity behavior", "events", "Analyze bounded, sanitized use metadata for machine identities; credential material is rejected."),
 	structured("credential_compromise", "Compromise signals", "signals", "Ingest sanitized detector evidence and credential references; stolen credential values are rejected."),
+	{
+		Kind: "pam_signin", Label: "Privileged account sign-ins", Tool: "Discover", Route: "/discovery?tab=sources&kind=pam_signin", SetupSurface: SetupSourceWizard,
+		Purpose:      "Watch the accounts a dynamic-secret provider manages for sign-ins outside trstctl: each sign-in no session, check-out, rotation or health check explains becomes a compromised-credential finding (A274).",
+		DataHandling: "Reads sign-in metadata only — the account, when, from where and how — through the provider's administrator connection: a host's sshd journal and auth log or Windows logon events, a database's current sessions. Never a credential or what a session did.",
+		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
+		Configuration: []Field{
+			field("provider_id", "Provider", "string", true, false, false, "A dynamic-secret provider of the tenant whose static accounts are watched (a Linux, Unix or Windows host, PostgreSQL, MySQL or SQL Server)."),
+			field("lookback_seconds", "Lookback seconds", "integer", false, false, true, "How far back each run reads (300 to 604800; default an hour). Overlapping runs refresh a finding, never repeat it."),
+		},
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/incident-and-jit.md#bypass-detection-a274",
+	},
 	structured("k8s_ingress_gateway", "Kubernetes TLS", "resources", "Inventory Kubernetes Ingress and Gateway TLS metadata; Secret values and private keys are rejected."),
 	{
 		Kind: "agent", Label: "Agent inventory", Tool: "Workloads & Machines", Route: "/agents", SetupSurface: SetupContextual,

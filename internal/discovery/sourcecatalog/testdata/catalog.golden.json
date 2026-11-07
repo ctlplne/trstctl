@@ -2457,6 +2457,55 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#metadata-sources"
     },
     {
+      "kind": "pam_signin",
+      "label": "Privileged account sign-ins",
+      "purpose": "Watch the accounts a dynamic-secret provider manages for sign-ins outside trstctl: each sign-in no session, check-out, rotation or health check explains becomes a compromised-credential finding (A274).",
+      "data_handling": "Reads sign-in metadata only — the account, when, from where and how — through the provider's administrator connection: a host's sshd journal and auth log or Windows logon events, a database's current sessions. Never a credential or what a session did.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=pam_signin",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "provider_id",
+          "label": "Provider",
+          "type": "string",
+          "required": true,
+          "description": "A dynamic-secret provider of the tenant whose static accounts are watched (a Linux, Unix or Windows host, PostgreSQL, MySQL or SQL Server)."
+        },
+        {
+          "path": "lookback_seconds",
+          "label": "Lookback seconds",
+          "type": "integer",
+          "required": false,
+          "advanced": true,
+          "description": "How far back each run reads (300 to 604800; default an hour). Overlapping runs refresh a finding, never repeat it."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/incident-and-jit.md#bypass-detection-a274"
+    },
+    {
       "kind": "k8s_ingress_gateway",
       "label": "Kubernetes TLS",
       "purpose": "Kubernetes TLS discovery from bounded, sanitized observations.",

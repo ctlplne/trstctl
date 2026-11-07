@@ -35,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pamsignin"
 	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -1569,6 +1570,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == compromise.SourceKind {
 		if err := compromise.ValidateConfig(cfg); err != nil {
+			return nil, errStatusFrom(http.StatusBadRequest, err)
+		}
+	}
+	if req.Kind == pamsignin.SourceKind {
+		if _, err := pamsignin.ParseConfig(cfg); err != nil {
 			return nil, errStatusFrom(http.StatusBadRequest, err)
 		}
 	}

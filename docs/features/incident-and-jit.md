@@ -111,6 +111,39 @@ This is a served dispatch and evidence path, not a promise that trstctl manages 
 correlation searches, Jira automation rules, Slack app installation, or bidirectional
 ServiceNow state sync.
 
+### Bypass detection (A274)
+
+A managed account's credential used outside trstctl — someone signing in with a vaulted
+password directly, around the gateway — is the compromise the access controls exist to
+prevent. A **Privileged account sign-ins** discovery source (`pam_signin`) names one of the
+tenant's dynamic-secret providers; each run reads, through the provider's administrator
+connection, the sign-ins of the accounts the provider manages (its static roles' accounts):
+a Linux or Unix host's sshd records from the journal and `/var/log/auth.log` or
+`/var/log/secure`, a Windows host's Security log logon events (4624) over OpenSSH, or a
+PostgreSQL, MySQL or SQL Server's current sessions. It reads sign-in metadata only — the
+account, when, from where and how — never a credential or what a session did.
+
+Each sign-in is explained by a span in which trstctl itself, or a person it let in, signed
+in as that account: a session to one of the provider's vaulted targets (through its
+gateway, or a direct PostgreSQL session) or an SSH session to the provider's host as that
+account, a revealed check-out, a rotation of the account, or a credential health check. A
+sign-in no span explains (allowing 30 seconds of clock skew) becomes a
+`compromised_credential` finding (CAP-ITDR-02, OWASP NHI2) with the account, the client
+address, the method, the collector and the target-side reference as evidence — the input to
+the credential compromise workflow above. A later run that reads the same sign-in refreshes
+the finding instead of repeating it.
+
+```json
+{"name": "orders-db-signins", "kind": "pam_signin",
+ "config": {"provider_id": "orders-db", "lookback_seconds": 900}}
+```
+
+Schedule the source (`POST /api/v1/discovery/schedules`) to run every few minutes: a
+finding appears within one run of the sign-in. A database's current sessions are read, so a
+connection that opens and closes between two runs is not seen there; host logs keep every
+sign-in. In the console, create the source under Discovery → Sources (kind **Privileged
+account sign-ins**: a provider that can read sign-ins, and an optional lookback).
+
 ### Fleet re-issuance for CA compromise (F32)
 
 If an X.509 CA is compromised, every active identity whose current certificate is
