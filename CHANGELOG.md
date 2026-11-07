@@ -2,6 +2,12 @@
 
 ### Added
 
+- Slack approvals over Socket Mode (A277 part 1): `slack_app.app_token_ref` makes trstctl open Slack's Socket Mode
+  connection itself (outbound only) and stop serving the Slack request URLs; slash commands and button presses arrive
+  over it. Buttons now carry trstctl-signed decisions (request, intent digest, action, nonce, expiry under the
+  deployment key): an altered or expired decision is refused, and each linked member's use is recorded once, so a
+  replay is refused (migration 0431 admits the `decision` purpose). `app_token_ref` and `signing_secret_ref` are
+  exclusive; one of them is required.
 - Privileged account certification (A276 part 3): access reviews generate from `"source": "pam_accounts"` — brokered
   accounts with owner, roles, template and open flags; template approver lists and quorums; approvers without a
   template; emergency responders. A revoke disables the account. `GET /api/v1/access/reviews/{id}/result`

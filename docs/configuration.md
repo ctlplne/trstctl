@@ -674,17 +674,28 @@ Zero open witnesses alone do not establish agreement or current authority health
 
 ## Notifications
 
-### Slack app (`slack_app`, N8)
+### Slack app (`slack_app`, N8, A277)
 
 Register an app at Slack with the bot scopes `chat:write`, `channels:read` and
-`groups:read`, interactivity at `<public_url>/integrations/slack/interactions`, a
-`/trstctl` slash command at `<public_url>/integrations/slack/commands`, and the
-redirect URL `<public_url>/integrations/slack/oauth/callback`. Then:
+`groups:read`, a `/trstctl` slash command, interactivity, and the redirect URL
+`<public_url>/integrations/slack/oauth/callback` (the installing member's browser follows
+it; Slack never calls it).
+
+Recommended — **Socket Mode** (A277): turn on Socket Mode in the app, create an app-level
+token with `connections:write`, and give it as `app_token_ref`. trstctl opens the
+connection itself (an outbound WebSocket), and Slack delivers slash commands and button
+presses over it, so no Slack endpoint is served and nothing reaches the control plane from
+the internet:
 
 ```json
 {"slack_app": {"client_id": "1234.5678", "client_secret_ref": "env:TRSTCTL_SLACK_CLIENT_SECRET",
-  "signing_secret_ref": "env:TRSTCTL_SLACK_SIGNING_SECRET", "public_url": "https://trstctl.example.com"}}
+  "app_token_ref": "env:TRSTCTL_SLACK_APP_TOKEN", "public_url": "https://trstctl.example.com"}}
 ```
+
+Alternatively, request URLs (N8): give `signing_secret_ref` instead of `app_token_ref` and
+point interactivity at `<public_url>/integrations/slack/interactions` and the slash command
+at `<public_url>/integrations/slack/commands`; those two endpoints are then served, and
+every request on them must carry Slack's signature. The two modes are exclusive.
 
 `api_base` (default `https://slack.com`) with `allow_private_api` and
 `private_egress_cidrs` points at a private stand-in. Startup refuses a partial block.

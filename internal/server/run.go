@@ -1525,6 +1525,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunTelemetry),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),
+			// A277: the Slack app's Socket Mode connection, outbound only.
+			startRuntimeWorker(workCtx, srv.RunSlackSocketMode),
 			// A258: each brokered account's stored credential is signed in
 			// with once per interval, read-only.
 			startRuntimeWorker(workCtx, srv.RunPAMAccountHealth),

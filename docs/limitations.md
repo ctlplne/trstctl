@@ -9136,6 +9136,28 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
+## Approvals where people work, and re-authentication (A277) — part 1: Slack Socket Mode
+
+Status: in progress. With `slack_app.app_token_ref` trstctl opens Slack's Socket Mode
+connection itself (`apps.connections.open`, then a WebSocket upgraded through the guarded
+egress transport) and serves no Slack endpoint; slash commands and button presses arrive over
+it and are acknowledged on it. Every posted button's decision is signed by trstctl under the
+deployment key and bound to the request's intent digest; each linked member's use of it is
+recorded once. Proof: `TestServedSlackSocketModeApprovalStartsTheSessionA277` against a Socket
+Mode stand-in built from Slack's documentation (no Slack handler answers the request URLs;
+members link with a slash command delivered over the connection; a privileged session's
+approval is posted with signed buttons; two reviewers' presses approve it and the session
+then starts; a replayed press and one with its digest altered are refused and change
+nothing), the N8 request-URL proof with signed buttons, and
+`TestSlackDecisionsAreSignedForOneActionA277`.
+
+What comes next:
+- Fresh re-authentication through the sign-in integration before a high-risk template's
+  session starts (part 2).
+- Microsoft Teams: a Teams bot receives its activities on an inbound HTTPS endpoint, so it is
+  not built; it goes to the handoff for the owner's decision.
+- A live Slack workspace run (Track B).
+
 ## Owners, certification and orphans (A276) — parts 1–3: owners, flags and certification
 
 Status: built locally. Brokered accounts are NHI inventory records, so the existing ownership

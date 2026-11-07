@@ -419,12 +419,21 @@ minutes, which they type into Slack as `/trstctl link <code>`. A button press de
 the request through the API's own approval route as the linked member, with the roles
 their membership holds at that moment: the requester's own press is refused like any
 self-approval, an unlinked Slack user is told to link first, a press is never matched
-by name or email, and the intent digest the message carries must still match. Every
-request Slack sends (`/integrations/slack/interactions` and `/commands`) must carry a
-valid `X-Slack-Signature` under the app's signing secret within five minutes. The
+by name or email, and the intent digest the message carries must still match. Each
+button carries its decision signed by trstctl — the approval request, the intent digest
+it binds to, the action, a nonce and an expiry, under the deployment key — so an altered
+or expired decision is refused, and a linked member's use of a message's decision is
+recorded once, so a replayed or repeated press is refused (A277). With Socket Mode
+(`slack_app.app_token_ref`, A277) trstctl opens the connection to Slack itself and
+slash commands and presses arrive over it: no Slack endpoint is served, and a refusal
+is replied to the presser through the press's `response_url`. In request-URL mode
+(`signing_secret_ref`) every request Slack sends (`/integrations/slack/interactions` and
+`/commands`) must carry a valid `X-Slack-Signature` under the app's signing secret within
+five minutes. The
 message is then updated with the outcome; a request decided elsewhere keeps its
 message. `DELETE /api/v1/integrations/slack` removes the install, the links and the
-message records. Status: served.
+message records. Status: served. Microsoft Teams approvals are not offered: a Teams bot
+receives its activities on an inbound HTTPS endpoint, which this design does not open.
 
 ### Access-change approvals
 

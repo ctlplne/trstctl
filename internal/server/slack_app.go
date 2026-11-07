@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -51,6 +52,12 @@ type slackAppServer struct {
 	cfg    config.SlackAppConfig
 	client slackapp.Client
 	now    func() time.Time
+	// socket is the Socket Mode client (A277): the guarded transport with no
+	// overall timeout, since the connection stays open.
+	socket slackapp.Client
+	// mac keys a posted button's decision (A277): the deployment KEK's keyed
+	// digest, so a decision survives a restart and cannot be forged.
+	mac func(domain, material []byte) ([]byte, error)
 }
 
 func newSlackAppServer(s *Server, cfg config.SlackAppConfig) (*slackAppServer, error) {
@@ -65,7 +72,94 @@ func newSlackAppServer(s *Server, cfg config.SlackAppConfig) (*slackAppServer, e
 	if err != nil {
 		return nil, fmt.Errorf("server: slack_app.api_base: %w", err)
 	}
-	return &slackAppServer{s: s, cfg: cfg, client: slackapp.Client{BaseURL: base, Doer: doer}, now: time.Now}, nil
+	a := &slackAppServer{s: s, cfg: cfg, client: slackapp.Client{BaseURL: base, Doer: doer}, now: time.Now}
+	if mac, ok := s.kek.(secretCommandMAC); ok {
+		a.mac = mac.KeyedDigest
+	}
+	if cfg.SocketMode() {
+		socketDoer, err := slackSocketHTTPClient(base, cfg.AllowPrivateAPI, cfg.PrivateEgressCIDRs)
+		if err != nil {
+			return nil, fmt.Errorf("server: slack_app socket mode: %w", err)
+		}
+		a.socket = slackapp.Client{BaseURL: base, Doer: socketDoer}
+	}
+	return a, nil
+}
+
+// slackSocketHTTPClient is cloudHTTPClient's guarded transport without an
+// overall timeout: a Socket Mode connection stays open.
+func slackSocketHTTPClient(endpoint string, allowPrivate bool, privateCIDRs []string) (*http.Client, error) {
+	c, err := cloudHTTPClient(endpoint, allowPrivate, privateCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	out := *c
+	out.Timeout = 0
+	return &out, nil
+}
+
+// A277: each posted button carries its decision signed by trstctl — the
+// tenant, the approval request, the intent digest it binds to, the action, a
+// nonce and an expiry — so a decision that comes back altered is refused, and
+// each approver's use of a nonce is recorded once, so a replay is refused.
+const (
+	slackDecisionDomain   = "trstctl-slack-decision-v1"
+	slackDecisionLifetime = 24 * time.Hour
+)
+
+type slackDecision struct {
+	Tenant  string `json:"t"`
+	Request string `json:"r"`
+	Digest  string `json:"d"`
+	Action  string `json:"a"`
+	Nonce   string `json:"n"`
+	Expires int64  `json:"x"`
+}
+
+var (
+	errSlackDecisionAltered = errors.New("the decision was altered or was not signed by trstctl")
+	errSlackDecisionExpired = errors.New("the decision's button has expired; decide in trstctl")
+)
+
+func (a *slackAppServer) signDecision(d slackDecision) (string, error) {
+	if a.mac == nil {
+		return "", errors.New("server: Slack decisions need the deployment key's keyed digest")
+	}
+	raw, err := json.Marshal(d)
+	if err != nil {
+		return "", err
+	}
+	sum, err := a.mac([]byte(slackDecisionDomain), raw)
+	if err != nil {
+		return "", err
+	}
+	return "v1." + base64.RawURLEncoding.EncodeToString(raw) + "." + base64.RawURLEncoding.EncodeToString(sum), nil
+}
+
+// openDecision checks a pressed button's value: trstctl's signature over
+// exactly what it posted, for this action, not expired.
+func (a *slackAppServer) openDecision(value, action string) (slackDecision, error) {
+	parts := strings.Split(value, ".")
+	if a.mac == nil || len(parts) != 3 || parts[0] != "v1" {
+		return slackDecision{}, errSlackDecisionAltered
+	}
+	raw, err1 := base64.RawURLEncoding.DecodeString(parts[1])
+	sig, err2 := base64.RawURLEncoding.DecodeString(parts[2])
+	if err1 != nil || err2 != nil {
+		return slackDecision{}, errSlackDecisionAltered
+	}
+	want, err := a.mac([]byte(slackDecisionDomain), raw)
+	if err != nil || !crypto.ConstantTimeEqual(want, sig) {
+		return slackDecision{}, errSlackDecisionAltered
+	}
+	var d slackDecision
+	if json.Unmarshal(raw, &d) != nil || d.Action != action || d.Request == "" || d.Digest == "" || d.Nonce == "" {
+		return slackDecision{}, errSlackDecisionAltered
+	}
+	if a.now().Unix() > d.Expires {
+		return slackDecision{}, errSlackDecisionExpired
+	}
+	return d, nil
 }
 
 func (a *slackAppServer) redirectURL() string { return a.cfg.PublicURL + slackCallbackPath }
@@ -271,28 +365,29 @@ func (a *slackAppServer) commands(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	fields := strings.Fields(form.Get("text"))
-	if form.Get("command") != "/trstctl" || len(fields) != 2 || fields[0] != "link" {
-		slackEphemeral(w, "Use /trstctl link <code>, with a code from trstctl (integrations slack link-code).")
-		return
+	slackEphemeral(w, a.handleCommand(r.Context(), form.Get("team_id"), form.Get("user_id"), form.Get("command"), form.Get("text")))
+}
+
+// handleCommand runs /trstctl link <code> from either transport and returns
+// the reply.
+func (a *slackAppServer) handleCommand(ctx context.Context, teamID, userID, command, text string) string {
+	fields := strings.Fields(text)
+	if command != "/trstctl" || len(fields) != 2 || fields[0] != "link" {
+		return "Use /trstctl link <code>, with a code from trstctl (integrations slack link-code)."
 	}
-	ctx := r.Context()
-	tenantID, err := a.s.store.TenantForSlackTeam(ctx, form.Get("team_id"))
+	tenantID, err := a.s.store.TenantForSlackTeam(ctx, teamID)
 	if err != nil {
-		slackEphemeral(w, "This workspace has no trstctl install.")
-		return
+		return "This workspace has no trstctl install."
 	}
 	subject, err := a.s.store.UseSlackCode(ctx, tenantID, slackCodeDigest(strings.ToUpper(fields[1])), "link", a.now().UTC())
 	if err != nil {
-		slackEphemeral(w, "That code is unknown, expired or already used; get a new one from trstctl.")
-		return
+		return "That code is unknown, expired or already used; get a new one from trstctl."
 	}
 	if err := a.s.orch.RecordSlackEvent(ctx, tenantID, projections.EventSlackUserLinked,
-		projections.SlackUserLinked{SlackUserID: form.Get("user_id"), Subject: subject}); err != nil {
-		slackEphemeral(w, "The link could not be recorded; try again.")
-		return
+		projections.SlackUserLinked{SlackUserID: userID, Subject: subject}); err != nil {
+		return "The link could not be recorded; try again."
 	}
-	slackEphemeral(w, "Your Slack user is linked to "+subject+" in trstctl.")
+	return "Your Slack user is linked to " + subject + " in trstctl."
 }
 
 type slackInteraction struct {
@@ -312,6 +407,7 @@ type slackInteraction struct {
 		Value    string `json:"value"`
 		ActionTS string `json:"action_ts"`
 	} `json:"actions"`
+	ResponseURL string `json:"response_url"`
 }
 
 // interactions serves POST /integrations/slack/interactions: an Approve or
@@ -328,57 +424,77 @@ func (a *slackAppServer) interactions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	action := in.Actions[0]
-	approve := action.ActionID == "approve"
-	requestID, digest, ok := strings.Cut(action.Value, "|")
-	if (!approve && action.ActionID != "deny") || !ok || requestID == "" || digest == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	ctx := r.Context()
-	tenantID, err := a.s.store.TenantForSlackTeam(ctx, in.Team.ID)
-	if err != nil {
-		slackEphemeral(w, "This workspace has no trstctl install.")
-		return
-	}
-	subject, err := a.s.store.SlackLinkedSubject(ctx, tenantID, in.User.ID)
-	if err != nil {
-		slackEphemeral(w, "Your Slack user is not linked to a trstctl member: get a code from trstctl (integrations slack link-code) and type /trstctl link <code>.")
-		return
-	}
 	if a.s.api == nil {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	status, answer := a.s.api.DecideApprovalAs(ctx, tenantID, subject, requestID, digest, approve, "denied in Slack by "+subject,
-		"slack:"+in.User.ID+":"+requestID+":"+action.ActionID)
+	if reply := a.handleInteraction(r.Context(), in); reply != "" {
+		slackEphemeral(w, reply)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleInteraction decides an approval from a pressed button, from either
+// transport, as the linked member; it returns a reply for the presser, or
+// nothing when the decision was taken and the message updated.
+func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteraction) string {
+	if in.Type != "block_actions" || len(in.Actions) != 1 || a.s.api == nil {
+		return "trstctl could not read that action."
+	}
+	action := in.Actions[0]
+	approve := action.ActionID == "approve"
+	if !approve && action.ActionID != "deny" {
+		return "trstctl could not read that action."
+	}
+	d, err := a.openDecision(action.Value, action.ActionID)
+	if err != nil {
+		return "trstctl refused the decision: " + err.Error()
+	}
+	tenantID, err := a.s.store.TenantForSlackTeam(ctx, in.Team.ID)
+	if err != nil || tenantID != d.Tenant {
+		return "This workspace has no trstctl install."
+	}
+	subject, err := a.s.store.SlackLinkedSubject(ctx, tenantID, in.User.ID)
+	if err != nil {
+		return "Your Slack user is not linked to a trstctl member: get a code from trstctl (integrations slack link-code) and type /trstctl link <code>."
+	}
+	// Single use: each linked member's use of this message's nonce is
+	// recorded once; a second press, or a replayed delivery, is refused.
+	use := crypto.SHA256Hex([]byte("slack-decision\x00" + d.Nonce + "\x00" + in.User.ID))
+	if err := a.s.store.UseSlackDecision(ctx, tenantID, use, subject, time.Unix(d.Expires, 0).UTC()); err != nil {
+		if errors.Is(err, store.ErrSlackDecisionUsed) {
+			return "trstctl refused the decision: it was already used"
+		}
+		return "trstctl could not record the decision; try again."
+	}
+	status, answer := a.s.api.DecideApprovalAs(ctx, tenantID, subject, d.Request, d.Digest, approve, "denied in Slack by "+subject,
+		"slack:"+in.User.ID+":"+d.Request+":"+action.ActionID)
 	if status/100 != 2 {
 		var problem struct {
 			Detail string `json:"detail"`
 		}
 		_ = json.Unmarshal(answer, &problem)
-		slackEphemeral(w, "trstctl refused the decision: "+problem.Detail)
-		return
+		return "trstctl refused the decision: " + problem.Detail
 	}
 	decision := "deny"
 	if approve {
 		decision = "approve"
 	}
 	if err := a.s.orch.RecordSlackEvent(ctx, tenantID, projections.EventSlackApprovalDecided, projections.SlackApprovalDecided{
-		ApprovalRequestID: requestID, Decision: decision, Subject: subject, SlackUserID: in.User.ID}); err != nil {
-		slackEphemeral(w, "trstctl recorded the decision; the message could not be updated.")
-		return
+		ApprovalRequestID: d.Request, Decision: decision, Subject: subject, SlackUserID: in.User.ID}); err != nil {
+		return "trstctl recorded the decision; the message could not be updated."
 	}
 	if inst, err := a.install(ctx, tenantID); err == nil {
 		if token, err := a.botToken(ctx, inst); err == nil {
 			verb := map[bool]string{true: "approved", false: "denied"}[approve]
-			text := fmt.Sprintf("Approval request %s was %s by %s.", requestID, verb, subject)
+			text := fmt.Sprintf("Approval request %s was %s by %s.", d.Request, verb, subject)
 			_ = a.client.Update(ctx, token, slackapp.Message{Channel: in.Container.ChannelID, TS: in.Container.MessageTS}, text,
 				[]any{map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": text}}})
 			secret.Wipe(token)
 		}
 	}
-	w.WriteHeader(http.StatusOK)
+	return ""
 }
 
 // postApproval posts an approval request to the tenant's approval channel
@@ -406,12 +522,24 @@ func (a *slackAppServer) postApproval(ctx context.Context, tenantID string, aler
 		return false, err
 	}
 	defer secret.Wipe(token)
-	value := requestID + "|" + alert.RequestBinding
+	nonce, err := crypto.RandomBytes(16)
+	if err != nil {
+		return false, err
+	}
+	expires := a.now().Add(slackDecisionLifetime).Unix()
+	values := map[string]string{}
+	for _, action := range []string{"approve", "deny"} {
+		values[action], err = a.signDecision(slackDecision{Tenant: tenantID, Request: requestID, Digest: alert.RequestBinding, Action: action,
+			Nonce: base64.RawURLEncoding.EncodeToString(nonce), Expires: expires})
+		if err != nil {
+			return false, err
+		}
+	}
 	blocks := []any{
 		map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": "*Approval requested*\n" + alert.Detail}},
 		map[string]any{"type": "actions", "elements": []any{
-			map[string]any{"type": "button", "action_id": "approve", "style": "primary", "value": value, "text": map[string]any{"type": "plain_text", "text": "Approve"}},
-			map[string]any{"type": "button", "action_id": "deny", "style": "danger", "value": value, "text": map[string]any{"type": "plain_text", "text": "Deny"}},
+			map[string]any{"type": "button", "action_id": "approve", "style": "primary", "value": values["approve"], "text": map[string]any{"type": "plain_text", "text": "Approve"}},
+			map[string]any{"type": "button", "action_id": "deny", "style": "danger", "value": values["deny"], "text": map[string]any{"type": "plain_text", "text": "Deny"}},
 		}},
 	}
 	msg, err := a.client.Post(ctx, token, in.ApprovalChannelID, "Approval requested: "+alert.Detail, blocks)
@@ -423,9 +551,113 @@ func (a *slackAppServer) postApproval(ctx context.Context, tenantID string, aler
 }
 
 func (a *slackAppServer) routes(mux *http.ServeMux, wrap func(http.Handler) http.Handler) {
+	// The install's redirect comes from the installing member's browser.
 	mux.Handle("GET "+slackCallbackPath, wrap(http.HandlerFunc(a.oauthCallback)))
+	if a.cfg.SocketMode() {
+		// A277: Slack's deliveries arrive over trstctl's own connection; no
+		// inbound endpoint for them is served.
+		return
+	}
 	mux.Handle("POST "+slackInteractPath, wrap(http.HandlerFunc(a.interactions)))
 	mux.Handle("POST "+slackCommandsPath, wrap(http.HandlerFunc(a.commands)))
+}
+
+// runSocketMode keeps a Socket Mode connection open (A277): it asks Slack for
+// a connection with the app-level token, answers each delivery — a slash
+// command's reply in its acknowledgement, a button press's reply through its
+// response_url — and reconnects with backoff when the connection ends.
+func (a *slackAppServer) runSocketMode(ctx context.Context) {
+	backoff := time.Second
+	for ctx.Err() == nil {
+		err := a.socketSession(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			a.s.logger.Warn("slack socket mode connection ended", "error_class", fmt.Sprintf("%T", err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if err != nil && backoff < 30*time.Second {
+			backoff *= 2
+		} else if err == nil {
+			backoff = time.Second
+		}
+	}
+}
+
+func (a *slackAppServer) socketSession(ctx context.Context) error {
+	token, err := resolveDiscoveryCredentialBytesRef(ctx, a.cfg.AppTokenRef)
+	if err != nil {
+		return err
+	}
+	wsURL, err := a.socket.OpenSocket(ctx, token)
+	secret.Wipe(token)
+	if err != nil {
+		return err
+	}
+	conn, err := a.socket.DialSocket(ctx, wsURL)
+	if err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	defer func() { _ = conn.Close() }()
+	for {
+		env, err := conn.Next()
+		if err != nil {
+			return err
+		}
+		switch env.Type {
+		case "hello":
+		case "disconnect":
+			return nil
+		case "slash_commands":
+			var cmd struct {
+				TeamID  string `json:"team_id"`
+				UserID  string `json:"user_id"`
+				Command string `json:"command"`
+				Text    string `json:"text"`
+			}
+			reply := "trstctl could not read that command."
+			if json.Unmarshal(env.Payload, &cmd) == nil {
+				reply = a.handleCommand(ctx, cmd.TeamID, cmd.UserID, cmd.Command, cmd.Text)
+			}
+			if err := conn.Ack(env.EnvelopeID, map[string]string{"response_type": "ephemeral", "text": reply}); err != nil {
+				return err
+			}
+		case "interactive":
+			if err := conn.Ack(env.EnvelopeID, nil); err != nil {
+				return err
+			}
+			var in slackInteraction
+			if json.Unmarshal(env.Payload, &in) != nil {
+				continue
+			}
+			if reply := a.handleInteraction(ctx, in); reply != "" && in.ResponseURL != "" {
+				_ = a.socket.PostResponse(ctx, in.ResponseURL, reply)
+			}
+		default:
+			if env.EnvelopeID != "" {
+				if err := conn.Ack(env.EnvelopeID, nil); err != nil {
+					return err
+				}
+			}
+		}
+	}
+}
+
+// RunSlackSocketMode keeps the Slack app's Socket Mode connection open when
+// it is configured (A277).
+func (s *Server) RunSlackSocketMode(ctx context.Context) {
+	if s.slack == nil || !s.slack.cfg.SocketMode() {
+		<-ctx.Done()
+		return
+	}
+	s.slack.runSocketMode(ctx)
 }
 
 // slackApprovalPoster is the outbox hook that posts approval requests, or nil.

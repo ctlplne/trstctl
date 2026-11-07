@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -212,7 +213,17 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(buttons), &post)
 	value := post.Blocks[1].Elements[0].Value
-	requestID := strings.SplitN(value, "|", 2)[0]
+	// A277: the value is trstctl's signed decision; its payload names the
+	// request.
+	var decision struct {
+		Request string `json:"r"`
+	}
+	if parts := strings.Split(value, "."); len(parts) != 3 {
+		t.Fatalf("the button's value is not a signed decision: %s", value)
+	} else if raw, err := base64.RawURLEncoding.DecodeString(parts[1]); err != nil || json.Unmarshal(raw, &decision) != nil {
+		t.Fatalf("the signed decision's payload: %v", err)
+	}
+	requestID := decision.Request
 	press := func(slackUser, action string) (int, string) {
 		payload, _ := json.Marshal(map[string]any{"type": "block_actions", "team": map[string]any{"id": "T0N8TEAM"}, "user": map[string]any{"id": slackUser},
 			"container": map[string]any{"channel_id": "C0SECURITY", "message_ts": "1762246800.000001"},

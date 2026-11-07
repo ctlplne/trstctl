@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2808 annotated sites across 31 rules. Each row is
+2814 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (605 sites)
+### G101 — CWE-798 Use of hardcoded credentials (606 sites)
 
 | Location | Reason |
 |---|---|
@@ -624,7 +624,8 @@ not this file.
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:235` | an env: reference to a test-only value (CWE-798) |
-| `internal/server/slack_app_served_test.go:86` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_app_served_test.go:87` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
 | `internal/server/thirdparty_collect_served_test.go:195` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
@@ -803,7 +804,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (433 sites)
+### G115 — CWE-190 Integer overflow or wraparound (436 sites)
 
 | Location | Reason |
 |---|---|
@@ -1055,6 +1056,9 @@ not this file.
 | `internal/signing/keystore.go:121` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:123` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:133` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
+| `internal/slackapp/socket.go:207` | bounded by maxSocketMessage above (CWE-190) |
+| `internal/slackapp/socket.go:231` | n <= 0xFFFF here (CWE-190) |
+| `internal/slackapp/socket.go:234` | a length is non-negative (CWE-190) |
 | `internal/store/access_bundles.go:142` | bounded above (CWE-190) |
 | `internal/store/acme_dns01.go:292` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/acme_dns01.go:337` | non-negative by construction (CWE-190) |
@@ -2469,7 +2473,7 @@ not this file.
 | `internal/server/run.go:589` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1207` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1391` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1848` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1850` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:48` | test fixture under t.TempDir (CWE-22) |
@@ -2761,7 +2765,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (17 sites)
+### G401 — CWE-328 Use of weak hash (18 sites)
 
 | Location | Reason |
 |---|---|
@@ -2782,6 +2786,7 @@ not this file.
 | `internal/crypto/uuidv5.go:20` | RFC 4122 UUIDv5 public identifier, not a security digest. |
 | `internal/crypto/weakkey/weakkey.go:139` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 | `internal/crypto/weakkey/weakkeytest/rsa.go:51` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
+| `internal/crypto/websocket_accept.go:17` | RFC 6455 handshake identifier, not integrity (CWE-328) |
 
 ### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (9 sites)
 
@@ -2850,7 +2855,7 @@ not this file.
 | `internal/crypto/pgsignin/pgsignin.go:18` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:7` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (12 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (13 sites)
 
 | Location | Reason |
 |---|---|
@@ -2866,6 +2871,7 @@ not this file.
 | `internal/crypto/uuidv5.go:6` | RFC 4122 UUIDv5 uses SHA-1 only for a public identity label, never integrity (CWE-328). |
 | `internal/crypto/weakkey/weakkey.go:24` | the Debian blocklist format is defined over SHA-1 of the modulus text; not used for security (CWE-328) |
 | `internal/crypto/weakkey/weakkeytest/rsa.go:8` | Debian's blocklist format is defined over SHA-1; not a security use (CWE-328) |
+| `internal/crypto/websocket_accept.go:6` | RFC 6455 4.2.2 fixes SHA-1 for the WebSocket handshake's accept value: an identifier, not integrity (CWE-328) |
 
 ### G602 — CWE-118 Incorrect access of indexable resource (5 sites)
 

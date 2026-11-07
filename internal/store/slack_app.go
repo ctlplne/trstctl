@@ -225,3 +225,22 @@ func (s *Store) UseSlackCode(ctx context.Context, tenantID, digest, purpose stri
 	}
 	return subject, err
 }
+
+// ErrSlackDecisionUsed is a button decision this approver already used.
+var ErrSlackDecisionUsed = errors.New("store: the Slack decision was already used")
+
+// UseSlackDecision records one approver's use of a posted decision once
+// (A277); a second use is ErrSlackDecisionUsed.
+func (s *Store) UseSlackDecision(ctx context.Context, tenantID, digest, subject string, expires time.Time) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `INSERT INTO slack_one_time_codes (tenant_id, code_digest, purpose, subject, expires_at, used_at)
+			VALUES ($1, $2, 'decision', $3, $4, now()) ON CONFLICT DO NOTHING`, tenantID, digest, subject, expires)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrSlackDecisionUsed
+		}
+		return nil
+	})
+}

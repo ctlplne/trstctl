@@ -15,8 +15,13 @@ import (
 // (<public_url>/integrations/slack/oauth/callback) and sends interactions and
 // the /trstctl command to.
 type SlackAppConfig struct {
-	ClientID         string `json:"client_id,omitempty"`
-	ClientSecretRef  string `json:"client_secret_ref,omitempty"`
+	ClientID        string `json:"client_id,omitempty"`
+	ClientSecretRef string `json:"client_secret_ref,omitempty"`
+	// AppTokenRef (A277) is the app-level token (xapp-) for Socket Mode:
+	// trstctl opens the connection and Slack delivers commands and button
+	// presses over it, so no inbound endpoint is served. Without it,
+	// SigningSecretRef serves Slack's request URLs instead (N8).
+	AppTokenRef      string `json:"app_token_ref,omitempty"`
 	SigningSecretRef string `json:"signing_secret_ref,omitempty"`
 	// APIBase is Slack (https://slack.com by default).
 	APIBase string `json:"api_base,omitempty"`
@@ -31,16 +36,23 @@ type SlackAppConfig struct {
 // Enabled reports whether the Slack app is configured.
 func (c SlackAppConfig) Enabled() bool { return strings.TrimSpace(c.ClientID) != "" }
 
+// SocketMode reports whether Slack's deliveries arrive over trstctl's own
+// outbound connection (A277) rather than inbound request URLs.
+func (c SlackAppConfig) SocketMode() bool { return strings.TrimSpace(c.AppTokenRef) != "" }
+
 // Validate checks a configured Slack app.
 func (c SlackAppConfig) Validate() error {
 	if !c.Enabled() {
-		if c.ClientSecretRef != "" || c.SigningSecretRef != "" || c.PublicURL != "" {
+		if c.ClientSecretRef != "" || c.SigningSecretRef != "" || c.AppTokenRef != "" || c.PublicURL != "" {
 			return errors.New("slack_app needs client_id")
 		}
 		return nil
 	}
-	if strings.TrimSpace(c.ClientSecretRef) == "" || strings.TrimSpace(c.SigningSecretRef) == "" {
-		return errors.New("slack_app needs client_secret_ref and signing_secret_ref")
+	if strings.TrimSpace(c.ClientSecretRef) == "" || (strings.TrimSpace(c.AppTokenRef) == "" && strings.TrimSpace(c.SigningSecretRef) == "") {
+		return errors.New("slack_app needs client_secret_ref and app_token_ref (Socket Mode, no inbound endpoint) or signing_secret_ref (request URLs)")
+	}
+	if strings.TrimSpace(c.AppTokenRef) != "" && strings.TrimSpace(c.SigningSecretRef) != "" {
+		return errors.New("slack_app takes app_token_ref (Socket Mode) or signing_secret_ref (request URLs), not both")
 	}
 	public, err := url.Parse(c.PublicURL)
 	if err != nil || public.Host == "" || public.RawQuery != "" || public.User != nil || strings.HasSuffix(c.PublicURL, "/") ||
