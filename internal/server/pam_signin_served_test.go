@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/pamsignin"
 )
 
@@ -479,5 +480,152 @@ func TestServedBypassDetectionOnADatabaseA274(t *testing.T) {
 	closeCheckout()
 	if len(got) != 1 || got[0].ID != direct {
 		t.Fatalf("a revealed check-out's sign-in raised: %+v", got)
+	}
+}
+
+// TestServedBypassDetectionOnMySQLA274: a pam_signin source watches the
+// account a MySQL provider's static role binds. MySQL keeps no connection
+// start time, so its collector dates a connection when a run first sees it:
+// an outside connection raises one compromised-credential finding and one
+// recorded sign-in, a later run that sees it still open refreshes them
+// rather than repeating them, a second outside connection is a second
+// sign-in, and neither another account's connection nor the collector's own
+// administrator connection is reported.
+func TestServedBypassDetectionOnMySQLA274(t *testing.T) {
+	if testing.Short() {
+		t.Skip("container acceptance test")
+	}
+	if out, err := exec.Command("docker", "image", "inspect", a201MySQLImage).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+		t.Skipf("the pinned image %s is not present locally: %v\n%s", a201MySQLImage, err, out)
+	}
+	ctx := context.Background()
+	id, addr := a201Container(t, "3306", "-e", "MYSQL_ROOT_PASSWORD=a274-root", "-e", "MYSQL_DATABASE=app", a201MySQLImage)
+	a256AwaitLog(t, id, "MySQL init process done")
+	asUser := func(user, password, sql string) (string, error) {
+		return a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-u"+user, "-p"+password, "-N", "-e", sql)
+	}
+	a201Await(t, "MySQL", func() bool { _, err := asUser("root", "a274-root", "SELECT 1"); return err == nil })
+	const account, outsidePassword = "app_reader", "Outside-Pass-1"
+	if out, err := asUser("root", "a274-root", "CREATE USER 'broker'@'%' IDENTIFIED BY 'broker-pass'; GRANT ALL ON *.* TO 'broker'@'%' WITH GRANT OPTION;"+
+		"CREATE USER '"+account+"'@'%' IDENTIFIED BY '"+outsidePassword+"'; GRANT SELECT ON app.* TO '"+account+"'@'%';"+
+		"CREATE USER 'bystander'@'%' IDENTIFIED BY 'bystander-pass'; GRANT SELECT ON app.* TO 'bystander'@'%';"); err != nil {
+		t.Fatalf("create the accounts: %v %s", err, out)
+	}
+	tenant := uuid.NewString()
+	providers := []config.DynamicSecretProviderConfig{{TenantID: tenant, ID: "a274-mysql", Type: "mysql",
+		AdminDSNRef: writeServedCredentialFile(t, "a274-mysql-admin-dsn", "broker:broker-pass@tcp("+addr+")/app\n"), Database: "app", Addr: addr,
+		AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"db/reader"}, RoleBindings: map[string]string{"db/reader": account},
+		AllowStaticRotation: true, MaxTTL: "1h", UsernamePrefix: "a274"}}
+	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: providers}, true); err != nil {
+		t.Fatalf("the provider as configured: %v", err)
+	}
+	registry, err := dynamicSecretProvidersFromConfig(ctx, providers, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{tenant: registry.ForTenant(tenant)}
+		d.PAM = PAMConfig{Enabled: true, DefaultTTL: time.Minute, MaxTTL: 3 * time.Minute, Attestors: []attest.Attestor{servedPAMAttestor{}}}
+	})
+	registerServedTenantID(t, h, tenant, "A274 MySQL bypass detection")
+	tok := seedScopedToken(t, h.store, tenant, "discovery:read", "discovery:write")
+	reader := seedScopedToken(t, h.store, tenant, "access:read")
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, "a274-mysql-source", map[string]any{
+		"name": "a274-mysql-signins", "kind": "pam_signin", "config": map[string]any{"provider_id": "a274-mysql", "lookback_seconds": 900}})
+	var source struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &source) != nil || source.ID == "" {
+		t.Fatalf("create the pam_signin source: %d %s", status, body)
+	}
+	collect := func(key string) []a274Finding {
+		t.Helper()
+		status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, key, map[string]any{"source_id": source.ID})
+		var queued struct {
+			ID string `json:"id"`
+		}
+		if status != http.StatusCreated || json.Unmarshal(body, &queued) != nil || queued.ID == "" {
+			t.Fatalf("queue %s: %d %s", key, status, body)
+		}
+		if err := h.srv.Drain(ctx); err != nil {
+			t.Fatalf("drain %s: %v", key, err)
+		}
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+		if status != http.StatusOK || !strings.Contains(string(body), `"status":"succeeded"`) {
+			t.Fatalf("run %s: %d %s", key, status, body)
+		}
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?limit=100", tok, nil)
+		var listed struct {
+			Items []a274Finding `json:"items"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &listed) != nil || strings.Contains(string(body), outsidePassword) {
+			t.Fatalf("findings after %s: %d %s", key, status, body)
+		}
+		var out []a274Finding
+		for _, f := range listed.Items {
+			if f.SourceID == source.ID {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	recorded := func() []api.PAMSignIn {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/access/signins?provider_id=a274-mysql", reader, nil)
+		var listed struct {
+			Items []api.PAMSignIn `json:"items"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &listed) != nil {
+			t.Fatalf("the recorded sign-ins: %d %s", status, body)
+		}
+		return listed.Items
+	}
+	connect := func(user, password string) func() {
+		t.Helper()
+		db, err := dynsecret.OpenMySQLExecutor(ctx, []byte(user+":"+password+"@tcp("+addr+")/app"))
+		if err != nil {
+			t.Fatalf("connect as %s: %v", user, err)
+		}
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("hold a connection as %s: %v", user, err)
+		}
+		if err := conn.PingContext(ctx); err != nil {
+			t.Fatalf("ping as %s: %v", user, err)
+		}
+		return func() { _ = conn.Close(); _ = db.Close() }
+	}
+
+	if got := collect("a274-mysql-before"); len(got) != 0 {
+		t.Fatalf("findings before any outside connection: %+v", got)
+	}
+	closeBystander := connect("bystander", "bystander-pass")
+	defer closeBystander()
+	closeOutside := connect(account, outsidePassword)
+	defer closeOutside()
+	got := collect("a274-mysql-outside")
+	if len(got) != 1 || got[0].Kind != "compromised_credential" || got[0].Ref != "pam:a274-mysql/"+account || got[0].Metadata["principal"] != account ||
+		got[0].Metadata["detector"] != "pam_signin:performance_schema_threads" || got[0].Metadata["ip"] == "" {
+		t.Fatalf("an outside connection raised: %+v", got)
+	}
+	first := got[0]
+	// The next run starts in a later second, so it dates the connection anew.
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(1100 * time.Millisecond)))
+	if again := collect("a274-mysql-still-open"); len(again) != 1 || again[0].ID != first.ID || again[0].Fingerprint != first.Fingerprint {
+		t.Fatalf("a run that sees the same connection again repeated it: %+v", again)
+	}
+	signIns := recorded()
+	if len(signIns) != 1 || signIns[0].Fingerprint != first.Fingerprint || signIns[0].Account != account || signIns[0].Earliest == nil ||
+		!signIns[0].Earliest.Before(signIns[0].At) || signIns[0].ExplainedBy != nil || signIns[0].Collector != "performance_schema_threads" ||
+		!signIns[0].LastSeenAt.After(signIns[0].At) {
+		t.Fatalf("the recorded connection (dated when first seen, seen again since): %+v", signIns)
+	}
+	closeSecond := connect(account, outsidePassword)
+	defer closeSecond()
+	if got := collect("a274-mysql-second"); len(got) != 2 {
+		t.Fatalf("a second outside connection: %+v", got)
+	}
+	if signIns := recorded(); len(signIns) != 2 {
+		t.Fatalf("the recorded connections: %+v", signIns)
 	}
 }

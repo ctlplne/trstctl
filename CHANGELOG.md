@@ -2,6 +2,9 @@
 
 ### Added
 
+- Bypass detection on MySQL (A274 part 3): a MySQL connection, dated when a run first sees it, keeps one fingerprint
+  while later runs see it still open (its connection id and the server's start), so a held outside connection raises
+  one finding and one recorded sign-in rather than one per run; served proof against MySQL 8.4.
 - Recorded sign-ins (A274 part 2): every sign-in bypass detection reads is recorded, metadata only, with the verdict of
   the run that first read it (what explained it, or nothing); `GET /api/v1/access/signins` (`listPAMSignIns`, OpenAPI
   789 -> 790 operations), `trstctl access signins list` (CLI 856 -> 857 commands) and the console's **Sign-ins to

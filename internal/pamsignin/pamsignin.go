@@ -123,7 +123,7 @@ func Dedupe(signIns []SignIn) []SignIn {
 	seen := map[string]bool{}
 	out := make([]SignIn, 0, len(signIns))
 	for _, s := range signIns {
-		key := strings.ToLower(s.Account) + "\x00" + s.At.UTC().Truncate(time.Second).Format(time.RFC3339) + "\x00" + s.Source + "\x00" + s.Ref
+		key := identity(s)
 		if seen[key] {
 			continue
 		}
@@ -137,8 +137,20 @@ func Dedupe(signIns []SignIn) []SignIn {
 // Fingerprint is a sign-in's stable identity on a target: a finding raised
 // for it is refreshed, not repeated, when a later collection reads it again.
 func Fingerprint(target string, s SignIn) string {
-	return "sha256:" + crypto.SHA256Hex([]byte(target+"\x00"+strings.ToLower(s.Account)+"\x00"+s.At.UTC().Truncate(time.Second).Format(time.RFC3339)+
-		"\x00"+s.Source+"\x00"+s.Ref))
+	return "sha256:" + crypto.SHA256Hex([]byte(target+"\x00"+identity(s)))
+}
+
+// identity is what makes two reads of a sign-in the same one: the account,
+// when, the client address and the target-side reference. A sign-in dated
+// only when a collection first saw it (Earliest set: a MySQL connection,
+// whose reference names the connection and the server's start) is the same
+// one whenever it is seen, so its moving date is left out.
+func identity(s SignIn) string {
+	when := s.At.UTC().Truncate(time.Second).Format(time.RFC3339)
+	if !s.Earliest.IsZero() && s.Ref != "" {
+		when = "first-seen"
+	}
+	return strings.ToLower(s.Account) + "\x00" + when + "\x00" + s.Source + "\x00" + s.Ref
 }
 
 // accountName is an account name a collector may put in a filter it sends

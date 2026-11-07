@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2805 annotated sites across 31 rules. Each row is
+2806 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1430,7 +1430,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (372 sites)
+### G204 — CWE-78 OS command injection (373 sites)
 
 | Location | Reason |
 |---|---|
@@ -1695,10 +1695,11 @@ not this file.
 | `internal/server/pam_recording_served_test.go:208` | the stock sftp client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_served_test.go:918` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_served_test.go:949` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_signin_served_test.go:42` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_signin_served_test.go:45` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_signin_served_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_signin_served_test.go:67` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:43` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:46` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:498` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:323` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:412` | test executes a fixed local tool or fixture it built itself (CWE-78) |

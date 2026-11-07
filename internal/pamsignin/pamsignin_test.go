@@ -81,6 +81,34 @@ func TestMatchExplainsOnlyWindowsOfTheSameAccountA274(t *testing.T) {
 	}
 }
 
+// TestAFirstSeenSignInKeepsItsFingerprintA274: a MySQL connection is dated
+// when a collection first sees it, so each collection that still sees it
+// dates it anew; its reference (connection and server start) keeps it one
+// sign-in. A dated sign-in's time stays part of its identity.
+func TestAFirstSeenSignInKeepsItsFingerprintA274(t *testing.T) {
+	at := time.Date(2026, 11, 7, 18, 0, 0, 0, time.UTC)
+	first := SignIn{Account: "app_reader", At: at, Earliest: at.Add(-15 * time.Minute), Source: "172.17.0.1", Method: "database", Ref: "connection 12 since 2026-11-07T17:00:00Z"}
+	again := first
+	again.At, again.Earliest = at.Add(5*time.Minute), at.Add(-10*time.Minute)
+	if Fingerprint("orders-mysql", first) != Fingerprint("orders-mysql", again) {
+		t.Fatal("a connection seen again by a later collection is a new sign-in")
+	}
+	if len(Dedupe([]SignIn{first, again})) != 1 {
+		t.Fatal("a connection read twice in one report is two sign-ins")
+	}
+	other := first
+	other.Ref = "connection 13 since 2026-11-07T17:00:00Z"
+	if Fingerprint("orders-mysql", first) == Fingerprint("orders-mysql", other) {
+		t.Fatal("two connections are one sign-in")
+	}
+	dated := SignIn{Account: "orders-single", At: at, Source: "203.0.113.5", Ref: "sshd[1]:2"}
+	later := dated
+	later.At = at.Add(time.Minute)
+	if Fingerprint("lab-host", dated) == Fingerprint("lab-host", later) {
+		t.Fatal("a dated sign-in's time is not part of its identity")
+	}
+}
+
 func TestValidAccountsA274(t *testing.T) {
 	if err := ValidAccounts([]string{"orders-single", "app_reader", `CORP\svc-sql`, "admin@corp.example"}); err != nil {
 		t.Fatal(err)

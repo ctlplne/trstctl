@@ -141,7 +141,9 @@ the finding instead of repeating it.
 Schedule the source (`POST /api/v1/discovery/schedules`) to run every few minutes: a
 finding appears within one run of the sign-in. A database's current sessions are read, so a
 connection that opens and closes between two runs is not seen there; host logs keep every
-sign-in. In the console, create the source under Discovery → Sources (kind **Privileged
+sign-in. MySQL keeps no connection start time: a connection is dated when a run first sees
+it (some time since the lookback began) and stays one sign-in, by its connection id and the
+server's start, for as long as later runs see it. In the console, create the source under Discovery → Sources (kind **Privileged
 account sign-ins**: a provider that can read sign-ins, and an optional lookback).
 
 Every sign-in a run reads is also recorded — metadata only — with what explained it: the

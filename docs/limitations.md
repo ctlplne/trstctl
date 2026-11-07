@@ -9453,7 +9453,7 @@ What comes next:
   an origin.
 - Rotating a web console account (today the account is vaulted, not rotated).
 
-## Bypass detection (A274) — parts 1-2: collectors, recorded sign-ins and retention
+## Bypass detection (A274) — parts 1-3: collectors, recorded sign-ins and retention
 
 Status: in progress. A `pam_signin` discovery source watches a dynamic-secret provider's
 static accounts: each run reads their sign-ins through the provider's administrator
@@ -9474,10 +9474,14 @@ rotation's skew allowance, are refused without `access:read`, are purged past th
 retention while the finding stays, and another tenant lists none) and
 `TestServedBypassDetectionOnADatabaseA274` (an outside
 connection with a vaulted PostgreSQL account raises a finding; the gateway's connection for a
-reviewed session and a revealed check-out's connection raise none).
+reviewed session and a revealed check-out's connection raise none) and
+`TestServedBypassDetectionOnMySQLA274` (an outside connection to MySQL 8.4 raises one finding
+and one recorded sign-in dated when first seen; a run in a later second that sees it still
+open refreshes them instead of repeating them; a second connection is a second sign-in;
+another account's connection and the collector's own are not reported).
 
 What comes next:
-- A MySQL served proof; SQL Server on the x86 lab job; the Windows script's native run on
+- SQL Server on the x86 lab job; the Windows script's native run on
   windows-latest (read at the build's final checks) and a Windows proof against a host;
   Windows hosts enrolled with the native agent (A268), whose logons need the host agent.
 - Database connections shorter than the collection interval are not seen (current sessions
