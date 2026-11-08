@@ -245,7 +245,10 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 	if err != nil {
 		return nil, err
 	}
-	stack.log, err = events.Open(ctx, cfg.NATS, events.WithAppendObserver(func(d time.Duration) { stack.breakdown.add(kindJetStreamAppend, d) }))
+	// The production constructor runs the background identity indexer; so does
+	// this stack, which measures it.
+	stack.log, err = events.Open(ctx, cfg.NATS, events.WithBackgroundEventIDIndexer(),
+		events.WithAppendObserver(func(d time.Duration) { stack.breakdown.add(kindJetStreamAppend, d) }))
 	if err != nil {
 		return nil, err
 	}

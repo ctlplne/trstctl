@@ -149,6 +149,14 @@ type Log struct {
 	// projection itself is a separate file-backed JetStream stream and survives
 	// process crashes; cross-replica writes use per-subject compare-and-swap.
 	idIndexMu sync.Mutex
+	// backgroundIDIndex runs the identity indexer (WithBackgroundEventIDIndexer);
+	// idIndexKick wakes it after an append, idIndexStop and idIndexDone end it
+	// at Close.
+	backgroundIDIndex bool
+	idIndexKick       chan struct{}
+	idIndexStop       context.CancelFunc
+	idIndexDone       chan struct{}
+	idIndexCloseOnce  sync.Once
 	// tenantIndexMu serializes this process's source-ordered tenant index
 	// catch-up. The index stream's last-sequence CAS orders other replicas.
 	tenantIndexMu sync.Mutex
@@ -237,6 +245,19 @@ func WithDuplicateWindowForTesting(window time.Duration) OpenOption {
 	}
 }
 
+// WithBackgroundEventIDIndexer keeps the event identity projection near the
+// head in the background: one goroutine, woken after each append and every
+// eventIDIndexerInterval, indexes in eventIDIndexBatch pages under the same
+// history read view and lock a lookup takes, releasing them between pages.
+// Without it the projection advanced only at Open and by a bounded step per
+// lookup, so a burst of appends with no lookups (an inventory import) left
+// every keyed lookup refusing with ErrEventIDIndexBehind until enough lookups
+// had caught it up. A lookup still fails closed, exactly as before, when the
+// projection is behind its pinned head by more than its bounded catch-up.
+func WithBackgroundEventIDIndexer() OpenOption {
+	return func(log *Log) { log.backgroundIDIndex = true }
+}
+
 // WithAppendObserver has the log report each Append's and Import's wall time to
 // observe, after it returns. It measures and changes nothing; the perf harness
 // uses it to split an issuance's time (CI-L37).
@@ -313,6 +334,9 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 	if err := l.warmTenantIndex(ctx); err != nil && !errors.Is(err, ErrBackupRestoreIncomplete) {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: rebuild tenant event index: %w", err)
+	}
+	if l.backgroundIDIndex && l.desiredReplicas >= 1 {
+		l.startEventIDIndexer()
 	}
 	return l, nil
 }
@@ -446,7 +470,11 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if l.appendObserver != nil {
 		defer l.observeAppend(time.Now())
 	}
-	return l.append(ctx, e, false)
+	out, err := l.append(ctx, e, false)
+	if err == nil {
+		l.kickEventIDIndexer()
+	}
+	return out, err
 }
 
 func (l *Log) observeAppend(start time.Time) { l.appendObserver(time.Since(start)) }
@@ -460,7 +488,11 @@ func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
 	if l.appendObserver != nil {
 		defer l.observeAppend(time.Now())
 	}
-	return l.append(ctx, e, true)
+	out, err := l.append(ctx, e, true)
+	if err == nil {
+		l.kickEventIDIndexer()
+	}
+	return out, err
 }
 
 // EnforceLegacySchedulerWriteFloor permanently rejects schema-v1 scheduler runs
@@ -1488,6 +1520,7 @@ func validateSharedTailConsumer(
 
 // Close closes the connection and, in embedded mode, shuts the server down.
 func (l *Log) Close() error {
+	l.stopEventIDIndexer()
 	shutdown(l.srv, l.nc)
 	return nil
 }

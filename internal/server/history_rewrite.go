@@ -33,6 +33,7 @@ func openHistoryAwareEventLog(
 	}
 	options := append([]events.OpenOption(nil), extraOptions...)
 	options = append(options,
+		events.WithBackgroundEventIDIndexer(),
 		events.WithRequiredPrivacyEventPolicies(),
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)),
 		events.WithHistoryRewriteContinuityVerifier(historycontinuity.NewReceiptVerifier(auditKey)),

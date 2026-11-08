@@ -248,6 +248,131 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 	return covered, errors.New("events: identity projection cursor contention did not converge")
 }
 
+// eventIDIndexerInterval is how often the background identity indexer looks
+// for unindexed history when no append has woken it.
+const eventIDIndexerInterval = 5 * time.Second
+
+// startEventIDIndexer runs the background identity indexer until Close.
+func (l *Log) startEventIDIndexer() {
+	ctx, cancel := context.WithCancel(context.Background())
+	l.idIndexKick = make(chan struct{}, 1)
+	l.idIndexStop = cancel
+	l.idIndexDone = make(chan struct{})
+	go func() {
+		defer close(l.idIndexDone)
+		ticker := time.NewTicker(eventIDIndexerInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-l.idIndexKick:
+			case <-ticker.C:
+			}
+			// A failed round (a generation switch, a broker error) leaves the
+			// durable cursor where it was; the next wake resumes from it.
+			_ = l.catchUpEventIDIndex(ctx)
+		}
+	}()
+}
+
+// kickEventIDIndexer wakes the background indexer without blocking.
+func (l *Log) kickEventIDIndexer() {
+	if l.idIndexKick == nil {
+		return
+	}
+	select {
+	case l.idIndexKick <- struct{}{}:
+	default:
+	}
+}
+
+// stopEventIDIndexer ends the background indexer and waits for it.
+func (l *Log) stopEventIDIndexer() {
+	l.idIndexCloseOnce.Do(func() {
+		if l.idIndexStop != nil {
+			l.idIndexStop()
+			<-l.idIndexDone
+		}
+	})
+}
+
+// catchUpEventIDIndex advances the identity projection to the head one page at
+// a time; each page takes and releases the history read view and the index
+// lock, so a lookup or a history rewrite never waits behind a long catch-up.
+func (l *Log) catchUpEventIDIndex(ctx context.Context) error {
+	for ctx.Err() == nil {
+		done, err := l.indexEventIDPage(ctx)
+		if err != nil || done {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+// EventIDIndexCovered reports how far the identity projection has indexed the
+// current source generation and that generation's head: the projection's lag
+// is head - covered. It reads and writes nothing else.
+func (l *Log) EventIDIndexCovered(ctx context.Context) (covered, head uint64, err error) {
+	err = l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		var name string
+		name, _, head, err = l.resolveReplayStream(readCtx)
+		if err != nil {
+			return err
+		}
+		state, err := l.schedulerSafetySnapshot(readCtx)
+		if err != nil {
+			return err
+		}
+		if state.Name != name {
+			return ErrGenerationChanged
+		}
+		index, epoch, err := l.eventIDIndexFor(readCtx, state)
+		if err != nil {
+			return err
+		}
+		covered, _, err = readEventIDCursor(readCtx, index, epoch)
+		return err
+	})
+	return covered, head, err
+}
+
+// indexEventIDPage indexes at most one page past the durable cursor and
+// reports whether the projection had already reached the pinned head.
+func (l *Log) indexEventIDPage(ctx context.Context) (bool, error) {
+	done := false
+	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		name, source, head, err := l.resolveReplayStream(readCtx)
+		if err != nil {
+			return err
+		}
+		state, err := l.schedulerSafetySnapshot(readCtx)
+		if err != nil {
+			return err
+		}
+		if state.Name != name || state.LastSequence < head {
+			return ErrGenerationChanged
+		}
+		l.idIndexMu.Lock()
+		defer l.idIndexMu.Unlock()
+		index, epoch, err := l.eventIDIndexFor(readCtx, state)
+		if err != nil {
+			return err
+		}
+		covered, _, err := readEventIDCursor(readCtx, index, epoch)
+		if err != nil {
+			return err
+		}
+		if covered >= head {
+			done = true
+			return nil
+		}
+		_, err = l.indexEventIDsThrough(readCtx, source, state, min(head, covered+eventIDIndexBatch))
+		return err
+	})
+	return done, err
+}
+
 func (l *Log) warmEventIDIndex(ctx context.Context) error {
 	// A concurrent privacy rewrite must not delete the old index while startup
 	// is rebuilding it. The shared history view pins one source generation until
