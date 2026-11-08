@@ -935,9 +935,49 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'signtool through the Windows KSP failed' }
           if (($p9Output -join "`n") -notmatch 'P9_SIGNTOOL_OK') { throw 'Required signtool proof marker missing' }
 
+  # X5 correctness on x86 Linux (Track A on GitHub-hosted runners since
+  # 2026-11-02): the host TLS session observer's probes attach to the
+  # runner's own OpenSSL 3 and read stock openssl and curl sessions on
+  # loopback (TestSessionObserverReadsStockTLSSessionsX5, as root for BPF);
+  # the committed probe objects must rebuild byte-identical from their source.
+  x5-session-observer:
+    name: x5 lab (host TLS session observer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+      - name: Build the session observer's proof binary
+        run: CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/sessionobserve.test" ./internal/agent/sessionobserve/
+      - name: Stock OpenSSL and curl sessions through the probes (X5)
+        run: |
+          uname -r
+          openssl version
+          curl --version | head -1
+          mkdir -p "$RUNNER_TEMP/x5"
+          sudo env TRSTCTL_X5_PROOF_OUT="$RUNNER_TEMP/x5/sessions.json" \
+            TRSTCTL_X5_TRAFFIC="$PWD/internal/agent/sessionobserve/testdata/traffic.sh" \
+            "$RUNNER_TEMP/sessionobserve.test" -test.run '^TestSessionObserverReadsStockTLSSessionsX5$' -test.v -test.count=1 \
+            2>&1 | tee "$RUNNER_TEMP/x5/proof.log"
+          grep -q -- '--- PASS: TestSessionObserverReadsStockTLSSessionsX5' "$RUNNER_TEMP/x5/proof.log"
+      - name: The committed probe objects rebuild from their source
+        run: |
+          make sessionobserve-bpf
+          git diff --exit-code -- internal/agent/sessionobserve/bpf/
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

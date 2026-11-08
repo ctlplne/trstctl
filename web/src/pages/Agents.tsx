@@ -35,8 +35,10 @@ const certRevocationReasons = [
 // agent acts on things in its segment that cannot run an agent at all, and an
 // observer (X1) watches an interface's handshakes. An agent can hold several —
 // host and network together is the F5-beside-a-server case. gateway (A254)
-// serves brokered access sessions and holds their upstream credentials.
-type AgentRole = "host" | "network" | "observer" | "gateway";
+// serves brokered access sessions and holds their upstream credentials, and a
+// session observer (X5) reads its own host's TLS sessions from the TLS
+// libraries.
+type AgentRole = "host" | "network" | "observer" | "gateway" | "session-observer";
 type AgentDisclosure = "fleet" | "trust" | "operations";
 
 const AGENT_ROLE_CHOICES = [
@@ -44,6 +46,7 @@ const AGENT_ROLE_CHOICES = [
   { value: "network", labelKey: "source.agent.role.network.a2r0le0005", helpKey: "source.agent.role.network.help.a2r0le0006" },
   { value: "observer", labelKey: "agents.role.observer", helpKey: "agents.role.observer.help" },
   { value: "gateway", labelKey: "agents.role.gateway", helpKey: "agents.role.gateway.help" },
+  { value: "session-observer", labelKey: "agents.role.sessionObserver", helpKey: "agents.role.sessionObserver.help" },
 ] as const satisfies readonly { value: AgentRole; labelKey: MessageKey; helpKey: MessageKey }[];
 
 // A194: the agent's clock against the control plane's, as a short drift.
@@ -67,6 +70,7 @@ function clockSkewWarning(agent: Agent): string | null {
 function agentRoleLabel(role: string): string {
   if (role === "observer") return translateNow("agents.role.observer");
   if (role === "gateway") return translateNow("agents.role.gateway");
+  if (role === "session-observer") return translateNow("agents.role.sessionObserver");
   return role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003");
 }
 

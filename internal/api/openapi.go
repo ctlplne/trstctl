@@ -6744,7 +6744,7 @@ func componentSchemas() map[string]*Schema {
 		// Capability grant projected from the agent's certificate SANs (epic A2).
 		// Not editable here: the role lives in a signed SAN, so an operator
 		// changes it with a grant the agent's next renewal signs (A191).
-		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
+		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}},
 		"role_source": {Type: "string", Enum: []string{"certificate", "unreported"}},
 		"role_grant":  ref("AgentRoleGrant"),
 		// A194: the agent's clock against the control plane's.
@@ -6822,7 +6822,7 @@ func componentSchemas() map[string]*Schema {
 		// The effective grant this token carries into the enrolled certificate,
 		// after normalization — so an operator sees what they authorized rather
 		// than what they typed (epic A2).
-		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}},
 	}, "token", "roles", "agent_server", "agent_server_name")
 	enrollmentTokenReq := object(map[string]*Schema{
 		"allowed_identity": str(),
@@ -6830,13 +6830,13 @@ func componentSchemas() map[string]*Schema {
 		// Requesting "network" additionally requires the agents:relay.grant
 		// permission, because a relay holds the credentials for the appliances it
 		// fronts.
-		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
+		"roles": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}},
 	})
 	enrollmentPlanPreview := object(map[string]*Schema{
 		"ready":                  {Type: "boolean"},
 		"side_effects":           {Type: "boolean"},
 		"allowed_identity":       str(),
-		"roles":                  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
+		"roles":                  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}},
 		"required_permissions":   {Type: "array", Items: str()},
 		"enroll_path":            str(),
 		"agent_server":           str(),
@@ -6860,7 +6860,7 @@ func componentSchemas() map[string]*Schema {
 	// A191: an operator's change to the roles an agent's next certificate
 	// carries. Requires agents:relay.grant.
 	agentRoleGrantReq := object(map[string]*Schema{
-		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
+		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
 		"reason": str(),
 	}, "roles")
 	agentClockSkew := object(map[string]*Schema{
@@ -6871,7 +6871,7 @@ func componentSchemas() map[string]*Schema {
 		"detail":            str(),
 	}, "state", "skew_seconds", "threshold_seconds", "observed_at", "detail")
 	agentRoleGrant := object(map[string]*Schema{
-		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway"}}},
+		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network", "observer", "gateway", "session-observer"}}},
 		"state":          {Type: "string", Enum: []string{"pending", "applied"}, Description: "pending until a renewal signs the roles into the agent's certificate."},
 		"granted_at":     timestamp(),
 		"event_id":       str(),

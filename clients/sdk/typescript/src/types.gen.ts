@@ -13485,7 +13485,7 @@ export interface components {
             role_grant?: components["schemas"]["AgentRoleGrant"];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
-            roles: ("host" | "network" | "observer" | "gateway")[];
+            roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
             status: string;
             version?: string;
             workload_api: components["schemas"]["AgentWorkloadAPIStatus"];
@@ -13643,7 +13643,7 @@ export interface components {
             event_id: string;
             /** Format: date-time */
             granted_at: string;
-            roles: ("host" | "network" | "observer" | "gateway")[];
+            roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
             /**
              * @description pending until a renewal signs the roles into the agent's certificate.
              * @enum {string}
@@ -13653,7 +13653,7 @@ export interface components {
         AgentRoleGrantRequest: {
             reason?: string;
             /** @description The complete role set the agent's next certificate carries; at least one. */
-            roles: ("host" | "network" | "observer" | "gateway")[];
+            roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
         };
         AgentUpgradeCampaign: {
             active: boolean;
@@ -18286,19 +18286,19 @@ export interface components {
             renewal_path: string;
             renewal_ready: boolean;
             required_permissions: string[];
-            roles: ("host" | "network" | "observer" | "gateway")[];
+            roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
             side_effects: boolean;
         };
         EnrollmentToken: {
             agent_server: string;
             agent_server_name: string;
             enroll_path?: string;
-            roles: ("host" | "network" | "observer" | "gateway")[];
+            roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
             token: string;
         };
         EnrollmentTokenRequest: {
             allowed_identity?: string;
-            roles?: ("host" | "network" | "observer" | "gateway")[];
+            roles?: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
         };
         EnterpriseProfessionalService: {
             deliverables: string[];

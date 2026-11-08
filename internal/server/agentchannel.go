@@ -110,6 +110,15 @@ const agentObserverSourceKind = "network-observer"
 
 var agentObservationKinds = map[string]bool{"tls_handshake": true, "ssh_kex": true, "plaintext_protocol": true}
 
+// agentSessionObserverSourceKind is the inventory source host session
+// observers report under (X5), and agentSessionObservationKind the one finding
+// kind only it may report: a TLS session read from the TLS library on the
+// agent's own host.
+const (
+	agentSessionObserverSourceKind = "tls-session-observer"
+	agentSessionObservationKind    = "tls_session"
+)
+
 // agentServiceDependencyFindingKind is a metadata-only network observation:
 // one exact owner-model workload relies on one exact resource. It travels over
 // the already tenant-bound agent mTLS channel and becomes an immutable
@@ -1179,9 +1188,19 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 	if sourceKind == agentObserverSourceKind && !agentHasRole(info.Roles, mtls.AgentRoleObserver) {
 		return nil, status.Error(codes.PermissionDenied, "observation reports need the observer role; this agent's certificate does not carry it")
 	}
+	// X5: what a session observer read from its host's TLS libraries is
+	// accepted only from a certificate carrying the session-observer role, and
+	// only as TLS sessions.
+	if sourceKind == agentSessionObserverSourceKind && !agentHasRole(info.Roles, mtls.AgentRoleSessionObserver) {
+		return nil, status.Error(codes.PermissionDenied, "TLS session reports need the session-observer role; this agent's certificate does not carry it")
+	}
 	for _, f := range req.Findings {
-		if agentObservationKinds[strings.TrimSpace(f.Kind)] != (sourceKind == agentObserverSourceKind) {
+		kind := strings.TrimSpace(f.Kind)
+		if agentObservationKinds[kind] != (sourceKind == agentObserverSourceKind) {
 			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q: observation kinds come only from the %s source, and that source reports only them", f.Ref, agentObserverSourceKind)
+		}
+		if (kind == agentSessionObservationKind) != (sourceKind == agentSessionObserverSourceKind) {
+			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q: TLS sessions come only from the %s source, and that source reports only them", f.Ref, agentSessionObserverSourceKind)
 		}
 	}
 	findings := make([]store.DiscoveryFinding, 0, len(req.Findings))

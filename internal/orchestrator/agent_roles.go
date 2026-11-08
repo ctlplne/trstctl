@@ -31,8 +31,9 @@ func (o *Orchestrator) GrantAgentRoles(ctx context.Context, tenantID, agentID st
 	reason = strings.TrimSpace(reason)
 	for _, role := range roles {
 		if !mtls.ValidAgentRole(role) {
-			return store.AgentRoleGrant{}, fmt.Errorf("%w: unknown role %q; expected %q or %q",
-				ErrAgentRolesInvalid, role, mtls.AgentRoleHost, mtls.AgentRoleNetwork)
+			return store.AgentRoleGrant{}, fmt.Errorf("%w: unknown role %q; expected %q, %q, %q, %q or %q",
+				ErrAgentRolesInvalid, role, mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleObserver,
+				mtls.AgentRoleGateway, mtls.AgentRoleSessionObserver)
 		}
 	}
 	granted := mtls.NormalizeAgentRoles(roles)

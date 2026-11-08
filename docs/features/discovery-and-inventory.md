@@ -262,9 +262,9 @@ Enrollment is deliberately two steps in **Agents → Add agent**:
    browser does not save it to local or session storage.
 
 Leaving the identity blank means any agent identity in the caller's tenant may use the
-token. Selecting **Network relay** or **Observer** also requires `agents:relay.grant`;
-ordinary `agents:write` authority cannot silently turn a host agent into a relay or an
-observer. If the public
+token. Selecting **Network relay**, **Observer**, **Access gateway** or **Session
+observer** also requires `agents:relay.grant`; ordinary `agents:write` authority cannot
+silently turn a host agent into a relay or an observer. If the public
 agent address or TLS name is missing, preview says exactly what must be configured and
 minting stays unavailable. Headless operators use `trstctl agents enroll-token-preview`
 with the same JSON body before `trstctl agents enroll-token`.
@@ -476,6 +476,36 @@ order or is not a handshake the observer reads is counted, never buffered, and e
 report carries the observer's own CPU time, heap and drops. Observations are discovery
 findings, kept across restarts, and they make `passive-wire-traffic` an observed class
 in [computed coverage](../design/cbom-coverage.md).
+
+### Host TLS session observer (X5)
+
+TLS 1.3 encrypts everything after the ServerHello, including the certificate, so a wire
+observer cannot see which certificate a TLS 1.3 connection used. The session observer
+reads it on the host instead, from the TLS library, with no proxy in the path. An agent
+granted the **session-observer** role (`agents:relay.grant`; it sees every process's
+connections on its host) and started with `--observe-tls-sessions` attaches probes to the
+host's OpenSSL 3 libraries (`libssl.so.3` and `libcrypto.so.3`, found in the usual library
+directories or named with `--observe-tls-libraries LIBSSL,LIBCRYPTO`). It needs Linux 5.17
+or later on x86-64 or arm64, `CAP_BPF` and `CAP_PERFMON` (or `CAP_SYS_ADMIN`) and the
+host PID namespace; other platforms report an error, never an empty observation set.
+
+For each TLS handshake a process on the host makes or accepts, the agent reports the
+process and its executable, which side it was on, the negotiated version, cipher suite
+and key-exchange group (X25519MLKEM768 and the other ML-KEM hybrids by name), the server
+name, whether the server first sent a HelloRetryRequest, and the peer's certificate
+(fingerprint, key type and size, expiry): the server's for a client, the client's for a
+server using mutual TLS. The probes copy only the plaintext handshake records an SSL
+exchanges with its own socket, each direction stopping at its first record that is not
+a handshake record, and the certificates libssl parses during the handshake; no
+application data and no encrypted byte leaves the kernel, and only a certificate's facts
+are kept. Findings are `tls_session` items under the `tls-session-observer` source, one
+per process, side, server name, negotiated facts and peer certificate, with a session
+count, reported every `--observe-tls-report-interval` (default one minute) with the
+probes' own drops; they say `application_data_read=false`, and they make
+`host-tls-sessions` an observed class in [computed coverage](../design/cbom-coverage.md).
+The server accepts that source only from a certificate that carries the session-observer
+role, and `tls_session` findings from no other source. When an operator removes the role,
+the agent renews at once, and its next role check, within seconds, detaches every probe.
 
 **AI assistants and MCP servers on hosts (P7).** Desktop assistants and IDEs list
 the MCP servers they start or call in JSON configuration files, and a server's

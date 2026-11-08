@@ -145,6 +145,10 @@ func Classify(now time.Time, sources []SourceState) Report {
 				cc.Action = fmt.Sprintf("grant an agent the observer role and start it with --observe-interface on the interface to watch (needs: %s)",
 					preconditionsOf(envs, kinds))
 			}
+			if len(kinds) == 1 && kinds[0] == SessionObserverKind {
+				cc.Action = fmt.Sprintf("grant a Linux host's agent the session-observer role and start it with --observe-tls-sessions (needs: %s)",
+					preconditionsOf(envs, kinds))
+			}
 			rep.Unobserved++
 		case staleSource != nil:
 			env := envs[resolveKind(envs, staleSource.Kind)]

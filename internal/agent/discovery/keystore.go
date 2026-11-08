@@ -25,6 +25,10 @@ const SourceKeystore = "keystore"
 // the agent's observe package collects it.
 const SourceNetworkObserver = "network-observer"
 
+// SourceTLSSessionObserver is the source host session observers report under
+// (X5); the agent's sessionobserve package collects it.
+const SourceTLSSessionObserver = "tls-session-observer"
+
 const maxKeystoreFileSize = 8 << 20
 
 // keystoreExtensions name the files a directory walk reads as keystores; a

@@ -90,6 +90,7 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"a267-windows-dependents":     ciUmbrellaCheck,
 	"p9-ksp-windows-build":        ciUmbrellaCheck,
 	"p9-windows-signtool":         ciUmbrellaCheck,
+	"x5-session-observer":         ciUmbrellaCheck,
 	"dod-census":                  dodUmbrellaCheck,
 	"dod-selftests":               dodUmbrellaCheck,
 	"fuzz-shards":                 fuzzUmbrellaCheck,

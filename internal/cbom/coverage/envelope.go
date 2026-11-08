@@ -36,6 +36,10 @@ const (
 	// AssetPassiveWireTraffic is what connections' handshakes state on an
 	// interface an observer agent watches (X1).
 	AssetPassiveWireTraffic AssetClass = "passive-wire-traffic" // #nosec G101 -- an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798)
+	// AssetHostTLSSessions is what the TLS sessions on a session observer
+	// agent's host negotiated, with their peer certificates, read from the
+	// TLS library itself (X5): what TLS 1.3 hides from a wire observer.
+	AssetHostTLSSessions AssetClass = "host-tls-sessions"
 	// Imported CBOMs (X6): vendors' own, source-code scans and image scans.
 	AssetVendorEmbedded AssetClass = "vendor-embedded-crypto"
 	AssetSourceCode     AssetClass = "source-code-crypto"
@@ -58,6 +62,7 @@ const (
 	PrecondRepositoryConfigured Precondition = "repository-configured"
 	PrecondOperatorFindings     Precondition = "operator-supplied-findings"
 	PrecondObserverReporting    Precondition = "observer-agent-reporting"
+	PrecondSessionObserver      Precondition = "session-observer-agent-reporting"
 	PrecondCBOMImported         Precondition = "cbom-imported"
 )
 
@@ -87,6 +92,11 @@ const ManualKind = "manual"
 // Agents run it, not the server, so it has no server executor.
 const ObserverKind = "network-observer"
 
+// SessionObserverKind is the host TLS session observer (X5): agents holding
+// the session-observer role report the TLS sessions their host's TLS
+// libraries negotiate. Agents run it, not the server.
+const SessionObserverKind = "tls-session-observer"
+
 // CBOM import kinds (X6): an import's source prefix names what it covers.
 const (
 	ImportVendorKind = "cbom_import_vendor"
@@ -95,10 +105,10 @@ const (
 )
 
 // ReportedKinds are the envelope kinds reported to the server — by agents
-// (the observer) or by CBOM imports — rather than run by it; the registry's
+// (the observers) or by CBOM imports — rather than run by it; the registry's
 // weld test exempts them from needing an executor.
 func ReportedKinds() map[string]bool {
-	return map[string]bool{ObserverKind: true, ImportVendorKind: true, ImportSourceKind: true, ImportImageKind: true}
+	return map[string]bool{ObserverKind: true, SessionObserverKind: true, ImportVendorKind: true, ImportSourceKind: true, ImportImageKind: true}
 }
 
 // importPrefix is the import source prefix that feeds each import kind.
@@ -157,6 +167,10 @@ func Envelopes() map[string]Envelope {
 		// watches: TLS versions, groups and TLS 1.2 certificates, SSH key
 		// exchange, plaintext protocols; never payload (X1).
 		env(ObserverKind, []AssetClass{AssetPassiveWireTraffic}, PrecondObserverReporting),
+		// TLS sessions a session observer agent read from its host's TLS
+		// libraries: version, suite, group and the peer certificate TLS 1.3
+		// encrypts on the wire; never application data (X5).
+		env(SessionObserverKind, []AssetClass{AssetHostTLSSessions}, PrecondSessionObserver),
 		// Imported CycloneDX CBOMs: a vendor's for its product, a source scan
 		// of a repository, an image or directory scan (X6). A vendor CBOM stays
 		// current for a release, so its window is longer.

@@ -1224,7 +1224,7 @@ export interface Agent {
   reported_ssh_trust_readiness?: SSHTrustReadiness;
   role_grant?: AgentRoleGrant;
   role_source: "certificate" | "unreported";
-  roles: ("host" | "network" | "observer" | "gateway")[];
+  roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
   status: string;
   version?: string;
   workload_api: AgentWorkloadAPIStatus;
@@ -1380,13 +1380,13 @@ export interface AgentRoleGrant {
   detail: string;
   event_id: string;
   granted_at: string;
-  roles: ("host" | "network" | "observer" | "gateway")[];
+  roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
   state: "pending" | "applied";
 }
 
 export interface AgentRoleGrantRequest {
   reason?: string;
-  roles: ("host" | "network" | "observer" | "gateway")[];
+  roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
 }
 
 export interface AgentUpgradeCampaign {
@@ -5111,7 +5111,7 @@ export interface EnrollmentPlanPreview {
   renewal_path: string;
   renewal_ready: boolean;
   required_permissions: string[];
-  roles: ("host" | "network" | "observer" | "gateway")[];
+  roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
   side_effects: boolean;
 }
 
@@ -5119,13 +5119,13 @@ export interface EnrollmentToken {
   agent_server: string;
   agent_server_name: string;
   enroll_path?: string;
-  roles: ("host" | "network" | "observer" | "gateway")[];
+  roles: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
   token: string;
 }
 
 export interface EnrollmentTokenRequest {
   allowed_identity?: string;
-  roles?: ("host" | "network" | "observer" | "gateway")[];
+  roles?: ("host" | "network" | "observer" | "gateway" | "session-observer")[];
 }
 
 export interface EnterpriseProfessionalService {

@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 29 served source kinds
+## Observability envelopes — 30 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -71,6 +71,7 @@ served set by construction.
 | `secret_third_party` | `third-party-secret` | `connector-credential-configured` | 24h0m0s |
 | `service_account` | `service-account` | `connector-credential-configured` | 24h0m0s |
 | `ssh` | `ssh-host-key`, `ssh-private-key` | `scan-targets-configured` | 24h0m0s |
+| `tls-session-observer` | `host-tls-sessions` | `session-observer-agent-reporting` | 24h0m0s |
 
 `manual` is the served fallback: a source of any kind with no dedicated
 connector records operator-supplied findings, and its envelope says exactly
@@ -102,7 +103,7 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 24 observable-unobserved · 5 structurally unobservable** across 31 classes.
+**2 observed · 25 observable-unobserved · 5 structurally unobservable** across 32 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
@@ -115,6 +116,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `container-image-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source image:<name> (needs: cbom-imported)** |
 | `ct-exposed-certificate` | `OBSERVABLE-UNOBSERVED` | last run of "ct-watch" finished "failed", not "succeeded" — **fix and re-run discovery source "ct-watch"** |
 | `deployed-certificate` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind drift (needs: deployment-baseline-configured)** |
+| `host-tls-sessions` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **grant a Linux host's agent the session-observer role and start it with --observe-tls-sessions (needs: session-observer-agent-reporting)** |
 | `kubernetes-tls-endpoint` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind k8s_ingress_gateway (needs: cluster-credential-configured)** |
 | `network-path` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_network_path (needs: cloud-credential-configured)** |
 | `nhi-behavior` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind nhi_behavior (needs: connector-credential-configured)** |

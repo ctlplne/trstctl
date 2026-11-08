@@ -6691,7 +6691,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },
@@ -7261,7 +7262,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },
@@ -7297,7 +7299,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },
@@ -24229,7 +24232,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },
@@ -24272,7 +24276,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },
@@ -24301,7 +24306,8 @@
                 "host",
                 "network",
                 "observer",
-                "gateway"
+                "gateway",
+                "session-observer"
               ],
               "type": "string"
             },

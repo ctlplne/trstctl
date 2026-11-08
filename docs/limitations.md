@@ -1443,6 +1443,21 @@ never live in the API process. What you can do end to end against the running bi
   reads untagged IPv4 without fragments and IPv6 without extension headers, follows
   connections in order (a gap ends reading of that connection), does not read QUIC
   or TLS over UDP, and needs Linux AF_PACKET (other platforms report an error).
+- Host TLS session observer (X5): an agent with the session-observer role reports,
+  from probes on the host's OpenSSL 3 libraries, each TLS handshake's version, suite,
+  key-exchange group, HelloRetryRequest and the peer's certificate — the one TLS 1.3
+  encrypts on the wire — never application data; removing the role detaches the
+  probes. Proven with stock OpenSSL 3.5 and curl in a privileged Linux container on the
+  build Mac (TLS 1.3 with X25519MLKEM768 and mutual TLS, TLS 1.2, a HelloRetryRequest;
+  no application-data marker reached the probes); correctness on x86 Linux is the
+  ubuntu-latest CI job `x5-session-observer`, and throughput on the x86 QA machine is a
+  Track B qualification. It reads OpenSSL 3 linked dynamically: GnuTLS, NSS, BoringSSL,
+  Go's crypto/tls and statically linked OpenSSL are what comes next, as is finding a
+  container image's own copy of the library without naming its path. It needs Linux
+  5.17 or later, BPF privileges and the host PID namespace; a peer certificate is read
+  only when the handshake runs inside SSL_do_handshake, SSL_connect, SSL_accept or an
+  SSL read or write, and a record header split across reads ends that direction's
+  reading (counted as a drop).
 - Host crypto discovery depth (X2): the agent reports Java keystore and PKCS#12
   key entries (alias, key type and size, public-key fingerprint; never key bytes)
   and the versions of TLS libraries and Go programs with whether each can negotiate

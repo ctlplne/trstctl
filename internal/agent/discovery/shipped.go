@@ -109,6 +109,13 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			Flags:       []string{"--observe-interface", "--observe-ports", "--observe-max-flows", "--observe-report-interval"},
 		},
 		{
+			// X5: TLS sessions read from this host's OpenSSL 3 libraries; needs
+			// the session-observer role, Linux and BPF privileges.
+			Kind:        SourceTLSSessionObserver,
+			Constructor: "sessionobserve.NewAssembler",
+			Flags:       []string{"--observe-tls-sessions", "--observe-tls-libraries", "--observe-tls-report-interval"},
+		},
+		{
 			// SSH inventory is collected by the sibling sshdiscovery package
 			// rather than a Source in this one; the kind is what the served
 			// surface advertises, so it belongs on this list either way.

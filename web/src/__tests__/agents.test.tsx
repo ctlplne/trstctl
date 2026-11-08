@@ -261,6 +261,39 @@ describe("agent fleet surface", () => {
     expect(row).toHaveTextContent(/next renewal: host, network/i);
   });
 
+  it("offers the session-observer role, says what it reads and who may grant it, and records it", async () => {
+    apiMock.grantAgentRoles.mockReset().mockImplementation(async (id: string, input: { roles: string[] }) => ({
+      ...(await apiMock.agents())[0],
+      id,
+      role_grant: {
+        roles: input.roles,
+        state: "pending",
+        granted_at: "2026-11-08T04:00:00Z",
+        event_id: "ev-x5",
+        detail: "The agent's next certificate renewal signs these roles.",
+      },
+    }));
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("table", { name: "Registered in-network agents" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Change roles" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Change roles for edge-01" });
+    const sessionObserver = within(dialog).getByRole("checkbox", { name: /^session observer/i });
+    expect(sessionObserver).not.toBeChecked();
+    expect(dialog).toHaveTextContent(/never reads application data/i);
+    expect(dialog).toHaveTextContent(/TLS 1\.3 encrypts on the wire/i);
+    fireEvent.click(sessionObserver);
+    fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "see which TLS this host's services use" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record role change" }));
+    await waitFor(() =>
+      expect(apiMock.grantAgentRoles).toHaveBeenCalledWith("ag-1", { roles: ["host", "session-observer"], reason: "see which TLS this host's services use" }),
+    );
+    expect(await screen.findByText(/role change recorded for edge-01/i)).toBeInTheDocument();
+    const row = screen.getByRole("row", { name: /edge-01/ });
+    expect(row).toHaveTextContent(/next renewal: host, session observer/i);
+  });
+
   it("names an agent whose clock is past the skew threshold in the table and its details", async () => {
     const [first] = await apiMock.agents();
     apiMock.agents.mockResolvedValueOnce([

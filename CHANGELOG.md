@@ -2,6 +2,16 @@
 
 ### Added
 
+- Host TLS session observer (X5): an agent granted the new `session-observer` role (`agents:relay.grant`; migration
+  0435 lets bootstrap tokens grant it) and started with `--observe-tls-sessions` attaches eBPF probes to its host's
+  OpenSSL 3 libraries (`--observe-tls-libraries`) and reports, for each TLS handshake on the host, the process, side,
+  version, cipher suite, key-exchange group, HelloRetryRequest and the peer's certificate facts — the certificate TLS
+  1.3 encrypts on the wire — as `tls_session` findings under the `tls-session-observer` source
+  (`--observe-tls-report-interval`). The probes copy only plaintext handshake records and the certificates libssl
+  parses during a handshake, never application data. The server accepts the source only from a certificate carrying
+  the role and `tls_session` from no other source; removing the role detaches the probes. Coverage: `host-tls-sessions`
+  is an observed class. Console: the **Session observer** role. Linux 5.17+ (x86-64, arm64), BPF privileges, host PID
+  namespace. CI: `x5-session-observer` (ubuntu-latest).
 - Windows signing adapter (P9; build list section 35, item 1): `trstctl-ksp.dll`, a CNG key storage provider in
   `clients/signing/ksp`, offers trstctl code-signing keys to signtool and other CNG tools as key containers
   (`TRSTCTL_KSP_KEYS`; ECDSA P-256, and RSA with PKCS #1 v1.5, over SHA-256). The key never leaves the signer: each

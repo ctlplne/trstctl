@@ -1567,6 +1567,12 @@ nothing.
 `--observe-interface` (Linux, observer role) watches an interface's handshakes and
 reports what each connection negotiated, never payload; `--observe-ports`,
 `--observe-max-flows` and `--observe-report-interval` bound it.
+`--observe-tls-sessions` (Linux 5.17+, session-observer role, BPF privileges and the host
+PID namespace) attaches probes to the host's OpenSSL 3 libraries and reports what each TLS
+handshake on the host negotiated, with the peer's certificate, never application data;
+`--observe-tls-libraries LIBSSL,LIBCRYPTO` names the libraries and
+`--observe-tls-report-interval` sets the report cadence. Removing the role detaches the
+probes.
 `--access-gateway-listen ADDR` (gateway role) serves brokered access sessions (A254):
 it claims `access.gateway.session` jobs, holds each session's upstream credential in
 locked memory (a PostgreSQL login, or the certificate for an SSH key it generated) and

@@ -749,9 +749,13 @@ func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
 	states := make([]coverage.SourceState, 0, len(rows))
 	for _, row := range rows {
 		kind := row.SourceKind
-		// X1: an agent's network-observer reports count as the observer source.
+		// X1: an agent's network-observer reports count as the observer source,
+		// and X5: its tls-session-observer reports as the session observer.
 		if kind == "agent" && strings.HasSuffix(row.SourceName, ":"+coverage.ObserverKind) {
 			kind = coverage.ObserverKind
+		}
+		if kind == "agent" && strings.HasSuffix(row.SourceName, ":"+coverage.SessionObserverKind) {
+			kind = coverage.SessionObserverKind
 		}
 		states = append(states, coverage.SourceState{
 			SourceID: row.SourceID, Kind: kind, Name: row.SourceName,
