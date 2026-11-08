@@ -104,12 +104,14 @@ jobs:
           set -euo pipefail
           file="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
           base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
-          curl -fsSL "${base}/${file}" -o "/tmp/${file}"
+          # Each download retries a failed transfer (GitHub release downloads
+          # answer 5xx in bursts) before the job gives up.
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 300 "${base}/${file}" -o "/tmp/${file}"
           # Verify the downloaded tarball against the digest upstream published for
           # this exact release (trivy_<ver>_checksums.txt), pinned by version. A
           # corrupted or swapped download fails `sha256sum -c` and the job stops —
           # we never tar/install unverified bytes (SUPPLY-006).
-          curl -fsSL "${base}/trivy_${TRIVY_VERSION}_checksums.txt" -o /tmp/trivy_checksums.txt
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 300 "${base}/trivy_${TRIVY_VERSION}_checksums.txt" -o /tmp/trivy_checksums.txt
           ( cd /tmp && grep " ${file}\$" trivy_checksums.txt | sha256sum -c - )
           tar -xzf "/tmp/${file}" -C /tmp trivy
           sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy

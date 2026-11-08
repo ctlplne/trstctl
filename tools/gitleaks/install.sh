@@ -76,8 +76,16 @@ base="https://github.com/gitleaks/gitleaks/releases/download/${version}"
 archive="${tmpdir}/${asset}"
 checksums="${tmpdir}/gitleaks_${asset_version}_checksums.txt"
 
-curl -fsSL "${base}/${asset}" -o "${archive}"
-curl -fsSL "${base}/gitleaks_${asset_version}_checksums.txt" -o "${checksums}"
+# fetch downloads one release file. GitHub's release downloads answer 5xx in
+# bursts (a 504 stopped the Security scans' gitleaks job twice on 2026-11-08),
+# so a failed download is retried six times, ten seconds apart, within the
+# job's time limit. The pinned checksums below still decide what is used.
+fetch() {
+  curl -fsSL --retry 6 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 300 "$1" -o "$2"
+}
+
+fetch "${base}/${asset}" "${archive}"
+fetch "${base}/gitleaks_${asset_version}_checksums.txt" "${checksums}"
 grep -E "^${expected_sha}[[:space:]]+${asset}$" "${checksums}" >/dev/null || {
   echo "pinned checksum for ${asset} does not match upstream checksums manifest" >&2
   exit 1

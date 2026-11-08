@@ -559,6 +559,11 @@
 
 ### Fixed
 
+- The Security scans' downloads retry a failed transfer. The gitleaks installer
+  (`tools/gitleaks/install.sh`) and the Trivy step fetched their GitHub release files once,
+  so a 504 from GitHub's release downloads failed the job without scanning anything (twice on
+  2026-11-08). Each download now retries six times, ten seconds apart, inside the job's time
+  limit; the pinned checksums still decide what is installed.
 - Inventory pages sorted the whole tenant on every page: the page queries select the keyset column as `id::text`
   without an alias, and PostgreSQL resolves a bare `ORDER BY id` against that output column, so each 50-row page of
   the certificate inventory (and of identities, owners, issuers and 17 other keyset pages) was a sequential scan and
