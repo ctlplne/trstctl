@@ -559,6 +559,13 @@
 
 ### Fixed
 
+- A second audit feed with a name another feed holds is a 409, and nothing is recorded
+  (A233-L3). `PUT /api/v1/audit/feeds/{id}` appended the configuration event and then
+  failed its projection on the tenant's feed-name index: the caller got a 500, and the
+  event log kept an event no projection could apply, so a projection rebuild stopped at
+  it. The name is now checked under the projection lock before anything is appended
+  (preview answers the same 409), and such an event already in a log applies as the
+  no-op it was live, so that log rebuilds and the name stays with the feed that held it.
 - A tenant baseline's and a change set's profile digest is one `sha256:` and its hex
   (A248-L2). The profile step prefixed `store.ProfileSpecDigest`, which already carries
   the prefix, so drift, change-set plans and recorded template applications read

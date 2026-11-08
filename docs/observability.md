@@ -167,7 +167,9 @@ Before saving, use `POST /api/v1/audit/feeds/{id}/preview` or `trstctl-cli audit
 feeds preview <id> -f <file>`. Preview uses the execution validator and explains
 the exact host, credential reference, permission, writes, later effect, proof, and
 recovery without creating durable state or contacting the collector. The console
-invalidates that review after any form field changes.
+invalidates that review after any form field changes. A tenant's feeds have distinct
+names: saving or previewing a feed under a name another feed holds answers 409 and
+records nothing.
 
 The status response is the durable operator signal. `last_delivered_sequence` is
 the highest accepted record, `lag_records` is the exact queued batch size still

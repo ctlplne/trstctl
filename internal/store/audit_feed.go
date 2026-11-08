@@ -14,6 +14,37 @@ import (
 
 var ErrAuditFeedBatchConflict = errors.New("store: audit feed batch conflicts with durable authority")
 
+// ErrAuditFeedNameConflict means another of the tenant's audit feeds holds the
+// name (A233-L3).
+var ErrAuditFeedNameConflict = errors.New("store: another audit feed holds the name")
+
+// EnsureAuditFeedNameAvailable refuses a configuration whose name another of
+// the tenant's feeds holds; a feed keeps its own name (A233-L3). The API
+// calls it under the projection lock so the check, the append and the inline
+// projection cannot interleave with another replica's.
+func (s *Store) EnsureAuditFeedNameAvailable(ctx context.Context, tenantID, id, name string) error {
+	held := false
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		held, err = auditFeedNameHeldTx(ctx, tx, tenantID, id, name)
+		return err
+	}); err != nil {
+		return err
+	}
+	if held {
+		return ErrAuditFeedNameConflict
+	}
+	return nil
+}
+
+func auditFeedNameHeldTx(ctx context.Context, tx pgx.Tx, tenantID, id, name string) (bool, error) {
+	var held bool
+	err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM audit_feed_destinations WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
+		tenantID, name, id).Scan(&held)
+	return held, err
+}
+
 // AuditFeed is one tenant-owned standing collector instruction plus its latest
 // durable delivery posture. TokenRef is a pointer only; credential bytes never
 // enter this read model.
@@ -93,6 +124,13 @@ func (s *Store) ApplyAuditFeedConfiguredTx(ctx context.Context, tx pgx.Tx, feed 
 		return err
 	}
 	if err := lockUpsertArbiterTx(ctx, tx, "audit_feed_destinations", feed.TenantID, feed.ID); err != nil {
+		return err
+	}
+	// A configuration naming a feed another feed already holds was a refused
+	// command (A233-L3): before the API checked names first, such an event was
+	// appended and then failed this projection, so the feed never existed. It
+	// applies as that same no-op, and a log holding one still rebuilds.
+	if held, err := auditFeedNameHeldTx(ctx, tx, feed.TenantID, feed.ID, feed.Name); err != nil || held {
 		return err
 	}
 	_, err = tx.Exec(ctx,

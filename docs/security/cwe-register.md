@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2854 annotated sites across 31 rules. Each row is
+2856 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (608 sites)
+### G101 — CWE-798 Use of hardcoded credentials (610 sites)
 
 | Location | Reason |
 |---|---|
@@ -428,6 +428,8 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:68` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_lab_p5_test.go:69` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_lab_p5_test.go:70` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_name_conflict_served_test.go:31` | token_ref is a non-secret environment locator (CWE-798). |
+| `internal/server/audit_feed_name_conflict_served_test.go:73` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_protected_served_test.go:88` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
@@ -1093,12 +1095,12 @@ not this file.
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:116` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/audit_feed.go:403` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:404` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:405` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:406` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:419` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/audit_feed.go:420` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:441` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:442` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:443` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:444` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:457` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:458` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
 | `internal/store/aws_honey_trail.go:76` | bounded above (CWE-190) |
 | `internal/store/breakglass_authority_receipt.go:36` | MaxInt64 checked above. |

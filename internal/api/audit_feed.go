@@ -5,6 +5,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -118,6 +120,10 @@ func (a *API) previewAuditFeed(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	if err := a.auditFeedNameAvailable(r.Context(), tenantID, configuration.ID, configuration.Destination.Name); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	existing, found, err := a.store.GetAuditFeed(r.Context(), tenantID, configuration.ID)
 	if err != nil {
 		a.writeError(w, err)
@@ -189,12 +195,34 @@ func (a *API) putAuditFeed(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		feed, err := a.orch.ConfigureAuditFeed(ctx, tenantID, configuration.Destination)
+		// A233-L3: a name another feed holds is a refusal, not an event. The
+		// projection lock spans the check, the append and its projection.
+		var feed store.AuditFeed
+		err = a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+			if err := a.auditFeedNameAvailable(ctx, tenantID, configuration.Destination.ID, configuration.Destination.Name); err != nil {
+				return err
+			}
+			var err error
+			feed, err = a.orch.ConfigureAuditFeed(ctx, tenantID, configuration.Destination)
+			return err
+		})
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusOK, auditFeedFromStore(feed), nil
 	})
+}
+
+// auditFeedNameAvailable answers a name another of the tenant's feeds holds
+// as a 409 problem (A233-L3).
+func (a *API) auditFeedNameAvailable(ctx context.Context, tenantID, id, name string) error {
+	if err := a.store.EnsureAuditFeedNameAvailable(ctx, tenantID, id, name); err != nil {
+		if errors.Is(err, store.ErrAuditFeedNameConflict) {
+			return errStatus(http.StatusConflict, fmt.Sprintf("another audit feed is named %q; give this feed a name of its own", name))
+		}
+		return err
+	}
+	return nil
 }
 
 // normalizeAuditFeedConfiguration is the one security decision shared by
