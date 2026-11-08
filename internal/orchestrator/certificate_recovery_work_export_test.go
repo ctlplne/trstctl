@@ -14,3 +14,7 @@ import (
 func RecoverCertificateHistoryForTest(o *Orchestrator, ctx context.Context, tx pgx.Tx, tenantID, fingerprint string) error {
 	return o.catchUpCertificateRecordingTx(ctx, tx, tenantID, fingerprint)
 }
+
+// CertificateHistoryReverifyPageForTest is how many already-verified history
+// events one recording re-checks.
+const CertificateHistoryReverifyPageForTest = certificateHistoryReverifyPage

@@ -66,7 +66,10 @@ func TestCertificateRecordingReadsHistoryOnlyPastTheTenantCheckpoint(t *testing.
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
 	o := orchestrator.NewOrchestrator(log, s, nil)
-	pageLimit := uint64(store.CertificateMetadataReceiptBatchLimit)
+	pageLimit := uint64(orchestrator.CertificateHistoryReverifyPageForTest)
+	if pageLimit == 0 || pageLimit > uint64(store.CertificateMetadataReceiptBatchLimit) {
+		t.Fatalf("re-verification page %d must fit one receipt read of %d", pageLimit, store.CertificateMetadataReceiptBatchLimit)
+	}
 
 	const n = 300
 	for i := 0; i < n; i++ {
@@ -159,7 +162,13 @@ func TestCertificateRecordingReadsHistoryOnlyPastTheTenantCheckpoint(t *testing.
 		t.Fatalf("the out-of-band change was seen by the trigger: %+v", state)
 	}
 	found := false
-	for i := n + 1; i <= n+1+n/int(pageLimit)+1; i++ {
+	head, err = log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One pass over the whole history re-checks each of its events once.
+	start := o.CertificateHistoryEventsReverified()
+	for i := n + 1; ; i++ {
 		_, err := o.RecordCertificate(ctx, tenantA, checkpointObservation(i))
 		if errors.Is(err, store.ErrIdempotencyConflict) {
 			found = true
@@ -167,6 +176,9 @@ func TestCertificateRecordingReadsHistoryOnlyPastTheTenantCheckpoint(t *testing.
 		}
 		if err != nil {
 			t.Fatal(err)
+		}
+		if o.CertificateHistoryEventsReverified()-start > head+pageLimit {
+			break
 		}
 	}
 	if !found {

@@ -89,7 +89,7 @@ tenant's whole certificate history, so recording an inventory took time that gre
 with its square. The tenant's ordering watermark row now carries a recovery
 checkpoint: the highest sequence up to which an earlier recovery, under the same
 ordering lock, found an exact receipt for every event. A recording verifies or
-recovers every event after it, re-verifies one page of the history below it
+recovers every event after it, re-verifies 16 events of the history below it
 (rotating, so the whole history is checked again continuously), and advances the
 checkpoint in the same transaction. A trigger marks any change to a receipt's
 sequence, identity or digest, and the next recording re-verifies from the changed

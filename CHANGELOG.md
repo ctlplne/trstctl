@@ -559,10 +559,10 @@
   started after the new leaf's own head, which is the tenant's registration, so recording an inventory took time that
   grew with its square; the A266 harness's 50,000-row switching import stalled in its first export. Migration 0436
   keeps a recovery checkpoint on the tenant's metadata watermark row: a recording scans the history past it,
-  re-verifies one receipt page below it (rotating, so the whole history is checked again continuously) and advances it
-  in the same transaction, and a trigger marks any receipt whose sequence, identity or digest changes, so the next
-  recording re-verifies from it and a corrupted receipt anywhere still refuses the append. A rolled-back recording, a
-  rebuild, a snapshot restore or offboarding resets or keeps it consistently. Snapshot format 112.
+  re-verifies 16 events of the history below it (rotating, so the whole history is checked again continuously) and
+  advances it in the same transaction, and a trigger marks any receipt whose sequence, identity or digest changes, so
+  the next recording re-verifies from it and a corrupted receipt anywhere still refuses the append. A rolled-back
+  recording, a rebuild, a snapshot restore or offboarding resets or keeps it consistently. Snapshot format 112.
 - Mutations with a documented body above 1 MiB accepted no more than 1 MiB: the shared idempotency binding read every
   mutation's body under the REST limit first, so `POST /api/v1/switching/imports` refused (413) any export the preview
   had just mapped past about 2,500 rows (the kit takes 50,000 rows and 20 MiB), `POST /api/v1/ssh/krl/adoptions` any

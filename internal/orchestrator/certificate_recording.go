@@ -245,7 +245,17 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 // errHistoryPageFull stops a re-verification page's replay once it is full.
 var errHistoryPageFull = errors.New("orchestrator: certificate history page full")
 
-// reverifyCertificateHistoryPageTx re-checks one page of the metadata history
+// certificateHistoryReverifyPage is how many already-verified history events
+// one recording checks again. Each costs a retained-event read, so the page
+// is what a recording pays for continuous re-verification: on the A266
+// harness 16 recorded an import at 123 rows/s against 91 for a full receipt
+// batch of 128. A receipt changed through SQL is rechecked at the next
+// recording whatever the page (the 0436 trigger); the page sets how many
+// recordings a pass over the whole history takes, n/16.
+const certificateHistoryReverifyPage = 16
+
+// reverifyCertificateHistoryPageTx re-checks one page (certificateHistoryReverifyPage
+// events) of the metadata history
 // a recovery scan skipped, (floor, end], resuming at cursor and wrapping
 // round, so every receipt below the checkpoint is checked again continuously
 // at a constant cost per recording. Each event must carry its exact receipt:
@@ -260,7 +270,7 @@ func (o *Orchestrator) reverifyCertificateHistoryPageTx(ctx context.Context, tx 
 	if start <= floor || start > end {
 		start = floor + 1
 	}
-	page := make([]events.Event, 0, store.CertificateMetadataReceiptBatchLimit)
+	page := make([]events.Event, 0, certificateHistoryReverifyPage)
 	pageBytes := 0
 	err := o.log.ReplayTenantTypesThrough(ctx, tenantID, start, end, projections.CertificateMetadataEventTypes(), func(e events.Event) error {
 		if !sameCertificateRecordingTenant(e.TenantID, tenantID) {
