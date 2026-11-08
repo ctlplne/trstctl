@@ -59,6 +59,9 @@ const ownershipImportGuidance = "An import fills in ownership nobody recorded an
 	"deletion. Changes to values nobody attested ARE applied, and are still listed, because a change " +
 	"nobody was told about is how ownership data quietly stops matching reality."
 
+// maxOwnershipImportBytes is the largest ownership CSV one import takes.
+const maxOwnershipImportBytes = 8 << 20
+
 // importOwnership ingests a CSV of ownership claims.
 //
 // AN-2/AN-5: the changes are emitted as ownership.reconciled events and
@@ -67,8 +70,10 @@ const ownershipImportGuidance = "An import fills in ownership nobody recorded an
 // somebody re-uploads the file is a queue nobody reads.
 func (a *API) importOwnership(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		records, err := ownership.ParseCSV(io.LimitReader(r.Body, 8<<20))
+	// The request binding refuses a CSV over the limit before anything is
+	// claimed, so the parser never reads a file it would cut short.
+	a.mutateWithBodyLimit(w, r, idempotencyKey, maxOwnershipImportBytes, func(ctx context.Context, tenantID string) (int, any, error) {
+		records, err := ownership.ParseCSV(io.LimitReader(r.Body, maxOwnershipImportBytes))
 		if err != nil {
 			return 0, nil, errStatusFrom(http.StatusBadRequest, err)
 		}

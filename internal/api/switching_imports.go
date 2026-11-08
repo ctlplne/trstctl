@@ -250,7 +250,7 @@ func (a *API) previewSwitchingImport(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) applySwitchingImport(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithBodyLimit(w, r, key, switchingImportBodyLimit, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req switchingImportRequest
 		if err := decodeJSONWithLimit(r, &req, switchingImportBodyLimit); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)

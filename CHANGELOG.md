@@ -548,6 +548,12 @@
 
 ### Fixed
 
+- Mutations with a documented body above 1 MiB accepted no more than 1 MiB: the shared idempotency binding read every
+  mutation's body under the REST limit first, so `POST /api/v1/switching/imports` refused (413) any export the preview
+  had just mapped past about 2,500 rows (the kit takes 50,000 rows and 20 MiB), `POST /api/v1/ssh/krl/adoptions` any
+  KRL over 1 MiB (4 MiB documented) and `POST /api/v1/owners/import` any CSV over 1 MiB (8 MiB). Each now binds its
+  whole body up to its own limit, so a body that differs anywhere is a different command, a CSV over 8 MiB is refused
+  rather than cut short, and a response recorded before the change still replays. Found by the A266 scale harness.
 - Signed third-party scan artifacts accept binary RSA and ECDSA signatures whose first or
   last byte is whitespace. Only base64 text loses surrounding whitespace; changed artifacts
   and incomplete signatures remain refused.

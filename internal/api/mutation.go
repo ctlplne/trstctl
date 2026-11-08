@@ -85,6 +85,18 @@ func (a *API) mutateDurableBound(w http.ResponseWriter, r *http.Request, idempot
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, fn, true)
 }
 
+// mutateWithBodyLimit is mutate for a route whose own body limit is larger
+// than the shared REST JSON limit: a switching export, a predecessor's KRL, an
+// ownership CSV. The fallback request binding reads and digests the whole body
+// up to bodyLimit instead of refusing everything above 1 MiB, so the route
+// accepts the size it documents, and a body that differs anywhere in it is a
+// different command. A body at or under the shared limit binds exactly as it
+// does under mutate, so a response recorded before a route moved here still
+// replays.
+func (a *API) mutateWithBodyLimit(w http.ResponseWriter, r *http.Request, idempotencyKey string, bodyLimit int64, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutateWithRecorderLimit(w, r, idempotencyKey, "", fn, false, bodyLimit)
+}
+
 // mutatePublicTenantBound applies AN-5 to a deliberately public credential
 // exchange after the handler has resolved its tenant lookup hint. The synthetic
 // principal carries only that already-resolved tenant into the common recorder;
@@ -187,6 +199,10 @@ func (a *API) mutatePreparedDurableBound(
 }
 
 func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool) {
+	a.mutateWithRecorderLimit(w, r, idempotencyKey, binding, fn, durable, defaultRESTJSONBodyLimit)
+}
+
+func (a *API) mutateWithRecorderLimit(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error), durable bool, bodyLimit int64) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
@@ -203,7 +219,7 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 			return
 		}
 		var body []byte
-		binding, body, err = mutationRequestBinding(r, principal)
+		binding, body, err = mutationRequestBindingLimit(r, principal, bodyLimit)
 		defer secret.Wipe(body)
 		if err != nil {
 			a.writeError(w, err)
@@ -278,14 +294,20 @@ func (a *API) mutateWithRecorder(w http.ResponseWriter, r *http.Request, idempot
 // binding. The bounded request body is restored before the callback sees it and
 // wiped when the mutation returns. Only its SHA-256 digest enters the binding.
 func mutationRequestBinding(r *http.Request, principal string) (binding string, body []byte, err error) {
+	return mutationRequestBindingLimit(r, principal, defaultRESTJSONBodyLimit)
+}
+
+// mutationRequestBindingLimit is mutationRequestBinding for a body of up to
+// limit bytes.
+func mutationRequestBindingLimit(r *http.Request, principal string, limit int64) (binding string, body []byte, err error) {
 	if r.Body != nil {
-		body, err = io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
+		body, err = io.ReadAll(io.LimitReader(r.Body, limit+1))
 		_ = r.Body.Close()
 		if err != nil {
 			secret.Wipe(body)
 			return "", nil, errStatus(http.StatusBadRequest, "failed to read mutation request body")
 		}
-		if len(body) > defaultRESTJSONBodyLimit {
+		if int64(len(body)) > limit {
 			secret.Wipe(body)
 			return "", nil, errStatus(http.StatusRequestEntityTooLarge, "mutation request body too large")
 		}

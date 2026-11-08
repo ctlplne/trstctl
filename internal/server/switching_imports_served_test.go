@@ -459,3 +459,111 @@ func TestServedSwitchingImportA265(t *testing.T) {
 		t.Fatalf("scheduled round = %+v", third.Watch)
 	}
 }
+
+// A266 finding: an export over the shared 1 MiB REST request limit, well
+// inside the switching kit's own 50,000 rows and 20 MiB, previews, applies and
+// is recorded in full. Before, preview took it and apply refused it with 413,
+// so no export of more than about 2,500 rows could be applied at all.
+func TestServedSwitchingImportAppliesAnExportOverOneMiB(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	ctx := t.Context()
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a266-admin", "*")
+	call := func(method, path, key string, body any, want int) []byte {
+		t.Helper()
+		code, out := doBearer(t, h.ts, method, path, admin, key, body)
+		if code != want {
+			t.Fatalf("%s %s = %d, want %d: %.600s", method, path, code, want, out)
+		}
+		return out
+	}
+	salt := strings.ReplaceAll(uuid.NewString()[:8], "-", "")
+	now := time.Now().UTC()
+	// Each certificate is deployed on a dozen hosts, as a shared wildcard is.
+	const n = 2000
+	rows := make([]map[string]string, 0, n)
+	for i := 0; i < n; i++ {
+		endpoints := make([]string, 12)
+		for e := range endpoints {
+			endpoints[e] = fmt.Sprintf("web-%04d-%02d.a266-%s.test:443", i, e, salt)
+		}
+		rows = append(rows, map[string]string{
+			"fingerprint_sha256": crypto.SHA256Hex([]byte(fmt.Sprintf("a266-%s-%d", salt, i))),
+			"common_name":        fmt.Sprintf("svc-%04d.a266-%s.test", i, salt),
+			"not_after":          now.AddDate(0, 0, 30+i%300).Format(time.RFC3339),
+			"folder":             fmt.Sprintf("Estate/Region %d", i%4),
+			"application":        fmt.Sprintf("app-%d", i%6),
+			"owner_email":        fmt.Sprintf("owner-%d@a266-%s.test", i%6, salt),
+			"endpoints":          strings.Join(endpoints, ","),
+		})
+	}
+	export, err := json.Marshal(map[string]any{"certificates": rows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := map[string]any{"name": "A266 export over one MiB", "export": string(export)}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) <= 1<<20 || len(export) > switchkit.MaxBytes {
+		t.Fatalf("request is %d bytes and export %d; the proof needs a request over 1 MiB and an export within the kit's limit", len(body), len(export))
+	}
+
+	var preview struct {
+		Rows   int    `json:"rows"`
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(call(http.MethodPost, "/api/v1/switching/imports/preview", "", request, http.StatusOK), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview.Rows != n || preview.Digest == "" {
+		t.Fatalf("preview = %+v, want %d rows and a digest", preview, n)
+	}
+	request["preview_digest"] = preview.Digest
+	var imp struct {
+		ID        string `json:"id"`
+		RowsTotal int    `json:"rows_total"`
+	}
+	applyKey := "a266-apply-" + salt
+	if err := json.Unmarshal(call(http.MethodPost, "/api/v1/switching/imports", applyKey, request, http.StatusCreated), &imp); err != nil {
+		t.Fatal(err)
+	}
+	if imp.ID == "" || imp.RowsTotal != n {
+		t.Fatalf("applied import = %+v, want %d rows", imp, n)
+	}
+	// The key binds the whole request: the same bytes replay, an export that
+	// differs only in its last row is a different command.
+	var again struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(call(http.MethodPost, "/api/v1/switching/imports", applyKey, request, http.StatusCreated), &again); err != nil || again.ID != imp.ID {
+		t.Fatalf("retried apply = %s (%v), want %s", again.ID, err, imp.ID)
+	}
+	rows[n-1]["common_name"] = "changed.a266.test"
+	changed, err := json.Marshal(map[string]any{"certificates": rows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	call(http.MethodPost, "/api/v1/switching/imports", applyKey, map[string]any{"name": request["name"], "export": string(changed),
+		"preview_digest": preview.Digest}, http.StatusConflict)
+
+	deadline := time.Now().Add(5 * time.Minute)
+	for {
+		if _, err := h.srv.ApplySwitchingImportsOnce(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got, err := h.store.GetSwitchingImport(ctx, h.tenant, imp.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status == "completed" {
+			if got.RowsApplied != n {
+				t.Fatalf("completed import applied %d of %d rows", got.RowsApplied, n)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("import still %s after 5 minutes: %d of %d applied", got.Status, got.RowsApplied, got.RowsTotal)
+		}
+	}
+}

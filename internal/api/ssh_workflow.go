@@ -531,7 +531,7 @@ func (a *API) getSSHKRLFleet(w http.ResponseWriter, r *http.Request) {
 //trstctl:mutation
 func (a *API) adoptSSHKRL(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithBodyLimit(w, r, idempotencyKey, MaxSSHKRLAdoptionBytes, func(ctx context.Context, tenantID string) (int, any, error) {
 		if a.sshWorkflow == nil {
 			return 0, nil, ErrSSHWorkflowUnavailable
 		}
