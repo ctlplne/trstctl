@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/accessdesktop"
 	"unicode"
 
+	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/hostedkey"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
@@ -237,6 +238,11 @@ type DynamicSecretProviderConfig struct {
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
 	RoleBindings map[string]string `json:"role_bindings,omitempty"`
+	// RoleAccess gives each allowed role of a postgresql, mysql or mongodb
+	// provider its access class, read or readwrite (A239-L1). A role named as
+	// a class (readonly, reader or read; writer or readwrite) needs none; any
+	// other role must have one, because a class is never read from a name.
+	RoleAccess map[string]string `json:"role_access,omitempty"`
 	// RedisACLRoles gives each allowed Redis role literal key namespaces and an
 	// explicit command allowlist. Raw ACL rules and categories are forbidden.
 	RedisACLRoles       map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
@@ -728,8 +734,10 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	switch c.Type {
 	case "postgresql":
 		ref(c.AdminDSNRef, "admin_dsn_ref", false)
+		errs = append(errs, validateDatabaseRoleAccess(where, c)...)
 	case "mysql":
 		ref(c.AdminDSNRef, "admin_dsn_ref", false)
+		errs = append(errs, validateDatabaseRoleAccess(where, c)...)
 		require(c.Database, "database")
 		require(c.Addr, "addr")
 		require(c.AccountHost, "account_host")
@@ -738,6 +746,7 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		}
 	case "mongodb":
 		ref(c.AdminDSNRef, "admin_dsn_ref", false)
+		errs = append(errs, validateDatabaseRoleAccess(where, c)...)
 		require(c.Database, "database")
 	case "redis":
 		require(c.Addr, "addr")
@@ -1221,6 +1230,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	var errs []error
 	if c.AllowWildcardAccountHost && c.Type != "mysql" {
 		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
+	}
+	if len(c.RoleAccess) > 0 && c.Type != "postgresql" && c.Type != "mysql" && c.Type != "mongodb" {
+		errs = append(errs, fmt.Errorf("%s role_access is only valid for mongodb, mysql and postgresql", where))
 	}
 	if len(c.RedisACLRoles) > 0 && c.Type != "redis" && c.Type != "aws-elasticache" && c.Type != "aws-memorydb" {
 		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis, aws-elasticache and aws-memorydb", where))
@@ -2395,6 +2407,47 @@ func validateProviderTransport(where string, c DynamicSecretProviderConfig) []er
 
 // validateRoleBindingsCoverRoles requires exactly one binding per allowed
 // role, and none for a role that isn't allowed.
+// postgresDecoyRole is the PostgreSQL provider role that mints decoy logins
+// (dynsecret.DecoyRole, Q6); it carries its own grants.
+const postgresDecoyRole = "decoy"
+
+// validateDatabaseRoleAccess requires every role of a PostgreSQL, MySQL or
+// MongoDB provider to have an access class (A239-L1): role_access read or
+// readwrite, or a role named as one (readonly, reader or read; writer or
+// readwrite). A class is never read from part of a name. PostgreSQL's decoy
+// role and a role two rotation_accounts serve carry their own grants.
+func validateDatabaseRoleAccess(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		class := strings.TrimSpace(c.RoleAccess[role])
+		if class == "" && ((c.Type == "postgresql" && role == postgresDecoyRole) || len(c.RotationAccounts[role]) > 0) {
+			continue
+		}
+		if _, ok := dbaccess.OfRole(role, class); ok {
+			continue
+		}
+		if class != "" {
+			errs = append(errs, fmt.Errorf("%s role_access[%q] must be %s or %s", where, role, dbaccess.BindingRead, dbaccess.BindingReadWrite))
+		} else {
+			errs = append(errs, fmt.Errorf("%s role %q needs role_access[%q] of %s or %s: a %s role is granted an explicit access class, never one read from its name",
+				where, role, role, dbaccess.BindingRead, dbaccess.BindingReadWrite, c.Type))
+		}
+	}
+	classed := make([]string, 0, len(c.RoleAccess))
+	for role := range c.RoleAccess {
+		classed = append(classed, role)
+	}
+	sort.Strings(classed)
+	for _, role := range classed {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_access[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
 func validateRoleBindingsCoverRoles(where string, c DynamicSecretProviderConfig) []error {
 	var errs []error
 	allowed := map[string]bool{}

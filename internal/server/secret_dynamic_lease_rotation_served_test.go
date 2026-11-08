@@ -190,7 +190,7 @@ func TestServedDynamicLeaseRotationIssuesTheRequestedTTLAndRetiresTheOldLease(t 
 	registry, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pg-leases", Type: "postgresql",
 		AdminDSNRef: writeServedCredentialFile(t, "pg-admin-dsn", dsn), Database: parsed.Database,
-		AllowedRoles: []string{"reporting"}, MaxTTL: "1h", UsernamePrefix: "trstctl_a201",
+		AllowedRoles: []string{"reporting"}, RoleAccess: map[string]string{"reporting": "read"}, MaxTTL: "1h", UsernamePrefix: "trstctl_a201",
 	}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -219,11 +220,24 @@ type PostgresConfig struct {
 	UsernamePrefix string
 	Publisher      CredentialPublisher
 	VerifyQuery    string
+	// Access is the class every rotated credential is granted; unset is read
+	// (A239-L1). A rotation key names a credential, not an access class.
+	Access dbaccess.Access
+}
+
+// rotatedAccess is the class a rotator's credentials are granted: read
+// unless the rotator asks for more.
+func rotatedAccess(access dbaccess.Access) dynsecret.DatabaseRoleAccess {
+	if access == dbaccess.Unset {
+		access = dbaccess.Read
+	}
+	return dynsecret.DatabaseRoleAccess{DefaultAccess: access}
 }
 
 func NewPostgresRotator(cfg PostgresConfig) (*BackendRotator, error) {
 	backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
 		DSN: cfg.DSN, Database: cfg.Database, Schema: cfg.Schema, UsernamePrefix: cfg.UsernamePrefix,
+		DatabaseRoleAccess: rotatedAccess(cfg.Access),
 	})
 	if err != nil {
 		return nil, err
@@ -263,12 +277,16 @@ type MySQLConfig struct {
 	UsernamePrefix           string
 	Publisher                CredentialPublisher
 	Verifier                 CredentialVerifier
+	// Access is the class every rotated credential is granted; unset is read
+	// (A239-L1).
+	Access dbaccess.Access
 }
 
 func NewMySQLRotator(cfg MySQLConfig) (*BackendRotator, error) {
 	backend, err := dynsecret.NewMySQLBackend(cfg.Executor, dynsecret.MySQLConfig{
 		Database: cfg.Database, Host: cfg.Host, AccountHost: cfg.AccountHost,
 		AllowWildcardAccountHost: cfg.AllowWildcardAccountHost, UsernamePrefix: cfg.UsernamePrefix,
+		DatabaseRoleAccess: rotatedAccess(cfg.Access),
 	})
 	if err != nil {
 		return nil, err

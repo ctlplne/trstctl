@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/redisacl"
 )
 
@@ -1502,5 +1503,70 @@ func TestValidateAWSHoneyTrailN4(t *testing.T) {
 		if err := ValidateSecretIntegrations(SecretIntegrationsConfig{HoneyAWSAccounts: []AWSHoneyAccountConfig{item}}, true); err == nil {
 			t.Fatalf("a trail with a bad %s was accepted", name)
 		}
+	}
+}
+
+// A239-L1: every role of a PostgreSQL, MySQL or MongoDB provider has an access
+// class, from role_access or a role named as one; startup refuses a role with
+// neither instead of reading a grant out of its name.
+func TestValidateDatabaseProviderRoleAccessA239L1(t *testing.T) {
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	base := map[string]DynamicSecretProviderConfig{
+		"postgresql": {TenantID: tenant, ID: "pg", Type: "postgresql", AdminDSNRef: "file:/run/secrets/pg-admin-dsn"},
+		"mysql":      {TenantID: tenant, ID: "my", Type: "mysql", AdminDSNRef: "file:/run/secrets/my-admin-dsn", Database: "app", Addr: "mysql.internal:3306", AccountHost: "10.4.0.12"},
+		"mongodb":    {TenantID: tenant, ID: "mongo", Type: "mongodb", AdminDSNRef: "file:/run/secrets/mongo-admin-uri", Database: "app"},
+	}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	for typ, c := range base {
+		ok := c
+		ok.AllowedRoles = []string{"readonly", "reader", "writer", "readwrite", "analytics", "etl"}
+		ok.RoleAccess = map[string]string{"analytics": "read", "etl": "readWrite"}
+		if err := check(ok); err != nil {
+			t.Fatalf("%s: explicit classes were refused: %v", typ, err)
+		}
+		for name, tc := range map[string]struct {
+			roles   []string
+			classes map[string]string
+			want    string
+		}{
+			"unnamed":            {[]string{"viewer"}, nil, `role "viewer" needs role_access["viewer"] of read or readwrite`},
+			"contains read":      {[]string{"support-read"}, nil, `role "support-read" needs role_access["support-read"]`},
+			"contains readwrite": {[]string{"readwrite-mirror"}, nil, `role "readwrite-mirror" needs role_access`},
+			"no class binding":   {[]string{"readonly"}, map[string]string{"readonly": "admin"}, `role_access["readonly"] must be read or readwrite`},
+			"stray binding":      {[]string{"readonly"}, map[string]string{"other": "read"}, `role_access["other"] has no matching allowed role`},
+		} {
+			bad := c
+			bad.AllowedRoles, bad.RoleAccess = tc.roles, tc.classes
+			if err := check(bad); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("%s %s: %v, want %q", typ, name, err, tc.want)
+			}
+		}
+	}
+	// PostgreSQL's decoy role and a two-user role carry their own grants.
+	pg := base["postgresql"]
+	pg.AllowedRoles = []string{"readonly", "decoy", "db/orders"}
+	pg.AllowStaticRotation = true
+	pg.MaxTTL = "1h"
+	pg.RotationAccounts = map[string][]string{"db/orders": {"orders_app_a", "orders_app_b"}}
+	if err := check(pg); err != nil {
+		t.Fatalf("the decoy and two-user roles were refused: %v", err)
+	}
+	if postgresDecoyRole != dynsecret.DecoyRole {
+		t.Fatalf("postgresDecoyRole %q drifted from dynsecret.DecoyRole %q", postgresDecoyRole, dynsecret.DecoyRole)
+	}
+	// role_access means nothing to another provider type.
+	redis := DynamicSecretProviderConfig{TenantID: tenant, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: "file:/run/secrets/redis",
+		RedisTLSServerName: "redis.internal", AllowedRoles: []string{"reader"}, RoleAccess: map[string]string{"reader": "read"},
+		RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}}
+	if err := check(redis); err == nil || !strings.Contains(err.Error(), "role_access is only valid for mongodb, mysql and postgresql") {
+		t.Fatalf("role_access on a redis provider: %v", err)
+	}
+	my := base["mysql"]
+	my.AllowedRoles = []string{"decoy"}
+	if err := check(my); err == nil || !strings.Contains(err.Error(), `role "decoy" needs role_access`) {
+		t.Fatalf("a MySQL decoy role was accepted without a class: %v", err)
 	}
 }

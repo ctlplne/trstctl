@@ -41,7 +41,7 @@ func startPAMMySQL(t *testing.T, note string) (string, DynamicSecretProviderRegi
 		TenantID: servedTestTenant, ID: "pam-mysql-provider", Type: "mysql",
 		AdminDSNRef: writeServedCredentialFile(t, "mysql-admin-dsn", "root:a256-admin@tcp("+addr+")/app?parseTime=true\n"),
 		Database:    "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
-		AllowedRoles: []string{"mysql-reader"}, MaxTTL: "1h", UsernamePrefix: "a256_mysql",
+		AllowedRoles: []string{"mysql-reader"}, RoleAccess: map[string]string{"mysql-reader": "read"}, MaxTTL: "1h", UsernamePrefix: "a256_mysql",
 	}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)

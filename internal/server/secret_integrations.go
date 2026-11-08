@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
@@ -690,7 +691,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
 			DSN: dsn, Database: cfg.Database, Schema: cfg.Schema, UsernamePrefix: cfg.UsernamePrefix,
-			RotationAccounts: o.provider.rotationAccountPairs(),
+			RotationAccounts: o.provider.rotationAccountPairs(), DatabaseRoleAccess: o.provider.databaseRoleAccess(),
 		})
 		if err != nil {
 			return o.fail(err)
@@ -708,6 +709,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		backend, err := dynsecret.NewMySQLBackend(db, dynsecret.MySQLConfig{
 			Database: cfg.Database, Addr: cfg.Addr, AccountHost: cfg.AccountHost,
 			AllowWildcardAccountHost: cfg.AllowWildcardAccountHost, UsernamePrefix: cfg.UsernamePrefix,
+			DatabaseRoleAccess: o.provider.databaseRoleAccess(),
 		})
 		if err != nil {
 			_ = db.Close()
@@ -727,7 +729,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewMongoBackend(admin, dynsecret.MongoConfig{
 			Database: cfg.Database, URI: uri, UsernamePrefix: cfg.UsernamePrefix,
-			RotationAccounts: o.provider.rotationAccountPairs(),
+			RotationAccounts: o.provider.rotationAccountPairs(), DatabaseRoleAccess: o.provider.databaseRoleAccess(),
 		})
 		if err != nil {
 			_ = admin.Close(context.Background())
@@ -1873,6 +1875,20 @@ func (p *configuredDynamicProvider) RotationPhase(role string) string {
 }
 
 // rotationAccountPairs returns every role's two-user pair for the backend.
+// databaseRoleAccess is the access class role_access gives each role of a
+// PostgreSQL, MySQL or MongoDB provider (A239-L1). Configuration validation
+// already refused a class that is neither read nor readwrite; a role without
+// one is granted the class its name states or refused by the backend.
+func (p *configuredDynamicProvider) databaseRoleAccess() dynsecret.DatabaseRoleAccess {
+	bound := make(map[string]dbaccess.Access, len(p.cfg.RoleAccess))
+	for role, class := range p.cfg.RoleAccess {
+		if access, ok := dbaccess.ParseBinding(class); ok {
+			bound[role] = access
+		}
+	}
+	return dynsecret.DatabaseRoleAccess{RoleAccess: bound}
+}
+
 func (p *configuredDynamicProvider) rotationAccountPairs() map[string][2]string {
 	pairs := map[string][2]string{}
 	for role := range p.cfg.RotationAccounts {

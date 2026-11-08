@@ -142,6 +142,8 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	roles := func(description string) dynamicSecretProviderRequirement {
 		return dynamicSecretRequirement("role_bindings", "Role bindings", "role_binding", description, true)
 	}
+	// A239-L1: a database lease's access class is explicit.
+	roleAccess := value("role_access", "Role access", "Per allowed role, read or readwrite: the access class its leases are granted. A role named readonly, reader or read (or writer or readwrite) needs none; startup refuses any other role without one, because a class is never read from a role's name.", false)
 	// N3: the AWS STS issuer's opt-in to end a revoked session early.
 	awsDenyPolicy := value("revoke_with_deny_policy", "Deny revoked sessions",
 		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
@@ -153,6 +155,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
 			value("database", "Database", "Optional database placed in the generated connection result.", false),
 			value("schema", "Schema", "Optional schema granted to the generated role.", false),
+			roleAccess,
 		)},
 		{Type: "mysql", Label: "MySQL / MariaDB", Purpose: "Creates and drops a scoped MySQL account.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
@@ -160,10 +163,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("database", "Database", "Database granted to the generated account.", true),
 			value("account_host", "Account host", "Required MySQL client host or network matcher; never defaults to %.", true),
 			value("allow_wildcard_account_host", "Wildcard account host opt-in", "Required to use % or _ in account_host; review the matched client range before enabling.", false),
+			roleAccess,
 		)},
 		{Type: "mongodb", Label: "MongoDB", Purpose: "Creates and drops a scoped MongoDB database user.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin URI reference", "Credential reference containing the least-privilege administrative MongoDB URI.", true),
 			value("database", "Database", "Database in which the generated user is created.", true),
+			roleAccess,
 		)},
 		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session. Early lease revocation remains pending until AWS session expiry, unless revoke_with_deny_policy denies the revoked session through an inline policy on its role.", Requirements: dynamicSecretAWSRequirements(
 			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
@@ -600,11 +605,11 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 func dynamicSecretProviderAuthority(providerType string) (authority, revocation string) {
 	switch providerType {
 	case "postgresql":
-		return "CONNECT on the configured database and USAGE on its schema, with SELECT on its tables for a role whose name contains \"read\", else SELECT, INSERT, UPDATE and DELETE", "confirmed"
+		return "CONNECT on the configured database and USAGE on its schema, with SELECT on its tables for a read role, or SELECT, INSERT, UPDATE and DELETE for a readwrite role (its role_access, or a role named as its class)", "confirmed"
 	case "mysql":
-		return "SELECT on the configured database for a role whose name contains \"read\", else SELECT, INSERT, UPDATE and DELETE, from the configured account host only", "confirmed"
+		return "SELECT on the configured database for a read role, or SELECT, INSERT, UPDATE and DELETE for a readwrite role (its role_access, or a role named as its class), from the configured account host only", "confirmed"
 	case "mongodb":
-		return "read on the configured database for a role whose name contains \"read\", else readWrite", "confirmed"
+		return "read on the configured database for a read role, or readWrite for a readwrite role (its role_access, or a role named as its class)", "confirmed"
 	case "aws-sts", "aws-iam":
 		return "the assumed IAM role's policies for the session's lifetime", "ttl_only"
 	case "gcp-iam":

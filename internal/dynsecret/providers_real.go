@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dbaccess"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -90,6 +91,40 @@ type PostgresConfig struct {
 	// both with the role's grants; rotation only ever sets their passwords, so
 	// the grants persist and both stay valid while consumers move over.
 	RotationAccounts map[string][2]string
+	DatabaseRoleAccess
+}
+
+// DatabaseRoleAccess is the access class each role of a PostgreSQL, MySQL or
+// MongoDB backend is granted (A239-L1). A role RoleAccess does not bind must be
+// named as a class (readonly, reader or read; writer or readwrite); any other
+// role gets DefaultAccess, or is refused before any account is created when
+// that is unset.
+type DatabaseRoleAccess struct {
+	RoleAccess    map[string]dbaccess.Access
+	DefaultAccess dbaccess.Access
+}
+
+// leaseAccess is the class a lease of role is granted.
+func (a DatabaseRoleAccess) leaseAccess(provider, role string) (dbaccess.Access, error) {
+	if access := a.RoleAccess[role]; access != dbaccess.Unset {
+		return access, nil
+	}
+	if access, ok := dbaccess.OfRole(role, ""); ok {
+		return access, nil
+	}
+	if a.DefaultAccess != dbaccess.Unset {
+		return a.DefaultAccess, nil
+	}
+	return dbaccess.Unset, fmt.Errorf("dynsecret %s: role %q has no access class: bind it read or readwrite in role_bindings", provider, role)
+}
+
+// clone keeps the backend's own copy of the bindings.
+func (a DatabaseRoleAccess) clone() DatabaseRoleAccess {
+	out := DatabaseRoleAccess{DefaultAccess: a.DefaultAccess, RoleAccess: make(map[string]dbaccess.Access, len(a.RoleAccess))}
+	for role, access := range a.RoleAccess {
+		out.RoleAccess[role] = access
+	}
+	return out
 }
 
 // PostgresBackend creates scoped PostgreSQL login roles and revokes them.
@@ -99,6 +134,7 @@ type PostgresBackend struct {
 	schema           string
 	usernamePrefix   string
 	rotationAccounts map[string][2]string
+	access           DatabaseRoleAccess
 }
 
 // NewPostgresBackend builds a PostgreSQL dynamic-secret backend.
@@ -138,6 +174,7 @@ func NewPostgresBackend(cfg PostgresConfig) (*PostgresBackend, error) {
 		schema:           cfg.Schema,
 		usernamePrefix:   cfg.UsernamePrefix,
 		rotationAccounts: cfg.RotationAccounts,
+		access:           cfg.clone(),
 	}, nil
 }
 
@@ -219,13 +256,17 @@ func (b *PostgresBackend) Create(ctx context.Context, role string) (string, []by
 // the requested lease TTL. LeaseID makes the role name stable across a worker
 // retry after an interrupted response.
 func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
-	// A decoy login is decided before anything else: any other role name that
-	// is not read-only becomes read-write below.
+	// A decoy login is decided before anything else; any other role is granted
+	// the access class it is bound to or named as, and refused without one.
 	if req.Role == DecoyRole {
 		return b.createDecoyCredential(ctx, req)
 	}
 	if account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor); ok && req.Static {
 		return b.stageTwoUser(ctx, account)
+	}
+	access, err := b.access.leaseAccess("postgres", req.Role)
+	if err != nil {
+		return "", nil, err
 	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 63, "_")
 	if err != nil {
@@ -268,7 +309,7 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 		"GRANT CONNECT ON DATABASE " + pgQuoteIdent(b.database) + " TO " + pgQuoteIdent(user),
 		"GRANT USAGE ON SCHEMA " + pgQuoteIdent(b.schema) + " TO " + pgQuoteIdent(user),
 	}
-	if readonlyRole(req.Role) {
+	if access == dbaccess.Read {
 		stmts = append(stmts, "GRANT SELECT ON ALL TABLES IN SCHEMA "+pgQuoteIdent(b.schema)+" TO "+pgQuoteIdent(user))
 	} else {
 		stmts = append(stmts, "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "+pgQuoteIdent(b.schema)+" TO "+pgQuoteIdent(user))
@@ -344,6 +385,7 @@ type MySQLConfig struct {
 	// so a missing scope cannot silently become the global % matcher.
 	Host           string
 	UsernamePrefix string
+	DatabaseRoleAccess
 }
 
 // MySQLBackend creates scoped MySQL users through a database/sql-compatible executor.
@@ -353,6 +395,7 @@ type MySQLBackend struct {
 	addr           string
 	accountHost    string
 	usernamePrefix string
+	access         DatabaseRoleAccess
 }
 
 // NewMySQLBackend builds a MySQL dynamic-secret backend.
@@ -384,7 +427,8 @@ func NewMySQLBackend(exec SQLExecutor, cfg MySQLConfig) (*MySQLBackend, error) {
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
 	}
-	return &MySQLBackend{exec: exec, database: cfg.Database, addr: cfg.Addr, accountHost: cfg.AccountHost, usernamePrefix: cfg.UsernamePrefix}, nil
+	return &MySQLBackend{exec: exec, database: cfg.Database, addr: cfg.Addr, accountHost: cfg.AccountHost, usernamePrefix: cfg.UsernamePrefix,
+		access: cfg.clone()}, nil
 }
 
 // Create implements Backend.
@@ -393,6 +437,10 @@ func (b *MySQLBackend) Create(ctx context.Context, role string) (string, []byte,
 }
 
 func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	access, err := b.access.leaseAccess("mysql", req.Role)
+	if err != nil {
+		return "", nil, err
+	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 32, "_")
 	if err != nil {
 		return "", nil, err
@@ -415,7 +463,7 @@ func (b *MySQLBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		return "", nil, errMySQLUserCreate
 	}
 	privileges := "SELECT"
-	if !readonlyRole(req.Role) {
+	if access == dbaccess.ReadWrite {
 		privileges = "SELECT, INSERT, UPDATE, DELETE"
 	}
 	if _, err := b.exec.ExecContext(ctx, "GRANT "+privileges+" ON "+mysqlQuoteIdent(b.database)+".* TO "+account); err != nil {
@@ -449,6 +497,7 @@ type MongoConfig struct {
 	// are not using and retires the other by setting one nobody holds; both
 	// keep their roles.
 	RotationAccounts map[string][2]string
+	DatabaseRoleAccess
 }
 
 // MongoBackend creates scoped MongoDB database users through MongoAdmin.
@@ -458,6 +507,7 @@ type MongoBackend struct {
 	uri              *secret.Buffer
 	usernamePrefix   string
 	rotationAccounts map[string][2]string
+	access           DatabaseRoleAccess
 }
 
 // NewMongoBackend builds a MongoDB dynamic-secret backend.
@@ -488,7 +538,7 @@ func NewMongoBackend(admin MongoAdmin, cfg MongoConfig) (*MongoBackend, error) {
 		}
 	}
 	return &MongoBackend{admin: admin, database: cfg.Database, uri: uri, usernamePrefix: cfg.UsernamePrefix,
-		rotationAccounts: cfg.RotationAccounts}, nil
+		rotationAccounts: cfg.RotationAccounts, access: cfg.clone()}, nil
 }
 
 // Create implements Backend.
@@ -515,6 +565,10 @@ func (b *MongoBackend) CreateCredential(ctx context.Context, req GenerateRequest
 		}
 		return account, mongoCredential(uri, b.database, account, password), nil
 	}
+	access, err := b.access.leaseAccess("mongodb", req.Role)
+	if err != nil {
+		return "", nil, err
+	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 128, "_")
 	if err != nil {
 		return "", nil, err
@@ -530,7 +584,7 @@ func (b *MongoBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	}
 	defer secret.Wipe(password)
 	mongoRole := "read"
-	if !readonlyRole(req.Role) {
+	if access == dbaccess.ReadWrite {
 		mongoRole = "readWrite"
 	}
 	if err := b.admin.CreateUser(ctx, b.database, user, password, []MongoRole{{Role: mongoRole, DB: b.database}}); err != nil {
@@ -1814,10 +1868,6 @@ func scopedKubernetesNameForRequest(prefix string, req GenerateRequest) (string,
 		return "", errors.New("dynsecret kubernetes: generated empty name")
 	}
 	return name, nil
-}
-
-func readonlyRole(role string) bool {
-	return role == "" || strings.Contains(strings.ToLower(role), "read")
 }
 
 func pgQuoteIdent(v string) string {

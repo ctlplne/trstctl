@@ -2107,6 +2107,14 @@ the connection value and creating a workload credential.
 }
 ```
 
+A PostgreSQL, MySQL or MongoDB lease is granted its role's access class: `read` (SELECT;
+MongoDB's `read`) or `readwrite` (SELECT, INSERT, UPDATE and DELETE; MongoDB's `readWrite`).
+A role named as its class — `readonly`, `reader` or `read`; `writer` or `readwrite` — needs
+nothing more. Any other role takes its class from `role_access`, for example
+`{"analytics": "read", "etl": "readwrite"}`, and startup refuses a role with neither: a class
+is never read from part of a name, so `reporting`, `viewer` or `support-read` must say which
+they are. PostgreSQL's `decoy` role and a role with `rotation_accounts` carry their own grants.
+
 `rotation_accounts` (PostgreSQL, MongoDB, Oracle, SQL Server, Azure SQL, LDAP or unix, with
 `allow_static_rotation: true`) maps an allowed role to the two existing accounts its static
 rotation alternates between, for example `{"reader": ["orders_app_a", "orders_app_b"]}` (for

@@ -50,7 +50,7 @@ func startPAMMongo(t *testing.T, note string) (string, DynamicSecretProviderRegi
 	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pam-mongo-provider", Type: "mongodb",
 		AdminDSNRef: writeServedCredentialFile(t, "mongo-admin-uri", adminURI), Database: "orders",
-		AllowedRoles: []string{"mongo-reader"}, MaxTTL: "1h", UsernamePrefix: "a256_mongo",
+		AllowedRoles: []string{"mongo-reader"}, RoleAccess: map[string]string{"mongo-reader": "read"}, MaxTTL: "1h", UsernamePrefix: "a256_mongo",
 	}}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)

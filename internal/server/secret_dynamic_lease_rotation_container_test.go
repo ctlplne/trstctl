@@ -120,7 +120,8 @@ func TestServedDynamicLeaseRotationOnMySQLAndRedis(t *testing.T) {
 	registry, err := dynamicSecretProvidersFromConfig(ctx, []config.DynamicSecretProviderConfig{
 		{TenantID: servedTestTenant, ID: "mysql-leases", Type: "mysql",
 			AdminDSNRef: writeServedCredentialFile(t, "mysql-admin-dsn", mysqlAdminDSN+"\n"), Database: "app", Addr: mysqlAddr,
-			AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"mysql-reader"}, MaxTTL: "1h", UsernamePrefix: "a201_mysql"},
+			AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"mysql-reader"}, RoleAccess: map[string]string{"mysql-reader": "read"},
+			MaxTTL: "1h", UsernamePrefix: "a201_mysql"},
 		{TenantID: servedTestTenant, ID: "redis-leases", Type: "redis", Addr: redisAddr,
 			PasswordRef: writeServedCredentialFile(t, "redis-admin-password", "a201-admin"), AllowPlaintextRedis: true,
 			AllowedRoles:  []string{"redis-reader"},

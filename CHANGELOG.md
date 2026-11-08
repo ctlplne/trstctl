@@ -1718,6 +1718,14 @@
 
 ### Security
 
+- Dynamic database leases are granted an explicit access class (A239-L1). A PostgreSQL,
+  MySQL or MongoDB lease used to read its grants from the role's name: any role containing
+  "read" was read-only, `readwrite` and `read-write` included, and any other role (`viewer`,
+  `reporting`, `analyst`) was granted INSERT, UPDATE and DELETE on every table. A role is now
+  `read` or `readwrite` by its `role_access` entry, or by a name that is exactly its class
+  (`readonly`, `reader` or `read`; `writer` or `readwrite`); startup refuses any other role,
+  and the backend refuses one before any account is created. Migration: give each such role
+  its class in `role_access`. The provider catalog lists `role_access` and states the rule.
 - MCP certificate writes take the identity lifecycle gate. `issue_certificate` and
   `rotate_certificate` used to issue straight from a named CA authority, outside the
   policy gate and dual control. They now act on a lifecycle identity (`identity_id`,

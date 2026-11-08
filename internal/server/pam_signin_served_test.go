@@ -515,6 +515,7 @@ func TestServedBypassDetectionOnMySQLA274(t *testing.T) {
 	providers := []config.DynamicSecretProviderConfig{{TenantID: tenant, ID: "a274-mysql", Type: "mysql",
 		AdminDSNRef: writeServedCredentialFile(t, "a274-mysql-admin-dsn", "broker:broker-pass@tcp("+addr+")/app\n"), Database: "app", Addr: addr,
 		AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"db/reader"}, RoleBindings: map[string]string{"db/reader": account},
+		RoleAccess:          map[string]string{"db/reader": "read"},
 		AllowStaticRotation: true, MaxTTL: "1h", UsernamePrefix: "a274"}}
 	if err := config.ValidateSecretIntegrations(config.SecretIntegrationsConfig{DynamicProviders: providers}, true); err != nil {
 		t.Fatalf("the provider as configured: %v", err)
