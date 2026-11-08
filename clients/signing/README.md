@@ -15,6 +15,7 @@ standard library.
 | --- | --- | --- |
 | `cmd/notation-trstctl` | Notation (plugin contract 1.0, `SIGNATURE_GENERATOR.RAW`) | Available; ECDSA P-256 keys |
 | `pkcs11` | PKCS #11 tools: jarsigner, osslsigncode and others (`libtrstctl-pkcs11`) | Available; ECDSA P-256 and RSA keys |
+| `ksp`, `cmd/trstctl-ksp-register` | signtool and other Windows CNG tools (`trstctl-ksp.dll`, a key storage provider, and its installer) | Available for 64-bit Windows (x64); ECDSA P-256 and RSA keys |
 | `trstctlsign` | Go programs and the clients here | Available |
 
 ## Configuration
@@ -63,6 +64,52 @@ osslsigncode, through the OpenSSL pkcs11 engine (`libengine-pkcs11-openssl` on D
 osslsigncode sign -pkcs11module /opt/trstctl/libtrstctl-pkcs11.so -certs release-chain.pem \
   -key 'pkcs11:object=release-key;type=private' -readpass token.txt -h sha256 -in app.exe -out app-signed.exe
 ```
+
+## Windows key storage provider
+
+`trstctl-ksp.dll` is a Windows CNG key storage provider, registered as
+`trstctl Key Storage Provider`. `TRSTCTL_KSP_KEYS` names the code-signing keys
+(comma-separated) it offers as key containers, each with its certificate chain
+configured in trstctl. It signs SHA-256 hashes: ECDSA P-256 keys, and RSA keys
+with PKCS #1 v1.5 padding (PSS is refused). Each signature is checked against
+the key's certificate before it is returned, and trstctl records the operation
+as the request's artifact type (`ksp:ECDSA_P256_SHA256`, `ksp:RSA_PKCS1_SHA256`).
+It creates, imports, deletes and exports no private key — there is none in the
+provider. A signature waiting for an approval is held open for up to
+`TRSTCTL_APPROVAL_WAIT`, as in the other clients, and a signature trstctl
+refuses is `NTE_PERM`, with trstctl's reason on standard error.
+`TRSTCTL_KSP_TRACE=1` logs every call CNG makes, with its names, flags and
+result.
+
+Build it on Linux or macOS with MinGW-w64 (`gcc-mingw-w64-x86-64` and
+`binutils-mingw-w64-x86-64` on Debian); the target also builds the installer and
+checks the DLL exports `GetKeyStorageInterface` and imports only KERNEL32.dll
+and msvcrt.dll:
+
+```bash
+make signing-ksp-windows   # bin/trstctl-ksp.dll and bin/trstctl-ksp-register.exe
+```
+
+On Windows, from an elevated prompt, install it (the DLL is copied into
+System32, where only administrators can replace it) and check that CNG lists it:
+
+```powershell
+.\trstctl-ksp-register.exe install .\trstctl-ksp.dll
+.\trstctl-ksp-register.exe status
+```
+
+Then sign with signtool, naming the provider (`/csp`), the trstctl key (`/kc`)
+and the key's certificate (`/f`, the leaf of its chain):
+
+```powershell
+$env:TRSTCTL_URL = 'https://trstctl.example.com'
+$env:TRSTCTL_TOKEN_FILE = 'C:\trstctl\token.txt'
+$env:TRSTCTL_KSP_KEYS = 'release-key'
+signtool sign /fd sha256 /f release.cer /csp "trstctl Key Storage Provider" /kc release-key app.exe
+signtool verify /pa app.exe
+```
+
+`trstctl-ksp-register uninstall` removes the registration and the copied DLL.
 
 ## Notation
 

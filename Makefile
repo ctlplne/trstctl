@@ -155,6 +155,20 @@ signing-clients: ## Build the Notation plugin and the PKCS #11 module (needs cgo
 	$(GO) build -C clients/signing -trimpath -o $(CURDIR)/$(BIN_DIR)/notation-trstctl ./cmd/notation-trstctl
 	CGO_ENABLED=1 $(GO) build -C clients/signing -trimpath -buildmode=c-shared -o $(CURDIR)/$(BIN_DIR)/libtrstctl-pkcs11.so ./pkcs11
 
+# The Windows CNG key storage provider is cross-compiled with MinGW-w64 (Debian:
+# gcc-mingw-w64-x86-64 and binutils-mingw-w64-x86-64); its registration tool is
+# pure Go.
+MINGW_CC ?= x86_64-w64-mingw32-gcc
+MINGW_OBJDUMP ?= x86_64-w64-mingw32-objdump
+
+.PHONY: signing-ksp-windows
+signing-ksp-windows: ## Cross-compile the Windows signing adapter (trstctl-ksp.dll, needs MinGW-w64) and trstctl-ksp-register.exe from clients/signing into ./bin, and check the DLL's exports and imports
+	@mkdir -p $(BIN_DIR)
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=$(MINGW_CC) $(GO) build -C clients/signing -trimpath -buildmode=c-shared -o $(CURDIR)/$(BIN_DIR)/trstctl-ksp.dll ./ksp
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -C clients/signing -trimpath -o $(CURDIR)/$(BIN_DIR)/trstctl-ksp-register.exe ./cmd/trstctl-ksp-register
+	$(MINGW_OBJDUMP) -p $(BIN_DIR)/trstctl-ksp.dll > $(BIN_DIR)/trstctl-ksp.objdump
+	scripts/ci/check-ksp-dll.sh $(BIN_DIR)/trstctl-ksp.objdump
+
 .PHONY: build-trstctl
 build-trstctl: ## Build the default static control-plane artifact used by the DoD profile
 	@mkdir -p $(BIN_DIR)

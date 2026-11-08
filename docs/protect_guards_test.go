@@ -642,6 +642,10 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		// The PKCS #11 token parses the served certificate and checks trstctl's
 		// signature against it before handing the signature to the tool.
 		"clients/signing/internal/token/token.go",
+		// The Windows key storage provider does the same for CNG: it parses the
+		// served public key, checks trstctl's signature against it, and returns
+		// an ECDSA signature in CNG's r||s form.
+		"clients/signing/ksp/module.go",
 	}
 	if !strings.Contains(read(t, "../test/interop/agentframeworks/go.mod"), "module trstctl.com/trstctl/test/interop/agentframeworks\n") {
 		t.Error("CRYPTO-101: test/interop/agentframeworks is allowed standard-library crypto only as its own module; its go.mod is missing or renamed")

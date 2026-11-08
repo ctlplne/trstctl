@@ -256,14 +256,22 @@ records each signature in Rekor through the outbox as described above.
   does nothing else. jarsigner loads it through SunPKCS11 and osslsigncode through
   the OpenSSL pkcs11 engine; see [`clients/signing`](https://github.com/ctlplne/trstctl/tree/main/clients/signing)
   for both command lines.
+- **signtool and other Windows CNG tools:** `trstctl-ksp.dll`
+  (`make signing-ksp-windows`) is a CNG key storage provider. Install it from an
+  elevated prompt with `trstctl-ksp-register install trstctl-ksp.dll`; it offers the
+  keys `TRSTCTL_KSP_KEYS` names as key containers (ECDSA P-256 and RSA) and signs
+  SHA-256 hashes, RSA with PKCS #1 v1.5. It creates, imports and exports no private
+  key. signtool names the provider and the key:
+  `signtool sign /fd sha256 /f release.cer /csp "trstctl Key Storage Provider" /kc release-key app.exe`.
 
-While a signing approval is pending, the Notation plugin and the PKCS #11 module hold
-the tool's request open — resending the same request, which is what the approver
-grants — for up to `TRSTCTL_APPROVAL_WAIT` (default `10m`; `0` does not wait), and the
+While a signing approval is pending, the Notation plugin, the PKCS #11 module and the
+Windows provider hold the tool's request open — resending the same request, which is
+what the approver grants — for up to `TRSTCTL_APPROVAL_WAIT` (default `10m`; `0` does not wait), and the
 tool signs once the approval is granted. A request trstctl refuses — a missing
 `keys:write`, a policy denial, an approval that is denied or expired, or a wait that
 runs out — stops the tool with trstctl's reason; Notation reports it as
-`ACCESS_DENIED` and the PKCS #11 module as `CKR_FUNCTION_REJECTED`.
+`ACCESS_DENIED`, the PKCS #11 module as `CKR_FUNCTION_REJECTED` and the Windows
+provider as `NTE_PERM`.
 
 ### Rotating and revoking the TSA certificate
 
@@ -368,6 +376,7 @@ body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
   `POST /api/v1/code-signing/keyless`, `GET /api/v1/code-signing/keys/{key_id}/certificate`,
   `POST /api/v1/code-signing/keys/{key_id}/csr`, `trstctl-cli code-signing keys certificate`,
   `trstctl-cli code-signing keys csr`, the `notation-trstctl` plugin, the `libtrstctl-pkcs11` module,
+  the `trstctl-ksp` Windows provider and `trstctl-ksp-register`,
   `trstctl-cli code-signing preview`,
   `trstctl-cli code-signing keyless-preview`, `trstctl-cli code-signing sign`,
   `trstctl-cli code-signing keyless`, `Service.Sign`, `Service.SignKeyless`,

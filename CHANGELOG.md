@@ -2,6 +2,15 @@
 
 ### Added
 
+- Windows signing adapter (P9; build list section 35, item 1): `trstctl-ksp.dll`, a CNG key storage provider in
+  `clients/signing/ksp`, offers trstctl code-signing keys to signtool and other CNG tools as key containers
+  (`TRSTCTL_KSP_KEYS`; ECDSA P-256, and RSA with PKCS #1 v1.5, over SHA-256). The key never leaves the signer: each
+  signature goes through `POST /api/v1/code-signing/sign`, is checked against the key's certificate, and is refused
+  as `NTE_PERM` when trstctl refuses it; the provider creates, imports and exports no private key.
+  `TRSTCTL_KSP_TRACE=1` logs each call. `trstctl-ksp-register install|status|uninstall` copies the DLL into System32
+  and registers it with CNG. `make signing-ksp-windows` cross-compiles both with MinGW-w64 and checks the DLL's
+  exports and imports. CI: `p9-ksp-windows-build` (cross-compile) and `p9-windows-signtool` (windows-latest: signtool
+  signs two executables through the provider and `signtool verify /pa` accepts them).
 - Recording uploads through the outbox with backpressure (A278 part 3): a gateway's chunk is sealed and staged with its
   outbox entry (`pam.recording.store`) in one transaction and the upload returns at once; a bounded in-process uploader
   and the outbox worker store chunks in order (an earlier staged chunk defers a later one without spending an attempt;

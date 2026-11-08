@@ -859,9 +859,85 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/a267-windows-dependents-lab.ps1
 
+  # P9's Windows signing adapter (Track A on GitHub-hosted runners since
+  # 2026-11-02). The Windows runner image has no C compiler, so the CNG key
+  # storage provider is cross-compiled here with MinGW-w64, as
+  # `make signing-ksp-windows` does locally, and its export table checked; the
+  # windows-latest job below installs it and signs through it with signtool.
+  p9-ksp-windows-build:
+    name: p9 Windows KSP (cross-compile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+      - name: Install MinGW-w64
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+          dpkg-query -W gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev
+      - name: Cross-compile trstctl-ksp.dll and check its exports and imports
+        run: make signing-ksp-windows
+      - name: Upload the provider and its registration tool
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trstctl-ksp-windows
+          path: |
+            bin/trstctl-ksp.dll
+            bin/trstctl-ksp-register.exe
+          if-no-files-found: error
+          retention-days: 1  # per-run artifact (CI-L32: keeps the repository artifact list short)
+
+  # P9's signtool run: installs the cross-compiled provider, serves a stand-in
+  # code-signing API, and has the Windows SDK's signtool sign and verify two
+  # executables through CNG (TestSigntoolSignsThroughTheKSPP9).
+  p9-windows-signtool:
+    name: p9 lab (signtool through the Windows KSP)
+    needs: [p9-ksp-windows-build]
+    runs-on: windows-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        shell: bash
+        run: scripts/ci/go-mod-download.sh
+      - name: Download the provider
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: trstctl-ksp-windows
+          path: ${{ runner.temp }}/trstctl-ksp
+      - name: signtool signs and verifies through trstctl-ksp (P9)
+        shell: pwsh
+        run: |
+          $env:TRSTCTL_P9_SIGNTOOL = '1'
+          $env:TRSTCTL_KSP_DLL = Join-Path $env:RUNNER_TEMP 'trstctl-ksp\trstctl-ksp.dll'
+          $p9Output = & go test -C clients/signing ./cmd/trstctl-ksp-register -run '^TestSigntoolSignsThroughTheKSPP9$' -count=1 -v -timeout=15m 2>&1
+          $p9Output | ForEach-Object { Write-Output $_ }
+          if ($LASTEXITCODE -ne 0) { throw 'signtool through the Windows KSP failed' }
+          if (($p9Output -join "`n") -notmatch 'P9_SIGNTOOL_OK') { throw 'Required signtool proof marker missing' }
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

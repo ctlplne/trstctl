@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2814 annotated sites across 31 rules. Each row is
+2827 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -804,10 +804,14 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (436 sites)
+### G115 — CWE-190 Integer overflow or wraparound (440 sites)
 
 | Location | Reason |
 |---|---|
+| `clients/signing/cmd/trstctl-ksp-register/cng_windows.go:76` | NTSTATUS and SECURITY_STATUS are 32-bit values |
+| `clients/signing/ksp/module.go:364` | RSA and P-256 key sizes fit 32 bits |
+| `clients/signing/ksp/module.go:626` | RSA sizes fit 32 bits |
+| `clients/signing/ksp/module.go:717` | a signature length fits 32 bits |
 | `cmd/trstctl-agent/main.go:632` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1341,9 +1345,9 @@ not this file.
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:922` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:988` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4744` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:926` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:992` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4748` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/mcpconfig.go:107` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -1436,7 +1440,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (373 sites)
+### G204 — CWE-78 OS command injection (379 sites)
 
 | Location | Reason |
 |---|---|
@@ -1448,6 +1452,9 @@ not this file.
 | `clients/embedded/est_client_test.go:183` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `clients/embedded/est_client_test.go:202` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `clients/embedded/est_client_test.go:219` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `clients/signing/cmd/trstctl-ksp-register/signtool_windows_test.go:166` | the Windows SDK's signtool and certutil with test inputs |
+| `clients/signing/ksp/module_test.go:132` | compiles the in-repo check program |
+| `clients/signing/ksp/module_test.go:139` | runs the program just built |
 | `clients/signing/pkcs11/module_test.go:88` | compiles the in-repo check program |
 | `clients/signing/pkcs11/module_test.go:91` | runs the program just built |
 | `clients/terraform/internal/terraformprovider/provider_tls_test.go:169` | fixed arguments to this test's own executable (CWE-78) |
@@ -1629,6 +1636,9 @@ not this file.
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
 | `internal/server/cloud_workload_replacement_served_test.go:141` | validated 64-hex owned test container ID and constant stock-client program, separate argv, no shell (CWE-78) |
 | `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
+| `internal/server/codesign_ksp_served_p9_test.go:77` | test builds the in-repo provider (CWE-78) |
+| `internal/server/codesign_ksp_served_p9_test.go:84` | test compiles the in-repo C caller (CWE-78) |
+| `internal/server/codesign_ksp_served_p9_test.go:90` | test runs the caller it just built (CWE-78) |
 | `internal/server/codesign_notation_lab_p9_test.go:73` | the lab runner names the verified Notation binary (CWE-78) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:83` | the lab runner names the local tool images (CWE-78) |
 | `internal/server/codesign_stock_tools_served_test.go:245` | test builds the in-repo plugin (CWE-78) |
@@ -1932,11 +1942,13 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (698 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (700 sites)
 
 | Location | Reason |
 |---|---|
 | `clients/embedded/est_client_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
+| `clients/signing/cmd/trstctl-ksp-register/main.go:79` | the administrator names the DLL to install |
+| `clients/signing/cmd/trstctl-ksp-register/signtool_windows_test.go:193` | this test binary, an unsigned executable to sign |
 | `clients/signing/trstctlsign/client.go:51` | the operator names the token file |
 | `clients/signing/trstctlsign/client.go:97` | the operator names the CA bundle |
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
@@ -2073,9 +2085,9 @@ not this file.
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:922` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:988` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4744` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:926` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:992` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4748` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `docs/sdk_registry_claims_test.go:44` | a page in this checkout (CWE-22) |
@@ -2635,10 +2647,11 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (125 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (126 sites)
 
 | Location | Reason |
 |---|---|
+| `clients/signing/cmd/trstctl-ksp-register/main.go:88` | System32 images are world-readable; only administrators write there |
 | `cmd/trstctl-agent/bootstrap_token_test.go:231` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/edgeca_test.go:312` | deliberately loose fixture proves atomic replacement tightens the mode |
 | `cmd/trstctl-agent/host_profile_census_test.go:19` | fixture executable written by this test (CWE-276) |

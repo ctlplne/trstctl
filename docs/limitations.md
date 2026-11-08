@@ -6246,8 +6246,20 @@ This is a deliberate, documented trust boundary, not an accident.
     SunPKCS11) and osslsigncode 2.5 (the OpenSSL pkcs11 engine) sign a JAR and a
     Windows executable through it with both key types and their verifiers accept
     the signatures, and a token without `keys:write` gets `CKR_FUNCTION_REJECTED`.
-    Built and proven on Linux (arm64); macOS builds, Windows (a KSP) is a separate
-    item. Signing approvals bind the artifact digest, signer, mechanism (the artifact
+    Built and proven on Linux (arm64); macOS builds. On Windows, `trstctl-ksp.dll`
+    (`make signing-ksp-windows`, cross-compiled with MinGW-w64; `trstctl-ksp-register`
+    installs it into System32 and registers it with CNG) is a CNG key storage provider
+    that offers the keys `TRSTCTL_KSP_KEYS` names as key containers (ECDSA P-256 and
+    RSA with PKCS #1 v1.5, over SHA-256; it creates, imports and exports no private
+    key): the served test builds it for the host, drives it through the function
+    table its DLL exports as CNG does, and signs with both key types through the
+    served API, the signatures verifying against the keys' certificates, and a token
+    without `keys:write` gets `NTE_PERM`. The cross-compiled DLL exports
+    `GetKeyStorageInterface` and imports only KERNEL32.dll and msvcrt.dll. The
+    Windows proof is the windows-latest CI job `p9-windows-signtool`: it registers the
+    DLL, has the Windows SDK's signtool sign two executables through CNG with both key
+    types, verifies them with `signtool verify /pa`, and checks a token without
+    `keys:write` leaves its executable unsigned. Signing approvals bind the artifact digest, signer, mechanism (the artifact
     type: `pkcs11:<mechanism>`, `notation:<algorithm>`), one use and an expiry; the
     plugin and module hold a pending request open (`TRSTCTL_APPROVAL_WAIT`) and sign
     once it is granted. The served test drives the built Notation plugin through a
@@ -6262,8 +6274,8 @@ This is a deliberate, documented trust boundary, not an accident.
     PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next.
     Stock Notation 1.3.2 signs an image in a local registry through the plugin and
     verifies it under a strict trust policy rooted at the issuing CA, and a principal
-    without `keys:write` is refused. Real HSM and cloud KMS accounts, and the Windows
-    signing adapter (a KSP for signtool), are what comes next.
+    without `keys:write` is refused. Real HSM and cloud KMS accounts, and an arm64
+    Windows build of the provider, are what comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
