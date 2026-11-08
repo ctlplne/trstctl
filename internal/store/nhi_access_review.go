@@ -284,7 +284,7 @@ func (s *Store) ListNHIReviewCampaignsPage(ctx context.Context, tenantID, after 
 			   FROM nhi_access_review_campaigns
 			  WHERE tenant_id = $1
 			    AND id > $2
-			  ORDER BY id
+			  ORDER BY nhi_access_review_campaigns.id
 			  LIMIT $3`,
 			tenantID, after, limit)
 		if err != nil {

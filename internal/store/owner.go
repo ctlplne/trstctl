@@ -266,7 +266,7 @@ func (s *Store) ListOwnersPage(ctx context.Context, tenantID, afterID string, li
 			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
 			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
 			        ownership_source_observed_at
-			   FROM owners WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
+			   FROM owners WHERE tenant_id = $1 AND id > $2 ORDER BY owners.id LIMIT $3`,
 			tenantID, afterID, limit)
 		if err != nil {
 			return err

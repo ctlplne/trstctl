@@ -137,7 +137,7 @@ func (s *Store) ListComplianceReportSchedulesPage(ctx context.Context, tenantID,
 			        enabled, delivery, recipient_ref, next_run_at, created_at, updated_at, dispatch
 			   FROM compliance_report_schedules
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+			  ORDER BY compliance_report_schedules.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}

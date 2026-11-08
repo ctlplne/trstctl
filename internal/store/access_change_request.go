@@ -245,7 +245,7 @@ func (s *Store) ListAccessChangeRequestsPage(ctx context.Context, tenantID, afte
 			   FROM access_change_requests
 			  WHERE tenant_id = $1
 			    AND id > $2
-			  ORDER BY id
+			  ORDER BY access_change_requests.id
 			  LIMIT $3`,
 			tenantID, after, limit)
 		if err != nil {

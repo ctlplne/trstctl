@@ -514,7 +514,7 @@ func (s *Store) ListSecretSyncJobsPage(ctx context.Context, tenantID, target str
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR target = $3)
 			    AND ($4 = '' OR status = $4)
-			  ORDER BY id
+			  ORDER BY secret_sync_jobs.id
 			  LIMIT $5`,
 			tenantID, afterID, target, string(status), limit)
 		if err != nil {

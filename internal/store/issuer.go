@@ -117,7 +117,7 @@ func (s *Store) ListIssuersPage(ctx context.Context, tenantID, afterID string, l
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, kind, name, chain, public_key, internal, created_at
-			   FROM issuers WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
+			   FROM issuers WHERE tenant_id = $1 AND id > $2 ORDER BY issuers.id LIMIT $3`,
 			tenantID, afterID, limit)
 		if err != nil {
 			return err

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2848 annotated sites across 31 rules. Each row is
+2849 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1955,7 +1955,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (706 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (707 sites)
 
 | Location | Reason |
 |---|---|
@@ -2548,6 +2548,7 @@ not this file.
 | `internal/spireupstream/plugin.go:381` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:466` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
+| `internal/store/keyset_order_test.go:43` | the package's own source files (CWE-22) |
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/store/store_isolation_test.go:409` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:457` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

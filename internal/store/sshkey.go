@@ -143,7 +143,7 @@ func (s *Store) ListSSHKeysPage(ctx context.Context, tenantID, afterID string, l
 			        standing_access, orphaned, created_at
 			   FROM ssh_keys
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id LIMIT $3`,
+			  ORDER BY ssh_keys.id LIMIT $3`,
 			tenantID, afterID, limit)
 		if err != nil {
 			return err

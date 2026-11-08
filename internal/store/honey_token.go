@@ -86,7 +86,7 @@ func (s *Store) ListHoneyTokensPage(ctx context.Context, tenantID, afterID strin
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT `+honeyTokenColumns+` FROM honey_tokens
-			 WHERE tenant_id = $1 AND kind = 'native' AND id > $2 ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+			 WHERE tenant_id = $1 AND kind = 'native' AND id > $2 ORDER BY honey_tokens.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}

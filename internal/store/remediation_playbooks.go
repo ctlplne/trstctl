@@ -297,7 +297,7 @@ func (s *Store) ListRemediationPlaybookRunsPage(ctx context.Context, tenantID, p
 			   FROM remediation_playbook_runs
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR playbook_id = $3)
-			  ORDER BY id
+			  ORDER BY remediation_playbook_runs.id
 			  LIMIT $4`, tenantID, afterID, playbookID, limit)
 		if err != nil {
 			return err

@@ -333,7 +333,7 @@ func (s *Store) ListPQCMigrationCampaignsPage(ctx context.Context, tenantID, aft
 			        closure_jws, closure_jwks, closed_by, created_at, updated_at, closed_at
 			   FROM pqc_migration_campaigns
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id
+			  ORDER BY pqc_migration_campaigns.id
 			  LIMIT $3`,
 			tenantID, after, limit)
 		if err != nil {

@@ -1330,7 +1330,7 @@ func (s *Store) ListSecretRotationSchedulesPage(ctx context.Context, tenantID, a
 			        last_new_ref, last_error, created_at, updated_at, consumers, retire_after_seconds, single_phase_acknowledged
 			   FROM secret_rotation_schedules
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+			  ORDER BY secret_rotation_schedules.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}
@@ -1420,7 +1420,7 @@ func (s *Store) ListDueSecretRotationSchedulesRingPage(
 			  WHERE tenant_id = $1 AND enabled AND next_run_at <= $2
 			    AND id > $3::uuid
 			    AND ($4 = '' OR id <= NULLIF($4, '')::uuid)
-			  ORDER BY id
+			  ORDER BY secret_rotation_schedules.id
 			  LIMIT $5`, tenantID, dueThrough, afterID, throughID, limit)
 		if err != nil {
 			return err

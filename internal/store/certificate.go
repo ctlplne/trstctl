@@ -366,7 +366,7 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			  WHERE tenant_id = $1 AND status = 'active'
 			    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 			    AND not_after IS NOT NULL AND not_after < $2
-			  ORDER BY not_after, id LIMIT $3`,
+			  ORDER BY not_after, certificates.id LIMIT $3`,
 			tenantID, soon90, expiringLimit)
 		if err != nil {
 			return err
@@ -627,7 +627,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2
 				    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'
 				    AND (not_after, id) > ($3, $4)`+searchClause(6)+`
-				  ORDER BY not_after, id LIMIT $5`,
+				  ORDER BY not_after, certificates.id LIMIT $5`,
 				searchArgs(tenantID, *expiringBefore, *afterNotAfter, afterID, limit)...)
 		case expiringBefore != nil:
 			// Expiry-ordered first page: no keyset lower bound yet, just the filter,
@@ -637,7 +637,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 				   FROM certificates
 				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2
 				    AND issuance_idempotency_key NOT LIKE 'ephemeral-issue:%'`+searchClause(4)+`
-				  ORDER BY not_after, id LIMIT $3`,
+				  ORDER BY not_after, certificates.id LIMIT $3`,
 				searchArgs(tenantID, *expiringBefore, limit)...)
 		default:
 			// Plain page: keyset on id alone, riding the primary key.
@@ -645,7 +645,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND id > $2`+searchClause(4)+`
-				  ORDER BY id LIMIT $3`,
+				  ORDER BY certificates.id LIMIT $3`,
 				searchArgs(tenantID, afterID, limit)...)
 		}
 		if qerr != nil {

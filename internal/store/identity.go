@@ -98,7 +98,7 @@ func (s *Store) ListIdentitiesPage(ctx context.Context, tenantID, afterID string
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
 			        status, not_before, not_after, attributes, created_at
-			   FROM identities WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
+			   FROM identities WHERE tenant_id = $1 AND id > $2 ORDER BY identities.id LIMIT $3`,
 			tenantID, afterID, limit)
 		if err != nil {
 			return err

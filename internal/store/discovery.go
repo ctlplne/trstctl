@@ -793,7 +793,7 @@ func (s *Store) ListDiscoverySourcesPage(ctx context.Context, tenantID, afterID 
 			`SELECT id::text, tenant_id::text, kind, name, config, created_at, updated_at
 			   FROM discovery_sources
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+			  ORDER BY discovery_sources.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}
@@ -819,7 +819,7 @@ func (s *Store) ListDiscoverySchedulesPage(ctx context.Context, tenantID, afterI
 			        retired_at, config_event_sequence, control_event_sequence, created_at, updated_at
 			   FROM discovery_schedules
 			  WHERE tenant_id = $1 AND id > $2
-			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+			  ORDER BY discovery_schedules.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}
@@ -993,7 +993,7 @@ func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID str
 		              target_results
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id > $2
-		     ORDER BY id LIMIT $3`, tenantID, afterID, limit)
+		     ORDER BY discovery_runs.id LIMIT $3`, tenantID, afterID, limit)
 		if err != nil {
 			return err
 		}

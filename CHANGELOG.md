@@ -548,6 +548,13 @@
 
 ### Fixed
 
+- Inventory pages sorted the whole tenant on every page: the page queries select the keyset column as `id::text`
+  without an alias, and PostgreSQL resolves a bare `ORDER BY id` against that output column, so each 50-row page of
+  the certificate inventory (and of identities, owners, issuers and 17 other keyset pages) was a sequential scan and
+  sort of every row by its text form — 35 ms at 102,000 certificates instead of 0.25 ms — and every caller that walks
+  the inventory (the API list, risk scoring, the graph build, revocation health, the weak-key audit) grew with the
+  square of it. The pages now order by the table column; the order, pages and cursors are unchanged. Found by the A266
+  scale harness.
 - Keyed commands failed after a burst of commands that looked nothing up, such as an inventory import: the event log's
   identity index advanced only at startup and by a bounded step per lookup, so every issuance after a 20,000-row
   switching import refused with "event identity index is behind source history" until enough lookups had caught it up.

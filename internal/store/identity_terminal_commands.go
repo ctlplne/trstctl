@@ -256,7 +256,7 @@ func (s *Store) PendingIdentityTerminalCommands(ctx context.Context, tenantID, a
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+identityTerminalColumns+` FROM identity_terminal_commands
 			WHERE tenant_id=$1 AND status='pending' AND identity_id > $2::uuid
-			ORDER BY identity_id LIMIT $3`, tenantID, afterIdentity, limit)
+			ORDER BY identity_terminal_commands.identity_id LIMIT $3`, tenantID, afterIdentity, limit)
 		if err != nil {
 			return err
 		}

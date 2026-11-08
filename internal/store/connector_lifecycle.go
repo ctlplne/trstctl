@@ -545,7 +545,7 @@ func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, t
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
 			    AND ($5 = '' OR idempotency_key = $5)
-			  ORDER BY id
+			  ORDER BY connector_delivery_receipts.id
 			  LIMIT $4`, tenantID, afterID, identityID, limit, key)
 		if err != nil {
 			return err
@@ -736,7 +736,7 @@ func (s *Store) ListRotationRunsPage(ctx context.Context, tenantID, identityID, 
 			   FROM lifecycle_rotation_runs
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
-			  ORDER BY id
+			  ORDER BY lifecycle_rotation_runs.id
 			  LIMIT $4`, tenantID, afterID, identityID, limit)
 		if err != nil {
 			return err
