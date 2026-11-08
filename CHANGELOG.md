@@ -558,9 +558,10 @@
 - Keyed commands failed after a burst of commands that looked nothing up, such as an inventory import: the event log's
   identity index advanced only at startup and by a bounded step per lookup, so every issuance after a 20,000-row
   switching import refused with "event identity index is behind source history" until enough lookups had caught it up.
-  The production event log now keeps the index at the head in the background: one goroutine, woken by each append and
-  every five seconds, indexing 256-event pages under the history read view and lock a lookup takes. A lookup still
-  refuses when the index is behind its bounded catch-up. Found by the A266 scale harness.
+  The production event log now keeps the index within one lookup's reach in the background: one goroutine, woken every
+  128 appends and every five seconds, indexes 256-event pages under the history read view and lock a lookup takes once
+  the index is more than 512 events behind (under ordinary traffic the lookups keep it current, so it does no work). A
+  lookup still refuses when the index is behind its bounded catch-up. Found by the A266 scale harness.
 - Recording a certificate re-read the tenant's whole certificate history: the recovery that runs before each recording
   (it verifies the history against exact receipts and recovers an event a failed transaction left in JetStream)
   started after the new leaf's own head, which is the tenant's registration, so recording an inventory took time that

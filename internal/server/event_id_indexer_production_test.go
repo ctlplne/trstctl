@@ -13,12 +13,13 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// A266: the production event log keeps its identity projection at the head in
-// the background. After a burst of commands no lookup touched — an inventory
-// import records one event per certificate — a keyed command such as an
-// issuance finds or refutes its event identity at once, instead of failing
-// with ErrEventIDIndexBehind until enough lookups have caught the index up
-// (each lookup advances it by a bounded step and then refuses).
+// A266: the production event log keeps its identity projection within one
+// lookup's reach in the background. After a burst of commands no lookup
+// touched — an inventory import records one event per certificate — a keyed
+// command such as an issuance finds or refutes its event identity at once,
+// instead of failing with ErrEventIDIndexBehind until enough lookups have
+// caught the index up (each lookup advances it by a bounded step of 1,024
+// events and then refuses).
 func TestProductionEventLogIndexesIdentitiesInTheBackground(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "a2660000-0000-4000-8000-000000000266"
@@ -54,7 +55,7 @@ func TestProductionEventLogIndexesIdentitiesInTheBackground(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if head >= burst && covered == head {
+		if head >= burst && head-covered < 1024 {
 			break
 		}
 		if time.Now().After(deadline) {

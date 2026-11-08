@@ -153,6 +153,7 @@ type Log struct {
 	// idIndexKick wakes it after an append, idIndexStop and idIndexDone end it
 	// at Close.
 	backgroundIDIndex bool
+	idIndexAppends    atomic.Uint64
 	idIndexKick       chan struct{}
 	idIndexStop       context.CancelFunc
 	idIndexDone       chan struct{}
@@ -245,10 +246,12 @@ func WithDuplicateWindowForTesting(window time.Duration) OpenOption {
 	}
 }
 
-// WithBackgroundEventIDIndexer keeps the event identity projection near the
-// head in the background: one goroutine, woken after each append and every
-// eventIDIndexerInterval, indexes in eventIDIndexBatch pages under the same
-// history read view and lock a lookup takes, releasing them between pages.
+// WithBackgroundEventIDIndexer keeps the event identity projection within one
+// lookup's reach in the background: one goroutine, woken every
+// eventIDIndexerKickEvery appends and every eventIDIndexerInterval, indexes
+// in eventIDIndexBatch pages once the projection is more than
+// eventIDIndexerLag events behind, under the same history read view and lock
+// a lookup takes, releasing them between pages.
 // Without it the projection advanced only at Open and by a bounded step per
 // lookup, so a burst of appends with no lookups (an inventory import) left
 // every keyed lookup refusing with ErrEventIDIndexBehind until enough lookups

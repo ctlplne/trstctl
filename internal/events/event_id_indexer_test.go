@@ -10,12 +10,12 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
-// A266: with the background indexer, the identity projection reaches the head
-// after a burst of appends that no lookup touched, so a keyed lookup right
-// after an inventory import finds its event instead of refusing with
-// ErrEventIDIndexBehind until enough lookups have caught the projection up.
-// Close stops the indexer.
-func TestBackgroundEventIDIndexerKeepsTheProjectionAtTheHead(t *testing.T) {
+// A266: with the background indexer, a burst of appends that no lookup
+// touched leaves the identity projection within one lookup's reach, so a
+// keyed lookup right after an inventory import finds its event instead of
+// refusing with ErrEventIDIndexBehind until enough lookups have caught the
+// projection up. Close stops the indexer.
+func TestBackgroundEventIDIndexerKeepsTheProjectionWithinALookupsReach(t *testing.T) {
 	ctx := t.Context()
 	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, WithBackgroundEventIDIndexer())
 	if err != nil {
@@ -35,29 +35,21 @@ func TestBackgroundEventIDIndexerKeepsTheProjectionAtTheHead(t *testing.T) {
 	}
 	deadline := time.Now().Add(time.Minute)
 	for {
-		state, err := log.schedulerSafetySnapshot(ctx)
+		covered, head, err := log.EventIDIndexCovered(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		index, epoch, err := log.eventIDIndexFor(ctx, state)
-		if err != nil {
-			t.Fatal(err)
-		}
-		covered, _, err := readEventIDCursor(ctx, index, epoch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if covered == state.LastSequence {
+		if head == uint64(count) && head-covered < eventIDIndexReadLimit {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the background indexer left the identity projection at %d of %d", covered, state.LastSequence)
+			t.Fatalf("the background indexer left the identity projection at %d of %d", covered, head)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	for i, id := range []string{"burst-0", fmt.Sprintf("burst-%d", count-1)} {
+	for i, id := range []string{fmt.Sprintf("burst-%d", count-1), "burst-0"} {
 		got, found, err := log.EventByID(ctx, id)
-		if err != nil || !found || got.ID != id || (i == 0 && got.Sequence != 1) {
+		if err != nil || !found || got.ID != id || (i == 1 && got.Sequence != 1) {
 			t.Fatalf("lookup %s after the burst = %+v, %t, %v", id, got, found, err)
 		}
 	}
@@ -69,6 +61,39 @@ func TestBackgroundEventIDIndexerKeepsTheProjectionAtTheHead(t *testing.T) {
 	case <-log.idIndexDone:
 	default:
 		t.Fatal("the background indexer is still running after Close")
+	}
+}
+
+// The indexer leaves a projection less than its lag behind to the lookups,
+// which catch it up themselves, and indexes one further behind to the head.
+func TestBackgroundEventIDIndexerWorksOnlyPastItsLag(t *testing.T) {
+	ctx := t.Context()
+	log, err := Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	appendN := func(from, n int) {
+		t.Helper()
+		for i := from; i < from+n; i++ {
+			if _, err := log.Append(ctx, Event{ID: fmt.Sprintf("lag-%d", i), Type: "test.index-lag", TenantID: "tenant-a", Data: []byte(`{}`)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	appendN(0, int(eventIDIndexerLag)-1)
+	if err := log.catchUpEventIDIndex(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if covered, _, err := log.EventIDIndexCovered(ctx); err != nil || covered != 0 {
+		t.Fatalf("a projection %d behind was indexed to %d (%v); the lookups catch that up", eventIDIndexerLag-1, covered, err)
+	}
+	appendN(int(eventIDIndexerLag)-1, 2)
+	if err := log.catchUpEventIDIndex(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if covered, head, err := log.EventIDIndexCovered(ctx); err != nil || covered != head {
+		t.Fatalf("a projection past the lag was indexed to %d of %d (%v)", covered, head, err)
 	}
 }
 

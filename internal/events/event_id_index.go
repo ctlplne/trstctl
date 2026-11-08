@@ -252,6 +252,18 @@ func (l *Log) indexEventIDsThrough(ctx context.Context, source jetstream.Stream,
 // for unindexed history when no append has woken it.
 const eventIDIndexerInterval = 5 * time.Second
 
+// The background indexer wakes every eventIDIndexerKickEvery appends and
+// indexes only once the projection is more than eventIDIndexerLag events
+// behind: half of what one lookup catches up on its own. Under ordinary
+// traffic the lookups keep the projection current and the indexer does no
+// work (waking it on every append cost a served issuance about 5 ms and the
+// issuance SLO its throughput floor); after a burst no lookup touched, the
+// lag stays inside one lookup's bound.
+const (
+	eventIDIndexerKickEvery = 128
+	eventIDIndexerLag       = eventIDIndexReadLimit / 2
+)
+
 // startEventIDIndexer runs the background identity indexer until Close.
 func (l *Log) startEventIDIndexer() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -276,9 +288,10 @@ func (l *Log) startEventIDIndexer() {
 	}()
 }
 
-// kickEventIDIndexer wakes the background indexer without blocking.
+// kickEventIDIndexer wakes the background indexer without blocking, once
+// every eventIDIndexerKickEvery appends.
 func (l *Log) kickEventIDIndexer() {
-	if l.idIndexKick == nil {
+	if l.idIndexKick == nil || l.idIndexAppends.Add(1)%eventIDIndexerKickEvery != 0 {
 		return
 	}
 	select {
@@ -301,6 +314,10 @@ func (l *Log) stopEventIDIndexer() {
 // a time; each page takes and releases the history read view and the index
 // lock, so a lookup or a history rewrite never waits behind a long catch-up.
 func (l *Log) catchUpEventIDIndex(ctx context.Context) error {
+	covered, head, err := l.EventIDIndexCovered(ctx)
+	if err != nil || head < covered+eventIDIndexerLag {
+		return err
+	}
 	for ctx.Err() == nil {
 		done, err := l.indexEventIDPage(ctx)
 		if err != nil || done {
