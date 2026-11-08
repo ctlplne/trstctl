@@ -178,7 +178,13 @@ export function PAMGatewayPoolsPanel({ canManage }: { canManage: boolean }) {
                     <td className="font-mono text-xs">{m.agent_id}</td>
                     <td className="font-mono text-xs">{m.address}</td>
                     <td>
-                      <StatusBadge value={m.health ?? "healthy"} label={t(HEALTH_LABEL[m.health ?? "healthy"])} tone={HEALTH_TONE[m.health ?? "healthy"]} />
+                      <StatusBadge
+                        value={m.health ?? "healthy"}
+                        label={t(
+                          m.upgrade_pending && m.health === "draining" ? "admin.access.gatewayPools.healthUpgrading" : HEALTH_LABEL[m.health ?? "healthy"],
+                        )}
+                        tone={HEALTH_TONE[m.health ?? "healthy"]}
+                      />
                     </td>
                     <td>{m.last_seen_at ? formatDateTime(m.last_seen_at, policy) : "—"}</td>
                     <td>{m.live_sessions}</td>

@@ -12522,6 +12522,7 @@ PAMGatewayMember = TypedDict(
         'health': str,
         'last_seen_at': str,
         'live_sessions': int,
+        'upgrade_pending': bool,
     },
     total=False,
 )

@@ -167,3 +167,15 @@ func (s *Store) CountLiveGatewaySessions(ctx context.Context, tenantID string, a
 	})
 	return out, err
 }
+
+// PendingAgentUpgrade reports whether an agent has a self-upgrade job queued
+// or in flight (A278: a pooled gateway drains before it upgrades).
+func (s *Store) PendingAgentUpgrade(ctx context.Context, tenantID, agentID string) (bool, error) {
+	var pending bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM outbox
+			WHERE tenant_id = $1 AND destination = 'agent.upgrade' AND required_agent_id::text = $2
+			  AND status IN ('pending', 'processing'))`, tenantID, agentID).Scan(&pending)
+	})
+	return pending, err
+}

@@ -835,6 +835,10 @@ export const messages = {
   "admin.access.gatewayPools.healthDraining": { defaultMessage: "Draining", description: "Pool member health (A278)." },
   "admin.access.gatewayPools.healthLost": { defaultMessage: "Lost", description: "Pool member health: stopped reporting (A278)." },
   "admin.access.gatewayPools.healthOffboarded": { defaultMessage: "Offboarded", description: "Pool member health (A278)." },
+  "admin.access.gatewayPools.healthUpgrading": {
+    defaultMessage: "Draining for upgrade",
+    description: "Pool member health: an upgrade is queued, so it takes no new sessions and upgrades once its sessions end (A278).",
+  },
   "admin.access.gatewayPools.drain": { defaultMessage: "Drain", description: "Stops new sessions on a gateway (A278)." },
   "admin.access.gatewayPools.drainFor": { defaultMessage: "Drain gateway {gateway}", description: "Accessible name of a drain button (A278)." },
   "admin.access.gatewayPools.resume": { defaultMessage: "Resume", description: "Lets a drained gateway take sessions again (A278)." },

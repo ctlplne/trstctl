@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -220,6 +221,13 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		})
 	}
 	kinds = permitted
+	// A278: a pooled gateway drains before it upgrades. While it owns live
+	// sessions its upgrade stays queued (and it takes no new sessions); it
+	// is handed the upgrade on a poll after they have ended.
+	if a.withholdGatewayUpgrade != nil && slices.Contains(kinds, agentJobKindUpgrade) &&
+		a.withholdGatewayUpgrade(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName)) {
+		kinds = slices.DeleteFunc(slices.Clone(kinds), func(kind string) bool { return kind == agentJobKindUpgrade })
+	}
 	if len(kinds) == 0 {
 		// Not an error: an agent that can execute nothing this control plane
 		// hands out should keep heartbeating, not crash-loop on a refusal.

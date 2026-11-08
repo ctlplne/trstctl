@@ -9058,10 +9058,11 @@ func componentSchemas() map[string]*Schema {
 		// A278: gateway pools.
 		"PAMGatewayMember": object(map[string]*Schema{
 			"agent_id": uuid(), "address": {Type: "string", Description: "host:port requesters reach this gateway at"},
-			"draining":      {Type: "boolean", Description: "takes no new sessions; its live sessions run to their end"},
-			"health":        {Type: "string", Enum: []string{"healthy", "draining", "lost", "offboarded"}, Description: "read-only: lost when it has not reported within pam.gateway_lost_after"},
-			"last_seen_at":  {Type: "string", Format: "date-time", Description: "read-only: its last report"},
-			"live_sessions": {Type: "integer", Description: "read-only: active sessions it owns"},
+			"draining":        {Type: "boolean", Description: "takes no new sessions; its live sessions run to their end"},
+			"upgrade_pending": {Type: "boolean", Description: "read-only: an upgrade is queued, so the gateway drains and is handed the upgrade once its live sessions have ended (A278)"},
+			"health":          {Type: "string", Enum: []string{"healthy", "draining", "lost", "offboarded"}, Description: "read-only: lost when it has not reported within pam.gateway_lost_after"},
+			"last_seen_at":    {Type: "string", Format: "date-time", Description: "read-only: its last report"},
+			"live_sessions":   {Type: "integer", Description: "read-only: active sessions it owns"},
 		}, "agent_id", "address", "live_sessions"),
 		"PAMGatewayPool": object(map[string]*Schema{
 			"name": str(), "members": {Type: "array", Items: ref("PAMGatewayMember")},

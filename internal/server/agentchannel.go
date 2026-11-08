@@ -268,8 +268,11 @@ type agentService struct {
 	// gatewayBoundHosts lists the host names of the targets bound to one
 	// gateway-role agent, and signGatewayServerCSR signs its listener's CSR
 	// with the agent CA (A254); nil when access gateways are not served.
-	gatewayBoundHosts    func(ctx context.Context, tenantID, agentID string) ([]string, error)
-	signGatewayServerCSR func(csr []byte, hosts, uris []string, ttl time.Duration) ([]byte, error)
+	gatewayBoundHosts func(ctx context.Context, tenantID, agentID string) ([]string, error)
+	// withholdGatewayUpgrade (A278) keeps a pooled gateway's agent.upgrade
+	// job from it while it owns live sessions; nil when PAM is not served.
+	withholdGatewayUpgrade func(ctx context.Context, tenantID, agentID string) bool
+	signGatewayServerCSR   func(csr []byte, hosts, uris []string, ttl time.Duration) ([]byte, error)
 	// signGatewaySSHKey certifies a gateway's per-session SSH key for a
 	// session job it holds (A254 part 2).
 	signGatewaySSHKey func(ctx context.Context, tenantID, agentID string, payload, publicKey []byte) ([]byte, time.Time, error)

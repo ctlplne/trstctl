@@ -163,8 +163,9 @@ func (s *pamService) gatewayPoolView(ctx context.Context, tenantID string, p sto
 	view := api.PAMGatewayPool{Name: p.Name, Revision: p.Revision, SavedBy: p.SavedBy, SavedAt: p.SavedAt.UTC(), Members: []api.PAMGatewayMember{}}
 	for _, m := range p.Members {
 		agent, agentErr := s.store.GetAgent(ctx, tenantID, m.AgentID)
-		member := api.PAMGatewayMember{AgentID: m.AgentID, Address: m.Address, Draining: m.Draining,
-			Health: s.gatewayHealth(agent, agentErr, m, now), LiveSessions: live[m.AgentID]}
+		upgrading := s.gatewayUpgrading(ctx, tenantID, m.AgentID)
+		member := api.PAMGatewayMember{AgentID: m.AgentID, Address: m.Address, Draining: m.Draining, UpgradePending: upgrading,
+			Health: s.gatewayHealth(agent, agentErr, m, upgrading, now), LiveSessions: live[m.AgentID]}
 		if agentErr == nil && agent.LastSeenAt != nil {
 			at := agent.LastSeenAt.UTC()
 			member.LastSeenAt = &at
@@ -175,18 +176,38 @@ func (s *pamService) gatewayPoolView(ctx context.Context, tenantID string, p sto
 }
 
 // gatewayHealth is a member's state: offboarded, lost (no heartbeat within
-// gatewayLostAfter), draining, or healthy.
-func (s *pamService) gatewayHealth(agent store.Agent, agentErr error, m store.PAMGatewayMember, now time.Time) string {
+// gatewayLostAfter), draining (by the operator, or for a queued upgrade), or
+// healthy.
+func (s *pamService) gatewayHealth(agent store.Agent, agentErr error, m store.PAMGatewayMember, upgrading bool, now time.Time) string {
 	switch {
 	case agentErr != nil || agent.OffboardedAt != nil:
 		return "offboarded"
 	case agent.LastSeenAt == nil || now.Sub(*agent.LastSeenAt) > gatewayLostAfterOrDefault(s.gatewayLostAfter):
 		return "lost"
-	case m.Draining:
+	case m.Draining || upgrading:
 		return "draining"
 	default:
 		return "healthy"
 	}
+}
+
+// gatewayUpgrading reports whether a gateway has a self-upgrade queued or in
+// flight: it drains first, taking no new sessions (A278 part 2).
+func (s *pamService) gatewayUpgrading(ctx context.Context, tenantID, agentID string) bool {
+	pending, err := s.store.PendingAgentUpgrade(ctx, tenantID, agentID)
+	return err == nil && pending
+}
+
+// withholdGatewayUpgrade reports whether a gateway's upgrade must wait: it is
+// in a pool and still owns live sessions, which run to their end — and their
+// recordings to their seal — before it is handed the upgrade. A gateway in no
+// pool upgrades as before.
+func (s *pamService) withholdGatewayUpgrade(ctx context.Context, tenantID, agentID string) bool {
+	if _, found, err := s.store.PAMGatewayPoolFor(ctx, tenantID, agentID); err != nil || !found {
+		return err != nil
+	}
+	live, err := s.store.CountLiveGatewaySessions(ctx, tenantID, []string{agentID}, s.clock().UTC())
+	return err != nil || live[agentID] > 0
 }
 
 // gatewayRunsKind reports whether a gateway's executor report says it can
@@ -237,7 +258,8 @@ func (s *pamService) chooseGateway(ctx context.Context, tenantID, agentID, addre
 	best := -1
 	for i, m := range pool.Members {
 		agent, agentErr := s.store.GetAgent(ctx, tenantID, m.AgentID)
-		if s.gatewayHealth(agent, agentErr, m, now) != "healthy" || (needKind != "" && !gatewayRunsKind(agent, needKind)) {
+		if s.gatewayHealth(agent, agentErr, m, s.gatewayUpgrading(ctx, tenantID, m.AgentID), now) != "healthy" ||
+			(needKind != "" && !gatewayRunsKind(agent, needKind)) {
 			continue
 		}
 		if best < 0 {
@@ -307,7 +329,7 @@ func (s *pamService) markLostGateways(ctx context.Context) {
 				agent, agentErr := s.store.GetAgent(ctx, rec.TenantID, rec.GatewayAgentID)
 				for _, m := range pool.Members {
 					if m.AgentID == rec.GatewayAgentID {
-						gone = s.gatewayHealth(agent, agentErr, m, now) == "lost"
+						gone = s.gatewayHealth(agent, agentErr, m, false, now) == "lost"
 					}
 				}
 			}
@@ -343,4 +365,13 @@ func (s *Server) DeletePAMGatewayPool(ctx context.Context, tenantID, actor, name
 		return api.ErrPAMUnavailable
 	}
 	return s.pam.DeletePAMGatewayPool(ctx, tenantID, actor, name, revision)
+}
+
+// pamWithholdGatewayUpgrade is the agent channel's drain-before-upgrade gate
+// (A278), or nil when PAM is not served.
+func (s *Server) pamWithholdGatewayUpgrade() func(ctx context.Context, tenantID, agentID string) bool {
+	if s.pam == nil {
+		return nil
+	}
+	return s.pam.withholdGatewayUpgrade
 }

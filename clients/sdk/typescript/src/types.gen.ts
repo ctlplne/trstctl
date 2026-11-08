@@ -23010,6 +23010,8 @@ export interface components {
             last_seen_at?: string;
             /** @description read-only: active sessions it owns */
             live_sessions: number;
+            /** @description read-only: an upgrade is queued, so the gateway drains and is handed the upgrade once its live sessions have ended (A278) */
+            upgrade_pending?: boolean;
         };
         PAMGatewayPool: {
             members: components["schemas"]["PAMGatewayMember"][];

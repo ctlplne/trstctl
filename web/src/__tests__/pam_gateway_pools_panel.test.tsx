@@ -32,6 +32,14 @@ const pool = {
     { agent_id: three, address: "gw3.example:8443", draining: true, health: "draining", last_seen_at: "2026-11-08T01:10:00Z", live_sessions: 1 },
   ],
 };
+const upgrading = {
+  ...pool,
+  members: [
+    pool.members[0],
+    pool.members[1],
+    { agent_id: three, address: "gw3.example:8443", health: "draining", upgrade_pending: true, last_seen_at: "2026-11-08T01:10:00Z", live_sessions: 1 },
+  ],
+};
 
 beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
@@ -141,6 +149,17 @@ describe("gateway pools", () => {
     mount(false);
     await screen.findByRole("table", { name: "Gateways of pool site-a" });
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("a gateway with an upgrade queued", () => {
+  it("reads draining for upgrade until its sessions end (A278 part 2)", async () => {
+    apiMock.pamGatewayPools.mockResolvedValue({ items: [upgrading] });
+    mount();
+    const table = await screen.findByRole("table", { name: "Gateways of pool site-a" });
+    const row = within(table).getAllByRole("row")[3];
+    expect(within(row).getAllByRole("cell")[2]).toHaveTextContent("Draining for upgrade");
+    expect(within(row).getAllByRole("cell")[4]).toHaveTextContent("1");
   });
 });
 

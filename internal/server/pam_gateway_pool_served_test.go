@@ -79,9 +79,21 @@ func TestServedGatewayPoolFailsOverA278(t *testing.T) {
 	beat := func(id string) {
 		_, _ = clients[id].Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: id, Version: "a278", Status: "active"})
 	}
+	// A gateway's row is made by its first heartbeat: beat each once, in
+	// order, before anything names the gateways.
 	for _, id := range ids {
-		beat(id)
+		if _, err := clients[id].Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: id, Version: "a278", Status: "active"}); err != nil {
+			t.Fatalf("gateway %s's first heartbeat: %v", id, err)
+		}
 	}
+	a201Await(t, "the three gateways read back", func() bool {
+		for _, id := range ids {
+			if _, err := h.store.GetAgent(ctx, h.tenant, id); err != nil {
+				return false
+			}
+		}
+		return true
+	})
 	go func() {
 		for ctx.Err() == nil {
 			for _, id := range ids {

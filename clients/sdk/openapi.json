@@ -42149,6 +42149,10 @@
           "live_sessions": {
             "description": "read-only: active sessions it owns",
             "type": "integer"
+          },
+          "upgrade_pending": {
+            "description": "read-only: an upgrade is queued, so the gateway drains and is handed the upgrade once its live sessions have ended (A278)",
+            "type": "boolean"
           }
         },
         "required": [

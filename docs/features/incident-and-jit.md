@@ -462,6 +462,12 @@ console, the **Gateway pools** panel lists pools with each gateway's health and 
 sessions, creates and edits them (one gateway per line), drains and resumes a gateway and
 deletes a pool; a session whose gateway was lost says so, and until when it may still serve.
 
+A pooled gateway drains before it upgrades: once an upgrade campaign queues its
+`agent.upgrade` (gateways started with `--self-upgrade` take upgrades like other agents), it
+reads `upgrade_pending` and **Draining for upgrade**, takes no new sessions, and is handed the
+upgrade only after the sessions it owns have ended and their recordings are sealed. The
+campaign waits for it, bounded by those sessions' deadlines, instead of scoring it silent.
+
 A Redis target (A256) is served only through its gateway: register it with
 `target_type: "redis"`, a Redis dynamic-secret provider and the gateway binding, or set a
 `pam.database_targets` entry. The session's credential is an ACL user the provider creates

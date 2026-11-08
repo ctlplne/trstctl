@@ -2630,6 +2630,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings),
 			pamGatewayCredential: s.pamGatewayCredential(), dependentRotationCredential: s.api.OpenDependentRotationCredential, windowsLocalRotationCredentials: s.api.OpenWindowsLocalRotationCredentials},
 		gatewayBoundHosts:         s.pamGatewayBoundHosts(),
+		withholdGatewayUpgrade:    s.pamWithholdGatewayUpgrade(),
 		signGatewayServerCSR:      s.signGatewayServerCSR,
 		signGatewaySSHKey:         s.pamSignGatewaySSHKey(),
 		storeRecordingChunk:       s.pamStoreRecordingChunk(),

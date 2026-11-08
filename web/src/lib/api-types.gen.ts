@@ -9010,6 +9010,7 @@ export interface PAMGatewayMember {
   health?: "healthy" | "draining" | "lost" | "offboarded";
   last_seen_at?: string;
   live_sessions: number;
+  upgrade_pending?: boolean;
 }
 
 export interface PAMGatewayPool {

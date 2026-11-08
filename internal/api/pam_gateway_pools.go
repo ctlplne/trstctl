@@ -25,6 +25,10 @@ type PAMGatewayMember struct {
 	AgentID  string `json:"agent_id"`
 	Address  string `json:"address"`
 	Draining bool   `json:"draining,omitempty"`
+	// UpgradePending (read-only): an upgrade is queued for the gateway, so it
+	// drains — takes no new sessions — and is handed the upgrade once its
+	// live sessions have ended (A278 part 2).
+	UpgradePending bool `json:"upgrade_pending,omitempty"`
 	// Health is healthy, draining, lost (no report within
 	// pam.gateway_lost_after) or offboarded.
 	Health       string     `json:"health,omitempty"`

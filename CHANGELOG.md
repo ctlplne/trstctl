@@ -2,6 +2,10 @@
 
 ### Added
 
+- Drained gateway upgrades (A278 part 2): `agent.upgrade` and `agent.self_check` admit the gateway role, so access
+  gateways started with `--self-upgrade` take staged upgrades. A pooled gateway with an upgrade queued reads
+  `upgrade_pending` and draining (no new sessions); the agent channel withholds its upgrade job while it owns live
+  sessions, and the campaign waits for it instead of scoring it silent. Console: **Draining for upgrade**.
 - Gateway pools (A278 part 1): `GET|PUT|DELETE /api/v1/access/gateway-pools[/{name}]` (OpenAPI 796 -> 799; CLI
   `access gateway-pools list|save|delete`, 863 -> 866; migration 0433, snapshot format 111). Gateways of a pool share
   their targets' sessions: a session starts on the healthy, undrained member with the fewest live sessions, which owns

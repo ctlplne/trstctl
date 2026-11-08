@@ -151,6 +151,11 @@ func (s *Server) stepDispatchingCampaign(
 			// Dispatched recently, no verdict yet: downloading, restarting, or
 			// simply not polling this second. Mid-grace is not evidence.
 			waiting = true
+		case s.pam != nil && s.pam.withholdGatewayUpgrade(ctx, tenantID, st.AgentID):
+			// A278: a pooled gateway is draining its live sessions before it
+			// takes the upgrade. That is waiting, bounded by those sessions'
+			// deadlines, not silence.
+			waiting = true
 		}
 		// Neither failed, nor on target, nor within grace: silent. An agent
 		// that took an upgrade order and never came back on the new version is

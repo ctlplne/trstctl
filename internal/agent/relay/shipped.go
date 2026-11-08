@@ -171,8 +171,9 @@ func ShippedJobKinds() []ShippedJobKind {
 			// A71: the post-upgrade functional check. Every agent answers it,
 			// whichever role it holds; it redeems nothing and names no
 			// connector, and the campaign pins each one to the agent it asks.
+			// A278: an access gateway answers it too.
 			Kind:          KindAgentSelfCheck,
-			Roles:         []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+			Roles:         []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleGateway},
 			Unconditional: true,
 		},
 		{
@@ -325,9 +326,11 @@ func ShippedJobKinds() []ShippedJobKind {
 			// deploys is this binary itself. Its own flag rather than
 			// --relay-claim, because replacing the executable is a consent the
 			// machine's operator gives separately from executing connector work.
+			// A278: an access gateway upgrades too; a pooled one drains first —
+			// the control plane withholds the job while it owns live sessions.
 			Kind:  KindAgentUpgrade,
 			Flags: []string{"--self-upgrade"},
-			Roles: []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
+			Roles: []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleGateway},
 		},
 	}
 }

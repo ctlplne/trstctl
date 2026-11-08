@@ -3803,6 +3803,14 @@ sha256 (`artifacts[].signature`, base64). Each agent can pin the same key with
 pinned bytes but not the pinned publisher's. Neither key set keeps the
 operator-supplied sha256 as the only integrity control.
 
+**Access gateways upgrade too, after draining (A278).** A gateway-role agent started with
+`--self-upgrade` takes `agent.upgrade` (and its `agent.self_check`) like host agents and
+network relays. A gateway in a gateway pool drains first: while its upgrade is queued it
+takes no new sessions, and it is handed the upgrade only once the sessions it owns have
+ended — their recordings finalized and sealed — so an upgrade cuts no session. The
+campaign waits for a draining gateway, bounded by its sessions' deadlines, rather than
+scoring it silent.
+
 **Revocation checks for scanned certificates.** `agent_channel.probe_scanned_certificates`,
 or `TRSTCTL_AGENT_CHANNEL_PROBE_SCANNED_CERTIFICATES`, is off by default. When on, a
 relay's TLS discovery sweep returns the public bytes of each leaf it finds and of up to

@@ -184,7 +184,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          notification_delivery_receipts, notification_routing_policies,
 		          endpoint_verifications, connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
 		          outbox_reconciliation_conflicts, incident_executions, incident_fleet_reissuance_runs,
-		          pam_sessions, pam_targets, machine_sessions, nhi_access_review_campaigns, nhi_access_review_items,
+		          pam_sessions, pam_targets, pam_gateway_pools, machine_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
 		          privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
