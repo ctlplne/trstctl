@@ -12644,6 +12644,7 @@ PAMRecording = TypedDict(
         'legal_hold': bool,
         'legal_hold_reason': str,
         'manifest_sha256': str,
+        'pending_chunks': int,
         'scope': str,
         'sealed_at': str,
         'session_id': str,

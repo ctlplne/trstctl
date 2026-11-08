@@ -9088,6 +9088,7 @@ export interface PAMRecording {
   legal_hold: boolean;
   legal_hold_reason?: string;
   manifest_sha256?: string;
+  pending_chunks: number;
   scope?: string;
   sealed_at?: string;
   session_id: string;

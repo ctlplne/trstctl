@@ -9115,7 +9115,8 @@ func componentSchemas() map[string]*Schema {
 			"chunks": {Type: "integer"}, "bytes": {Type: "integer"}, "started_at": timestamp(), "last_chunk_at": timestamp(),
 			"sealed_at": timestamp(), "final_received": {Type: "boolean"}, "chain_head": str(), "manifest_sha256": str(),
 			"legal_hold": {Type: "boolean"}, "legal_hold_reason": str(), "deleted_at": timestamp(),
-		}, "session_id", "status", "chunks", "bytes", "started_at", "last_chunk_at", "final_received", "chain_head", "legal_hold"),
+			"pending_chunks": {Type: "integer", Description: "accepted chunks still waiting for the object store (A278); the recording seals once none wait"},
+		}, "session_id", "status", "chunks", "bytes", "started_at", "last_chunk_at", "final_received", "chain_head", "legal_hold", "pending_chunks"),
 		"PAMRecordingFrames": object(map[string]*Schema{
 			"session_id": uuid(), "status": {Type: "string", Enum: []string{"recording", "sealed", "deleted"}},
 			"next": {Type: "integer"}, "frames": {Type: "array", Items: &Schema{Type: "object"}},

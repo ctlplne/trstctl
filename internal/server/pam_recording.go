@@ -129,6 +129,11 @@ func (a *agentService) UploadSessionRecording(ctx context.Context, req *transpor
 		return &transport.UploadSessionRecordingResponse{Stopped: true}, nil
 	}
 	stopped, err := a.storeRecordingChunk(ctx, info.TenantID, agentID, job.Payload, req.Attempt, req.Seq, req.Chunk, req.Final)
+	if errors.Is(err, errRecordingBackpressure) {
+		// A278: the session has too much waiting for the object store; the
+		// gateway keeps the chunk and retries.
+		return nil, status.Error(codes.ResourceExhausted, err.Error())
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "store the recording chunk: %v", err)
 	}
@@ -166,60 +171,10 @@ func (s *pamService) storeRecordingChunk(ctx context.Context, tenantID, agentID 
 	case rec.Status == "sealed":
 		return true, nil
 	}
-	chunks, err := s.store.ListPAMRecordingChunks(ctx, tenantID, sessionID, 0, 0)
-	if err != nil {
+	// A278: the chunk is sealed and staged with its outbox entry; it is
+	// stored in the object store after this returns.
+	if err := s.acceptRecordingChunk(ctx, tenantID, sessionID, agentID, attempt, seq, chunk, final); err != nil {
 		return false, err
-	}
-	sum := crypto.SHA256Sum(chunk)
-	sumHex := hex.EncodeToString(sum)
-	next := 0
-	for _, c := range chunks {
-		if c.Attempt != attempt {
-			continue
-		}
-		if c.Seq == seq {
-			if c.SHA256 != sumHex {
-				return false, fmt.Errorf("chunk %d of attempt %d was already stored with other content", seq, attempt)
-			}
-			return false, nil // a retry of a stored chunk
-		}
-		if c.Seq >= next {
-			next = c.Seq + 1
-		}
-	}
-	if seq != next {
-		return false, fmt.Errorf("chunk %d of attempt %d is out of order (expected %d)", seq, attempt, next)
-	}
-	ord := len(chunks)
-	chain, err := recordingChain(rec.ChainHead, sum)
-	if err != nil {
-		return false, err
-	}
-	sealed, err := sealTenantValue(ctx, s.recordings.access, s.recordings.legacy, tenantID, chunk, recordingAAD(tenantID, sessionID, ord, sumHex))
-	if err != nil {
-		return false, err
-	}
-	view, err := objectstore.ForTenant(ctx, s.recordings.objects, tenantID)
-	if err != nil {
-		return false, err
-	}
-	rel := "recordings/" + sessionID + "/" + strconv.Itoa(ord) + "-" + strconv.Itoa(attempt) + "-" + strconv.Itoa(seq)
-	ref, err := view.Create(ctx, rel, bytes.NewReader(sealed), int64(len(sealed)), crypto.SHA256Sum(sealed))
-	if err != nil {
-		return false, err
-	}
-	stored := projections.PAMRecordingChunkStored{ID: sessionID, GatewayAgentID: agentID, Ord: ord, Attempt: attempt, Seq: seq,
-		ObjectRef: ref, SHA256: sumHex, SealedSHA256: hex.EncodeToString(crypto.SHA256Sum(sealed)), Chain: chain,
-		Size: len(chunk), Final: final, StoredAt: s.clock().UTC()}
-	eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte("pam-recording-chunk\x00"+tenantID+"\x00"+sessionID+"\x00"+
-		strconv.Itoa(attempt)+"\x00"+strconv.Itoa(seq))).String()
-	if err := s.appendDeterministic(ctx, tenantID, eventID, projections.EventPAMRecordingChunkStored, stored); err != nil {
-		return false, err
-	}
-	if final {
-		if err := s.sealRecording(ctx, tenantID, sessionID); err != nil {
-			return false, err
-		}
 	}
 	return false, nil
 }
@@ -229,6 +184,11 @@ func (s *pamService) storeRecordingChunk(ctx context.Context, tenantID, agentID 
 func (s *pamService) sealRecording(ctx context.Context, tenantID, sessionID string) error {
 	if s.recordings == nil {
 		return nil
+	}
+	// A278: chunks still waiting for the object store are part of the
+	// recording; the upload that stores the last of them seals it.
+	if staged, err := s.store.HasPAMRecordingUploads(ctx, tenantID, sessionID); err != nil || staged {
+		return err
 	}
 	rec, err := s.store.GetPAMRecording(ctx, tenantID, sessionID)
 	if err != nil || rec.Status == "sealed" {
@@ -444,9 +404,13 @@ func (s *Server) GetPAMRecording(ctx context.Context, tenantID, sessionID string
 		return api.PAMRecording{}, err
 	}
 
+	pending, err := s.store.CountPAMRecordingUploads(ctx, tenantID, sessionID)
+	if err != nil {
+		return api.PAMRecording{}, err
+	}
 	return api.PAMRecording{Scope: scope, SessionID: rec.SessionID, Status: rec.Status, Chunks: rec.Chunks, Bytes: rec.Bytes,
 		StartedAt: rec.StartedAt, LastChunkAt: rec.LastChunkAt, SealedAt: rec.SealedAt, FinalReceived: rec.FinalReceived,
-		ChainHead: rec.ChainHead, ManifestSHA256: rec.ManifestSHA256,
+		ChainHead: rec.ChainHead, ManifestSHA256: rec.ManifestSHA256, PendingChunks: pending,
 		LegalHold: rec.LegalHold, LegalHoldReason: rec.LegalHoldReason, DeletedAt: rec.DeletedAt}, nil
 }
 

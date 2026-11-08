@@ -118,6 +118,9 @@ type PAMRecording struct {
 	FinalReceived  bool       `json:"final_received"`
 	ChainHead      string     `json:"chain_head"`
 	ManifestSHA256 string     `json:"manifest_sha256,omitempty"`
+	// PendingChunks (A278) are accepted chunks still waiting for the object
+	// store; the recording is sealed only once none wait.
+	PendingChunks int `json:"pending_chunks"`
 	// LegalHold keeps the recording past retention; DeletedAt is when
 	// retention removed its objects.
 	LegalHold       bool       `json:"legal_hold"`

@@ -1294,6 +1294,27 @@ function ProblemDetail({ message, fallback }: { message: string; fallback: strin
   return message === fallback ? null : <p>{message}</p>;
 }
 
+// A278: a gateway session's recording, and what of it still waits for the
+// object store (uploads are staged and stored in order; the recording seals
+// once none wait).
+function PAMRecordingRow({ sessionID }: { sessionID: string }) {
+  const { t } = useTranslation();
+  const recording = useApiQuery(["pam-recording", sessionID], () => api.pamRecording(sessionID), { retry: false, live: { intervalMs: 10_000 } });
+  const rec = recording.data;
+  if (!rec) return null;
+  return (
+    <DetailRow term={t("admin.access.recording")}>
+      {rec.status === "sealed"
+        ? t("admin.access.recordingSealed", { chunks: rec.chunks })
+        : rec.status === "deleted"
+          ? t("admin.access.recordingDeleted")
+          : rec.pending_chunks > 0
+            ? t("admin.access.recordingPending", { chunks: rec.chunks, pending: rec.pending_chunks })
+            : t("admin.access.recordingOpen", { chunks: rec.chunks })}
+    </DetailRow>
+  );
+}
+
 function PAMDetailDialog({
   session,
   formatPolicy,
@@ -1383,6 +1404,7 @@ function PAMDetailDialog({
           <DetailRow term={t("admin.access.revocationFailedAt")}>{formatOptionalDate(current.revocation_failed_at, formatPolicy)}</DetailRow>
         ) : null}
         {current.ended_at ? <DetailRow term={t("admin.access.ended")}>{formatOptionalDate(current.ended_at, formatPolicy)}</DetailRow> : null}
+        {current.delivery === "gateway" ? <PAMRecordingRow sessionID={current.id} /> : null}
         {current.gateway_lost ? (
           <DetailRow term={t("admin.access.gatewayLost")}>
             {t("admin.access.gatewayLostBody", { until: formatOptionalDate(current.uncertain_until, formatPolicy) })}

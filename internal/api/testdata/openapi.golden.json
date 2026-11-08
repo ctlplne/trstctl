@@ -42463,6 +42463,10 @@
           "manifest_sha256": {
             "type": "string"
           },
+          "pending_chunks": {
+            "description": "accepted chunks still waiting for the object store (A278); the recording seals once none wait",
+            "type": "integer"
+          },
           "scope": {
             "description": "native_console_handoff means the signed recording covers only the gateway handoff; native console actions and cookies are outside capture.",
             "type": "string"
@@ -42497,7 +42501,8 @@
           "last_chunk_at",
           "final_received",
           "chain_head",
-          "legal_hold"
+          "legal_hold",
+          "pending_chunks"
         ],
         "type": "object"
       },

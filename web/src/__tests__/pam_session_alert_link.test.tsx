@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     pamSessions: vi.fn(),
     pamSession: vi.fn(),
     pamCommandActions: vi.fn(),
+    pamRecording: vi.fn(),
   },
 }));
 vi.mock("@/lib/bootstrapApi", async (original) => {
@@ -42,6 +43,7 @@ beforeEach(() => {
   apiMock.apiTokens.mockResolvedValue({ items: [] });
   apiMock.pamSessions.mockResolvedValue({ items: [] });
   apiMock.pamCommandActions.mockResolvedValue({ items: [] });
+  apiMock.pamRecording.mockRejectedValue(new Error("no recording"));
   apiMock.pamSession.mockResolvedValue({
     id: sessionID,
     target_type: "postgres",
@@ -118,4 +120,41 @@ it("says a session's pooled gateway was lost and how long it may still serve (A2
     within(dialog).getByText(/This session's gateway stopped reporting, so the session was revoked\. It may still serve connections until/),
   ).toBeInTheDocument();
   expect(within(dialog).queryByText("May still serve until")).not.toBeInTheDocument();
+});
+
+it("shows a gateway session's recording and what still waits for storage (A278)", async () => {
+  apiMock.pamRecording.mockResolvedValue({
+    session_id: sessionID,
+    status: "recording",
+    chunks: 12,
+    bytes: 4096,
+    started_at: "2026-11-07T20:00:00Z",
+    last_chunk_at: "2026-11-07T20:05:00Z",
+    final_received: false,
+    chain_head: "00",
+    legal_hold: false,
+    pending_chunks: 3,
+  });
+  mount(`/admin/access?session=${sessionID}`);
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText("Recording: 12 chunks stored, 3 waiting for storage")).toBeInTheDocument();
+  expect(apiMock.pamRecording).toHaveBeenCalledWith(sessionID);
+});
+
+it("says when a gateway session's recording is sealed (A278)", async () => {
+  apiMock.pamRecording.mockResolvedValue({
+    session_id: sessionID,
+    status: "sealed",
+    chunks: 15,
+    bytes: 4096,
+    started_at: "2026-11-07T20:00:00Z",
+    last_chunk_at: "2026-11-07T20:05:00Z",
+    final_received: true,
+    chain_head: "00",
+    legal_hold: false,
+    pending_chunks: 0,
+  });
+  mount(`/admin/access?session=${sessionID}`);
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText("Sealed: 15 chunks")).toBeInTheDocument();
 });

@@ -520,3 +520,20 @@ func TestPAMGatewayPoolsUseEventRecoveryAndSnapshotsA278(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without gateway pools", SnapshotFormatVersion)
 	}
 }
+
+// TestPAMRecordingUploadsUseIndependentPostgresRecoveryA278: staged recording
+// chunks are delivery state beside the outbox, not a read model. They are
+// erased with their tenant, but a rebuild or a snapshot restore must not
+// drop or overwrite a chunk still waiting for the object store.
+func TestPAMRecordingUploadsUseIndependentPostgresRecoveryA278(t *testing.T) {
+	const table = "pam_recording_uploads"
+	if !containsRecoveryTable(TenantScopedTables, table) {
+		t.Errorf("%s must be erased with its tenant", table)
+	}
+	if containsRecoveryTable(ReadModelTables, table) {
+		t.Errorf("%s is in ReadModelTables; a rebuild would drop chunks still waiting for the object store", table)
+	}
+	if containsRecoveryTable(snapshotTables, table) {
+		t.Errorf("%s is in snapshotTables; a snapshot restore must not overwrite staged recording chunks", table)
+	}
+}

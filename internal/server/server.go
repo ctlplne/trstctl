@@ -2337,6 +2337,18 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		}
 		return s.pam.failAccountDiscovery(ctx, m)
 	}
+	secretIntegrations.recordingUpload = func(ctx context.Context, m orchestrator.Message) error {
+		if s.pam == nil {
+			return api.ErrPAMUnavailable
+		}
+		return s.pam.deliverRecordingUpload(ctx, m)
+	}
+	secretIntegrations.recordingUploadFailure = func(ctx context.Context, m orchestrator.Message) error {
+		if s.pam == nil {
+			return api.ErrPAMUnavailable
+		}
+		return s.pam.failRecordingUpload(ctx, m)
+	}
 	s.secretIntegrations = secretIntegrations
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {

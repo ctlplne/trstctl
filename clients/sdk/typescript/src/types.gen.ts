@@ -23101,6 +23101,8 @@ export interface components {
             legal_hold: boolean;
             legal_hold_reason?: string;
             manifest_sha256?: string;
+            /** @description accepted chunks still waiting for the object store (A278); the recording seals once none wait */
+            pending_chunks: number;
             /** @description native_console_handoff means the signed recording covers only the gateway handoff; native console actions and cookies are outside capture. */
             scope?: string;
             /** Format: date-time */

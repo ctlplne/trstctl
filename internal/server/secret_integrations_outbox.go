@@ -35,8 +35,12 @@ import (
 // dispatcher fallback from acknowledging an unknown secret side effect as though
 // it had been delivered.
 type secretIntegrationOutboxDispatcher struct {
-	discoveryScan            func(context.Context, orchestrator.Message) error
-	discoveryScanFailure     func(context.Context, orchestrator.Message) error
+	discoveryScan        func(context.Context, orchestrator.Message) error
+	discoveryScanFailure func(context.Context, orchestrator.Message) error
+	// recordingUpload stores staged gateway recording chunks (A278);
+	// recordingUploadFailure keeps one whose attempts ran out.
+	recordingUpload          func(context.Context, orchestrator.Message) error
+	recordingUploadFailure   func(context.Context, orchestrator.Message) error
 	dynamicProviders         DynamicSecretProviderRegistry
 	awsHoneyAccounts         AWSHoneyAccountRegistry
 	fallbackDynamicProviders []dynsecret.Provider
@@ -191,6 +195,11 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 			return true, errors.New("server: PAM discovery worker unavailable")
 		}
 		return true, d.discoveryScan(ctx, m)
+	case m.Destination == pamRecordingStoreDestination:
+		if d.recordingUpload == nil {
+			return true, errors.New("server: PAM recording upload worker unavailable")
+		}
+		return true, d.recordingUpload(ctx, m)
 	case m.Destination == dynamicSecretIssueDestination:
 		err := d.issueDynamicSecret(ctx, m)
 		if d.afterDynamicSecretDelivery != nil {
@@ -239,6 +248,12 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 			return true, errors.New("server: PAM discovery failure worker unavailable")
 		}
 		return true, d.discoveryScanFailure(ctx, m)
+	}
+	if m.Destination == pamRecordingStoreDestination {
+		if d.recordingUploadFailure == nil {
+			return true, errors.New("server: PAM recording upload failure worker unavailable")
+		}
+		return true, d.recordingUploadFailure(ctx, m)
 	}
 	const terminal = "external delivery exhausted its retry budget"
 	switch {

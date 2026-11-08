@@ -186,6 +186,15 @@ func (t Tenant) Create(ctx context.Context, rel string, body io.ReadSeeker, size
 	return name, t.store.Create(ctx, name, body, size, sha256)
 }
 
+// Head describes rel inside the tenant's prefix (see Store.Head).
+func (t Tenant) Head(ctx context.Context, rel string) (Object, error) {
+	name, err := t.Name(rel)
+	if err != nil {
+		return Object{}, err
+	}
+	return t.store.Head(ctx, name)
+}
+
 // Get reads rel inside the tenant's prefix (see Store.Get).
 func (t Tenant) Get(ctx context.Context, rel string, w io.Writer, limit int64) (Object, error) {
 	name, err := t.Name(rel)

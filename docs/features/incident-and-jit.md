@@ -831,7 +831,16 @@ manifest the audit key signs. Read a recording's index with
 or watch a live session (`trstctl access sessions watch <id>`); with `recordings:export`,
 export it with its signed manifest and place a legal hold. With `access:terminate`, end a
 live session (`trstctl access sessions terminate <id> -f reason.json`); until the gateway
-reports the end, the session reads `uncertain_until` its deadline. `pam.recording_retention`
+reports the end, the session reads `uncertain_until` its deadline. Recording uploads go
+through the outbox (A278): the control plane seals and stages each chunk with its outbox
+entry in one transaction and answers the gateway at once, then stores the chunks in order —
+so a slow or stalled object store never holds the agent channel a gateway heartbeats and
+claims on. Staged bytes are bounded (`pam.recording_staging_bytes`, 16 MiB a session and
+sixteen times that a tenant); past the bound an upload is refused as retryable, the gateway
+keeps the chunk in its spool and retries, and only that session's traffic waits. Nothing is
+dropped: a staged chunk is retried until it is stored, the recording seals only once no chunk
+waits, and `GET /api/v1/access/sessions/{id}/recording` reports `pending_chunks` (the console's
+session detail shows "N waiting for storage"). `pam.recording_retention`
 deletes sealed recordings unless a legal hold keeps them. The design, its failure modes and
 its threat model are in [the access gateway design](../design/access-gateway.md).
 

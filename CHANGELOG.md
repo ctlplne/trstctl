@@ -2,6 +2,14 @@
 
 ### Added
 
+- Recording uploads through the outbox with backpressure (A278 part 3): a gateway's chunk is sealed and staged with its
+  outbox entry (`pam.recording.store`) in one transaction and the upload returns at once; a bounded in-process uploader
+  and the outbox worker store chunks in order (an earlier staged chunk defers a later one without spending an attempt;
+  an unanswering store defers before any write; exhausted attempts defer instead of dead-lettering); the recording
+  seals once none wait. Past `pam.recording_staging_bytes` (default 16 MiB a session, sixteen times that a tenant) an
+  upload is refused with RESOURCE_EXHAUSTED and the gateway retries. Migration 0434 (`pam_recording_uploads`, delivery
+  state: erased with its tenant, not rebuilt or snapshotted). The recording index gains `pending_chunks`; console: the
+  session detail's **Recording** row.
 - Drained gateway upgrades (A278 part 2): `agent.upgrade` and `agent.self_check` admit the gateway role, so access
   gateways started with `--self-upgrade` take staged upgrades. A pooled gateway with an upgrade queued reads
   `upgrade_pending` and draining (no new sessions); the agent channel withholds its upgrade job while it owns live

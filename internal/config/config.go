@@ -1904,6 +1904,11 @@ type PAM struct {
 	// gateways and the sessions it owned end. Empty is two minutes (four
 	// missed 30-second heartbeats); at least 30 seconds.
 	GatewayLostAfter string `json:"gateway_lost_after,omitempty"`
+	// RecordingStagingBytes (A278) bounds the sealed bytes one session's
+	// recording may have waiting for the object store before uploads are
+	// refused as retryable; a tenant may stage sixteen times this. Zero is
+	// 16 MiB; at least 1 MiB.
+	RecordingStagingBytes int64 `json:"recording_staging_bytes,omitempty"`
 	// CertificationInterval (A276) starts a certification campaign of
 	// brokered accounts and approver lists this often; empty never.
 	// CertificationReviewer is the subject it is assigned to.
@@ -5171,6 +5176,9 @@ func validatePAM(p PAM) []error {
 	_ = parsePositive("recording_retention", p.RecordingRetention)
 	_ = parsePositive("signin_retention", p.SignInRetention)
 	_ = parsePositive("unused_after", p.UnusedAfter)
+	if p.RecordingStagingBytes != 0 && p.RecordingStagingBytes < 1<<20 {
+		errs = append(errs, errors.New("pam.recording_staging_bytes must be 0 (16 MiB) or at least 1 MiB"))
+	}
 	if lost := parsePositive("gateway_lost_after", p.GatewayLostAfter); lost > 0 && lost < 30*time.Second {
 		errs = append(errs, errors.New("pam.gateway_lost_after must be at least 30s: a gateway heartbeats every 30 seconds"))
 	}

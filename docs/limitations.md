@@ -9136,9 +9136,9 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
-## Gateway high availability (A278) — parts 1–2: pools, failover and drained upgrades
+## Gateway high availability (A278) — parts 1–3: pools, failover, drained upgrades and upload backpressure
 
-Status: in progress. Gateway pools share sessions: a target bound to any member is served by
+Status: built locally. Gateway pools share sessions: a target bound to any member is served by
 the healthy, undrained member with the fewest live sessions when a session starts; that
 member owns the session (its job is claimable by it alone). A member silent past
 `pam.gateway_lost_after` is lost: new sessions go to the others and its live sessions are
@@ -9157,8 +9157,21 @@ while the session lives, and the campaign keeps waiting past its verify grace; t
 ends, its recording is sealed with its final chunk, verifies and is masked; only then does A
 claim the upgrade) and the console test.
 
+Part 3: recording uploads go through the outbox. A chunk is sealed and staged with its outbox
+entry in one transaction and the upload returns at once; chunks are stored in order and the
+recording seals once none wait; past `pam.recording_staging_bytes` an upload is refused as
+retryable and the gateway retries. Proof: `TestServedStalledObjectStoreAppliesBackpressureA278`
+(a recorded PostgreSQL session while the object store holds every chunk write: uploads are
+pushed back, staging stays within its bound, the gateway's heartbeat answers at once and the
+recording does not seal; once the store answers, every chunk is stored, the ended session's
+recording seals with its final chunk and verifies, and all 160 of its statements are in it),
+the A255 recording proof on the staged path, and the console test.
+
+A278's Done-when is met locally: with three gateways, stopping one moves new sessions to the
+others and marks its live sessions ended; a drained upgrade loses no recording; a stalled
+object store applies backpressure with no data loss.
+
 What comes next:
-- Recordings upload through the outbox with backpressure (part 3).
 - A278 at scale on the x86 machine, inside A266's harness (Track B).
 
 ## Approvals where people work, and re-authentication (A277) — parts 1–2: Slack Socket Mode and fresh sign-in

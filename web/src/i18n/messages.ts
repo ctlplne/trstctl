@@ -861,6 +861,14 @@ export const messages = {
     defaultMessage: "This session's gateway stopped reporting, so the session was revoked. It may still serve connections until {until}.",
     description: "Session detail: gateway lost explanation (A278).",
   },
+  "admin.access.recording": { defaultMessage: "Recording", description: "Session detail: its gateway recording (A278)." },
+  "admin.access.recordingSealed": { defaultMessage: "Sealed: {chunks} chunks", description: "Session detail: recording sealed (A278)." },
+  "admin.access.recordingDeleted": { defaultMessage: "Deleted by retention", description: "Session detail: recording removed by retention (A278)." },
+  "admin.access.recordingOpen": { defaultMessage: "Recording: {chunks} chunks stored", description: "Session detail: recording in progress (A278)." },
+  "admin.access.recordingPending": {
+    defaultMessage: "Recording: {chunks} chunks stored, {pending} waiting for storage",
+    description: "Session detail: chunks accepted but still waiting for the object store (A278).",
+  },
   "admin.access.uncertainUntil": { defaultMessage: "May still serve until", description: "Session detail: A255 bounded uncertainty (A278)." },
   "auth.reauth.required": {
     defaultMessage: "This needs a fresh sign-in: sign in again (within the last {minutes} min), then try again.",

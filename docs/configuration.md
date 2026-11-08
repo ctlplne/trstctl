@@ -2458,7 +2458,9 @@ after it was sealed unless a legal hold keeps it; empty keeps recordings (A255).
 no session or check-out for that long (A276). `pam.gateway_lost_after` (a duration of at
 least `30s`; empty is `2m`) is how long a pooled gateway may go without a heartbeat before
 it is lost: new sessions go to the pool's other gateways and the sessions it owned are
-revoked (A278). `pam.certification_interval` (a positive
+revoked (A278). `pam.recording_staging_bytes` (bytes; `0` is 16 MiB, at least 1 MiB) bounds
+how much of one session's recording may wait for the object store — a tenant may stage sixteen
+times this — before a gateway's uploads are refused as retryable (A278). `pam.certification_interval` (a positive
 duration; empty never) starts a certification campaign of brokered accounts and approver
 lists that often, assigned to `pam.certification_reviewer` (a subject) when it is set.
 `pam.signin_retention` (a positive duration; empty is `2160h`, 90 days) is how long the

@@ -515,6 +515,7 @@ import type {
   PAMCommandPolicy,
   PAMRequestProgress,
   PAMRecordingFrames,
+  PAMRecording,
   PAMRecordingVerification,
   PAMSession,
   PAMSessionActivationRequest,
@@ -2726,6 +2727,7 @@ export interface Api {
     signal?: AbortSignal;
   }): Promise<PAMRecordingSearchResult>;
   pamCommandActions(id: string, options?: { cursor?: string; signal?: AbortSignal }): Promise<PAMCommandActionList>;
+  pamRecording(id: string): Promise<PAMRecording>;
   pamRecordingVerify(id: string): Promise<PAMRecordingVerification>;
   pamRecordingFrames(id: string, from: number): Promise<PAMRecordingFrames>;
   pamSession(id: string): Promise<PAMSession>;
@@ -3812,6 +3814,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
       `/api/v1/access/sessions/${encodeURIComponent(id)}/actions?limit=50${options?.cursor ? `&cursor=${encodeURIComponent(options.cursor)}` : ""}`,
       { signal: options?.signal },
     ),
+  pamRecording: (id) => req<PAMRecording>(`/api/v1/access/sessions/${encodeURIComponent(id)}/recording`),
   pamRecordingVerify: (id) => req<PAMRecordingVerification>(`/api/v1/access/sessions/${encodeURIComponent(id)}/recording/verify`),
   pamRecordingFrames: (id, from) => req<PAMRecordingFrames>(`/api/v1/access/sessions/${encodeURIComponent(id)}/recording/watch?from=${from}&limit=1000`),
   pamSession: (id) => req<PAMSession>(`/api/v1/access/sessions/${encodeURIComponent(id)}`),

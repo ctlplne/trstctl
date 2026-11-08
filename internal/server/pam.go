@@ -143,6 +143,10 @@ type PAMConfig struct {
 	// GatewayLostAfter is how long a pooled gateway may go without a
 	// heartbeat before it is lost (A278); zero is two minutes.
 	GatewayLostAfter time.Duration
+	// RecordingStagingBytes bounds the sealed bytes one session's recording
+	// may have waiting for the object store (A278); a tenant may stage
+	// sixteen times this. Zero is 16 MiB.
+	RecordingStagingBytes int64
 	// CertificationInterval starts a certification campaign of brokered
 	// accounts and approver lists this often (A276); zero never.
 	// CertificationReviewer is the subject such a campaign is assigned to;
@@ -232,6 +236,10 @@ type pamService struct {
 	defaultTTL                          time.Duration
 	maxTTL                              time.Duration
 	expiryInterval                      time.Duration
+	// recordingStagingBytes and uploader (A278): staged recording bound and the
+	// eager per-process uploader.
+	recordingStagingBytes int64
+	uploader              *pamRecordingUploader
 	// gatewayLostAfter (A278): a pooled gateway silent this long is lost.
 	gatewayLostAfter  time.Duration
 	clock             func() time.Time
@@ -418,7 +426,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
 		browser:                             newPAMBrowser(),
-		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), gatewayLostAfter: gatewayLostAfterOrDefault(cfg.GatewayLostAfter), certificationInterval: cfg.CertificationInterval, certificationReviewer: cfg.CertificationReviewer, auditSigner: d.AuditSigner, healthInterval: healthInterval, health: health,
+		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), gatewayLostAfter: gatewayLostAfterOrDefault(cfg.GatewayLostAfter), recordingStagingBytes: cfg.RecordingStagingBytes, uploader: newPAMRecordingUploader(), certificationInterval: cfg.CertificationInterval, certificationReviewer: cfg.CertificationReviewer, auditSigner: d.AuditSigner, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
@@ -1861,6 +1869,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.GatewayLostAfter)); err == nil {
 		out.GatewayLostAfter = d
+	}
+	if c.RecordingStagingBytes > 0 {
+		out.RecordingStagingBytes = c.RecordingStagingBytes
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.CertificationInterval)); err == nil {
 		out.CertificationInterval = d
