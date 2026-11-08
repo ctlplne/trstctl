@@ -27,6 +27,8 @@ const (
 	MeasurementArtifact     = perfcontract.MeasurementArtifact
 	LiveMeasurementArtifact = perfcontract.LiveMeasurementArtifact
 	SpineBurstArtifact      = perfcontract.SpineBurstArtifact
+	// ScaleMeasurementArtifact is the enterprise-scale harness's receipt (A266).
+	ScaleMeasurementArtifact = perfcontract.ScaleMeasurementArtifact
 )
 
 func HotPaths() []HotPathSLO {

@@ -209,7 +209,9 @@ func liveLoadPhases(samples int) []LoadPhase {
 	}
 }
 
-func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
+// startLiveEvalStack boots the eval stack; options adjust its server
+// dependencies (the scale harness sets the renewal scheduler's horizon).
+func startLiveEvalStack(ctx context.Context, options ...func(*server.Deps)) (*liveEvalStack, error) {
 	dir, err := os.MkdirTemp("", "trstctl-perf-live-")
 	if err != nil {
 		return nil, err
@@ -289,7 +291,7 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 		return nil, err
 	}
 
-	stack.srv, err = server.Build(life, server.Deps{
+	deps := server.Deps{
 		Store:             stack.store,
 		Log:               stack.log,
 		Signer:            stack.signer,
@@ -299,7 +301,11 @@ func startLiveEvalStack(ctx context.Context) (*liveEvalStack, error) {
 		EnableSecretsAPI:  true,
 		Protocols:         cfg.Protocols,
 		Logger:            logger,
-	})
+	}
+	for _, option := range options {
+		option(&deps)
+	}
+	stack.srv, err = server.Build(life, deps)
 	if err != nil {
 		return nil, err
 	}
@@ -406,6 +412,8 @@ func seedLiveToken(ctx context.Context, st *store.Store) ([]byte, error) {
 			string(authz.CertsRead), string(authz.CertsWrite), string(authz.CertsIssue),
 			string(authz.GraphRead), string(authz.RiskRead),
 			string(authz.SecretsRead), string(authz.SecretsWrite),
+			string(authz.ConnectorsRead), string(authz.ConnectorsWrite),
+			string(authz.ProfilesRead), string(authz.ProfilesWrite),
 		},
 	}); err != nil {
 		secret.Wipe(raw)

@@ -537,6 +537,10 @@ spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; de
 	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile "spine-burst-$$profile"; \
 	echo ">> spine-burst: trend report at $$report"
 
+.PHONY: perf-scale
+perf-scale: ## Run the enterprise-scale harness once (A266): switching-kit inventory, a fleet on ACM targets, a renewal storm (SCALE_INVENTORY, SCALE_RENEWALS, SCALE_CLIENTS, SCALE_OUT)
+	scripts/perf/run-scale.sh
+
 .PHONY: lint lint-partial
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools (golangci-lint, actionlint, node for the web console checks) are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2849 annotated sites across 31 rules. Each row is
+2852 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (607 sites)
+### G101 — CWE-798 Use of hardcoded credentials (608 sites)
 
 | Location | Reason |
 |---|---|
@@ -363,6 +363,7 @@ not this file.
 | `internal/orchestrator/outbox_internal_test.go:1300` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/perf/capacity.go:11` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/perf/scale.go:63` | a fabricated credential only the in-process ACM double accepts (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/credential_usage.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -996,7 +997,7 @@ not this file.
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/perf/live.go:927` | page size is positive and small (CWE-190) |
+| `internal/perf/live.go:935` | page size is positive and small (CWE-190) |
 | `internal/pqcmigration/cutover.go:198` | bounded above (CWE-190) |
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
@@ -1584,8 +1585,8 @@ not this file.
 | `internal/objectstore/minio_lock_test.go:48` | test removes the container it started (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:49` | test inspects the container it started (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:64` | test reads the container it started (CWE-78) |
-| `internal/perf/live.go:807` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
-| `internal/perf/live.go:971` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:815` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/perf/live.go:979` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/pluginhost/raw_api_boundary_test.go:44` | fixed go build command, literal tag table, owned temp output; no shell or user arguments (CWE-78). |
 | `internal/pqc/native_probe_test.go:74` | pinned local stock executable and owned loopback fixture. |
 | `internal/pqc/prepared_leaf_openssl_test.go:63` | LookPath-resolved OpenSSL, fixed verbs, loopback and TempDir artifacts. |
@@ -1836,7 +1837,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (56 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (57 sites)
 
 | Location | Reason |
 |---|---|
@@ -1889,6 +1890,7 @@ not this file.
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:137` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/perfgate/main.go:52` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `scripts/perf/cmd/scalegate/main.go:52` | developer tool writing a run receipt; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakcapture/main.go:82` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakgate/main.go:120` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:170` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
@@ -2667,7 +2669,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (127 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (128 sites)
 
 | Location | Reason |
 |---|---|
@@ -2783,6 +2785,7 @@ not this file.
 | `scripts/perf/cmd/capacitycalibrate/main.go:140` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/capacitycalibrate/main_test.go:183` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `scripts/perf/cmd/perfgate/main.go:55` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `scripts/perf/cmd/scalegate/main.go:55` | developer tool writing a run receipt; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakcapture/main.go:85` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakgate/main.go:123` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:173` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |

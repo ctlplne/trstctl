@@ -154,6 +154,50 @@ unless `SPINE_BURST_OUT` overrides the path.
 | PERF-SLO-007 | `signer.rpc` | `trustctl-signer` gRPC Sign/GenerateKey request path | SIGNING | `BenchmarkSignerRPC` | 25 / 75 / 150 ms | 100/sec | 0.10% | queue <= 70%, lag = 0 events | CAP-SMALL |
 | PERF-SLO-008 | `spine.projection_replay` | event replay and projection decode/apply loop | SPINE/PROJECTIONS | `BenchmarkProjectionReplay` | 100 / 300 / 750 ms | 500 events/sec | 0.10% | queue <= 80%, lag <= 50 events | CAP-LARGE |
 
+## Enterprise-scale harness
+
+The enterprise-scale harness (A266) measures trstctl at estate size through its own API, on the same local eval stack
+the live-load gate boots (embedded PostgreSQL, embedded JetStream, the signer as a child process):
+
+```sh
+make perf-scale
+scripts/perf/run-scale.sh --inventory 100000 --renewals 2000 --clients 16 --out dist/scale/receipt.json
+```
+
+One run has three phases:
+
+1. **Inventory.** `--inventory` certificates, described the way another product's export describes them and generated
+   from `--seed` so a rerun imports the same rows, go through the switching kit: each export of at most `--chunk` rows
+   (default 25,000) is previewed, applied against the preview's digest, and applied by the leader's bounded batches,
+   each row becoming a certificate with its owner and application group.
+2. **Fleet.** `--renewals` managed identities under a certificate profile with a short validity ceiling, each bound to
+   its own AWS Certificate Manager target (an in-process ACM double that checks every request's SigV4 signature), are
+   requested by `--clients` concurrent API clients, issued by the built-in CA and deployed to their targets.
+3. **Renewal storm.** Once the last fleet certificate enters its renewal window, the last third of its life, the
+   lifecycle scheduler's sweep finds the whole fleet due at once on the real clock, and the runtime's outbox dispatcher
+   issues and deploys every successor while readers page the inventory. The wait before the storm, and the time the storm has before the
+   first successor's own window opens, are both the storm budget: 200 ms a renewal, at least three minutes
+   (`--fleet-lifetime` sets the fleet's full signed lifetime instead).
+
+The JSON receipt records each phase's throughput and request latency, the storm's drain time, peak outbox depth and
+read latency, the control plane's, signer's, PostgreSQL's and JetStream's resources, and every correctness gap; the run
+exits non-zero on any of them: an import not completed with every row applied, a fleet identity not issued, deployed
+and delivered exactly once, a fleet identity not renewed or renewed twice, a successor its target does not hold, or a
+dead letter. CI runs the harness at CI scale on every push (`a266 scale smoke`, 3,000 certificates and a 40-renewal
+storm) and keeps the receipt as a workflow artifact.
+
+The committed receipt is `scripts/perf/artifacts/scale-local-baseline.json`: one Mac (arm64, 10 CPUs, embedded
+datastores), 100,000 certificates and a 2,000-renewal storm with 16 clients. The four 25,000-row exports were previewed
+and applied in 6.0 s and the leader recorded them at 164.5 certificates a second (608 s). The fleet's 2,000 identities
+were requested in 6.2 s (p95 69 ms) and issued and delivered to their ACM targets in 161 s (12.4 a second). The storm
+renewed and delivered all 2,000 in 393 s (5.1 a second), none twice and with no dead letter, while eight readers paged
+the inventory 166,706 times at p95 27 ms. The control plane peaked at 404 MiB and the database at 220 MiB.
+
+A tenant's renewals are delivered one at a time: issuance and renewal share one outbox lane per tenant, and the outbox
+runs at most one entry per lane and two per tenant, so a storm's rate is one over a renewal's time (about 0.2 s here).
+What comes next is a lane per identity with configurable caps, so a tenant's storm can use the workers it is given, and
+the published million-certificate run across several hosts on external PostgreSQL and JetStream.
+
 ## Gates
 
 The fast local gate:
@@ -175,6 +219,12 @@ The event-spine burst gate:
 make spine-burst
 ```
 
+The enterprise-scale harness:
+
+```sh
+make perf-scale
+```
+
 The Go benchmark denominator (the `Benchmark*` targets named in the SLO table
 above), and the broader benchmark discovery command used for release review:
 
@@ -186,7 +236,8 @@ CI runs the smoke profile and uploads the JSON receipt as a workflow artifact.
 Release review compares the smoke receipt, the served live-load receipt, the
 capacity calibration receipt at
 `scripts/perf/artifacts/capacity-measurement-baseline.json`, the spine-burst
-receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`, and the capacity
+receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`, the enterprise-scale
+receipt at `scripts/perf/artifacts/scale-local-baseline.json`, and the capacity
 model in `docs/performance-capacity.md`.
 
 CAP-SCALE-01 is also served as operator-facing posture: `GET

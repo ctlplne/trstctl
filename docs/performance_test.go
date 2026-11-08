@@ -648,3 +648,74 @@ func formatUSD(n int) string {
 	s := formatInt(n)
 	return "$" + s
 }
+
+// A266: the enterprise-scale harness is executable evidence. The docs say how
+// to run it and where its receipt is, the Makefile and CI run it, the served
+// scale plan's gate reproduces the committed receipt, and that receipt is a
+// passing run at estate size in which every imported row became a
+// certificate and every fleet identity was renewed once and its successor
+// delivered.
+func TestEnterpriseScaleHarnessIsExecutableEvidence(t *testing.T) {
+	doc := read(t, "performance.md")
+	for _, want := range []string{"make perf-scale", "scripts/perf/run-scale.sh", perf.ScaleMeasurementArtifact, "--fleet-lifetime",
+		"switching kit", "Renewal storm", "a266 scale smoke"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("performance.md missing enterprise-scale evidence %q", want)
+		}
+	}
+	if mk := read(t, "../Makefile"); !strings.Contains(mk, "perf-scale:") || !strings.Contains(mk, "scripts/perf/run-scale.sh") {
+		t.Error("Makefile missing the perf-scale target")
+	}
+	script := read(t, "../scripts/perf/run-scale.sh")
+	for _, want := range []string{"./scripts/perf/cmd/scalegate", "--inventory", "--renewals", "--chunk", "--fleet-lifetime", "--timeout", "--seed"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("run-scale.sh missing %q", want)
+		}
+	}
+	if ci := read(t, "../.github/workflows/ci.yml"); !strings.Contains(ci, "name: a266 scale smoke") || !strings.Contains(ci, "run: scripts/perf/run-scale.sh --inventory") {
+		t.Error("ci.yml missing the a266 scale smoke job")
+	}
+
+	raw, err := os.ReadFile("../" + perf.ScaleMeasurementArtifact)
+	if err != nil {
+		t.Fatalf("read the committed scale receipt: %v", err)
+	}
+	var receipt perf.ScaleReport
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatalf("decode the committed scale receipt: %v", err)
+	}
+	cfg := receipt.Config
+	if receipt.Schema != "trstctl.scale.v1" || !receipt.OK || len(receipt.Failures) != 0 {
+		t.Fatalf("scale receipt %s ok=%t failures=%v, want a passing trstctl.scale.v1 run", receipt.Schema, receipt.OK, receipt.Failures)
+	}
+	if cfg.Inventory < 100_000 || cfg.Renewals < 1_000 {
+		t.Fatalf("scale receipt sized %d certificates and %d renewals; the baseline is an estate-size run, not a smoke", cfg.Inventory, cfg.Renewals)
+	}
+	if inv := receipt.Inventory; inv.RowsTotal != cfg.Inventory || inv.RowsApplied != cfg.Inventory || inv.Certificates < cfg.Inventory {
+		t.Fatalf("scale receipt inventory = %+v, want all %d rows applied as certificates", inv, cfg.Inventory)
+	}
+	if st := receipt.Storm; st.Due != cfg.Renewals || st.Renewed != cfg.Renewals || st.Delivered != cfg.Renewals ||
+		st.NotRenewed != 0 || st.RenewedTwice != 0 || st.DeadLetters != 0 {
+		t.Fatalf("scale receipt storm = %+v, want all %d renewed once and delivered", st, cfg.Renewals)
+	}
+	phases := map[string]bool{}
+	for _, p := range receipt.Phases {
+		phases[p.Name] = true
+	}
+	for _, want := range []string{"inventory.import", "inventory.record", "fleet.request", "fleet.issue_deploy", "fleet.age", "storm.renew"} {
+		if !phases[want] {
+			t.Errorf("scale receipt missing phase %s", want)
+		}
+	}
+	var gate *perf.ScaleReleaseGate
+	for _, g := range perf.ScaleOrchestration("").ReleaseGates {
+		if g.ID == "enterprise-scale" {
+			gate = &g
+		}
+	}
+	reproduce := fmt.Sprintf("scripts/perf/run-scale.sh --inventory %d --renewals %d --clients %d --out %s", cfg.Inventory, cfg.Renewals,
+		cfg.Clients, perf.ScaleMeasurementArtifact)
+	if gate == nil || !gate.Required || gate.Artifact != perf.ScaleMeasurementArtifact || gate.Command != reproduce {
+		t.Fatalf("served enterprise-scale gate = %+v, want required %q", gate, reproduce)
+	}
+}

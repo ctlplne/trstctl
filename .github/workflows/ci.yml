@@ -975,9 +975,49 @@ jobs:
           make sessionobserve-bpf
           git diff --exit-code -- internal/agent/sessionobserve/bpf/
 
+  a266-scale-smoke:
+    name: a266 scale smoke (inventory and renewal storm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+      # The harness at CI scale: an inventory imported through the switching
+      # kit in two exports, a fleet issued and deployed to ACM targets, and the
+      # renewal storm once the fleet's renewal windows open (about 3 minutes).
+      - name: Scale harness smoke (A266)
+        run: scripts/perf/run-scale.sh --inventory 3000 --chunk 2000 --renewals 40 --clients 4 --timeout 25m --out "${RUNNER_TEMP}/scale-smoke.json"
+      - name: Upload the scale receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: a266-scale-smoke
+          path: ${{ runner.temp }}/scale-smoke.json
+          if-no-files-found: warn
+          retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer, a266-scale-smoke]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

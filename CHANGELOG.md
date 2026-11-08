@@ -2,6 +2,17 @@
 
 ### Added
 
+- Enterprise-scale harness (A266; build list section 35, item 4): `make perf-scale` and `scripts/perf/run-scale.sh`
+  (`--inventory`, `--renewals`, `--clients`, `--chunk`, `--seed`, `--fleet-lifetime`, `--timeout`, `--out`) boot the
+  local eval stack and drive it through the API: an inventory generated from the seed and imported through the
+  switching kit, a fleet of managed identities under a short-lived profile, each deployed to its own ACM target, and a
+  renewal storm the scheduler finds on the real clock once the fleet's renewal windows open, delivered by the
+  runtime's dispatcher. The JSON receipt (`trstctl.scale.v1`) records each phase's throughput and latency, the storm's
+  drain time, outbox depth and read latency, component resources and every correctness gap, and the run fails on any
+  gap. The served scale plan (`GET /api/v1/scale/orchestration`) names it as the `enterprise-scale` release gate with
+  its receipt `scripts/perf/artifacts/scale-local-baseline.json`: one Mac, 100,000 certificates recorded at 164 a
+  second and a 2,000-renewal storm delivered in 393 s. CI: `a266-scale-smoke` (3,000 certificates, a 40-renewal
+  storm).
 - Posture rollout across hosts proven (A176): a lab test runs the Envoy PQC fixture twice, each copy a container host
   with its own enrolled agent, and one migration run rolls the TLS posture out to both — each job pinned to its own
   host's agent, each readback signed by it — and back.

@@ -214,6 +214,10 @@ const (
 	LiveMeasurementArtifact     = "scripts/perf/artifacts/live-load-baseline.json"
 	CapacityMeasurementArtifact = "scripts/perf/artifacts/capacity-measurement-baseline.json"
 	SpineBurstArtifact          = "scripts/perf/artifacts/spine-burst-cap-small.json"
+	// ScaleMeasurementArtifact is the enterprise-scale harness's receipt (A266):
+	// an inventory imported through the switching kit, a fleet issued and
+	// deployed, and a renewal storm, on one host with embedded datastores.
+	ScaleMeasurementArtifact = "scripts/perf/artifacts/scale-local-baseline.json"
 )
 
 var hotPathSLOs = []HotPathSLO{
@@ -369,6 +373,7 @@ var scaleReleaseGates = []ScaleReleaseGate{
 	{ID: "perf-capacity", Command: "scripts/perf/run-capacity-calibration.sh --out scripts/perf/artifacts/capacity-measurement-baseline.json", Artifact: CapacityMeasurementArtifact, Required: true},
 	{ID: "spine-burst", Command: "scripts/perf/run-spine-burst.sh --profile cap-small --out scripts/perf/artifacts/spine-burst-cap-small.json && scripts/perf/soak.sh --in scripts/perf/artifacts/spine-burst-cap-small.json", Artifact: SpineBurstArtifact, Required: true},
 	{ID: "soak", Command: "scripts/perf/soak.sh --in <series.json> --out <report.json>", Artifact: "soak-trend.json", Required: true},
+	{ID: "enterprise-scale", Command: "scripts/perf/run-scale.sh --inventory 100000 --renewals 2000 --clients 16 --out " + ScaleMeasurementArtifact, Artifact: ScaleMeasurementArtifact, Required: true},
 	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 }
 
@@ -468,7 +473,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 		ReleaseGates:            append([]ScaleReleaseGate(nil), scaleReleaseGates...),
 		EstimatedDailyEventLoad: large.EventsPerDay,
 		EstimatedMonthlyCostUSD: large.EstimatedMonthlyCostUSD,
-		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact, SpineBurstArtifact},
+		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact, SpineBurstArtifact, ScaleMeasurementArtifact},
 		UnitEconomics: ScaleUnitEconomics{
 			EstimatedCostPerCredentialUSD: large.EstimatedCostPerCredential,
 			PostgresGiB30Day:              large.PostgresGiB30Day,
@@ -506,6 +511,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"customer infrastructure costs and exact datastore SKU are operator-specific",
 			"external relying-party adoption of CRL shard and delta URLs depends on customer CDP/AIA rollout",
 			"remote GitHub-hosted matrix behavior is not proven by this local served endpoint",
+			"the enterprise-scale receipt is one host with embedded PostgreSQL and JetStream; the published million-certificate run across several hosts on external datastores is what comes next",
 		},
 		EvidenceRefs: []string{
 			"internal/perf/contract.go",
@@ -515,6 +521,9 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"scripts/perf/artifacts/capacity-measurement-baseline.json",
 			"scripts/perf/artifacts/live-load-baseline.json",
 			"scripts/perf/artifacts/spine-burst-cap-small.json",
+			"internal/perf/scale.go",
+			"scripts/perf/run-scale.sh",
+			ScaleMeasurementArtifact,
 		},
 	}
 }

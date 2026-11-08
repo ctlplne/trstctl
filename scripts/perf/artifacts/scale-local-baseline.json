@@ -1,0 +1,193 @@
+{
+  "schema": "trstctl.scale.v1",
+  "stack": "eval-loopback-actual-listener-child-signer-uds",
+  "config": {
+    "inventory": 100000,
+    "renewals": 2000,
+    "clients": 16,
+    "chunk": 25000,
+    "seed": 266,
+    "fleet_lifetime_seconds": 1050
+  },
+  "host": {
+    "os": "darwin",
+    "arch": "arm64",
+    "cpus": 10,
+    "go_version": "go1.26.10"
+  },
+  "started_at": "2026-11-08T09:06:57.414152Z",
+  "finished_at": "2026-11-08T09:33:25.744272Z",
+  "phases": [
+    {
+      "name": "inventory.import",
+      "items": 100000,
+      "seconds": 5.951118666,
+      "per_second": 16803.563432757805,
+      "latency_ms": {
+        "count": 4,
+        "p50": 1083.321,
+        "p95": 1088.502,
+        "p99": 1088.502,
+        "max": 1088.502
+      },
+      "errors": 0
+    },
+    {
+      "name": "inventory.record",
+      "items": 100000,
+      "seconds": 607.972662,
+      "per_second": 164.48107990750412,
+      "errors": 0
+    },
+    {
+      "name": "fleet.request",
+      "items": 2000,
+      "seconds": 6.202883292,
+      "per_second": 322.43069970048373,
+      "latency_ms": {
+        "count": 2000,
+        "p50": 47.991,
+        "p95": 69.059,
+        "p99": 97.256,
+        "max": 121.616
+      },
+      "errors": 0
+    },
+    {
+      "name": "fleet.issue_deploy",
+      "items": 2000,
+      "seconds": 160.762704375,
+      "per_second": 12.440696415100973,
+      "errors": 0
+    },
+    {
+      "name": "fleet.age",
+      "items": 2000,
+      "seconds": 400.17403525,
+      "per_second": 4.997825505471748,
+      "errors": 0
+    },
+    {
+      "name": "storm.renew",
+      "items": 2000,
+      "seconds": 392.501932666,
+      "per_second": 5.0955163110034984,
+      "errors": 0
+    }
+  ],
+  "inventory": {
+    "imports": 4,
+    "rows_total": 100000,
+    "rows_recorded": 100000,
+    "rows_applied": 100000,
+    "outcomes": {
+      "mapped_with_gaps": 100000
+    },
+    "certificates": 100000,
+    "database_bytes": 230808599
+  },
+  "storm": {
+    "due": 2000,
+    "queued": 2000,
+    "sweeps": 2,
+    "renewed": 2000,
+    "delivered": 2000,
+    "not_renewed": 0,
+    "renewed_twice": 0,
+    "dead_letters": 0,
+    "max_outbox_pending": 2000,
+    "drain_seconds": 392.501932666,
+    "renewals_per_second": 5.0955163110034984,
+    "reads_ms": {
+      "count": 166706,
+      "p50": 17.64,
+      "p95": 27.436,
+      "p99": 37.386,
+      "max": 149.904
+    }
+  },
+  "resources": [
+    {
+      "component": "control_plane",
+      "kind": "process",
+      "pid": 54689,
+      "runtime": "trstctl-control-plane",
+      "metrics": {
+        "goroutines": 184,
+        "cpu_count": 10,
+        "open_fds": 3,
+        "heap_alloc_bytes": 133108224,
+        "heap_inuse_bytes": 162512896,
+        "stack_inuse_bytes": 2392064,
+        "total_alloc_bytes": 202217898480,
+        "memory_sys_bytes": 371100008,
+        "rss_bytes": 423886848,
+        "virtual_bytes": 502500753408,
+        "num_gc": 2485,
+        "projection_lag_hint": 0
+      }
+    },
+    {
+      "component": "signer",
+      "kind": "process",
+      "pid": 54965,
+      "runtime": "trstctl-signer-child-process",
+      "metrics": {
+        "goroutines": 0,
+        "cpu_count": 10,
+        "open_fds": 12,
+        "heap_alloc_bytes": 0,
+        "heap_inuse_bytes": 159891456,
+        "stack_inuse_bytes": 0,
+        "total_alloc_bytes": 0,
+        "memory_sys_bytes": 159891456,
+        "rss_bytes": 159891456,
+        "virtual_bytes": 502079406080,
+        "num_gc": 0,
+        "projection_lag_hint": 0
+      }
+    },
+    {
+      "component": "postgresql",
+      "kind": "process",
+      "pid": 63712,
+      "runtime": "embedded-postgres-backend-process",
+      "metrics": {
+        "goroutines": 0,
+        "cpu_count": 10,
+        "open_fds": 216,
+        "heap_alloc_bytes": 0,
+        "heap_inuse_bytes": 152764416,
+        "stack_inuse_bytes": 0,
+        "total_alloc_bytes": 0,
+        "memory_sys_bytes": 152764416,
+        "rss_bytes": 152764416,
+        "virtual_bytes": 500719927296,
+        "num_gc": 0,
+        "projection_lag_hint": 0
+      }
+    },
+    {
+      "component": "jetstream",
+      "kind": "process",
+      "pid": 54689,
+      "runtime": "embedded-jetstream-in-control-plane-process",
+      "metrics": {
+        "goroutines": 184,
+        "cpu_count": 10,
+        "open_fds": 3,
+        "heap_alloc_bytes": 133165360,
+        "heap_inuse_bytes": 162545664,
+        "stack_inuse_bytes": 2392064,
+        "total_alloc_bytes": 202217955616,
+        "memory_sys_bytes": 371100008,
+        "rss_bytes": 423886848,
+        "virtual_bytes": 502500753408,
+        "num_gc": 2485,
+        "projection_lag_hint": 0
+      }
+    }
+  ],
+  "failures": null,
+  "ok": true
+}

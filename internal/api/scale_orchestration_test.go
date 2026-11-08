@@ -42,6 +42,7 @@ func TestServedScaleOrchestrationCAPSCALE01(t *testing.T) {
 	requireScaleGate(t, got.ReleaseGates, "perf-live", perf.LiveMeasurementArtifact)
 	requireScaleGate(t, got.ReleaseGates, "spine-burst", perf.SpineBurstArtifact)
 	requireScaleGate(t, got.ReleaseGates, "soak", "soak-trend.json")
+	requireScaleGate(t, got.ReleaseGates, "enterprise-scale", perf.ScaleMeasurementArtifact)
 	if got.TenantIsolation.StorageEnforcement == "" || got.Datastore.Postgres == "" || got.Signer.ProcessModel == "" {
 		t.Fatalf("scale plan missing tenant/datastore/signer posture: %+v", got)
 	}
@@ -51,7 +52,7 @@ func TestServedScaleOrchestrationCAPSCALE01(t *testing.T) {
 	if len(got.OperatorActions) == 0 || len(got.Residuals) == 0 {
 		t.Fatalf("scale plan missing operator actions/residuals/artifacts: %+v", got)
 	}
-	for _, artifact := range []string{perf.MeasurementArtifact, perf.LiveMeasurementArtifact, perf.CapacityMeasurementArtifact, perf.SpineBurstArtifact} {
+	for _, artifact := range []string{perf.MeasurementArtifact, perf.LiveMeasurementArtifact, perf.CapacityMeasurementArtifact, perf.SpineBurstArtifact, perf.ScaleMeasurementArtifact} {
 		if !containsString(got.MeasurementArtifacts, artifact) {
 			t.Fatalf("scale plan missing measurement artifact %s in %+v", artifact, got.MeasurementArtifacts)
 		}
