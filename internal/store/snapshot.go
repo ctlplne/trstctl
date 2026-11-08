@@ -313,7 +313,11 @@ import (
 // Version 111 carries A278's gateway pools: without them a restored store
 // would lose which gateways share sessions and which are draining, while its
 // covered offset skipped their events.
-const SnapshotFormatVersion = 111
+// Version 112 carries the certificate recording recovery state on the
+// metadata watermark row (A266: checkpoint, re-verification cursor, recheck
+// marker): an older payload has no such columns, and restoring it would fail
+// their NOT NULL rather than start from zero.
+const SnapshotFormatVersion = 112
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

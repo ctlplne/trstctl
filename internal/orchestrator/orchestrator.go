@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -136,6 +137,13 @@ type Orchestrator struct {
 	// agentHeartbeatInterval is the served channel's next-beat hint. Discovery
 	// admission uses the same two-beat freshness window as Agents presence.
 	agentHeartbeatInterval time.Duration
+	// certificateRecoveryVisited counts the certificate-metadata events past
+	// the recovery checkpoint that recording scans have read: about one per
+	// recording, however large the inventory. certificateHistoryReverified
+	// counts the already-verified events the rotating re-verification checked
+	// again: at most one receipt page per recording.
+	certificateRecoveryVisited   atomic.Uint64
+	certificateHistoryReverified atomic.Uint64
 }
 
 // OrchestratorOption configures served command-side behavior while keeping the

@@ -164,11 +164,16 @@ func installRecordingPublicRollback(t *testing.T, ctx context.Context, s *store.
 	return cleanup
 }
 
+// certificateOrderState is the certificate's read state with its tenant's
+// ordering watermark and ownership. The watermark row's recovery state
+// (checkpoint, re-verification cursor, recheck marker) is left out: it is
+// recovery bookkeeping a recording advances and a rebuild resets, not read
+// state.
 func certificateOrderState(t *testing.T, ctx context.Context, s *store.Store, fingerprint string) []byte {
 	t.Helper()
 	var raw []byte
 	err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT jsonb_build_object('certificate',to_jsonb(c),'watermark',(SELECT to_jsonb(w) FROM certificate_metadata_watermarks w WHERE w.tenant_id=$1),'ownership',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.inventory_id),'[]'::jsonb) FROM ownership_assignments a WHERE a.tenant_id=$1 AND a.inventory_id='certificate/'||c.id::text)) FROM certificates c WHERE c.tenant_id=$1 AND c.fingerprint=$2`, tenantA, fingerprint).Scan(&raw)
+		return tx.QueryRow(ctx, `SELECT jsonb_build_object('certificate',to_jsonb(c),'watermark',(SELECT to_jsonb(w)-'recovered_through'-'reverify_cursor'-'recheck_from' FROM certificate_metadata_watermarks w WHERE w.tenant_id=$1),'ownership',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.inventory_id),'[]'::jsonb) FROM ownership_assignments a WHERE a.tenant_id=$1 AND a.inventory_id='certificate/'||c.id::text)) FROM certificates c WHERE c.tenant_id=$1 AND c.fingerprint=$2`, tenantA, fingerprint).Scan(&raw)
 	})
 	if err != nil {
 		t.Fatal(err)

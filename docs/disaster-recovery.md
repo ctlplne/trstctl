@@ -84,6 +84,21 @@ and external rows are not backfilled with guessed issuance times. The current
 reader rejects older snapshot formats and rebuilds from retained events rather than
 advancing a checkpoint from an incomplete snapshot.
 
+Migration 0436 bounds that recovery's work. Before 0436 each recording re-read the
+tenant's whole certificate history, so recording an inventory took time that grew
+with its square. The tenant's ordering watermark row now carries a recovery
+checkpoint: the highest sequence up to which an earlier recovery, under the same
+ordering lock, found an exact receipt for every event. A recording verifies or
+recovers every event after it, re-verifies one page of the history below it
+(rotating, so the whole history is checked again continuously), and advances the
+checkpoint in the same transaction. A trigger marks any change to a receipt's
+sequence, identity or digest, and the next recording re-verifies from the changed
+receipt, so a corrupted receipt anywhere still refuses the next append. A
+rolled-back recording leaves the checkpoint where it was; a rebuild, snapshot
+restore or offboarding resets it with the row, and the next recording verifies the
+history from the registration once. Snapshot format 112 carries this state; older
+snapshots are rebuilt from retained events.
+
 When recovery reports that a certificate recording requires a full retained
 read-model rebuild, stop mutating control-plane replicas and use the existing
 deployment configuration with `trstctl --rebuild`. This reconstructs state and

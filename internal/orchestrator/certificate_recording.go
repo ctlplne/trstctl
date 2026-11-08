@@ -16,6 +16,18 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// CertificateRecoveryEventsVisited is how many certificate-metadata events
+// past the recovery checkpoints this orchestrator's recording scans have read.
+func (o *Orchestrator) CertificateRecoveryEventsVisited() uint64 {
+	return o.certificateRecoveryVisited.Load()
+}
+
+// CertificateHistoryEventsReverified is how many already-verified history
+// events the rotating re-verification has checked again.
+func (o *Orchestrator) CertificateHistoryEventsReverified() uint64 {
+	return o.certificateHistoryReverified.Load()
+}
+
 // RecordCertificateEvent preserves an issuer's existing stable event identity
 // while using the same append-order fence, immutable binding and recovery path
 // as ordinary certificate recording. Callers must supply a complete public fact.
@@ -108,15 +120,32 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 	if err != nil {
 		return events.Event{}, false, err
 	}
-	from := head.Sequence + 1
-	if from <= lifetimeFloor {
-		from = lifetimeFloor + 1
+	// The scan reads the history past the tenant's recovery checkpoint (A266):
+	// every metadata event at or below it had an exact receipt when an earlier
+	// scan under this same fence verified it, and a receipt changed since then
+	// moves the start back to it (the 0436 trigger), so a corrupted or
+	// rewritten receipt anywhere is still found before the next append. The
+	// history the scan skips is re-verified a page at a time below. Starting
+	// after the recorded leaf's own head instead meant a new leaf (head 0)
+	// re-read the tenant's whole history, so an import grew quadratically.
+	state, err := o.store.CertificateRecordingRecoveryStateTx(ctx, tx, tenantID)
+	if err != nil {
+		return events.Event{}, false, err
 	}
+	if state.Through > through {
+		return events.Event{}, false, errors.New("orchestrator: certificate recording recovery checkpoint is beyond retained log head")
+	}
+	verified := state.Through
+	if state.RecheckFrom > 0 && state.RecheckFrom-1 < verified {
+		verified = state.RecheckFrom - 1
+	}
+	from := max(lifetimeFloor, verified) + 1
 	if from == 0 {
 		return events.Event{}, false, errors.New("orchestrator: certificate recording cursor overflow")
 	}
 	page := make([]events.Event, 0, store.CertificateMetadataReceiptBatchLimit)
 	pageBytes := 0
+	visited := uint64(0)
 	flush := func() error {
 		done, err := o.store.CertificateMetadataEventsAppliedTx(ctx, tx, tenantID, page)
 		if err != nil {
@@ -152,6 +181,7 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 		if !dependent {
 			return nil
 		}
+		visited++
 		// Match ApplyTx: admit the schema, then verify the whole immutable
 		// envelope against its completion receipt before decoding certificate
 		// material again. Only an exact receipt can skip domain decoding;
@@ -196,10 +226,83 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 	if err := flush(); err != nil {
 		return events.Event{}, false, err
 	}
+	o.certificateRecoveryVisited.Add(visited)
+	cursor, err := o.reverifyCertificateHistoryPageTx(ctx, tx, tenantID, state.Cursor, lifetimeFloor, from-1)
+	if err != nil {
+		return events.Event{}, false, err
+	}
+	// Every metadata event through the cut now has an exact receipt in this
+	// transaction: the next scan starts after it.
+	if err := o.store.SaveCertificateRecordingRecoveryStateTx(ctx, tx, tenantID, through, cursor); err != nil {
+		return events.Event{}, false, err
+	}
 	if found && retained.Sequence <= lifetimeFloor {
 		return events.Event{}, false, fmt.Errorf("%w: certificate command belongs to an earlier tenant registration", store.ErrIdempotencyConflict)
 	}
 	return retained, found, nil
+}
+
+// errHistoryPageFull stops a re-verification page's replay once it is full.
+var errHistoryPageFull = errors.New("orchestrator: certificate history page full")
+
+// reverifyCertificateHistoryPageTx re-checks one page of the metadata history
+// a recovery scan skipped, (floor, end], resuming at cursor and wrapping
+// round, so every receipt below the checkpoint is checked again continuously
+// at a constant cost per recording. Each event must carry its exact receipt:
+// a mismatch is an idempotency conflict and a missing one requires the
+// ordered rebuild, since the history was verified complete. It returns where
+// the next page starts.
+func (o *Orchestrator) reverifyCertificateHistoryPageTx(ctx context.Context, tx pgx.Tx, tenantID string, cursor, floor, end uint64) (uint64, error) {
+	if end <= floor {
+		return floor + 1, nil
+	}
+	start := cursor
+	if start <= floor || start > end {
+		start = floor + 1
+	}
+	page := make([]events.Event, 0, store.CertificateMetadataReceiptBatchLimit)
+	pageBytes := 0
+	err := o.log.ReplayTenantTypesThrough(ctx, tenantID, start, end, projections.CertificateMetadataEventTypes(), func(e events.Event) error {
+		if !sameCertificateRecordingTenant(e.TenantID, tenantID) {
+			return nil
+		}
+		dependent, err := projections.CertificateMetadataEvent(e)
+		if err != nil || !dependent {
+			return err
+		}
+		const maxPageBytes = 1 << 20
+		if len(page) > 0 && pageBytes+len(e.Data) > maxPageBytes {
+			return errHistoryPageFull
+		}
+		page = append(page, e)
+		pageBytes += len(e.Data)
+		if len(page) == cap(page) || pageBytes >= maxPageBytes {
+			return errHistoryPageFull
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errHistoryPageFull) {
+		return 0, err
+	}
+	full := errors.Is(err, errHistoryPageFull)
+	done, err := o.store.CertificateMetadataEventsAppliedTx(ctx, tx, tenantID, page)
+	if err != nil {
+		return 0, err
+	}
+	for i, e := range page {
+		if !done[i] {
+			return 0, fmt.Errorf("%w: certificate metadata event %d below the recovery checkpoint has no completion receipt", store.ErrCertificateRecordingRebuildRequired, e.Sequence)
+		}
+	}
+	o.certificateHistoryReverified.Add(uint64(len(page)))
+	if !full || len(page) == 0 {
+		return floor + 1, nil
+	}
+	next := page[len(page)-1].Sequence + 1
+	if next > end {
+		next = floor + 1
+	}
+	return next, nil
 }
 
 // The caller already holds the certificate relation/metadata fence. Offboard

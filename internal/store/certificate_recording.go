@@ -84,6 +84,64 @@ func (s *Store) CertificateRecordingHeadTx(ctx context.Context, tx pgx.Tx, tenan
 	return head, nil
 }
 
+// CertificateRecordingRecoveryState is how far a tenant's certificate
+// recording recovery has verified its metadata history (migration 0436).
+type CertificateRecordingRecoveryState struct {
+	// Through: every metadata event of the tenant at or below it had an exact
+	// completion receipt when an earlier scan, under the metadata fence, last
+	// verified it.
+	Through uint64
+	// Cursor is where the rotating re-verification of the history at or below
+	// Through resumes.
+	Cursor uint64
+	// RecheckFrom is 0, or the lowest sequence whose receipt changed since the
+	// last scan; the next scan re-verifies from there.
+	RecheckFrom uint64
+}
+
+// CertificateRecordingRecoveryStateTx reads the tenant's recovery state. A
+// tenant with no watermark row has recorded no certificate metadata: its
+// state is zero and its next scan starts at the lifetime floor.
+func (s *Store) CertificateRecordingRecoveryStateTx(ctx context.Context, tx pgx.Tx, tenantID string) (CertificateRecordingRecoveryState, error) {
+	var through, cursor int64
+	var recheck *int64
+	err := tx.QueryRow(ctx, `SELECT recovered_through,reverify_cursor,recheck_from FROM certificate_metadata_watermarks WHERE tenant_id=$1`,
+		tenantID).Scan(&through, &cursor, &recheck)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return CertificateRecordingRecoveryState{}, nil
+	}
+	if err != nil {
+		return CertificateRecordingRecoveryState{}, err
+	}
+	var from int64
+	if recheck != nil {
+		from = *recheck
+		if from <= 0 {
+			return CertificateRecordingRecoveryState{}, errors.New("store: invalid certificate recording recheck marker")
+		}
+	}
+	if through < 0 || cursor < 0 || from < 0 {
+		return CertificateRecordingRecoveryState{}, errors.New("store: invalid certificate recording recovery state")
+	}
+	return CertificateRecordingRecoveryState{Through: uint64(through), Cursor: uint64(cursor), RecheckFrom: uint64(from)}, nil
+}
+
+// SaveCertificateRecordingRecoveryStateTx records a completed scan: every
+// metadata event of the tenant through `through` now has an exact receipt in
+// this transaction, the rotating re-verification resumes at cursor, and no
+// receipt has changed since. The caller holds the tenant metadata fence; a
+// rollback undoes the save with the scan. The checkpoint never moves back. A
+// tenant without a watermark row yet keeps none.
+func (s *Store) SaveCertificateRecordingRecoveryStateTx(ctx context.Context, tx pgx.Tx, tenantID string, through, cursor uint64) error {
+	if through > math.MaxInt64 || cursor > math.MaxInt64 {
+		return errors.New("store: certificate recording recovery state exceeds PostgreSQL bigint")
+	}
+	_, err := tx.Exec(ctx, `UPDATE certificate_metadata_watermarks
+		SET recovered_through=greatest(recovered_through,$2),reverify_cursor=$3,recheck_from=NULL
+		WHERE tenant_id=$1`, tenantID, int64(through), int64(cursor))
+	return err
+}
+
 // ApplyCertificateRecordingHeadTx runs only after the projector's effects for
 // this exact event succeed in the same transaction. SQL rollback cannot erase
 // the source event that command recovery must replay before its next append.

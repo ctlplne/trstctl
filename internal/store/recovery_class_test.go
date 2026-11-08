@@ -537,3 +537,17 @@ func TestPAMRecordingUploadsUseIndependentPostgresRecoveryA278(t *testing.T) {
 		t.Errorf("%s is in snapshotTables; a snapshot restore must not overwrite staged recording chunks", table)
 	}
 }
+
+// A266: the certificate recording recovery state lives on the metadata
+// watermark row, so it is erased with its tenant, reset by a rebuild and
+// carried by snapshots, and a snapshot taken before its columns existed is
+// not restored.
+func TestCertificateRecordingRecoveryCheckpointFollowsTheWatermarkRow(t *testing.T) {
+	const table = "certificate_metadata_watermarks"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant, rebuilt and snapshotted", table)
+	}
+	if SnapshotFormatVersion < 112 {
+		t.Fatalf("snapshot format %d could restore a watermark row without its recovery state", SnapshotFormatVersion)
+	}
+}
