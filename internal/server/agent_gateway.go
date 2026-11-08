@@ -152,6 +152,11 @@ func (s *pamService) gatewayBoundHosts(ctx context.Context, tenantID, agentID st
 			add(t.GatewayAddress)
 		}
 	}
+	// A278: a pooled gateway also serves its pool's targets at its own
+	// address.
+	if member, ok := s.gatewayMemberAddress(ctx, tenantID, agentID); ok {
+		add(member)
+	}
 	return hosts, nil
 }
 

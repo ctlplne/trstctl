@@ -1632,6 +1632,11 @@ result schema with its tool list; the bridge gives it to the client as every too
 Account folders: `access folders list`, `access folders save <name> -f <body.json>`
 (`template_id`, optional `description`, and the read `revision` for an update), and
 `access folders delete <name> --revision <revision>` (empty folders only).
+
+Gateway pools (A278): `access gateway-pools list` (each gateway's health and live
+sessions), `access gateway-pools save <name> -f <body.json>` (`members`: `agent_id`,
+`address` and optional `draining`; the read `revision` for an update), and
+`access gateway-pools delete <name> --revision <revision>`.
 `access targets folder <target_type> <id> -f <body.json>` moves a registered target
 with `{"folder":"name"}` or removes its membership with `{"folder":""}`.
 Every mutation accepts an idempotency key. Folder templates apply automatically to

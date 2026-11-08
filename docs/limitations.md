@@ -9136,6 +9136,24 @@ ClickHouse rules remain unbuilt; their configuration is rejected.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
+## Gateway high availability (A278) — part 1: pools, owned sessions and failover
+
+Status: in progress. Gateway pools share sessions: a target bound to any member is served by
+the healthy, undrained member with the fewest live sessions when a session starts; that
+member owns the session (its job is claimable by it alone). A member silent past
+`pam.gateway_lost_after` is lost: new sessions go to the others and its live sessions are
+revoked by `trstctl:gateway-health`, ending with A255's bounded uncertainty. Proof:
+`TestServedGatewayPoolFailsOverA278` with three gateways (three idle gateways each get one of
+three sessions and can claim only their own; one stops heartbeating: its session reads
+revoked with `gateway_lost` and `uncertain_until` its deadline, the pool reads it `lost`,
+new sessions start only on the other two, a draining member takes none, and the stopped
+gateway, back again, cannot claim the session it lost) and the console tests.
+
+What comes next:
+- Upgrades drain first, and a drained upgrade loses no recording (part 2).
+- Recordings upload through the outbox with backpressure (part 3).
+- A278 at scale on the x86 machine, inside A266's harness (Track B).
+
 ## Approvals where people work, and re-authentication (A277) — parts 1–2: Slack Socket Mode and fresh sign-in
 
 Status: built locally. With `slack_app.app_token_ref` trstctl opens Slack's Socket Mode

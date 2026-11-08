@@ -453,6 +453,20 @@ type gatewayStart struct {
 // could not be queued now is queued by the expiry worker's next pass.
 func (s *pamService) startGatewaySession(ctx context.Context, tenantID, idempotencyKey, requester, id string, now, expiresAt time.Time,
 	att attest.Attestation, req api.PAMSessionRequest, start gatewayStart) (api.PAMSession, error) {
+	// A278: a pooled gateway shares its targets' sessions; the member the
+	// session starts on owns it, and a lost or draining one is passed over.
+	provisional := store.PAMSession{TenantID: tenantID, ID: id, TargetType: req.TargetType, TargetID: req.TargetID, Role: req.Role,
+		ExpiresAt: expiresAt, GatewayAgentID: start.agentID, SSHPrincipal: start.sshPrincipal, CommandPolicy: req.ResolvedCommandPolicy}
+	needKind := ""
+	if intent, err := s.gatewaySessionIntent(ctx, provisional); err == nil {
+		needKind = pamSessionNeedsExecutor(intent)
+	}
+	agentID, address, err := s.chooseGateway(ctx, tenantID, start.agentID, start.address, needKind)
+	if err != nil {
+		start.undo()
+		return api.PAMSession{}, err
+	}
+	start.agentID, start.address = agentID, address
 	ticket, err := newGatewayTicket()
 	if err != nil {
 		start.undo()
@@ -525,6 +539,13 @@ func (s *pamService) gatewayDeliveryForRead(ctx context.Context, tenantID string
 			address = target.GatewayAddress
 		}
 	}
+	if address == "" {
+		// A278: a pool member that owns another member's target's session
+		// is reached at its own address.
+		if member, ok := s.gatewayMemberAddress(ctx, tenantID, rec.GatewayAgentID); ok {
+			address = member
+		}
+	}
 	delivery, err := s.gatewayDelivery(ctx, tenantID, rec.GatewayAgentID, address, "")
 	if err != nil {
 		return &api.PAMGatewayDelivery{AgentID: rec.GatewayAgentID, Address: address}
@@ -592,7 +613,7 @@ func (s *pamService) signGatewaySSHKey(ctx context.Context, tenantID, agentID st
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	if target.GatewayAgentID != agentID || !principalAllowed(target.Principals, rec.SSHPrincipal) {
+	if !s.gatewayServesTarget(ctx, tenantID, target.GatewayAgentID, agentID) || !principalAllowed(target.Principals, rec.SSHPrincipal) {
 		return nil, time.Time{}, errors.New("the SSH target no longer admits this session through this gateway")
 	}
 	issued, err := s.sshCA.IssueUserCert(ctx, sshca.Profile{

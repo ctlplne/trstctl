@@ -42,6 +42,7 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { PAMAutoApprovalPanel } from "@/pages/PAMAutoApprovalPanel";
 import { PAMFoldersPanel } from "@/pages/PAMFoldersPanel";
+import { PAMGatewayPoolsPanel } from "@/pages/PAMGatewayPoolsPanel";
 import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
 import { PAMDiscoveryPanel } from "@/pages/PAMDiscoveryPanel";
 import { PAMCheckoutPanel } from "@/pages/PAMCheckoutPanel";
@@ -954,6 +955,7 @@ export function AdminAccess() {
                 <>
                   <PAMAutoApprovalPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:write")} />
                   <PAMFoldersPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
+                  <PAMGatewayPoolsPanel canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")} />
                   <PAMTargetsPanel
                     canManage={!!user?.permissions?.some((permission) => permission === "*" || permission === "access:targets.write")}
                     canAssignOwner={!!user?.permissions?.some((permission) => permission === "*" || permission === "owners:write")}
@@ -1381,6 +1383,13 @@ function PAMDetailDialog({
           <DetailRow term={t("admin.access.revocationFailedAt")}>{formatOptionalDate(current.revocation_failed_at, formatPolicy)}</DetailRow>
         ) : null}
         {current.ended_at ? <DetailRow term={t("admin.access.ended")}>{formatOptionalDate(current.ended_at, formatPolicy)}</DetailRow> : null}
+        {current.gateway_lost ? (
+          <DetailRow term={t("admin.access.gatewayLost")}>
+            {t("admin.access.gatewayLostBody", { until: formatOptionalDate(current.uncertain_until, formatPolicy) })}
+          </DetailRow>
+        ) : current.uncertain_until ? (
+          <DetailRow term={t("admin.access.uncertainUntil")}>{formatOptionalDate(current.uncertain_until, formatPolicy)}</DetailRow>
+        ) : null}
         <DetailRow term={t("admin.access.attestation")}>
           {current.attestation ? <JSONBlock value={current.attestation} /> : t("admin.access.attestationUnavailable")}
         </DetailRow>

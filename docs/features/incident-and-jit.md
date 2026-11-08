@@ -441,6 +441,27 @@ extension is refused, it closes the session's connections and wipes the credenti
 the login's removal (PostgreSQL) or the session's key ID on the served KRL (SSH) follows as
 for any session.
 
+##### Gateway pools (A278)
+
+Several gateways can share sessions: `PUT /api/v1/access/gateway-pools/{name}`
+(`access:targets.write`; `trstctl-cli access gateway-pools save <name> -f pool.json`) names
+1–16 gateway-role agents of the tenant and the `host:port` each is reached at, each in at
+most one pool, at the revision read (`{"members":[{"agent_id":"…","address":"gw1:8443"}],
+"revision":3}`). A target bound to any member is then served by every member: a session
+starts on the healthy, undrained member with the fewest live sessions, and that member owns
+it — the session's job is claimable by that gateway alone, and the requester gets that
+gateway's address. `GET /api/v1/access/gateway-pools` (`access:read`) shows each member's
+health (`healthy`, `draining`, `lost`, `offboarded`), its last report and its live
+sessions. A member that has not heartbeated within `pam.gateway_lost_after` (default two
+minutes) is lost: new sessions go to the others, and each live session it owned is revoked
+by `trstctl:gateway-health` — its job is recalled, so the gateway serves it no longer if it
+comes back, its credential is withdrawn as for any revocation, and it reads
+`gateway_lost: true` with `uncertain_until` its native deadline (A255). A member with
+`"draining": true` takes no new sessions while its live sessions run to their end. In the
+console, the **Gateway pools** panel lists pools with each gateway's health and live
+sessions, creates and edits them (one gateway per line), drains and resumes a gateway and
+deletes a pool; a session whose gateway was lost says so, and until when it may still serve.
+
 A Redis target (A256) is served only through its gateway: register it with
 `target_type: "redis"`, a Redis dynamic-secret provider and the gateway binding, or set a
 `pam.database_targets` entry. The session's credential is an ACL user the provider creates

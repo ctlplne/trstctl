@@ -12513,6 +12513,57 @@ PAMFrozenCommandRule = TypedDict(
     total=False,
 )
 
+PAMGatewayMember = TypedDict(
+    'PAMGatewayMember',
+    {
+        'address': str,
+        'agent_id': str,
+        'draining': bool,
+        'health': str,
+        'last_seen_at': str,
+        'live_sessions': int,
+    },
+    total=False,
+)
+
+PAMGatewayPool = TypedDict(
+    'PAMGatewayPool',
+    {
+        'members': list[dict[str, Any]],
+        'name': str,
+        'revision': int,
+        'saved_at': str,
+        'saved_by': str,
+    },
+    total=False,
+)
+
+PAMGatewayPoolDeleted = TypedDict(
+    'PAMGatewayPoolDeleted',
+    {
+        'deleted': bool,
+        'name': str,
+    },
+    total=False,
+)
+
+PAMGatewayPoolList = TypedDict(
+    'PAMGatewayPoolList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PAMGatewayPoolRequest = TypedDict(
+    'PAMGatewayPoolRequest',
+    {
+        'members': list[dict[str, Any]],
+        'revision': int,
+    },
+    total=False,
+)
+
 PAMImportedAccount = TypedDict(
     'PAMImportedAccount',
     {
@@ -13097,6 +13148,7 @@ PAMSession = TypedDict(
         'expires_at': str,
         'gateway': dict[str, Any],
         'gateway_end': dict[str, Any],
+        'gateway_lost': bool,
         'id': str,
         'postgres': dict[str, Any],
         'reason': str,

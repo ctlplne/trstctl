@@ -1101,6 +1101,14 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventPAMFolderDeleted, 1}: privacyRules(
 			privacyRule("/name", clear), privacyRule("/revision", opaque), privacyRule("/actor", exact), privacyRule("/at", opaque),
 		),
+		// A278: gateway pools name gateway agents and their addresses.
+		{EventPAMGatewayPoolSaved, 1}: privacyRules(
+			privacyRule("/name", clear), privacyRule("/members/*/agent_id", opaque), privacyRule("/members/*/address", opaque),
+			privacyRule("/members/*/draining", opaque), privacyRule("/revision", opaque), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
+		{EventPAMGatewayPoolDeleted, 1}: privacyRules(
+			privacyRule("/name", clear), privacyRule("/revision", opaque), privacyRule("/actor", exact), privacyRule("/at", opaque),
+		),
 		{EventPAMTargetFolderSet, 1}: privacyRules(
 			privacyRule("/target_type", opaque), privacyRule("/id", opaque), privacyRule("/folder", clear), privacyRule("/previous", clear),
 			privacyRule("/actor", exact), privacyRule("/at", opaque),
@@ -1807,6 +1815,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMAutoApprovalEvaluated, 1}:                                                   privacyPayloadShape[PAMAutoApprovalEvaluated](),
 		{EventPAMAutoApprovalApplied, 1}:                                                     privacyPayloadShape[PAMAutoApprovalApplied](),
 		{EventPAMFolderSaved, 1}:                                                             privacyPayloadShape[PAMFolderSaved](),
+		{EventPAMGatewayPoolSaved, 1}:                                                        privacyPayloadShape[PAMGatewayPoolSaved](),
+		{EventPAMGatewayPoolDeleted, 1}:                                                      privacyPayloadShape[PAMGatewayPoolDeleted](),
 		{EventPAMFolderDeleted, 1}:                                                           privacyPayloadShape[PAMFolderDeleted](),
 		{EventPAMTargetFolderSet, 1}:                                                         privacyPayloadShape[PAMTargetFolderSet](),
 		{EventPAMEmergencyRespondersSet, 1}:                                                  privacyPayloadShape[PAMEmergencyRespondersSet](),

@@ -5928,6 +5928,7 @@ func componentSchemas() map[string]*Schema {
 			"ended": {Type: "string", Enum: []string{"deadline", "recalled"}}, "ended_at": timestamp(),
 		}, "ended", "ended_at"),
 		"uncertain_until": {Type: "string", Format: "date-time", Description: "A revoked or terminated gateway session whose gateway has not reported its end may still serve connections until this time, its native deadline (A255)."},
+		"gateway_lost":    {Type: "boolean", Description: "The pooled gateway that owned the session stopped reporting, so the session was revoked (A278); it may still serve until uncertain_until."},
 		"emergency":       ref("PAMEmergencyGrant"),
 	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at")
 	// A258: access templates and emergency access.
@@ -9053,7 +9054,28 @@ func componentSchemas() map[string]*Schema {
 			"description": str(),
 			"revision":    {Type: "integer", Description: "the revision being replaced; omit to create"},
 		}, "template_id"),
-		"PAMFolderDeleted":       object(map[string]*Schema{"name": str(), "deleted": {Type: "boolean"}}, "name", "deleted"),
+		"PAMFolderDeleted": object(map[string]*Schema{"name": str(), "deleted": {Type: "boolean"}}, "name", "deleted"),
+		// A278: gateway pools.
+		"PAMGatewayMember": object(map[string]*Schema{
+			"agent_id": uuid(), "address": {Type: "string", Description: "host:port requesters reach this gateway at"},
+			"draining":      {Type: "boolean", Description: "takes no new sessions; its live sessions run to their end"},
+			"health":        {Type: "string", Enum: []string{"healthy", "draining", "lost", "offboarded"}, Description: "read-only: lost when it has not reported within pam.gateway_lost_after"},
+			"last_seen_at":  {Type: "string", Format: "date-time", Description: "read-only: its last report"},
+			"live_sessions": {Type: "integer", Description: "read-only: active sessions it owns"},
+		}, "agent_id", "address", "live_sessions"),
+		"PAMGatewayPool": object(map[string]*Schema{
+			"name": str(), "members": {Type: "array", Items: ref("PAMGatewayMember")},
+			"revision": {Type: "integer"}, "saved_by": str(), "saved_at": timestamp(),
+		}, "name", "members", "revision", "saved_at"),
+		"PAMGatewayPoolList": object(map[string]*Schema{"items": {Type: "array", Items: ref("PAMGatewayPool")}}, "items"),
+		"PAMGatewayPoolRequest": object(map[string]*Schema{
+			"members": {Type: "array", Items: object(map[string]*Schema{
+				"agent_id": uuid(), "address": {Type: "string", Description: "host:port requesters reach this gateway at"},
+				"draining": {Type: "boolean", Description: "take no new sessions"},
+			}, "agent_id", "address"), Description: "1-16 gateway-role agents of the tenant, each in no other pool"},
+			"revision": {Type: "integer", Description: "the revision being replaced; omit to create"},
+		}, "members"),
+		"PAMGatewayPoolDeleted":  object(map[string]*Schema{"name": str(), "deleted": {Type: "boolean"}}, "name", "deleted"),
 		"PAMTargetFolderRequest": object(map[string]*Schema{"folder": {Type: "string", Description: "the folder to move the target into; empty moves it out"}}, "folder"),
 		"PAMCheckoutReveal": object(map[string]*Schema{
 			"checkout":   ref("PAMCheckout"),

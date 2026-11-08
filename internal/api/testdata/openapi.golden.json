@@ -42117,6 +42117,143 @@
         ],
         "type": "object"
       },
+      "PAMGatewayMember": {
+        "properties": {
+          "address": {
+            "description": "host:port requesters reach this gateway at",
+            "type": "string"
+          },
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "draining": {
+            "description": "takes no new sessions; its live sessions run to their end",
+            "type": "boolean"
+          },
+          "health": {
+            "description": "read-only: lost when it has not reported within pam.gateway_lost_after",
+            "enum": [
+              "healthy",
+              "draining",
+              "lost",
+              "offboarded"
+            ],
+            "type": "string"
+          },
+          "last_seen_at": {
+            "description": "read-only: its last report",
+            "format": "date-time",
+            "type": "string"
+          },
+          "live_sessions": {
+            "description": "read-only: active sessions it owns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agent_id",
+          "address",
+          "live_sessions"
+        ],
+        "type": "object"
+      },
+      "PAMGatewayPool": {
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PAMGatewayMember"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "saved_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "members",
+          "revision",
+          "saved_at"
+        ],
+        "type": "object"
+      },
+      "PAMGatewayPoolDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "PAMGatewayPoolList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMGatewayPool"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMGatewayPoolRequest": {
+        "properties": {
+          "members": {
+            "description": "1-16 gateway-role agents of the tenant, each in no other pool",
+            "items": {
+              "properties": {
+                "address": {
+                  "description": "host:port requesters reach this gateway at",
+                  "type": "string"
+                },
+                "agent_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "draining": {
+                  "description": "take no new sessions",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "agent_id",
+                "address"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "description": "the revision being replaced; omit to create",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "type": "object"
+      },
       "PAMImportedAccount": {
         "properties": {
           "approval_request_id": {
@@ -43741,6 +43878,10 @@
               "ended_at"
             ],
             "type": "object"
+          },
+          "gateway_lost": {
+            "description": "The pooled gateway that owned the session stopped reporting, so the session was revoked (A278); it may still serve until uncertain_until.",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -65169,6 +65310,203 @@
           }
         ],
         "summary": "Create an account folder, or replace one at the revision read; a policy change requires a fresh access review",
+        "x-trstctl-permission": "access:targets.write"
+      }
+    },
+    "/api/v1/access/gateway-pools": {
+      "get": {
+        "operationId": "listPAMGatewayPools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMGatewayPoolList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List gateway pools: the gateways that share sessions, each one's health and live sessions",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/gateway-pools/{name}": {
+      "delete": {
+        "operationId": "deletePAMGatewayPool",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "pool name: 1-64 lowercase letters, digits, - or _",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the pool's revision you read",
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMGatewayPoolDeleted"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete a gateway pool at the revision you read; its gateways then serve only the targets bound to each",
+        "x-trstctl-permission": "access:targets.write"
+      },
+      "put": {
+        "operationId": "savePAMGatewayPool",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "pool name: 1-64 lowercase letters, digits, - or _",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMGatewayPoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMGatewayPool"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a gateway pool, or replace one at the revision read: its members and which of them are draining",
         "x-trstctl-permission": "access:targets.write"
       }
     },

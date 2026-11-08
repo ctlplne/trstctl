@@ -2,6 +2,15 @@
 
 ### Added
 
+- Gateway pools (A278 part 1): `GET|PUT|DELETE /api/v1/access/gateway-pools[/{name}]` (OpenAPI 796 -> 799; CLI
+  `access gateway-pools list|save|delete`, 863 -> 866; migration 0433, snapshot format 111). Gateways of a pool share
+  their targets' sessions: a session starts on the healthy, undrained member with the fewest live sessions, which owns
+  it (its job is claimable by that gateway alone; a member's server certificate also covers its own pool address, and
+  a pooled member may certify SSH session keys for its pool's targets). A member that misses heartbeats past
+  `pam.gateway_lost_after` (default `2m`, at least `30s`) is lost: new sessions go to the others and its live sessions
+  are revoked by `trstctl:gateway-health`, reading `gateway_lost: true` with `uncertain_until` their deadline. Console:
+  the **Gateway pools** panel (health, live sessions, drain/resume, create/edit/delete) and "Gateway lost" on a
+  session's detail.
 - High-risk access templates need a fresh sign-in (A277 part 2): `reauthenticate_within_seconds` (60-3600; migration
   0432, snapshot format 110) refuses a session, emergency session or check-out reveal through the template unless the
   caller's console sign-in is that recent — `401` with an RFC 9470 step-up challenge

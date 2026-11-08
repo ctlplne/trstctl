@@ -334,7 +334,10 @@ type PAMSession struct {
 	// cut off, and the credential stops working then regardless.
 	GatewayEnd     *PAMGatewayEnd `json:"gateway_end,omitempty"`
 	UncertainUntil *time.Time     `json:"uncertain_until,omitempty"`
-	Audit          map[string]any `json:"audit,omitempty"`
+	// GatewayLost (A278): the pooled gateway that owned the session stopped
+	// reporting, so it was revoked; it may still serve until UncertainUntil.
+	GatewayLost bool           `json:"gateway_lost,omitempty"`
+	Audit       map[string]any `json:"audit,omitempty"`
 	// Emergency (A258) marks a session a named responder opened without
 	// approval, with its post-incident review.
 	Emergency *PAMEmergencyGrant `json:"emergency,omitempty"`

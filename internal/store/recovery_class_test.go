@@ -507,3 +507,16 @@ func TestPAMAccountFlagsUseEventRecoveryAndSnapshotsA276(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without account flags", SnapshotFormatVersion)
 	}
 }
+
+// TestPAMGatewayPoolsUseEventRecoveryAndSnapshotsA278: gateway pools are
+// erased with their tenant, rebuilt from events and carried by snapshots
+// from format 111.
+func TestPAMGatewayPoolsUseEventRecoveryAndSnapshotsA278(t *testing.T) {
+	const table = "pam_gateway_pools"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 111 {
+		t.Fatalf("snapshot format %d could restore a payload without gateway pools", SnapshotFormatVersion)
+	}
+}

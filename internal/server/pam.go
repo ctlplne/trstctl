@@ -140,6 +140,9 @@ type PAMConfig struct {
 	// UnusedAfter flags a brokered account with no session or check-out for
 	// this long (A276); zero is 90 days.
 	UnusedAfter time.Duration
+	// GatewayLostAfter is how long a pooled gateway may go without a
+	// heartbeat before it is lost (A278); zero is two minutes.
+	GatewayLostAfter time.Duration
 	// CertificationInterval starts a certification campaign of brokered
 	// accounts and approver lists this often (A276); zero never.
 	// CertificationReviewer is the subject such a campaign is assigned to;
@@ -229,11 +232,13 @@ type pamService struct {
 	defaultTTL                          time.Duration
 	maxTTL                              time.Duration
 	expiryInterval                      time.Duration
-	clock                               func() time.Time
-	orch                                *orchestrator.Orchestrator
-	approvalTTL                         time.Duration
-	requiredApprovals                   int
-	targetDeps                          pamDeps
+	// gatewayLostAfter (A278): a pooled gateway silent this long is lost.
+	gatewayLostAfter  time.Duration
+	clock             func() time.Time
+	orch              *orchestrator.Orchestrator
+	approvalTTL       time.Duration
+	requiredApprovals int
+	targetDeps        pamDeps
 	// agentCAPEM returns the agent CA PEM a client verifies a gateway's
 	// certificate against (A254); nil when no agent channel is served.
 	agentCAPEM func() []byte
@@ -413,7 +418,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,
 		browser:                             newPAMBrowser(),
-		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), certificationInterval: cfg.CertificationInterval, certificationReviewer: cfg.CertificationReviewer, auditSigner: d.AuditSigner, healthInterval: healthInterval, health: health,
+		recordings:                          recordings, recordingRetention: cfg.RecordingRetention, signInRetention: signInRetentionOrDefault(cfg.SignInRetention), unusedAfter: unusedAfterOrDefault(cfg.UnusedAfter), gatewayLostAfter: gatewayLostAfterOrDefault(cfg.GatewayLostAfter), certificationInterval: cfg.CertificationInterval, certificationReviewer: cfg.CertificationReviewer, auditSigner: d.AuditSigner, healthInterval: healthInterval, health: health,
 		store: d.Store, log: d.Log, projector: projections.New(d.Store), audit: audit,
 		attestors: cfg.Attestors, databases: databaseTargets,
 		providers: d.Providers, kek: d.KEK, outbox: d.Outbox, wakeOutbox: d.WakeOutbox, tenantCrypto: d.TenantCrypto,
@@ -1246,6 +1251,7 @@ func (s *pamService) RunExpiry(ctx context.Context) {
 		s.reconcileEmergencyNotices(ctx)
 		s.sweepBrowser(s.clock())
 		s.ensureGatewayJobs(ctx)
+		s.markLostGateways(ctx)
 		s.sealIdleRecordings(ctx)
 		s.deleteExpiredRecordings(ctx)
 		s.purgeExpiredSignIns(ctx)
@@ -1782,6 +1788,8 @@ func pamSessionFromStore(rec store.PAMSession) api.PAMSession {
 		Audit:       jsonMap(rec.Audit),
 		Delivery:    pamDeliveryName(rec.Delivery),
 		GatewayEnd:  pamGatewayEnd(rec), UncertainUntil: pamUncertainUntil(rec),
+		// A278: revoked because the pooled gateway that owned it was lost.
+		GatewayLost: rec.Delivery == "gateway" && rec.RevocationRequestedBy == pamGatewayHealthActor,
 	}
 }
 
@@ -1850,6 +1858,9 @@ func pamFromConfig(c config.PAM) PAMConfig {
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.UnusedAfter)); err == nil {
 		out.UnusedAfter = d
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(c.GatewayLostAfter)); err == nil {
+		out.GatewayLostAfter = d
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(c.CertificationInterval)); err == nil {
 		out.CertificationInterval = d

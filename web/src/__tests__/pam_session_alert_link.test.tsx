@@ -93,3 +93,29 @@ it("says when the linked session cannot be opened (A275)", async () => {
   expect(await screen.findByText("The linked session could not be opened")).toBeInTheDocument();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+
+it("says a session's pooled gateway was lost and how long it may still serve (A278)", async () => {
+  apiMock.pamSession.mockResolvedValue({
+    id: sessionID,
+    target_type: "postgres",
+    target_id: "orders-db",
+    role: "readonly",
+    status: "revoked",
+    subject: "alice",
+    requested_by: "alice",
+    started_at: "2026-11-07T20:00:00Z",
+    expires_at: "2026-11-07T20:15:00Z",
+    delivery: "gateway",
+    revocation_requested_by: "trstctl:gateway-health",
+    revocation_reason: "gateway lost: 9f0c stopped reporting",
+    gateway_lost: true,
+    uncertain_until: "2026-11-07T20:15:00Z",
+  });
+  mount(`/admin/access?session=${sessionID}`);
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText("Gateway lost")).toBeInTheDocument();
+  expect(
+    within(dialog).getByText(/This session's gateway stopped reporting, so the session was revoked\. It may still serve connections until/),
+  ).toBeInTheDocument();
+  expect(within(dialog).queryByText("May still serve until")).not.toBeInTheDocument();
+});

@@ -369,6 +369,10 @@ const (
 	EventPAMCommandReviewDecided   = "pam.command.review_decided"
 	EventPAMTemplateDeleted        = "pam.template.deleted"
 	EventPAMFolderSaved            = "pam.folder.saved"
+	// A278: a gateway pool at a revision (its members, each draining or
+	// not), and its deletion.
+	EventPAMGatewayPoolSaved       = "pam.gateway_pool.saved"
+	EventPAMGatewayPoolDeleted     = "pam.gateway_pool.deleted"
 	EventPAMFolderDeleted          = "pam.folder.deleted"
 	EventPAMTargetFolderSet        = "pam.target.folder_set"
 	EventPAMEmergencyRespondersSet = "pam.emergency.responders_set"
@@ -4576,6 +4580,31 @@ type PAMFolderDeleted struct {
 	At       time.Time `json:"at"`
 }
 
+// PAMGatewayPoolMember is one gateway of a pool (A278).
+type PAMGatewayPoolMember struct {
+	AgentID  string `json:"agent_id"`
+	Address  string `json:"address"`
+	Draining bool   `json:"draining,omitempty"`
+}
+
+// PAMGatewayPoolSaved records a gateway pool at a revision (A278): the
+// gateways that share sessions, each draining or not.
+type PAMGatewayPoolSaved struct {
+	Name     string                 `json:"name"`
+	Members  []PAMGatewayPoolMember `json:"members"`
+	Revision int64                  `json:"revision"`
+	Actor    string                 `json:"actor"`
+	At       time.Time              `json:"at"`
+}
+
+// PAMGatewayPoolDeleted records a gateway pool's deletion (A278).
+type PAMGatewayPoolDeleted struct {
+	Name     string    `json:"name"`
+	Revision int64     `json:"revision"`
+	Actor    string    `json:"actor"`
+	At       time.Time `json:"at"`
+}
+
 // PAMTargetFolderSet records a registered target moved into a folder, or out
 // of one when Folder is empty (A261 part 3).
 type PAMTargetFolderSet struct {
@@ -5447,6 +5476,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMAutoApprovalEvaluated:                 {1: true},
 	EventPAMAutoApprovalApplied:                   {1: true},
 	EventPAMFolderSaved:                           {1: true},
+	EventPAMGatewayPoolSaved:                      {1: true},
+	EventPAMGatewayPoolDeleted:                    {1: true},
 	EventPAMFolderDeleted:                         {1: true},
 	EventPAMTargetFolderSet:                       {1: true},
 	EventPAMEmergencyRespondersSet:                {1: true},
@@ -9051,6 +9082,32 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyPAMFolderDeletedTx(ctx, tx, e.TenantID, pl.Name, pl.Revision, pl.At)
+	case EventPAMGatewayPoolSaved:
+		var pl PAMGatewayPoolSaved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Name == "" || len(pl.Members) == 0 || pl.Revision < 1 || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		members := make([]store.PAMGatewayMember, 0, len(pl.Members))
+		for _, m := range pl.Members {
+			if m.AgentID == "" || m.Address == "" {
+				return fmt.Errorf("projections: incomplete %s", e.Type)
+			}
+			members = append(members, store.PAMGatewayMember{AgentID: m.AgentID, Address: m.Address, Draining: m.Draining})
+		}
+		return p.store.ApplyPAMGatewayPoolSavedTx(ctx, tx, e.TenantID, store.PAMGatewayPool{Name: pl.Name, Members: members,
+			Revision: pl.Revision, SavedBy: pl.Actor, SavedAt: pl.At})
+	case EventPAMGatewayPoolDeleted:
+		var pl PAMGatewayPoolDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Name == "" || pl.Revision < 1 || pl.Actor == "" || pl.At.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyPAMGatewayPoolDeletedTx(ctx, tx, e.TenantID, pl.Name, pl.Revision, pl.At)
 	case EventPAMTargetFolderSet:
 		var pl PAMTargetFolderSet
 		if err := decode(e, &pl); err != nil {

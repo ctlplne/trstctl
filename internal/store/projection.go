@@ -891,6 +891,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// A274: projected from pam.signin.collected and pam.signin.records_purged.
 	"pam_signin_records",
 	"pam_account_flags",
+	// A278: projected from pam.gateway_pool.saved and pam.gateway_pool.deleted.
+	"pam_gateway_pools",
 	// A260: projected from pam.discovery.source_saved,
 	// pam.discovery.source_deleted, pam.discovery.run_completed,
 	// pam.discovery.imported and pam.discovery.dismissed.

@@ -9003,6 +9003,37 @@ export interface PAMFrozenCommandRule {
   severity?: "warning" | "critical";
 }
 
+export interface PAMGatewayMember {
+  address: string;
+  agent_id: string;
+  draining?: boolean;
+  health?: "healthy" | "draining" | "lost" | "offboarded";
+  last_seen_at?: string;
+  live_sessions: number;
+}
+
+export interface PAMGatewayPool {
+  members: PAMGatewayMember[];
+  name: string;
+  revision: number;
+  saved_at: string;
+  saved_by?: string;
+}
+
+export interface PAMGatewayPoolDeleted {
+  deleted: boolean;
+  name: string;
+}
+
+export interface PAMGatewayPoolList {
+  items: PAMGatewayPool[];
+}
+
+export interface PAMGatewayPoolRequest {
+  members: { address: string; agent_id: string; draining?: boolean }[];
+  revision?: number;
+}
+
 export interface PAMImportedAccount {
   approval_request_id: string;
   folder: string;
@@ -9405,6 +9436,7 @@ export interface PAMSession {
   expires_at: string;
   gateway?: { address: string; agent_id: string; aws_region?: string; aws_service?: string; ca_pem?: string; spiffe_id: string; ticket?: string };
   gateway_end?: { ended: "deadline" | "recalled"; ended_at: string };
+  gateway_lost?: boolean;
   id: string;
   postgres?: PAMPostgresCredential;
   reason?: string;

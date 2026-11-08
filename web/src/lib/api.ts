@@ -526,6 +526,9 @@ import type {
   PAMFolder,
   PAMFolderList,
   PAMFolderRequest,
+  PAMGatewayPool,
+  PAMGatewayPoolList,
+  PAMGatewayPoolRequest,
   PAMAccessTemplate,
   PAMAccessTemplateList,
   PAMAccessTemplateRequest,
@@ -2632,6 +2635,9 @@ export interface Api {
   savePAMFolder(name: string, input: PAMFolderRequest, idempotencyKey?: string): Promise<PAMFolder>;
   deletePAMFolder(name: string, revision: number, idempotencyKey?: string): Promise<unknown>;
   setPAMTargetFolder(targetType: string, id: string, folder: string, idempotencyKey?: string): Promise<PAMTarget>;
+  pamGatewayPools(): Promise<PAMGatewayPoolList>;
+  savePAMGatewayPool(name: string, input: PAMGatewayPoolRequest, idempotencyKey?: string): Promise<PAMGatewayPool>;
+  deletePAMGatewayPool(name: string, revision: number, idempotencyKey?: string): Promise<unknown>;
   pamTemplates(): Promise<PAMAccessTemplateList>;
   updatePAMTemplate(id: string, input: PAMAccessTemplateRequest, idempotencyKey?: string): Promise<PAMAccessTemplate>;
   pamTargets(): Promise<PAMTargetList>;
@@ -3627,6 +3633,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate("DELETE", `/api/v1/access/folders/${encodeURIComponent(name)}?revision=${revision}`, undefined, idempotencyKey),
   setPAMTargetFolder: (targetType, id, folder, idempotencyKey) =>
     mutate<PAMTarget>("POST", `/api/v1/access/targets/${encodeURIComponent(targetType)}/${encodeURIComponent(id)}/folder`, { folder }, idempotencyKey),
+  pamGatewayPools: () => req<PAMGatewayPoolList>("/api/v1/access/gateway-pools"),
+  savePAMGatewayPool: (name, input, idempotencyKey) =>
+    mutate<PAMGatewayPool>("PUT", `/api/v1/access/gateway-pools/${encodeURIComponent(name)}`, input, idempotencyKey),
+  deletePAMGatewayPool: (name, revision, idempotencyKey) =>
+    mutate("DELETE", `/api/v1/access/gateway-pools/${encodeURIComponent(name)}?revision=${revision}`, undefined, idempotencyKey),
   pamTemplates: () => req<PAMAccessTemplateList>("/api/v1/access/templates"),
   updatePAMTemplate: (id, input, idempotencyKey) =>
     mutate<PAMAccessTemplate>("PUT", `/api/v1/access/templates/${encodeURIComponent(id)}`, input, idempotencyKey),
@@ -4251,5 +4262,6 @@ export function identityState(i: Identity): string {
 }
 
 export type { PAMFolder, PAMFolderList, PAMFolderRequest, PAMAccessTemplate, PAMAccessTemplateList, PAMAccessTemplateRequest } from "./api-types.gen";
+export type { PAMGatewayMember, PAMGatewayPool, PAMGatewayPoolList, PAMGatewayPoolRequest } from "./api-types.gen";
 
 export type { PAMAutoApprovalRule, PAMAutoApprovalRuleRequest, PAMAutoApprovalRuleList } from "./api-types.gen";

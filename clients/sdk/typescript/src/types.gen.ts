@@ -968,6 +968,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/gateway-pools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List gateway pools: the gateways that share sessions, each one's health and live sessions */
+        get: operations["listPAMGatewayPools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/gateway-pools/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Create a gateway pool, or replace one at the revision read: its members and which of them are draining */
+        put: operations["savePAMGatewayPool"];
+        post?: never;
+        /** Delete a gateway pool at the revision you read; its gateways then serve only the targets bound to each */
+        delete: operations["deletePAMGatewayPool"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/members": {
         parameters: {
             query?: never;
@@ -22956,6 +22991,54 @@ export interface components {
              */
             severity?: "warning" | "critical";
         };
+        PAMGatewayMember: {
+            /** @description host:port requesters reach this gateway at */
+            address: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** @description takes no new sessions; its live sessions run to their end */
+            draining?: boolean;
+            /**
+             * @description read-only: lost when it has not reported within pam.gateway_lost_after
+             * @enum {string}
+             */
+            health?: "healthy" | "draining" | "lost" | "offboarded";
+            /**
+             * Format: date-time
+             * @description read-only: its last report
+             */
+            last_seen_at?: string;
+            /** @description read-only: active sessions it owns */
+            live_sessions: number;
+        };
+        PAMGatewayPool: {
+            members: components["schemas"]["PAMGatewayMember"][];
+            name: string;
+            revision: number;
+            /** Format: date-time */
+            saved_at: string;
+            saved_by?: string;
+        };
+        PAMGatewayPoolDeleted: {
+            deleted: boolean;
+            name: string;
+        };
+        PAMGatewayPoolList: {
+            items: components["schemas"]["PAMGatewayPool"][];
+        };
+        PAMGatewayPoolRequest: {
+            /** @description 1-16 gateway-role agents of the tenant, each in no other pool */
+            members: {
+                /** @description host:port requesters reach this gateway at */
+                address: string;
+                /** Format: uuid */
+                agent_id: string;
+                /** @description take no new sessions */
+                draining?: boolean;
+            }[];
+            /** @description the revision being replaced; omit to create */
+            revision?: number;
+        };
         PAMImportedAccount: {
             /** Format: uuid */
             approval_request_id: string;
@@ -23448,6 +23531,8 @@ export interface components {
                 /** Format: date-time */
                 ended_at: string;
             };
+            /** @description The pooled gateway that owned the session stopped reporting, so the session was revoked (A278); it may still serve until uncertain_until. */
+            gateway_lost?: boolean;
             /** Format: uuid */
             id: string;
             postgres?: components["schemas"]["PAMPostgresCredential"];
@@ -30989,6 +31074,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMFolderDeleted"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMGatewayPools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMGatewayPoolList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    savePAMGatewayPool: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description pool name: 1-64 lowercase letters, digits, - or _ */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMGatewayPoolRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMGatewayPool"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deletePAMGatewayPool: {
+        parameters: {
+            query?: {
+                /** @description the pool's revision you read */
+                revision?: number;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description pool name: 1-64 lowercase letters, digits, - or _ */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMGatewayPoolDeleted"];
                 };
             };
             /** @description client error */

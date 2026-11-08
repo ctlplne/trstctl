@@ -1899,6 +1899,11 @@ type PAM struct {
 	// UnusedAfter (A276) flags a brokered account with no session or
 	// check-out for this long; empty is 90 days.
 	UnusedAfter string `json:"unused_after,omitempty"`
+	// GatewayLostAfter (A278) is how long a pooled gateway may go without a
+	// heartbeat before it is lost: new sessions go to the pool's other
+	// gateways and the sessions it owned end. Empty is two minutes (four
+	// missed 30-second heartbeats); at least 30 seconds.
+	GatewayLostAfter string `json:"gateway_lost_after,omitempty"`
 	// CertificationInterval (A276) starts a certification campaign of
 	// brokered accounts and approver lists this often; empty never.
 	// CertificationReviewer is the subject it is assigned to.
@@ -5166,6 +5171,9 @@ func validatePAM(p PAM) []error {
 	_ = parsePositive("recording_retention", p.RecordingRetention)
 	_ = parsePositive("signin_retention", p.SignInRetention)
 	_ = parsePositive("unused_after", p.UnusedAfter)
+	if lost := parsePositive("gateway_lost_after", p.GatewayLostAfter); lost > 0 && lost < 30*time.Second {
+		errs = append(errs, errors.New("pam.gateway_lost_after must be at least 30s: a gateway heartbeats every 30 seconds"))
+	}
 	_ = parsePositive("certification_interval", p.CertificationInterval)
 	_ = parsePositive("health_check_interval", p.HealthCheckInterval)
 	if defaultTTL > 0 && maxTTL > 0 && defaultTTL > maxTTL {

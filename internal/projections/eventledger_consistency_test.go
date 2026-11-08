@@ -144,6 +144,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventCloudMachineChangeProposed:               "EventCloudMachineChangeProposed",
 	projections.EventCloudMachineChangeProgressed:             "EventCloudMachineChangeProgressed",
 	projections.EventPAMFolderSaved:                           "EventPAMFolderSaved",
+	projections.EventPAMGatewayPoolSaved:                      "EventPAMGatewayPoolSaved",
+	projections.EventPAMGatewayPoolDeleted:                    "EventPAMGatewayPoolDeleted",
 	projections.EventPAMFolderDeleted:                         "EventPAMFolderDeleted",
 	projections.EventPAMTargetFolderSet:                       "EventPAMTargetFolderSet",
 	projections.EventPAMEmergencyRespondersSet:                "EventPAMEmergencyRespondersSet",

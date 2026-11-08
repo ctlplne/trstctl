@@ -310,7 +310,10 @@ import (
 // approved action resolved each, while its covered offset skipped their
 // events.
 // Version 110 carries A277's per-template fresh-sign-in window.
-const SnapshotFormatVersion = 110
+// Version 111 carries A278's gateway pools: without them a restored store
+// would lose which gateways share sessions and which are draining, while its
+// covered offset skipped their events.
+const SnapshotFormatVersion = 111
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -425,6 +428,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"pam_signin_records",
 	// Format 109: A276's brokered account flags.
 	"pam_account_flags",
+	// Format 111: A278's gateway pools.
+	"pam_gateway_pools",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -808,6 +813,7 @@ SELECT jsonb_build_object(
   'pam_command_actions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_command_actions t),
   'pam_signin_records', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_signin_records t),
   'pam_account_flags', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_account_flags t),
+  'pam_gateway_pools', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_gateway_pools t),
   'aws_honey_trail_objects', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_trail_objects t),
   'slack_installs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_installs t),
   'slack_user_links', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM slack_user_links t),
