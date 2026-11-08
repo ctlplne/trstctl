@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -102,6 +103,18 @@ func TestServedTenantBaselineAppliesAndReportsDrift(t *testing.T) {
 	drift, err := h.srv.api.TenantBaselineDrift(ctx, h.tenant, scope, baseline)
 	if err != nil || !drift.InSync || len(drift.Objects) != 7 {
 		t.Fatalf("drift after apply = %+v %v", drift, err)
+	}
+	// A248-L2: every object's digest is one sha256: and its hex, and the
+	// profile's is the profile record's own spec digest; the profile and
+	// policy digests used to read "sha256:sha256:".
+	digestForm := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	for _, o := range drift.Objects {
+		if !digestForm.MatchString(o.ExpectedDigest) || !digestForm.MatchString(o.ActualDigest) {
+			t.Fatalf("%s %s digests %q / %q are not sha256:<hex>", o.Kind, o.Key, o.ExpectedDigest, o.ActualDigest)
+		}
+		if o.Kind == api.BaselineKindProfile && o.ExpectedDigest != store.ProfileSpecDigest(baseline.Profiles[0].Spec) {
+			t.Fatalf("profile digest %q is not the profile's spec digest %q", o.ExpectedDigest, store.ProfileSpecDigest(baseline.Profiles[0].Spec))
+		}
 	}
 
 	again, err := h.srv.api.ApplyTenantBaseline(ctx, h.tenant, scope, baseline)

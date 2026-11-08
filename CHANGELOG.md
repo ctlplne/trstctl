@@ -559,6 +559,12 @@
 
 ### Fixed
 
+- A tenant baseline's and a change set's profile digest is one `sha256:` and its hex
+  (A248-L2). The profile step prefixed `store.ProfileSpecDigest`, which already carries
+  the prefix, so drift, change-set plans and recorded template applications read
+  `sha256:sha256:…` for profiles. Template applications recorded earlier keep the doubled
+  form in their stored results; a provider rollout previewed before the upgrade is
+  previewed again, since its fingerprint covers each object's digest.
 - The Security scans' downloads retry a failed transfer. The gitleaks installer
   (`tools/gitleaks/install.sh`) and the Trivy step fetched their GitHub release files once,
   so a 504 from GitHub's release downloads failed the job without scanning anything (twice on

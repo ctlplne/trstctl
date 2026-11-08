@@ -460,7 +460,8 @@ func createdOrUpdated(current any) string {
 
 func (a *API) baselineProfileStep(tenantID string, p BaselineProfile) baselineStep {
 	name := strings.TrimSpace(p.Name)
-	expected := "sha256:" + store.ProfileSpecDigest(p.Spec)
+	// ProfileSpecDigest is already sha256:<hex> (A248-L2).
+	expected := store.ProfileSpecDigest(p.Spec)
 	return baselineStep{
 		read: func(ctx context.Context) (BaselineObjectState, any, error) {
 			active, err := a.store.GetActiveProfile(ctx, tenantID, name)
@@ -471,7 +472,7 @@ func (a *API) baselineProfileStep(tenantID string, p BaselineProfile) baselineSt
 			if missing {
 				return stateOf(BaselineKindProfile, name, "", expected, "", true), nil, nil
 			}
-			s := stateOf(BaselineKindProfile, name, active.ID, expected, "sha256:"+store.ProfileSpecDigest(active.Spec), false)
+			s := stateOf(BaselineKindProfile, name, active.ID, expected, store.ProfileSpecDigest(active.Spec), false)
 			s.Detail = fmt.Sprintf("active version %d", active.Version)
 			return s, &active, nil
 		},

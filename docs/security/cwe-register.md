@@ -1939,7 +1939,7 @@ not this file.
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/tenant_baseline_served_test.go:60` | owner execute is required to traverse this private test directory. |
+| `internal/server/tenant_baseline_served_test.go:61` | owner execute is required to traverse this private test directory. |
 | `internal/signing/serve.go:203` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:59` | deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276) |
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
