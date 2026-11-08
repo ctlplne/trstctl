@@ -124,6 +124,32 @@ func parseTLS(client, server []byte) (Observation, bool, bool) {
 	return obs, hello, serverEnded || len(server) >= MaxDirectionBytes
 }
 
+// ParseSession reads one TLS session as a host sees it (X5): the client's
+// and the server's plaintext handshake bytes, each up to its first record that
+// is not a handshake record. It reports the session as Parse would, except
+// that a server whose only message in the clear is a HelloRetryRequest — its
+// second ServerHello follows a ChangeCipherSpec — still reports the version,
+// suite and group that request settled, which the server must keep (RFC 8446
+// section 4.1.4), with retry set.
+func ParseSession(client, server []byte) (obs Observation, retry, ok bool) {
+	if len(client) < 3 || client[0] != 0x16 || client[1] != 0x03 {
+		return Observation{}, false, false
+	}
+	obs, ok, _ = parseTLS(client, server)
+	if ok {
+		return obs, false, true
+	}
+	msgs, _ := handshakeMessages(server)
+	for _, m := range msgs {
+		var scratch Observation
+		if m.kind == 2 && parseServerHello(m.body, &scratch) && scratch.TLSVersion == "TLSv1.3" && obs.TLSVersion == "TLSv1.3" {
+			obs.CertificateHidden = true
+			return obs, true, true
+		}
+	}
+	return obs, false, false
+}
+
 type handshakeMessage struct {
 	kind byte
 	body []byte

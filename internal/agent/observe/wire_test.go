@@ -90,6 +90,31 @@ func TestParseTLS13HelloRetryUsesTheFinalGroup(t *testing.T) {
 	}
 }
 
+// TestParseSessionReadsWhatAHostSeesX5 is the host observer's view: each
+// direction up to its first record that is not a handshake record. A full
+// TLS 1.3 handshake reads as Parse reads it; a server whose only plaintext
+// message is a HelloRetryRequest still reports the version, suite and group
+// the request settled, flagged as a retry; anything that is not a TLS
+// ClientHello is not a session.
+func TestParseSessionReadsWhatAHostSeesX5(t *testing.T) {
+	client := clientHello("retry.example.test", 0x11ec, 0x0017)
+	obs, retry, ok := ParseSession(client, serverHello13(0x1302, 0x11ec, nil))
+	if !ok || retry || obs.TLSVersion != "TLSv1.3" || obs.Group != "X25519MLKEM768" || obs.CipherSuite != "TLS_AES_256_GCM_SHA384" ||
+		obs.ServerName != "retry.example.test" || !obs.CertificateHidden {
+		t.Fatalf("a full TLS 1.3 handshake = %+v retry=%v ok=%v", obs, retry, ok)
+	}
+	obs, retry, ok = ParseSession(client, serverHello13(0x1301, 0x0017, helloRetryRandom))
+	if !ok || !retry || obs.TLSVersion != "TLSv1.3" || obs.Group != "secp256r1" || obs.CipherSuite != "TLS_AES_128_GCM_SHA256" || !obs.CertificateHidden {
+		t.Fatalf("a HelloRetryRequest alone = %+v retry=%v ok=%v", obs, retry, ok)
+	}
+	if _, _, ok := ParseSession(client, nil); ok {
+		t.Fatal("a ClientHello alone is not a session")
+	}
+	if _, _, ok := ParseSession([]byte("GET / HTTP/1.1\r\n"), serverHello13(0x1301, 0x001d, nil)); ok {
+		t.Fatal("bytes that are not a ClientHello read as a session")
+	}
+}
+
 func TestParseTLS12CertificateAndCurve(t *testing.T) {
 	leaf := []byte("leaf-certificate-der")
 	certMsg := handshake(11, append(u24(3+len(leaf)), append(u24(len(leaf)), leaf...)...))

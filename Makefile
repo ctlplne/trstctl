@@ -169,6 +169,10 @@ signing-ksp-windows: ## Cross-compile the Windows signing adapter (trstctl-ksp.d
 	$(MINGW_OBJDUMP) -p $(BIN_DIR)/trstctl-ksp.dll > $(BIN_DIR)/trstctl-ksp.objdump
 	scripts/ci/check-ksp-dll.sh $(BIN_DIR)/trstctl-ksp.objdump
 
+.PHONY: sessionobserve-bpf
+sessionobserve-bpf: ## Rebuild the host TLS session observer's BPF objects (X5) for x86-64 and arm64 in a pinned Debian container; commit them with bpf/sessionobserve.bpf.c.sha256
+	scripts/gen-sessionobserve-bpf.sh
+
 .PHONY: build-trstctl
 build-trstctl: ## Build the default static control-plane artifact used by the DoD profile
 	@mkdir -p $(BIN_DIR)

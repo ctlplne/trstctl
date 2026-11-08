@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2827 annotated sites across 31 rules. Each row is
+2839 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -804,7 +804,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (440 sites)
+### G115 — CWE-190 Integer overflow or wraparound (447 sites)
 
 | Location | Reason |
 |---|---|
@@ -853,10 +853,17 @@ not this file.
 | `internal/agent/observe/wire_test.go:14` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:15` | big-endian packing of bounded test lengths (CWE-190) |
 | `internal/agent/observe/wire_test.go:18` | test vectors are under 256 bytes (CWE-190) |
-| `internal/agent/observe/wire_test.go:115` | bounded test fixture length (CWE-190) |
-| `internal/agent/observe/wire_test.go:122` | bounded test fixture length (CWE-190) |
+| `internal/agent/observe/wire_test.go:140` | bounded test fixture length (CWE-190) |
+| `internal/agent/observe/wire_test.go:147` | bounded test fixture length (CWE-190) |
 | `internal/agent/relay/adcsscan_wire_test.go:246` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
 | `internal/agent/relay/adcsscan_wire_test.go:258` | this fixed fixture is below MaxUint16 (CWE-190). |
+| `internal/agent/sessionobserve/session.go:82` | a signed C field read back as signed (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:15` | big-endian packing of bounded test lengths (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:16` | big-endian packing of bounded test lengths (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:19` | test vectors are under 256 bytes (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:81` | test payloads are small (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:83` | the C field is signed (CWE-190) |
+| `internal/agent/sessionobserve/session_test.go:137` | small test offsets (CWE-190) |
 | `internal/agent/sshkrl/revocations_test.go:167` | test fixture strings are a few bytes, far under the uint32 bound |
 | `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:64` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1440,7 +1447,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (379 sites)
+### G204 — CWE-78 OS command injection (380 sites)
 
 | Location | Reason |
 |---|---|
@@ -1527,6 +1534,7 @@ not this file.
 | `internal/agent/reportstate/local_account_rotation_test.go:290` | current Go test executable with one fixed test selector and an owned public temp root; no shell or credentials (CWE-78) |
 | `internal/agent/reportstate/task_execution_test.go:337` | the current Go test executable and one fixed test name, public owned fixture root only, no shell or credential (CWE-78) |
 | `internal/agent/secretrender/secretrender.go:645` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
+| `internal/agent/sessionobserve/observer_linux_test.go:101` | the proof's own traffic script, named by the proof runner (CWE-78) |
 | `internal/agent/sshkrl/revocations_test.go:92` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1942,7 +1950,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (700 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (703 sites)
 
 | Location | Reason |
 |---|---|
@@ -2176,6 +2184,9 @@ not this file.
 | `internal/agent/secretrender/secretrender_test.go:175` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:230` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:258` | the test's own temp file (CWE-22) |
+| `internal/agent/sessionobserve/objects_test.go:46` | the committed probe objects beside the test (CWE-22) |
+| `internal/agent/sessionobserve/observer_linux_test.go:40` | the proof traffic's own output (CWE-22) |
+| `internal/agent/sessionobserve/observer_linux_test.go:175` | the proof traffic's own output (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:60` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:79` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
@@ -2896,13 +2907,14 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (40 sites)
+### G702 — CWE-78 OS command injection (taint) (41 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
+| `internal/agent/sessionobserve/observer_linux_test.go:101` | the proof's own traffic script, named by the proof runner (CWE-78) |
 | `internal/crypto/ssh_signin_report_windows_test.go:33` | the fixed report script this test proves, run on the test host (CWE-78) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:279` | exact compiler-output digest verified by the parent; absolute regular lab binary, fixed argv, no shell or credential argument (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
@@ -2941,7 +2953,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (144 sites)
+### G703 — CWE-22 Path traversal (taint) (145 sites)
 
 | Location | Reason |
 |---|---|
@@ -2962,6 +2974,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:224` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:255` | derived agent-owned state path |
 | `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
+| `internal/agent/sessionobserve/observer_linux_test.go:132` | the proof names its report path in the environment, never a request (CWE-22) |
 | `internal/agent/sshkrl/install.go:279` | staged path is created in the bound target directory by CreateTemp |
 | `internal/agent/sshkrl/install.go:280` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
 | `internal/agent/sshkrl/install.go:299` | path is a derived predecessor name inside the checked private rollback directory |

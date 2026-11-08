@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.1
 	github.com/aws/smithy-go v1.27.1
 	github.com/beevik/etree v1.6.0
+	github.com/cilium/ebpf v0.22.0
 	github.com/cloudflare/circl v1.6.3
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/crewjam/saml v0.5.1
