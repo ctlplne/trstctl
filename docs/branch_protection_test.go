@@ -87,6 +87,7 @@ var branchProtectionUmbrellaLanes = map[string]string{
 	"a239-x86-labs":               ciUmbrellaCheck,
 	"a239-x86-hana":               ciUmbrellaCheck,
 	"a240-windows-accounts":       ciUmbrellaCheck,
+	"a267-windows-dependents":     ciUmbrellaCheck,
 	"p9-ksp-windows-build":        ciUmbrellaCheck,
 	"p9-windows-signtool":         ciUmbrellaCheck,
 	"dod-census":                  dodUmbrellaCheck,
