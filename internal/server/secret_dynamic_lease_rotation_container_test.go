@@ -57,7 +57,7 @@ func a201Container(t *testing.T, port string, args ...string) (string, string) {
 
 // a201Exec runs a command inside a container and returns its output.
 func a201Exec(id string, args ...string) (string, error) {
-	out, err := exec.Command("docker", append([]string{"exec", id}, args...)...).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	out, err := exec.Command("docker", append([]string{"exec", id}, args...)...).CombinedOutput() // #nosec G204 G702 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	return strings.TrimSpace(string(out)), err
 }
 

@@ -392,7 +392,9 @@ the exact setup and [Current limitations](../limitations.md) for coverage.
 exact-predecessor rollback for the supported file connectors, and agent-owned
 Envoy TLS posture rollout and rollback: on the host agent of a co-resident Envoy,
 or on the network relay a remote Envoy target names (A104). Both require a
-signed agent readback before the observed CBOM state changes. The core also exposes CBOM posture, profile
+signed agent readback before the observed CBOM state changes. One run rolls a
+posture out across several hosts, each change on its own host's agent; two
+container hosts prove it (A176). The core also exposes CBOM posture, profile
 selection, campaign tracking and proof, and PQC issuance. See
 [Current limitations](../limitations.md) for client and connector limits.
 An expired commercial license does not disable Core migration or rollback;

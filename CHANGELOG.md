@@ -2,6 +2,9 @@
 
 ### Added
 
+- Posture rollout across hosts proven (A176): a lab test runs the Envoy PQC fixture twice, each copy a container host
+  with its own enrolled agent, and one migration run rolls the TLS posture out to both — each job pinned to its own
+  host's agent, each readback signed by it — and back.
 - Host TLS session observer (X5): an agent granted the new `session-observer` role (`agents:relay.grant`; migration
   0435 lets bootstrap tokens grant it) and started with `--observe-tls-sessions` attaches eBPF probes to its host's
   OpenSSL 3 libraries (`--observe-tls-libraries`) and reports, for each TLS handshake on the host, the process, side,

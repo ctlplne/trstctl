@@ -7129,8 +7129,15 @@ return to that agent and restore its exact predecessor; the relay must run with
 `--host-rollback-dir` in persistent storage. The local partner-lab Envoy xDS fixture is documented in
 `deploy/demo/lab/README.md`. Previously queued pre-agent intents still refuse
 in-process execution, and posture changed by an older build has no host-retained
-predecessor to restore. These local fixtures do not qualify an external
-appliance or a multi-host deployment.
+predecessor to restore. A rollout across hosts is proven on two container hosts
+(A176): two copies of that fixture, each a network namespace with its own Envoy,
+controller and enrolled product agent, take one migration run whose two posture
+jobs are pinned to their own hosts' agents; each agent applies its own change and
+signs its own readback, stock OpenSSL 3.5 sees TLS 1.3 with X25519MLKEM768 on both
+listeners and TLS 1.2 refused, and the run's rollback returns to each agent, which
+restores its own predecessor (TLS 1.2 again; hybrid-only TLS 1.3 refused). A real
+second machine (the x86 host, Track B) and an external appliance are what comes
+next.
 
 The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
 (and hybrid labels) when it finds them in your estate. Algorithm recognition

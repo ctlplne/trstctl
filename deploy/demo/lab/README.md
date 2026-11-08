@@ -65,6 +65,15 @@ reachable from the relay: register the target with `vantage: network`,
 relay with `--relay-claim` and `--host-rollback-dir`. A target that names no
 relay is refused before any job is queued.
 
+Two hosts (A176): `TestServedPostureRolloutAcrossTwoContainerHostsA176` in
+`internal/server` runs this fixture twice on Docker's default bridge (it needs no
+new network), each copy with the product agent built for Linux in its network
+namespace, and rolls one migration run out across both and back. Build the agent
+with `GOOS=linux CGO_ENABLED=0 go build -o <dir>/trstctl-agent ./cmd/trstctl-agent`
+for the Docker host's architecture, build an image with `socat` and OpenSSL 3.5
+(`FROM alpine` plus `apk add socat openssl`), and run the test with
+`TRSTCTL_A176_LAB_DIR=<dir>` and `TRSTCTL_A176_AGENT_IMAGE=<image>`.
+
 Independent checks can use `openssl s_client -connect 127.0.0.1:11444
 -servername pqc-edge.local.qa -tls1_2 -brief` before migration and
 `-tls1_3 -groups X25519MLKEM768 -brief` afterward. After rollback, repeat

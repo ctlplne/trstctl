@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2840 annotated sites across 31 rules. Each row is
+2848 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1448,7 +1448,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (380 sites)
+### G204 — CWE-78 OS command injection (383 sites)
 
 | Location | Reason |
 |---|---|
@@ -1725,6 +1725,9 @@ not this file.
 | `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:498` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:146` | the lab's own container names (CWE-78) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:161` | the lab's own container name (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:323` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:412` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1833,7 +1836,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (55 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (56 sites)
 
 | Location | Reason |
 |---|---|
@@ -1872,6 +1875,7 @@ not this file.
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/server/pam_served_test.go:724` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:137` | a disposable lab certificate the Envoy container reads |
 | `internal/server/protocols_served_stock_clients_test.go:51` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:86` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1951,7 +1955,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (703 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (706 sites)
 
 | Location | Reason |
 |---|---|
@@ -2474,6 +2478,9 @@ not this file.
 | `internal/server/pam_served_test.go:921` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:82` | the lab runner's build output (CWE-22) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:97` | the repository's own fixture (CWE-22) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:117` | the repository's own fixture (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/protocol_mounts.go:746` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:861` | operator-configured local file path from deployment config (CWE-22) |
@@ -2659,7 +2666,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (126 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (127 sites)
 
 | Location | Reason |
 |---|---|
@@ -2758,6 +2765,7 @@ not this file.
 | `internal/server/mcp_authorization_keycloak_test.go:252` | public cache configuration the container reads (CWE-276) |
 | `internal/server/pam_served_test.go:845` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:857` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:527` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:581` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2908,7 +2916,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (41 sites)
+### G702 — CWE-78 OS command injection (taint) (44 sites)
 
 | Location | Reason |
 |---|---|
@@ -2943,10 +2951,13 @@ not this file.
 | `internal/server/pam_gateway_mysql_served_test.go:134` | the stock mysql client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_redis_served_test.go:107` | the stock redis-cli against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_snowflake_served_test.go:101` | stock curl against the test-owned gateway tunnel (CWE-78) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:36` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:70` | the runner's own lab cluster (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1173` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2954,7 +2965,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (145 sites)
+### G703 — CWE-22 Path traversal (taint) (147 sites)
 
 | Location | Reason |
 |---|---|
@@ -3045,6 +3056,8 @@ not this file.
 | `internal/server/pam_gateway_kubernetes_kind_test.go:161` | the kubeconfig the CLI wrote for this test (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:396` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
 | `internal/server/pam_webconsole_served_test.go:400` | the operator-named handshake directory of an opt-in test run, with constant file names (CWE-22) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:60` | public lab inputs the containers read (CWE-22) |
+| `internal/server/pqc_posture_two_hosts_lab_a176_test.go:82` | the lab runner's build output (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:316` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:692` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:733` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
