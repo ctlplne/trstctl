@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2856 annotated sites across 31 rules. Each row is
+2857 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1095,12 +1095,12 @@ not this file.
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:116` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/audit_feed.go:441` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:442` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:443` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:444` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:457` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/audit_feed.go:458` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:418` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:419` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:420` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:421` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:434` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:435` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/audit_retention_scope.go:22` | PostgreSQL advisory keys are signed bit patterns. |
 | `internal/store/aws_honey_trail.go:76` | bounded above (CWE-190) |
 | `internal/store/breakglass_authority_receipt.go:36` | MaxInt64 checked above. |
@@ -1902,7 +1902,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (53 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (54 sites)
 
 | Location | Reason |
 |---|---|
@@ -1941,6 +1941,7 @@ not this file.
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
+| `internal/server/report_schedule_name_conflict_served_test.go:33` | owner execute is required to traverse this private test directory. |
 | `internal/server/tenant_baseline_served_test.go:61` | owner execute is required to traverse this private test directory. |
 | `internal/signing/serve.go:203` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:59` | deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276) |
@@ -2216,7 +2217,7 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:279` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agentid/delegation/reachtruststore.go:81` | signer-owned floor and validated key ID; open only to fsync the published directory |
 | `internal/agentid/orchestrator/reachability_key.go:156` | configured control-plane key directory; open only to fsync the sealed-key publication |
-| `internal/api/backpressure_errors_test.go:86` | reads this package's own sources in a test (CWE-22) |
+| `internal/api/backpressure_errors_test.go:88` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/public_route_abuse_guard_test.go:91` | reads this package's own sources in a test (CWE-22) |
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |

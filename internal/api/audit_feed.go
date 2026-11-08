@@ -5,8 +5,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -213,16 +211,10 @@ func (a *API) putAuditFeed(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// auditFeedNameAvailable answers a name another of the tenant's feeds holds
-// as a 409 problem (A233-L3).
+// auditFeedNameAvailable refuses a name another of the tenant's feeds holds;
+// writeError answers the *store.TenantNameHeldError as a 409 (A233-L3).
 func (a *API) auditFeedNameAvailable(ctx context.Context, tenantID, id, name string) error {
-	if err := a.store.EnsureAuditFeedNameAvailable(ctx, tenantID, id, name); err != nil {
-		if errors.Is(err, store.ErrAuditFeedNameConflict) {
-			return errStatus(http.StatusConflict, fmt.Sprintf("another audit feed is named %q; give this feed a name of its own", name))
-		}
-		return err
-	}
-	return nil
+	return a.store.EnsureAuditFeedNameAvailable(ctx, tenantID, id, name)
 }
 
 // normalizeAuditFeedConfiguration is the one security decision shared by

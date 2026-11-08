@@ -102,6 +102,12 @@ func (s *Store) ApplyComplianceReportScheduleUpsertedTx(ctx context.Context, tx 
 	if err := lockUpsertArbiterTx(ctx, tx, "compliance_report_schedules", sched.TenantID, sched.ID); err != nil {
 		return err
 	}
+	// LS-1: a schedule named as another schedule is was a refused command;
+	// such an event appended before the check existed applies as the no-op it
+	// was live, and the name stays with the schedule that held it.
+	if held, err := tenantNameHeldTx(ctx, tx, "compliance_report_schedules", sched.TenantID, sched.ID, sched.Name); err != nil || held {
+		return err
+	}
 	dispatch, err := dispatchJSON(sched.Dispatch)
 	if err != nil {
 		return err

@@ -559,6 +559,13 @@
 
 ### Fixed
 
+- A report schedule under a name another schedule holds is a 409, and nothing is recorded
+  (LS-1, the class A233-L3 found). Creating one, from the API or a tenant baseline,
+  appended the schedule event and then failed its projection on the tenant's
+  schedule-name index: a 500, and an event a projection rebuild stopped at. The
+  orchestrator now checks the name under the projection lock before the append, the API
+  answers a typed `name_held` problem (audit feeds use the same refusal), and such an
+  event already in a log applies as the no-op it was live.
 - A second audit feed with a name another feed holds is a 409, and nothing is recorded
   (A233-L3). `PUT /api/v1/audit/feeds/{id}` appended the configuration event and then
   failed its projection on the tenant's feed-name index: the caller got a 500, and the

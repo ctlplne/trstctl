@@ -885,7 +885,9 @@ on the same object still prevents the older hold's release. See
 `POST /api/v1/compliance/report-schedules/preview` validates and
 fingerprints the exact unsaved definition without appending an event, projecting a row,
 generating a report, or calling a destination. The console invalidates that review after
-any edit and keeps **Create schedule** disabled until the exact draft is ready. Saved
+any edit and keeps **Create schedule** disabled until the exact draft is ready. A tenant's
+schedules have distinct names: one under a name another schedule holds, from the API or a
+tenant baseline, answers 409 (`code: name_held`) and records nothing. Saved
 schedules expose named `/{id}/pause` and `/{id}/resume` recovery routes. Pause retains
 the definition and prior evidence; resume calculates a fresh full interval. Both actions
 are tenant-scoped, permission-checked, event-sourced, and idempotent. This limitation
