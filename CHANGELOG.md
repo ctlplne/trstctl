@@ -1718,6 +1718,12 @@
 
 ### Security
 
+- A tenant baseline's connector targets are checked against their module's setup inputs
+  (A248-L1). An operator's create and a change set checked a relay module's target
+  configuration (A242: required inputs present, typed, a secret input only as a
+  reference), but the baseline's target step did not, so a baseline wrote a module target
+  with a required input missing or with a secret input holding the secret itself. That
+  step now refuses it as the operator's create does, and writes nothing.
 - Dynamic database leases are granted an explicit access class (A239-L1). A PostgreSQL,
   MySQL or MongoDB lease used to read its grants from the role's name: any role containing
   "read" was read-only, `readwrite` and `read-write` included, and any other role (`viewer`,

@@ -164,7 +164,8 @@ module awaiting approval. On Connectors, the relay plugins table shows each modu
 state and what an approval would add, and loaded modules appear as destination types
 with a setup form built from their inputs; the API checks a module destination's
 configuration against them (required, typed, and a secret input only as a reference
-such as `secret://name`).
+such as `secret://name`), whether an operator creates it, a change set carries it or a
+tenant baseline applies it.
 
 Retries use capped backoff with jitter, and a tenant/destination circuit breaker opens
 after repeated failures, skipping new claims until a half-open probe succeeds. A failure

@@ -23,39 +23,7 @@ import (
 func TestServedConnectorModuleCensusAndSetupInputsA242(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"connector.deploy"}, func(*Deps) {})
-	module := func(state string, pending []string) *plugincensus.Module {
-		return &plugincensus.Module{
-			Version: "1.2.0", State: state, HostAPIMin: 1, HostAPIMax: 1,
-			Actions: []string{"deploy", "readback", "test"}, Idempotency: "create-new", Revocation: "delete",
-			Credentials: []string{"bearer"}, MemoryPages: 1024, TimeoutMS: 10000, PendingPermissions: pending,
-			Inputs: []plugincensus.ModuleInput{
-				{Name: "partition", Type: "string", Required: true, Description: "the appliance partition"},
-				{Name: "admin_ref", Type: "string", Secret: true},
-				{Name: "port", Type: "integer"},
-			},
-			Health: plugincensus.ModuleHealth{Calls: 4, Failures: 1, LastFailure: "timeout"},
-		}
-	}
-	census := []plugincensus.Entry{
-		{
-			Name: "partner-lb", Digest: "sha256:" + strings.Repeat("a", 64), Publisher: "sha256:" + strings.Repeat("b", 64),
-			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM,
-			Grants:           []plugincensus.Grant{{Capability: "net.http", Constraints: []string{"lb.internal:443"}}},
-			Module:           module(plugincensus.ModuleStateLoaded, nil),
-		},
-		{
-			Name: "partner-fw", Digest: "sha256:" + strings.Repeat("c", 64), Publisher: "sha256:" + strings.Repeat("b", 64),
-			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM, Grants: []plugincensus.Grant{},
-			Module: module(plugincensus.ModuleStateAwaitingApproval, []string{"capability net.http", "credential bearer"}),
-		},
-	}
-	report, err := transport.SignedPluginCensus(h.identity.Identity(), h.tenant, h.agent, census, time.Now().UTC().Add(-2*time.Second).Unix())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "relay-test", Status: "active", RelayPlugins: report}); err != nil {
-		t.Fatalf("heartbeat with module census: %v", err)
-	}
+	reportPartnerModules(t, h)
 	if carries, err := h.store.TenantNetworkRelayCarriesPlugin(ctx, h.tenant, "partner-lb"); err != nil || !carries {
 		t.Fatalf("the loaded module is not carried: %v %v", carries, err)
 	}
@@ -112,5 +80,47 @@ func TestServedConnectorModuleCensusAndSetupInputsA242(t *testing.T) {
 		if strings.Contains(body, "hunter2") {
 			t.Errorf("the refusal echoed a secret value: %s", body)
 		}
+	}
+}
+
+// reportPartnerModules heartbeats a signed relay census carrying two connector
+// modules (A242): partner-lb loaded, with a required partition, a secret
+// admin_ref and an integer port among its setup inputs, and partner-fw
+// awaiting its operator's approval.
+func reportPartnerModules(t *testing.T, h *roleHarness) {
+	t.Helper()
+	ctx := context.Background()
+	module := func(state string, pending []string) *plugincensus.Module {
+		return &plugincensus.Module{
+			Version: "1.2.0", State: state, HostAPIMin: 1, HostAPIMax: 1,
+			Actions: []string{"deploy", "readback", "test"}, Idempotency: "create-new", Revocation: "delete",
+			Credentials: []string{"bearer"}, MemoryPages: 1024, TimeoutMS: 10000, PendingPermissions: pending,
+			Inputs: []plugincensus.ModuleInput{
+				{Name: "partition", Type: "string", Required: true, Description: "the appliance partition"},
+				{Name: "admin_ref", Type: "string", Secret: true},
+				{Name: "port", Type: "integer"},
+			},
+			Health: plugincensus.ModuleHealth{Calls: 4, Failures: 1, LastFailure: "timeout"},
+		}
+	}
+	census := []plugincensus.Entry{
+		{
+			Name: "partner-lb", Digest: "sha256:" + strings.Repeat("a", 64), Publisher: "sha256:" + strings.Repeat("b", 64),
+			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM,
+			Grants:           []plugincensus.Grant{{Capability: "net.http", Constraints: []string{"lb.internal:443"}}},
+			Module:           module(plugincensus.ModuleStateLoaded, nil),
+		},
+		{
+			Name: "partner-fw", Digest: "sha256:" + strings.Repeat("c", 64), Publisher: "sha256:" + strings.Repeat("b", 64),
+			ExecutionContext: plugincensus.ExecutionContextNetworkRelayWASM, Grants: []plugincensus.Grant{},
+			Module: module(plugincensus.ModuleStateAwaitingApproval, []string{"capability net.http", "credential bearer"}),
+		},
+	}
+	report, err := transport.SignedPluginCensus(h.identity.Identity(), h.tenant, h.agent, census, time.Now().UTC().Add(-2*time.Second).Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "relay-test", Status: "active", RelayPlugins: report}); err != nil {
+		t.Fatalf("heartbeat with module census: %v", err)
 	}
 }

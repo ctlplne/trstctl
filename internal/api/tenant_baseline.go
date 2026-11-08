@@ -649,6 +649,11 @@ func (a *API) baselineTargetStep(tenantID, scope string, x BaselineDeploymentTar
 			if err := a.requireAdmittedConnector(ctx, tenantID, req.Connector); err != nil {
 				return "", "", err
 			}
+			// A248-L1: the module's setup inputs bind a baseline's target as
+			// they bind an operator's create (A242).
+			if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
+				return "", "", err
+			}
 			if enabled {
 				if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
 					return "", "", err
