@@ -92,3 +92,29 @@ func TestLimitationsADCSDatabaseIngestIsServed(t *testing.T) {
 		}
 	}
 }
+
+// DF-3: a pure ML-DSA CSR is carried by CMP (58c0c54c4) and by SCEP when the
+// client's CMS transport identity is RSA (55264a09d): both protocol mounts
+// verify and inspect through the platform's PQC-aware seams, so the doc may
+// not keep saying SCEP cannot by protocol. What SCEP cannot do is deliver its
+// enveloped reply to a signature-only transport key.
+func TestLimitationsPureMLDSAOverCMPAndSCEPAgree(t *testing.T) {
+	mounts := read(t, "../internal/server/protocol_mounts.go")
+	requireDocAnchor(t, "internal/server/protocol_mounts.go", mounts, "scepSrv := scep.New(scep.Config{", "issuer.verifyCSR", "issuer.inspectCSRInfo")
+	requireDocAnchor(t, "internal/protocols/scep/mldsa_csr_test.go", read(t, "../internal/protocols/scep/mldsa_csr_test.go"), "ML-DSA")
+	limitations := flatDoc(t, "limitations.md")
+	for _, stale := range []string{"SCEP cannot by protocol", "SCEP and CMP still verify CSRs with the core parser"} {
+		if strings.Contains(limitations, stale) {
+			t.Errorf("limitations.md still says %q, but SCEP and CMP verify a pure ML-DSA CSR through the PQC-aware seam", stale)
+		}
+	}
+	for _, want := range []string{
+		"CMP consults the same PQC parser for its carried CSR",
+		"and SCEP does too when the client's CMS transport identity is RSA",
+		"a pure ML-DSA PKCS#10 enrolls when the client's CMS transport identity",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md should state how CMP and SCEP carry a pure ML-DSA CSR (missing %q)", want)
+		}
+	}
+}

@@ -7217,7 +7217,9 @@ the cutover waits and the served leaf stays hybrid. Direct pure ML-DSA
 enrollment is served through EST (and as the SPIFFE Workload API's second
 SVID), and
 CMP consults the same PQC parser for its carried CSR (PKIMessage
-protection stays classically verified). SCEP cannot by protocol. The direct
+protection stays classically verified), and SCEP does too when the client's CMS
+transport identity is RSA (a signature-only transport key cannot receive SCEP's
+enveloped reply, a protocol limit). The direct
 identity API now accepts a caller-supplied CSR — supply `subject_csr_pem`
 on the transition to `issued` and trstctl signs that request rather than
 generating a subject key — so CSR-based enrollment, including post-quantum
