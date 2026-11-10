@@ -9705,7 +9705,13 @@ new password's effect is proven by the stand-in, and on a real host by its Track
 An `esxi` scan names a refused administrator sign-in (vim25's `InvalidLogin`) as
 `rejected` and a host that does not answer as `unreachable`. The `redfish` provider opens a
 session on any success that carries `X-Auth-Token` (DSP0266 has a service answer `201
-Created`; DMTF's reference mockup answers `204 No Content`).
+Created`; DMTF's reference mockup answers `204 No Content`), and it is proven against DMTF's
+stock Redfish Mockup Server serving DMTF's `public-rackmount1` mockup
+(`TestServedRedfishProviderAgainstDMTFsMockupServerA271O2`, run in CI's a271 lab from the
+pinned 1.3.0 release): a rotation completes, discovery reads DMTF's account shapes with their
+`RoleId`s, every session is deleted, and no password reaches an event though the mockup echoes
+a patched password back. The mockup authenticates nothing, so a new password's effect is
+proven by the stand-in, and on a real controller by its Track B row.
 
 What comes next:
 - The other device providers (`redfish`, `vcenter-sso` and A270's network devices)

@@ -1022,10 +1022,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
-  # A271-O1: the ESXi provider against stock vcsim, the vSphere API simulator
-  # from VMware's govmomi, built from the pinned release tag (its commit is
-  # checked). The in-repo stand-in proves what a password change does; vcsim
-  # proves the wire as VMware's own vim25 encoder writes it.
+  # A271-O1/O2: the ESXi provider against stock vcsim, the vSphere API
+  # simulator from VMware's govmomi, and the Redfish provider against DMTF's
+  # Redfish Mockup Server, each from a pinned release tag (its commit is
+  # checked). The in-repo stand-ins prove what a password change does; these
+  # prove the wire as the vendor's and the standards body's own tools write it.
   a271-device-labs:
     name: a271 labs (stock device simulators)
     runs-on: ubuntu-latest
@@ -1068,6 +1069,26 @@ jobs:
           set -o pipefail
           go test ./internal/server -run 'A271O1' -count=1 -v 2>&1 | tee "$RUNNER_TEMP/a271-vcsim.log"
           test "$(grep -c -- '--- PASS: TestServedESXiProvider.*A271O1' "$RUNNER_TEMP/a271-vcsim.log")" = 2
+      - name: Fetch DMTF's Redfish Mockup Server 1.3.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/redfish-mockup"
+          git clone --quiet --depth 1 --branch 1.3.0 https://github.com/DMTF/Redfish-Mockup-Server "$src"
+          test "$(git -C "$src" rev-parse HEAD)" = 23d21f9a3610f6b6fbb71ffc941296b159a524d2
+          python3 -m venv "$RUNNER_TEMP/redfish-mockup-venv"
+          "$RUNNER_TEMP/redfish-mockup-venv/bin/python" -m pip install --disable-pip-version-check \
+            'requests==2.32.3' 'grequests==0.7.0' 'multipart==1.2.1'
+          echo "TRSTCTL_REDFISH_MOCKUP=$src" >> "$GITHUB_ENV"
+          echo "TRSTCTL_REDFISH_MOCKUP_PYTHON=$RUNNER_TEMP/redfish-mockup-venv/bin/python" >> "$GITHUB_ENV"
+      - name: DMTF's Redfish mockup against the served Redfish provider (A271-O2)
+        shell: bash
+        env:
+          TRSTCTL_REQUIRE_REDFISH_MOCKUP: "1"
+        run: |
+          set -o pipefail
+          go test ./internal/server -run 'A271O2' -count=1 -v 2>&1 | tee "$RUNNER_TEMP/a271-redfish.log"
+          grep -q -- '--- PASS: TestServedRedfishProviderAgainstDMTFsMockupServerA271O2' "$RUNNER_TEMP/a271-redfish.log"
 
   build-test-lint:
     name: build / test / lint

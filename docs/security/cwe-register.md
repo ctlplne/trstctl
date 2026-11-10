@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2890 annotated sites across 33 rules. Each row is
+2892 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (616 sites)
+### G101 — CWE-798 Use of hardcoded credentials (617 sites)
 
 | Location | Reason |
 |---|---|
@@ -553,6 +553,7 @@ not this file.
 | `internal/server/protocols_served_test.go:1011` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:1088` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/protocols_served_test.go:1288` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/redfish_mockup_served_test.go:191` | fabricated test-only password for the mockup (CWE-798) |
 | `internal/server/response_integrations_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1464,7 +1465,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (388 sites)
+### G204 — CWE-78 OS command injection (389 sites)
 
 | Location | Reason |
 |---|---|
@@ -1763,6 +1764,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:49` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/redfish_mockup_served_test.go:79` | the interpreter and checkout the CI lab names, fixed arguments (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/sdk_registry_install_served_test.go:239` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/sdk_registry_install_served_test.go:285` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2962,7 +2964,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (44 sites)
+### G702 — CWE-78 OS command injection (taint) (45 sites)
 
 | Location | Reason |
 |---|---|
@@ -2999,6 +3001,7 @@ not this file.
 | `internal/server/pam_gateway_snowflake_served_test.go:101` | stock curl against the test-owned gateway tunnel (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/redfish_mockup_served_test.go:79` | the interpreter and checkout the CI lab names, fixed arguments (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
 | `internal/server/secret_csi_lab_a238_test.go:134` | the runner's own lab cluster (CWE-78) |
