@@ -192,3 +192,42 @@ func TestLimitationsClickHouseRulesAreBuiltWithoutCategories(t *testing.T) {
 		}
 	}
 }
+
+// DOC-O2: a target whose host renewals are refused as another job's, because
+// a signed record from a rolled-back successor holds its slot, is freed by the
+// stuck host renewal runbook. The guard anchors the runbook's record name,
+// directory and symptom on the agent's code, and on the relay test that
+// proves the removal frees the slot.
+func TestStuckHostRenewalRunbookMatchesTheAgent(t *testing.T) {
+	requireDocAnchor(t, "internal/agent/relay/host_renew_pending.go", read(t, "../internal/agent/relay/host_renew_pending.go"),
+		`trstcrypto.SHA256Hex([]byte(s.tenantID + "\x00" + connectorName + "\x00" + targetID))`,
+		`filepath.Join(s.root, name+".renew")`,
+		`p.Fingerprint != "" || len(p.CertPEM) != 0`,
+	)
+	requireDocAnchor(t, "internal/agent/relay/hostrenew.go", read(t, "../internal/agent/relay/hostrenew.go"),
+		"the encrypted pending host key belongs to another job or cannot be read",
+	)
+	requireDocAnchor(t, "cmd/trstctl-agent/main.go", read(t, "../cmd/trstctl-agent/main.go"),
+		`filepath.Join(filepath.Dir(o.keyPath), "host-rollbacks")`,
+		`"trstctl-agent: encrypted host rollback state enabled at %s\n"`,
+	)
+	requireDocAnchor(t, "internal/agent/relay/host_renew_manual_release_test.go", read(t, "../internal/agent/relay/host_renew_manual_release_test.go"),
+		"func TestTheRunbooksManualReleaseFreesASignedPendingHostKeyDOCO2(",
+	)
+	runbook := flatDoc(t, "runbooks/stuck-host-renewal.md")
+	for _, want := range []string{
+		"the encrypted pending host key belongs to another job or cannot be read",
+		`printf '%s\0%s\0%s' "$TENANT_ID" "$CONNECTOR" "$TARGET_ID" | sha256sum`,
+		`"$HOST_ROLLBACK_DIR/$NAME.renew"`,
+		"`host-rollbacks` beside the file its `--key` flag names",
+		"trstctl-agent: encrypted host rollback state enabled at <directory>",
+		"Remove only that one file.",
+	} {
+		if !strings.Contains(runbook, want) {
+			t.Errorf("the stuck host renewal runbook no longer says %q", want)
+		}
+	}
+	if !strings.Contains(read(t, "../mkdocs.yml"), "runbooks/stuck-host-renewal.md") {
+		t.Error("mkdocs.yml does not list the stuck host renewal runbook")
+	}
+}

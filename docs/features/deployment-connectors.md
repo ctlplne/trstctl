@@ -325,7 +325,9 @@ The control-plane operator first enables the native connector. For a local file/
 target, the operator also enrolls a host-role agent and starts an agent channel.
 Enable `endpoint.renew` in `agent_channel.claimable_job_kinds` for host-generated
 keys (`executor: agent`): this kind performs both the first issuance and later
-renewals. `connector.deploy` handles delivery of centrally prepared material and
+renewals. A target whose renewals all fail with "the encrypted pending host key
+belongs to another job or cannot be read" is freed by
+[the stuck host renewal runbook](../runbooks/stuck-host-renewal.md). `connector.deploy` handles delivery of centrally prepared material and
 does not replace `endpoint.renew`. Enable `connector.test` for target tests and
 `connector.rollback` for supported restores, `endpoint.contain` for emergency
 stop of a compromised leaf on a host listener, and `endpoint.purge` to remove

@@ -112,6 +112,7 @@ nav:
           - Upgrade rollback: runbooks/upgrade-rollback.md
           - Fleet rollout: runbooks/fleet-rollout.md
           - Fleet rollback: runbooks/fleet-rollback.md
+          - Stuck host renewal: runbooks/stuck-host-renewal.md
       - Identity provider runbooks:
           - Overview: operator/oidc-runbooks/index.md
           - Keycloak: operator/oidc-runbooks/keycloak.md
