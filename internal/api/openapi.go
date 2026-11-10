@@ -1849,7 +1849,8 @@ func componentSchemas() map[string]*Schema {
 		"revocation_status": {Type: "string", Enum: []string{"requested", "manual", "failed", "closed"},
 			Description: "what trstctl did about a revoke decision; closed only once the credential reads revoked"},
 		"revocation_detail": str(), "revocation_requested_at": timestamp(), "closed_at": timestamp(),
-		"closing_evidence": {Type: "string", Description: "what showed the credential revoked"},
+		"closing_evidence": {Type: "string", Description: "what showed the credential revoked, or that trstctl no longer holds it"},
+		"closed_as":        {Type: "string", Enum: []string{"revoked", "gone"}, Description: "why a closed revoke item closed: its credential read revoked, or trstctl no longer holds its record (gone)"},
 		"next_review_at":   {Type: "string", Format: "date-time", Description: "a keep decision's next review date; no upstream right changed"},
 	}, "item_id", "nhi_id", "nhi_kind", "display_name", "resource", "entitlement", "risk", "evidence_refs", "status", "created_at", "updated_at")
 	// Q1: a campaign generated from the access graph or stale owner attestations.

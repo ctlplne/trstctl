@@ -21312,9 +21312,14 @@ export interface components {
             };
         };
         NHIReviewItem: {
+            /**
+             * @description why a closed revoke item closed: its credential read revoked, or trstctl no longer holds its record (gone)
+             * @enum {string}
+             */
+            closed_as?: "revoked" | "gone";
             /** Format: date-time */
             closed_at?: string;
-            /** @description what showed the credential revoked */
+            /** @description what showed the credential revoked, or that trstctl no longer holds it */
             closing_evidence?: string;
             /** Format: date-time */
             created_at: string;

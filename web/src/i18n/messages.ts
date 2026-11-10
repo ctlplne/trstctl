@@ -17990,6 +17990,10 @@ export const messages = {
     description: "Q1-L2: fallback when an operator's retry request fails.",
   },
   "policy.nhiReview.outcome.closed": { defaultMessage: "Closed: the credential reads revoked", description: "Q1: the item closed on evidence." },
+  "policy.nhiReview.outcome.gone": {
+    defaultMessage: "Closed: trstctl no longer holds this credential",
+    description: "Q1-L3: the item closed because the reviewed credential's record is gone, so there is nothing left to revoke.",
+  },
   "policy.nhiReview.outcome.nextReview": {
     defaultMessage: "Next review {date}; no upstream right changed",
     description: "Q1: a keep decision's next review date.",

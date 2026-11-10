@@ -146,7 +146,8 @@ export function AccessReviewOutcome({
     requested: t("policy.nhiReview.outcome.requested"),
     manual: t("policy.nhiReview.outcome.manual"),
     failed: t("policy.nhiReview.outcome.failed"),
-    closed: t("policy.nhiReview.outcome.closed"),
+    // Q1-L3: an item also closes when trstctl no longer holds the credential.
+    closed: item.closed_as === "gone" ? t("policy.nhiReview.outcome.gone") : t("policy.nhiReview.outcome.closed"),
   }[item.revocation_status];
   return (
     <div className="mt-1 text-xs">

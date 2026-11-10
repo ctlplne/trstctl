@@ -1502,8 +1502,11 @@ never live in the API process. What you can do end to end against the running bi
   (`POST /api/v1/access/reviews/{id}/items/{item_id}/revocation-retry`, CLI
   `access reviews retry-revocation`, or Retry revocation on the item). Each
   attempt carries its own idempotency key, which PAM requires to retry a failed
-  revocation. A credential trstctl no longer holds leaves its item open. Decoy logins no longer
-  appear in the access graph.
+  revocation. A credential trstctl no longer holds (its record removed) is
+  evidence too (Q1-L3): the revoke item closes with `closed_as: gone` and
+  evidence naming what is gone, instead of staying open and retrying a revoke
+  of nothing; an item whose credential reads revoked closes as `revoked`. Decoy
+  logins no longer appear in the access graph.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before

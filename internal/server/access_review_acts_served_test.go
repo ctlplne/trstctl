@@ -32,6 +32,7 @@ type q1Item struct {
 	RevocationStatus string     `json:"revocation_status"`
 	RevocationDetail string     `json:"revocation_detail"`
 	ClosingEvidence  string     `json:"closing_evidence"`
+	ClosedAs         string     `json:"closed_as"`
 	ClosedAt         *time.Time `json:"closed_at"`
 	NextReviewAt     *time.Time `json:"next_review_at"`
 }

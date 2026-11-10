@@ -29,7 +29,27 @@ const nhiReviewActGrace = 2 * time.Minute
 const (
 	nhiReviewTargetRevoked = "revoked"
 	nhiReviewTargetFailed  = "failed"
+	// nhiReviewTargetGone: trstctl no longer holds the credential's record
+	// (Q1-L3). There is nothing left to revoke, so a revoke decision's item
+	// closes on that evidence instead of staying open on every pass.
+	nhiReviewTargetGone = "gone"
 )
+
+// nhiReviewGoneEvidence opens the closing evidence of an item closed because
+// its credential is gone; the item's closed_as reads it (Q1-L3).
+const nhiReviewGoneEvidence = "gone: "
+
+// nhiReviewClosedAs says how a closed revoke item closed: on the credential
+// read revoked, or on the credential being gone.
+func nhiReviewClosedAs(item store.NHIReviewItem) string {
+	if item.RevocationStatus != store.NHIReviewRevocationClosed {
+		return ""
+	}
+	if strings.HasPrefix(item.ClosingEvidence, nhiReviewGoneEvidence) {
+		return nhiReviewTargetGone
+	}
+	return nhiReviewTargetRevoked
+}
 
 // NHIReviewIdempotencyKey is the one key every attempt to act on a review item
 // uses.
@@ -223,7 +243,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 		}
 		s, err := a.pam.GetPAMSession(ctx, tenantID, id)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the PAM session")
 		}
 		switch s.Status {
 		case store.PAMSessionStatusRevoked:
@@ -240,7 +260,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 		targetType, targetID, _ := strings.Cut(id, "/")
 		target, err := a.pam.GetPAMTarget(ctx, tenantID, targetType, targetID)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the brokered account")
 		}
 		if !target.Enabled {
 			return nhiReviewTargetRevoked, "brokered account disabled" + at(target.DisabledAt), nil
@@ -248,7 +268,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 	case "token", "msession":
 		t, err := a.store.GetAPIToken(ctx, tenantID, id)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the API token")
 		}
 		if t.RevokedAt != nil {
 			by := ""
@@ -270,7 +290,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 		}
 		lease, err := getDynamicLeaseContext(ctx, engine, id)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the dynamic-secret lease")
 		}
 		if lease.State == dynsecret.LeaseRevoked {
 			return nhiReviewTargetRevoked, "dynamic-secret lease revoked" + at(lease.RevokedAt), nil
@@ -278,7 +298,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 	case "cert":
 		c, err := a.store.GetCertificate(ctx, tenantID, id)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the certificate")
 		}
 		if c.RevokedAt != nil {
 			return nhiReviewTargetRevoked, "certificate " + c.Serial + " revoked" + at(c.RevokedAt), nil
@@ -289,7 +309,7 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 	case "id":
 		it, err := a.store.GetIdentity(ctx, tenantID, id)
 		if err != nil {
-			return "", "", nhiReviewReadError(err)
+			return nhiReviewReadError(err, "the identity")
 		}
 		if it.Status == "revoked" {
 			return nhiReviewTargetRevoked, "identity " + it.Name + " revoked", nil
@@ -298,19 +318,20 @@ func (a *API) nhiReviewTargetState(ctx context.Context, tenantID, nhiID string, 
 	return "", "", nil
 }
 
-// nhiReviewReadError treats a credential trstctl no longer holds as not yet
-// evidence: its item stays open and visible instead of failing every pass.
-func nhiReviewReadError(err error) error {
+// nhiReviewReadError reads a credential trstctl no longer holds as gone
+// (Q1-L3), with what is gone; any other read error stays an error.
+func nhiReviewReadError(err error, what string) (string, string, error) {
 	if store.IsNotFound(err) {
-		return nil
+		return nhiReviewTargetGone, nhiReviewGoneEvidence + "trstctl no longer holds " + what + "; its record was removed, so there is nothing left to revoke", nil
 	}
-	return err
+	return "", "", err
 }
 
 // ReconcileNHIReviewRevocations finishes the tenant's revoke decisions: a
 // decision whose act was interrupted acts now with the same idempotency key,
 // a failed revocation is retried once its backoff passes (Q1-L2), and an item
-// closes when its credential reads revoked. It returns how many items closed.
+// closes when its credential reads revoked or is gone (Q1-L3). It returns how
+// many items closed.
 func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string, now time.Time) (int, error) {
 	if a.orch == nil || a.store == nil {
 		return 0, nil
@@ -347,7 +368,7 @@ func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string
 			continue
 		}
 		switch {
-		case state == nhiReviewTargetRevoked:
+		case state == nhiReviewTargetRevoked || state == nhiReviewTargetGone:
 			if _, err := a.orch.CloseNHIReviewItem(ctx, tenantID, item.CampaignID, item.ItemID, detail); err != nil {
 				note(err)
 				continue

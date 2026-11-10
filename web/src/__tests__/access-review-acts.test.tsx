@@ -123,6 +123,15 @@ describe("Q1 access reviews that act", () => {
     expect(screen.getByText(/no upstream right changed/)).toBeInTheDocument();
   });
 
+  it("says an item closed because trstctl no longer holds the credential (Q1-L3)", () => {
+    render(
+      <AccessReviewOutcome item={item({ revocation_status: "closed", closed_as: "gone", closing_evidence: "gone: trstctl no longer holds the API token" })} />,
+    );
+    expect(screen.getByText("Closed: trstctl no longer holds this credential")).toBeInTheDocument();
+    expect(screen.getByText("gone: trstctl no longer holds the API token")).toBeInTheDocument();
+    expect(screen.queryByText("Closed: the credential reads revoked")).not.toBeInTheDocument();
+  });
+
   it("generates a privileged account certification with no target (A276)", async () => {
     apiMock.generateNHIReviewCampaign.mockResolvedValueOnce({ campaign: { id: "c2", item_count: 4 } });
     const onGenerated = vi.fn();

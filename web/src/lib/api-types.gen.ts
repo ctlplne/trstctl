@@ -7622,6 +7622,7 @@ export interface NHIReviewGenerateResponse {
 }
 
 export interface NHIReviewItem {
+  closed_as?: "revoked" | "gone";
   closed_at?: string;
   closing_evidence?: string;
   created_at: string;

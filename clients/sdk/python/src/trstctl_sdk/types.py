@@ -10570,6 +10570,7 @@ NHIReviewGenerateResponse = TypedDict(
 NHIReviewItem = TypedDict(
     'NHIReviewItem',
     {
+        'closed_as': str,
         'closed_at': str,
         'closing_evidence': str,
         'created_at': str,

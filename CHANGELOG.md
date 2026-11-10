@@ -580,6 +580,12 @@
 
 ### Fixed
 
+- An access review item whose credential trstctl no longer holds now closes (Q1-L3). A revoke
+  decision's item closed only when its credential read revoked; a credential whose record was
+  removed read as no evidence at all, so the item stayed open on every reconcile pass and a failed
+  revoke of it was retried for a week. Gone is now evidence of its own: the item closes with
+  `closed_as: gone` and evidence naming what is gone (an item closed on a revoked credential reads
+  `closed_as: revoked`), and the console says "Closed: trstctl no longer holds this credential".
 - Audit archive downloads are limited per caller as well as per tenant (A234-L3). One bucket per
   tenant, six a minute, let one caller holding `audit:archive.read` spend the tenant's budget and
   lock its other auditors out. Each caller now has six a minute, taken before the tenant's thirty,

@@ -35513,12 +35513,20 @@
       },
       "NHIReviewItem": {
         "properties": {
+          "closed_as": {
+            "description": "why a closed revoke item closed: its credential read revoked, or trstctl no longer holds its record (gone)",
+            "enum": [
+              "revoked",
+              "gone"
+            ],
+            "type": "string"
+          },
           "closed_at": {
             "format": "date-time",
             "type": "string"
           },
           "closing_evidence": {
-            "description": "what showed the credential revoked",
+            "description": "what showed the credential revoked, or that trstctl no longer holds it",
             "type": "string"
           },
           "created_at": {

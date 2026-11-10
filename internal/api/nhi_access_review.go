@@ -58,7 +58,10 @@ type nhiReviewItemResponse struct {
 	RevocationRequestedAt *time.Time `json:"revocation_requested_at,omitempty"`
 	ClosedAt              *time.Time `json:"closed_at,omitempty"`
 	ClosingEvidence       string     `json:"closing_evidence,omitempty"`
-	NextReviewAt          *time.Time `json:"next_review_at,omitempty"`
+	// ClosedAs says why a closed revoke item closed: its credential read
+	// revoked, or trstctl no longer holds it (gone, Q1-L3).
+	ClosedAs     string     `json:"closed_as,omitempty"`
+	NextReviewAt *time.Time `json:"next_review_at,omitempty"`
 }
 
 //trstctl:mutation
@@ -218,6 +221,6 @@ func toNHIReviewItemResponse(item store.NHIReviewItem) nhiReviewItemResponse {
 		DecidedAt: item.DecidedAt, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 		RevocationStatus: item.RevocationStatus, RevocationDetail: item.RevocationDetail,
 		RevocationRequestedAt: item.RevocationRequestedAt, ClosedAt: item.ClosedAt,
-		ClosingEvidence: item.ClosingEvidence, NextReviewAt: item.NextReviewAt,
+		ClosingEvidence: item.ClosingEvidence, ClosedAs: nhiReviewClosedAs(item), NextReviewAt: item.NextReviewAt,
 	}
 }
