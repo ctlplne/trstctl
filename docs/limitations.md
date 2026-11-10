@@ -9694,7 +9694,14 @@ in place; the console registers `account` targets. Proof today:
 `TestServedESXiRotationA271`, `TestVCenterSSORotationA271` and
 `TestServedVCenterSSORotationA271` and `TestServedAccountCheckoutA271` against stand-ins built from the DMTF Redfish
 specification, HPE's iLO Redfish reference, the vSphere Web Services SDK and VMware's
-dir-cli articles; no controller, host or appliance has run them.
+dir-cli articles; no controller, host or appliance has run them. The `esxi` provider is
+also proven against stock vcsim, the vSphere API simulator from VMware's govmomi, in ESX
+mode (`TestServedESXiProviderAgainstStockVcsimA271O1` and
+`TestServedESXiProviderNamesStockVcsimsLoginFaultA271O1`, run in CI's a271 lab from the
+pinned v0.56.2 release): its SOAP envelopes, the ESX managed-object references, the
+session cookie, vim25's fault encoding and the discovery answers interoperate, and every
+session it opens is logged out. vcsim accepts a password change without storing it, so a
+new password's effect is proven by the stand-in, and on a real host by its Track B row.
 
 What comes next:
 - A vCenter run that also confirms `dir-cli`'s output on vSphere 8.

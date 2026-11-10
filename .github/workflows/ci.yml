@@ -1022,9 +1022,56 @@ jobs:
           if-no-files-found: warn
           retention-days: 7  # per-run artifact (CI-L32: keeps the repository artifact list short)
 
+  # A271-O1: the ESXi provider against stock vcsim, the vSphere API simulator
+  # from VMware's govmomi, built from the pinned release tag (its commit is
+  # checked). The in-repo stand-in proves what a password change does; vcsim
+  # proves the wire as VMware's own vim25 encoder writes it.
+  a271-device-labs:
+    name: a271 labs (stock device simulators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Prefetch dependencies (retries a transient module-proxy failure)
+        run: scripts/ci/go-mod-download.sh
+      - name: Restore the pinned embedded PostgreSQL archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.embedded-postgres-go
+            /tmp/trstctl-pg-archives
+          key: embedded-postgres-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/server/bundled_pg_pins.go', 'third_party/embedded-postgres/version_strategy.go') }}
+      - name: Offer the restored PostgreSQL archive to the bundled server
+        run: scripts/ci/seed-bundled-pg-archive.sh
+      - name: Build stock vcsim from govmomi v0.56.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/govmomi"
+          git clone --quiet --depth 1 --branch v0.56.2 https://github.com/vmware/govmomi "$src"
+          test "$(git -C "$src" rev-parse HEAD)" = 10a792caabf08426f90d2e58d4a3a41b0a427c0b
+          (cd "$src/vcsim" && CGO_ENABLED=0 go build -trimpath -o "$(go env GOPATH)/bin/vcsim" .)
+          command -v vcsim
+      - name: Stock vcsim against the served ESXi provider (A271-O1)
+        shell: bash
+        env:
+          TRSTCTL_REQUIRE_VCSIM: "1"
+        run: |
+          set -o pipefail
+          go test ./internal/server -run 'A271O1' -count=1 -v 2>&1 | tee "$RUNNER_TEMP/a271-vcsim.log"
+          test "$(grep -c -- '--- PASS: TestServedESXiProvider.*A271O1' "$RUNNER_TEMP/a271-vcsim.log")" = 2
+
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer, a266-scale-smoke]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, os-package-checks, perf-gates, core-integration-succession, core-integration-wire, a239-x86-labs, a239-x86-hana, a240-windows-accounts, a267-windows-dependents, p9-ksp-windows-build, p9-windows-signtool, x5-session-observer, a266-scale-smoke, a271-device-labs]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

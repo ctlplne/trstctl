@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2887 annotated sites across 33 rules. Each row is
+2890 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (614 sites)
+### G101 — CWE-798 Use of hardcoded credentials (616 sites)
 
 | Location | Reason |
 |---|---|
@@ -493,6 +493,8 @@ not this file.
 | `internal/server/dynamic_secret_tailscale_served_test.go:48` | fabricated stand-in API token (CWE-798) |
 | `internal/server/dynamic_secret_totp_lab_test.go:38` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/endpoint_replacement_served_test.go:29` | fabricated test-only credential (CWE-798) |
+| `internal/server/esxi_vcsim_served_test.go:268` | fabricated test-only password for the simulator (CWE-798) |
+| `internal/server/esxi_vcsim_served_test.go:356` | fabricated test-only password for the simulator (CWE-798) |
 | `internal/server/external_observer_served_test.go:62` | fabricated fixture credential (CWE-798) |
 | `internal/server/gcp_workload_identity_served_test.go:27` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:25` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1462,7 +1464,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (387 sites)
+### G204 — CWE-78 OS command injection (388 sites)
 
 | Location | Reason |
 |---|---|
@@ -1679,6 +1681,7 @@ not this file.
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/esxi_vcsim_served_test.go:70` | the stock simulator on PATH with fixed arguments (CWE-78) |
 | `internal/server/github_action_served_test.go:246` | the test deliberately executes a generated copy of the fixed shipped action script (CWE-78). |
 | `internal/server/java_sdk_served_test.go:56` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/java_sdk_served_test.go:60` | test executes a fixed local tool or fixture it built itself (CWE-78) |
