@@ -4193,10 +4193,15 @@ than sending an operator looking for a credential that was never there.
   healthy certificates as broken, serials normalize so the same certificate from
   two exports is not two inventory rows, and an unparseable NotAfter is counted
   as a VISIBILITY GAP rather than treated as an expiry in year zero. Scope,
-  stated exactly: this is the transport and parsing layer only. NOTHING YET
-  CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
-  pulls a CA database into inventory, so issued/pending/revoked state is not
-  reconciled by C4/XREC. **The AD CS issuer health view is served** (A161):
+  stated exactly: this is the parsing layer, and the ingest that runs it is
+  served — `POST /api/v1/adcs/ca-database/ingest` for rows a relay collected,
+  and the relay's own certutil read at `POST /api/v1/adcs/ca-database/collect`
+  (see AD CS certificate-database lifecycle visibility, below). It yields
+  per-disposition counts per CA, not inventory rows: no certificate from a CA
+  database enters the inventory, nothing collects on a schedule (an operator
+  asks for each read), and XREC has no AD CS source, so a certificate's
+  issued/pending/revoked state at the CA is not reconciled by C4/XREC.
+  **The AD CS issuer health view is served** (A161):
   `GET /api/v1/adcs/issuers/health` (`trstctl adcs issuers health`; console
   Posture → AD CS issuers) reports, per `adcs` external CA the tenant can use,
   healthy / degraded / failing / idle over seven days from the certificates

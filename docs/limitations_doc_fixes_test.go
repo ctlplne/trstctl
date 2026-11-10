@@ -65,3 +65,30 @@ func TestLimitationsCAHierarchyFlowsAreServed(t *testing.T) {
 		}
 	}
 }
+
+// DF-2: the AD CS CA-database ingest is served (a relay's certutil rows, or a
+// relay read the control plane queues, become per-CA disposition counts), so
+// limitations.md may not say that nothing calls it. What stays true and must
+// be said: the counts are not inventory rows, nothing collects on a schedule,
+// and XREC has no AD CS source.
+func TestLimitationsADCSDatabaseIngestIsServed(t *testing.T) {
+	requireDocAnchor(t, "internal/api/routes_platform.go", read(t, "../internal/api/routes_platform.go"),
+		`path: "/api/v1/adcs/ca-database/ingest"`,
+		`path: "/api/v1/adcs/ca-database/collect"`,
+	)
+	limitations := flatDoc(t, "limitations.md")
+	for _, stale := range []string{"NOTHING YET CALLS THE DATABASE INGESTION", "no scheduled or served ingest"} {
+		if strings.Contains(limitations, stale) {
+			t.Errorf("limitations.md still says %q, but the CA-database ingest and the relay read are served", stale)
+		}
+	}
+	for _, want := range []string{
+		"the ingest that runs it is served",
+		"per-disposition counts per CA, not inventory rows",
+		"XREC has no AD CS source",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md should say what the served CA-database ingest does and does not do (missing %q)", want)
+		}
+	}
+}
