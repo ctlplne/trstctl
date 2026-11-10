@@ -8747,15 +8747,16 @@ the API scopes its token needs. `TestServedSOARPlaybookPackN7` checks every step
 against the served OpenAPI document and runs every playbook against the served API
 with a token holding only the pack's scopes; running them found that certificate
 revocation needs `certs:issue` beside the route's declared `identities:write`, which
-the pack's scopes now carry.
+the pack's scopes now carry. A playbook stops where a SOAR would when a step's status
+or assert says no, and the test exercises that refusal (N7-L2): the honeytoken
+playbook run on a bait nobody has used stops at its read step and the bait stays
+active; on a triggered bait it retires it.
 
 What comes next:
 - Packs in a specific SOAR product's own playbook or app format are integrations
   the owner names; none is named yet (listed for approval).
 - Running the playbooks inside a SOAR platform is a live proof (SOAR vendor
   accounts, Track B).
-- The OpenAPI permission of `bulkRevokeCertificates` names `identities:write` but
-  the handler also requires `certs:issue`; the document should say both.
 
 ## Slack app with approve and deny buttons (N8) — served
 

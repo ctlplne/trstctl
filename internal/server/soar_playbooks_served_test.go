@@ -124,9 +124,30 @@ func soarAssert(doc any, want map[string]any) error {
 	return nil
 }
 
+// soarRefusal is a playbook stopping where a SOAR would: a step's response
+// status or assert said no (N7-L2).
+type soarRefusal struct {
+	Step   string
+	Reason string
+}
+
+func (r *soarRefusal) Error() string { return r.Step + ": " + r.Reason }
+
 // runSOARPlaybook runs a playbook the way a SOAR does: HTTP only, with the
 // pack's bearer token and tenant header. between runs while a step waits.
 func runSOARPlaybook(t *testing.T, h *servedHarness, token string, pb soarPlaybook, inputs map[string]string, between func()) map[string]string {
+	t.Helper()
+	vars, refusal := runSOARPlaybookUntilRefused(t, h, token, pb, inputs, between)
+	if refusal != nil {
+		t.Fatalf("%s/%v", pb.ID, refusal)
+	}
+	return vars
+}
+
+// runSOARPlaybookUntilRefused runs a playbook and returns where it stopped
+// when a step refuses, as a SOAR stops the playbook there (N7-L2): no later
+// step runs.
+func runSOARPlaybookUntilRefused(t *testing.T, h *servedHarness, token string, pb soarPlaybook, inputs map[string]string, between func()) (map[string]string, *soarRefusal) {
 	t.Helper()
 	vars := map[string]string{}
 	for k, v := range inputs {
@@ -186,21 +207,21 @@ func runSOARPlaybook(t *testing.T, h *servedHarness, token string, pb soarPlaybo
 		}
 		status, doc := send()
 		if !slices.Contains(step.Expect, status) {
-			t.Fatalf("%s/%s: HTTP %d, want %v: %v", pb.ID, step.Name, status, step.Expect, doc)
+			return vars, &soarRefusal{Step: step.Name, Reason: fmt.Sprintf("HTTP %d, want %v: %v", status, step.Expect, doc)}
 		}
 		if err := soarAssert(doc, step.Assert); err != nil {
-			t.Fatalf("%s/%s: %v", pb.ID, step.Name, err)
+			return vars, &soarRefusal{Step: step.Name, Reason: err.Error()}
 		}
 		if step.Until != nil {
 			deadline := time.Now().Add(time.Duration(step.Until.MaxSeconds) * time.Second)
 			for soarAssert(doc, step.Until.Assert) != nil {
 				if time.Now().After(deadline) {
-					t.Fatalf("%s/%s never reached %v: %v", pb.ID, step.Name, step.Until.Assert, doc)
+					return vars, &soarRefusal{Step: step.Name, Reason: fmt.Sprintf("never reached %v: %v", step.Until.Assert, doc)}
 				}
 				between()
 				status, doc = send()
 				if !slices.Contains(step.Expect, status) {
-					t.Fatalf("%s/%s: HTTP %d while waiting", pb.ID, step.Name, status)
+					return vars, &soarRefusal{Step: step.Name, Reason: fmt.Sprintf("HTTP %d while waiting", status)}
 				}
 			}
 		}
@@ -210,7 +231,7 @@ func runSOARPlaybook(t *testing.T, h *servedHarness, token string, pb soarPlaybo
 			}
 		}
 	}
-	return vars
+	return vars, nil
 }
 
 type soarFindingScanner struct{}
@@ -343,9 +364,32 @@ func TestServedSOARPlaybookPackN7(t *testing.T) {
 	if status != http.StatusCreated || json.Unmarshal(raw, &bait) != nil {
 		t.Fatalf("plant bait: HTTP %d %s", status, raw)
 	}
+	// N7-L2: before anyone has used it, the playbook refuses at its read
+	// step, so it never revokes the bait: an untriggered bait keeps waiting.
+	baitState := func() string {
+		t.Helper()
+		status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/honeytokens/"+bait.ID, soar, nil)
+		var read struct {
+			State string `json:"state"`
+		}
+		if status != http.StatusOK || json.Unmarshal(raw, &read) != nil {
+			t.Fatalf("read bait: HTTP %d %s", status, raw)
+		}
+		return read.State
+	}
+	_, refusal := runSOARPlaybookUntilRefused(t, h, soar, byID["retire-triggered-honeytoken"], map[string]string{"honeytoken_id": bait.ID}, drain)
+	if refusal == nil || refusal.Step != "read" || !strings.Contains(refusal.Reason, "/state") {
+		t.Fatalf("retiring an untriggered bait = %v, want the playbook to refuse at its read step", refusal)
+	}
+	if state := baitState(); state != "active" {
+		t.Fatalf("after the refused playbook the untriggered bait reads %q, want active", state)
+	}
 	if status, _ := secretsReq(t, h, http.MethodGet, "/api/v1/access/roles", bait.Token, nil); status != http.StatusUnauthorized {
 		t.Fatalf("bait use: HTTP %d", status)
 	}
 	runSOARPlaybook(t, h, soar, byID["retire-triggered-honeytoken"], map[string]string{"honeytoken_id": bait.ID}, drain)
+	if state := baitState(); state != "revoked" {
+		t.Fatalf("after the playbook a triggered bait reads %q, want revoked", state)
+	}
 	t.Logf("N7_SOAR_PACK_OK pack=%s playbooks=%d scopes=%v", pack.Pack, len(playbooks), pack.API.Scopes)
 }
