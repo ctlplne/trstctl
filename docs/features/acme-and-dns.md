@@ -43,7 +43,11 @@ byte-for-byte with the externally served request URL (scheme, authority, path, a
 query), as RFC 8555 §6.4 requires. A routing intermediary therefore cannot move a valid
 account signature to another ACME action. Each order offers three challenge types by
 default (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one [issuance
-path](issuance-and-cas.md) to mint the certificate. Account registration is idempotent
+path](issuance-and-cas.md) to mint the certificate. When the order's certificate profile
+refuses the request, finalize answers the client's error, not a server fault: a name the
+profile does not permit is `400 rejectedIdentifier`, and anything else it refuses (key
+algorithm or size, extended key usage, protocol, validity) is `400 badCSR`, each naming the
+refusal. Account registration is idempotent
 by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
 The certificate URL returns `application/pem-certificate-chain` with the

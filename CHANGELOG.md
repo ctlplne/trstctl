@@ -565,6 +565,12 @@
 
 ### Fixed
 
+- An ACME finalize the certificate profile refuses answers the client's error (P15-L10). It
+  answered `500 serverInternal` ("issuance failed: profile ... does not permit DNS SAN
+  ..."), telling the client the server had failed, so clients retried a request that could
+  never succeed. A name the profile does not permit is now `400 rejectedIdentifier` and any
+  other refusal `400 badCSR` (RFC 8555 section 6.7), naming the refusal; a profile that
+  cannot be evaluated stays a server error.
 - A host renewal heals after a certificate authority outage with nothing cleared on the
   agent host (A36, an outside lab's DNS-01 test). A job whose CA attempt was left
   unconfirmed could never finish, every retry answered 409, and once that job was

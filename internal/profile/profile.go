@@ -12,6 +12,7 @@ package profile
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"regexp"
@@ -253,6 +254,28 @@ type Request struct {
 	Protocol       string        // "api" | "acme" | "est" | "scep" | "cmp" | ...
 }
 
+// Refusal is a request the certificate profile refuses (P15-L10), as
+// opposed to a profile that cannot be evaluated. Identifier is true when what
+// it refuses is a name the request asks for: an enrollment protocol answers
+// that as a refused identifier, and any other refusal as an unacceptable
+// request.
+type Refusal struct {
+	Identifier bool
+	reason     string
+	cause      error
+}
+
+func (r *Refusal) Error() string { return r.reason }
+
+// Unwrap is the error that kept a name from being evaluated, if any.
+func (r *Refusal) Unwrap() error { return r.cause }
+
+// refuse builds a Refusal from a format, keeping a wrapped cause.
+func refuse(identifier bool, format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	return &Refusal{Identifier: identifier, reason: err.Error(), cause: errors.Unwrap(err)}
+}
+
 // Validate returns nil if r satisfies p, or a descriptive error naming the first
 // violation (so a rejection has a clear reason — S8.1 acceptance). It enforces by
 // construction, never "best effort".
@@ -263,24 +286,24 @@ func (p CertificateProfile) Validate(r Request) error {
 		return err
 	}
 	if len(p.AllowedKeyAlgorithms) > 0 && !contains(p.AllowedKeyAlgorithms, r.KeyAlgorithm) {
-		return fmt.Errorf("%s does not allow key algorithm %q (allowed: %s)", id, r.KeyAlgorithm, strings.Join(p.AllowedKeyAlgorithms, ", "))
+		return refuse(false, "%s does not allow key algorithm %q (allowed: %s)", id, r.KeyAlgorithm, strings.Join(p.AllowedKeyAlgorithms, ", "))
 	}
 	switch r.KeyAlgorithm {
 	case "RSA":
 		if floor := p.EffectiveMinRSABits(); r.KeyBits < floor {
 			if p.MinRSABits == 0 {
-				return fmt.Errorf("%s requires RSA keys of at least %d bits (the default when min_rsa_bits is unset), got %d", id, floor, r.KeyBits)
+				return refuse(false, "%s requires RSA keys of at least %d bits (the default when min_rsa_bits is unset), got %d", id, floor, r.KeyBits)
 			}
-			return fmt.Errorf("%s requires RSA keys of at least %d bits, got %d", id, floor, r.KeyBits)
+			return refuse(false, "%s requires RSA keys of at least %d bits, got %d", id, floor, r.KeyBits)
 		}
 	case "ECDSA":
 		if p.MinECDSABits > 0 && r.KeyBits < p.MinECDSABits {
-			return fmt.Errorf("%s requires ECDSA curves of at least %d bits, got %d", id, p.MinECDSABits, r.KeyBits)
+			return refuse(false, "%s requires ECDSA curves of at least %d bits, got %d", id, p.MinECDSABits, r.KeyBits)
 		}
 	}
 	for _, eku := range r.RequestedEKUs {
 		if len(p.AllowedEKUs) > 0 && !contains(p.AllowedEKUs, eku) {
-			return fmt.Errorf("%s does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(p.AllowedEKUs, ", "))
+			return refuse(false, "%s does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(p.AllowedEKUs, ", "))
 		}
 	}
 	return nil
@@ -292,10 +315,10 @@ func (p CertificateProfile) Validate(r Request) error {
 func (p CertificateProfile) ValidateRequestMetadata(r Request) error {
 	id := fmt.Sprintf("profile %q v%d", p.Name, p.Version)
 	if len(p.AllowedProtocols) > 0 && r.Protocol != "" && !contains(p.AllowedProtocols, r.Protocol) {
-		return fmt.Errorf("%s does not permit enrollment protocol %q", id, r.Protocol)
+		return refuse(false, "%s does not permit enrollment protocol %q", id, r.Protocol)
 	}
 	if p.MaxValidity > 0 && r.TTL > time.Duration(p.MaxValidity) {
-		return fmt.Errorf("%s caps validity at %s, requested %s", id, time.Duration(p.MaxValidity), r.TTL)
+		return refuse(false, "%s caps validity at %s, requested %s", id, time.Duration(p.MaxValidity), r.TTL)
 	}
 	sanPolicy := p.hasSANPolicy()
 	if len(p.AllowedIPCIDRs) > 0 {
@@ -306,47 +329,47 @@ func (p CertificateProfile) ValidateRequestMetadata(r Request) error {
 	for _, dns := range r.DNSNames {
 		if len(p.AllowedDNSSuffixes) == 0 {
 			if sanPolicy {
-				return fmt.Errorf("%s does not permit DNS SAN %q (no allowed DNS suffixes configured)", id, dns)
+				return refuse(true, "%s does not permit DNS SAN %q (no allowed DNS suffixes configured)", id, dns)
 			}
 			continue
 		}
 		if !suffixAllowed(dns, p.AllowedDNSSuffixes) {
-			return fmt.Errorf("%s does not permit DNS SAN %q (allowed suffixes: %s)", id, dns, strings.Join(p.AllowedDNSSuffixes, ", "))
+			return refuse(true, "%s does not permit DNS SAN %q (allowed suffixes: %s)", id, dns, strings.Join(p.AllowedDNSSuffixes, ", "))
 		}
 	}
 	for _, ip := range r.IPAddresses {
 		if len(p.AllowedIPCIDRs) == 0 {
 			if sanPolicy {
-				return fmt.Errorf("%s does not permit IP SAN %q (no allowed IP CIDRs configured)", id, ip)
+				return refuse(true, "%s does not permit IP SAN %q (no allowed IP CIDRs configured)", id, ip)
 			}
 			continue
 		}
 		if ok, err := ipAllowed(ip, p.AllowedIPCIDRs); err != nil {
-			return fmt.Errorf("%s cannot evaluate IP SAN %q: %w", id, ip, err)
+			return refuse(true, "%s cannot evaluate IP SAN %q: %w", id, ip, err)
 		} else if !ok {
-			return fmt.Errorf("%s does not permit IP SAN %q (allowed CIDRs: %s)", id, ip, strings.Join(p.AllowedIPCIDRs, ", "))
+			return refuse(true, "%s does not permit IP SAN %q (allowed CIDRs: %s)", id, ip, strings.Join(p.AllowedIPCIDRs, ", "))
 		}
 	}
 	for _, email := range r.EmailAddresses {
 		if len(p.AllowedEmailDomains) == 0 {
 			if sanPolicy {
-				return fmt.Errorf("%s does not permit email SAN %q (no allowed email domains configured)", id, email)
+				return refuse(true, "%s does not permit email SAN %q (no allowed email domains configured)", id, email)
 			}
 			continue
 		}
 		if !emailAllowed(email, p.AllowedEmailDomains) {
-			return fmt.Errorf("%s does not permit email SAN %q (allowed domains: %s)", id, email, strings.Join(p.AllowedEmailDomains, ", "))
+			return refuse(true, "%s does not permit email SAN %q (allowed domains: %s)", id, email, strings.Join(p.AllowedEmailDomains, ", "))
 		}
 	}
 	for _, uri := range r.URIs {
 		if len(p.AllowedURIPrefixes) == 0 {
 			if sanPolicy {
-				return fmt.Errorf("%s does not permit URI SAN %q (no allowed URI prefixes configured)", id, uri)
+				return refuse(true, "%s does not permit URI SAN %q (no allowed URI prefixes configured)", id, uri)
 			}
 			continue
 		}
 		if !uriPrefixAllowed(uri, p.AllowedURIPrefixes) {
-			return fmt.Errorf("%s does not permit URI SAN %q (allowed prefixes: %s)", id, uri, strings.Join(p.AllowedURIPrefixes, ", "))
+			return refuse(true, "%s does not permit URI SAN %q (allowed prefixes: %s)", id, uri, strings.Join(p.AllowedURIPrefixes, ", "))
 		}
 	}
 	return nil

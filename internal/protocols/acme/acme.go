@@ -1630,6 +1630,19 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 			s.problemWithError(w, r, http.StatusBadRequest, "badCSR", detail, err)
 			return
 		}
+		// P15-L10: the certificate profile refusing the request is the
+		// client's error (RFC 8555 §6.7): a name it does not permit is
+		// rejectedIdentifier, anything else badCSR. A 500 told the client to
+		// retry a request that can never succeed.
+		var refusal *profile.Refusal
+		if errors.As(err, &refusal) {
+			problem := "badCSR"
+			if refusal.Identifier {
+				problem = "rejectedIdentifier"
+			}
+			s.problemWithError(w, r, http.StatusBadRequest, problem, refusal.Error(), err)
+			return
+		}
 		s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error(), err)
 		return
 	}
