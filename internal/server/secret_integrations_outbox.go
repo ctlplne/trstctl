@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -51,6 +52,9 @@ type secretIntegrationOutboxDispatcher struct {
 	store                    *store.Store
 	log                      *events.Log
 	idem                     *orchestrator.Idempotency
+	// observeMovedSecretDelivery counts a delivered secret-sync job as its
+	// target's consumer read of that version (P6-L4); nil records nothing.
+	observeMovedSecretDelivery func(ctx context.Context, tenantID, name string, version int, target string)
 	// staticRotation and staticRotationFailure are the API's durable
 	// static-provider rotation phase executor and its terminal-failure hook
 	// (A14/A15); the server binds them once the API exists.
@@ -1542,13 +1546,34 @@ func (d *secretIntegrationOutboxDispatcher) appendAndProjectSecretSyncEvidence(c
 	if jobID == "" {
 		return errors.New("server: secret-sync terminal evidence payload is invalid")
 	}
-	return d.store.WithPrivacyRecoveryBarrier(ctx, tenantID, "secret-sync terminal event", func(privacyCtx context.Context) error {
+	if err := d.store.WithPrivacyRecoveryBarrier(ctx, tenantID, "secret-sync terminal event", func(privacyCtx context.Context) error {
 		return d.log.WithHistoryRead(privacyCtx, func(readCtx context.Context) error {
 			return d.store.WithSecretSyncTerminalChoiceLock(readCtx, tenantID, jobID, func(lockCtx context.Context) error {
 				return d.appendAndProjectSecretSyncEvidenceLocked(lockCtx, eventID, tenantID, eventType, payload)
 			})
 		})
-	})
+	}); err != nil {
+		return err
+	}
+	if eventType == projections.EventSecretSyncDelivered {
+		d.observeSyncDelivery(ctx, tenantID, jobID)
+	}
+	return nil
+}
+
+// observeSyncDelivery counts a delivered job as its target's consumer read
+// of the version it delivered (P6-L4): the target's consumers read the secret
+// there, never through trstctl, so the delivery is the only read trstctl sees.
+// It runs after the delivered evidence is durable and never fails it.
+func (d *secretIntegrationOutboxDispatcher) observeSyncDelivery(ctx context.Context, tenantID, jobID string) {
+	if d.observeMovedSecretDelivery == nil {
+		return
+	}
+	job, err := d.store.GetSecretSyncJob(ctx, tenantID, jobID)
+	if err != nil || job.Status != store.SecretSyncJobDelivered || job.SecretVersion <= 0 || job.SecretVersion > math.MaxInt32 {
+		return
+	}
+	d.observeMovedSecretDelivery(ctx, tenantID, job.SecretName, int(job.SecretVersion), job.Target)
 }
 
 func (d *secretIntegrationOutboxDispatcher) appendAndProjectSecretSyncEvidenceLocked(ctx context.Context, eventID, tenantID, eventType string, payload any) error {

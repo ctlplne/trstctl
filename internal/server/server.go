@@ -2324,6 +2324,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	if s.api != nil {
 		secretIntegrations.staticRotation = s.api.AdvanceStaticSecretRotation
 		secretIntegrations.staticRotationFailure = s.api.FailStaticSecretRotation
+		secretIntegrations.observeMovedSecretDelivery = s.api.ObserveMovedSecretDelivery
 	}
 	secretIntegrations.discoveryScan = func(ctx context.Context, m orchestrator.Message) error {
 		if s.pam == nil {

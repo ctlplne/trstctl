@@ -167,16 +167,35 @@ func (a *API) withSecretMoves(ctx context.Context, tenantID string, items []disc
 // consumers picked up its rotation. A failure to record is logged and never
 // fails the read; without the record the finding only stays open.
 func (a *API) observeMovedSecretRead(r *http.Request, tenantID, name string, version int) {
+	a.observeMovedSecretReadBy(r.Context(), tenantID, name, version, func() (string, error) {
+		return requestPrincipalSubject(r.Context())
+	})
+}
+
+// ObserveMovedSecretDelivery records that a secret-sync target received a
+// version of a moved leaked secret newer than the moved one (P6-L4): its
+// consumers read the secret there, so the delivery is their read, by the
+// reader "secret-sync:<target>". Like a read, a failure to record is logged
+// and never fails the delivery.
+func (a *API) ObserveMovedSecretDelivery(ctx context.Context, tenantID, name string, version int, target string) {
+	a.observeMovedSecretReadBy(ctx, tenantID, name, version, func() (string, error) {
+		return "secret-sync:" + target, nil
+	})
+}
+
+// observeMovedSecretReadBy names the reader only when a moved finding is
+// waiting for one, so an ordinary read costs one indexed lookup.
+func (a *API) observeMovedSecretReadBy(ctx context.Context, tenantID, name string, version int, readerOf func() (string, error)) {
 	if a.orch == nil || a.store == nil || version < 2 {
 		return
 	}
-	ids, err := a.store.MovedFindingsAwaitingConsumerRead(r.Context(), tenantID, name, version, movedSecretReadBatch)
+	ids, err := a.store.MovedFindingsAwaitingConsumerRead(ctx, tenantID, name, version, movedSecretReadBatch)
 	if err == nil && len(ids) > 0 {
 		var reader string
-		if reader, err = requestPrincipalSubject(r.Context()); err == nil {
+		if reader, err = readerOf(); err == nil {
 			now := time.Now().UTC()
 			for _, id := range ids {
-				if recErr := a.orch.RecordMovedSecretConsumerRead(r.Context(), tenantID, projections.DiscoveryFindingSecretConsumerRead{
+				if recErr := a.orch.RecordMovedSecretConsumerRead(ctx, tenantID, projections.DiscoveryFindingSecretConsumerRead{
 					FindingID: id, SecretName: name, Version: version, Reader: reader, ReadAt: now,
 				}); recErr != nil && err == nil {
 					err = recErr

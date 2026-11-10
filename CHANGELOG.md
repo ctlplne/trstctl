@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- A moved leaked secret's consumers can prove the rotation through the KV-compatible surface and
+  secret sync (P6-L4). Only reads through the native store's routes counted as a consumer
+  picking up the rotated version, so a finding whose consumers read through `/v1/secret/data`
+  or from a sync target never closed. Both now record the consumer read: a KV read with its
+  reader, a sync delivery as `secret-sync:<target>`.
 - A GitHub push hook delivery refused for its signature is an audit event (P6-L3). A missing or
   wrong `X-Hub-Signature-256` was answered with 401 and left no record. Each refusal is now a
   `secret.scan_hook.refused` event naming the hook, GitHub's delivery ID and whether the

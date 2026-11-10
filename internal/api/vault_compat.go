@@ -739,6 +739,11 @@ func (a *API) vaultKVRead(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// P6-L4: a read through the KV-compatible surface is a consumer read like
+	// a native one: it can show a moved leaked secret's consumers picked up its
+	// rotation, and that a migration's consumer moved.
+	a.observeMovedSecretRead(r, tenantID, name, rec.Version)
+	a.observeMigratedSecretRead(r, tenantID, name, rec.Version)
 	a.writeVaultKVRead(w, rec, value)
 }
 

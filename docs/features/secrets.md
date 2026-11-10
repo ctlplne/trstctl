@@ -2254,8 +2254,10 @@ run; after it closes, the history commits stay listed on the finding, because cl
 the latest file does not remove the value from history (rotation is what ends the
 exposure). A finding seen again after it closed shows as regressed.
 
-Reads through the native store's own routes count as consumer reads; reads through the
-KV-compatible `/v1` surface and deliveries by secret sync do not yet.
+Reads through the native store's own routes and through the KV-compatible `/v1` surface
+count as consumer reads, recorded with the reader's subject. A secret-sync delivery of a
+rotated version counts too: the target's consumers read the secret there, so the delivery
+is recorded as the read of `secret-sync:<target>`.
 
 Third-party artifacts use the same shape: `GET /api/v1/secrets/scans/third-party` and
 `POST /api/v1/secrets/scans/third-party/{provider}/ingest` cover `cicd_log`,
