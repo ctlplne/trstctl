@@ -42,6 +42,9 @@ type Stand struct {
 	images       map[string]imageManifest       // repo + "@" + digest
 	blobs        map[string]bool                // repo + "@" + digest
 	referrers    map[string][]map[string]string // repo + "@" + subject digest → annotations
+	// referrerRefs is the manifest digest of each referrer, in the same order
+	// (A174-L1: a resolved finding's referrer is deleted).
+	referrerRefs map[string][]string
 	uploads      int
 	unauthorized int
 	slackLimited int
@@ -57,7 +60,7 @@ type imageManifest struct {
 func New(token, jiraUser string) *Stand {
 	s := &Stand{token: token, jiraUser: jiraUser, slackThreads: map[string][]string{}, jiraIssues: map[string][]string{},
 		statuses: map[string][]Status{}, commits: map[string]bool{}, images: map[string]imageManifest{}, blobs: map[string]bool{},
-		referrers: map[string][]map[string]string{}}
+		referrers: map[string][]map[string]string{}, referrerRefs: map[string][]string{}}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
 }
@@ -112,7 +115,13 @@ func (s *Stand) SlackLimitNext(n int) {
 func (s *Stand) SlackReplies(channel, ts string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]string(nil), s.slackThreads[channel+"/"+ts]...)
+	var out []string
+	for _, text := range s.slackThreads[channel+"/"+ts] {
+		if text != "" {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 // JiraComments returns the raw comment bodies on an issue.
@@ -165,7 +174,8 @@ func (s *Stand) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	path := r.URL.EscapedPath()
 	switch {
-	case strings.HasPrefix(path, "/api/chat.postMessage") || strings.HasPrefix(path, "/api/conversations.replies"):
+	case strings.HasPrefix(path, "/api/chat.postMessage") || strings.HasPrefix(path, "/api/conversations.replies") ||
+		strings.HasPrefix(path, "/api/chat.delete"):
 		s.slack(w, r, path, body)
 	case strings.HasPrefix(path, "/rest/api/3/issue/"):
 		s.jira(w, r, path, body)
@@ -196,9 +206,30 @@ func (s *Stand) slack(w http.ResponseWriter, r *http.Request, path string, body 
 		}
 		messages := []map[string]string{{"ts": r.URL.Query().Get("ts"), "text": "original message"}}
 		for i, text := range replies {
+			if text == "" {
+				continue // deleted
+			}
 			messages = append(messages, map[string]string{"ts": r.URL.Query().Get("ts") + "-reply-" + strconv.Itoa(i+1), "text": text})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "messages": messages})
+		return
+	}
+	if strings.HasPrefix(path, "/api/chat.delete") {
+		// A174-L1: a reply is deleted by its ts ("<thread>-reply-<n>").
+		var req struct {
+			Channel string `json:"channel"`
+			TS      string `json:"ts"`
+		}
+		_ = json.Unmarshal(body, &req)
+		thread, n, found := strings.Cut(req.TS, "-reply-")
+		index, err := strconv.Atoi(n)
+		replies := s.slackThreads[req.Channel+"/"+thread]
+		if !found || err != nil || index < 1 || index > len(replies) || replies[index-1] == "" {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "message_not_found"})
+			return
+		}
+		replies[index-1] = ""
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": req.Channel, "ts": req.TS})
 		return
 	}
 	if s.slackLimited > 0 {
@@ -225,6 +256,20 @@ func (s *Stand) jira(w http.ResponseWriter, r *http.Request, path string, body [
 	rest := strings.TrimPrefix(path, "/rest/api/3/issue/")
 	key, tail, _ := strings.Cut(rest, "/")
 	comments, ok := s.jiraIssues[key]
+	if id, editing := strings.CutPrefix(tail, "comment/"); ok && editing && r.Method == http.MethodPut {
+		// A174-L1: a comment is edited in place by its id.
+		index, err := strconv.Atoi(id)
+		var req struct {
+			Body json.RawMessage `json:"body"`
+		}
+		if err != nil || index < 10000 || index-10000 >= len(comments) || json.Unmarshal(body, &req) != nil || len(req.Body) == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]any{"errorMessages": []string{"Can not find a comment for the id."}})
+			return
+		}
+		comments[index-10000] = string(req.Body)
+		writeJSON(w, http.StatusOK, map[string]any{"id": id})
+		return
+	}
 	if !ok || tail != "comment" {
 		writeJSON(w, http.StatusNotFound, map[string]any{"errorMessages": []string{"Issue does not exist or you do not have permission to see it."}})
 		return
@@ -259,7 +304,7 @@ func (s *Stand) status(w http.ResponseWriter, host, rest string, body []byte, na
 	var req map[string]string
 	_ = json.Unmarshal(body, &req)
 	next := Status{State: req["state"], Context: req[nameField], Description: req["description"]}
-	if next.State != failedState {
+	if next.State != failedState && next.State != "success" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "unexpected state " + next.State})
 		return
 	}
@@ -295,6 +340,25 @@ func (s *Stand) registry(w http.ResponseWriter, r *http.Request, rest string, bo
 			}
 			return
 		}
+		if r.Method == http.MethodDelete {
+			// A174-L1: deleting a referrer manifest removes it from its subject.
+			if _, ok := s.images[repo+"@"+ref]; !ok {
+				writeJSON(w, http.StatusNotFound, map[string]any{"errors": []map[string]string{{"code": "MANIFEST_UNKNOWN"}}})
+				return
+			}
+			delete(s.images, repo+"@"+ref)
+			for subject, refs := range s.referrerRefs {
+				for i, candidate := range refs {
+					if candidate == ref && strings.HasPrefix(subject, repo+"@") {
+						s.referrerRefs[subject] = append(refs[:i:i], refs[i+1:]...)
+						s.referrers[subject] = append(s.referrers[subject][:i:i], s.referrers[subject][i+1:]...)
+						break
+					}
+				}
+			}
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		if r.Method != http.MethodPut || ref != "sha256:"+crypto.SHA256Hex(body) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"errors": []map[string]string{{"code": "DIGEST_INVALID"}}})
 			return
@@ -312,6 +376,7 @@ func (s *Stand) registry(w http.ResponseWriter, r *http.Request, rest string, bo
 		}
 		if _, exists := s.images[repo+"@"+ref]; !exists && manifest.Subject != nil {
 			s.referrers[repo+"@"+manifest.Subject.Digest] = append(s.referrers[repo+"@"+manifest.Subject.Digest], manifest.Annotations)
+			s.referrerRefs[repo+"@"+manifest.Subject.Digest] = append(s.referrerRefs[repo+"@"+manifest.Subject.Digest], ref)
 		}
 		s.images[repo+"@"+ref] = imageManifest{mediaType: "application/vnd.oci.image.manifest.v1+json", body: body}
 		w.Header().Set("Docker-Content-Digest", ref)

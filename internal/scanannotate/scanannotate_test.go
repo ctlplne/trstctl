@@ -128,3 +128,66 @@ func TestAnnotationFailuresSayWhetherToRetry(t *testing.T) {
 		t.Fatal("an unknown provider was accepted")
 	}
 }
+
+// A174-L1: each provider settles a resolved finding's annotation the way it
+// can, and settling it again answers that it is already settled.
+func TestResolveSettlesEachProvidersAnnotation(t *testing.T) {
+	stand := scanannotatetest.New(a174Token, "ops@example.com")
+	t.Cleanup(stand.Close)
+	ctx := context.Background()
+	stand.SeedSlackMessage("C0A174", "1730000000.000100")
+	stand.SeedJiraIssue("OPS-174")
+	stand.SeedCommit("github", "acme/api", "a174a174a174")
+	stand.SeedCommit("gitlab", "acme/api", "b174b174b174")
+	image := stand.SeedImage("acme/api", []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","layers":[]}`))
+	base := scanannotate.Annotation{FindingID: "f1740000-0000-4000-8000-000000000002", Rule: "slack-bot-token", DetectedAt: "2026-11-01T00:00:00Z"}
+	for _, step := range []struct {
+		provider, username string
+		object             scanannotate.Object
+		settled            func() bool
+	}{
+		{"slack", "", scanannotate.Object{ChannelID: "C0A174", MessageTS: "1730000000.000100"}, func() bool {
+			return len(stand.SlackReplies("C0A174", "1730000000.000100")) == 0
+		}},
+		{"jira", "ops@example.com", scanannotate.Object{IssueKey: "OPS-174"}, func() bool {
+			c := stand.JiraComments("OPS-174")
+			return len(c) == 1 && strings.Contains(c[0], "Resolved in trstctl")
+		}},
+		{"github", "", scanannotate.Object{Repo: "acme/api", CommitSHA: "a174a174a174"}, func() bool {
+			s := stand.Statuses("github", "acme/api", "a174a174a174")
+			return len(s) == 2 && s[1].State == "success" && s[1].Context == s[0].Context
+		}},
+		{"gitlab", "", scanannotate.Object{Repo: "acme/api", CommitSHA: "b174b174b174"}, func() bool {
+			s := stand.Statuses("gitlab", "acme/api", "b174b174b174")
+			return len(s) == 2 && s[1].State == "success" && s[1].Context == s[0].Context
+		}},
+		{"registry", "", scanannotate.Object{Repository: "acme/api", Digest: image}, func() bool {
+			return len(stand.Referrers("acme/api", image)) == 0
+		}},
+	} {
+		a := annotator(t, stand, step.provider, step.username)
+		annotation := base
+		annotation.Object = step.object
+		made, err := a.Annotate(ctx, annotation)
+		if err != nil {
+			t.Fatalf("%s annotate: %v", step.provider, err)
+		}
+		resolver, ok := a.(scanannotate.Resolver)
+		if !ok {
+			t.Fatalf("%s annotations cannot be settled", step.provider)
+		}
+		got, err := resolver.Resolve(ctx, annotation, made.ProviderRef)
+		if err != nil || got.Status != scanannotate.Resolved || !step.settled() {
+			t.Fatalf("%s resolve = %+v, %v (settled %v)", step.provider, got, err, step.settled())
+		}
+		if strings.Contains(got.Detail, a174Token) {
+			t.Fatalf("%s resolve detail carries the token", step.provider)
+		}
+		if step.provider == "slack" || step.provider == "registry" {
+			again, err := resolver.Resolve(ctx, annotation, made.ProviderRef)
+			if err != nil || again.Status != scanannotate.AlreadyResolved {
+				t.Fatalf("%s resolved again = %+v, %v; want already resolved", step.provider, again, err)
+			}
+		}
+	}
+}

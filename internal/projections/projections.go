@@ -7405,12 +7405,16 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyDiscoveryFindingTriageChangedTx(ctx, tx, store.DiscoveryFindingTriageChange{
+		if err := p.store.ApplyDiscoveryFindingTriageChangedTx(ctx, tx, store.DiscoveryFindingTriageChange{
 			TenantID: e.TenantID, FindingID: pl.ID, Status: pl.Status,
 			ManagedIdentityID: pl.ManagedIdentityID, Actor: pl.Actor, Reason: pl.Reason,
 			ChangedAt: e.Time, MetadataPatch: pl.MetadataPatch,
 			Assignee: pl.Assignee, DueAt: pl.DueAt, EvidenceRef: pl.EvidenceRef, RiskAcceptedUntil: pl.RiskAcceptedUntil,
-		})
+		}); err != nil {
+			return err
+		}
+		// A174-L1: a resolved finding's provider annotation is settled.
+		return p.store.QueueResolvedFindingAnnotationTx(ctx, tx, e.TenantID, pl.ID, pl.Status, e.Time)
 	case EventDiscoveryRunCompleted:
 		var pl DiscoveryRunCompleted
 		if err := decode(e, &pl); err != nil {

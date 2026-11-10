@@ -269,4 +269,52 @@ func TestServedThirdPartyFindingsAnnotatedAtTheProvider(t *testing.T) {
 	if s := state("acme-gitlab-ci"); s["status"] != "failed" || !strings.Contains(s["detail"].(string), "status 401") {
 		t.Fatalf("refused token state = %+v", s)
 	}
+
+	// A174-L1: resolving a finding settles its annotation where it was made:
+	// the Slack reply is deleted, the Jira comment says it was resolved, the
+	// GitHub status turns to success under the same context, and the image
+	// referrer is deleted. A finding whose annotation never landed has
+	// nothing to settle.
+	triager := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	for source, action := range map[string]string{
+		"acme-slack": "remediated", "acme-jira": "remediated", "acme-github-ci": "dismiss", "acme-image": "remediated", "acme-gitlab-ci": "remediated",
+	} {
+		path, body := "/resolution", map[string]any{"action": "remediated", "reason": "a174l1 rotated", "evidence_ref": "rotation:a174l1"}
+		if action == "dismiss" {
+			path, body = "/dismiss", map[string]any{"reason": "a174l1 a test credential"}
+		}
+		if status, out := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/findings/"+byScan[source].ID+path, triager, "a174l1-"+source, body); status != http.StatusOK {
+			t.Fatalf("resolve %s = %d %s", source, status, out)
+		}
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain the settlements: %v", err)
+	}
+	if replies := stand.SlackReplies("C0DEPLOY", "1730300000.000100"); len(replies) != 0 {
+		t.Fatalf("the Slack reply outlived its resolved finding: %v", replies)
+	}
+	if comments := stand.JiraComments("OPS-174"); len(comments) != 1 || !strings.Contains(comments[0], "Resolved in trstctl") {
+		t.Fatalf("Jira comments after resolution = %v", comments)
+	}
+	githubStatuses := stand.Statuses("github", "acme/api", "a174a174a174a174")
+	if len(githubStatuses) != 2 || githubStatuses[1].State != "success" || githubStatuses[1].Context != githubStatuses[0].Context {
+		t.Fatalf("GitHub statuses after resolution = %+v", githubStatuses)
+	}
+	if refs := stand.Referrers("acme/api", image); len(refs) != 0 {
+		t.Fatalf("the image referrer outlived its resolved finding: %+v", refs)
+	}
+	byScan = findings()
+	settled := func(source string) map[string]any {
+		actions, _ := byScan[source].Metadata["provider_actions"].(map[string]any)
+		s, _ := actions["resolve_annotation"].(map[string]any)
+		return s
+	}
+	for _, source := range []string{"acme-slack", "acme-jira", "acme-github-ci", "acme-image"} {
+		if s := settled(source); s["status"] != "resolved" {
+			t.Fatalf("%s settlement = %+v", source, s)
+		}
+	}
+	if s := settled("acme-gitlab-ci"); s != nil {
+		t.Fatalf("a finding whose annotation never landed was settled: %+v", s)
+	}
 }

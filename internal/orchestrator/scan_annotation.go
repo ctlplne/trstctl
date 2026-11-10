@@ -35,12 +35,19 @@ const DestinationScanAnnotation = "scan.annotation"
 // FindingActionAnnotate is the provider action an annotation records under.
 const FindingActionAnnotate = "annotate"
 
+// FindingActionResolveAnnotation is the provider action that settles an
+// annotation once its finding is resolved (A174-L1).
+const FindingActionResolveAnnotation = "resolve_annotation"
+
 // Annotation statuses, as the finding records them.
 const (
 	AnnotationQueued         = "queued"
 	AnnotationConfirmed      = "confirmed"
 	AnnotationAlreadyPresent = "already_present"
 	AnnotationFailed         = "failed"
+	// A174-L1: a settled annotation.
+	AnnotationResolved        = "resolved"
+	AnnotationAlreadyResolved = "already_resolved"
 )
 
 var scanAnnotationNamespace = uuid.MustParse("4c1d74a1-a174-4174-8174-a174a174a174")
@@ -57,6 +64,19 @@ type FindingAnnotationIntent struct {
 	DetectedAt string            `json:"detected_at,omitempty"`
 	Object     map[string]string `json:"object"`
 	Reason     string            `json:"reason,omitempty"`
+	// Action is FindingActionAnnotate when empty, or
+	// FindingActionResolveAnnotation to settle the annotation ProviderRef
+	// names once the finding is resolved (A174-L1).
+	Action      string `json:"action,omitempty"`
+	ProviderRef string `json:"provider_ref,omitempty"`
+}
+
+// action is the provider action the intent records under.
+func (in FindingAnnotationIntent) action() string {
+	if in.Action == FindingActionResolveAnnotation {
+		return FindingActionResolveAnnotation
+	}
+	return FindingActionAnnotate
 }
 
 // QueueFindingAnnotation records the request on the finding and queues its
@@ -107,7 +127,7 @@ func (o *Orchestrator) QueueFindingAnnotation(ctx context.Context, tenantID, req
 // derived from the request so a redelivered row converges.
 func (o *Orchestrator) RecordFindingAnnotation(ctx context.Context, tenantID string, in FindingAnnotationIntent, status, providerRef, detail string) error {
 	payload, err := json.Marshal(projections.DiscoveryFindingProviderAction{
-		FindingID: in.FindingID, Action: FindingActionAnnotate, Status: status, Provider: in.Provider,
+		FindingID: in.FindingID, Action: in.action(), Status: status, Provider: in.Provider,
 		Detail: detail, ProviderRef: providerRef, RequestID: in.RequestID,
 	})
 	if err != nil {

@@ -565,6 +565,12 @@
 
 ### Fixed
 
+- Resolving a third-party finding settles its provider annotation (A174-L1). The Slack reply,
+  Jira comment, failed commit status or image referrer an annotation wrote kept telling people
+  to rotate a credential after the finding was remediated or dismissed. The resolution now
+  queues, in the same transaction, a control-plane row that deletes the Slack reply, rewrites
+  the Jira comment to say the finding was resolved, sets the commit status to success under the
+  same context, or deletes the image referrer.
 - DigiCert and Sectigo domain validations are recorded like upstream ACME authorizations
   (A165-L2). The vendors' unattended DNS TXT validation left no record, so the upstream
   authorization freshness view showed nothing for them. Each validated name is now recorded as a

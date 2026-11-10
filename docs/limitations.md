@@ -4921,8 +4921,11 @@ than sending an operator looking for a credential that was never there.
   thread, a comment on the Jira issue, a failed commit status at GitHub or
   GitLab, or an OCI referrer on the image. The note names the rule and the
   finding and never the secret; the finding records what the provider
-  confirmed. Native collection from registries, Slack, Jira, GitHub Actions and
-  GitLab is served (N6).
+  confirmed. Resolving the finding (remediated or dismissed) settles the note
+  the same way (A174-L1): the Slack reply is deleted, the Jira comment says the
+  finding was resolved, the commit status turns to success under the same
+  context, and the image referrer is deleted. Native collection from
+  registries, Slack, Jira, GitHub Actions and GitLab is served (N6).
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every
   DataGrid-backed large table switches to a bounded, overscanned DOM window

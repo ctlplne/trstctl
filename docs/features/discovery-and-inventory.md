@@ -713,6 +713,12 @@ reply in the Slack thread, a comment on the Jira issue, a failed commit status, 
 OCI referrer on the image. The note names the rule and the finding, never the secret,
 and the finding shows what the provider confirmed.
 
+When the finding is resolved (recorded remediated or dismissed), its note is settled at
+the same provider so it stops telling people to rotate a credential that is already
+handled: the Slack reply is deleted, the Jira comment is rewritten to say the finding was
+resolved, the commit status turns to success under the same context, and the image
+referrer is deleted. The finding shows the settlement under `provider_actions.resolve_annotation`.
+
 ### Cloud secret managers
 
 A `cloud_secret` or `secret_store` source lists the secrets an authorized principal can

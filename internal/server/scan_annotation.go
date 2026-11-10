@@ -65,10 +65,14 @@ func (d *issuanceDispatcher) handleScanAnnotation(ctx context.Context, m orchest
 		return fail(err.Error())
 	}
 	defer closeAnnotator()
-	result, err := annotator.Annotate(ctx, scanannotate.Annotation{
+	annotation := scanannotate.Annotation{
 		FindingID: in.FindingID, Rule: in.Rule, Location: in.Location, DetectedAt: in.DetectedAt,
 		Object: annotationObject(in.Object), Retry: m.Attempts > 0,
-	})
+	}
+	if in.Action == orchestrator.FindingActionResolveAnnotation {
+		return d.resolveScanAnnotation(ctx, m, in, annotator, annotation, fail)
+	}
+	result, err := annotator.Annotate(ctx, annotation)
 	if err != nil {
 		if scanannotate.Retryable(err) {
 			return fmt.Errorf("server: scan annotation: %w", err)
@@ -78,6 +82,29 @@ func (d *issuanceDispatcher) handleScanAnnotation(ctx context.Context, m orchest
 	status := orchestrator.AnnotationConfirmed
 	if result.Status == scanannotate.AlreadyPresent {
 		status = orchestrator.AnnotationAlreadyPresent
+	}
+	return d.orch.RecordFindingAnnotation(ctx, m.TenantID, in, status, result.ProviderRef, result.Detail)
+}
+
+// resolveScanAnnotation settles a resolved finding's annotation at its
+// provider (A174-L1): the Slack reply deleted, the Jira comment rewritten,
+// the CI status set to success, the image referrer deleted.
+func (d *issuanceDispatcher) resolveScanAnnotation(ctx context.Context, m orchestrator.Message, in orchestrator.FindingAnnotationIntent,
+	annotator scanannotate.Annotator, annotation scanannotate.Annotation, fail func(string) error) error {
+	resolver, ok := annotator.(scanannotate.Resolver)
+	if !ok {
+		return fail("this provider's annotations cannot be settled")
+	}
+	result, err := resolver.Resolve(ctx, annotation, in.ProviderRef)
+	if err != nil {
+		if scanannotate.Retryable(err) {
+			return fmt.Errorf("server: resolve scan annotation: %w", err)
+		}
+		return fail(err.Error())
+	}
+	status := orchestrator.AnnotationResolved
+	if result.Status == scanannotate.AlreadyResolved {
+		status = orchestrator.AnnotationAlreadyResolved
 	}
 	return d.orch.RecordFindingAnnotation(ctx, m.TenantID, in, status, result.ProviderRef, result.Detail)
 }
