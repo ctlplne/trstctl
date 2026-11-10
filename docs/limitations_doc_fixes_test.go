@@ -163,3 +163,32 @@ func TestLimitationsDNS01PreflightReadsLiveDNS(t *testing.T) {
 		}
 	}
 }
+
+// DOC-O1: ClickHouse is an enforcing protocol for command rules (A262), whose
+// rules name its operation classes and no A275 risk category; so the doc may
+// not call ClickHouse rules unbuilt, and it says ClickHouse has no categories.
+func TestLimitationsClickHouseRulesAreBuiltWithoutCategories(t *testing.T) {
+	rules := read(t, "../internal/accessrules/rules.go")
+	requireDocAnchor(t, "internal/accessrules/rules.go", rules,
+		`r.Protocol != "clickhouse"`,
+		"if protocol == \"clickhouse\" {\n\t\treturn slices.Clone(clickhouseOperationNames)\n\t}",
+	)
+	requireDocAnchor(t, "internal/server/pam_command_clickhouse_served_test.go", read(t, "../internal/server/pam_command_clickhouse_served_test.go"),
+		"func TestServedClickHouseCommandRuleBlocksAndRecordsA262(",
+		"func TestServedClickHouseCommandReviewWaitsAndCancelsA262(",
+	)
+	limitations := flatDoc(t, "limitations.md")
+	if strings.Contains(limitations, "ClickHouse rules remain unbuilt") {
+		t.Error("limitations.md still says ClickHouse rules remain unbuilt, but ClickHouse is an enforcing protocol with served proofs")
+	}
+	for _, want := range []string{
+		"ClickHouse rules match the operation class of each statement sent over ClickHouse's HTTP interface",
+		"`TestServedClickHouseCommandRuleBlocksAndRecordsA262`",
+		"`TestServedClickHouseCommandReviewWaitsAndCancelsA262`",
+		"Redis, MongoDB, ClickHouse and network devices have no categories",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md no longer says %q", want)
+		}
+	}
+}

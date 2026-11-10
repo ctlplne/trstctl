@@ -9306,7 +9306,16 @@ waiting, disconnect cancellation and a same-login findAndModify removal bypass,
 with independent document readback. Document values and alias effects are not
 predicates; transaction and opaque encoding modes are explicitly refused.
 See [MongoDB rule scope](design/access-gateway.md#mongodb-command-name-guardrails-a262).
-ClickHouse rules remain unbuilt; their configuration is rejected.
+ClickHouse rules match the operation class of each statement sent over ClickHouse's
+HTTP interface (`SELECT`, `INSERT`, `TRUNCATE`, `ALTER`, `GRANT` and the rest, whether
+the statement travels in the URL, the body or both); values, identifiers and comments
+are not predicates. They have local served direct refusal with independent row
+readback, distinct-human waiting, disconnect cancellation and a same-login
+`ALTER … DELETE` bypass of a `TRUNCATE`-only rule
+(`TestServedClickHouseCommandRuleBlocksAndRecordsA262`,
+`TestServedClickHouseCommandReviewWaitsAndCancelsA262`); refusal and review evidence
+carries no values or sign-in material. The gateway does not serve ClickHouse's native
+protocol, so the rules cover the HTTP interface only.
 Exact-image replay and deferred gates are owed. These local proofs do not qualify
 the whole platform.
 
@@ -9439,7 +9448,8 @@ scoped delete and a string naming the catalogs pass; over SSH `cat /etc/shadow` 
 alerted and `rm -rf` blocked with the directory intact, while a plain `rm` passes;
 three alerts, no table, path or argument in any action or alert), and the classifier
 tables in `TestSQLRiskCategoriesA275`/`TestSSHRiskCategoriesA275`. Redis, MongoDB,
-ClickHouse and network devices have no categories.
+ClickHouse and network devices have no categories: their rules name operations only
+(ClickHouse's are the A262 operation classes above).
 Part 3: `GET /api/v1/access/recordings/search` (`recordings:read`; CLI `access recordings
 search`; console panel) reads the tenant's newest sealed or live recordings within bounds
 — no plaintext index at rest — over commands, output, statements, results and desktop
