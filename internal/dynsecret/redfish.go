@@ -157,8 +157,11 @@ func (b *RedfishBackend) session(ctx context.Context, user string, password []by
 	if err != nil {
 		return "", "", err
 	}
+	// DSP0266 has a service answer a new session with 201 Created, but the
+	// token is what a session needs: DMTF's reference client accepts any
+	// success that carries one, and DMTF's reference mockup answers 204.
 	token, location := header.Get("X-Auth-Token"), header.Get("Location")
-	if status != http.StatusCreated || token == "" {
+	if status < http.StatusOK || status >= http.StatusMultipleChoices || token == "" {
 		return "", "", fmt.Errorf("dynsecret redfish: the controller refused %s's session (HTTP %d)", user, status)
 	}
 	if u, err := url.Parse(location); err == nil && u.Path != "" {

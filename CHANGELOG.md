@@ -580,6 +580,10 @@
 
 ### Fixed
 
+- A Redfish controller that answers a new session with any success carrying `X-Auth-Token` opens
+  a session (A271-D2). The `redfish` provider accepted only `201 Created`, as DSP0266 has a service
+  answer; DMTF's reference client accepts any success that carries the token, and DMTF's reference
+  mockup server answers `204 No Content`, so the provider could not open a session there.
 - An ESXi host's refused administrator sign-in reads `rejected`, and a host that does not answer
   `unreachable` (A271-D1). A privileged-account scan records why it failed as a class, so an
   operator knows whether to fix the stored password or the network; the `esxi` provider returned

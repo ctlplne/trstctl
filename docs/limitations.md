@@ -9703,7 +9703,9 @@ session cookie, vim25's fault encoding and the discovery answers interoperate, a
 session it opens is logged out. vcsim accepts a password change without storing it, so a
 new password's effect is proven by the stand-in, and on a real host by its Track B row.
 An `esxi` scan names a refused administrator sign-in (vim25's `InvalidLogin`) as
-`rejected` and a host that does not answer as `unreachable`.
+`rejected` and a host that does not answer as `unreachable`. The `redfish` provider opens a
+session on any success that carries `X-Auth-Token` (DSP0266 has a service answer `201
+Created`; DMTF's reference mockup answers `204 No Content`).
 
 What comes next:
 - The other device providers (`redfish`, `vcenter-sso` and A270's network devices)
