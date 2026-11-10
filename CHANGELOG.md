@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- A Kubernetes TrustBundle refuses a certificate that does not parse (TB-O1). The agent
+  checked only that each PEM block said `CERTIFICATE`, so a truncated or garbled certificate
+  reached ConfigMaps, Secrets and CSI volumes (only the API server's ClusterTrustBundle
+  validation refused it). Every block must now parse, and the refusal names which one.
 - A KMIP key that is not yet activated reconciles as disabled, not unknown (KMIP-O1). The
   KMIP reducer mapped Pre-Active to "pending", which the canonical status set does not have,
   so every reconciliation round reported such a key as drift. A Pre-Active object may not

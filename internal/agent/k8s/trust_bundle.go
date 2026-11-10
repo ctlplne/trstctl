@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 func configMapCollectionPath(namespace string) string {
@@ -218,6 +219,11 @@ func validateTrustBundlePEM(bundle string) error {
 		}
 		if block.Type != "CERTIFICATE" {
 			return fmt.Errorf("spec.caBundlePEM contains %s block; only CERTIFICATE blocks are allowed", block.Type)
+		}
+		// TB-O1: the type alone admitted a truncated or garbled certificate;
+		// every block must be a certificate that parses.
+		if _, err := certinfo.Inspect(pem.EncodeToMemory(block)); err != nil {
+			return fmt.Errorf("spec.caBundlePEM certificate %d does not parse: %w", certs+1, err)
 		}
 		certs++
 		rest = next

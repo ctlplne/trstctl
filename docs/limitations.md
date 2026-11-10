@@ -6190,7 +6190,7 @@ This is a deliberate, documented trust boundary, not an accident.
   - Kubernetes TrustBundle distribution is served for public CA-bundle
     propagation: the agent reconciles cluster-scoped
     `TrustBundle.trstctl.com` resources, validates that `spec.caBundlePEM`
-    contains only PEM `CERTIFICATE` blocks, writes namespace ConfigMaps, and
+    contains only PEM `CERTIFICATE` blocks, each a certificate that parses, writes namespace ConfigMaps, and
     marks status with target count, `bundleSHA256`, and Ready=True. The
     posture route `GET /api/v1/kubernetes/trust-bundles`, CLI command
     `trstctl-cli kubernetes trust-bundles`, and Workloads console disclose
