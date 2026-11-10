@@ -140,7 +140,7 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 		"go install github.com/spiffe/spiffe-helper/cmd/spiffe-helper@v0.11.0",
 		"TRSTCTL_REQUIRE_GOSPIFFE: \"1\"",
 		"TRSTCTL_REQUIRE_SPIFFE_HELPER: \"1\"",
-		"TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID",
+		"TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID|AHostAgentSocketB8L2",
 	} {
 		if !strings.Contains(ci, marker) {
 			t.Errorf("ci.yml must require the served EST/SPIFFE stock-client marker %q (INTEROP-001/002)", marker)

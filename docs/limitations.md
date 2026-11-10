@@ -6256,7 +6256,12 @@ This is a deliberate, documented trust boundary, not an accident.
     before it, nothing could scope an entry to an agent, so a host's Workload API
     issued nothing). They are read at start; registering, changing or retiring an
     entry without a restart, through the API and the console with each change an
-    event, is what comes next.
+    event, is what comes next. Stock go-spiffe and stock spiffe-helper are proven
+    against a host agent's socket through the real agent channel
+    (`TestServedGoSpiffeClientFetchesFromAHostAgentSocketB8L2`,
+    `TestServedSpiffeHelperWritesAnSVIDFromAHostAgentSocketB8L2`, B8-L2), in the same
+    CI conformance job as the control plane's socket; the host socket serves X.509 and
+    JWT SVIDs, while trust bundles and JWT validation stay on the control plane's socket.
     On darwin the path comes from the connecting process's audit token
     (LOCAL_PEERTOKEN): its pid and pid version, read at connect time. The path is
     resolved only while that pid version still owns the pid, checked before and

@@ -2873,14 +2873,17 @@ jobs:
           go install github.com/spiffe/spiffe-helper/cmd/spiffe-helper@v0.11.0
           command -v spiffe-helper
 
-      - name: go-spiffe and spiffe-helper against served Workload API UDS
+      # The control plane's own socket, and (B8-L2) a host agent's socket
+      # reached through the real agent channel, where workload identity is
+      # delivered since A85.
+      - name: go-spiffe and spiffe-helper against the served and a host agent's Workload API UDS
         env:
           TRSTCTL_REQUIRE_GOSPIFFE: "1"
           TRSTCTL_REQUIRE_SPIFFE_HELPER: "1"
           TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
         run: |
           mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
-          go test ./internal/server -run 'TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID' -count=1 -v
+          go test ./internal/server -run 'TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID|AHostAgentSocketB8L2' -count=1 -v
 
       - name: Upload SPIFFE Workload API conformance transcripts
         if: always()

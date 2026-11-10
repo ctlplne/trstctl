@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -16,56 +15,8 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/agent/workloadapi"
+	"trstctl.com/trstctl/internal/agent/workloadchannel"
 )
-
-// workloadChannel adapts the transport client to the host Workload API's
-// Upstream (epic B3).
-//
-// The same shape as relayChannel: internal/agent/workloadapi holds an interface
-// so it can be exercised without a control plane, and this binary owns the
-// translation. It is also the only place the two meet, which keeps the question
-// "what does this host send upward on a workload's behalf" answerable by
-// reading one file.
-type workloadChannel struct {
-	c *transport.AgentClient
-}
-
-func (w workloadChannel) FetchWorkloadSVID(
-	ctx context.Context, publicKeyDER []byte, selectors, audience []string,
-) (*workloadapi.SVIDSet, error) {
-	resp, err := w.c.FetchWorkloadSVID(ctx, &transport.FetchWorkloadSVIDRequest{
-		PublicKeyDER: publicKeyDER, Selectors: selectors, Audience: audience,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := &workloadapi.SVIDSet{Bundle: resp.Bundle}
-	for _, svid := range resp.X509SVIDs {
-		out.X509 = append(out.X509, workloadapi.X509SVID{
-			SPIFFEID: svid.SPIFFEID, CertChainDER: svid.CertChainDER, Hint: svid.Hint,
-			ExpiresAt: unixOrZero(svid.ExpiresAtUnix),
-		})
-	}
-	for _, svid := range resp.JWTSVIDs {
-		out.JWT = append(out.JWT, workloadapi.JWTSVID{
-			SPIFFEID: svid.SPIFFEID, Token: svid.Token,
-			ExpiresAt: unixOrZero(svid.ExpiresAtUnix),
-		})
-	}
-	return out, nil
-}
-
-// unixOrZero converts a unix timestamp, leaving zero as the zero time.
-//
-// Zero means the control plane did not report an expiry, which is different from
-// "expires at the epoch" — and a client that read the epoch would treat a
-// perfectly good SVID as long expired.
-func unixOrZero(sec int64) time.Time {
-	if sec <= 0 {
-		return time.Time{}
-	}
-	return time.Unix(sec, 0).UTC()
-}
 
 // startWorkloadAPI serves the host-local SPIFFE Workload API, if configured.
 //
@@ -84,7 +35,7 @@ func startWorkloadAPI(ctx context.Context, o agentOptions, conn *grpc.ClientConn
 	}
 	workloadAPIEnabled.Store(true)
 	srv := workloadapi.New(
-		workloadChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))},
+		workloadchannel.New(transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))),
 		func(spiffeID string, selectors []string) {
 			// Reported to stdout for now, and counted for the heartbeat below.
 			// The console's per-host view reads the counter, not this line.

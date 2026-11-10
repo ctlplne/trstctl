@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2892 annotated sites across 33 rules. Each row is
+2893 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1465,7 +1465,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (389 sites)
+### G204 — CWE-78 OS command injection (390 sites)
 
 | Location | Reason |
 |---|---|
@@ -1651,6 +1651,7 @@ not this file.
 | `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
 | `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
+| `internal/server/agent_workload_api_stock_clients_test.go:120` | the stock helper on PATH with a config this test wrote (CWE-78) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/server/archive_minio_served_test.go:50` | test removes the container it started (CWE-78) |
 | `internal/server/archive_minio_served_test.go:51` | test inspects the container it started (CWE-78) |
