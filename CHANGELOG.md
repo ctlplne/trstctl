@@ -559,6 +559,14 @@
 
 ### Fixed
 
+- A secret rotation schedule or MDM SCEP policy under a name another one holds is a 409,
+  and nothing is recorded (LS-1, the rest of the class A233-L3 found). Each appended its
+  event and then failed the projection on the tenant's name index (MDM SCEP policies in
+  any case): a 500 from the API (the rotation schedule's refusal surfaced as the
+  database's duplicate-key error) and an event a projection rebuild stopped at. Both
+  commands now check the name under the projection lock before the append and answer the
+  typed `name_held` problem, and such an event already in a log applies as the no-op it
+  was live.
 - A report schedule under a name another schedule holds is a 409, and nothing is recorded
   (LS-1, the class A233-L3 found). Creating one, from the API or a tenant baseline,
   appended the schedule event and then failed its projection on the tenant's

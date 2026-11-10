@@ -421,7 +421,18 @@ func (a *API) emitMDMSCEPPolicy(ctx context.Context, tenantID, id string, req md
 	if err != nil {
 		return err
 	}
-	return a.appendAndProjectMDMSCEP(ctx, tenantID, projections.EventMDMSCEPPolicyUpserted, payload)
+	if a.store == nil {
+		return a.appendAndProjectMDMSCEP(ctx, tenantID, projections.EventMDMSCEPPolicyUpserted, payload)
+	}
+	// LS-1: a name another of the tenant's policies holds is refused before
+	// anything is appended; the projection lock spans the check, the append
+	// and its projection. writeError answers the refusal as a 409.
+	return a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if err := a.store.EnsureTenantNameAvailable(ctx, "mdm_scep_policies", tenantID, id, req.Name); err != nil {
+			return err
+		}
+		return a.appendAndProjectMDMSCEP(ctx, tenantID, projections.EventMDMSCEPPolicyUpserted, payload)
+	})
 }
 
 func (a *API) appendAndProjectMDMSCEP(ctx context.Context, tenantID, eventType string, payload []byte) error {

@@ -1132,7 +1132,9 @@ operation.
 The scheduled path records connector cadences at
 `POST /api/v1/secrets/rotation-schedules`, lists them with
 `GET /api/v1/secrets/rotation-schedules`, and runs due ones with
-`POST /api/v1/secrets/rotation-schedules/run-due`. A schedule may name a
+`POST /api/v1/secrets/rotation-schedules/run-due`. Schedule names are distinct per
+tenant: one under a name another schedule holds answers 409 (`code: name_held`) and
+records nothing. A schedule may name a
 connector target or a static provider that allows static rotation for the secret;
 dynamic-lease schedules fail closed with `503`. A static due edge queues one durable
 command, chains its predecessor from the credential the last terminal command left

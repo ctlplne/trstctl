@@ -71,6 +71,12 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		"mdm-scep-policy:"+p.ID); err != nil {
 		return err
 	}
+	// LS-1: a policy named as another policy is (in any case) was a refused
+	// command; such an event appended before the check existed applies as the
+	// no-op it was live.
+	if held, err := tenantNameHeldTx(ctx, tx, "mdm_scep_policies", p.TenantID, p.ID, p.Name); err != nil || held {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO mdm_scep_policies
 		    (id, tenant_id, name, provider, scep_profile, scep_endpoint, expected_audience,

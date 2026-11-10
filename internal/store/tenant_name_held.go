@@ -29,6 +29,8 @@ func (e *TenantNameHeldError) Is(target error) bool { return target == ErrTenant
 var tenantNameKinds = map[string]string{
 	"audit_feed_destinations":     "audit feed",
 	"compliance_report_schedules": "report schedule",
+	"secret_rotation_schedules":   "secret rotation schedule",
+	"mdm_scep_policies":           "MDM SCEP policy",
 }
 
 // tenantNameHeldSQL is, for each read model with a tenant-unique name index
@@ -37,9 +39,12 @@ var tenantNameKinds = map[string]string{
 // command's event was appended to the log, so a duplicate name left an event
 // no rebuild could apply; the commands check first, and the projections
 // apply such an event already in a log as the no-op it was live.
-var tenantNameHeldSQL = map[string]string{
+var tenantNameHeldSQL = map[string]string{ // #nosec G101 -- table names and read queries, not credentials (CWE-798)
 	"audit_feed_destinations":     `SELECT EXISTS (SELECT 1 FROM audit_feed_destinations WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
 	"compliance_report_schedules": `SELECT EXISTS (SELECT 1 FROM compliance_report_schedules WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
+	"secret_rotation_schedules":   `SELECT EXISTS (SELECT 1 FROM secret_rotation_schedules WHERE tenant_id = $1 AND name = $2 AND id <> $3::uuid)`,
+	// The MDM SCEP policy index is on lower(name).
+	"mdm_scep_policies": `SELECT EXISTS (SELECT 1 FROM mdm_scep_policies WHERE tenant_id = $1 AND lower(name) = lower($2) AND id <> $3::uuid)`,
 }
 
 // tenantNameHeldTx reports whether a row of table other than id holds name.

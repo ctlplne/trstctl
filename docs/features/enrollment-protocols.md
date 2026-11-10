@@ -322,7 +322,9 @@ and run the identical readiness planner again, so a caller cannot bypass the gat
 
 The other served operations are `POST/GET/PUT/DELETE
 /api/v1/mdm/scep/policies`, `GET /api/v1/mdm/scep/status`, and their matching
-`trstctl mdm scep ...` commands. They keep profile guidance, challenge mode,
+`trstctl mdm scep ...` commands. Policy names are distinct per tenant in any case: a
+policy under a name another holds answers 409 (`code: name_held`) and records nothing.
+They keep profile guidance, challenge mode,
 trust-anchor references, rotation version, and telemetry visible without storing
 raw MDM secrets. At runtime the validator resolves enabled policy
 `trust_anchor_refs` from the served secret store (`secret://...`) per decision, so

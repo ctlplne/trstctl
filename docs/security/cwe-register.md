@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2857 annotated sites across 31 rules. Each row is
+2858 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (610 sites)
+### G101 — CWE-798 Use of hardcoded credentials (611 sites)
 
 | Location | Reason |
 |---|---|
@@ -665,6 +665,7 @@ not this file.
 | `internal/store/secret_static_rotation.go:359` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
+| `internal/store/tenant_name_held.go:42` | table names and read queries, not credentials (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:150` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
@@ -995,7 +996,7 @@ not this file.
 | `internal/orchestrator/discovery.go:367` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/orchestrator/operation_approvals.go:435` | a negative stored version is classified as drift before conversion (CWE-190). |
-| `internal/orchestrator/secret_rotation.go:565` | the positive int64 value always fits exactly in uint64 (CWE-190). |
+| `internal/orchestrator/secret_rotation.go:574` | the positive int64 value always fits exactly in uint64 (CWE-190). |
 | `internal/orchestrator/tenant_registration_test.go:242` | bounded test sequence. |
 | `internal/orchestrator/tenant_registration_test.go:323` | test event sequence is PostgreSQL bigint-bounded. |
 | `internal/outboxgc/outboxgc_test.go:37` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1199,12 +1200,12 @@ not this file.
 | `internal/store/rehearsals.go:64` | bounded above (CWE-190) |
 | `internal/store/scanned_certificate_chain.go:23` | event sequences fit int64 (CWE-190) |
 | `internal/store/secret_projects.go:74` | bounded to int64 above (CWE-190) |
-| `internal/store/secret_rotation_schedule.go:247` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:260` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:287` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:300` | checked against MaxInt64 above (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:396` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:420` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:253` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:266` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:293` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:306` | checked against MaxInt64 above (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:402` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:426` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/slack_app.go:51` | bounded above (CWE-190) |
 | `internal/store/snapshot.go:838` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
 | `internal/store/snapshot.go:858` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

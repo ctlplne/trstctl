@@ -62,7 +62,16 @@ func (o *Orchestrator) UpsertSecretRotationSchedule(ctx context.Context, tenantI
 	if err != nil {
 		return store.SecretRotationSchedule{}, err
 	}
-	if _, err := o.emit(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, payload); err != nil {
+	// LS-1: a name another schedule holds is refused before anything is
+	// appended; the projection lock spans the check, the append and its
+	// projection.
+	if err := o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if err := o.store.EnsureTenantNameAvailable(ctx, "secret_rotation_schedules", tenantID, id, strings.TrimSpace(in.Name)); err != nil {
+			return err
+		}
+		_, err := o.emit(ctx, projections.EventSecretRotationScheduleUpserted, tenantID, payload)
+		return err
+	}); err != nil {
 		return store.SecretRotationSchedule{}, err
 	}
 	// PostgreSQL persists timestamps at microsecond precision. Return the

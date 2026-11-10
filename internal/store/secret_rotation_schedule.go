@@ -188,6 +188,12 @@ func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pg
 	if err := lockUpsertArbiterTx(ctx, tx, "secret_rotation_schedules", sched.TenantID, sched.ID); err != nil {
 		return err
 	}
+	// LS-1: a schedule named as another schedule is was a refused command;
+	// such an event appended before the check existed applies as the no-op it
+	// was live.
+	if held, err := tenantNameHeldTx(ctx, tx, "secret_rotation_schedules", sched.TenantID, sched.ID, sched.Name); err != nil || held {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO secret_rotation_schedules
 		        (id, tenant_id, name, provider, secret_key, old_ref, interval_seconds,
