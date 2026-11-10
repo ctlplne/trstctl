@@ -1209,6 +1209,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/reviews/{id}/items/{item_id}/revocation-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a revoke decision's failed revocation under a fresh idempotency key, with a reason */
+        post: operations["retryNHIReviewRevocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/reviews/{id}/result": {
         parameters: {
             query?: never;
@@ -21340,6 +21357,10 @@ export interface components {
             resource: string;
             risk?: string;
         };
+        NHIReviewRevocationRetryRequest: {
+            /** @description Why the revocation is retried now, at most 200 characters; recorded with the retry. */
+            reason: string;
+        };
         NHIShadowFinding: {
             /** Format: date-time */
             discovered_at: string;
@@ -31902,6 +31923,54 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["NHIReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryNHIReviewRevocation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIReviewRevocationRetryRequest"];
             };
         };
         responses: {

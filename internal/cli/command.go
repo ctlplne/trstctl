@@ -618,6 +618,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "reviews", "get"}, Method: "GET", Path: "/api/v1/access/reviews/{id}", Summary: "Get an NHI access certification campaign"},
 	{Name: []string{"access", "reviews", "generate"}, Method: "POST", Path: "/api/v1/access/reviews/generate", Body: bodyFile, Summary: "Start an NHI access review built from who can reach a resource or from stale owner attestations"},
 	{Name: []string{"access", "reviews", "decide"}, Method: "POST", Path: "/api/v1/access/reviews/{id}/items/{item_id}/decision", Body: bodyFile, Summary: "Record an NHI access-review item decision"},
+	{Name: []string{"access", "reviews", "retry-revocation"}, Method: "POST", Path: "/api/v1/access/reviews/{id}/items/{item_id}/revocation-retry", Body: bodyFile, Summary: "Retry a revoke decision's failed revocation, with a reason"},
 
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},

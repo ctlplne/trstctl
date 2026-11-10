@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useCan } from "@/components/rbac";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type NHIReviewItem } from "@/lib/api";
+import { api, type NHIReviewCampaign, type NHIReviewItem } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 
 // Q1: access reviews that act. A review can be built from what trstctl records
@@ -128,7 +128,15 @@ export function AccessReviewGenerate({ onGenerated }: { onGenerated: (campaignId
 // AccessReviewOutcome says what a decision did: for a revoke, whether trstctl
 // requested the credential's revoke, left it to its own revocation, failed, or
 // closed the item on evidence; for a keep, the next review date.
-export function AccessReviewOutcome({ item }: { item: NHIReviewItem }) {
+export function AccessReviewOutcome({
+  item,
+  campaignId,
+  onRetried,
+}: {
+  item: NHIReviewItem;
+  campaignId?: string;
+  onRetried?: (campaign: NHIReviewCampaign) => void;
+}) {
   const { t, formatDate } = useTranslation();
   if (item.status === "certified" && item.next_review_at) {
     return <p className="mt-1 text-xs text-muted-foreground">{t("policy.nhiReview.outcome.nextReview", { date: formatDate(item.next_review_at) })}</p>;
@@ -144,6 +152,67 @@ export function AccessReviewOutcome({ item }: { item: NHIReviewItem }) {
     <div className="mt-1 text-xs">
       <p className={item.revocation_status === "failed" ? "font-medium text-destructive" : "font-medium"}>{label}</p>
       <p className="break-words text-muted-foreground">{item.revocation_status === "closed" ? item.closing_evidence : item.revocation_detail}</p>
+      {item.revocation_status === "failed" ? <AccessReviewRetry campaignId={campaignId} item={item} onRetried={onRetried} /> : null}
+    </div>
+  );
+}
+
+// AccessReviewRetry (Q1-L2) retries a failed revocation. trstctl retries on
+// its own for a week, waiting longer each time; an operator who fixed the
+// cause retries now, with a reason. A network retry of the same click reuses
+// its key, so it never makes a second attempt.
+function AccessReviewRetry({ campaignId, item, onRetried }: { campaignId?: string; item: NHIReviewItem; onRetried?: (campaign: NHIReviewCampaign) => void }) {
+  const { t } = useTranslation();
+  const canWrite = useCan("access:write");
+  const [reason, setReason] = useState("");
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const auto = <p className="mt-1 text-muted-foreground">{t("policy.nhiReview.outcome.autoRetry")}</p>;
+  if (!canWrite || !campaignId || !onRetried) return auto;
+
+  async function retry() {
+    if (!campaignId || !onRetried) return;
+    const key = pendingKey ?? crypto.randomUUID();
+    setPendingKey(key);
+    setBusy(true);
+    setError(null);
+    try {
+      const campaign = await api.retryNHIReviewRevocation(campaignId, item.item_id, { reason: reason.trim() }, key);
+      setPendingKey(null);
+      setReason("");
+      onRetried(campaign);
+    } catch (cause) {
+      setError(apiProblemMessage(cause, t("policy.nhiReview.outcome.retryFailed")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 grid max-w-sm gap-2">
+      {auto}
+      <Field label={t("policy.nhiReview.outcome.retryReason")} controlId={`nhi-review-retry-${item.item_id}`}>
+        {(control) => (
+          <Input
+            {...control}
+            value={reason}
+            maxLength={200}
+            onChange={(event) => {
+              setReason(event.target.value);
+              setPendingKey(null);
+            }}
+          />
+        )}
+      </Field>
+      <Button type="button" size="sm" variant="outline" disabled={busy || !reason.trim()} onClick={() => void retry()}>
+        {t("policy.nhiReview.outcome.retry")}
+      </Button>
+      {error ? (
+        <p role="alert" className="text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

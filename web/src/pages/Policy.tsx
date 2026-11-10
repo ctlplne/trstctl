@@ -1300,6 +1300,10 @@ function PolicyContent() {
                   onDecision={decideNHIReviewItem}
                   onEvidenceRefsChange={setReviewDecisionEvidenceRefs}
                   onReasonChange={setDecisionReasons}
+                  onRetried={(campaign) => {
+                    setActiveReview(campaign);
+                    void refreshNHIReviews(campaign.id);
+                  }}
                 />
               )}
             </div>
@@ -1648,6 +1652,7 @@ function NHIReviewCampaignPanel({
   onDecision,
   onEvidenceRefsChange,
   onReasonChange,
+  onRetried,
   reviewAction,
 }: {
   campaign: NHIReviewCampaign;
@@ -1658,6 +1663,8 @@ function NHIReviewCampaignPanel({
   onDecision: (item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) => Promise<void>;
   onEvidenceRefsChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
   onReasonChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
+  // Q1-L2: an operator retried a failed revocation; the panel shows the answer.
+  onRetried: (campaign: NHIReviewCampaign) => void;
   reviewAction: string | null;
 }) {
   const { t } = useTranslation();
@@ -1775,7 +1782,7 @@ function NHIReviewCampaignPanel({
                           {(item.decision_evidence_refs?.length ?? 0) > 0 && (
                             <p className="mt-1 break-all text-xs text-muted-foreground">{item.decision_evidence_refs?.join(", ")}</p>
                           )}
-                          <AccessReviewOutcome item={item} />
+                          <AccessReviewOutcome item={item} campaignId={campaign.id} onRetried={onRetried} />
                         </div>
                       )}
                     </td>

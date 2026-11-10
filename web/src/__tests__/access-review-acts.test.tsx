@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { AccessReviewGenerate, AccessReviewOutcome, AccessReviewSignedResult } from "@/pages/policy/AccessReviewActs";
 import type { NHIReviewItem } from "@/lib/api";
 
-const { apiMock, can } = vi.hoisted(() => ({ apiMock: { generateNHIReviewCampaign: vi.fn(), nhiReviewResult: vi.fn() }, can: { value: true } }));
+const { apiMock, can } = vi.hoisted(() => ({
+  apiMock: { generateNHIReviewCampaign: vi.fn(), nhiReviewResult: vi.fn(), retryNHIReviewRevocation: vi.fn() },
+  can: { value: true },
+}));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -69,6 +72,44 @@ describe("Q1 access reviews that act", () => {
     can.value = false;
     const { container } = render(<AccessReviewGenerate onGenerated={() => {}} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("retries a failed revocation with a reason, reusing the key on a network retry (Q1-L2)", async () => {
+    const campaign = { id: "c1", items: [] };
+    apiMock.retryNHIReviewRevocation.mockRejectedValueOnce(new Error("network"));
+    apiMock.retryNHIReviewRevocation.mockResolvedValueOnce(campaign);
+    const onRetried = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AccessReviewOutcome
+        item={item({ revocation_status: "failed", revocation_detail: "the PAM session's revocation failed" })}
+        campaignId="c1"
+        onRetried={onRetried}
+      />,
+    );
+    expect(screen.getByText(/retries a failed revocation on its own/)).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "Retry revocation" });
+    expect(retry).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "Why retry now" }), "provider repaired");
+    await user.click(retry);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await user.click(retry);
+    const [first, second] = apiMock.retryNHIReviewRevocation.mock.calls;
+    expect(first.slice(0, 3)).toEqual(["c1", "i1", { reason: "provider repaired" }]);
+    expect(second[3]).toBe(first[3]);
+    expect(onRetried).toHaveBeenCalledWith(campaign);
+  });
+
+  it("offers no retry without access:write, and none for a revocation that did not fail", () => {
+    can.value = false;
+    const { rerender } = render(
+      <AccessReviewOutcome item={item({ revocation_status: "failed", revocation_detail: "refused" })} campaignId="c1" onRetried={() => {}} />,
+    );
+    expect(screen.getByText(/retries a failed revocation on its own/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry revocation" })).not.toBeInTheDocument();
+    can.value = true;
+    rerender(<AccessReviewOutcome item={item({ revocation_status: "requested", revocation_detail: "requested" })} campaignId="c1" onRetried={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Retry revocation" })).not.toBeInTheDocument();
   });
 
   it("says what a decision did", () => {

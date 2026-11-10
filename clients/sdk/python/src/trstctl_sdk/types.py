@@ -10609,6 +10609,14 @@ NHIReviewItemRequest = TypedDict(
     total=False,
 )
 
+NHIReviewRevocationRetryRequest = TypedDict(
+    'NHIReviewRevocationRetryRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 NHIShadowFinding = TypedDict(
     'NHIShadowFinding',
     {

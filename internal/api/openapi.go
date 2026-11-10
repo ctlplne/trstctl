@@ -1834,6 +1834,10 @@ func componentSchemas() map[string]*Schema {
 		"decision_evidence_refs": {Type: "array", Items: str()},
 		"next_review_days":       {Type: "integer", Description: "keep decisions: days until the next review, 1-730 (default 90)"},
 	}, "decision")
+	// Q1-L2: an operator's retry of a failed review revocation.
+	nhiReviewRevocationRetryReq := object(map[string]*Schema{
+		"reason": {Type: "string", Description: "Why the revocation is retried now, at most 200 characters; recorded with the retry."},
+	}, "reason")
 	nhiReviewItem := object(map[string]*Schema{
 		"item_id": uuid(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
 		"owner_ref": str(), "resource": str(), "entitlement": str(), "risk": str(),
@@ -8330,6 +8334,7 @@ func componentSchemas() map[string]*Schema {
 		"NHIReviewItemRequest":                  nhiReviewItemReq,
 		"NHIReviewCampaignStartRequest":         nhiReviewCampaignStartReq,
 		"NHIReviewDecisionRequest":              nhiReviewDecisionReq,
+		"NHIReviewRevocationRetryRequest":       nhiReviewRevocationRetryReq,
 		"NHIReviewItem":                         nhiReviewItem,
 		"NHIReviewCampaign":                     nhiReviewCampaign,
 		"NHIReviewCampaignList":                 list("NHIReviewCampaign"),

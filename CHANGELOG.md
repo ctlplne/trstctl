@@ -2,6 +2,14 @@
 
 ### Added
 
+- A failed access review revocation is retried (Q1-L2). It used to stay failed: nothing retried it,
+  and a retry under the decision's own key could not work, because PAM refuses to retry a failed
+  revocation under the key that failed. The leader's reconcile now retries on its own, waiting as
+  long as the revocation has been failing (5 minutes to 6 hours) and stopping a week after the first
+  request; an operator retries at any time with a reason through
+  `POST /api/v1/access/reviews/{id}/items/{item_id}/revocation-retry` (access:write), the CLI's
+  `access reviews retry-revocation`, or Retry revocation on the item. Every attempt has its own
+  idempotency key, and the item records who retried and why.
 - A revocation waiting on an AD CS relay says why (A162-L5). An `adcs` issuer revokes through its
   `revocation_relay`, and until that relay reports, the certificate stays active and the delivery
   waits without spending its retries, which showed only as a deferred job. `GET

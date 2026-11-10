@@ -751,6 +751,7 @@ public final class OpenApiSchemas {
       "NHIReviewGenerateResponse",
       "NHIReviewItem",
       "NHIReviewItemRequest",
+      "NHIReviewRevocationRetryRequest",
       "NHIShadowFinding",
       "NHIShadowPosture",
       "NHIShadowSummary",

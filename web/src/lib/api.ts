@@ -475,6 +475,7 @@ import type {
   NHIReviewCampaignList,
   NHIReviewCampaignStartRequest,
   NHIReviewDecisionRequest,
+  NHIReviewRevocationRetryRequest,
   NHIReviewItem,
   NHIShadowPosture,
   NHIStalePosture,
@@ -1530,6 +1531,7 @@ export type {
   NHIReviewCampaignList,
   NHIReviewCampaignStartRequest,
   NHIReviewDecisionRequest,
+  NHIReviewRevocationRetryRequest,
   NHIReviewItem,
   NHIShadowPosture,
   NHIStalePosture,
@@ -2541,6 +2543,7 @@ export interface Api {
   startNHIReviewCampaign(input: NHIReviewCampaignStartRequest): Promise<NHIReviewCampaign>;
   getNHIReviewCampaign(id: string): Promise<NHIReviewCampaign>;
   decideNHIReviewItem(campaignId: string, itemId: string, input: NHIReviewDecisionRequest): Promise<NHIReviewCampaign>;
+  retryNHIReviewRevocation(campaignId: string, itemId: string, input: NHIReviewRevocationRetryRequest, idempotencyKey?: string): Promise<NHIReviewCampaign>;
   apiTokens(options?: { limit?: number; cursor?: string; subject?: string; includeRevoked?: boolean }): Promise<APITokenList>;
   createAPIToken(input: APITokenCreateRequest): Promise<APITokenCreateResponse>;
   revokeAPIToken(id: string): Promise<void>;
@@ -3537,6 +3540,13 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getNHIReviewCampaign: (id) => req<NHIReviewCampaign>(`/api/v1/access/reviews/${encodeURIComponent(id)}`),
   decideNHIReviewItem: (campaignId, itemId, input) =>
     mutate<NHIReviewCampaign>("POST", `/api/v1/access/reviews/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/decision`, input),
+  retryNHIReviewRevocation: (campaignId, itemId, input, idempotencyKey) =>
+    mutate<NHIReviewCampaign>(
+      "POST",
+      `/api/v1/access/reviews/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/revocation-retry`,
+      input,
+      idempotencyKey,
+    ),
   apiTokens: (options) => req<APITokenList>(`/api/v1/access/api-tokens${apiTokensQueryString(options)}`),
   createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),

@@ -7655,6 +7655,10 @@ export interface NHIReviewItemRequest {
   risk?: string;
 }
 
+export interface NHIReviewRevocationRetryRequest {
+  reason: string;
+}
+
 export interface NHIShadowFinding {
   discovered_at: string;
   display_name: string;

@@ -388,9 +388,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// emergency check-out (789). A274 adds the recorded sign-ins (790). A275
 	// adds the recording search (791). A276 adds the account flags (795) and
 	// the signed review result (796). A278 adds the gateway pools (799).
-	// A162-L5 adds the revocations waiting on an AD CS relay (800).
-	if len(out) != 800 {
-		t.Fatalf("OpenAPI operationIds = %d, want 800", len(out))
+	// A162-L5 adds the revocations waiting on an AD CS relay (800). Q1-L2
+	// adds the retry of a failed review revocation (801).
+	if len(out) != 801 {
+		t.Fatalf("OpenAPI operationIds = %d, want 801", len(out))
 	}
 	return out
 }

@@ -35652,6 +35652,18 @@
         ],
         "type": "object"
       },
+      "NHIReviewRevocationRetryRequest": {
+        "properties": {
+          "reason": {
+            "description": "Why the revocation is retried now, at most 200 characters; recorded with the retry.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "NHIShadowFinding": {
         "properties": {
           "discovered_at": {
@@ -66657,6 +66669,92 @@
           }
         ],
         "summary": "Record an NHI access-review item decision",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/reviews/{id}/items/{item_id}/revocation-retry": {
+      "post": {
+        "operationId": "retryNHIReviewRevocation",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIReviewRevocationRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Retry a revoke decision's failed revocation under a fresh idempotency key, with a reason",
         "x-trstctl-permission": "access:write"
       }
     },

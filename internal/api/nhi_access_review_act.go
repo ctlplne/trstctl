@@ -52,7 +52,12 @@ func nhiReviewRevokeReason(campaignID string, item store.NHIReviewItem) string {
 // dynamic-secret leases itself; any other kind is left to its own revocation
 // (manual), and its item closes when trstctl sees the credential revoked.
 func (a *API) RevokeReviewedCredential(ctx context.Context, tenantID, campaignID string, item store.NHIReviewItem) (string, string) {
-	key := NHIReviewIdempotencyKey(campaignID, item.ItemID)
+	return a.revokeReviewedCredentialWithKey(ctx, tenantID, campaignID, item, NHIReviewIdempotencyKey(campaignID, item.ItemID))
+}
+
+// revokeReviewedCredentialWithKey is one attempt at the reviewed credential's
+// revoke under key: the decision's own key, or a retry's (Q1-L2).
+func (a *API) revokeReviewedCredentialWithKey(ctx context.Context, tenantID, campaignID string, item store.NHIReviewItem, key string) (string, string) {
 	reason := nhiReviewRevokeReason(campaignID, item)
 	kind, id, _ := strings.Cut(item.NHIID, ":")
 	switch kind {
@@ -304,8 +309,8 @@ func nhiReviewReadError(err error) error {
 
 // ReconcileNHIReviewRevocations finishes the tenant's revoke decisions: a
 // decision whose act was interrupted acts now with the same idempotency key,
-// and an item closes when its credential reads revoked. It returns how many
-// items closed.
+// a failed revocation is retried once its backoff passes (Q1-L2), and an item
+// closes when its credential reads revoked. It returns how many items closed.
 func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string, now time.Time) (int, error) {
 	if a.orch == nil || a.store == nil {
 		return 0, nil
@@ -350,6 +355,10 @@ func (a *API) ReconcileNHIReviewRevocations(ctx context.Context, tenantID string
 			closed++
 		case state == nhiReviewTargetFailed && item.RevocationStatus != store.NHIReviewRevocationFailed:
 			if _, err := a.orch.RecordNHIReviewRevocation(ctx, tenantID, item.CampaignID, item.ItemID, store.NHIReviewRevocationFailed, detail); err != nil {
+				note(err)
+			}
+		case nhiReviewAutoRetryDue(item, now):
+			if _, err := a.autoRetryNHIReviewRevocation(ctx, tenantID, item); err != nil {
 				note(err)
 			}
 		}

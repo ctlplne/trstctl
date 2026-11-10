@@ -17961,6 +17961,16 @@ export const messages = {
     description: "Q1: trstctl does not revoke this kind from a review.",
   },
   "policy.nhiReview.outcome.failed": { defaultMessage: "Revocation failed", description: "Q1: the credential's revoke refused." },
+  "policy.nhiReview.outcome.autoRetry": {
+    defaultMessage: "trstctl retries a failed revocation on its own for a week, waiting longer each time. Once the cause is fixed, retry now.",
+    description: "Q1-L2: how a failed review revocation is retried.",
+  },
+  "policy.nhiReview.outcome.retryReason": { defaultMessage: "Why retry now", description: "Q1-L2: the reason recorded with an operator's retry." },
+  "policy.nhiReview.outcome.retry": { defaultMessage: "Retry revocation", description: "Q1-L2: retry a failed review revocation." },
+  "policy.nhiReview.outcome.retryFailed": {
+    defaultMessage: "The retry could not be recorded.",
+    description: "Q1-L2: fallback when an operator's retry request fails.",
+  },
   "policy.nhiReview.outcome.closed": { defaultMessage: "Closed: the credential reads revoked", description: "Q1: the item closed on evidence." },
   "policy.nhiReview.outcome.nextReview": {
     defaultMessage: "Next review {date}; no upstream right changed",

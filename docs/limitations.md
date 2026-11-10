@@ -1480,8 +1480,14 @@ never live in the API process. What you can do end to end against the running bi
   next review date without changing any upstream right.
   `POST /api/v1/access/reviews/generate` builds a campaign from who can reach a
   graph node (with the graph's coverage statement) or from stale owner
-  attestations. A failed revoke stays visible and is not retried on its own; a
-  credential trstctl no longer holds leaves its item open. Decoy logins no longer
+  attestations. A failed revoke stays visible and is retried (Q1-L2): the
+  leader's reconcile retries it on its own, waiting as long as it has been
+  failing (5 minutes to 6 hours) and stopping a week after the first request,
+  and an operator retries at any time with a reason
+  (`POST /api/v1/access/reviews/{id}/items/{item_id}/revocation-retry`, CLI
+  `access reviews retry-revocation`, or Retry revocation on the item). Each
+  attempt carries its own idempotency key, which PAM requires to retry a failed
+  revocation. A credential trstctl no longer holds leaves its item open. Decoy logins no longer
   appear in the access graph.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
