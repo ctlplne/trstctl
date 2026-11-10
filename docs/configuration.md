@@ -745,6 +745,13 @@ saved earlier. DNS answers are checked at each socket dial, redirects keep the
 same origin, and air-gap destination rules also apply. A delivery receipt proves
 receiver acceptance, not downstream incident handling.
 
+A tenant baseline, and a Provider tenant template built from one, may name a
+webhook at a private address (A223-L1). Recording it accepts any address an
+operator could grant (RFC 1918 or unique-local; never loopback, link-local, CGNAT
+or a metadata address). Applying it to a tenant checks that tenant's grant: a
+tenant without one gets that channel refused with the reason and the rest of the
+baseline applied.
+
 The Alerts and delivery console lets an operator edit or delete saved tenant channels
 and routing policies from their cards. A channel update replaces the entire channel.
 The API hides configured endpoint URLs and credential references on readback, so the

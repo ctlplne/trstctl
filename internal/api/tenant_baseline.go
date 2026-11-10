@@ -14,8 +14,10 @@ import (
 	guuid "github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/authz"
+	cfg "trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/profile"
@@ -313,10 +315,30 @@ func baselineTargetRequest(x BaselineDeploymentTarget) (deploymentTargetRequest,
 	return parseDeploymentTargetRequest(raw)
 }
 
+// baselineChannel builds a baseline's channel before any tenant's grant is
+// consulted (A223-L1): the endpoint must be public HTTPS or HTTPS to an address
+// an operator could grant a tenant (grantableNotificationEndpoint). Whether
+// the tenant it is applied to holds that grant is the apply step's check.
 func baselineChannel(tenantID string, x BaselineNotificationChannel) (store.NotificationChannel, error) {
 	return notificationChannelFromRequest(tenantID, x.ChannelType, notificationChannelRequest{
 		ChannelType: x.ChannelType, Label: x.Label, EndpointURL: x.EndpointURL, CredentialRef: x.CredentialRef, Enabled: x.Enabled,
-	})
+	}, grantableNotificationEndpoint)
+}
+
+// grantableNotificationEndpoint accepts public HTTPS, or HTTPS to a literal
+// address in the ranges an operator may grant a tenant (RFC 1918 or
+// unique-local; never loopback, link-local, CGNAT or a metadata address).
+func grantableNotificationEndpoint(_ string, endpoint string) error {
+	return netsec.ValidatePublicHTTPSURLWithOptions(endpoint, netsec.SafeClientOptions{AllowPrivateCIDRs: cfg.TenantGrantablePrivateRanges()})
+}
+
+// tenantNotificationEndpoint is the check a tenant's own channel request
+// passes: public HTTPS, or HTTPS inside the operator's grant for that tenant.
+func (a *API) tenantNotificationEndpoint(tenantID, endpoint string) error {
+	if a.notificationEgress != nil {
+		return a.notificationEgress(tenantID, endpoint)
+	}
+	return netsec.ValidatePublicHTTPSURL(endpoint)
 }
 
 func baselineScheduleRequest(x BaselineReportSchedule) (complianceReportScheduleRequest, error) {
@@ -698,6 +720,14 @@ func (a *API) baselineChannelStep(tenantID string, x BaselineNotificationChannel
 			return stateOf(BaselineKindNotificationChannel, want.ID, want.ID, expected, channelDigest(got), false), &got, nil
 		},
 		apply: func(ctx context.Context, current any) (string, string, error) {
+			// A223-L1: the endpoint the baseline names must be one this
+			// tenant's own request could name: a private address needs the
+			// operator's grant for this tenant.
+			if want.EndpointURL != "" {
+				if err := a.tenantNotificationEndpoint(tenantID, want.EndpointURL); err != nil {
+					return "", "", errStatus(http.StatusBadRequest, "endpoint_url must be public HTTPS or HTTPS inside an operator-granted private range for this tenant")
+				}
+			}
 			if _, err := a.appendNotificationChannelUpsert(ctx, tenantID, want); err != nil {
 				return "", "", err
 			}

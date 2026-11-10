@@ -366,7 +366,14 @@ never live in the API process. What you can do end to end against the running bi
   refuse loopback, metadata, link-local, wildcard and partly public ranges;
   HTTPS certificate validation and the air-gap guard still apply. The served
   private-TLS/outbox test proves one receiver and tenant isolation; fresh-image
-  console and restart proof is recorded separately in the build replay.
+  console and restart proof is recorded separately in the build replay. A tenant
+  baseline (what a Provider tenant template applies) may name a private webhook
+  too (A223-L1): validated before any tenant is known, it accepts an address an
+  operator could grant (RFC 1918 or unique-local, never loopback, link-local,
+  CGNAT or a metadata address), and applying it checks the grant of the tenant
+  it is applied to: with the grant the channel is created and delivers (proven
+  over TLS to a receiver on a private interface); without it that object fails
+  naming the grant and the rest of the baseline applies.
 - Deployment connector orchestration serves target metadata, identity binding,
   outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
   Device proof (E1): every appliance family — a10, cisco, f5, fortigate, kemp,

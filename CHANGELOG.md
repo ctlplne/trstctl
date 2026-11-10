@@ -580,6 +580,14 @@
 
 ### Fixed
 
+- A tenant baseline, and the Provider tenant template that applies one, may name a webhook at a
+  private address, decided by the operator's grant for the tenant it is applied to (A223-L1). The
+  baseline is validated before any tenant is known, and that validation refused every private
+  literal, so a template could not carry one even for a granted tenant, and the apply step never
+  consulted the tenant's grant. Validation without a tenant now accepts an address an operator
+  could grant (RFC 1918 or unique-local; never loopback, link-local, CGNAT or a metadata address),
+  and applying the baseline checks the tenant's own grant: without it that channel fails naming
+  the grant and the rest of the baseline applies.
 - In an AWS KMS account several tenants share, a tenant's reconcile round no longer reads the
   other tenants' managed keys as its drift (A168-L2). The `awskms` source asserted every key
   carrying trstctl's operation tag, so each tenant's witness evidence held the other tenants' key

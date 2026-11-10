@@ -100,6 +100,18 @@ func NotificationTenantPrivatePrefixes(grants []TenantPrivateEgress) (map[string
 	return out, nil
 }
 
+// TenantGrantablePrivateRanges are the ranges an operator may grant a tenant's
+// notification channels (A223): RFC 1918 and IPv6 unique-local space. A grant
+// lies inside one of them and never contains a metadata address; a tenant
+// baseline validated before its tenant is known accepts an endpoint in them
+// and leaves the grant to the tenant it is applied to (A223-L1).
+func TenantGrantablePrivateRanges() []netip.Prefix {
+	return []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("172.16.0.0/12"),
+		netip.MustParsePrefix("192.168.0.0/16"), netip.MustParsePrefix("fc00::/7"),
+	}
+}
+
 func tenantPrivatePrefix(prefix netip.Prefix) bool {
 	// Check the entire range, not only its first address: 10.0.0.0/7 also
 	// contains public addresses. A grant cannot include a metadata endpoint.
@@ -107,8 +119,7 @@ func tenantPrivatePrefix(prefix netip.Prefix) bool {
 	if prefix.Contains(metadata) {
 		return false
 	}
-	for _, raw := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"} {
-		allowed := netip.MustParsePrefix(raw)
+	for _, allowed := range TenantGrantablePrivateRanges() {
 		if prefix.Bits() >= allowed.Bits() && allowed.Contains(prefix.Addr()) {
 			return !netsec.HardBlockedIP(net.IP(prefix.Addr().AsSlice()))
 		}
