@@ -3384,6 +3384,12 @@ say `verified`. It does not redeem a
 certificate or private key: those do not exist in a target-only test and are
 supplied only after a deploy is authorized. It redeems only a host-target secret
 the preflight actually needs, such as a Java keystore password reference.
+A cluster agent testing a `k8s_secret` destination checks the namespace against
+its profile, then reads the named Secret with its own service account: the plan
+says a deploy would create the Secret or replace its certificate and key, or it
+names the agent's RBAC when the cluster refuses the read. That GET is the only
+request it sends. CI proves each answer against a kind cluster with the agent's
+least-privilege token, and checks on the wire that nothing is written.
 The three cloud-store connectors queue the same event-sourced job on the bounded
 control-plane outbox worker. That worker resolves the exact saved target revision,
 leases its provider credential for one attempt, and performs an authenticated

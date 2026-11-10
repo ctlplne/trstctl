@@ -538,3 +538,35 @@ func TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch(t *testing.T) {
 		}
 	}
 }
+
+// K8S-O1: limitations.md says CI proves the k8s_secret dry-run against a kind
+// cluster with the agent's least-privilege token. The build-tagged proof sits
+// beside its executor, outside test/e2e, so the kind job must name it, in the
+// step that has the cluster's coordinates, or the claim would rest on a test
+// nobody runs.
+func TestCIRunsTheKubernetesSecretDryRunKindProof(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	start := strings.Index(ci, "- name: Run the in-cluster e2e")
+	if start < 0 {
+		t.Fatal("ci.yml has no in-cluster e2e step; revisit this guard")
+	}
+	step := ci[start:]
+	if end := strings.Index(step[len("- name:"):], "- name:"); end >= 0 {
+		step = step[:len("- name:")+end]
+	}
+	const proof = "go test -tags e2e -count=1 -v -run 'TestKubernetesSecretDryRunAgainstACluster' ./internal/agent/relay/"
+	if !strings.Contains(step, proof) || !strings.Contains(step, "K8S_TOKEN=") {
+		t.Fatalf("the in-cluster e2e step must run %q with the cluster's coordinates", proof)
+	}
+	source := read(t, "../internal/agent/relay/k8ssecret_kind_e2e_test.go")
+	for _, name := range []string{
+		"TestKubernetesSecretDryRunAgainstAClusterPlansACreateAndWritesNothing",
+		"TestKubernetesSecretDryRunAgainstAClusterPlansAReplaceAndLeavesTheSecretAsItWas",
+		"TestKubernetesSecretDryRunAgainstAClusterRefusesANamespaceOutsideTheProfile",
+		"TestKubernetesSecretDryRunAgainstAClusterNamesTheAgentsRBAC",
+	} {
+		if !strings.Contains(source, "func "+name+"(t *testing.T)") {
+			t.Errorf("the kind dry-run proof no longer defines %s", name)
+		}
+	}
+}

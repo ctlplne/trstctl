@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2884 annotated sites across 33 rules. Each row is
+2887 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1975,7 +1975,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (712 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (713 sites)
 
 | Location | Reason |
 |---|---|
@@ -2170,6 +2170,7 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
+| `internal/agent/relay/k8ssecret_kind_e2e_test.go:84` | the cluster CA file the kind job exports (CWE-22) |
 | `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/plugin_modules.go:43` | the operator's own approval record beside the agent key (CWE-22) |
 | `internal/agent/relay/plugins.go:255` | operator-configured plugin directory (CWE-22) |
@@ -3007,7 +3008,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (148 sites)
+### G703 — CWE-22 Path traversal (taint) (149 sites)
 
 | Location | Reason |
 |---|---|
@@ -3029,6 +3030,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:255` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:288` | derived agent-owned state path |
 | `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
+| `internal/agent/relay/k8ssecret_kind_e2e_test.go:84` | the cluster CA file the kind job exports (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:132` | the proof names its report path in the environment, never a request (CWE-22) |
 | `internal/agent/sshkrl/install.go:279` | staged path is created in the bound target directory by CreateTemp |
 | `internal/agent/sshkrl/install.go:280` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
@@ -3160,13 +3162,15 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (40 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (42 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl/connector.go:426` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `cmd/trstctl/connector.go:446` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
+| `internal/agent/relay/k8ssecret_kind_e2e_test.go:108` | the kind cluster API server the job exports (CWE-918) |
+| `internal/agent/relay/k8ssecret_kind_e2e_test.go:117` | the kind cluster API server the job exports (CWE-918) |
 | `internal/agent/workloadapi/attest_linux_test.go:29` | the parent test hands its own temporary socket's path to this helper process (CWE-918). |
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |

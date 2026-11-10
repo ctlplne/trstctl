@@ -3251,6 +3251,10 @@ jobs:
           K8S_TRUST_CSI_IMAGE="trstctl-agent-csi:ci"
           export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE K8S_TRUST_CSI_IMAGE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...
+          # K8S-O1: the k8s_secret dry-run against the same cluster with the
+          # agent's restricted token. It sits beside its executor, whose test
+          # seam points it at this API server instead of a pod's mount.
+          go test -tags e2e -count=1 -v -run 'TestKubernetesSecretDryRunAgainstACluster' ./internal/agent/relay/
 
       - name: Diagnostics on failure
         if: failure()
