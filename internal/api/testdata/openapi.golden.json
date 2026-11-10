@@ -76696,6 +76696,12 @@
           }
         ],
         "summary": "Revoke exact certificates or explicitly selected lifecycle identities",
+        "x-trstctl-also-requires": [
+          {
+            "permission": "certs:issue",
+            "when": "the request selects exact certificates (certificate_ids); without it the revocation is refused with 403"
+          }
+        ],
         "x-trstctl-permission": "identities:write"
       }
     },

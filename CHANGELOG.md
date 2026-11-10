@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- The bulk-revoke contract names every permission it checks (N7-L1).
+  `POST /api/v1/certificates/bulk-revoke` advertised only `identities:write`, but selecting
+  exact certificates (`certificate_ids`) also needs `certs:issue` and is refused with 403
+  without it. Operations now list such permissions in `x-trstctl-also-requires`
+  (`permission` and `when`), and bulk revoke declares `certs:issue` for exact certificates.
 - The access deletes' OpenAPI contract requires the `revision` the caller read (A261-L4).
   `DELETE /api/v1/access/folders/{name}`, `/auto-approval-rules/{id}` and
   `/gateway-pools/{name}` refuse a delete without it (400), but the served contract marked

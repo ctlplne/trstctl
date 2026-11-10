@@ -923,6 +923,13 @@ func (a *API) Routes() []Route {
 func openapiPath(p string) string { return strings.ReplaceAll(p, "...}", "}") }
 
 // param is an OpenAPI query parameter descriptor.
+// conditionalPermission is a permission a handler checks beyond its route's,
+// and the request shape that makes it check it (N7-L1).
+type conditionalPermission struct {
+	Permission authz.Permission
+	When       string
+}
+
 type param struct {
 	required bool
 	name     string
@@ -977,7 +984,10 @@ type route struct {
 	sensitiveResponse  bool
 	approval           bool             // records an approval or denial that counts toward dual control; delegated tokens are refused (F262)
 	perm               authz.Permission // required permission; "" means public
-	scope              routeScope
+	// alsoRequires names a permission the handler checks as well, and when
+	// (N7-L1); the contract lists each beside perm.
+	alsoRequires []conditionalPermission
+	scope        routeScope
 }
 
 type routeScope func(*http.Request) (authz.Scope, error)
@@ -1342,7 +1352,8 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
 		{method: "POST", path: "/api/v1/certificates/pki-secret-recoveries", opID: "recoverPKISecretLeaf", summary: "Give a historical PKI-secret leaf its inventory row from its public certificate", handler: a.recoverPKISecretLeaf, reqSchema: "PKISecretLeafPEM", reqContentType: "application/x-pem-file", resSchema: "PKISecretLeafRecovery", successCode: "200", mutation: true, perm: authz.CertsWrite},
 		{method: "POST", path: "/api/v1/certificates/managed-ca-recoveries", opID: "recoverManagedCALeaf", summary: "Give a serial-only managed CA leaf its inventory row from its public certificate", handler: a.recoverManagedCALeaf, reqSchema: "PKISecretLeafPEM", reqContentType: "application/x-pem-file", resSchema: "PKISecretLeafRecovery", successCode: "200", mutation: true, perm: authz.CertsWrite},
-		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Revoke exact certificates or explicitly selected lifecycle identities", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
+		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Revoke exact certificates or explicitly selected lifecycle identities", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite,
+			alsoRequires: []conditionalPermission{{Permission: authz.CertsIssue, When: "the request selects exact certificates (certificate_ids); without it the revocation is refused with 403"}}},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/health", opID: "getCertificateHealth", summary: "Get estate-wide certificate expiry and source health", handler: a.getCertificateHealth, resSchema: "CertificateHealthDashboard", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/validity-readiness", opID: "getValidityReadiness", summary: "Report whether each certificate keeps renewing, and which public TLS profiles request too long a validity, under the CA/Browser Forum's dated maximum validity", handler: a.getValidityReadiness, resSchema: "ValidityReadinessReport", successCode: "200", perm: authz.CertsRead},

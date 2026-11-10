@@ -38,19 +38,29 @@ type PathItem map[string]*Operation
 
 // Operation describes one endpoint.
 type Operation struct {
-	OperationID        string                `json:"operationId"`
-	Summary            string                `json:"summary,omitempty"`
-	Deprecated         bool                  `json:"deprecated,omitempty"`
-	Parameters         []Parameter           `json:"parameters,omitempty"`
-	RequestBody        *RequestBody          `json:"requestBody,omitempty"`
-	Responses          map[string]Response   `json:"responses"`
-	Security           []map[string][]string `json:"security,omitempty"`
-	XPermission        string                `json:"x-trstctl-permission,omitempty"`
-	XPublicRationale   string                `json:"x-trstctl-public-rationale,omitempty"`
-	XSensitiveResponse bool                  `json:"x-trstctl-sensitive-response,omitempty"`
-	XReadOnly          bool                  `json:"x-trstctl-read-only,omitempty"`
-	XAvailability      string                `json:"x-trstctl-availability,omitempty"`
-	XUnavailableReason string                `json:"x-trstctl-unavailable-reason,omitempty"`
+	OperationID string                `json:"operationId"`
+	Summary     string                `json:"summary,omitempty"`
+	Deprecated  bool                  `json:"deprecated,omitempty"`
+	Parameters  []Parameter           `json:"parameters,omitempty"`
+	RequestBody *RequestBody          `json:"requestBody,omitempty"`
+	Responses   map[string]Response   `json:"responses"`
+	Security    []map[string][]string `json:"security,omitempty"`
+	XPermission string                `json:"x-trstctl-permission,omitempty"`
+	// XAlsoRequires lists permissions the operation checks beyond
+	// x-trstctl-permission, each with the request shape that needs it (N7-L1).
+	XAlsoRequires      []XConditionalPermission `json:"x-trstctl-also-requires,omitempty"`
+	XPublicRationale   string                   `json:"x-trstctl-public-rationale,omitempty"`
+	XSensitiveResponse bool                     `json:"x-trstctl-sensitive-response,omitempty"`
+	XReadOnly          bool                     `json:"x-trstctl-read-only,omitempty"`
+	XAvailability      string                   `json:"x-trstctl-availability,omitempty"`
+	XUnavailableReason string                   `json:"x-trstctl-unavailable-reason,omitempty"`
+}
+
+// XConditionalPermission is a permission an operation checks beyond
+// x-trstctl-permission, and when.
+type XConditionalPermission struct {
+	Permission string `json:"permission"`
+	When       string `json:"when"`
 }
 
 // Parameter is a path or query parameter.
@@ -307,6 +317,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 		if r.perm != "" {
 			op.Security = []map[string][]string{{"BearerAuth": {}}, {"SessionCookie": {}}}
 			op.XPermission = string(r.perm)
+			for _, also := range r.alsoRequires {
+				op.XAlsoRequires = append(op.XAlsoRequires, XConditionalPermission{Permission: string(also.Permission), When: also.When})
+			}
 		} else if rationale := publicRationaleForRoute(r); rationale != "" {
 			op.XPublicRationale = rationale
 		}
