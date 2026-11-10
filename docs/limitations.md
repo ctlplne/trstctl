@@ -2192,7 +2192,8 @@ panel. A segment is addressed only by its opaque ID; the server rebuilds its
 location from the configured archive, the tenant and the record count, verifies
 the bytes as that tenant's signed retention segment, and records an
 `audit.archive.downloaded` audit event before releasing them. Downloads are
-limited to six a minute per tenant. A downloaded segment verifies offline with
+limited to six a minute per caller and thirty a minute per tenant, so one caller
+cannot spend the tenant's budget (A234-L3). A downloaded segment verifies offline with
 `trstctl audit verify --format retention-jws --audit-jwks ... --expected-tenant
 ...`. Segments the retention worker writes hold one tenant's records; a segment
 that does not verify as the requesting tenant's own, a legacy segment and the

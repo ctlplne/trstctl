@@ -580,6 +580,10 @@
 
 ### Fixed
 
+- Audit archive downloads are limited per caller as well as per tenant (A234-L3). One bucket per
+  tenant, six a minute, let one caller holding `audit:archive.read` spend the tenant's budget and
+  lock its other auditors out. Each caller now has six a minute, taken before the tenant's thirty,
+  and the refusal says which limit applied.
 - A ticket's requester can no longer approve their own issuance request under their login
   (A225-L1). The request recorded the requester as the ticket system names them (Jira's reporter
   by display name, a ServiceNow display value), the approver signs in under a login subject, and

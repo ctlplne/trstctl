@@ -627,7 +627,8 @@ console Audit → **Archived segments**). It needs the separate `audit:archive.r
 permission, which of the built-in roles only admin and auditor hold. The server
 verifies the bytes as the tenant's own signed retention segment, appends an
 `audit.archive.downloaded` audit event before releasing them, never returns a host
-path or object locator, and limits downloads to six a minute per tenant. A download
+path or object locator, and limits downloads to six a minute per caller and thirty a
+minute per tenant. A download
 verifies offline with `trstctl audit verify --format retention-jws --audit-jwks ...
 --expected-tenant ...`. Legacy segments and the deployment-wide archives stay
 custodian-only. See [Compliance](../compliance.md).

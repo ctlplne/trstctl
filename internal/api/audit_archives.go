@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // A234: a tenant downloads its own signed audit archive segments. The route is
-// separately permissioned (audit:archive.read), rate limited per tenant and
-// audited: every released segment leaves an audit.archive.downloaded event
+// separately permissioned (audit:archive.read), rate limited per caller and
+// per tenant (A234-L3), and audited: every released segment leaves an audit.archive.downloaded event
 // appended BEFORE the bytes leave. A segment is addressed only by its opaque
 // ID (the audit.archived event that recorded it); its storage locator never
 // enters a request or a response. The bytes returned are exactly the signed
@@ -23,9 +24,15 @@ import (
 // Deployment-wide archives stay custodian-only.
 
 const (
-	auditArchiveDownloadBucket   = "audit-archive-download"
-	auditArchiveDownloadCapacity = 6.0
-	auditArchiveDownloadRefill   = 6.0 / 60.0 // tokens per second: six a minute
+	// Each caller downloads at most six segments a minute, and the tenant as
+	// a whole thirty: one caller can no longer spend the tenant's budget and
+	// lock its other auditors out (A234-L3).
+	auditArchiveDownloadCallerBucket   = "audit-archive-download:caller:"
+	auditArchiveDownloadCallerCapacity = 6.0
+	auditArchiveDownloadCallerRefill   = 6.0 / 60.0 // tokens per second: six a minute
+	auditArchiveDownloadBucket         = "audit-archive-download"
+	auditArchiveDownloadCapacity       = 30.0
+	auditArchiveDownloadRefill         = 30.0 / 60.0 // tokens per second: thirty a minute
 )
 
 var (
@@ -117,16 +124,28 @@ func (a *API) downloadAuditArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.store != nil {
-		allowed, retryAfter, err := a.store.RateLimitTake(r.Context(), tenantID, auditArchiveDownloadBucket, auditArchiveDownloadCapacity, auditArchiveDownloadRefill)
-		if err != nil {
-			a.writeError(w, err)
-			return
-		}
-		if !allowed {
-			seconds := int(retryAfter.Seconds()) + 1
-			w.Header().Set("Retry-After", strconv.Itoa(seconds))
-			a.writeProblem(w, problem.New(http.StatusTooManyRequests, "audit archive downloads are limited per tenant; retry after the Retry-After interval"))
-			return
+		// The caller's own bucket is taken first, so a caller over its limit
+		// spends nothing from the tenant's.
+		for _, limit := range []struct {
+			bucket           string
+			capacity, refill float64
+			who              string
+		}{
+			{auditArchiveDownloadCallerBucket + crypto.SHA256Hex([]byte(principalSubject(r.Context())))[:32],
+				auditArchiveDownloadCallerCapacity, auditArchiveDownloadCallerRefill, "per caller"},
+			{auditArchiveDownloadBucket, auditArchiveDownloadCapacity, auditArchiveDownloadRefill, "per tenant"},
+		} {
+			allowed, retryAfter, err := a.store.RateLimitTake(r.Context(), tenantID, limit.bucket, limit.capacity, limit.refill)
+			if err != nil {
+				a.writeError(w, err)
+				return
+			}
+			if !allowed {
+				seconds := int(retryAfter.Seconds()) + 1
+				w.Header().Set("Retry-After", strconv.Itoa(seconds))
+				a.writeProblem(w, problem.New(http.StatusTooManyRequests, "audit archive downloads are limited "+limit.who+"; retry after the Retry-After interval"))
+				return
+			}
 		}
 	}
 	download, err := a.auditArchives.Download(r.Context(), tenantID, id)

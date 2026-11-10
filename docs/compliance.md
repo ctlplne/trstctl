@@ -600,7 +600,7 @@ verifies the bytes as that tenant's signed retention segment; anything else is
 refused (404 for another tenant's or an unknown ID, 409 when the stored bytes
 are missing, moved or do not verify). An `audit.archive.downloaded` event with
 the segment ID, digest and record range is appended before the bytes leave, and
-downloads are limited to six a minute per tenant. Verify a download offline
+downloads are limited to six a minute per caller and thirty a minute per tenant (A234-L3). Verify a download offline
 with `trstctl audit verify --artifact segment.jws --format retention-jws
 --audit-jwks audit.jwks.json --expected-tenant <tenant-id>`.
 
