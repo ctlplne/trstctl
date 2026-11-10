@@ -863,6 +863,11 @@
           "go_type": "bytes_base64",
           "name": "csr_der",
           "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "installed_certificate_der",
+          "presence": "optional"
         }
       ]
     },
@@ -1014,6 +1019,12 @@
       {
         "full_method": "/trstctl.agent.v1.AgentService/UploadSessionRecording",
         "name": "UploadSessionRecording",
+        "request": "",
+        "response": ""
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/EvaluateGatewayAction",
+        "name": "EvaluateGatewayAction",
         "request": "",
         "response": ""
       },

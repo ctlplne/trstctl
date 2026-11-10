@@ -2677,8 +2677,9 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// through the SAME issuance dispatcher the control plane's own mints go
 		// through, so the profile gate, the CA and the certificate record cannot
 		// diverge for agent-originated requests.
-		signSubjectCSR:      s.signAgentSubjectCSR,
-		completeHostRenewal: s.completeHostRenewal,
+		signSubjectCSR:        s.signAgentSubjectCSR,
+		recoverJobCertificate: s.recoverAgentJobCertificate,
+		completeHostRenewal:   s.completeHostRenewal,
 		// B3: the Workload API moved to the hosts; this is the node API it calls.
 		issueWorkloadSVID: s.issueWorkloadSVID,
 		// A219: a host's edge journal reconciles through the edge delegation

@@ -807,9 +807,12 @@ never live in the API process. What you can do end to end against the running bi
   job, and the relay redeems and installs it. The appliance operations are proven
   against the management-API doubles, not hardware, and the PAN-OS certificate
   generate and CSR export shapes need a firewall to confirm; each renewal's key
-  object stays on the appliance and nothing prunes them yet; a PAN-OS renewal picked
-  up again after its certificate import stops instead of finishing, and the same
-  holds for a Cisco renewal picked up after its bind. ISE names each request
+  object stays on the appliance and nothing prunes them yet. A PAN-OS renewal picked
+  up again after its certificate import finishes (PANOS-O1): the relay names the
+  certificate the job's object holds, the control plane hands back the job's own
+  signed result only when it is exactly that certificate, and the relay binds,
+  commits, verifies and reports without a second signature. A Cisco renewal picked
+  up after its bind still stops and says so. ISE names each request
   itself, so the relay keeps ISE's request ID for the job on the control plane
   before it asks for a signature and a retried attempt reuses that request; the
   ISE node must already trust the issuing CA. Readback answers for

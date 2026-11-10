@@ -56,8 +56,12 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 	if req == nil || req.JobID <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "job_id is required")
 	}
-	if len(req.CSRDER) == 0 {
+	recovering := len(req.InstalledCertificateDER) > 0
+	if len(req.CSRDER) == 0 && !recovering {
 		return nil, status.Error(codes.InvalidArgument, "csr_der is required")
+	}
+	if len(req.CSRDER) > 0 && recovering {
+		return nil, status.Error(codes.InvalidArgument, "send csr_der or installed_certificate_der, not both")
 	}
 
 	// Check the claim before loading its subject binding. The signing dispatcher
@@ -90,6 +94,24 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 		// never established.
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"job kind %q does not authorize certificate issuance", job.Destination)
+	}
+
+	if recovering {
+		// PANOS-O1: the appliance already holds the certificate an earlier
+		// attempt was signed. Nothing new is signed, so the CSR's name check
+		// has nothing to check; the job's own result is handed back only when
+		// it is exactly that certificate.
+		if a.recoverJobCertificate == nil {
+			return nil, status.Error(codes.FailedPrecondition, "this control plane cannot hand back a job's signed certificate")
+		}
+		resp, err := a.recoverJobCertificate(ctx, info.TenantID, info.CommonName, job, req.JobID, req.InstalledCertificateDER, job.ClaimAttempts)
+		if err != nil {
+			return nil, err
+		}
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.signed_result_recovered", map[string]any{
+			"agent": info.CommonName, "job_id": req.JobID, "fingerprint": resp.Fingerprint,
+		})
+		return resp, nil
 	}
 
 	permitted := signJobCSRPermittedNames(job.Payload)

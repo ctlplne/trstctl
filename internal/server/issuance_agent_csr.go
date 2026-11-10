@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/decommission/reprotect"
 	"trstctl.com/trstctl/internal/migration"
@@ -53,8 +54,20 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 	if json.Unmarshal(job.Payload, &intent) != nil || strings.TrimSpace(intent.IdentityID) == "" {
 		return nil, status.Error(codes.FailedPrecondition, "renewal job has no identity binding")
 	}
+	return d.underAgentJobIssuanceFence(ctx, tenantID, agentName, intent.IdentityID, job, jobID, attempt,
+		func(fenced context.Context) (*transport.SignJobCSRResponse, error) {
+			return d.signAgentSubjectCSRUnderFence(fenced, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
+		})
+}
+
+// underAgentJobIssuanceFence runs fn under the identity's issuance fence with
+// the agent's claim on the exact job checked before and after it.
+func (d *issuanceDispatcher) underAgentJobIssuanceFence(
+	ctx context.Context, tenantID, agentName, identityID string, job store.AgentJobForRedemption,
+	jobID int64, attempt int, fn func(context.Context) (*transport.SignJobCSRResponse, error),
+) (*transport.SignJobCSRResponse, error) {
 	var response *transport.SignJobCSRResponse
-	err := d.store.WithIdentityIssuanceFence(ctx, tenantID, intent.IdentityID, func(fenced context.Context) error {
+	err := d.store.WithIdentityIssuanceFence(ctx, tenantID, identityID, func(fenced context.Context) error {
 		checkClaim := func() error {
 			current, held, err := d.store.GetAgentJobForRedemption(fenced, tenantID, agentRowID(tenantID, agentName), jobID, time.Now().UTC())
 			if err != nil {
@@ -69,7 +82,7 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 			return err
 		}
 		var err error
-		response, err = d.signAgentSubjectCSRUnderFence(fenced, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
+		response, err = fn(fenced)
 		if err != nil {
 			return err
 		}
@@ -84,6 +97,91 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 		return nil, err
 	}
 	return response, nil
+}
+
+// A reclaimed appliance-key job whose certificate is already installed
+// (PANOS-O1).
+//
+// PAN-OS replaces the pending request in a job's certificate object with the
+// certificate imported for it. An attempt that imported the certificate and
+// then lost its lease, or failed to bind and commit, leaves a reclaim nothing
+// to sign: the control plane signs one request per job, and the firewall has
+// no request left. The reclaim names the certificate the firewall holds
+// instead, and the control plane hands back the job's own signed result —
+// certificate, chain and fingerprint, exactly as the first signature returned
+// them — only when that result is byte for byte the installed certificate,
+// the identity still permits issuance and the certificate is not revoked. The
+// relay can then finish binding, committing, verifying and reporting.
+
+// recoverAgentJobCertificate is the Server-level seam for the recovery, as
+// signAgentSubjectCSR is for signing.
+func (s *Server) recoverAgentJobCertificate(
+	ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption,
+	jobID int64, installedDER []byte, attempt int,
+) (*transport.SignJobCSRResponse, error) {
+	d, ok := s.obHandler.(*issuanceDispatcher)
+	if !ok || d == nil || d.store == nil || d.orch == nil || d.idem == nil {
+		return nil, status.Error(codes.FailedPrecondition, "this control plane cannot hand back a job's signed certificate")
+	}
+	var intent RelayDeployIntent
+	if json.Unmarshal(job.Payload, &intent) != nil || strings.TrimSpace(intent.IdentityID) == "" {
+		return nil, status.Error(codes.FailedPrecondition, "renewal job has no identity binding")
+	}
+	return d.underAgentJobIssuanceFence(ctx, tenantID, agentName, intent.IdentityID, job, jobID, attempt,
+		func(fenced context.Context) (*transport.SignJobCSRResponse, error) {
+			return d.recoverAgentJobCertificateUnderFence(fenced, tenantID, job, intent, jobID, installedDER)
+		})
+}
+
+func (d *issuanceDispatcher) recoverAgentJobCertificateUnderFence(
+	ctx context.Context, tenantID string, job store.AgentJobForRedemption, intent RelayDeployIntent,
+	jobID int64, installedDER []byte,
+) (*transport.SignJobCSRResponse, error) {
+	if _, err := d.agentCSRIdentityUnderFence(ctx, tenantID, strings.TrimSpace(intent.IdentityID)); err != nil {
+		return nil, err
+	}
+	key, found, err := d.store.AgentJobSignedRequestKey(ctx, tenantID, jobID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "find this job's signed request: %v", err)
+	}
+	if !found {
+		return nil, status.Error(codes.PermissionDenied,
+			"this job has no signed certificate to hand back; the appliance holds a certificate this job was not signed")
+	}
+	out, err := d.idem.Result(ctx, tenantID, key)
+	if errors.Is(err, orchestrator.ErrInProgress) {
+		return nil, transport.CSRPendingError()
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read this job's signed result: %v", err)
+	}
+	fingerprint, certPEM, chainPEM, ok := splitAgentCSRResult(out)
+	secret.Wipe(out)
+	if !ok {
+		return nil, status.Error(codes.Internal, "this job's signed result could not be read back")
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil || block.Type != "CERTIFICATE" || !crypto.ConstantTimeEqual(block.Bytes, installedDER) {
+		return nil, status.Error(codes.PermissionDenied,
+			"the certificate the appliance holds is not the one this job was signed; start a new renewal")
+	}
+	if cert, err := d.store.GetCertificateByFingerprint(ctx, tenantID, fingerprint); err != nil {
+		return nil, status.Errorf(codes.Internal, "load this job's signed certificate: %v", err)
+	} else if cert.Status == "revoked" {
+		return nil, status.Error(codes.FailedPrecondition,
+			"the certificate this job was signed has since been revoked; start a new renewal")
+	}
+	if err := d.bindAgentCSRMigrationSuccessor(ctx, tenantID, job.IdempotencyKey, intent, fingerprint); err != nil {
+		return nil, err
+	}
+	if len(chainPEM) == 0 {
+		chainPEM = d.chainPEM
+	}
+	return &transport.SignJobCSRResponse{
+		CertificatePEM: certPEM,
+		ChainPEM:       append([]byte(nil), chainPEM...),
+		Fingerprint:    fingerprint,
+	}, nil
 }
 
 func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(

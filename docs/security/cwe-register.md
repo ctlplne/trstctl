@@ -145,8 +145,8 @@ not this file.
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/secretrender/secretrender_test.go:126` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/agent/transport/agentservice.go:921` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:928` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:928` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:935` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -1889,7 +1889,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2564` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3039` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:3040` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2529,8 +2529,8 @@ not this file.
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/server.go:1587` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2966` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:3043` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2967` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:3044` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:62` | the repository's own SOAR pack (CWE-22) |
 | `internal/server/soar_playbooks_served_test.go:72` | a playbook the repository's own pack names (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
@@ -2781,7 +2781,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:3049` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:3050` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -3198,7 +3198,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/connector/paloalto/paloaltotest/paloaltotest.go:560` | test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502) |
+| `internal/connector/paloalto/paloaltotest/paloaltotest.go:579` | test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502) |
 
 ### G710 — CWE-601 Open redirect (taint) (4 sites)
 

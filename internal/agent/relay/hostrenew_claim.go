@@ -116,9 +116,18 @@ func retryableClaimTransport(err error) bool {
 }
 
 func signHostCSR(ctx context.Context, signer CSRSigner, job Job, csr []byte, maintained bool) ([]byte, []byte, string, error) {
+	return callJobSigner(ctx, maintained, func(callCtx context.Context) ([]byte, []byte, string, error) {
+		return signer.SignJobCSR(callCtx, job.JobID, job.Attempt, csr)
+	})
+}
+
+// callJobSigner makes one signing call, and while the job's claim is
+// maintained retries a pending answer or a transport failure until the call
+// settles or the claim's context ends.
+func callJobSigner(ctx context.Context, maintained bool, call func(context.Context) ([]byte, []byte, string, error)) ([]byte, []byte, string, error) {
 	for {
 		callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-		cert, chain, fingerprint, err := signer.SignJobCSR(callCtx, job.JobID, job.Attempt, csr)
+		cert, chain, fingerprint, err := call(callCtx)
 		cancel()
 		if err == nil || !maintained || ctx.Err() != nil {
 			return cert, chain, fingerprint, err

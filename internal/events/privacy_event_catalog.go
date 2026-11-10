@@ -170,6 +170,8 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/kind", opaque)),
 		entry("agent.jobs.csr_signed", catalogPrivacyRule("/agent", exact),
 			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/names/*", token), catalogPrivacyRule("/fingerprint", opaque)),
+		entry("agent.jobs.signed_result_recovered", catalogPrivacyRule("/agent", exact),
+			catalogPrivacyRule("/job_id", opaque), catalogPrivacyRule("/fingerprint", opaque)),
 		entry("agent.gateway.server_certificate_signed", catalogPrivacyRule("/agent", exact),
 			catalogPrivacyRule("/hosts/*", token)),
 		entry("agent.gateway.session_key_certified", catalogPrivacyRule("/agent", exact),

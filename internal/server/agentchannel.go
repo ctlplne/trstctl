@@ -330,6 +330,10 @@ type agentService struct {
 	// The permitted set is passed in already derived from the job payload, so
 	// the signing side cannot be handed names the caller did not authorize.
 	signSubjectCSR func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
+	// recoverJobCertificate hands a reclaimed job back the certificate the
+	// control plane already signed for it when its appliance holds exactly
+	// that certificate and no request to sign again (PANOS-O1). Nil refuses.
+	recoverJobCertificate func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, installedDER []byte, attempt int) (*transport.SignJobCSRResponse, error)
 	// reconcileEdgeJournal reconciles a host's edge issuance journal sent over
 	// the channel (A219). Nil means edge delegation is not served and
 	// ReportEdgeJournal fails closed.

@@ -324,6 +324,21 @@ func (r relayChannel) SignJobCSR(ctx context.Context, jobID int64, attempt int, 
 	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
 }
 
+// RecoverJobCertificate asks for the certificate the control plane already
+// signed for a job whose appliance installed it and kept no request to sign
+// again, naming the installed certificate (PANOS-O1).
+func (r relayChannel) RecoverJobCertificate(ctx context.Context, jobID int64, attempt int, installedDER []byte) ([]byte, []byte, string, error) {
+	resp, err := r.c.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: jobID, Attempt: attempt, InstalledCertificateDER: installedDER,
+	})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return resp.CertificatePEM, resp.ChainPEM, resp.Fingerprint, nil
+}
+
+var _ relay.JobCertificateRecoverer = relayChannel{}
+
 // SignJobSSHKey has the control plane certify an access gateway session's
 // per-session SSH key for the job attempt the gateway holds (A254). Without
 // it the gateway refuses SSH sessions rather than serving them uncertified.

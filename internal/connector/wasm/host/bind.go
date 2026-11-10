@@ -4,6 +4,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -123,6 +124,13 @@ type applianceKeyOp struct{ b *bound }
 func (o applianceKeyOp) GenerateApplianceKey(ctx context.Context, sb connector.Sandbox, req connector.ApplianceKeyRequest) (connector.ApplianceKey, error) {
 	result, err := o.b.run(ctx, sb, abi.Call{Op: abi.OpGenerateApplianceKey, ApplianceKeyRequest: &req})
 	if err != nil {
+		if len(result.InstalledCertificatePEM) > 0 && errors.Is(err, connector.ErrApplianceKeyAlreadyInstalled) {
+			// PANOS-O1: keep the certificate the object holds, so the reclaim
+			// can name it and finish with the job's signed result.
+			return connector.ApplianceKey{}, errors.Join(err, &connector.ApplianceKeyInstalledError{
+				ObjectName: req.ObjectName, CertificatePEM: append([]byte(nil), result.InstalledCertificatePEM...),
+			})
+		}
 		return connector.ApplianceKey{}, err
 	}
 	if result.ApplianceKey == nil {

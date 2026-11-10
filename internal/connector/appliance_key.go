@@ -145,8 +145,30 @@ var ErrApplianceKeyUnsupported = errors.New("connector: this connector cannot ge
 // generated into already holds the job's certificate and the appliance kept no
 // CSR beside it (PAN-OS replaces a pending request with the certificate
 // imported for it). The control plane signs one CSR per job, so a reclaimed job
-// cannot ask for another; it stops instead of generating a second key.
+// cannot ask for another and never generates a second key: it finishes with
+// the job's signed result when the appliance can say which certificate it
+// holds (ApplianceKeyInstalledError), and stops otherwise.
 var ErrApplianceKeyAlreadyInstalled = errors.New("connector: the appliance already installed a certificate for this job's key")
+
+// ApplianceKeyInstalledError is ErrApplianceKeyAlreadyInstalled with the
+// certificate the job's object holds, from an appliance that can export it
+// (PAN-OS). A reclaim names that certificate to the control plane, which hands
+// back the job's signed result only when it is exactly this certificate, and
+// the reclaim then finishes the install instead of stopping (PANOS-O1). It
+// carries public material only.
+type ApplianceKeyInstalledError struct {
+	ObjectName     string
+	CertificatePEM []byte
+}
+
+func (e *ApplianceKeyInstalledError) Error() string {
+	return ErrApplianceKeyAlreadyInstalled.Error() + " (object " + e.ObjectName + ")"
+}
+
+// Is makes the error match ErrApplianceKeyAlreadyInstalled.
+func (e *ApplianceKeyInstalledError) Is(target error) bool {
+	return target == ErrApplianceKeyAlreadyInstalled
+}
 
 // RunApplianceKey asks the appliance for a key and CSR inside the connector's
 // capability sandbox.

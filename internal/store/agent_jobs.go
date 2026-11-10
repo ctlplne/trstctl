@@ -881,6 +881,45 @@ func (s *Store) AgentJobSignedOtherCSR(ctx context.Context, tenantID string, job
 	return signed, err
 }
 
+// AgentJobSignedRequestKey returns the idempotency key under which the control
+// plane signed this durable job's one request (PANOS-O1), so a reclaim whose
+// appliance already installed that certificate can be handed back the signed
+// result. An external authority's row carries the same key plus its authority
+// namespace; both name the one request. found is false when nothing was signed
+// for the job, and more than one request fails closed: a job signs one.
+func (s *Store) AgentJobSignedRequestKey(ctx context.Context, tenantID string, jobID int64) (string, bool, error) {
+	var keys []string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT DISTINCT split_part(issuance_idempotency_key, ':external-ca:', 1)
+			   FROM certificates
+			  WHERE tenant_id = $1
+			    AND issuance_idempotency_key LIKE $2`, tenantID, fmt.Sprintf("agentcsr:%d:%%", jobID))
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				return err
+			}
+			keys = append(keys, key)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return "", false, err
+	}
+	switch len(keys) {
+	case 0:
+		return "", false, nil
+	case 1:
+		return keys[0], true, nil
+	}
+	return "", false, fmt.Errorf("%w: agent job %d has more than one signed request", ErrIdempotencyConflict, jobID)
+}
+
 // HasPendingAgentJob reports whether an unfinished job of this kind is already
 // queued for the tenant. The CMDB relay scheduler uses it to keep ONE sync in
 // flight: stacking identical reads behind an unclaimed job would have the

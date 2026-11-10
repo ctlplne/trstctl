@@ -3,12 +3,18 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -173,5 +179,77 @@ func TestServedCancellingAnApplianceDestinationWithdrawsItsRenewal(t *testing.T)
 	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{agentJobKindEndpointRenew}, Limit: 5, LeaseSeconds: 60})
 	if err != nil || len(claimed.Jobs) != 0 {
 		t.Fatalf("the relay could still claim %d renewals after the cancel (%v)", len(claimed.Jobs), err)
+	}
+}
+
+// PANOS-O1: PAN-OS replaces a job's pending request with the certificate
+// imported for it, so a reclaim after the import has nothing to sign. Naming
+// the certificate the firewall holds gets the job's own signed result back —
+// the same certificate, chain and fingerprint, with nothing new minted. A
+// certificate the job was not signed is refused, and so is a request that
+// sends both a CSR and a certificate.
+func TestServedReclaimedApplianceJobGetsItsSignedCertificateBack(t *testing.T) {
+	ctx := t.Context()
+	h, _, _ := queueApplianceFirstIssuance(t)
+	first := claimOneRenewal(t, ctx, h)
+	key, err := crypto.GenerateHostSubjectKey("vip.example.test", []string{"vip.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: first.JobID, Attempt: first.Attempt, CSRDER: key.CSRDER})
+	if err != nil {
+		t.Fatalf("sign the appliance's CSR: %v", err)
+	}
+	installed, _ := pem.Decode(issued.CertificatePEM)
+	if installed == nil {
+		t.Fatal("the signed certificate is not PEM")
+	}
+
+	// The first attempt imported the certificate, then lost its lease.
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET claim_expires_at=now()-interval '1 second', agent_next_attempt_at=now()-interval '1 second'
+			WHERE tenant_id=$1 AND id=$2 AND destination='endpoint.renew'`, h.tenant, first.JobID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second := claimOneRenewal(t, ctx, h)
+	if second.JobID != first.JobID || second.Attempt <= first.Attempt {
+		t.Fatalf("expected the same job under a new claim: first=%+v second=%+v", first, second)
+	}
+	recovered, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: second.JobID, Attempt: second.Attempt, InstalledCertificateDER: installed.Bytes,
+	})
+	if err != nil {
+		t.Fatalf("a reclaim naming the installed certificate = %v, want the job's signed result back", err)
+	}
+	if recovered.Fingerprint != issued.Fingerprint || !bytes.Equal(recovered.CertificatePEM, issued.CertificatePEM) ||
+		!bytes.Equal(recovered.ChainPEM, issued.ChainPEM) {
+		t.Fatalf("recovered %s, want the first signature's certificate %s and chain", recovered.Fingerprint, issued.Fingerprint)
+	}
+
+	other, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Destroy()
+	otherDER, err := crypto.SelfSignedCACert(other, "vip.example.test", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: second.JobID, Attempt: second.Attempt, InstalledCertificateDER: otherDER,
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("a certificate this job was not signed = %v, want PermissionDenied", err)
+	}
+	if _, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{
+		JobID: second.JobID, Attempt: second.Attempt, CSRDER: key.CSRDER, InstalledCertificateDER: installed.Bytes,
+	}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("a request with both a CSR and a certificate = %v, want InvalidArgument", err)
+	}
+	var minted int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM certificates WHERE tenant_id = $1`, h.tenant).Scan(&minted); err != nil || minted != 1 {
+		t.Fatalf("certificates after the reclaim = %d (%v), want the one the first attempt was signed", minted, err)
 	}
 }

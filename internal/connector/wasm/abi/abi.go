@@ -95,7 +95,11 @@ type Result struct {
 	Preview      *connector.Preview      `json:"preview,omitempty"`
 	Posture      *connector.TLSPosture   `json:"posture,omitempty"`
 	ApplianceKey *connector.ApplianceKey `json:"appliance_key,omitempty"`
-	Error        *Error                  `json:"error,omitempty"`
+	// InstalledCertificatePEM rides beside an appliance_key_already_placed
+	// error: the certificate the job's object already holds, so a reclaim
+	// can finish with the job's signed result (PANOS-O1). Public material.
+	InstalledCertificatePEM []byte `json:"installed_certificate_pem,omitempty"`
+	Error                   *Error `json:"error,omitempty"`
 }
 
 // Error is an error that crossed the boundary: its text and the sentinel errors

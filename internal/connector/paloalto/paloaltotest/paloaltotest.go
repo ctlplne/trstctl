@@ -124,6 +124,9 @@ type Server struct {
 	partFailStatus   int
 	partFailBody     []byte
 
+	// commitFailures is how many of the next commits fail (PANOS-O1).
+	commitFailures int
+
 	// A122: keys the firewall generated itself (object -> key), the pending
 	// CSR each such object holds until a certificate is imported for it, and
 	// how often a client asked to export one of those keys.
@@ -323,6 +326,16 @@ func (s *Server) InjectFailureFor(category string, status int, body []byte) {
 	s.mu.Unlock()
 }
 
+// FailCommits makes the next n commits answer with a PAN-OS commit error
+// inside a 200, as a firewall does when a commit is refused, while every
+// import and configuration change before them still takes effect. It is how a
+// test leaves an imported but uncommitted renewal behind (PANOS-O1).
+func (s *Server) FailCommits(n int) {
+	s.mu.Lock()
+	s.commitFailures = n
+	s.mu.Unlock()
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// Recorded before the auth check, so a request that leaked the key in its URL
 	// is caught even when the device went on to reject it.
@@ -374,6 +387,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
+		if s.commitFailures > 0 {
+			s.commitFailures--
+			s.mu.Unlock()
+			writeEnvelope(w, http.StatusOK, `<response status="error" code="13"><result><msg><line>Commit failed</line></msg></result></response>`)
+			return
+		}
 		s.commits++
 		s.commitAdmins = append(s.commitAdmins, admin)
 		s.mu.Unlock()

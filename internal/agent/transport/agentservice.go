@@ -895,6 +895,13 @@ type SignJobCSRRequest struct {
 	Attempt int `json:"attempt"`
 	// CSRDER is the PKCS#10, DER-encoded.
 	CSRDER []byte `json:"csr_der"`
+	// InstalledCertificateDER replaces CSRDER for a reclaimed job whose
+	// appliance already installed the certificate an earlier attempt of the
+	// job was signed, and kept no request to sign again: PAN-OS replaces a
+	// pending request with the certificate imported for it (PANOS-O1). The
+	// control plane signs nothing for it. It hands back the job's own signed
+	// result, and only when that result is exactly this certificate.
+	InstalledCertificateDER []byte `json:"installed_certificate_der,omitempty"`
 }
 
 // SignJobCSRResponse returns the issued chain.

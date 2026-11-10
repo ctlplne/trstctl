@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -146,7 +147,12 @@ func dispatch(ctx context.Context, c connector.Connector, sb connector.Sandbox, 
 		}
 		key, err := g.GenerateApplianceKey(ctx, sb, *call.ApplianceKeyRequest)
 		if err != nil {
-			return failed(err)
+			out := failed(err)
+			var installed *connector.ApplianceKeyInstalledError
+			if errors.As(err, &installed) {
+				out.InstalledCertificatePEM = installed.CertificatePEM
+			}
+			return out
 		}
 		return abi.Result{ApplianceKey: &key}
 	}

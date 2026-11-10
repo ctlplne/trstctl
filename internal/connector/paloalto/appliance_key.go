@@ -31,8 +31,9 @@ var _ connector.ApplianceKeyGenerator = (*Connector)(nil)
 // key its earlier attempt made. PAN-OS replaces the pending CSR with the
 // certificate imported for it, so an object that already holds a certificate
 // was installed by an earlier attempt and has no CSR left to sign; the request
-// stops with ErrApplianceKeyAlreadyInstalled rather than generating a second
-// key. The key is never exported.
+// returns an ApplianceKeyInstalledError carrying that certificate rather than
+// generating a second key, so the reclaim can finish with the job's signed
+// result (PANOS-O1). The key is never exported.
 func (c *Connector) GenerateApplianceKey(ctx context.Context, sb connector.Sandbox, req connector.ApplianceKeyRequest) (connector.ApplianceKey, error) {
 	if err := c.applianceKeyConfigured(); err != nil {
 		return connector.ApplianceKey{}, err
@@ -67,7 +68,8 @@ func (c *Connector) GenerateApplianceKey(ctx context.Context, sb connector.Sandb
 	case pemCertificateRequest:
 		return connector.ApplianceKey{ObjectName: object, CSRPEM: exported}, nil
 	case pemCertificate:
-		return connector.ApplianceKey{}, fmt.Errorf("paloalto: certificate object %q: %w", object, connector.ErrApplianceKeyAlreadyInstalled)
+		return connector.ApplianceKey{}, fmt.Errorf("paloalto: certificate object %q: %w", object,
+			&connector.ApplianceKeyInstalledError{ObjectName: object, CertificatePEM: exported})
 	}
 	return connector.ApplianceKey{}, fmt.Errorf("paloalto: the firewall exported no CSR for %q", object)
 }

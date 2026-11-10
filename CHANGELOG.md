@@ -565,6 +565,12 @@
 
 ### Fixed
 
+- A PAN-OS renewal picked up again after its certificate import finishes instead of stopping
+  (PANOS-O1). PAN-OS replaces a job's pending request with the certificate imported for it, so
+  a reclaim after a failed commit or a lost job had nothing left to sign and stopped. The relay
+  now names the certificate the firewall holds; the control plane hands back the job's own
+  signed result only when it is exactly that certificate, and the relay binds, commits,
+  verifies and reports without a second signature.
 - Renewing a Kubernetes TLS Secret in place keeps what other controllers set on it (K8S-O2).
   The update replaced the whole object, carrying only labels and annotations, so a renewal
   dropped the Secret's `ownerReferences`, its finalizers and data keys such as `ca.crt`. The

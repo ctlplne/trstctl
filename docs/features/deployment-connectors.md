@@ -1151,9 +1151,15 @@ object is gone is refused rather than bound to another key. A renewal the relay
 picks up again after losing it asks the appliance for the same object and gets the
 same CSR back, so one renewal never leaves two keys. PAN-OS keeps no CSR once the
 certificate for it is imported, so a PAN-OS renewal picked up after that import
-stops and says so; check the firewall and start a new renewal. The same holds on
-ISE: a request is turned into its system certificate when the certificate is bound,
-so a Cisco renewal picked up after its bind stops and says so.
+(its commit failed, or the relay lost the job before reporting) names the
+certificate the firewall holds instead. The control plane signs nothing new: it
+hands back the job's own signed certificate and chain only when they are exactly
+what the firewall holds, and the relay binds the profile, commits, verifies and
+reports as the first attempt would have. A firewall object holding any other
+certificate stops the renewal and says so; check the firewall and start a new
+renewal. On ISE a request is turned into its system certificate when the
+certificate is bound, so a Cisco renewal picked up after its bind still stops and
+says so.
 
 ### Activate Tomcat PEM certificates
 

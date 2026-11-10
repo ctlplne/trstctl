@@ -31,6 +31,10 @@ type applianceChannel struct {
 	signed       [][]byte
 	custody      []custody.Record
 	fingerprints []string
+	// issued is the certificate signed for each job; recovered records the
+	// installed certificates a reclaim named (PANOS-O1).
+	issued    map[int64][]byte
+	recovered [][]byte
 }
 
 func newApplianceChannel(t *testing.T) *applianceChannel {
@@ -44,10 +48,10 @@ func newApplianceChannel(t *testing.T) *applianceChannel {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &applianceChannel{ca: ca, caDER: caDER}
+	return &applianceChannel{ca: ca, caDER: caDER, issued: map[int64][]byte{}}
 }
 
-func (a *applianceChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER []byte) ([]byte, []byte, string, error) {
+func (a *applianceChannel) SignJobCSR(_ context.Context, jobID int64, _ int, csrDER []byte) ([]byte, []byte, string, error) {
 	a.signed = append(a.signed, append([]byte(nil), csrDER...))
 	if a.signErr != nil {
 		return nil, nil, "", a.signErr
@@ -57,6 +61,19 @@ func (a *applianceChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER 
 		return nil, nil, "", err
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	a.issued[jobID] = certPEM
+	return certPEM, nil, connector.CertificateFingerprint(certPEM), nil
+}
+
+// RecoverJobCertificate hands back the certificate signed for the job, as the
+// control plane does, only when it is exactly the one the appliance holds.
+func (a *applianceChannel) RecoverJobCertificate(_ context.Context, jobID int64, _ int, installedDER []byte) ([]byte, []byte, string, error) {
+	a.recovered = append(a.recovered, append([]byte(nil), installedDER...))
+	certPEM, ok := a.issued[jobID]
+	block, _ := pem.Decode(certPEM)
+	if !ok || block == nil || !bytes.Equal(block.Bytes, installedDER) {
+		return nil, nil, "", errors.New("the appliance holds a certificate this job was not signed")
+	}
 	return certPEM, nil, connector.CertificateFingerprint(certPEM), nil
 }
 
@@ -250,7 +267,8 @@ func panApplianceRenewJob(t *testing.T, srv *paloaltotest.Server, jobID int64, a
 // A122 on PAN-OS: a relay renews a firewall whose key stays on the firewall,
 // binding the SSL/TLS service profile to the object named for the job. PAN-OS
 // keeps no CSR once its certificate is imported, so a reclaim after the
-// install asks for no second signature and says why it stopped.
+// install asks for no second signature: it names the certificate the object
+// holds, gets the job's signed result back and finishes (PANOS-O1).
 func TestARelayRenewsAFirewallWhoseKeyStaysOnTheFirewall(t *testing.T) {
 	srv := paloaltotest.New([]byte("pan-api-key"))
 	defer srv.Close()
@@ -279,11 +297,69 @@ func TestARelayRenewsAFirewallWhoseKeyStaysOnTheFirewall(t *testing.T) {
 	if len(ch.signed) != 1 {
 		t.Fatalf("signing requests = %d, want none after the install", len(ch.signed))
 	}
-	if len(ch.reports) != 2 || ch.reports[1].outcome != relay.OutcomeFailed || !strings.Contains(ch.reports[1].detail, "earlier attempt") {
-		t.Fatalf("reclaim reports = %+v, want a failure naming the earlier attempt", ch.reports)
+	if len(ch.recovered) != 1 || len(ch.reports) != 2 || ch.reports[1].outcome != relay.OutcomeExecuted ||
+		len(ch.fingerprints) != 2 || ch.fingerprints[1] != ch.fingerprints[0] {
+		t.Fatalf("reclaim after the install: recoveries %d, reports %+v, fingerprints %v; want the job's own certificate finished",
+			len(ch.recovered), ch.reports, ch.fingerprints)
 	}
 	if srv.KeyExports() != 0 {
 		t.Fatalf("the relay asked to export a firewall key %d times", srv.KeyExports())
+	}
+}
+
+// PANOS-O1: an attempt that imported the job's certificate and then failed to
+// commit leaves the firewall holding the certificate with no request to sign
+// again. The reclaim names that certificate, gets the job's signed result back
+// without a second signature, binds the profile, commits and reports the
+// job's own fingerprint, so the renewal heals instead of stopping. A firewall
+// object holding a certificate the job was not signed still stops the reclaim.
+func TestAReclaimedFirewallRenewalFinishesAfterTheImport(t *testing.T) {
+	srv := paloaltotest.New([]byte("pan-api-key"))
+	defer srv.Close()
+	ch := newApplianceChannel(t)
+	ch.material = map[string][]byte{"secret://connectors/pan": []byte("pan-api-key")}
+	srv.FailCommits(1)
+	ch.jobs = []relay.Job{panApplianceRenewJob(t, srv, 61, 1)}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil {
+		t.Fatal(err)
+	}
+	object := connector.ApplianceKeyObjectName(applianceTargetID, 61)
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed || srv.Commits() != 0 || srv.Pending(object) {
+		t.Fatalf("first attempt: reports %+v, commits %d, pending CSR %v; want the import done and the commit failed",
+			ch.reports, srv.Commits(), srv.Pending(object))
+	}
+
+	ch.jobs = []relay.Job{panApplianceRenewJob(t, srv, 61, 2)}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.signed) != 1 || len(ch.recovered) != 1 {
+		t.Fatalf("signatures %d, recoveries %d; want one signature and the reclaim naming the installed certificate",
+			len(ch.signed), len(ch.recovered))
+	}
+	if len(ch.reports) != 2 || ch.reports[1].outcome != relay.OutcomeExecuted {
+		t.Fatalf("reclaim reports = %+v, want the renewal finished", ch.reports)
+	}
+	issued := connector.CertificateFingerprint(ch.issued[61])
+	if len(ch.fingerprints) != 1 || ch.fingerprints[0] != issued {
+		t.Fatalf("reported fingerprints %v, want the job's signed certificate %s", ch.fingerprints, issued)
+	}
+	if srv.ProfileCertificate("web-profile") != object || srv.Commits() != 1 {
+		t.Fatalf("profile bound to %q after %d commits, want %s committed once", srv.ProfileCertificate("web-profile"), srv.Commits(), object)
+	}
+	if srv.KeyExports() != 0 {
+		t.Fatalf("the relay asked to export a firewall key %d times", srv.KeyExports())
+	}
+
+	// A firewall object that holds a certificate this job was not signed is
+	// not finished: the control plane refuses to hand anything back.
+	delete(ch.issued, 61)
+	ch.jobs = []relay.Job{panApplianceRenewJob(t, srv, 61, 3)}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.reports) != 3 || ch.reports[2].outcome != relay.OutcomeFailed || !strings.Contains(ch.reports[2].detail, "did not hand it back") {
+		t.Fatalf("reclaim against a certificate the job was not signed = %+v, want a failure", ch.reports)
 	}
 }
 

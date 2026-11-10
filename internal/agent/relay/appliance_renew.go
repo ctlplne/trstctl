@@ -3,6 +3,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -123,47 +124,34 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
 		return false
 	}
-	if errors.Is(err, connector.ErrApplianceKeyAlreadyInstalled) {
+	var (
+		certPEM, chainPEM []byte
+		fingerprint       string
+		installed         *connector.ApplianceKeyInstalledError
+	)
+	switch {
+	case errors.As(err, &installed) && len(installed.CertificatePEM) > 0:
+		// PANOS-O1: an earlier attempt imported this job's certificate and
+		// the appliance kept no request to sign again. Finish with the job's
+		// own signed result instead of stopping.
+		var ok bool
+		if certPEM, chainPEM, fingerprint, ok = recoverInstalledApplianceCertificate(ctx, ch, job, object, installed, claim != nil); !ok {
+			return false
+		}
+		key = connector.ApplianceKey{ObjectName: object}
+	case errors.Is(err, connector.ErrApplianceKeyAlreadyInstalled):
 		report(ctx, ch, job, OutcomeFailed, "an earlier attempt of this renewal already installed its certificate against the "+
 			"appliance key, and the appliance kept no request to sign again; check the appliance and start a new renewal")
 		return false
-	}
-	if err != nil {
+	case err != nil:
 		log.Printf("trstctl-agent: job %d attempt %d: appliance key generation failed: %v", job.JobID, job.Attempt, err)
 		report(ctx, ch, job, OutcomeFailed, "the appliance did not generate a key and CSR")
 		return false
-	}
-	if ref := strings.TrimSpace(key.Reference); ref != "" && ref != job.ApplianceReference {
-		// The appliance named a new request (Cisco ISE's CSR ID). Keep it for
-		// the job before asking for a signature, so a later attempt reuses
-		// this request instead of making another.
-		recorder, ok := ch.(ApplianceReferenceRecorder)
-		if !ok {
-			report(ctx, ch, job, OutcomeFailed, "this agent build cannot keep the appliance's request ID for the renewal")
+	default:
+		var ok bool
+		if certPEM, chainPEM, fingerprint, ok = signApplianceRequest(ctx, ch, signer, job, key, claim != nil); !ok {
 			return false
 		}
-		if err := recorder.RecordJobApplianceReference(ctx, job.JobID, job.Attempt, ref); err != nil {
-			report(ctx, ch, job, OutcomeFailed, "the appliance's request ID could not be kept for this renewal; nothing was signed")
-			return false
-		}
-	}
-	block, _ := pem.Decode(key.CSRPEM)
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		report(ctx, ch, job, OutcomeFailed, "the appliance returned no certificate request")
-		return false
-	}
-	certPEM, chainPEM, fingerprint, err := signHostCSR(ctx, signer, job, block.Bytes, claim != nil)
-	if err != nil {
-		if transport.IsCSRValidityRefusal(err) {
-			report(ctx, ch, job, OutcomeFailed, transport.CSRValidityRefusalDetail)
-			return false
-		}
-		report(ctx, ch, job, OutcomeFailed, "the control plane did not sign the appliance's request")
-		return false
-	}
-	if len(certPEM) == 0 {
-		report(ctx, ch, job, OutcomeFailed, "signing returned no certificate")
-		return false
 	}
 	if claim != nil {
 		if err := claim.confirm(); err != nil {
@@ -213,4 +201,84 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 		outcome, detail, evidence, fingerprint, ApplianceRenewCustody(""))
 	logReportOutcome(job, outcome, accepted, reportErr)
 	return outcome != OutcomeFailed && outcome != transport.OutcomeVerifyFailed
+}
+
+// signApplianceRequest has the control plane sign the CSR the appliance
+// returned, after keeping the appliance's own request ID for the job when it
+// named one. ok is false once the failure has been reported.
+func signApplianceRequest(ctx context.Context, ch Channel, signer CSRSigner, job Job, key connector.ApplianceKey, maintained bool) ([]byte, []byte, string, bool) {
+	if ref := strings.TrimSpace(key.Reference); ref != "" && ref != job.ApplianceReference {
+		// The appliance named a new request (Cisco ISE's CSR ID). Keep it for
+		// the job before asking for a signature, so a later attempt reuses
+		// this request instead of making another.
+		recorder, ok := ch.(ApplianceReferenceRecorder)
+		if !ok {
+			report(ctx, ch, job, OutcomeFailed, "this agent build cannot keep the appliance's request ID for the renewal")
+			return nil, nil, "", false
+		}
+		if err := recorder.RecordJobApplianceReference(ctx, job.JobID, job.Attempt, ref); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the appliance's request ID could not be kept for this renewal; nothing was signed")
+			return nil, nil, "", false
+		}
+	}
+	block, _ := pem.Decode(key.CSRPEM)
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		report(ctx, ch, job, OutcomeFailed, "the appliance returned no certificate request")
+		return nil, nil, "", false
+	}
+	certPEM, chainPEM, fingerprint, err := signHostCSR(ctx, signer, job, block.Bytes, maintained)
+	if err != nil {
+		if transport.IsCSRValidityRefusal(err) {
+			report(ctx, ch, job, OutcomeFailed, transport.CSRValidityRefusalDetail)
+			return nil, nil, "", false
+		}
+		report(ctx, ch, job, OutcomeFailed, "the control plane did not sign the appliance's request")
+		return nil, nil, "", false
+	}
+	if len(certPEM) == 0 {
+		report(ctx, ch, job, OutcomeFailed, "signing returned no certificate")
+		return nil, nil, "", false
+	}
+	return certPEM, chainPEM, fingerprint, true
+}
+
+// JobCertificateRecoverer hands a reclaimed job back the certificate the
+// control plane already signed for it, named by the certificate its
+// appliance installed (PANOS-O1). The control plane answers only when its
+// signed result for the job is exactly that certificate.
+type JobCertificateRecoverer interface {
+	RecoverJobCertificate(ctx context.Context, jobID int64, attempt int, installedDER []byte) (certPEM, chainPEM []byte, fingerprint string, err error)
+}
+
+// recoverInstalledApplianceCertificate gets the job's signed result for the
+// certificate an earlier attempt already imported into the job's object, and
+// checks it is that certificate. ok is false once the failure has been
+// reported.
+func recoverInstalledApplianceCertificate(ctx context.Context, ch Channel, job Job, object string,
+	installed *connector.ApplianceKeyInstalledError, maintained bool) ([]byte, []byte, string, bool) {
+	recoverer, ok := ch.(JobCertificateRecoverer)
+	if !ok {
+		report(ctx, ch, job, OutcomeFailed, "an earlier attempt of this renewal already installed its certificate, and this "+
+			"agent build cannot ask for the job's signed result to finish it; start a new renewal")
+		return nil, nil, "", false
+	}
+	block, _ := pem.Decode(installed.CertificatePEM)
+	if installed.ObjectName != object || block == nil || block.Type != "CERTIFICATE" {
+		report(ctx, ch, job, OutcomeFailed, "the appliance's object for this renewal holds no readable certificate")
+		return nil, nil, "", false
+	}
+	certPEM, chainPEM, fingerprint, err := callJobSigner(ctx, maintained, func(callCtx context.Context) ([]byte, []byte, string, error) {
+		return recoverer.RecoverJobCertificate(callCtx, job.JobID, job.Attempt, block.Bytes)
+	})
+	if err != nil {
+		log.Printf("trstctl-agent: job %d attempt %d: the job's signed result was not handed back: %v", job.JobID, job.Attempt, err)
+		report(ctx, ch, job, OutcomeFailed, "an earlier attempt of this renewal already installed a certificate, and the "+
+			"control plane did not hand it back as this job's signed result; check the appliance and start a new renewal")
+		return nil, nil, "", false
+	}
+	if returned, _ := pem.Decode(certPEM); returned == nil || !bytes.Equal(returned.Bytes, block.Bytes) {
+		report(ctx, ch, job, OutcomeFailed, "the control plane handed back a certificate other than the one the appliance holds")
+		return nil, nil, "", false
+	}
+	return certPEM, chainPEM, fingerprint, true
 }
