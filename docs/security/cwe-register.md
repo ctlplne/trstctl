@@ -775,7 +775,7 @@ not this file.
 | `internal/crypto/ctlog/sct_test.go:45` | loopback test log (CWE-918) |
 | `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
-| `internal/server/adcs_revoke_relay_served_test.go:268` | the test's own CA stand-in (CWE-918). |
+| `internal/server/adcs_revoke_relay_served_test.go:305` | the test's own CA stand-in (CWE-918). |
 | `internal/server/archive_minio_served_test.go:58` | loopback URL of the container this test started (CWE-88) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:53` | the served test harness URL |
 | `internal/server/ca_hierarchy_pqc_served_test.go:55` | the served test harness URL |
@@ -2761,7 +2761,7 @@ not this file.
 | `internal/secretscan/gitleaks_options_test.go:178` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/adcs_database_collect_served_test.go:42` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/adcs_decisions_served_test.go:50` | a test-owned executable stand-in (CWE-276). |
-| `internal/server/adcs_revoke_relay_served_test.go:120` | a test-owned executable stand-in (CWE-276). |
+| `internal/server/adcs_revoke_relay_served_test.go:121` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

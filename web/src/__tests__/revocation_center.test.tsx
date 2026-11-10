@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
+import { QueuedCertificateRevocation } from "@/pages/certificates/QueuedCertificateRevocation";
 import { AppQueryProvider } from "@/lib/query";
-import { ApiError, type Identity } from "@/lib/api";
+import { ApiError, type Identity, type RevocationRelayWait } from "@/lib/api";
 import { useState, type ReactNode } from "react";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     retryKeyCompromise: vi.fn(),
     previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
+    revocationRelayWaits: vi.fn(async () => ({ items: [] as RevocationRelayWait[], guidance: "" })),
   },
 }));
 
@@ -761,5 +763,93 @@ describe("RevocationCenter", () => {
     expect(await screen.findByText("Revocation accepted and the exact certificate now reads revoked.", {}, { timeout: 4000 })).toBeInTheDocument();
     expect(onCertificateRevoked).toHaveBeenCalledExactlyOnceWith(revoked);
     expect(apiMock.bulkRevokeCertificates).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A162-L5: a revocation through an AD CS issuer waits for that issuer's relay.
+// The Revocation center says which relay and why, and the queued certificate
+// shows only its own wait.
+describe("RevocationCenter relay waits", () => {
+  const wait = {
+    revocation_id: "certificate.external-revoked:aa",
+    serial: "4ed190b35b509d2b9237df35d65af081",
+    ca_config: "CORP-DC01\\Corp Issuing CA",
+    issuer_id: "corp-adcs-web",
+    issuer_name: "Corp AD CS (WebServer template)",
+    relay: "dc-relay-a162l5",
+    relay_agent_id: "c54460e1-1ae4-504e-907e-2674f96fc351",
+    relay_presence: "never_seen" as const,
+    state: "waiting_for_relay" as const,
+    attempt: 1,
+    queued_at: "2026-11-10T16:50:20Z",
+    attempt_queued_at: "2026-11-10T16:50:20Z",
+  };
+
+  afterEach(() => {
+    apiMock.revocationRelayWaits.mockReset().mockResolvedValue({ items: [], guidance: "" });
+  });
+
+  it("names the relay each waiting revocation is held by and why", async () => {
+    apiMock.connectorTargets.mockReset().mockResolvedValue({ items: [] });
+    apiMock.revocationRelayWaits.mockReset().mockResolvedValue({
+      items: [
+        wait,
+        {
+          ...wait,
+          revocation_id: "certificate.external-revoked:bb",
+          serial: "0b",
+          relay: "dc-relay-east",
+          relay_presence: "stale" as const,
+          relay_last_seen_at: "2026-11-10T09:00:00Z",
+          attempt: 2,
+          last_error: "certutil could not publish a new CRL",
+        },
+        {
+          ...wait,
+          revocation_id: "certificate.external-revoked:cc",
+          serial: "0c",
+          relay: "dc-relay-west",
+          relay_presence: "online" as const,
+          state: "relay_working" as const,
+        },
+      ],
+      guidance: "",
+    });
+    renderCenter();
+    const panel = await screen.findByRole("region", { name: "Revocations waiting on an AD CS relay" });
+    expect(
+      within(panel).getByText("Waiting for relay dc-relay-a162l5, which has never connected. Enroll and start it so it can revoke the certificate."),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText("Waiting for relay dc-relay-east, offline since 2026-11-10T09:00:00Z.")).toBeInTheDocument();
+    expect(within(panel).getByText("The previous attempt failed: certutil could not publish a new CRL")).toBeInTheDocument();
+    expect(within(panel).getByText("Relay dc-relay-west is revoking it at CORP-DC01\\Corp Issuing CA.")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Serial 4ed190b35b509d2b9237df35d65af081 · CA CORP-DC01\\Corp Issuing CA · queued 2026-11-10T16:50:20Z · attempt 1"),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText(/completes on its own once the relay connects/)).toBeInTheDocument();
+  });
+
+  it("shows a queued certificate only its own relay wait", async () => {
+    apiMock.getCertificate.mockReset().mockResolvedValue(brokerCertificate);
+    apiMock.revocationRelayWaits.mockReset().mockResolvedValue({
+      items: [
+        { ...wait, serial: "0a" },
+        { ...wait, revocation_id: "certificate.external-revoked:other", serial: "0b", relay: "dc-relay-other" },
+      ],
+      guidance: "",
+    });
+    renderWithApp(<QueuedCertificateRevocation certificate={{ ...brokerCertificate, serial: "0A" }} onConfirmed={vi.fn()} />);
+    expect(
+      await screen.findByText("Waiting for relay dc-relay-a162l5, which has never connected. Enroll and start it so it can revoke the certificate."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/dc-relay-other/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Revocations waiting on an AD CS relay" })).not.toBeInTheDocument();
+  });
+
+  it("shows nothing when no revocation waits on a relay", async () => {
+    apiMock.connectorTargets.mockReset().mockResolvedValue({ items: [] });
+    renderCenter();
+    await waitFor(() => expect(apiMock.revocationRelayWaits).toHaveBeenCalled());
+    expect(screen.queryByRole("region", { name: "Revocations waiting on an AD CS relay" })).not.toBeInTheDocument();
   });
 });

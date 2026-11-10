@@ -30,6 +30,7 @@ import { useApiQuery } from "@/lib/query";
 import { KeyCompromiseEffects } from "./KeyCompromiseEffects";
 import { KeyCompromiseRecovery } from "./KeyCompromiseRecovery";
 import { RevocationProbeNow } from "./RevocationProbeNow";
+import { RevocationRelayWaits } from "./RevocationRelayWaits";
 
 type ReviewBase = {
   impact: GraphImpact | null;
@@ -401,6 +402,8 @@ export function RevocationCenter({
           <RevocationProbeNow />
         </div>
       </header>
+
+      <RevocationRelayWaits />
 
       <KeyCompromiseRecovery />
 

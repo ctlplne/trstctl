@@ -826,6 +826,10 @@ trstctl-cli revocation crls
 # Show signed network-relay CRL and OCSP endpoint health evidence.
 trstctl-cli revocation health
 
+# List revocations waiting on an AD CS issuer's relay: the relay, whether it has
+# ever connected or when it was last seen, the attempt and the last failure.
+trstctl-cli revocation relay-waits
+
 # Show signed per-segment relay-local CRL and OCSP cache freshness metadata.
 # Cached protocol bytes and upstream locations remain inside the segment.
 trstctl-cli revocation caches

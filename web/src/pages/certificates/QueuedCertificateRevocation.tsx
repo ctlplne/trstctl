@@ -3,6 +3,7 @@ import { api, type Certificate } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
+import { RevocationRelayWaits } from "./RevocationRelayWaits";
 
 export function QueuedCertificateRevocation({ certificate, onConfirmed }: { certificate: Certificate; onConfirmed: (value: Certificate) => void }) {
   const { t } = useTranslation();
@@ -18,6 +19,7 @@ export function QueuedCertificateRevocation({ certificate, onConfirmed }: { cert
     <div className="grid gap-2">
       <p role="status">{t("certificates.revocation.certificateQueued")}</p>
       <p>{t("certificates.revocation.certificateQueuedHelp")}</p>
+      <RevocationRelayWaits serial={certificate.serial} />
       {result.error || (result.data && !matches) ? <p role="alert">{t("certificates.revocation.certificateReadUnavailable")}</p> : null}
       <Button type="button" variant="outline" loading={result.fetching} onClick={result.refetch}>
         {t("certificates.revocation.refreshResult")}

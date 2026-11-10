@@ -49858,6 +49858,106 @@
         ],
         "type": "object"
       },
+      "RevocationRelayWait": {
+        "properties": {
+          "attempt": {
+            "description": "This attempt: one more than the relay's failed attempts.",
+            "type": "integer"
+          },
+          "attempt_queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ca_config": {
+            "description": "The certsrv CA the relay revokes at (host\\CA name).",
+            "type": "string"
+          },
+          "issuer_id": {
+            "type": "string"
+          },
+          "issuer_name": {
+            "type": "string"
+          },
+          "last_error": {
+            "description": "The relay's reason for the newest failed attempt.",
+            "type": "string"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relay": {
+            "description": "The relay's enrolled name.",
+            "type": "string"
+          },
+          "relay_agent_id": {
+            "description": "The exact agent the attempt is pinned to.",
+            "type": "string"
+          },
+          "relay_last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relay_presence": {
+            "description": "never_seen: no agent has ever reported under the relay's name; otherwise the agent's presence.",
+            "enum": [
+              "never_seen",
+              "online",
+              "stale",
+              "unreported",
+              "offboarded",
+              "clock_skew"
+            ],
+            "type": "string"
+          },
+          "revocation_id": {
+            "type": "string"
+          },
+          "serial": {
+            "description": "The certificate serial the relay revokes: lower-case hex without separators.",
+            "type": "string"
+          },
+          "state": {
+            "description": "waiting_for_relay until the relay takes the attempt; relay_working while it holds it.",
+            "enum": [
+              "waiting_for_relay",
+              "relay_working"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "revocation_id",
+          "serial",
+          "ca_config",
+          "relay",
+          "relay_agent_id",
+          "relay_presence",
+          "state",
+          "attempt",
+          "queued_at",
+          "attempt_queued_at"
+        ],
+        "type": "object"
+      },
+      "RevocationRelayWaits": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevocationRelayWait"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -101343,6 +101443,53 @@
         ],
         "summary": "Probe this tenant's CRL and OCSP endpoints now through the network relay, instead of at the next hourly sweep",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/revocation/relay-waits": {
+      "get": {
+        "operationId": "listRevocationRelayWaits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationRelayWaits"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List revocations waiting on an AD CS issuer's relay, naming the relay and why it has not finished",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/revocation/rogue-certificates": {

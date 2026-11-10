@@ -14999,6 +14999,36 @@ RevocationProbeNow = TypedDict(
     total=False,
 )
 
+RevocationRelayWait = TypedDict(
+    'RevocationRelayWait',
+    {
+        'attempt': int,
+        'attempt_queued_at': str,
+        'ca_config': str,
+        'issuer_id': str,
+        'issuer_name': str,
+        'last_error': str,
+        'queued_at': str,
+        'relay': str,
+        'relay_agent_id': str,
+        'relay_last_seen_at': str,
+        'relay_presence': str,
+        'revocation_id': str,
+        'serial': str,
+        'state': str,
+    },
+    total=False,
+)
+
+RevocationRelayWaits = TypedDict(
+    'RevocationRelayWaits',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

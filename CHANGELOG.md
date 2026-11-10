@@ -2,6 +2,13 @@
 
 ### Added
 
+- A revocation waiting on an AD CS relay says why (A162-L5). An `adcs` issuer revokes through its
+  `revocation_relay`, and until that relay reports, the certificate stays active and the delivery
+  waits without spending its retries, which showed only as a deferred job. `GET
+  /api/v1/revocation/relay-waits` (certs:read) lists each revocation the relay has not finished:
+  the relay's name (also for a relay that has never connected), its presence and last heartbeat,
+  waiting or running, the attempt number and the last failed attempt's reason. The Revocation
+  center lists them, and a queued certificate shows its own wait.
 - A failed host renewal says why in plain words, with one retry (A36's console part). The
   `renewal_failed` alert leads with the cause, one of a closed set read from the control
   plane's own records (the certificate authority's error class for the job's request, or

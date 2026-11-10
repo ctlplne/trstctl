@@ -10761,6 +10761,28 @@ export interface RevocationProbeNow {
   queued: boolean;
 }
 
+export interface RevocationRelayWait {
+  attempt: number;
+  attempt_queued_at: string;
+  ca_config: string;
+  issuer_id?: string;
+  issuer_name?: string;
+  last_error?: string;
+  queued_at: string;
+  relay: string;
+  relay_agent_id: string;
+  relay_last_seen_at?: string;
+  relay_presence: "never_seen" | "online" | "stale" | "unreported" | "offboarded" | "clock_skew";
+  revocation_id: string;
+  serial: string;
+  state: "waiting_for_relay" | "relay_working";
+}
+
+export interface RevocationRelayWaits {
+  guidance: string;
+  items: RevocationRelayWait[];
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;

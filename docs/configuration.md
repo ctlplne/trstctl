@@ -391,7 +391,10 @@ common name of a domain-joined network relay (with `tenant_id`, because the rela
 is one tenant's agent): trstctl hands each revocation to that relay, which runs
 `certutil -config <ca_config> -revoke`, publishes a new CRL with `certutil -CRL`
 and reads the row back. The relay's account needs the CA's Issue and Manage
-Certificates and Manage CA rights, and `adcs.revoke` must be claimable. The same
+Certificates and Manage CA rights, and `adcs.revoke` must be claimable. Until the
+relay reports, the certificate stays active and the revocation waits; the
+Revocation center (and `GET /api/v1/revocation/relay-waits`) shows each waiting
+revocation and why, such as a relay that has never connected. The same
 relay approves (`certutil -resubmit`) or denies held requests after trstctl's own
 approval (N1); `adcs.request.decide` must be claimable for that.
 

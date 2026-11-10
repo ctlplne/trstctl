@@ -9323,6 +9323,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/relay-waits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List revocations waiting on an AD CS issuer's relay, naming the relay and why it has not finished */
+        get: operations["listRevocationRelayWaits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/rogue-certificates": {
         parameters: {
             query?: never;
@@ -25170,6 +25187,43 @@ export interface components {
             guidance: string;
             /** @description False when a request in the same minute already queued this probe; requests inside one minute share it. */
             queued: boolean;
+        };
+        RevocationRelayWait: {
+            /** @description This attempt: one more than the relay's failed attempts. */
+            attempt: number;
+            /** Format: date-time */
+            attempt_queued_at: string;
+            /** @description The certsrv CA the relay revokes at (host\CA name). */
+            ca_config: string;
+            issuer_id?: string;
+            issuer_name?: string;
+            /** @description The relay's reason for the newest failed attempt. */
+            last_error?: string;
+            /** Format: date-time */
+            queued_at: string;
+            /** @description The relay's enrolled name. */
+            relay: string;
+            /** @description The exact agent the attempt is pinned to. */
+            relay_agent_id: string;
+            /** Format: date-time */
+            relay_last_seen_at?: string;
+            /**
+             * @description never_seen: no agent has ever reported under the relay's name; otherwise the agent's presence.
+             * @enum {string}
+             */
+            relay_presence: "never_seen" | "online" | "stale" | "unreported" | "offboarded" | "clock_skew";
+            revocation_id: string;
+            /** @description The certificate serial the relay revokes: lower-case hex without separators. */
+            serial: string;
+            /**
+             * @description waiting_for_relay until the relay takes the attempt; relay_working while it holds it.
+             * @enum {string}
+             */
+            state: "waiting_for_relay" | "relay_working";
+        };
+        RevocationRelayWaits: {
+            guidance: string;
+            items: components["schemas"]["RevocationRelayWait"][];
         };
         RiskComponents: {
             age: number;
@@ -55383,6 +55437,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevocationProbeNow"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRevocationRelayWaits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevocationRelayWaits"];
                 };
             };
             /** @description client error */

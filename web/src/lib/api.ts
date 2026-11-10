@@ -273,6 +273,8 @@ import type {
   RevocationCachePosture,
   RevocationHealth,
   RevocationProbeNow,
+  RevocationRelayWait,
+  RevocationRelayWaits,
   CTLogSubmission,
   CTLogSubmissionRequest,
   CTMonitoring,
@@ -1380,6 +1382,8 @@ export type {
   RevocationCachePosture,
   RevocationHealth,
   RevocationProbeNow,
+  RevocationRelayWait,
+  RevocationRelayWaits,
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
@@ -2218,6 +2222,7 @@ export interface Api {
   revocationCaches(): Promise<RevocationCachePosture>;
   revocationHealth(): Promise<RevocationHealth>;
   probeRevocationHealth(idempotencyKey?: string): Promise<RevocationProbeNow>;
+  revocationRelayWaits(): Promise<RevocationRelayWaits>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
   takedownRogueCertificate(input: RogueCertificateTakedownRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   revokeRogueCertificateAtIssuer(input: RogueCertificateRevokeRequest, idempotencyKey?: string): Promise<RogueIssuerRevocation>;
@@ -3186,6 +3191,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   revocationCaches: () => req<RevocationCachePosture>("/api/v1/revocation/caches"),
   revocationHealth: () => req<RevocationHealth>("/api/v1/revocation/health"),
   probeRevocationHealth: (idempotencyKey) => mutate<RevocationProbeNow>("POST", "/api/v1/revocation/health/probe", {}, idempotencyKey),
+  revocationRelayWaits: () => req<RevocationRelayWaits>("/api/v1/revocation/relay-waits"),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   takedownRogueCertificate: (input, key) => mutate<ConnectorDelivery>("POST", "/api/v1/revocation/rogue-certificates/takedown", input, key),
   revokeRogueCertificateAtIssuer: (input, key) => mutate<RogueIssuerRevocation>("POST", "/api/v1/revocation/rogue-certificates/revoke", input, key),

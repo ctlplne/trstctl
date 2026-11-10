@@ -231,7 +231,8 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 				inner: implementation, authorityID: id, endpoint: strings.TrimSpace(cfg.Endpoint), orch: s.orch,
 			}
 		}
-		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available", UpstreamDNS01: cfg.UpstreamDNS01}
+		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available", UpstreamDNS01: cfg.UpstreamDNS01,
+			RevocationRelay: cfg.ADCSRevocation.Relay, RevocationCAConfig: cfg.ADCSRevocation.CAConfig}
 		replaySafety := cfg.ReplaySafety
 		if externalCATypeHasReceiverIdempotency(typ) {
 			replaySafety = ca.ExternalIssueReconciled

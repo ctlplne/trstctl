@@ -290,6 +290,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"revocation", "caches"}, Method: "GET", Path: "/api/v1/revocation/caches", Summary: "List signed segment-local CRL and OCSP cache freshness evidence"},
 	{Name: []string{"revocation", "health"}, Method: "GET", Path: "/api/v1/revocation/health", Summary: "List signed network-relay CRL and OCSP endpoint health evidence"},
 	{Name: []string{"revocation", "health", "probe"}, Method: "POST", Path: "/api/v1/revocation/health/probe", Summary: "Probe this tenant's CRL and OCSP endpoints now instead of at the next hourly sweep"},
+	{Name: []string{"revocation", "relay-waits"}, Method: "GET", Path: "/api/v1/revocation/relay-waits", Summary: "List revocations waiting on an AD CS issuer's relay, naming the relay and why"},
 	{Name: []string{"revocation", "rogue-certificates"}, Method: "GET", Path: "/api/v1/revocation/rogue-certificates", Summary: "List rogue and non-compliant certificate detection findings"},
 	{Name: []string{"revocation", "rogue-certificates", "revoke"}, Method: "POST", Path: "/api/v1/revocation/rogue-certificates/revoke", Body: bodyFile, Summary: "Revoke a rogue certificate found in Certificate Transparency at the external CA that issued it"},
 	{Name: []string{"revocation", "rogue-certificates", "takedown"}, Method: "POST", Path: "/api/v1/revocation/rogue-certificates/takedown", Body: bodyFile, Summary: "Queue removal of a rogue certificate from the connector target where trstctl installed it"},

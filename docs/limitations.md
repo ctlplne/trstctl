@@ -4223,7 +4223,12 @@ than sending an operator looking for a credential that was never there.
   database row back; trstctl records the certificate revoked only from that
   checked report. While the relay has not answered, the delivery waits without
   spending its retry budget; a failed relay attempt spends one and the next
-  delivery queues a fresh attempt. certutil takes reasons unspecified through
+  delivery queues a fresh attempt. The wait is visible (A162-L5):
+  `GET /api/v1/revocation/relay-waits` and the Revocation center list each
+  revocation the relay has not finished, with the relay's name, whether it has
+  ever connected or when it was last seen, the attempt number and the last
+  failed attempt's reason; the wait itself is not bounded, because giving up
+  would leave the certificate active just the same. certutil takes reasons unspecified through
   cessationOfOperation, so other reasons are refused. Proven with the
   production relay loop against a certutil stand-in that drives a CA stand-in
   whose CRL, fetched from its distribution point, names the serial; a live

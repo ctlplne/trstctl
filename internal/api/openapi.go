@@ -6608,6 +6608,29 @@ func componentSchemas() map[string]*Schema {
 		"bucket":   {Type: "string", Description: "The request's probe bucket (manual:<minute>), which its relay observations carry."},
 		"guidance": str(),
 	}, "queued", "bucket", "guidance")
+	// A162-L5: a revocation an AD CS issuer's relay has not finished, and why.
+	revocationRelayWait := object(map[string]*Schema{
+		"revocation_id":  str(),
+		"serial":         {Type: "string", Description: "The certificate serial the relay revokes: lower-case hex without separators."},
+		"ca_config":      {Type: "string", Description: "The certsrv CA the relay revokes at (host\\CA name)."},
+		"issuer_id":      str(),
+		"issuer_name":    str(),
+		"relay":          {Type: "string", Description: "The relay's enrolled name."},
+		"relay_agent_id": {Type: "string", Description: "The exact agent the attempt is pinned to."},
+		"relay_presence": {Type: "string", Enum: []string{"never_seen", "online", "stale", "unreported", "offboarded", "clock_skew"},
+			Description: "never_seen: no agent has ever reported under the relay's name; otherwise the agent's presence."},
+		"relay_last_seen_at": timestamp(),
+		"state": {Type: "string", Enum: []string{"waiting_for_relay", "relay_working"},
+			Description: "waiting_for_relay until the relay takes the attempt; relay_working while it holds it."},
+		"attempt":           {Type: "integer", Description: "This attempt: one more than the relay's failed attempts."},
+		"last_error":        {Type: "string", Description: "The relay's reason for the newest failed attempt."},
+		"queued_at":         timestamp(),
+		"attempt_queued_at": timestamp(),
+	}, "revocation_id", "serial", "ca_config", "relay", "relay_agent_id", "relay_presence", "state", "attempt", "queued_at", "attempt_queued_at")
+	revocationRelayWaits := object(map[string]*Schema{
+		"items":    {Type: "array", Items: ref("RevocationRelayWait")},
+		"guidance": str(),
+	}, "items", "guidance")
 	controlPlaneKeygen := object(map[string]*Schema{
 		"decided": {Type: "boolean", Description: "False for a tenant that predates the switch and has not been decided yet; it keeps the behavior it had (allowed)."},
 		"enabled": {Type: "boolean", Description: "Whether the control plane may generate a subject private key for a requester in this tenant."},
@@ -8456,6 +8479,8 @@ func componentSchemas() map[string]*Schema {
 		"RevocationHealthSummary":                  revocationHealthSummary,
 		"RevocationHealth":                         revocationHealth,
 		"RevocationProbeNow":                       revocationProbeNow,
+		"RevocationRelayWait":                      revocationRelayWait,
+		"RevocationRelayWaits":                     revocationRelayWaits,
 		"RevocationCacheStatus":                    revocationCacheStatus,
 		"RevocationCacheSummary":                   revocationCacheSummary,
 		"RevocationCachePosture":                   revocationCachePosture,

@@ -59,6 +59,13 @@ type ExternalCA struct {
 	// validates names through tenant DNS-01 provider configs, so the endpoint
 	// preview must confirm one can publish for the requested name.
 	UpstreamDNS01 bool `json:"-"`
+	// RevocationRelay and RevocationCAConfig are in-process metadata too: the
+	// enrolled name of the relay that revokes an adcs authority's certificates
+	// and the certsrv CA it revokes at (A162). A revocation waiting on that
+	// relay is pinned to its agent id, so the wait names the relay even when
+	// no agent has ever reported under that name (A162-L5).
+	RevocationRelay    string `json:"-"`
+	RevocationCAConfig string `json:"-"`
 }
 
 type ExternalCAIssueRequest struct {

@@ -143,6 +143,8 @@ func (a *API) revocationHealthRoutes() []route {
 	return []route{
 		{method: "GET", path: "/api/v1/revocation/health", opID: "listRevocationHealth", summary: "List relay-verified CRL and OCSP endpoint reachability, signature, status, and freshness", handler: a.listRevocationHealth, resSchema: "RevocationHealth", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/revocation/health/probe", opID: "probeRevocationHealth", summary: "Probe this tenant's CRL and OCSP endpoints now through the network relay, instead of at the next hourly sweep", handler: a.probeRevocationHealth, resSchema: "RevocationProbeNow", successCode: "202", mutation: true, perm: authz.CertsWrite},
+		// A162-L5: revocations an AD CS issuer's relay has not finished, and why.
+		{method: "GET", path: "/api/v1/revocation/relay-waits", opID: "listRevocationRelayWaits", summary: "List revocations waiting on an AD CS issuer's relay, naming the relay and why it has not finished", handler: a.listRevocationRelayWaits, resSchema: "RevocationRelayWaits", successCode: "200", perm: authz.CertsRead},
 	}
 }
 

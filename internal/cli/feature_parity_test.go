@@ -429,8 +429,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A274 adds `access signins list`. A275 adds `access recordings search`.
 	// A276 adds `access account-flags list|scan|propose|apply` and `access
 	// reviews result`. A278 adds `access gateway-pools list|save|delete`.
-	if len(out) != 866 {
-		t.Fatalf("CLI commands = %d, want 866", len(out))
+	// A162-L5 adds `revocation relay-waits`.
+	if len(out) != 867 {
+		t.Fatalf("CLI commands = %d, want 867", len(out))
 	}
 	return out
 }

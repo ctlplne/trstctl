@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -253,6 +254,39 @@ func TestServedRevokeThroughTrstctlShowsOnTheADCSCRL(t *testing.T) {
 	if current, err := h.store.GetCertificate(ctx, h.tenant, selected.ID); err != nil || current.Status != "active" {
 		t.Fatalf("certificate before the relay reports = %+v %v; want still active", current.Status, err)
 	}
+	// A162-L5: while it waits, the Revocation center's read names the relay
+	// it waits on — never seen until it reports in, then online — and once the
+	// relay's report records the revocation, the wait is gone.
+	if wait, listed := revocationRelayWaitFor(t, h.servedHarness, token, selected.Serial); !listed || wait.Relay != "role-agent" ||
+		wait.RelayPresence != "never_seen" || wait.State != "waiting_for_relay" || wait.Attempt != 1 {
+		t.Fatalf("relay wait before the relay reports in = %+v listed %v; want role-agent never seen, attempt 1 waiting", wait, listed)
+	}
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "a162l5", Status: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if wait, listed := revocationRelayWaitFor(t, h.servedHarness, token, selected.Serial); !listed || wait.Relay != "role-agent" ||
+		wait.RelayPresence != "online" || wait.RelayLastSeenAt == "" || wait.State != "waiting_for_relay" {
+		t.Fatalf("relay wait once the relay reports in = %+v listed %v; want role-agent online, still waiting", wait, listed)
+	}
+	// While the relay holds a live lease on the attempt it reads as running;
+	// the lease is released again before the production loop claims it.
+	setADCSRevokeLease := func(held bool) {
+		t.Helper()
+		query := `UPDATE outbox SET claimed_by_agent_id = required_agent_id, claim_expires_at = now() + interval '1 minute'
+		           WHERE tenant_id = $1 AND destination = 'adcs.revoke' AND claim_completed_at IS NULL`
+		if !held {
+			query = `UPDATE outbox SET claimed_by_agent_id = NULL, claim_expires_at = NULL
+			          WHERE tenant_id = $1 AND destination = 'adcs.revoke' AND claim_completed_at IS NULL`
+		}
+		if _, err := h.store.SystemPool().Exec(ctx, query, h.tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setADCSRevokeLease(true)
+	if wait, listed := revocationRelayWaitFor(t, h.servedHarness, token, selected.Serial); !listed || wait.State != "relay_working" {
+		t.Fatalf("relay wait while the relay holds the attempt = %+v listed %v; want relay_working", wait, listed)
+	}
+	setADCSRevokeLease(false)
 
 	channel := &sshCollectionServedChannel{t: t, h: h}
 	if count, err := relay.RunOnce(ctx, channel, http.DefaultClient, 1, 120); err != nil || count != 1 {
@@ -264,6 +298,9 @@ func TestServedRevokeThroughTrstctlShowsOnTheADCSCRL(t *testing.T) {
 	current, err := h.store.GetCertificate(ctx, h.tenant, selected.ID)
 	if err != nil || current.Status != "revoked" || current.RevocationReason != "superseded" {
 		t.Fatalf("certificate after the AD CS revocation = %s/%s %v", current.Status, current.RevocationReason, err)
+	}
+	if wait, listed := revocationRelayWaitFor(t, h.servedHarness, token, selected.Serial); listed {
+		t.Fatalf("relay wait after the revocation recorded = %+v; want none", wait)
 	}
 	resp, err := http.Get(adminSrv.URL + "/CertEnroll/Corp-Issuing-CA.crl") // #nosec G107 -- the test's own CA stand-in (CWE-918).
 	if err != nil {
@@ -341,6 +378,12 @@ func TestServedADCSRelayRevocationFailureIsRetriedOnTheRevocationsBackoff(t *tes
 	}
 	if n := adcsRevokeAttempts(t, h); n != 2 {
 		t.Fatalf("relay attempts after one failure = %d; want the next one queued", n)
+	}
+	// A162-L5: the retry waiting on the relay carries its number and the
+	// failed attempt's reason.
+	if wait, listed := revocationRelayWaitFor(t, h.servedHarness, token, selected.Serial); !listed || wait.Attempt != 2 ||
+		!strings.Contains(wait.LastError, "could not publish a new CRL") || wait.State != "waiting_for_relay" {
+		t.Fatalf("relay wait after a failed attempt = %+v listed %v; want attempt 2 with the relay's reason", wait, listed)
 	}
 	admin.mu.Lock()
 	admin.failCRL = false

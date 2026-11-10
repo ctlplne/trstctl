@@ -11330,6 +11330,47 @@ export const messages = {
     defaultMessage: "The current result could not be verified. Revocation remains unconfirmed.",
     description: "Fail-closed external revocation observation.",
   },
+  "certificates.revocation.relayWaitsTitle": {
+    defaultMessage: "Revocations waiting on an AD CS relay",
+    description: "Heading for revocations an AD CS issuer's relay has not finished.",
+  },
+  "certificates.revocation.relayWaitsHelp": {
+    defaultMessage:
+      "Each certificate stays active until its relay runs certutil and reports the CA's answer. A waiting revocation spends none of its retries and completes on its own once the relay connects.",
+    description: "Why a revocation through an AD CS relay waits and how it completes.",
+  },
+  "certificates.revocation.relayNeverSeen": {
+    defaultMessage: "Waiting for relay {relay}, which has never connected. Enroll and start it so it can revoke the certificate.",
+    description: "No agent has ever reported under the issuer's revocation relay name.",
+  },
+  "certificates.revocation.relayNotReported": {
+    defaultMessage: "Waiting for relay {relay}, which has not reported in yet.",
+    description: "The revocation relay has an agent record but no heartbeat.",
+  },
+  "certificates.revocation.relayOffline": {
+    defaultMessage: "Waiting for relay {relay}, offline since {seen}.",
+    description: "The revocation relay's last heartbeat is stale.",
+  },
+  "certificates.revocation.relayOnlineWaiting": {
+    defaultMessage: "Waiting for relay {relay} to take the revocation. The relay is online.",
+    description: "The revocation relay is online but has not claimed the job yet.",
+  },
+  "certificates.revocation.relayOffboarded": {
+    defaultMessage: "Waiting for relay {relay}, which is offboarded. Re-enroll it or name another revocation relay for the issuer.",
+    description: "The revocation relay was offboarded.",
+  },
+  "certificates.revocation.relayWorking": {
+    defaultMessage: "Relay {relay} is revoking it at {ca}.",
+    description: "The revocation relay holds the job and is running certutil.",
+  },
+  "certificates.revocation.relayWaitFacts": {
+    defaultMessage: "Serial {serial} · CA {ca} · queued {since} · attempt {attempt}",
+    description: "Facts about one revocation waiting on a relay.",
+  },
+  "certificates.revocation.relayWaitLastError": {
+    defaultMessage: "The previous attempt failed: {error}",
+    description: "The relay's reason for the newest failed attempt.",
+  },
   "certificates.revocation.refreshResult": {
     defaultMessage: "Refresh revocation result",
     description: "Refresh the exact certificate after an accepted external revocation.",
