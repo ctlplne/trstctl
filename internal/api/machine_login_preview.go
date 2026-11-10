@@ -28,13 +28,18 @@ type machineLoginPrerequisite struct {
 }
 
 type machineLoginPreviewResponse struct {
-	Capability             string                     `json:"capability"`
-	Operation              string                     `json:"operation"`
-	Ready                  bool                       `json:"ready"`
-	EffectFree             bool                       `json:"effect_free"`
-	Method                 machineAuthMethodInfo      `json:"method"`
-	TenantBinding          string                     `json:"tenant_binding"`
-	CredentialFormat       string                     `json:"credential_format"`
+	Capability       string                `json:"capability"`
+	Operation        string                `json:"operation"`
+	Ready            bool                  `json:"ready"`
+	EffectFree       bool                  `json:"effect_free"`
+	Method           machineAuthMethodInfo `json:"method"`
+	TenantBinding    string                `json:"tenant_binding"`
+	CredentialFormat string                `json:"credential_format"`
+	// SingleUse and CredentialReuse say whether the credential logs in once
+	// or until it expires (M4-L1): OIDC and JWT logins are replay-guarded, so
+	// a second login with the same token is refused.
+	SingleUse              bool                       `json:"single_use"`
+	CredentialReuse        string                     `json:"credential_reuse"`
 	SessionTTLSeconds      int64                      `json:"session_ttl_seconds"`
 	RequiredPermission     string                     `json:"required_permission"`
 	RequestFingerprint     string                     `json:"request_fingerprint"`
@@ -117,6 +122,21 @@ func machineLoginCredentialFormat(method machineAuthMethodInfo) string {
 		return "A signed JWT whose issuer, audience, expiry, claims, and tenant binding match this method."
 	default:
 		return "The credential format declared by this configured machine-auth method."
+	}
+}
+
+// machineLoginCredentialReuse says whether a method's credential logs in once
+// (M4-L1). OIDC and JWT logins pass the durable replay guard: the same token,
+// by issuer and jti or by its digest, is refused a second time until it
+// expires. The other methods' credentials log in again until they expire.
+func machineLoginCredentialReuse(method machineAuthMethodInfo) (bool, string) {
+	switch method.Type {
+	case "oidc", "jwt":
+		return true, "Single-use: each token logs in once. The same token is refused a second time, so mint a fresh one for every login."
+	case "token":
+		return false, "Reusable: the same machine token logs in again until it expires."
+	default:
+		return false, "Reusable: the same credential logs in again until it expires; only OIDC and JWT tokens are single-use."
 	}
 }
 
@@ -237,6 +257,7 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ttl := a.secrets.machineSessionTTL()
+	singleUse, reuse := machineLoginCredentialReuse(*selected)
 	verificationReady, verificationDetail, verificationRemediation := machineLoginVerificationReady(*selected)
 	scopeReady, scopeDetail, scopeRemediation := a.machineLoginScopeReady(*selected)
 	methodEnabledDetail := "The selected method accepts new logins."
@@ -268,6 +289,7 @@ func (a *API) previewMachineLogin(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, machineLoginPreviewResponse{
 		Capability: "F58", Operation: "test_machine_login", Ready: len(blockers) == 0, EffectFree: true,
 		Method: *selected, TenantBinding: machineLoginTenantBinding(*selected), CredentialFormat: machineLoginCredentialFormat(*selected),
+		SingleUse: singleUse, CredentialReuse: reuse,
 		SessionTTLSeconds: int64(ttl.Seconds()), RequiredPermission: "secrets:read", RequestFingerprint: fingerprint,
 		Prerequisites: prerequisites, Blockers: blockers,
 		PreviewReads:  []string{"read the tenant-scoped method projection and disable overlay"},

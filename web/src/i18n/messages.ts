@@ -5026,6 +5026,10 @@ export const messages = {
   "secrets.login.sessionTTL": { defaultMessage: "Session lifetime", description: "F58 reviewed session TTL label." },
   "secrets.login.tenantBinding": { defaultMessage: "Tenant boundary", description: "F58 tenant-binding label." },
   "secrets.login.credentialFormat": { defaultMessage: "Credential expected", description: "F58 credential format label." },
+  "secrets.login.credentialReuse": {
+    defaultMessage: "Can the credential log in again",
+    description: "M4-L1 label for whether the previewed credential is single-use or reusable.",
+  },
   "secrets.login.automation": { defaultMessage: "Use the same contract from the native CLI", description: "F58 automation heading." },
   "secrets.login.credentialHelp": {
     defaultMessage: "Used once for this test, never displayed or stored, and cleared after success or failure.",

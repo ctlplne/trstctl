@@ -770,6 +770,10 @@ func TestMachineLoginPreviewIsEffectFreeTenantBoundAndRecoveryAware(t *testing.T
 	if plan["tenant_binding"] == "" || plan["credential_format"] == "" || plan["request_fingerprint"] == "" {
 		t.Fatalf("preview omitted tenant/credential/fingerprint detail: %v", plan)
 	}
+	// M4-L1: the preview says whether the credential logs in once.
+	if reuse, _ := plan["credential_reuse"].(string); plan["single_use"] != false || !strings.HasPrefix(reuse, "Reusable") {
+		t.Fatalf("preview reuse = %v %q, want a reusable machine token said so", plan["single_use"], reuse)
+	}
 	for _, key := range []string{"prerequisites", "execute_writes", "recovery_steps", "verification_steps", "cli_argv"} {
 		values, exists := plan[key].([]any)
 		if !exists || len(values) == 0 {

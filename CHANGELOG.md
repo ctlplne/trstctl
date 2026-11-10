@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- The machine-login review says whether the credential logs in once (M4-L1). OIDC and JWT
+  logins are replay-guarded, so a token works once, but the preview never said so and a second
+  test with the same token looked like a failure. The preview now serves `single_use` and
+  `credential_reuse`, and the console shows it in the review.
 - Lint covers the Go SDK module (A250-L1). No lint gate ran over `clients/sdk/go`, which left
   three gosec findings unseen: the idempotency key generator's `math/rand/v2` draws (a dedup
   token the server binds to the authenticated request, kept outside the crypto boundary by

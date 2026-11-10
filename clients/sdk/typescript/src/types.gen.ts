@@ -20333,6 +20333,8 @@ export interface components {
             capability: string;
             cli_argv: string[];
             credential_format: string;
+            /** @description Whether the same credential logs in again, in plain words. */
+            credential_reuse: string;
             effect_free: boolean;
             execute_external_effects: string[];
             execute_writes: string[];
@@ -20348,6 +20350,8 @@ export interface components {
             required_permission: string;
             secret_data_handling: string;
             session_ttl_seconds: number;
+            /** @description The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1). */
+            single_use: boolean;
             tenant_binding: string;
             verification_steps: string[];
         };

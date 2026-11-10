@@ -8166,7 +8166,9 @@ func componentSchemas() map[string]*Schema {
 		"execute_writes": {Type: "array", Items: str()}, "execute_external_effects": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
 		"cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
-	}, "capability", "operation", "ready", "effect_free", "method", "tenant_binding", "credential_format",
+		"single_use":       {Type: "boolean", Description: "The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1)."},
+		"credential_reuse": {Type: "string", Description: "Whether the same credential logs in again, in plain words."},
+	}, "capability", "operation", "ready", "effect_free", "method", "tenant_binding", "credential_format", "single_use", "credential_reuse",
 		"session_ttl_seconds", "required_permission", "request_fingerprint", "prerequisites", "blockers", "preview_reads",
 		"preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps",
 		"verification_steps", "cli_argv", "secret_data_handling")

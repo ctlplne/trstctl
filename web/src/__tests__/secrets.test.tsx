@@ -477,6 +477,8 @@ function primeSecretsMocks() {
     method: { name: "token", type: "token", source: "builtin", jwks_configured: false, disabled: false },
     tenant_binding: "The credential and issued session are bound to this tenant.",
     credential_format: "A tenant-, audience-, and expiry-bound machine token.",
+    single_use: false,
+    credential_reuse: "Reusable: the same machine token logs in again until it expires.",
     session_ttl_seconds: 3600,
     required_permission: "secrets:read",
     request_fingerprint: "sha256:reviewed-machine-login",
@@ -3033,6 +3035,8 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
       method: { name: "ci-jwt", type: "jwt", source: "config", jwks_configured: true, disabled: true },
       tenant_binding: "The credential and issued session are bound to this tenant.",
       credential_format: "A signed JWT with the configured issuer, audience, expiry, and tenant claim.",
+      single_use: true,
+      credential_reuse: "Single-use: each token logs in once. The same token is refused a second time, so mint a fresh one for every login.",
       session_ttl_seconds: 3600,
       required_permission: "secrets:read",
       request_fingerprint: "sha256:blocked-machine-login",
@@ -3063,6 +3067,11 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
 
     expect(await loginForm.findByText("This method is blocked")).toBeInTheDocument();
     expect(loginForm.getByText("Method ci-jwt is disabled. Enable it before testing a credential.")).toBeInTheDocument();
+    // M4-L1: the review says a JWT logs in once.
+    expect(loginForm.getByText("Can the credential log in again")).toBeInTheDocument();
+    expect(
+      loginForm.getByText("Single-use: each token logs in once. The same token is refused a second time, so mint a fresh one for every login."),
+    ).toBeInTheDocument();
     expect(loginForm.queryByLabelText("Credential")).not.toBeInTheDocument();
     expect(loginForm.queryByRole("button", { name: "Test reviewed login" })).not.toBeInTheDocument();
     expect(apiMock.machineLogin).not.toHaveBeenCalled();

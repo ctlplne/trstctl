@@ -6766,6 +6766,7 @@ export interface MachineLoginPreview {
   capability: string;
   cli_argv: string[];
   credential_format: string;
+  credential_reuse: string;
   effect_free: boolean;
   execute_external_effects: string[];
   execute_writes: string[];
@@ -6781,6 +6782,7 @@ export interface MachineLoginPreview {
   required_permission: string;
   secret_data_handling: string;
   session_ttl_seconds: number;
+  single_use: boolean;
   tenant_binding: string;
   verification_steps: string[];
 }

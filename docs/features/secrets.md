@@ -1898,8 +1898,10 @@ review-first journey:
    authentication authority.
 2. **Review login.** `POST /api/v1/secrets/login/preview` receives only the method
    name. It reads configuration and returns the exact tenant binding, credential
-   shape, session lifetime, prerequisites, blockers, writes, outside calls, recovery
-   steps, verification steps, and CLI command. It does not receive a credential,
+   shape, whether the credential is single-use (`single_use`, with `credential_reuse`
+   in plain words: OIDC and JWT tokens log in once, other credentials log in again
+   until they expire), session lifetime, prerequisites, blockers, writes, outside
+   calls, recovery steps, verification steps, and CLI command. It does not receive a credential,
    call the verifier, create a session/event/idempotency row, or contact AWS STS.
 3. **Test reviewed login.** Only a ready plan reveals the password-style credential
    field. `POST /api/v1/secrets/login` consumes the credential once and requires an

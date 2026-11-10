@@ -31910,6 +31910,10 @@
           "credential_format": {
             "type": "string"
           },
+          "credential_reuse": {
+            "description": "Whether the same credential logs in again, in plain words.",
+            "type": "string"
+          },
           "effect_free": {
             "type": "boolean"
           },
@@ -31976,6 +31980,10 @@
           "session_ttl_seconds": {
             "type": "integer"
           },
+          "single_use": {
+            "description": "The credential logs in once: OIDC and JWT tokens are replay-guarded (M4-L1).",
+            "type": "boolean"
+          },
           "tenant_binding": {
             "type": "string"
           },
@@ -31994,6 +32002,8 @@
           "method",
           "tenant_binding",
           "credential_format",
+          "single_use",
+          "credential_reuse",
           "session_ttl_seconds",
           "required_permission",
           "request_fingerprint",

@@ -233,6 +233,10 @@ export function MachineAuthWorkflow({
                 <dt className="text-muted-foreground">{t("secrets.login.credentialFormat")}</dt>
                 <dd>{reviewedPlan.credential_format}</dd>
               </div>
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">{t("secrets.login.credentialReuse")}</dt>
+                <dd>{reviewedPlan.credential_reuse}</dd>
+              </div>
             </dl>
             <div>
               <h4 className="font-medium">{t("secrets.pki.prerequisites")}</h4>
