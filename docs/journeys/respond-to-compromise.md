@@ -3,7 +3,7 @@
 <!-- trstctl:journey-census:start -->
 !!! success "Served path — wiring census 81/81"
 
-    The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 81 census rows launch the shipped binary** and **69 of 81 are proved through the production-assembled handler**.
+    The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 84 census rows launch the shipped binary** and **72 of 84 are proved through the production-assembled handler**.
     Production-assembled means production `buildRunDeps` output driving the assembled `Server.Handler` in-process, with a hand-built `Deps` rejected; only the process launch differs.
     Independently proof-gated capability rows used by this journey (all `required`, all `served`): `breakglass_rotation.cross_sign_rekey`, `connector.registry`, `notification_channel.dispatch`.
     Core surfaces guarded by route and journey tests: `credential_graph`, `incident_execution`, `revocation`, `evidence_export`.

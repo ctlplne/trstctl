@@ -565,6 +565,12 @@
 
 ### Fixed
 
+- The signed webhook, Parameter Store and Netlify secret-sync targets are counted by the
+  definition-of-done census (A202-L2). They were proved only by served tests, so the README's
+  secret-sync row counted ten and named them apart. Each is now a census row (WIRE-SYNC-109 to
+  111) proved through the production-assembled handler against the census vendor emulator,
+  which checks the webhook's HMAC over timestamp and body, SigV4 for `ssm`, and Netlify's env
+  API, and reads each value back; the row reads 13 inventory / 13 served.
 - The machine-login review says whether the credential logs in once (M4-L1). OIDC and JWT
   logins are replay-guarded, so a token works once, but the preview never said so and a second
   test with the same token looked like a failure. The preview now serves `single_use` and

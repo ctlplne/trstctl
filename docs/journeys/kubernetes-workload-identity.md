@@ -3,7 +3,7 @@
 <!-- trstctl:journey-census:start -->
 !!! success "Served path — wiring census 81/81"
 
-    The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 81 census rows launch the shipped binary** and **69 of 81 are proved through the production-assembled handler**.
+    The Definition-of-Done census reports **81/81 required capabilities served**: **12 of 84 census rows launch the shipped binary** and **72 of 84 are proved through the production-assembled handler**.
     Production-assembled means production `buildRunDeps` output driving the assembled `Server.Handler` in-process, with a hand-built `Deps` rejected; only the process launch differs.
     Independently proof-gated capability rows used by this journey (all `required`, all `served`): `k8s_posture_routes.certificate_signing_requests`, `k8s_posture_routes.trust_bundles`, `pqc_end_to_end.multikey_spiffe_hybrid_svid`.
     Core surfaces guarded by route and journey tests: `spiffe_workload_api`, `kubernetes_operator`, `workload_identity_inventory`.

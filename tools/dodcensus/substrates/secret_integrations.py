@@ -557,6 +557,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/dod/readback":
             self._readback(parsed)
             return
+        if self.state.entry_id == "secret_sync.netlify" and parsed.path.startswith("/api/v1/accounts/"):
+            _netlify_get_impl(self, parsed)
+            return
         if parsed.path == "/dod/sync-state":
             self._sync_state(parsed)
             return
@@ -871,6 +874,12 @@ class Handler(BaseHTTPRequestHandler):
             self._terraform_sync(method, parsed, body)
         elif entry == "secrets_residuals.vault_kv_outbound_sync":
             self._vault_sync(method, parsed.path, body)
+        elif entry == "secret_sync.webhook":
+            self._webhook_sync(body)
+        elif entry == "secret_sync.aws_parameter_store":
+            self._parameter_store_sync(parsed, body)
+        elif entry == "secret_sync.netlify":
+            self._netlify_sync(method, parsed, body)
         else:
             self.send_body(404)
 
@@ -1239,6 +1248,88 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(body); key = payload["metadata"]["name"]; self.state.values[key] = base64.b64decode(payload["data"]["value"]); self.state.synced = True; self.send_body(201)
         else:
             self.send_body(404)
+
+
+# A202-L2: the signed webhook, Parameter Store and Netlify targets.
+WEBHOOK_SIGNING_KEY = b"dod-webhook-signing-key"
+WEBHOOK_MAX_SKEW_SECONDS = 300
+
+
+def _webhook_sync_impl(handler, body: bytes) -> None:
+    timestamp = handler.headers.get("X-Trstctl-Timestamp", "")
+    signature = handler.headers.get("X-Trstctl-Signature", "")
+    delivery = handler.headers.get("X-Trstctl-Delivery", "")
+    if not timestamp.isdigit() or abs(time.time() - int(timestamp)) > WEBHOOK_MAX_SKEW_SECONDS or not delivery:
+        handler.send_body(401); return
+    expected = "sha256=" + hmac.new(WEBHOOK_SIGNING_KEY, timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        handler.send_body(401); return
+    payload = json.loads(body)
+    if payload.get("delivery") != delivery:
+        handler.send_body(400); return
+    handler.state.values[payload["name"]] = payload["value"].encode()
+    handler.state.synced = True
+    handler.send_body(200)
+
+
+def _parameter_store_sync_impl(handler, parsed, body: bytes) -> None:
+    if (not handler._verify_sigv4(parsed, body, "AKIADODSSM", "dod-aws-ssm-secret", "us-east-1", "ssm", ("content-type", "x-amz-target"))
+            or handler.headers.get("Content-Type") != "application/x-amz-json-1.1"
+            or handler.headers.get("X-Amz-Target") != "AmazonSSM.PutParameter"):
+        handler.send_body(401); return
+    payload = json.loads(body)
+    name = payload.get("Name", "")
+    if not name.startswith("/") or payload.get("Type") != "SecureString" or payload.get("Overwrite") is not True:
+        handler.send_body(400, b'{"__type":"ValidationException"}'); return
+    key = name[1:]
+    handler.state.values[key] = payload.get("Value", "").encode()
+    handler.state.sync_versions[key] = handler.state.sync_versions.get(key, 0) + 1
+    handler.state.synced = True
+    handler.send_body(200, json.dumps({"Version": handler.state.sync_versions[key], "Tier": "Standard"}).encode(), "application/x-amz-json-1.1")
+
+
+def _netlify_sync_impl(handler, method: str, parsed, body: bytes) -> None:
+    collection = "/api/v1/accounts/dod-team/env"
+    if (handler.headers.get("Authorization") != "Bearer dod-netlify-token"
+            or parse_qs(parsed.query).get("site_id", [""])[0] != "dod-site"):
+        handler.send_body(401); return
+    if method == "POST" and parsed.path == collection:
+        items = json.loads(body)
+        for item in items:
+            values = item.get("values") or []
+            if item.get("is_secret") is not True or len(values) != 1 or values[0].get("context") != "production":
+                handler.send_body(422); return
+            handler.state.values[item["key"]] = values[0]["value"].encode()
+        handler.state.synced = True
+        handler.send_body(201, json.dumps(items).encode()); return
+    if method == "PATCH" and parsed.path.startswith(collection + "/"):
+        key = unquote(parsed.path[len(collection) + 1:])
+        if key not in handler.state.values:
+            handler.send_body(404); return
+        payload = json.loads(body)
+        if payload.get("context") != "production":
+            handler.send_body(422); return
+        handler.state.values[key] = payload["value"].encode()
+        handler.state.synced = True
+        handler.send_body(200); return
+    handler.send_body(404)
+
+
+def _netlify_get_impl(handler, parsed) -> None:
+    collection = "/api/v1/accounts/dod-team/env/"
+    if (handler.headers.get("Authorization") != "Bearer dod-netlify-token"
+            or parse_qs(parsed.query).get("site_id", [""])[0] != "dod-site" or not parsed.path.startswith(collection)):
+        handler.send_body(401); return
+    key = unquote(parsed.path[len(collection):])
+    if key not in handler.state.values:
+        handler.send_body(404, b'{"code":404,"message":"Not Found"}'); return
+    # A secret's value is never echoed back by the API.
+    handler.send_body(200, json.dumps({"key": key, "is_secret": True, "values": [{"context": "production"}]}).encode())
+
+
+Handler._webhook_sync = lambda self, body: _webhook_sync_impl(self, body)  # type: ignore[attr-defined]
+Handler._parameter_store_sync = lambda self, parsed, body: _parameter_store_sync_impl(self, parsed, body)  # type: ignore[attr-defined]
+Handler._netlify_sync = lambda self, method, parsed, body: _netlify_sync_impl(self, method, parsed, body)  # type: ignore[attr-defined]
 
 
 def serve() -> int:

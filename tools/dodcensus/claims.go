@@ -159,7 +159,7 @@ func validateReadmeCensusClaims(failures *claimFailureSet, manifest Manifest, re
 		"connector":      24,
 		"external_ca":    14,
 		"dynamic_secret": 8,
-		"secret_sync":    10,
+		"secret_sync":    13,
 		"hsm_kms":        6,
 	}
 	labels := map[string]string{ // #nosec G101 -- developer-tool constant matching the secret-name heuristic; no credential value (CWE-798)

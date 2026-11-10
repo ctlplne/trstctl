@@ -20,7 +20,9 @@ func TestSecretIntegrationManifestMatchesProductionAssemblyAndRuntimeBinding(t *
 		t.Fatal(err)
 	}
 	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
-	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 9}
+	// A202-L2: the signed webhook, Parameter Store and Netlify targets joined
+	// the nine (registry + provider catalog).
+	wantByCapability := map[string]int{"dynamic_secret": 9, "secret_sync": 12}
 	seen := map[string]int{}
 	for _, entry := range manifest.Entries {
 		if _, ok := wantByCapability[entry.Capability]; !ok {

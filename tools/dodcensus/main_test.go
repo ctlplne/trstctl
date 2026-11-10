@@ -1125,8 +1125,9 @@ func TestManifestIsVersionedGranularAndCoversEveryDoDCard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load committed manifest: %v", err)
 	}
-	if len(manifest.Entries) != 81 {
-		t.Fatalf("manifest entries = %d, want one exact row for each of the 81 DoD-gated backlog cards", len(manifest.Entries))
+	// A202-L2 added WIRE-SYNC-109..111 (signed webhook, Parameter Store, Netlify).
+	if len(manifest.Entries) != 84 {
+		t.Fatalf("manifest entries = %d, want one exact row for each of the 84 DoD-gated backlog cards", len(manifest.Entries))
 	}
 	seen := map[string]bool{}
 	for _, entry := range manifest.Entries {
@@ -1135,7 +1136,7 @@ func TestManifestIsVersionedGranularAndCoversEveryDoDCard(t *testing.T) {
 		}
 		seen[entry.CardID] = true
 	}
-	for _, card := range []string{"WIRE-CONN-000", "WIRE-CONN-124", "WIRE-EXTCA-114", "WIRE-DYNSEC-108", "WIRE-SYNC-108", "WIRE-HSM-106", "WIRE-CODESIGN-001", "WIRE-RIGHTSIZE-001", "WIRE-K8SDESC-102"} {
+	for _, card := range []string{"WIRE-CONN-000", "WIRE-CONN-124", "WIRE-EXTCA-114", "WIRE-DYNSEC-108", "WIRE-SYNC-108", "WIRE-SYNC-111", "WIRE-HSM-106", "WIRE-CODESIGN-001", "WIRE-RIGHTSIZE-001", "WIRE-K8SDESC-102"} {
 		if !seen[card] {
 			t.Errorf("manifest missing %s", card)
 		}

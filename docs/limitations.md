@@ -220,8 +220,8 @@ statusless.
 The served denominators quoted in the README and on this page are checked against the
 repo-native census gate (`tools/dodcensus/manifest.json` in the repository) (`make dod-gate` emits the
 local `wiring-census.json` receipt). Proof modes are not uniform:
-**12 of 81 census rows launch the shipped binary**;
-**69 of 81 are proved through the production-assembled handler** — the production
+**12 of 84 census rows launch the shipped binary**;
+**72 of 84 are proved through the production-assembled handler** — the production
 `buildRunDeps` output driving the assembled `Server.Handler` in-process, with a
 hand-built `Deps` rejected. Only the process launch differs, so each served row names
 the mode that proved it. This vocabulary is for maintainers and auditors; a customer

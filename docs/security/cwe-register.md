@@ -2602,7 +2602,7 @@ not this file.
 | `tools/dodcensus/main_test.go:634` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/main_test.go:657` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/main_test.go:706` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/main_test.go:1179` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/dodcensus/main_test.go:1180` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_closure.go:56` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:149` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:214` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2641,8 +2641,8 @@ not this file.
 | `tools/dodcensus/runtime_runner_test.go:535` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:589` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:593` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/secret_integrations_manifest_test.go:124` | test reads the exact committed substrate source (CWE-22) |
-| `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
+| `tools/dodcensus/secret_integrations_manifest_test.go:126` | test reads the exact committed substrate source (CWE-22) |
+| `tools/dodcensus/secret_integrations_manifest_test.go:158` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/dodcensus/shard.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/shard.go:198` | developer tool reading the shard receipts it is pointed at (CWE-22) |
 | `tools/editionledger/main.go:43` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -3112,7 +3112,7 @@ not this file.
 | `tools/dodcensus/main_test.go:644` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:667` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/main_test.go:721` | test path inside its own tempdir/checkout (CWE-22) |
-| `tools/dodcensus/main_test.go:1481` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/dodcensus/main_test.go:1482` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:222` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:302` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/managed_key_manifest_test.go:436` | test path inside its own tempdir/checkout (CWE-22) |

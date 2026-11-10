@@ -162,9 +162,26 @@ func TestDODSecretSyncProductionAssembly(t *testing.T) {
 		"secret_sync.azure_key_vault", "secret_sync.github_actions", "secret_sync.gitlab_ci",
 		"secret_sync.vercel", "secret_sync.generic_ci_json", "secret_sync.kubernetes_secrets",
 		"secrets_residuals.terraform_opentofu_native_sync", "secrets_residuals.vault_kv_outbound_sync",
+		"secret_sync.webhook", "secret_sync.aws_parameter_store", "secret_sync.netlify",
 	)
 	if only == "" {
 		dodRunAllSecretSyncProductionAssembly(t)
+		return
+	}
+	// A202-L2: the signed webhook, Parameter Store and Netlify targets.
+	if only == "secret_sync.webhook" {
+		external := proof.StartCommand(t, "secret_sync.webhook")
+		dodRunFocusedSecretSync(t, "secret_sync.webhook", external, dodSecretIntegrationTarget{"secret_sync.webhook", "webhook", "webhook"})
+		return
+	}
+	if only == "secret_sync.aws_parameter_store" {
+		external := proof.StartCommand(t, "secret_sync.aws_parameter_store")
+		dodRunFocusedSecretSync(t, "secret_sync.aws_parameter_store", external, dodSecretIntegrationTarget{"secret_sync.aws_parameter_store", "aws-parameter-store", "aws-ssm"})
+		return
+	}
+	if only == "secret_sync.netlify" {
+		external := proof.StartCommand(t, "secret_sync.netlify")
+		dodRunFocusedSecretSync(t, "secret_sync.netlify", external, dodSecretIntegrationTarget{"secret_sync.netlify", "netlify", "netlify"})
 		return
 	}
 	if only == "secret_sync.registry" {
@@ -465,6 +482,9 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncKubernetes := proof.StartCommand(t, "secret_sync.kubernetes_secrets")
 	syncTerraform := proof.StartCommand(t, "secrets_residuals.terraform_opentofu_native_sync")
 	syncVault := proof.StartCommand(t, "secrets_residuals.vault_kv_outbound_sync")
+	syncWebhook := proof.StartCommand(t, "secret_sync.webhook")
+	syncParameterStore := proof.StartCommand(t, "secret_sync.aws_parameter_store")
+	syncNetlify := proof.StartCommand(t, "secret_sync.netlify")
 
 	syncRegistryEndpoint := dodParentSubstrateLoopbackBridge(t, syncRegistry.Endpoint())
 	syncAWSEndpoint := dodParentSubstrateLoopbackBridge(t, syncAWS.Endpoint())
@@ -477,6 +497,9 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	syncKubernetesEndpoint := dodParentSubstrateLoopbackBridge(t, syncKubernetes.Endpoint())
 	syncTerraformEndpoint := dodParentSubstrateLoopbackBridge(t, syncTerraform.Endpoint())
 	syncVaultEndpoint := dodParentSubstrateLoopbackBridge(t, syncVault.Endpoint())
+	syncWebhookEndpoint := dodParentSubstrateLoopbackBridge(t, syncWebhook.Endpoint())
+	syncParameterStoreEndpoint := dodParentSubstrateLoopbackBridge(t, syncParameterStore.Endpoint())
+	syncNetlifyEndpoint := dodParentSubstrateLoopbackBridge(t, syncNetlify.Endpoint())
 
 	secretDir := t.TempDir()
 	fileRef := func(name string, value []byte) string { return dodSecretIntegrationFile(t, secretDir, name, value) }
@@ -501,6 +524,9 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes-secrets", Type: "kubernetes-secrets", Endpoint: syncKubernetesEndpoint, Namespace: "apps", TokenRef: fileRef("kubernetes-sync-token", []byte("dod-k8s-sync-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "terraform-cloud-opentofu", Type: "terraform-cloud-opentofu", Endpoint: syncTerraformEndpoint, WorkspaceID: "ws-dod-opentofu", VariableCategory: "env", Description: "DOD managed variable", TokenRef: fileRef("terraform-sync-token", []byte("dod-terraform-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 		{TenantID: dodSecretIntegrationTenant, ID: "vault-kv-v2", Type: "vault-kv-v2", Endpoint: syncVaultEndpoint, Mount: "team-secrets", PathPrefix: "apps", Field: "value", VaultNamespace: "platform/team-a", TokenRef: fileRef("vault-sync-token", []byte("dod-vault-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "webhook", Type: "webhook", Endpoint: syncWebhookEndpoint, SigningKeyRef: fileRef("webhook-signing-key", []byte("dod-webhook-signing-key")), BodyTemplate: dodWebhookBodyTemplate, AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "aws-parameter-store", Type: "aws-parameter-store", Endpoint: syncParameterStoreEndpoint, Region: "us-east-1", AccessKeyID: "AKIADODSSM", SecretAccessRef: fileRef("aws-ssm-secret", []byte("dod-aws-ssm-secret")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
+		{TenantID: dodSecretIntegrationTenant, ID: "netlify", Type: "netlify", Endpoint: syncNetlifyEndpoint + "/api/v1", AccountID: "dod-team", SiteID: "dod-site", DeployContext: "production", TokenRef: fileRef("netlify-token", []byte("dod-netlify-token")), AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("secret integration production config: %v", err)
@@ -554,7 +580,15 @@ func dodRunAllSecretSyncProductionAssembly(t *testing.T) {
 	dodProveSecretSync(t, "secret_sync.kubernetes_secrets", syncKubernetes, srv, token, dodSecretIntegrationTarget{"secret_sync.kubernetes_secrets", "kubernetes-secrets", "kubernetes"}, sourceValue)
 	dodProveSecretSync(t, "secrets_residuals.terraform_opentofu_native_sync", syncTerraform, srv, token, dodSecretIntegrationTarget{"secrets_residuals.terraform_opentofu_native_sync", "terraform-cloud-opentofu", "terraform"}, sourceValue)
 	dodProveSecretSync(t, "secrets_residuals.vault_kv_outbound_sync", syncVault, srv, token, dodSecretIntegrationTarget{"secrets_residuals.vault_kv_outbound_sync", "vault-kv-v2", "vault"}, sourceValue)
+	dodProveSecretSync(t, "secret_sync.webhook", syncWebhook, srv, token, dodSecretIntegrationTarget{"secret_sync.webhook", "webhook", "webhook"}, sourceValue)
+	dodProveSecretSync(t, "secret_sync.aws_parameter_store", syncParameterStore, srv, token, dodSecretIntegrationTarget{"secret_sync.aws_parameter_store", "aws-parameter-store", "aws-ssm"}, sourceValue)
+	dodProveSecretSync(t, "secret_sync.netlify", syncNetlify, srv, token, dodSecretIntegrationTarget{"secret_sync.netlify", "netlify", "netlify"}, sourceValue)
 }
+
+// dodWebhookBodyTemplate is the signed webhook target's body (A202-L2): the
+// emulator checks the HMAC over timestamp and body, then reads the value
+// back under its name.
+const dodWebhookBodyTemplate = `{"name":"${key}","value":"${value}","delivery":"${delivery_id}","at":${timestamp}}`
 
 func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.ExternalSubstrate, target dodSecretIntegrationTarget) {
 	t.Helper()
@@ -609,6 +643,16 @@ func dodRunFocusedSecretSync(t *testing.T, entryID string, external *proof.Exter
 		base.Type, base.Mount, base.PathPrefix, base.Field = "vault-kv-v2", "team-secrets", "apps", "value"
 		base.VaultNamespace = "platform/team-a"
 		base.TokenRef = fileRef("vault-sync-token", []byte("dod-vault-token"))
+	case "secret_sync.webhook":
+		base.Type = "webhook"
+		base.SigningKeyRef = fileRef("webhook-signing-key", []byte("dod-webhook-signing-key"))
+		base.BodyTemplate = dodWebhookBodyTemplate
+	case "secret_sync.aws_parameter_store":
+		base.Type, base.Region, base.AccessKeyID = "aws-parameter-store", "us-east-1", "AKIADODSSM"
+		base.SecretAccessRef = fileRef("aws-ssm-secret", []byte("dod-aws-ssm-secret"))
+	case "secret_sync.netlify":
+		base.Type, base.Endpoint, base.AccountID, base.SiteID, base.DeployContext = "netlify", endpoint+"/api/v1", "dod-team", "dod-site", "production"
+		base.TokenRef = fileRef("netlify-token", []byte("dod-netlify-token"))
 	default:
 		t.Fatalf("focused secret-sync proof has no configuration for %q", entryID)
 	}
