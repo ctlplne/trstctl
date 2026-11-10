@@ -139,6 +139,24 @@ describe("certificate application view (A244)", () => {
     expect(section.getByText("Nothing observes this destination yet, so the new certificate will read as delivered, not seen in use")).toBeInTheDocument();
   });
 
+  it("names the identity's own certificate details when they changed under an approval (A245-L5)", async () => {
+    const view = fixture();
+    view.approvals = [
+      {
+        id: "ap-2",
+        status: "superseded",
+        action: "issue",
+        created_at: "2030-01-01T08:00:00Z",
+        expires_at: "2030-01-02T08:00:00Z",
+        changed: ["identity"],
+      },
+    ];
+    read.mockResolvedValue(view);
+    show();
+    const section = within(await screen.findByRole("region", { name: "Application view" }));
+    expect(await section.findByText(/Changed since it was asked: certificate details \(names, key algorithm or request\)\./)).toBeInTheDocument();
+  });
+
   it("refuses an answer for a different identity", async () => {
     const view = fixture();
     view.identity = { ...view.identity, id: "someone-else" };

@@ -35792,6 +35792,10 @@ export const messages = {
   "identities.application.changed.profile": { defaultMessage: "profile", description: "Application view of one certificate in identity detail." },
   "identities.application.changed.destination": { defaultMessage: "destination", description: "Application view of one certificate in identity detail." },
   "identities.application.changed.issuer": { defaultMessage: "issuing CA", description: "Application view of one certificate in identity detail." },
+  "identities.application.changed.identity": {
+    defaultMessage: "certificate details (names, key algorithm or request)",
+    description: "Application view of one certificate in identity detail: what the identity itself puts into the certificate changed under an approval.",
+  },
   "identities.application.enrollment": {
     defaultMessage: "Enrollment methods: {methods}",
     description: "Application view of one certificate in identity detail.",

@@ -19108,7 +19108,7 @@ export interface components {
             }[];
             approvals: {
                 action: string;
-                changed: ("profile" | "destination" | "issuer")[];
+                changed: ("profile" | "destination" | "issuer" | "identity")[];
                 /** Format: date-time */
                 created_at: string;
                 /** Format: date-time */

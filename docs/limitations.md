@@ -7614,11 +7614,16 @@ a stranded or quarantined command reads uncertain. Each operation opens to its
 causal chain and the retry and rollback that apply to exactly it. The revocation
 report separates CA status, deployed material, new-connection rejection and
 existing-session termination. Issuance approvals bind the issuer (the platform
-CA when none is named), destination and profile version. Proven in served
+CA when none is named), destination and profile version, and a digest of what
+the identity itself puts into the certificate (its name, attributes such as the
+requester's CSR and the subject key algorithm, and its validity window; not its
+owner). Proven in served
 journeys: a partial failure (one delivery succeeds, one fails) reads the same
 through the API before and after a cold restart and through the CLI; an old
 approval is superseded by an issuer change and refused after a new profile
-version (A244 proved the destination). What it reads from, and what comes next:
+version (A244 proved the destination), and by a subject key algorithm set on the
+same destination and issuer, while an ownership reassignment leaves a fresh
+approval standing (A245-L5). What it reads from, and what comes next:
 
 - **Four sources.** Host and relay job executions, SSH certificate and session
   revocations, and managed-key operations are not in the ledger yet; adding them

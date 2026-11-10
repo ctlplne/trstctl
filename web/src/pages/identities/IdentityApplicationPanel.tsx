@@ -45,6 +45,7 @@ const changeCopy = {
   profile: "identities.application.changed.profile",
   destination: "identities.application.changed.destination",
   issuer: "identities.application.changed.issuer",
+  identity: "identities.application.changed.identity",
 } as const;
 
 const verifyCopy = {

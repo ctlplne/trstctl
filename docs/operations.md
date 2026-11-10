@@ -110,7 +110,15 @@ present it) and existing sessions (a containment stop after the revocation).
 An issuance approval binds the identity's destination and revision, its issuer
 — the platform CA when the identity names none — and the profile version and
 spec digest, so an old approval never authorizes a changed issuer, target or
-profile version.
+profile version. It also binds a digest of what the identity itself puts into
+the certificate: its kind, name, issuer, validity window and attributes (the
+requester's CSR, the subject names, the subject key algorithm, the reviewed
+endpoint preview and the rest). A first issuance is the identity's first
+lifecycle transition, so its lifecycle version cannot carry this: when any of
+these change, the approval is superseded when it is decided or used, and the
+application view names the identity as what changed. An identity event that
+changes none of them, such as an ownership reassignment, leaves the approval
+standing.
 
 ## Deployment health (A246)
 

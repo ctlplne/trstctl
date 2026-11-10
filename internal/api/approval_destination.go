@@ -14,8 +14,10 @@ import (
 
 // bindApprovalDestination adds the identity's destination — its deployment
 // target and that target's configuration revision — and its issuing authority
-// to an issuance binding (A244). They become evidence refs under the
-// approval's intent digest, so a target edit, a rebinding or another issuer
+// to an issuance binding (A244), and the digest of what the identity itself
+// puts into the certificate (A245-L5). They become evidence refs under the
+// approval's intent digest, so a target edit, a rebinding, another issuer or
+// a changed subject request, name, key algorithm or reviewed preview
 // supersedes the approval when it is decided or used.
 func (a *API) bindApprovalDestination(ctx context.Context, tenantID string, identity store.Identity, b *store.OperationApprovalIssuanceBinding) error {
 	var attrs struct {
@@ -43,6 +45,11 @@ func (a *API) bindApprovalDestination(ctx context.Context, tenantID string, iden
 	if source := strings.TrimSpace(attrs.Source); source != "" {
 		b.IssuerSource, b.IssuerID = source, strings.TrimSpace(attrs.Issuer)
 	}
+	digest, err := store.IdentityIssuanceDigest(identity)
+	if err != nil {
+		return err
+	}
+	b.IdentityDigest = digest
 	return nil
 }
 

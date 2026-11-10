@@ -580,6 +580,18 @@
 
 ### Fixed
 
+- An issuance approval no longer outlives a change to what the identity puts into the certificate
+  (A245-L5). An approval bound the identity's lifecycle version, which is 0 for every first
+  issuance and never moves on an attribute edit, so an approval asked for one subject key could
+  issue another: rebinding the same destination and CA with a post-quantum subject key algorithm
+  left it standing. It now also binds a digest of the identity's kind, name, issuer, validity
+  window and attributes (the requester's CSR, subject names, subject key algorithm, reviewed
+  preview and the rest; not the owner, the renewal pause, or the destination and CA attributes
+  bound on their own). A change supersedes the approval when it is decided or used, and the
+  application view names "certificate details" as what changed; an ownership reassignment leaves
+  it standing. The application view's profile is now the one issuance resolves (the identity's,
+  the one retained from its first issuance, else the served default): reading the identity's
+  attribute alone said every approval under the served default had a changed profile.
 - A managed key generated in a PKCS#11 HSM can only sign (P9-L4). The key-pair template left the
   token's defaults for the other uses, so SoftHSM made the private key usable to decrypt and unwrap
   and the public key to encrypt and wrap. The template now sets those uses false, and a SoftHSM

@@ -1182,7 +1182,7 @@ not this file.
 | `internal/store/migration_run.go:245` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/migration_run.go:278` | positive bigint constrained by migration (CWE-190) |
 | `internal/store/offboard_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/store/operation_approvals.go:285` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
+| `internal/store/operation_approvals.go:298` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/outbox_reconciliation_conflicts.go:76` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190). |
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |

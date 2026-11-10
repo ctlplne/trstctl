@@ -27356,7 +27356,8 @@
                     "enum": [
                       "profile",
                       "destination",
-                      "issuer"
+                      "issuer",
+                      "identity"
                     ],
                     "type": "string"
                   },

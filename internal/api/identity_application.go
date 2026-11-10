@@ -5,12 +5,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -132,7 +134,8 @@ type applicationApproval struct {
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	// Changed names what moved since the approval was asked for: profile,
-	// destination or issuer; empty when none did.
+	// destination, issuer or identity (what the identity itself puts into
+	// the certificate, A245-L5); empty when none did.
 	Changed []string `json:"changed"`
 }
 
@@ -236,14 +239,33 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 			return identityApplicationView{}, err
 		}
 	}
-	if attrs.Profile != "" {
-		if rec, err := a.store.GetActiveProfile(ctx, tenantID, attrs.Profile); err == nil {
+	profileName := attrs.Profile
+	if a.orch != nil {
+		// The profile the next issuance applies, resolved as issuance resolves
+		// it: the identity's own, the one retained from its first issuance,
+		// else the served default. An issuance approval binds that profile, so
+		// it is what "changed" compares with; reading the identity's attribute
+		// alone said every approval under the served default had a changed
+		// profile (found with A245-L5).
+		requirement, err := a.issuanceProfileRequirement(ctx, tenantID, id, a.gate.Profile)
+		var notActive *orchestrator.ProfileNotActiveError
+		switch {
+		case err == nil:
+			profileName = requirement.ProfileName
+		case errors.As(err, &notActive):
+			profileName = ""
+		default:
+			return identityApplicationView{}, err
+		}
+	}
+	if profileName != "" {
+		if rec, err := a.store.GetActiveProfile(ctx, tenantID, profileName); err == nil {
 			var spec struct {
 				RequiresApproval bool     `json:"requires_approval"`
 				AllowedProtocols []string `json:"allowed_protocols"`
 			}
 			_ = json.Unmarshal(rec.Spec, &spec)
-			view.Profile = &applicationProfile{Name: attrs.Profile, Version: rec.Version,
+			view.Profile = &applicationProfile{Name: profileName, Version: rec.Version,
 				SpecDigest: store.ProfileSpecDigest(rec.Spec), RequiresApproval: spec.RequiresApproval,
 				EnrollmentMethods: append([]string{}, spec.AllowedProtocols...)}
 		} else if !store.IsNotFound(err) {
@@ -296,9 +318,13 @@ func (a *API) identityApplicationView(ctx context.Context, tenantID, id string) 
 	if err != nil {
 		return identityApplicationView{}, err
 	}
+	identityDigest, err := store.IdentityIssuanceDigest(identity)
+	if err != nil {
+		return identityApplicationView{}, err
+	}
 	for _, request := range approvals {
 		view.Approvals = append(view.Approvals, applicationApproval{ID: request.ID, Status: request.Status, Action: request.Action,
-			CreatedAt: request.CreatedAt, ExpiresAt: request.ExpiresAt, Changed: approvalChanges(request, view)})
+			CreatedAt: request.CreatedAt, ExpiresAt: request.ExpiresAt, Changed: approvalChanges(request, view, identityDigest)})
 	}
 	if a.lifecycleAutomationPlan != nil {
 		plan, err := a.lifecycleAutomationPlan.LifecycleAutomationPlan(ctx, tenantID, time.Now().UTC())
@@ -360,8 +386,9 @@ func applicationReviewPlan(status string, view identityApplicationView) []applic
 
 // approvalChanges names what moved since an approval was asked for, read
 // from its evidence: the profile revision, the destination (target or its
-// revision) and the issuer.
-func approvalChanges(request store.OperationApprovalRequest, view identityApplicationView) []string {
+// revision), the issuer, and what the identity itself puts into the
+// certificate (identityDigest is its IdentityIssuanceDigest now).
+func approvalChanges(request store.OperationApprovalRequest, view identityApplicationView, identityDigest string) []string {
 	changed := []string{}
 	use, err := store.OperationApprovalUseFromRequest(request)
 	if err != nil || use.Issuance == nil {
@@ -377,6 +404,9 @@ func approvalChanges(request store.OperationApprovalRequest, view identityApplic
 	}
 	if b.IssuerSource != "" && (view.Issuer.Source != b.IssuerSource || view.Issuer.ID != b.IssuerID) {
 		changed = append(changed, "issuer")
+	}
+	if b.IdentityDigest != "" && b.IdentityDigest != identityDigest {
+		changed = append(changed, "identity")
 	}
 	return changed
 }
@@ -469,7 +499,7 @@ func identityApplicationSchemas() map[string]*Schema {
 			}, "fingerprint", "vantage", "matches_current"),
 			"approvals": {Type: "array", Items: object(map[string]*Schema{
 				"id": uuid(), "status": str(), "action": str(), "created_at": timestamp(), "expires_at": timestamp(),
-				"changed": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"profile", "destination", "issuer"}}},
+				"changed": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"profile", "destination", "issuer", "identity"}}},
 			}, "id", "status", "action", "created_at", "expires_at", "changed")},
 			"renewal": object(map[string]*Schema{
 				"due": {Type: "boolean"}, "not_after": timestamp(), "source": str(), "next_action": str(),
