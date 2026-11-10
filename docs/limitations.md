@@ -9162,7 +9162,11 @@ cannot reveal or check it in; the reveal returns the account's current credentia
 in) once, a second reveal is refused, and the audit record names the check-out without the
 credential; checking in rotates the account and the database refuses the revealed credential;
 a second check-out not checked in is untouched before its deadline and rotated after it, its
-revealed credential refused too. The console's access page lists check-outs, requests one for a
+revealed credential refused too. `TestServedMySQLCheckoutRevealsOnceAndRotatesA261L3` proves
+the same on MySQL (A261-L3), whose rotation mints a new account: a check-out is refused until
+the account's first rotation, which replaces the seeded account; the revealed credential signs
+in once shown, checking in rotates the account and MySQL refuses the revealed credential, and
+the next check-out shows the successor, which signs in. The console's access page lists check-outs, requests one for a
 vaulted account, reveals the approved credential once in a dialog that forgets it when closed
 and checks in the caller's own (component tests, axe clean). CLI: `access checkouts
 request|reveal|checkin|list|get`.

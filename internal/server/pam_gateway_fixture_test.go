@@ -59,6 +59,9 @@ type gatewayFixture struct {
 	requester, reviewerOne, reviewerTwo, operator, auditor string
 	// vaultDSN is the vaulted account's starting DSN (opts.vaulted).
 	vaultDSN string
+	// mysqlVaultDSN is the vaulted MySQL account's starting DSN
+	// (opts.mysqlVaulted).
+	mysqlVaultDSN string
 }
 
 type gatewayFixtureOptions struct {
@@ -69,6 +72,10 @@ type gatewayFixtureOptions struct {
 	recordingRetention time.Duration
 	// redis adds the Redis target "redis-gw" (A256), bound to the gateway.
 	redis bool
+	// mysqlVaulted (A261-L3) also seeds a vaulted MySQL account and adds the
+	// provider "pam-mysql-vault" that rotates it; mysqlVaultDSN is its
+	// starting DSN. It starts the MySQL target as mysqlNote does.
+	mysqlVaulted bool
 	// mysqlNote adds the MySQL target "mysql-gw" (A256), bound to the
 	// gateway, its app.notes table holding this note.
 	mysqlNote string
@@ -123,8 +130,11 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	if opts.redis {
 		f.redisID, redisProviders = startPAMRedis(t)
 	}
+	if opts.mysqlVaulted && opts.mysqlNote == "" {
+		opts.mysqlNote = "a261-mysql-vault"
+	}
 	if opts.mysqlNote != "" {
-		f.mysqlID, mysqlProviders = startPAMMySQL(t, opts.mysqlNote)
+		f.mysqlID, f.mysqlVaultDSN, mysqlProviders = startPAMMySQLWithVault(t, opts.mysqlNote, opts.mysqlVaulted)
 	}
 	if opts.mongoNote != "" {
 		f.mongoID, mongoProviders = startPAMMongo(t, opts.mongoNote)
@@ -156,6 +166,9 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 		}
 		d.Protocols.SSH = config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
 		wirePAMPostgresProvider(d, adminDSNRef, time.Minute)
+		if opts.mysqlVaulted {
+			d.EnableSecretsAPI = true
+		}
 		if opts.vaulted {
 			d.EnableSecretsAPI = true
 			vault := config.DynamicSecretProviderConfig{TenantID: servedTestTenant, ID: "pam-pg-vault", Type: "postgresql",

@@ -17,10 +17,23 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mysqlsignin"
 )
 
-// startPAMMySQL runs the pinned MySQL image with an "app" database holding a
-// note, and returns its container and a provider of per-session accounts in
-// the "mysql-reader" role (SELECT on app).
-func startPAMMySQL(t *testing.T, note string) (string, DynamicSecretProviderRegistry) {
+// The vaulted MySQL account (A261-L3): provider "pam-mysql-vault" rotates the
+// role mysql-vault's stored account as a static credential, minting a
+// successor account and dropping the one it replaces. The first account is
+// seeded under the provider's own name shape, so the first rotation may drop
+// it as it drops every account it minted.
+const (
+	mysqlVaultRole     = "mysql-vault"
+	mysqlVaultPrefix   = "a261vault"
+	mysqlVaultSeedUser = "a261vault_seed_00000a2610"
+)
+
+// startPAMMySQLWithVault runs the pinned MySQL image with an "app" database
+// holding a note, and returns its container and a provider of per-session
+// accounts in the "mysql-reader" role (SELECT on app). With vault it also
+// seeds the vaulted account, adds the provider that rotates it, and returns
+// that account's starting DSN.
+func startPAMMySQLWithVault(t *testing.T, note string, vault bool) (string, string, DynamicSecretProviderRegistry) {
 	t.Helper()
 	if out, err := exec.Command("docker", "image", "inspect", a201MySQLImage).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 		t.Skipf("the pinned image %s is not present locally: %v\n%s", a201MySQLImage, err, out)
@@ -37,16 +50,33 @@ func startPAMMySQL(t *testing.T, note string) (string, DynamicSecretProviderRegi
 		"CREATE TABLE notes (id INT PRIMARY KEY, note TEXT); INSERT INTO notes VALUES (1, '"+note+"');"); err != nil {
 		t.Fatalf("seed MySQL: %v %s", err, out)
 	}
-	registry, err := dynamicSecretProvidersFromConfig(context.Background(), []config.DynamicSecretProviderConfig{{
+	adminDSNRef := writeServedCredentialFile(t, "mysql-admin-dsn", "root:a256-admin@tcp("+addr+")/app?parseTime=true\n")
+	providers := []config.DynamicSecretProviderConfig{{
 		TenantID: servedTestTenant, ID: "pam-mysql-provider", Type: "mysql",
-		AdminDSNRef: writeServedCredentialFile(t, "mysql-admin-dsn", "root:a256-admin@tcp("+addr+")/app?parseTime=true\n"),
+		AdminDSNRef: adminDSNRef,
 		Database:    "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
 		AllowedRoles: []string{"mysql-reader"}, RoleAccess: map[string]string{"mysql-reader": "read"}, MaxTTL: "1h", UsernamePrefix: "a256_mysql",
-	}}, nil, nil, nil)
+	}}
+	vaultDSN := ""
+	if vault {
+		const seedPassword = "a261-seed-Pw-0d4f" // #nosec G101 -- fabricated test-only password for a throwaway MySQL container (CWE-798)
+		if out, err := a201Exec(id, "mysql", "--protocol=TCP", "-h", "127.0.0.1", "-uroot", "-pa256-admin", "-e",
+			"CREATE USER '"+mysqlVaultSeedUser+"'@'%' IDENTIFIED BY '"+seedPassword+"'; GRANT SELECT, INSERT, UPDATE, DELETE ON app.* TO '"+mysqlVaultSeedUser+"'@'%';"); err != nil {
+			t.Fatalf("seed the vaulted account: %v %s", err, out)
+		}
+		vaultDSN = mysqlVaultSeedUser + ":" + seedPassword + "@tcp(" + addr + ")/app"
+		providers = append(providers, config.DynamicSecretProviderConfig{
+			TenantID: servedTestTenant, ID: "pam-mysql-vault", Type: "mysql", AdminDSNRef: adminDSNRef,
+			Database: "app", Addr: addr, AccountHost: "%", AllowWildcardAccountHost: true,
+			AllowedRoles: []string{mysqlVaultRole}, RoleAccess: map[string]string{mysqlVaultRole: "readwrite"},
+			MaxTTL: "1h", UsernamePrefix: mysqlVaultPrefix, AllowStaticRotation: true,
+		})
+	}
+	registry, err := dynamicSecretProvidersFromConfig(context.Background(), providers, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id, registry
+	return id, vaultDSN, registry
 }
 
 var fixtureMySQLCommand = regexp.MustCompile(`mysql -h 127\.0\.0\.1 -P (\d+)`)
