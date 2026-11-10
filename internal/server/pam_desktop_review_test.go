@@ -28,7 +28,7 @@ func TestADDesktopBindingFreezesOnlyTheRequestedRole(t *testing.T) {
 	const first = "CN=first,OU=services,DC=example,DC=test"
 	const second = "CN=second,OU=services,DC=example,DC=test"
 	cfg := config.DynamicSecretProviderConfig{Type: "ldap", DirectoryMode: "active_directory", AllowStaticRotation: true, RoleBindings: map[string]string{"first": first, "second": second}, ADLogonNames: map[string]string{first: "first", second: "second"}, Desktop: &accessdesktop.Binding{Address: "desktop.example:3389", CertificateSHA256: strings.Repeat("ab", 32), Width: 800, Height: 600}}
-	p := newConfiguredDynamicProvider(cfg, map[string]bool{"first": true, "second": true}, time.Minute, integrationCredentialResolver{}, nil).(*configuredDynamicProvider)
+	p := configuredADProvider(t, newConfiguredDynamicProvider(cfg, map[string]bool{"first": true, "second": true}, time.Minute, integrationCredentialResolver{}, nil))
 	cfg.ADLogonNames[first] = "foreign"
 	a, err := p.DynamicSecretGatewayDesktop("first")
 	if err != nil || len(a.Accounts) != 1 || a.Accounts[0].Reference != first || a.Accounts[0].Username != "first" {
