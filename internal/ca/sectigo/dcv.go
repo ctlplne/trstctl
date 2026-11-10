@@ -50,6 +50,8 @@ func (b *backend) validateDomain(ctx context.Context, tenantID, domain string) (
 		return fmt.Errorf("sectigo: DCV status of %s: %w", domain, err)
 	}
 	if strings.EqualFold(status.Status, "VALIDATED") {
+		// A165-L2: SCM already held the domain validated; nothing was published.
+		ca.ObserveDomainValidation(ctx, b.dcv, tenantID, ca.DomainValidation{Identifier: domain, Reused: true})
 		return nil
 	}
 	var started struct {
@@ -81,6 +83,7 @@ func (b *backend) validateDomain(ctx context.Context, tenantID, domain string) (
 			return fmt.Errorf("sectigo: DCV status of %s: %w", domain, err)
 		}
 		if strings.EqualFold(status.Status, "VALIDATED") {
+			ca.ObserveDomainValidation(ctx, b.dcv, tenantID, ca.DomainValidation{Identifier: domain, Method: ca.DomainValidationMethodDNSTXT})
 			return nil
 		}
 		select {

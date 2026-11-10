@@ -105,6 +105,48 @@ func TestServedDigiCertDomainValidationCompletesUnattended(t *testing.T) {
 	if values, _ := dns.LookupTXT(context.Background(), "_dnsauth.app.dcv.test"); len(values) != 0 {
 		t.Fatalf("the DCV record is still published after issuance: %v", values)
 	}
+	// A165-L2: the validation is recorded like an upstream ACME authorization,
+	// as one this install earned by publishing the record (not a reuse) ...
+	auditor := seedScopedTokenSubject(t, h.store, h.tenant, "a165-dv-auditor", "audit:read")
+	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/audit/events?type=acme.dns01.upstream.authorization.observed&limit=10", auditor, nil)
+	var observedEvents struct {
+		Events []struct {
+			Data struct {
+				Identifier    string `json:"identifier"`
+				ChallengeType string `json:"challenge_type"`
+				Reused        bool   `json:"reused"`
+			} `json:"data"`
+		} `json:"events"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &observedEvents) != nil || len(observedEvents.Events) != 1 ||
+		observedEvents.Events[0].Data.Identifier != "app.dcv.test" || observedEvents.Events[0].Data.ChallengeType != "dns-txt" ||
+		observedEvents.Events[0].Data.Reused {
+		t.Fatalf("DigiCert's validation of app.dcv.test as an upstream authorization event = %d %s", status, raw)
+	}
+	// ... and the projection that keeps "last validated" apart from "last
+	// reused" takes it like an ACME authorization.
+	tailCtx, stopTail := context.WithTimeout(context.Background(), 20*time.Second)
+	defer stopTail()
+	go func() { _ = h.srv.tailWorker.Run(tailCtx) }()
+	var validated bool
+	for !validated && tailCtx.Err() == nil {
+		observed, err := h.store.ListACMEUpstreamAuthorizations(tailCtx, h.tenant)
+		if err != nil && tailCtx.Err() == nil {
+			t.Fatal(err)
+		}
+		for _, a := range observed {
+			if a.Identifier == "app.dcv.test" && a.ChallengeType == "dns-txt" && a.ValidateCount == 1 && a.ReuseCount == 0 && !a.LastValidatedAt.IsZero() {
+				validated = true
+			}
+		}
+		if !validated {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	stopTail()
+	if !validated {
+		t.Fatal("DigiCert's validation of app.dcv.test never reached the upstream authorization view")
+	}
 
 	// CAA that does not authorize DigiCert stops the publish.
 	dns.setCAA("caa.dcv.test", []acmesrv.CAARecord{{Tag: "issue", Value: "other-ca.example"}})

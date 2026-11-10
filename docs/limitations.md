@@ -7353,9 +7353,12 @@ SCM's TXT domain control validation for each name, publishes the record SCM
 names, submits it and waits for SCM to report it validated before enrolling. Both
 go through the same DNS-01 provider configs (`allow_upstream_dv`), the same CAA
 check against the authority's own identifier and the same retraction on every
-exit path. Proven against each vendor's protocol stand-in (the DigiCert path end
-to end through the served issue route and a webhook DNS provider); live vendor
-accounts are Track B.
+exit path. Each outcome is recorded like an upstream ACME authorization (A165-L2):
+a name validated through the published record as a `dns-txt` validation, and a
+name Sectigo already holds validated as a reuse, so the freshness panel below
+covers the vendors too. Proven against each vendor's protocol stand-in (the
+DigiCert path end to end through the served issue route and a webhook DNS
+provider); live vendor accounts are Track B.
 
 **A standing record instead of a challenge per order** (P1). An ACME authority
 configured with `upstream_dns_persist` (with `upstream_dns01`) prefers

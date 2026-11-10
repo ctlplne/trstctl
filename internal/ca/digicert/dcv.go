@@ -66,6 +66,10 @@ func (b *backend) validateDomains(ctx context.Context, tenantID string, orderID 
 			return fmt.Errorf("digicert: check DCV: %w", err)
 		}
 		if checked.DCVStatus == "complete" || checked.OrderStatus == "issued" {
+			// A165-L2: every name this order published for is validated now.
+			for name := range seen {
+				ca.ObserveDomainValidation(ctx, b.dcv, tenantID, ca.DomainValidation{Identifier: name, Method: ca.DomainValidationMethodDNSTXT})
+			}
 			return nil
 		}
 		select {

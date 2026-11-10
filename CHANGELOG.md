@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- DigiCert and Sectigo domain validations are recorded like upstream ACME authorizations
+  (A165-L2). The vendors' unattended DNS TXT validation left no record, so the upstream
+  authorization freshness view showed nothing for them. Each validated name is now recorded as a
+  `dns-txt` validation under the authority, and a name Sectigo already holds validated as a reuse.
 - A moved leaked secret's consumers can prove the rotation through the KV-compatible surface and
   secret sync (P6-L4). Only reads through the native store's routes counted as a consumer
   picking up the rotated version, so a finding whose consumers read through `/v1/secret/data`

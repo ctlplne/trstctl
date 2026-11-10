@@ -259,9 +259,10 @@ type upstreamDVBinding struct {
 }
 
 var (
-	_ acmekey.ChallengeSolver = (*upstreamDVBinding)(nil)
-	_ acmekey.DVObserver      = (*upstreamDVBinding)(nil)
-	_ ca.TXTPublisher         = (*upstreamDVBinding)(nil)
+	_ acmekey.ChallengeSolver     = (*upstreamDVBinding)(nil)
+	_ acmekey.DVObserver          = (*upstreamDVBinding)(nil)
+	_ ca.TXTPublisher             = (*upstreamDVBinding)(nil)
+	_ ca.DomainValidationObserver = (*upstreamDVBinding)(nil)
 )
 
 func (b *upstreamDVBinding) solver() *upstreamACMEDNS01Solver {
@@ -302,6 +303,14 @@ func (b *upstreamDVBinding) PublishTXT(ctx context.Context, tenantID, identifier
 		return nil, acmekey.ErrSolverNotConfigured
 	}
 	return s.publishTXT(ctx, tenantID, identifier, recordName, value)
+}
+
+// ObserveDomainValidation records a vendor validation (DigiCert, Sectigo) as
+// the same upstream authorization observation an ACME order records
+// (A165-L2): a reuse with no challenge, or a validation by the TXT record
+// this binding published, under this authority's issuer.
+func (b *upstreamDVBinding) ObserveDomainValidation(ctx context.Context, tenantID string, out ca.DomainValidation) {
+	b.ObserveAuthorization(ctx, tenantID, acmekey.DVOutcome{Identifier: out.Identifier, ChallengeType: out.Method, Reused: out.Reused})
 }
 
 func (b *upstreamDVBinding) ObserveAuthorization(ctx context.Context, tenantID string, out acmekey.DVOutcome) {
