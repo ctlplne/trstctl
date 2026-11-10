@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2866 annotated sites across 31 rules. Each row is
+2868 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -682,10 +682,11 @@ not this file.
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/server/spire_jwt_authorities_container_test.go:258` | the test's containers reach the served API through the Docker host gateway (CWE-200) |
 
-### G103 — CWE-? (unmapped rule) (78 sites)
+### G103 — CWE-? (unmapped rule) (79 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/agent/secretrender/restrict_windows_test.go:39` | the ACE's trailing SID, as the Windows API lays it out (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 | `internal/crypto/secret/foreign_windows.go:23` | caller-owned native allocation remains live through release and native free; only its bounded bytes are borrowed (CWE-242) |
@@ -1965,7 +1966,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (708 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (709 sites)
 
 | Location | Reason |
 |---|---|
@@ -2188,11 +2189,12 @@ not this file.
 | `internal/agent/secretrender/replace_windows_test.go:49` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/replacement_test.go:53` | this test reads only its own temporary renderer destination (CWE-22) |
 | `internal/agent/secretrender/replacement_test.go:82` | this test reads only its own temporary renderer destination (CWE-22) |
+| `internal/agent/secretrender/restrict_windows_test.go:70` | the test's own file (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:340` | the renderer's own state directory and a validated template name (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:627` | operator-configured pid file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:718` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:746` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:793` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:719` | a fresh random name beside the configured destination (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:752` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:799` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:83` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:142` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:154` | the test's own temp file (CWE-22) |

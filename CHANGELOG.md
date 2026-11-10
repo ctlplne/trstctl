@@ -580,6 +580,11 @@
 
 ### Fixed
 
+- A secret file the agent renders on Windows no longer inherits its directory's readers (A238-L10).
+  The mode set only the read-only attribute, so whoever the directory's access control list let read
+  could read the secret. The file now gets an explicit, protected DACL from its mode before any
+  content is written: the agent's user and SYSTEM, the agent's primary group for the group bits, and
+  Authenticated Users for the other bits. CI's Windows job checks it.
 - A custom role with `graph:read` but not `access:read` no longer reads the access side of the
   graph (G1-L2): tenant members' subjects and names, their roles, AI agents, and the API tokens,
   machine sessions, PAM sessions and leases they hold. Every graph route leaves it out for such a

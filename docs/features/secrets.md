@@ -1678,9 +1678,10 @@ temporary file in the same directory is written, flushed and given its mode (nev
 readable by others), then renamed over the old file, so a reader sees the old file or the
 new one, never part of either. Then the reload hook runs (an argv with no shell, or a
 signal to the process in a pid file), and the verify probe asks the application to prove it
-uses the new value (on Windows a mode is the file's read-only attribute, who may read it follows the
-directory's access control list, and a file an application holds open is replaced once it lets go, within
-two seconds, or on the next render). The control plane hears `injected` when the file is written and
+uses the new value (on Windows a mode sets the file's read-only attribute and an explicit DACL that
+inherits nothing from the directory: the agent's user and SYSTEM, plus the agent's primary group for the
+group bits and Authenticated Users for the other bits; a file an application holds open is replaced once it
+lets go, within two seconds, or on the next render). The control plane hears `injected` when the file is written and
 `verified` only when the probe passes. `trstctl-cli secrets deliveries list --name
 web/prod/password` shows each consumer as `verified` on the current version, `injected`
 only, or `behind`. A consumer can report only secrets it may read, at versions that

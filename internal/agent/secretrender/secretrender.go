@@ -706,6 +706,7 @@ func (r *Renderer) reportQuietly(ctx context.Context, t Template, state string, 
 
 // writeAtomic writes content to path so a reader sees the old file or the new
 // one, never a partial: a private temporary file in the same directory is
+// restricted (on Windows, an explicit DACL from its mode, before any content),
 // written, flushed and given its mode, then renamed over path, and the
 // directory is flushed.
 func writeAtomic(path string, content []byte, mode os.FileMode) error {
@@ -720,6 +721,11 @@ func writeAtomic(path string, content []byte, mode os.FileMode) error {
 		return err
 	}
 	cleanup := func() { _ = os.Remove(tmp) }
+	if err := restrictPath(tmp, mode); err != nil {
+		_ = f.Close()
+		cleanup()
+		return err
+	}
 	if _, err := f.Write(content); err != nil {
 		_ = f.Close()
 		cleanup()
