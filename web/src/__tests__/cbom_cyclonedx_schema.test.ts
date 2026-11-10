@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 
 // Q3: the CycloneDX CBOM export is checked by an independent validator (ajv)
 // against the official CycloneDX 1.6 JSON schemas, not by trstctl's own code.
-// The Go encoder test writes the golden this validates.
+// The Go encoder test writes the golden; the served export test captures what
+// the API serves (Q3-L4) and fails when the served shape drifts from it.
 const testdata = resolve(process.cwd(), "../internal/cbom/testdata");
 const load = (name: string) => JSON.parse(readFileSync(resolve(testdata, name), "utf8")) as Record<string, unknown>;
 
@@ -17,9 +18,9 @@ function validator() {
 }
 
 describe("CycloneDX 1.6 CBOM export", () => {
-  it("validates against the official CycloneDX 1.6 schema", () => {
+  it.each(["cyclonedx-export.golden.json", "cyclonedx-served-export.json"])("%s validates against the official CycloneDX 1.6 schema", (name) => {
     const validate = validator();
-    const bom = load("cyclonedx-export.golden.json");
+    const bom = load(name);
     const valid = validate(bom);
     expect(validate.errors ?? []).toEqual([]);
     expect(valid).toBe(true);

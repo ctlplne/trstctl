@@ -4,12 +4,15 @@ package server
 
 import (
 	"encoding/json"
+	"flag"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -76,6 +79,7 @@ func TestServedCBOMCycloneDXExportMatchesTheInventoryAndVerifiesOffline(t *testi
 		export.Components != len(inventory.Items) || !strings.HasPrefix(export.BOMSHA256, "sha256:") {
 		t.Fatalf("export = %d %s", status, body)
 	}
+	checkServedCycloneDXFixture(t, export.BOM)
 	type property struct {
 		Name  string `json:"name"`
 		Value string `json:"value"`
@@ -191,4 +195,106 @@ func TestServedCBOMCycloneDXExportMatchesTheInventoryAndVerifiesOffline(t *testi
 	if _, err := keys.VerifyArtifact(export.SignedBOM, jose.ArtifactCryptoReadiness); err == nil {
 		t.Fatal("the CBOM signature verified as another evidence kind")
 	}
+}
+
+// updateServedCycloneDX rewrites the served-export fixture the console's
+// official-schema test validates (Q3-L4).
+var updateServedCycloneDX = flag.Bool("update-cyclonedx-served", false,
+	"rewrite internal/cbom/testdata/cyclonedx-served-export.json from the served export")
+
+// servedCycloneDXFixture is a CycloneDX export as the API serves it, captured
+// by this test. web/src/__tests__/cbom_cyclonedx_schema.test.ts validates it
+// against the official CycloneDX 1.6 schemas with an independent validator,
+// beside the encoder's golden.
+var servedCycloneDXFixture = filepath.Join("..", "cbom", "testdata", "cyclonedx-served-export.json")
+
+// checkServedCycloneDXFixture keeps that fixture the shape of what the API
+// serves (Q3-L4): every field path and the type of its value, arrays
+// collapsed, so a field the served export gains or drops fails here until the
+// fixture is captured again, and then the schema test validates the new shape.
+// Values (ports, serial numbers, times) differ run to run and are not compared.
+func checkServedCycloneDXFixture(t *testing.T, served json.RawMessage) {
+	t.Helper()
+	if *updateServedCycloneDX {
+		var pretty any
+		if err := json.Unmarshal(served, &pretty); err != nil {
+			t.Fatal(err)
+		}
+		// The test's scan locations are its temporary directory and a random
+		// loopback port: the fixture holds fixed examples in their place.
+		scrubCycloneDXLocations(pretty)
+		out, err := json.MarshalIndent(pretty, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(servedCycloneDXFixture, append(out, '\n'), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fixture, err := os.ReadFile(servedCycloneDXFixture) // #nosec G304 -- the repository's own fixture path (CWE-22)
+	if err != nil {
+		t.Fatalf("read the served CycloneDX fixture (run with -update-cyclonedx-served): %v", err)
+	}
+	got, want := cycloneDXShape(t, served), cycloneDXShape(t, fixture)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("the served CycloneDX export's shape is not the fixture's; capture it with -update-cyclonedx-served so the "+
+			"console's official-schema test validates what is served.\nserved: %v\nfixture: %v", got, want)
+	}
+}
+
+// scrubCycloneDXLocations replaces every evidence location with a fixed
+// example of the same kind: a configuration file path or a host and port.
+func scrubCycloneDXLocations(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, child := range x {
+			if location, ok := child.(string); ok && k == "location" {
+				if strings.Contains(location, "/") {
+					x[k] = "/etc/nginx/nginx.conf"
+				} else {
+					x[k] = "app.example.test:443"
+				}
+				continue
+			}
+			scrubCycloneDXLocations(child)
+		}
+	case []any:
+		for _, child := range x {
+			scrubCycloneDXLocations(child)
+		}
+	}
+}
+
+// cycloneDXShape lists a JSON document's field paths with their value types.
+func cycloneDXShape(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	var walk func(path string, v any)
+	walk = func(path string, v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			seen[path+":object"] = true
+			for k, child := range x {
+				walk(path+"."+k, child)
+			}
+		case []any:
+			seen[path+":array"] = true
+			for _, child := range x {
+				walk(path+"[]", child)
+			}
+		default:
+			seen[fmt.Sprintf("%s:%T", path, v)] = true
+		}
+	}
+	walk("$", doc)
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
