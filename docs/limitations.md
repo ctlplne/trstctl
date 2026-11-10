@@ -4628,8 +4628,12 @@ than sending an operator looking for a credential that was never there.
   key only the account holds, one only trstctl's record holds, and a state that
   drifted (disabled by hand, or still enabled after trstctl revoked it); proven
   against an in-repository KMS stand-in that verifies each signature (a live
-  account is Track B). An account shared by several tenants' managed keys reads
-  the other tenants' keys as drift. GCP Cloud KMS and Azure Key Vault keys
+  account is Track B). Each key trstctl creates records its tenant
+  (`trstctl-tenant`, in the same CreateKey request), and a tenant's round leaves
+  a key tagged as another tenant's out, so an account several tenants share no
+  longer reads the other tenants' keys as drift (A168-L2; a round over a shared
+  account proven against the stand-in); keys created before the tag existed carry
+  none and are still asserted by every tenant's round until they are tagged. GCP Cloud KMS and Azure Key Vault keys
   are what comes next; a `cloud-kms` id with no source block still fails
   observation closed rather than fabricate an authority, and
   inventory rows with no captured DER cannot participate in the comparison

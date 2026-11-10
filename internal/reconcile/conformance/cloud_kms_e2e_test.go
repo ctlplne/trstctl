@@ -143,3 +143,101 @@ func TestE2E_CloudKMSAccountRoundsAgainstManagedKeys(t *testing.T) {
 		t.Fatalf("the observation changed the account (%d) or signed badly (%d)", stand.Mutations(), stand.Refused())
 	}
 }
+
+// A168-L2: an AWS KMS account several tenants share. trstctl records the
+// tenant on each key it creates, so a round of one tenant witnesses only its
+// own drift: its key the inventory does not hold, never a key created for
+// another tenant, which every other tenant's round used to read as drift.
+func TestE2E_CloudKMSAccountSharedByTenantsRoundsOnlyTheTenantsKeysA168L2(t *testing.T) {
+	const (
+		accessKey = "AKIAA168L2E2E"
+		secretKey = "a168l2-e2e-secret" // #nosec G101 -- fabricated fixture credential (CWE-798)
+		other     = "22222222-3333-4444-8555-666666666666"
+	)
+	h := newE2EHarness(t)
+	tenantTagged := func(tenant, op string) map[string]string {
+		return map[string]string{"trstctl-managed-key-operation": op, "trstctl-tenant": tenant}
+	}
+	stand := awskmstest.New("us-east-1", accessKey, secretKey, 100)
+	t.Cleanup(stand.Close)
+	stand.Put(
+		awskmstest.Key{ID: "own-agree", Spec: "ECC_NIST_P256", State: "Enabled", Tags: tenantTagged(h.tenant, "op-1")},
+		awskmstest.Key{ID: "own-only-in-kms", Spec: "ECC_NIST_P256", State: "Enabled", Tags: tenantTagged(h.tenant, "op-2")},
+		awskmstest.Key{ID: "other-tenants", Spec: "ECC_NIST_P256", State: "Enabled", Tags: tenantTagged(other, "op-3")},
+		awskmstest.Key{ID: "other-tenants-disabled", Spec: "RSA_3072", State: "Disabled", Tags: tenantTagged(other, "op-4")},
+	)
+	now := time.Now().UTC()
+	if _, err := h.store.SystemPool().Exec(h.ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'a168l2 tenant') ON CONFLICT DO NOTHING`, h.tenant); err != nil {
+		t.Fatalf("register tenant: %v", err)
+	}
+	if _, err := h.store.SystemPool().Exec(h.ctx, `INSERT INTO managed_keys
+		(tenant_id, provider, key_id, algorithm, version, state, public_der, created_at, updated_at)
+		VALUES ($1, 'aws', 'own-agree', 'ECDSA-P256', 1, 'active', '\x30'::bytea, $2, $2)`, h.tenant, now); err != nil {
+		t.Fatalf("seed managed key: %v", err)
+	}
+	dir := t.TempDir()
+	accessFile, secretFile := filepath.Join(dir, "access"), filepath.Join(dir, "secret")
+	if err := os.WriteFile(accessFile, []byte(accessKey), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secretFile, []byte(secretKey), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plane := func(id string) rounds.PlaneConfig { return rounds.PlaneConfig{AuthorityID: id, Liveness: time.Hour} }
+	rt, err := eereconcile.NewRuntime(eereconcile.RuntimeConfig{
+		Store:         h.store,
+		Log:           h.log,
+		Idempotency:   orchestrator.NewIdempotency(h.store),
+		Signer:        e2eSignerProvider{client: h.client},
+		Logger:        slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		Schedules:     []rounds.Config{{TenantID: h.tenant, Cadence: 2 * time.Second, Liveness: time.Hour, Planes: []rounds.PlaneConfig{plane("aws-kms-shared"), plane("managed-keys-aws")}}},
+		RoundInterval: 200 * time.Millisecond,
+		CloudKMSSources: []eereconcile.AWSKMSSourceConfig{{
+			AuthorityID: "aws-kms-shared", Region: "us-east-1", Address: stand.URL(),
+			AccessKeyIDFile: accessFile, SecretAccessKeyFile: secretFile, AllowInsecureLoopback: true,
+		}},
+		ManagedKeyAuthorities: []eereconcile.ManagedKeyAuthorityConfig{{AuthorityID: "managed-keys-aws", Provider: "aws-kms"}},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntime: %v", err)
+	}
+	workerCtx, cancel := context.WithCancel(h.ctx)
+	done := make(chan error, 1)
+	go func() { done <- rt.BackgroundWorkers[0].Run(workerCtx) }()
+	var byPair map[string]witness.WitnessRecorded
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		byPair = firstWitnessPerPair(t, h.log)
+		if len(byPair) == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("no witness within 2 minutes (have %v)", byPair)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	own, err := canon.KeyStableID("own-only-in-kms", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded, ok := byPair["aws-kms-shared|managed-keys-aws"]
+	if !ok {
+		t.Fatalf("no witness for the KMS pair (have %v)", byPair)
+	}
+	entries := recorded.Evidence.Body.Entries
+	if len(entries) != 1 || entries[0].RecordKey.StableID != own || entries[0].Class != witness.ClassPresence ||
+		entries[0].PresentAuthority != "aws-kms-shared" {
+		var seen []string
+		for _, entry := range entries {
+			seen = append(seen, entry.RecordKey.StableID+" "+entry.Class+" held by "+entry.PresentAuthority)
+		}
+		t.Fatalf("witness entries = %q; want only the tenant's own KMS-only key, never another tenant's keys", seen)
+	}
+	if stand.Mutations() != 0 || stand.Refused() != 0 {
+		t.Fatalf("the observation changed the account (%d) or signed badly (%d)", stand.Mutations(), stand.Refused())
+	}
+}

@@ -731,3 +731,41 @@ func TestManagedKeyExecutingJournalReconcilesCommittedProviderEffectAfterSignerR
 		t.Fatalf("reconciled zeroize=%+v err=%v provider effects=%d", zeroized, err, provider.delegate.zeroize)
 	}
 }
+
+// tenantScopingJournalProvider records the tenant the signer scoped each
+// operation to (A168-L2).
+type tenantScopingJournalProvider struct {
+	*operationAwareJournalProvider
+	scopedTo []string
+}
+
+func (p *tenantScopingJournalProvider) ForKeyTenant(tenantID string) crypto.OperationAwareRemoteKeyLifecycle {
+	p.scopedTo = append(p.scopedTo, tenantID)
+	return p.operationAwareJournalProvider
+}
+
+// A168-L2: the signer scopes a managed-key operation to the command's tenant
+// when the provider can record it on the keys it creates.
+func TestManagedKeyOperationsAreScopedToTheCommandsTenantA168L2(t *testing.T) {
+	provider := &tenantScopingJournalProvider{operationAwareJournalProvider: newOperationAwareJournalProvider()}
+	t.Cleanup(provider.delegate.cleanup)
+	server := signing.NewServer(signing.WithManagedKeyProviders(t.TempDir(), map[string]crypto.RemoteKeyLifecycle{
+		"aws-kms": provider,
+	}))
+	generated, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+		TenantId: "tenant-a", Provider: "aws-kms", OperationId: "a168l2-generate",
+		Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_GENERATE, Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.ManageKey(context.Background(), &signerpb.ManageKeyRequest{
+		TenantId: "tenant-a", Provider: "aws-kms", OperationId: "a168l2-rotate", KeyId: generated.GetKeyId(),
+		Action: signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_ROTATE, Algorithm: signerpb.Algorithm_ALGORITHM_ECDSA_P256,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.scopedTo) != 2 || provider.scopedTo[0] != "tenant-a" || provider.scopedTo[1] != "tenant-a" {
+		t.Fatalf("the signer scoped its operations to %v, want tenant-a for the generate and the rotate", provider.scopedTo)
+	}
+}

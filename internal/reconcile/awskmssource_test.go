@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -85,6 +86,55 @@ func TestAWSKMSSourceAssertsTheAccountsTrstctlKeys(t *testing.T) {
 	for _, key := range all.Keys {
 		if key.KeyID == "k4-untagged" && !key.RotationEnabled {
 			t.Fatalf("the symmetric key's rotation standing was not read: %+v", key)
+		}
+	}
+	if stand.Mutations() != 0 || stand.Refused() != 0 {
+		t.Fatalf("mutations %d, refused signatures %d", stand.Mutations(), stand.Refused())
+	}
+}
+
+// A168-L2: in an account several tenants share, a tenant's round asserts its
+// own keys and the keys created before the tenant tag existed, never a key
+// tagged as another tenant's, whether or not every customer key is asserted.
+func TestAWSKMSSourceLeavesAnotherTenantsKeysOutA168L2(t *testing.T) {
+	stand := awskmstest.New("us-east-1", a168AccessKey, a168SecretKey, 100)
+	t.Cleanup(stand.Close)
+	tenantTagged := func(tenant string) map[string]string {
+		return map[string]string{awsKMSManagedTag: "op-" + tenant, awsKMSTenantTag: tenant}
+	}
+	stand.Put(
+		awskmstest.Key{ID: "a-own", Spec: "ECC_NIST_P256", State: "Enabled", Tags: tenantTagged("tenant-a")},
+		awskmstest.Key{ID: "b-other", Spec: "ECC_NIST_P256", State: "Enabled", Tags: tenantTagged("tenant-b")},
+		awskmstest.Key{ID: "legacy", Spec: "ECC_NIST_P256", State: "Enabled", Tags: a168Tagged()},
+		awskmstest.Key{ID: "untagged", Spec: "SYMMETRIC_DEFAULT", State: "Enabled"},
+	)
+	access, secret := a168CredentialFiles(t, a168SecretKey)
+	for _, all := range []bool{false, true} {
+		src, err := newAWSKMSSource(AWSKMSSourceConfig{AuthorityID: "aws-kms-shared", Region: "us-east-1", Address: stand.URL(),
+			AccessKeyIDFile: access, SecretAccessKeyFile: secret, AllCustomerKeys: all,
+			AllowInsecureLoopback: true, HTTPClient: stand.Client()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for tenant, want := range map[string][]string{
+			"tenant-a": {"a-own", "legacy"},
+			"tenant-b": {"b-other", "legacy"},
+		} {
+			if all {
+				want = append(want, "untagged")
+			}
+			snap, err := src.CloudKMSSnapshot(context.Background(), tenant, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, key := range snap.Keys {
+				got = append(got, key.KeyID)
+			}
+			slices.Sort(want)
+			if !slices.Equal(got, want) {
+				t.Fatalf("all=%v: %s's round asserts %v, want %v", all, tenant, got, want)
+			}
 		}
 	}
 	if stand.Mutations() != 0 || stand.Refused() != 0 {

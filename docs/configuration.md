@@ -617,7 +617,10 @@ exactly those. The files are read at each observation and wiped once the request
 is signed; `session_token_file` adds a session token. By default the source
 asserts only the keys trstctl tagged as its own when it created them
 (`trstctl-managed-key-operation`); `"all_customer_keys": true` asserts every
-customer-managed key, and AWS-managed keys are never asserted. Each key is
+customer-managed key, and AWS-managed keys are never asserted. A key trstctl
+creates also records its tenant (`trstctl-tenant`), so in an account several
+tenants share, a tenant's round never asserts a key tagged as another tenant's
+(keys created before the tag existed carry none and are asserted as before). Each key is
 asserted by its KeyId with its key spec, its state (enabled, disabled, or
 scheduled for deletion) and, for symmetric keys, its rotation standing. The
 `managed_keys` authority asserts what trstctl's record says the provider should

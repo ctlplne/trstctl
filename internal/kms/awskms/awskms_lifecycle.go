@@ -42,6 +42,44 @@ const pendingDeletionWindowDays = 7
 // binds the already-created key instead of issuing another CreateKey.
 const operationTagKey = "trstctl-managed-key-operation"
 
+// tenantTagKey records, in the same CreateKey request, the tenant a key belongs
+// to (A168-L2), so a KMS account several tenants share tells their keys apart.
+// The reconcile source reads the same tag (internal/reconcile awsKMSTenantTag).
+const tenantTagKey = "trstctl-tenant"
+
+var _ crypto.KeyTenantScoper = (*Backend)(nil)
+
+// ForKeyTenant returns the backend's operation lifecycle that stamps tenantID
+// on every key it creates (A168-L2). Revoke and zeroize act on an existing key
+// and are the backend's own.
+func (b *Backend) ForKeyTenant(tenantID string) crypto.OperationAwareRemoteKeyLifecycle {
+	return tenantKeyLifecycle{b: b, tenant: strings.TrimSpace(tenantID)}
+}
+
+type tenantKeyLifecycle struct {
+	b      *Backend
+	tenant string
+}
+
+func (l tenantKeyLifecycle) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+	return l.b.managedKeyForOperation(ctx, "generate", operationID, "", alg, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RotateKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) (crypto.Signer, crypto.KeyRef, error) {
+	if ref.ID == "" {
+		return nil, crypto.KeyRef{}, fmt.Errorf("aws-kms: rotate requires a key ref")
+	}
+	return l.b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, l.tenant)
+}
+
+func (l tenantKeyLifecycle) RevokeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.RevokeKeyForOperation(ctx, operationID, ref)
+}
+
+func (l tenantKeyLifecycle) ZeroizeKeyForOperation(ctx context.Context, operationID string, ref crypto.KeyRef) error {
+	return l.b.ZeroizeKeyForOperation(ctx, operationID, ref)
+}
+
 // GenerateManagedKey creates an asymmetric signing key in KMS and returns a Signer
 // plus a KeyRef for lifecycle management. It is the BYOK/HSM on-ramp: the key is
 // born in KMS and never leaves it.
@@ -73,7 +111,7 @@ func (b *Backend) RotateKey(ctx context.Context, ref crypto.KeyRef) (crypto.Sign
 // so even a process death immediately after the provider effect leaves enough
 // provider state for the next process to find the key.
 func (b *Backend) GenerateManagedKeyForOperation(ctx context.Context, operationID string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
-	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg)
+	return b.managedKeyForOperation(ctx, "generate", operationID, "", alg, "")
 }
 
 // RotateKeyForOperation uses the same tagged-create recovery path, with the
@@ -83,10 +121,12 @@ func (b *Backend) RotateKeyForOperation(ctx context.Context, operationID string,
 	if ref.ID == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("aws-kms: rotate requires a key ref")
 	}
-	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm)
+	return b.managedKeyForOperation(ctx, "rotate", operationID, ref.ID, ref.Algorithm, "")
 }
 
-func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm) (crypto.Signer, crypto.KeyRef, error) {
+// managedKeyForOperation creates or finds the key an operation owns; tenant,
+// when set, is stamped on a key it creates (A168-L2).
+func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID, source string, alg crypto.Algorithm, tenant string) (crypto.Signer, crypto.KeyRef, error) {
 	if strings.TrimSpace(operationID) == "" {
 		return nil, crypto.KeyRef{}, fmt.Errorf("aws-kms: durable operation id is required")
 	}
@@ -102,13 +142,17 @@ func (b *Backend) managedKeyForOperation(ctx context.Context, kind, operationID,
 		return nil, crypto.KeyRef{}, err
 	}
 	if !found {
+		tags := []types.Tag{{
+			TagKey:   awssdk.String(operationTagKey),
+			TagValue: awssdk.String(tagValue),
+		}}
+		if tenant != "" {
+			tags = append(tags, types.Tag{TagKey: awssdk.String(tenantTagKey), TagValue: awssdk.String(tenant)})
+		}
 		created, createErr := b.client.CreateKey(ctx, &awskmssdk.CreateKeyInput{
 			KeySpec:  spec,
 			KeyUsage: types.KeyUsageTypeSignVerify,
-			Tags: []types.Tag{{
-				TagKey:   awssdk.String(operationTagKey),
-				TagValue: awssdk.String(tagValue),
-			}},
+			Tags:     tags,
 		}, func(options *awskmssdk.Options) {
 			// CreateKey has no idempotency token. A transparent SDK retry after the
 			// provider applied the first request would create a second key before our

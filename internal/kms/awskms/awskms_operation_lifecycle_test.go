@@ -328,3 +328,51 @@ func loseKMSResponse(w http.ResponseWriter) {
 	}
 	_ = conn.Close()
 }
+
+// A168-L2: a key created for a tenant records that tenant beside the
+// operation tag, in the same CreateKey request, so a KMS account several
+// tenants share tells their keys apart. Without a tenant nothing is added.
+func TestTenantScopedLifecycleTagsTheKeysTenantA168L2(t *testing.T) {
+	f := newOperationKMS(t)
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
+		awskms.WithEndpoint(f.srv.URL), awskms.WithHTTPClient(f.srv.Client()), awskms.WithOpTimeout(0))
+	var scoper crypto.KeyTenantScoper = b
+	ctx := context.Background()
+	const tenant = "11111111-2222-4333-8444-555555555555"
+	scoped := scoper.ForKeyTenant(tenant)
+	_, ref, err := scoped.GenerateManagedKeyForOperation(ctx, "a168l2-generate", crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, rotated, err := scoped.RotateKeyForOperation(ctx, "a168l2-rotate", ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, unscoped, err := b.GenerateManagedKeyForOperation(ctx, "a168l2-unscoped", crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagsOf := func(id string) map[string]string {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.keys[id].tags
+	}
+	for _, id := range []string{ref.ID, rotated.ID} {
+		if tags := tagsOf(id); tags["trstctl-tenant"] != tenant || tags["trstctl-managed-key-operation"] == "" {
+			t.Fatalf("key %s tags = %v, want the operation tag and trstctl-tenant=%s", id, tags, tenant)
+		}
+	}
+	if tags := tagsOf(unscoped.ID); tags["trstctl-tenant"] != "" {
+		t.Fatalf("an unscoped key carries a tenant tag: %v", tags)
+	}
+	// Revoke acts on the existing key through the scoped lifecycle.
+	if err := scoped.RevokeKeyForOperation(ctx, "a168l2-revoke", rotated); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	disabled := f.disableEffects
+	f.mu.Unlock()
+	if disabled != 1 {
+		t.Fatalf("DisableKey effects = %d, want 1", disabled)
+	}
+}

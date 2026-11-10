@@ -92,6 +92,17 @@ type OperationAwareRemoteKeyLifecycle interface {
 	ZeroizeKeyForOperation(ctx context.Context, operationID string, ref KeyRef) error
 }
 
+// KeyTenantScoper is a remote key provider that can record, on each key an
+// operation creates, the tenant the key belongs to (A168-L2). Several tenants'
+// keys in one provider account are then told apart by that record instead of
+// each tenant reading the others' keys as its own. The signer scopes every
+// managed-key operation to the command's tenant when its provider offers this.
+type KeyTenantScoper interface {
+	// ForKeyTenant returns the provider's operation lifecycle that records
+	// tenantID on every key it creates.
+	ForKeyTenant(tenantID string) OperationAwareRemoteKeyLifecycle
+}
+
 // RemoteKeyDigestSigner is the signer-process-only operation for an existing
 // provider key reference. Implementations must perform the private-key
 // operation at the provider/device and return only the signature.

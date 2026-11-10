@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2881 annotated sites across 33 rules. Each row is
+2882 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (612 sites)
+### G101 — CWE-798 Use of hardcoded credentials (613 sites)
 
 | Location | Reason |
 |---|---|
@@ -396,8 +396,9 @@ not this file.
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
 | `internal/protocols/acme/email_reply_test.go:23` | RFC 8823 test token and digest, not a credential (CWE-798) |
-| `internal/reconcile/awskmssource_test.go:19` | fabricated fixture credential (CWE-798) |
+| `internal/reconcile/awskmssource_test.go:20` | fabricated fixture credential (CWE-798) |
 | `internal/reconcile/conformance/cloud_kms_e2e_test.go:34` | fabricated fixture credential (CWE-798) |
+| `internal/reconcile/conformance/cloud_kms_e2e_test.go:154` | fabricated fixture credential (CWE-798) |
 | `internal/rehearsal/rehearsal.go:27` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/revocationhealth/contract_test.go:91` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/risk/contextual_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2408,7 +2409,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:233` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/ssh/krl_binary_test.go:315` | test-owned file under t.TempDir |
-| `internal/reconcile/awskmssource.go:309` | operator-configured credential file path (CWE-22) |
+| `internal/reconcile/awskmssource.go:327` | operator-configured credential file path (CWE-22) |
 | `internal/reconcile/casource.go:61` | operator-configured CA certificate bundle path (CWE-22) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:283` | a certificate this test copied out of its own container (CWE-22) |
 | `internal/reconcile/conformance/ca_ledgers_e2e_test.go:409` | the test's own copied config (CWE-22) |
@@ -2561,8 +2562,8 @@ not this file.
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
 | `internal/signing/managedkeys.go:353` | the signer's own journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:717` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:860` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:722` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:865` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |

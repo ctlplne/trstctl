@@ -527,6 +527,11 @@ func validateManagedKeyRequest(req *signerpb.ManageKeyRequest) (managedKeyJourna
 func (r *managedKeyRuntime) apply(ctx context.Context, provider crypto.RemoteKeyLifecycle, req managedKeyJournalRequest) (managedKeyJournalResult, error) {
 	ref := crypto.KeyRef{ID: req.KeyID, Algorithm: req.Algorithm}
 	operationProvider, operationAware := provider.(crypto.OperationAwareRemoteKeyLifecycle)
+	if scoper, ok := provider.(crypto.KeyTenantScoper); ok && operationAware && req.TenantID != "" {
+		// A168-L2: a key the operation creates records its tenant, so tenants
+		// sharing one provider account tell their keys apart.
+		operationProvider = scoper.ForKeyTenant(req.TenantID)
+	}
 	if req.Action != int32(signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_GENERATE) {
 		owner, ok := r.owners[managedKeyOwnerKey(req.Provider, req.KeyID)]
 		if !ok || owner.TenantID != req.TenantID {

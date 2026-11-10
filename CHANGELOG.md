@@ -580,6 +580,13 @@
 
 ### Fixed
 
+- In an AWS KMS account several tenants share, a tenant's reconcile round no longer reads the
+  other tenants' managed keys as its drift (A168-L2). The `awskms` source asserted every key
+  carrying trstctl's operation tag, so each tenant's witness evidence held the other tenants' key
+  ids, specs and states. A key the signer creates now also records its tenant in the same
+  CreateKey request (`trstctl-tenant`), and the source leaves out a key tagged as another
+  tenant's, with or without `all_customer_keys`. Keys created before the tag carry none and are
+  asserted as before.
 - An AWS STS lease's session can't assume another role (N3-L3). A session chained from a lease
   runs as the other role, which neither `revoke_with_deny_policy`'s denial on the lease's role nor
   the lease's expiry reaches, so it outlived the lease's revocation by up to an hour. Each lease's

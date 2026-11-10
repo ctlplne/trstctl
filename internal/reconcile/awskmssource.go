@@ -33,7 +33,9 @@ import (
 // ListResourceTags and GetKeyRotationStatus, read-only — and asserts each key's
 // identity (its KeyId), key spec, state and rotation standing. By default it asserts only the keys trstctl tagged as its
 // own when it created them (the managed-key operation tag); AWS-managed keys
-// are never asserted. It pairs with the managed-key inventory authority, which
+// are never asserted, and nor is a key tagged as another tenant's (A168-L2):
+// in an account several tenants share, a round of one tenant reads only its
+// own keys and untagged keys created before the tenant tag existed. It pairs with the managed-key inventory authority, which
 // asserts what trstctl believes it holds in the same account, so a round
 // witnesses a key only one side holds and a key whose state drifted.
 //
@@ -49,6 +51,9 @@ const (
 	// awsKMSManagedTag is the tag trstctl stamps on every key it creates
 	// (internal/kms/awskms operationTagKey).
 	awsKMSManagedTag = "trstctl-managed-key-operation"
+	// awsKMSTenantTag names the tenant a key trstctl created belongs to
+	// (internal/kms/awskms tenantTagKey, A168-L2).
+	awsKMSTenantTag = "trstctl-tenant"
 )
 
 // AWSKMSSourceConfig is the core-owned shape operator config maps onto.
@@ -135,7 +140,7 @@ func (s *awsKMSSource) CloudKMSSnapshot(ctx context.Context, tenantID string, sb
 		return reducers.CloudKMSSnapshot{}, err
 	}
 	for _, id := range ids {
-		key, keep, err := s.describe(ctx, sb, creds, id)
+		key, keep, err := s.describe(ctx, sb, creds, id, tenantID)
 		if err != nil {
 			return reducers.CloudKMSSnapshot{}, err
 		}
@@ -144,7 +149,6 @@ func (s *awsKMSSource) CloudKMSSnapshot(ctx context.Context, tenantID string, sb
 		}
 	}
 	sort.Slice(snap.Keys, func(i, j int) bool { return snap.Keys[i].KeyID < snap.Keys[j].KeyID })
-	_ = tenantID // one account per authority; the tenant scopes the round, not the account
 	return snap, nil
 }
 
@@ -183,8 +187,9 @@ func (s *awsKMSSource) listKeys(ctx context.Context, sb *reducers.ObservationSan
 }
 
 // describe reads one key's metadata and decides whether this authority asserts
-// it: never an AWS-managed key, and by default only a key trstctl tagged.
-func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSandbox, creds awsKMSCredentials, id string) (reducers.CloudKMSKey, bool, error) {
+// it in tenantID's round: never an AWS-managed key or a key tagged as another
+// tenant's, and by default only a key trstctl tagged.
+func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSandbox, creds awsKMSCredentials, id, tenantID string) (reducers.CloudKMSKey, bool, error) {
 	if _, err := sb.Describe(ctx, s.resource("key", id)); err != nil {
 		return reducers.CloudKMSKey{}, false, fmt.Errorf("xrec aws kms source: describe %s: %w", id, err)
 	}
@@ -204,14 +209,15 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 	if md.KeyManager == "AWS" {
 		return reducers.CloudKMSKey{}, false, nil
 	}
-	if !s.cfg.AllCustomerKeys {
-		tagged, err := s.managedTag(ctx, creds, id)
-		if err != nil {
-			return reducers.CloudKMSKey{}, false, err
-		}
-		if !tagged {
-			return reducers.CloudKMSKey{}, false, nil
-		}
+	tags, err := s.trstctlTags(ctx, creds, id)
+	if err != nil {
+		return reducers.CloudKMSKey{}, false, err
+	}
+	if !tags.managed && !s.cfg.AllCustomerKeys {
+		return reducers.CloudKMSKey{}, false, nil
+	}
+	if tags.tenant != "" && tags.tenant != strings.TrimSpace(tenantID) {
+		return reducers.CloudKMSKey{}, false, nil
 	}
 	rotation, err := s.rotationEnabled(ctx, creds, id, md.KeySpec)
 	if err != nil {
@@ -227,7 +233,15 @@ func (s *awsKMSSource) describe(ctx context.Context, sb *reducers.ObservationSan
 	}, true, nil
 }
 
-func (s *awsKMSSource) managedTag(ctx context.Context, creds awsKMSCredentials, id string) (bool, error) {
+// awsKMSKeyTags is what a key's tags say about trstctl: whether trstctl
+// created it, and the tenant it was created for.
+type awsKMSKeyTags struct {
+	managed bool
+	tenant  string
+}
+
+func (s *awsKMSSource) trstctlTags(ctx context.Context, creds awsKMSCredentials, id string) (awsKMSKeyTags, error) {
+	var tags awsKMSKeyTags
 	marker := ""
 	for page := 0; page < 20; page++ {
 		req := map[string]any{"KeyId": id, "Limit": 50}
@@ -236,25 +250,29 @@ func (s *awsKMSSource) managedTag(ctx context.Context, creds awsKMSCredentials, 
 		}
 		var out struct {
 			Tags []struct {
-				TagKey string `json:"TagKey"`
+				TagKey   string `json:"TagKey"`
+				TagValue string `json:"TagValue"`
 			} `json:"Tags"`
 			NextMarker string `json:"NextMarker"`
 			Truncated  bool   `json:"Truncated"`
 		}
 		if err := s.call(ctx, creds, "ListResourceTags", req, &out); err != nil {
-			return false, err
+			return awsKMSKeyTags{}, err
 		}
 		for _, tag := range out.Tags {
-			if tag.TagKey == awsKMSManagedTag {
-				return true, nil
+			switch tag.TagKey {
+			case awsKMSManagedTag:
+				tags.managed = true
+			case awsKMSTenantTag:
+				tags.tenant = strings.TrimSpace(tag.TagValue)
 			}
 		}
 		if !out.Truncated || out.NextMarker == "" {
-			return false, nil
+			return tags, nil
 		}
 		marker = out.NextMarker
 	}
-	return false, nil
+	return tags, nil
 }
 
 // rotationEnabled asks only about symmetric keys: KMS rotates nothing else and
