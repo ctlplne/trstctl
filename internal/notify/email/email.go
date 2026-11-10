@@ -7,17 +7,19 @@
 // recipient list through an SMTP relay.
 //
 // SMTP is not HTTP, so the outbound seam is a Sender (deliver a message to recipients)
-// rather than the HTTPDoer the chat/webhook channels use: production dials the relay over
-// net/smtp. Rendering tests inject a fake Sender; transport tests use loopback sockets
+// rather than the HTTPDoer the chat/webhook channels use: production dials the relay and
+// drives the SMTP exchange itself (smtp_session.go; net/smtp's command wire, without its
+// client, so the PLAIN password is written from a buffer that is wiped, P15-L5).
+// Rendering tests inject a fake Sender; transport tests use loopback sockets
 // to verify delivery and cancellation. This is the same least-privilege seam pattern the connector
 // SDK and the other channels follow: the channel does exactly one thing — render and send
 // one message.
 //
 // The SMTP password (when PLAIN auth is configured) is a secret: it is held opaquely,
 // never logged, and never written into error text (AN-8 lineage — the same rule the Teams
-// channel follows for its webhook URL and PagerDuty for its routing key). net/smtp's own
-// errors describe the protocol exchange and do not echo the password, so they are wrapped
-// without further sanitization; the password is set on the auth value and nowhere else.
+// channel follows for its webhook URL and PagerDuty for its routing key). The exchange's
+// errors describe the protocol and do not echo the password, so they are wrapped without
+// further sanitization; the password is held by the sender's credentials and nowhere else.
 //
 // STARTTLS configuration comes from internal/crypto/mtls; this package imports no
 // crypto/* (AN-3). When the channel is driven from
@@ -32,12 +34,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/smtp"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/notify"
 )
 
@@ -70,20 +70,20 @@ func WithSender(s Sender) Option {
 	return func(c *Channel) { c.sender = s }
 }
 
-// WithAuth configures SMTP PLAIN authentication on the default net/smtp sender. The
+// WithAuth configures SMTP PLAIN authentication on the default sender. The
 // password is stored only inside the sender's auth value and is never logged or surfaced
 // in errors (AN-8). It has no effect once WithSender has replaced the default sender (a
 // fake sender does not authenticate), so the order of options does not matter in tests.
 func WithAuth(username, password string) Option {
 	return func(c *Channel) {
 		if rs, ok := c.sender.(*realSender); ok {
-			rs.auth = smtp.PlainAuth("", username, password, hostOf(rs.addr))
+			rs.plain = &plainCredentials{username: username, password: []byte(password)}
 		}
 	}
 }
 
 // New returns an email channel that sends from from to the recipients in to through the
-// SMTP relay at addr (host:port). By default it dials addr with net/smtp; pass
+// SMTP relay at addr (host:port). By default it dials addr itself; pass
 // WithSender to inject a fake (tests) and WithAuth to enable PLAIN authentication.
 func New(addr, from string, to []string, opts ...Option) *Channel {
 	c := &Channel{
@@ -160,13 +160,19 @@ func hostOf(addr string) string {
 	return addr
 }
 
-// realSender is the production Sender: it delivers via net/smtp, dialing the
-// relay at addr. When auth is non-nil the message is sent with SMTP PLAIN authentication.
-// The auth value holds the password opaquely; it is never logged (AN-8).
+// realSender is the production Sender: it dials the relay at addr and drives the
+// SMTP exchange (smtp_session.go). When plain is set the message is sent with SMTP
+// PLAIN authentication; the credentials are never logged (AN-8).
 type realSender struct {
-	addr string
-	from string
-	auth smtp.Auth // nil unless WithAuth was set; carries the password opaquely (AN-8)
+	addr  string
+	from  string
+	plain *plainCredentials // nil unless WithAuth or a relay password set it (AN-8)
+}
+
+// plainCredentials are SMTP PLAIN credentials; the password stays bytes.
+type plainCredentials struct {
+	username string
+	password []byte
 }
 
 // Send bounds the whole SMTP exchange, including greeting, STARTTLS, auth, DATA
@@ -198,44 +204,37 @@ func (s *realSender) Send(ctx context.Context, from string, to []string, msg []b
 	if err := conn.SetDeadline(deadline); err != nil {
 		return err
 	}
-	client, err := smtp.NewClient(conn, hostOf(s.addr))
+	session, err := newSMTPSession(conn, hostOf(s.addr))
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Close() }()
-	if err := client.Hello("localhost"); err != nil {
+	defer func() { _ = session.close() }()
+	if err := session.hello(); err != nil {
 		return err
 	}
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(mtls.SMTPClientTLSConfig(hostOf(s.addr))); err != nil {
+	if session.extension("STARTTLS") {
+		if err := session.startTLS(); err != nil {
 			return err
 		}
 	}
-	if s.auth != nil {
-		if ok, _ := client.Extension("AUTH"); !ok {
+	if s.plain != nil {
+		if !session.extension("AUTH") {
 			return fmt.Errorf("SMTP relay does not support AUTH")
 		}
-		if err := client.Auth(s.auth); err != nil {
+		if err := session.authPlain(s.plain.username, s.plain.password); err != nil {
 			return err
 		}
 	}
-	if err := client.Mail(from); err != nil {
+	if err := session.mail(from); err != nil {
 		return err
 	}
 	for _, recipient := range to {
-		if err := client.Rcpt(recipient); err != nil {
+		if err := session.rcpt(recipient); err != nil {
 			return err
 		}
 	}
-	body, err := client.Data()
-	if err != nil {
+	if err := session.data(msg); err != nil {
 		return err
 	}
-	if _, err := body.Write(msg); err != nil {
-		return err
-	}
-	if err := body.Close(); err != nil {
-		return err
-	}
-	return client.Quit()
+	return session.quit()
 }

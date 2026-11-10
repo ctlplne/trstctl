@@ -580,6 +580,11 @@
 
 ### Fixed
 
+- The SMTP relay password no longer lingers in memory after a send (P15-L5). net/smtp's client
+  base64-encoded the PLAIN response into a command string and its writer's buffer, copies nothing
+  could wipe. The email channel now drives the SMTP exchange itself (the same commands net/smtp
+  sends) and writes the AUTH line from a buffer it wipes once written; after STARTTLS the line is
+  sealed in place, and the relay password the ACME email challenge holds as bytes is never a string.
 - Host discovery reads a PKCS#12 file's certificates without decrypting its private key (X2-L3).
   The library decoder decrypted the key on the way to the certificates and left its own copies of
   the decrypted key in memory. A certificate-only reader in `internal/crypto/pfx`, written from

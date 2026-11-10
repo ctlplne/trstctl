@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2878 annotated sites across 33 rules. Each row is
+2879 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1972,7 +1972,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (710 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (711 sites)
 
 | Location | Reason |
 |---|---|
@@ -2376,6 +2376,7 @@ not this file.
 | `internal/kms/wrapadapter/localstack_signer_test.go:104` | the test's own key store (CWE-22) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:74` | the test's own key store (CWE-22) |
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |
+| `internal/notify/email/smtp_plain_wipe_test.go:131` | this package's own source files (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/objectstore/config.go:38` | operator-configured CA bundle path (CWE-22) |
 | `internal/perf/smoke.go:176` | perf harness reading its own artifact path (CWE-22) |
