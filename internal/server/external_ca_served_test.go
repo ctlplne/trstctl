@@ -81,6 +81,16 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 	if !hasExternalCA(listed.Items, "digicert", "digicert") || !hasExternalCA(listed.Items, "lets-encrypt", "letsencrypt") {
 		t.Fatalf("registry items = %+v, want digicert and lets-encrypt", listed.Items)
 	}
+	// A163-L3: each authority says how it revokes a certificate trstctl found,
+	// so the console never keeps its own list of kinds.
+	for _, item := range listed.Items {
+		wantSerial, wantCertificate := item.Type == "digicert", item.Type == "letsencrypt"
+		if item.RevokesBySerial == nil || item.RevokesByCertificate == nil ||
+			*item.RevokesBySerial != wantSerial || *item.RevokesByCertificate != wantCertificate {
+			t.Fatalf("%s revocation addressing = serial %v certificate %v, want %v %v; body=%s",
+				item.ID, item.RevokesBySerial, item.RevokesByCertificate, wantSerial, wantCertificate, body)
+		}
+	}
 
 	digiBody := externalCAIssueRequestBody(t, "svc.digicert.served.test")
 	digi := issueExternalCAWithBody(t, h, "digicert", "clm-03-digicert", digiBody)
@@ -798,6 +808,9 @@ type externalCAListItem struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
 	Name string `json:"name"`
+	// A163-L3: how the authority revokes a certificate trstctl found.
+	RevokesBySerial      *bool `json:"revokes_by_serial"`
+	RevokesByCertificate *bool `json:"revokes_by_certificate"`
 }
 
 func issueExternalCA(t *testing.T, h *servedHarness, caID, dnsName, idem string) externalCAIssueResponse {

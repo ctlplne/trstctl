@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
@@ -46,6 +47,14 @@ type ExternalCA struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
 	Status string `json:"status"`
+	// RevokesBySerial and RevokesByCertificate say how this authority can
+	// revoke a certificate trstctl found but did not issue (A163-L3): by its
+	// serial alone, or from the certificate's bytes (an ACME authority, N10).
+	// The console offers an authority for a rogue certificate from these, so
+	// it never keeps a second list of kinds that can drift from the server's.
+	// Both are false for an authority that is not available.
+	RevokesBySerial      bool `json:"revokes_by_serial"`
+	RevokesByCertificate bool `json:"revokes_by_certificate"`
 	// UpstreamDNS01 is in-process metadata (never serialized): the authority
 	// validates names through tenant DNS-01 provider configs, so the endpoint
 	// preview must confirm one can publish for the requested name.
@@ -98,6 +107,11 @@ func (a *API) listExternalCAs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeError(w, err)
 		return
+	}
+	for i := range items {
+		available := items[i].Status == "available"
+		items[i].RevokesBySerial = available && ca.RevokesBySerial(items[i].Type)
+		items[i].RevokesByCertificate = available && ca.RevokesByCertificate(items[i].Type)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
 }

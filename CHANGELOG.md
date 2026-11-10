@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- The console offers an authority for a rogue certificate from what the server says it can do
+  (A163-L3). It kept its own copy of the kinds that revoke by serial or from a certificate's
+  bytes, which could drift from the server's. `GET /api/v1/external-cas` now serves
+  `revokes_by_serial` and `revokes_by_certificate` for each authority (false while it is
+  unavailable), and the console filters on them.
 - Resolving a third-party finding settles its provider annotation (A174-L1). The Slack reply,
   Jira comment, failed commit status or image referrer an annotation wrote kept telling people
   to rotate a credential after the finding was remediated or dismissed. The resolution now

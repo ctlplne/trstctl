@@ -13,11 +13,14 @@ import { newIdempotencyKey } from "@/lib/apiTransport";
 // (N10); an inventory finding goes through the exact revocation, which reaches
 // its recorded issuer.
 
-/** External CA kinds whose revocation addresses a certificate by serial alone. */
-export const SERIAL_REVOCABLE_KINDS = ["digicert", "sectigo", "awspca", "gcpcas", "smallstep", "ejbca", "vaultpki"];
-
-/** ACME CA kinds that revoke a found certificate from its bytes (N10). */
-export const AUTHORIZED_REVOCABLE_KINDS = ["letsencrypt"];
+/**
+ * Whether the server says an authority can revoke a certificate trstctl found:
+ * by its serial alone, or from its bytes (an ACME authority, N10). The server
+ * serves this per authority (A163-L3), so the console keeps no list of kinds.
+ */
+export function revokesFoundCertificates(ca: ExternalCA): boolean {
+  return ca.revokes_by_serial || ca.revokes_by_certificate;
+}
 
 /** RFC 5280 reasons an operator chooses from when revoking a rogue certificate. */
 export const ROGUE_REVOCATION_REASONS = [
@@ -98,7 +101,7 @@ export function RogueIssuerRevocationCell({
   if (!finding.discovery_id) {
     return <span className="text-xs text-muted-foreground">{t("certificates.rogue.issuerNone")}</span>;
   }
-  const offered = authorities.filter((ca) => SERIAL_REVOCABLE_KINDS.includes(ca.type) || AUTHORIZED_REVOCABLE_KINDS.includes(ca.type));
+  const offered = authorities.filter(revokesFoundCertificates);
   return (
     <span className="grid gap-1 text-xs">
       <label className="grid gap-1">

@@ -5352,6 +5352,8 @@ export interface EvidenceReport {
 export interface ExternalCA {
   id: string;
   name: string;
+  revokes_by_certificate: boolean;
+  revokes_by_serial: boolean;
   status: string;
   type: string;
 }

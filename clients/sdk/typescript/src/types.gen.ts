@@ -18550,6 +18550,10 @@ export interface components {
         ExternalCA: {
             id: string;
             name: string;
+            /** @description This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10). */
+            revokes_by_certificate: boolean;
+            /** @description This authority, when available, revokes a certificate trstctl did not issue by its serial alone (A163). */
+            revokes_by_serial: boolean;
             status: string;
             type: string;
         };

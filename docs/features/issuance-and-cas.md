@@ -955,7 +955,9 @@ A Certificate Transparency finding — a certificate trstctl never asked for, su
 as one issued in your own vendor account outside trstctl — is revoked by serial
 at the external CA you name; CAs whose revocation takes a serial are offered
 (DigiCert, Sectigo, AWS Private CA, Google CAS, step-ca, EJBCA, Vault PKI), and so
-is an ACME CA (N10). An ACME CA identifies the certificate by its bytes, which
+is an ACME CA (N10). Each authority in `GET /api/v1/external-cas` says which way it
+can revoke a certificate trstctl found (`revokes_by_serial`, `revokes_by_certificate`;
+both false while it is unavailable), and the console offers authorities from those. An ACME CA identifies the certificate by its bytes, which
 trstctl never held: trstctl reads them back from the Certificate Transparency log
 that recorded the finding (through that CT source's own egress settings), checks
 them against the finding's fingerprint and serial, gets its own ACME account

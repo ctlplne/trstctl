@@ -1107,7 +1107,9 @@ func componentSchemas() map[string]*Schema {
 	}, "certificate_pem", "serial", "not_after")
 	externalCA := object(map[string]*Schema{
 		"id": str(), "type": str(), "name": str(), "status": str(),
-	}, "id", "type", "name", "status")
+		"revokes_by_serial":      {Type: "boolean", Description: "This authority, when available, revokes a certificate trstctl did not issue by its serial alone (A163)."},
+		"revokes_by_certificate": {Type: "boolean", Description: "This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10)."},
+	}, "id", "type", "name", "status", "revokes_by_serial", "revokes_by_certificate")
 	externalCAIssueReq := object(map[string]*Schema{
 		"csr_pem": str(), "dns_names": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
 		"profile_name": str(), "requested_ekus": {Type: "array", Items: str()},

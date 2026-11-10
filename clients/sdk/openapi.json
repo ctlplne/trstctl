@@ -25355,6 +25355,14 @@
           "name": {
             "type": "string"
           },
+          "revokes_by_certificate": {
+            "description": "This authority, when available, revokes a found certificate from its bytes (an ACME authority, N10).",
+            "type": "boolean"
+          },
+          "revokes_by_serial": {
+            "description": "This authority, when available, revokes a certificate trstctl did not issue by its serial alone (A163).",
+            "type": "boolean"
+          },
           "status": {
             "type": "string"
           },
@@ -25366,7 +25374,9 @@
           "id",
           "type",
           "name",
-          "status"
+          "status",
+          "revokes_by_serial",
+          "revokes_by_certificate"
         ],
         "type": "object"
       },

@@ -85,10 +85,20 @@ function rowOf(subject: string): HTMLElement {
 
 describe("A163 revoke a rogue certificate at its issuer", () => {
   beforeEach(() => {
+    // A163-L3: the server says how each authority revokes a found certificate.
     apiMock.externalCAs.mockReset().mockResolvedValue([
-      { id: "corp-digicert", type: "digicert", name: "Corp DigiCert", status: "available" },
-      { id: "corp-venafi", type: "venafi", name: "Corp Venafi", status: "available" },
-      { id: "corp-acme", type: "letsencrypt", name: "Corp ACME", status: "available" },
+      { id: "corp-digicert", type: "digicert", name: "Corp DigiCert", status: "available", revokes_by_serial: true, revokes_by_certificate: false },
+      { id: "corp-venafi", type: "venafi", name: "Corp Venafi", status: "available", revokes_by_serial: false, revokes_by_certificate: false },
+      { id: "corp-acme", type: "letsencrypt", name: "Corp ACME", status: "available", revokes_by_serial: false, revokes_by_certificate: true },
+      { id: "corp-next", type: "nextca", name: "Corp NextCA", status: "available", revokes_by_serial: true, revokes_by_certificate: false },
+      {
+        id: "corp-digicert-down",
+        type: "digicert",
+        name: "Corp DigiCert (down)",
+        status: "unavailable",
+        revokes_by_serial: false,
+        revokes_by_certificate: false,
+      },
     ]);
     apiMock.revokeRogueCertificateAtIssuer.mockReset();
     apiMock.bulkRevokeCertificates.mockReset();
@@ -110,6 +120,9 @@ describe("A163 revoke a rogue certificate at its issuer", () => {
     expect(within(shadow).queryByRole("option", { name: "Corp Venafi" })).not.toBeInTheDocument();
     // N10: an ACME CA revokes a found certificate from its bytes.
     expect(within(shadow).getByRole("option", { name: "Corp ACME" })).toBeInTheDocument();
+    // A163-L3: the served property decides, not a list of kinds in the console.
+    expect(within(shadow).getByRole("option", { name: "Corp NextCA" })).toBeInTheDocument();
+    expect(within(shadow).queryByRole("option", { name: "Corp DigiCert (down)" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Revocation reason"), { target: { value: "keyCompromise" } });
     fireEvent.change(within(shadow).getByLabelText("Issuing CA"), { target: { value: "corp-digicert" } });
     fireEvent.click(within(shadow).getByRole("button", { name: "Revoke at issuer" }));
