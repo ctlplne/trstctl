@@ -161,7 +161,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:112` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/access_bundles.go:1014` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
+| `internal/api/access_bundles.go:1056` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
 | `internal/api/acme_dns01.go:561` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2475,8 +2475,8 @@ not this file.
 | `internal/server/kmip_client_registration_served_test.go:163` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/server/lab_openldap_test.go:55` | the test's own temp file (CWE-22) |
 | `internal/server/mcp_authorization_keycloak_test.go:141` | the test's own TempDir audit log (CWE-22) |
-| `internal/server/pam_agent_launcher_served_test.go:175` | what the launched agent wrote in the test's temp dir (CWE-22) |
-| `internal/server/pam_agent_launcher_served_test.go:179` | what the launched agent wrote in the test's temp dir (CWE-22) |
+| `internal/server/pam_agent_launcher_served_test.go:193` | what the launched agent wrote in the test's temp dir (CWE-22) |
+| `internal/server/pam_agent_launcher_served_test.go:197` | what the launched agent wrote in the test's temp dir (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:187` | one of two fixed owned native fixture credential paths, selected by the test (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:460` | unique owned task file under fixed lab account home (CWE-22) |
 | `internal/server/pam_desktop_served_test.go:465` | unique owned task file under fixed lab account home (CWE-22) |

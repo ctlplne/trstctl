@@ -343,7 +343,49 @@ func (a *API) normalizeAccessBundle(ctx context.Context, tenantID string, req ac
 	if req.AccessTargets, err = normalizeAccessTargets(req.AccessTargets, req.Permissions); err != nil {
 		return req, err
 	}
+	if err := a.requireRegisteredAccessTargets(ctx, tenantID, req.AccessTargets); err != nil {
+		return req, err
+	}
 	return req, nil
+}
+
+// requireRegisteredAccessTargets checks each account a bundle delegates
+// against the tenant's privileged access target registry when the bundle is
+// saved (A257-L4): the target must be registered and enabled, and a target
+// that lists the roles it allows must allow every role the bundle names. A
+// bundle that could never open what it names was accepted and only refused
+// at session time, after a run had been minted for it. The session check
+// stays authoritative for what the registry cannot say at save time.
+func (a *API) requireRegisteredAccessTargets(ctx context.Context, tenantID string, targets []store.AccessBundleTarget) error {
+	if len(targets) == 0 {
+		return nil
+	}
+	if a.pam == nil {
+		return errStatus(http.StatusUnprocessableEntity, "privileged access is not enabled, so a bundle can name no access targets")
+	}
+	for _, t := range targets {
+		key := t.TargetType + "/" + t.TargetID
+		target, err := a.pam.GetPAMTarget(ctx, tenantID, t.TargetType, t.TargetID)
+		if errors.Is(err, store.ErrPAMTargetNotFound) {
+			return errStatus(http.StatusUnprocessableEntity, "access target "+key+" is not a registered privileged access target")
+		}
+		if err != nil {
+			return err
+		}
+		if !target.Enabled {
+			return errStatus(http.StatusUnprocessableEntity, "access target "+key+" is disabled; a run could open no session to it")
+		}
+		if len(target.AllowedRoles) == 0 {
+			continue
+		}
+		for _, role := range t.Roles {
+			if !slices.Contains(target.AllowedRoles, role) {
+				return errStatus(http.StatusUnprocessableEntity, fmt.Sprintf("access target %s does not allow the role %s (it allows %s)",
+					key, role, strings.Join(target.AllowedRoles, ", ")))
+			}
+		}
+	}
+	return nil
 }
 
 // requireHeldAccessPermissions refuses permissions the caller does not hold.

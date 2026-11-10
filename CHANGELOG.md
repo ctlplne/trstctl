@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- An access bundle naming an account the target registry cannot serve is refused when it is
+  saved (A257-L4). A bundle could delegate an unregistered or disabled target, or a role the
+  target does not allow, and was refused only when a run tried to open it. Saving now checks
+  each `access_targets` entry against the registry and answers 422 naming the target or role.
 - The console offers an authority for a rogue certificate from what the server says it can do
   (A163-L3). It kept its own copy of the kinds that revoke by serial or from a certificate's
   bytes, which could drift from the server's. `GET /api/v1/external-cas` now serves

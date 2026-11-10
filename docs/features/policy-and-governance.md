@@ -225,8 +225,11 @@ TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.js
   sessions to: `access_targets`, each a target type and ID with the roles allowed on it (at
   most 16 targets, 8 roles each; a bundle naming any also carries `access:sessions.open`). A
   run may request or open a session only for those, and is refused (403) any other; a bundle
-  that names none delegates none. The target itself still decides: a role it does not allow
-  is refused as for any requester. `access:sessions.open` requests, opens and revokes one's
+  that names none delegates none. Saving a bundle checks each account against the target
+  registry (A257-L4): a target that is not registered or is disabled, or a role a target's
+  allowed roles do not include, is refused (422) then, not when a run tries it. The target
+  itself still decides at session time: a role it does not allow is refused as for any
+  requester. `access:sessions.open` requests, opens and revokes one's
   own sessions and nothing else of access. Like every other field, an update replaces the
   list: omit it and the bundle delegates nothing. `trstctl-cli access agent` launches an
   agent with these accounts through the access gateway and no credential

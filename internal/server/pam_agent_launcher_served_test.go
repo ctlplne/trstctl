@@ -86,6 +86,24 @@ func TestServedAgentLauncherA257(t *testing.T) {
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "a257-admin", "access:read", "access:write", "access:bundle.run")
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@ops.example", "certs:issue", "certs:read", "identities:write")
 
+	// A257-L4: a bundle naming an account the registry cannot serve is
+	// refused when it is saved, not when a run tries to open it.
+	for name, tc := range map[string]struct {
+		target map[string]any
+		want   string
+	}{
+		"an unregistered target":           {map[string]any{"target_type": "postgres", "target_id": "pg-nowhere", "roles": []string{"readonly"}}, "not a registered privileged access target"},
+		"a role the target does not allow": {map[string]any{"target_type": "postgres", "target_id": "pg-gw", "roles": []string{"superuser"}}, "does not allow the role superuser"},
+	} {
+		status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/bundles", admin, "a257-refused-"+name, map[string]any{
+			"name": "refused", "permissions": []string{"access:sessions.open"}, "max_run_ttl_seconds": 3600,
+			"access_targets": []map[string]any{tc.target},
+		})
+		if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), tc.want) {
+			t.Fatalf("a bundle naming %s = %d %s; want 422 naming %q", name, status, body, tc.want)
+		}
+	}
+
 	// The bundle delegates one account: pg-gw as readonly.
 	status, body := secretsReqKey(t, h.servedHarness, http.MethodPost, "/api/v1/access/bundles", admin, "a257-bundle", map[string]any{
 		"name": "nightly-report", "description": "the reporting agent's database", "permissions": []string{"access:sessions.open"},
