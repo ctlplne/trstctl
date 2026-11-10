@@ -1851,7 +1851,7 @@ func componentSchemas() map[string]*Schema {
 		"name":             str(),
 		"source":           {Type: "string", Enum: []string{"graph_reachers", "stale_owner_attestation", "pam_accounts"}},
 		"target":           {Type: "string", Description: "graph_reachers: the graph node whose reachers to review"},
-		"older_than_days":  {Type: "integer", Description: "stale_owner_attestation: attested longer ago than this (default: the attestation cadence)"},
+		"older_than_days":  {Type: "integer", Description: "stale_owner_attestation: attested longer ago than this (default: the attestation cadence). Owners with no application or environment, which cannot be attested, are always listed."},
 		"reviewer_subject": str(), "due_at": timestamp(),
 	}, "name", "source")
 	nhiReviewGenerateResp := object(map[string]*Schema{

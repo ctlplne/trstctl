@@ -170,9 +170,11 @@ func (a *API) nhiReviewFromStaleOwners(ctx context.Context, tenantID string, g *
 			return orchestrator.NHIReviewCampaignStartRequest{}, err
 		}
 		for _, owner := range owners {
-			// An incomplete owner cannot be attested; the unowned-identity
-			// report names it instead.
-			if !owner.OwnershipComplete() || owner.OwnershipCurrent(now, cadence) {
+			// Q1-L5: an owner with no application or environment can never be
+			// attested, so its credentials are listed here too: a keep is
+			// refused until the reviewer completes the owner. Only a complete
+			// owner with a current attestation is left out.
+			if owner.OwnershipComplete() && owner.OwnershipCurrent(now, cadence) {
 				continue
 			}
 			for _, credential := range g.Neighbors("wl:"+owner.ID, graph.EdgeOwns) {
@@ -189,15 +191,19 @@ func (a *API) nhiReviewFromStaleOwners(ctx context.Context, tenantID string, g *
 		after = owners[len(owners)-1].ID
 	}
 	if len(items) == 0 {
-		return orchestrator.NHIReviewCampaignStartRequest{}, errStatus(http.StatusUnprocessableEntity, "no owned credential has a stale owner attestation")
+		return orchestrator.NHIReviewCampaignStartRequest{}, errStatus(http.StatusUnprocessableEntity, "no owned credential has a stale or incomplete owner attestation")
 	}
-	return orchestrator.NHIReviewCampaignStartRequest{Scope: "owners attested before " + now.Add(-cadence).Format(time.DateOnly), Items: items}, nil
+	return orchestrator.NHIReviewCampaignStartRequest{Scope: "owners attested before " + now.Add(-cadence).Format(time.DateOnly) +
+		", and owners with no application or environment", Items: items}, nil
 }
 
 func staleOwnerReviewItem(owner store.Owner, credential graph.Node) orchestrator.NHIReviewItemRequest {
 	attested := "never attested"
 	if owner.OwnershipVerifiedAt != nil {
 		attested = "attested " + owner.OwnershipVerifiedAt.UTC().Format(time.DateOnly)
+	}
+	if !owner.OwnershipComplete() {
+		attested = "incomplete: the owner has no application or environment, so it cannot be attested; complete the owner, then keep"
 	}
 	return orchestrator.NHIReviewItemRequest{
 		NHIID: credential.ID, NHIKind: firstNonEmpty(credential.Attrs["credential_kind"], "credential"),

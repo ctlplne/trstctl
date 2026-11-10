@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- A stale-owner access review lists the credentials of owners that cannot be attested (Q1-L5).
+  An owner with no application or environment can never be attested, and
+  `stale_owner_attestation` skipped it, so no campaign ever brought it to a reviewer. Its
+  credentials are now listed as "ownership incomplete"; a keep stays refused until the
+  reviewer completes the owner.
 - An SSH trust fleet rollout with a failed host reads `attention_required` even when other
   hosts are still queued past the window (A226-L3). `execution_window_expired` used to
   override it, so the rollout list read as a timing problem while a host had failed; the

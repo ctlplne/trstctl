@@ -24,6 +24,7 @@ type q1Item struct {
 	NHIKind          string     `json:"nhi_kind"`
 	OwnerRef         string     `json:"owner_ref"`
 	Resource         string     `json:"resource"`
+	Entitlement      string     `json:"entitlement"`
 	EvidenceRefs     []string   `json:"evidence_refs"`
 	Status           string     `json:"status"`
 	DecisionBy       string     `json:"decision_by"`
@@ -204,6 +205,13 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 	if _, err := h.srv.orch.AttestOwnership(ctx, h.tenant, fresh, "owner-of-billing"); err != nil {
 		t.Fatal(err)
 	}
+	// Q1-L5: an owner with no application or environment can never be
+	// attested; the stale review surfaces its credentials instead of
+	// skipping them, so a campaign is where it gets completed.
+	unfinished := servedCreateID(t, h, lead, "q1-unfinished-owner", "/api/v1/owners", map[string]any{"kind": "workload", "name": "reports"})
+	reportsID := servedCreateID(t, h, lead, "q1-reports-identity", "/api/v1/identities", map[string]any{
+		"kind": "x509_certificate", "name": "reports.example.test", "owner_id": unfinished,
+	})
 	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/access/reviews/generate", noGraph, "q1-stale", map[string]any{
 		"name": "stale owners", "source": "stale_owner_attestation", "reviewer_subject": "review-bob",
 	})
@@ -221,6 +229,15 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 	}
 	if keepItem.OwnerRef != "wl:"+stale {
 		t.Fatalf("stale owner items = %+v, want the ledger identity owned by %s", generated.Campaign.Items, stale)
+	}
+	var unfinishedItem q1Item
+	for _, candidate := range generated.Campaign.Items {
+		if candidate.NHIID == "id:"+reportsID {
+			unfinishedItem = candidate
+		}
+	}
+	if unfinishedItem.OwnerRef != "wl:"+unfinished || !strings.Contains(unfinishedItem.Entitlement, "ownership incomplete") {
+		t.Fatalf("an owner without an application or environment is not in the stale review: %+v", generated.Campaign.Items)
 	}
 	keepPath := "/api/v1/access/reviews/" + generated.Campaign.ID + "/items/" + keepItem.ItemID + "/decision"
 	status, raw = secretsReqKey(t, h, http.MethodPost, keepPath, bob, "q1-keep", map[string]any{"decision": "certified", "next_review_days": 30})

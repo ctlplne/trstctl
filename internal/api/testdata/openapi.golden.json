@@ -35417,7 +35417,7 @@
             "type": "string"
           },
           "older_than_days": {
-            "description": "stale_owner_attestation: attested longer ago than this (default: the attestation cadence)",
+            "description": "stale_owner_attestation: attested longer ago than this (default: the attestation cadence). Owners with no application or environment, which cannot be attested, are always listed.",
             "type": "integer"
           },
           "reviewer_subject": {

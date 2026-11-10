@@ -21247,7 +21247,7 @@ export interface components {
             /** Format: date-time */
             due_at?: string;
             name: string;
-            /** @description stale_owner_attestation: attested longer ago than this (default: the attestation cadence) */
+            /** @description stale_owner_attestation: attested longer ago than this (default: the attestation cadence). Owners with no application or environment, which cannot be attested, are always listed. */
             older_than_days?: number;
             reviewer_subject?: string;
             /** @enum {string} */
