@@ -508,6 +508,10 @@ func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orche
 	if m.Destination == orchestrator.DestinationConnectorRightSize {
 		return d.failConnectorRightSizeTerminal(ctx, m)
 	}
+	// A cloud-store member's spent row is its failed receipt (A166-L4).
+	if handled, err := d.failCloudStoreMigrationTerminal(ctx, m); handled || err != nil {
+		return err
+	}
 	if d.tenantKeyDomains != nil {
 		handled, err := d.tenantKeyDomains.DeliverTerminalFailure(ctx, m, cause)
 		if handled || err != nil {

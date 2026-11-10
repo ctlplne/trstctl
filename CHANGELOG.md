@@ -565,6 +565,12 @@
 
 ### Fixed
 
+- A cloud-store migration member whose store stays down fails its gate instead of waiting at
+  it (A166-L4). A control-plane deploy or rollback that spent its retries recorded no verdict,
+  so the run sat at its live gate where a relay would have reported a failed receipt. The
+  spent row now counts as the member's failed answer: the run rolls the member back, or halts
+  naming it when the rollback could not reach the store either, and one rollback retry once
+  the store is back re-binds the predecessor.
 - One access review campaign attests an owner once (Q1-L6). Every kept item appended its own
   ownership attestation, so an owner with several credentials in one campaign was attested
   as many times. A keep now records nothing more when the owner was already attested after

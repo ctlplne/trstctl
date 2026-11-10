@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/migration"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -75,19 +77,127 @@ func (d *issuanceDispatcher) closeCloudStoreGate(ctx context.Context, m orchestr
 // already committed, and records the re-bind against the run when the command
 // belongs to a cloud-store member.
 func (d *issuanceDispatcher) closeCloudStoreRollbackGate(ctx context.Context, m orchestrator.Message) error {
+	claim, ok := cloudStoreRollbackClaim(m)
+	if !ok {
+		return nil
+	}
+	return d.observeCloudStoreMigration(ctx, m.TenantID, m.IdempotencyKey, claim)
+}
+
+// cloudStoreRollbackClaim reads a control-plane rollback command's member
+// claim; ok is false for any row that is not a cloud-store member's.
+func cloudStoreRollbackClaim(m orchestrator.Message) (cloudStoreClaim, bool) {
 	var req struct {
 		controlPlaneRollbackCommand
 		MigrationRunID  string `json:"migration_run_id"`
 		MigrationWaveID string `json:"migration_wave_id"`
 	}
 	if json.Unmarshal(m.Payload, &req) != nil || !cloudStoreMigrationRow(m, req.MigrationRunID) {
-		return nil
+		return cloudStoreClaim{}, false
 	}
-	return d.observeCloudStoreMigration(ctx, m.TenantID, m.IdempotencyKey, cloudStoreClaim{
+	return cloudStoreClaim{
 		runID: req.MigrationRunID, waveID: req.MigrationWaveID, identityID: req.IdentityID,
 		stage: migration.StageRollbackSuccessor, targetID: req.TargetID, connector: req.Connector, target: req.Target,
 		config: append(json.RawMessage(nil), req.TargetConfig...), want: req.PredecessorFingerprint,
-	})
+	}, true
+}
+
+// cloudStoreDeployClaim reads a control-plane deploy row's member claim from
+// its public routing, so a row that spent its retries is matched to its
+// member without opening the sealed key it carried. A row sealed nothing when
+// it held no key, and its plain payload names the same routing under the same
+// field names.
+func cloudStoreDeployClaim(m orchestrator.Message) (cloudStoreClaim, bool) {
+	var routing sealedConnectorDeployPayload
+	if json.Unmarshal(m.Payload, &routing) != nil ||
+		(routing.Format != "" && routing.Format != connectorDeploySealedFormat) ||
+		!cloudStoreMigrationRow(m, routing.MigrationRunID) {
+		return cloudStoreClaim{}, false
+	}
+	return cloudStoreClaim{
+		runID: routing.MigrationRunID, waveID: routing.MigrationWaveID, identityID: routing.IdentityID,
+		stage: migration.StageSuccessor, targetID: routing.TargetID, revision: routing.Revision,
+		connector: routing.Connector, target: routing.Target,
+		config: append(json.RawMessage(nil), routing.TargetConfig...), want: routing.Fingerprint,
+	}, true
+}
+
+// A cloud-store member's row that spends its retries (A166-L4).
+//
+// A relay that cannot install or restore a member says so in a signed failed
+// receipt, and the failed verdict rolls the run back or halts it. A
+// control-plane row has no relay to report for it: when the store stays
+// unreachable, or keeps refusing the change, until the outbox stops retrying,
+// the spent row is the member's receipt. It records the failed verdict for the
+// stage it carried, under the same per-row event a readback would have used,
+// so the run rolls back (or, for a rollback row, halts naming the member) as
+// it would on a relay's failed receipt instead of waiting at its gate for an
+// operator nobody told. A row that names no member or drifted from its
+// binding fails no member; a verdict the member already holds, or one the
+// run's phase no longer takes, is left as the run decided it.
+
+// errCloudStoreGateMovedOn marks a spent row whose member the run has already
+// decided: nothing is recorded and the row ends failed.
+var errCloudStoreGateMovedOn = errors.New("server: the cloud-store member's gate has already moved on")
+
+// failCloudStoreMigrationTerminal handles a spent cloud-store member row;
+// handled is false for every other row.
+func (d *issuanceDispatcher) failCloudStoreMigrationTerminal(ctx context.Context, m orchestrator.Message) (handled bool, err error) {
+	var claim cloudStoreClaim
+	var ok bool
+	switch m.Destination {
+	case "connector.deploy":
+		claim, ok = cloudStoreDeployClaim(m)
+	case orchestrator.DestinationConnectorRollback:
+		claim, ok = cloudStoreRollbackClaim(m)
+	}
+	if !ok {
+		return false, nil
+	}
+	if d.store == nil || d.orch == nil {
+		return true, errors.New("server: the cloud-store migration gate is not configured")
+	}
+	record, err := d.store.GetMigrationRun(ctx, m.TenantID, claim.runID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	member, found := migration.Member(record.Run, claim.waveID, claim.identityID)
+	if !found || validateCloudStoreClaim(member.Binding, claim) != nil {
+		return true, nil
+	}
+	obs := migration.Observation{WaveID: claim.waveID, IdentityID: claim.identityID, Stage: claim.stage, Verdict: migration.VerdictFailed}
+	eventID := orchestrator.MigrationEventID(m.TenantID, claim.runID, "receipt:"+m.IdempotencyKey)
+	updated, err := d.orch.UpdateMigrationRun(ctx, m.TenantID, claim.runID, eventID,
+		func(current migration.Run) (migration.Run, []migration.Action, error) {
+			bound, found := migration.Member(current, claim.waveID, claim.identityID)
+			if !found || memberStageVerdict(bound, claim.stage) != "" {
+				return current, nil, errCloudStoreGateMovedOn
+			}
+			next, actions, err := migration.Observe(current, obs)
+			if err != nil {
+				return current, nil, fmt.Errorf("%w: %w", errCloudStoreGateMovedOn, err)
+			}
+			return next, actions, nil
+		})
+	if errors.Is(err, errCloudStoreGateMovedOn) {
+		return true, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	return true, syncIncidentMigrationState(ctx, d.store, d.orch, d.audit, m.TenantID, updated)
+}
+
+// memberStageVerdict is the verdict a member already holds for the stage a
+// cloud-store row carries.
+func memberStageVerdict(member migration.RunMember, stage migration.ObservationStage) migration.Verdict {
+	if stage == migration.StageRollbackSuccessor {
+		return member.RollbackSuccessorVerdict
+	}
+	return member.SuccessorVerdict
 }
 
 // observeCloudStoreMigration reads the store back and records the verdict

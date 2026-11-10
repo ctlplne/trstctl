@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Imported is the self-managed certificate the fake received.
@@ -44,7 +45,13 @@ type Server struct {
 	polls   int
 	preview int
 	nextOp  int
+
+	unavailable atomic.Bool
 }
+
+// SetUnavailable makes every request answer 503 UNAVAILABLE until it is
+// turned off, as a provider outage would.
+func (s *Server) SetUnavailable(down bool) { s.unavailable.Store(down) }
 
 // New starts a fake Certificate Manager that accepts requests bearing
 // expectedToken.
@@ -124,6 +131,10 @@ func (s *Server) UploadedKeys() int {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	if s.unavailable.Load() {
+		s.fail(w, http.StatusServiceUnavailable, "UNAVAILABLE", "the service is currently unavailable")
+		return
+	}
 	if r.Header.Get("Authorization") != "Bearer "+s.token {
 		s.fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "bearer token missing or invalid")
 		return

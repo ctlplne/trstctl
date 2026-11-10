@@ -446,6 +446,13 @@ predecessor's exact identifiers, creates its fingerprint-named certificate and
 points the target's certificate map entry at it, then reads the entry back: the
 live gate passes only when the certificate the entry serves is the successor.
 Rollback re-points the entry at the predecessor and reads it back the same way.
+A store that cannot be reached is retried. If it stays unreachable until the
+control plane stops retrying, the member fails its gate as though the store had
+answered with the wrong certificate: the run rolls the member back on its own,
+and if the rollback cannot reach the store either, the run halts and its halt
+reason names the member. Once the store answers again, roll the run back once
+(**Review rollback** in the console, or `POST /api/v1/migrations/runs/{id}/rollback`)
+to re-bind the predecessor.
 A GCP Certificate Manager target qualifies when it names `certificate_map_entry`
 and trstctl delivered the current certificate to it. AWS Certificate Manager
 re-imports in place and Azure Key Vault serves its newest version, so neither can

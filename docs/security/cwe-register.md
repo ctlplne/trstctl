@@ -517,7 +517,7 @@ not this file.
 | `internal/server/mdm_poller_served_test.go:37` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_scep_dynamic_served_test.go:120` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
 | `internal/server/mdm_scep_dynamic_served_test.go:215` | a secret:// reference in a test fixture, not a credential value (CWE-798) |
-| `internal/server/migration_cloud_store_served_test.go:38` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/migration_cloud_store_served_test.go:41` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/native_connectors_served_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/native_connectors_served_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/native_connectors_served_test.go:130` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798). |

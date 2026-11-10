@@ -30,7 +30,10 @@ import (
 // fingerprint-named certificate and points the map entry at it, and the
 // store's readback of that entry closes the live gate. An operator rollback
 // re-binds the entry to the predecessor through the same client and the
-// readback closes the rollback gate. A store whose API cannot restore a
+// readback closes the rollback gate. A deploy or rollback row that spends its
+// retries against a store that stays down is the member's failed receipt
+// (A166-L4): the run rolls itself back, or halts naming the member, instead of
+// waiting at its gate. A store whose API cannot restore a
 // predecessor, a GCP target without a map entry, a trust path, and a tenant
 // whose cloud-store work runs on a relay are each refused by name.
 func TestServedMigrationCarriesACloudStoreFromTheControlPlane(t *testing.T) {
@@ -258,6 +261,86 @@ func TestServedMigrationCarriesACloudStoreFromTheControlPlane(t *testing.T) {
 	}
 	if bound := provider.MapEntry(mapEntry); len(bound) != 1 || !strings.HasSuffix(bound[0], "/certificates/"+predecessorName) {
 		t.Fatalf("map entry after the rollback = %v, want the predecessor %q", bound, predecessorName)
+	}
+
+	// A166-L4: the store goes down after a second run starts and stays down
+	// while the control plane's deploy spends its retries. The spent row is
+	// the member's failed receipt, as a relay's would be, so the run rolls
+	// itself back instead of waiting at its gate; the rollback row spends its
+	// retries too and halts the run naming the member. Once the store is back
+	// the operator's one rollback retry re-binds the predecessor.
+	status, body = start("plan-a166-down", created.ID, "", "a166-start-down")
+	var down migration.Run
+	if status != http.StatusCreated || json.Unmarshal(body, &down) != nil {
+		t.Fatalf("start the outage run = %d %s", status, body)
+	}
+	provider.SetUnavailable(true)
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain the outage run: %v", err)
+	}
+	spend := func(destination, keyPrefix string) {
+		t.Helper()
+		var key string
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT idempotency_key FROM outbox
+			   WHERE tenant_id = $1 AND destination = $2 AND status = 'pending' AND starts_with(idempotency_key, $3)`,
+				h.tenant, destination, keyPrefix).Scan(&key)
+		}); err != nil {
+			t.Fatalf("pending %s row %s: %v", destination, keyPrefix, err)
+		}
+		// One attempt short of the outbox's limit, so the next failure is its last.
+		tag, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET attempts = 9, next_attempt_at = now()
+		   WHERE tenant_id = $1 AND idempotency_key = $2 AND status = 'pending'`, h.tenant, key)
+		if err != nil || tag.RowsAffected() != 1 {
+			t.Fatalf("arm %s: %v %v", key, tag, err)
+		}
+		if err := h.srv.Drain(ctx); err != nil {
+			t.Fatalf("drain %s: %v", key, err)
+		}
+		var rowStatus string
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT status FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`, h.tenant, key).Scan(&rowStatus)
+		}); err != nil || rowStatus != "failed" {
+			t.Fatalf("%s after its last attempt = %q %v, want failed", key, rowStatus, err)
+		}
+	}
+	memberKey := "migration:" + down.ID + ":cloud:" + created.ID + ":"
+	spend("connector.deploy", memberKey+"cloud_store_deploy")
+	outage, err := h.store.GetMigrationRun(ctx, h.tenant, down.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := outage.Run.Waves[0].Members[0]; got.SuccessorVerdict != migration.VerdictFailed || outage.Run.Status != migration.RunRollingBack {
+		t.Fatalf("after the deploy spent its retries: status %q successor verdict %q, want rolling_back on a failed verdict (the run waited at its gate)",
+			outage.Run.Status, got.SuccessorVerdict)
+	}
+	spend("connector.rollback", memberKey)
+	halted, err := h.store.GetMigrationRun(ctx, h.tenant, down.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := halted.Run.Waves[0].Members[0]; got.RollbackSuccessorVerdict != migration.VerdictFailed ||
+		halted.Run.Status != migration.RunHalted || !strings.Contains(halted.Run.HaltReason, created.ID) {
+		t.Fatalf("after the rollback spent its retries: status %q halt %q rollback verdict %q, want halted naming the member",
+			halted.Run.Status, halted.Run.HaltReason, got.RollbackSuccessorVerdict)
+	}
+	provider.SetUnavailable(false)
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/migrations/runs/"+down.ID+"/rollback", operator, "a166-rollback-down", map[string]any{"reason": "a166 store is back"})
+	if status != http.StatusOK {
+		t.Fatalf("retry the halted rollback = %d %s", status, body)
+	}
+	if err := h.srv.Drain(ctx); err != nil {
+		t.Fatalf("drain the retried rollback: %v", err)
+	}
+	healed, err := h.store.GetMigrationRun(ctx, h.tenant, down.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if healed.Run.Status != migration.RunRolledBack || healed.Run.Waves[0].Members[0].RollbackSuccessorVerdict != migration.VerdictVerified {
+		t.Fatalf("after the store came back: %+v", healed.Run)
+	}
+	if bound := provider.MapEntry(mapEntry); len(bound) != 1 || !strings.HasSuffix(bound[0], "/certificates/"+predecessorName) {
+		t.Fatalf("map entry after the outage run = %v, want the predecessor %q", bound, predecessorName)
 	}
 
 	// Once a relay is enrolled the store's work runs there, so a new run must

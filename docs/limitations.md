@@ -4833,7 +4833,10 @@ than sending an operator looking for a credential that was never there.
   plane: the entry must serve a certificate whose content is the successor.
   A store that answers otherwise fails the gate and the run rolls the member
   back. Rollback re-points the entry at the predecessor through the same client
-  and reads it back the same way. A GCP Certificate Manager target that names a
+  and reads it back the same way. A store that cannot be reached is retried; a
+  deploy or rollback that spends its retries counts as the store's failed answer
+  (A166-L4), so the run rolls the member back, or halts naming it when the
+  rollback could not reach the store either, rather than waiting at the gate. A GCP Certificate Manager target that names a
   `certificate_map_entry`, whose predecessor trstctl delivered to it, qualifies.
   AWS Certificate Manager (re-import in place, no previous version) and Azure
   Key Vault (consumers read the newest version) cannot restore a predecessor and
