@@ -3387,8 +3387,8 @@ while a reached target that cannot re-bind reports `rollback_failed`. Where no
 predecessor exists — a first deployment — the durable evidence says so rather
 than sending an operator looking for a credential that was never there.
 
-- Remaining private CA hierarchy operator flows beyond root/intermediate/leaf
-  issuance. Root/intermediate CA creation, existing signer-backed CA chain
+- Private CA hierarchy operator flows beyond root/intermediate/leaf issuance
+  are served. Root/intermediate CA creation, existing signer-backed CA chain
   import, offline-root import, offline-intermediate CSR generation/import,
   m-of-n approvals, signer-backed leaf issuance, and configured upstream CA
   issuance are served at `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
@@ -3419,12 +3419,15 @@ than sending an operator looking for a credential that was never there.
   ceremony ID at `/api/v1/ca/offline-rekeys/{ceremony-id}` after a restart or a
   lost response; no private key enters the browser or control plane.
   The offline-root import profile accepts any key algorithm the platform can
-  verify and label — ECDSA P-256/P-384/P-521, Ed25519, RSA-2048/3072/4096 —
-  and the reviewed `signature_algorithm` must name the key the certificate
-  actually carries (a root reviewed as one algorithm and carrying another is
-  refused before the ceremony starts); the console's offline import and
-  offline re-key forms select it. CAs the served signer mints stay ECDSA
-  P-256. For offline-root import, `ttl_seconds` caps remaining certificate
+  verify and label — ECDSA P-256/P-384/P-521, Ed25519, RSA-2048/3072/4096 and
+  ML-DSA-44/65/87 — and the reviewed `signature_algorithm` must name the key
+  the certificate actually carries (a root reviewed as one algorithm and
+  carrying another is refused before the ceremony starts); the console's
+  offline import and offline re-key forms select it. A CA the served signer
+  mints is ECDSA P-256, or ML-DSA-44/65/87 when its ceremony's
+  `signature_algorithm` names that parameter set (see
+  [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms)).
+  For offline-root import, `ttl_seconds` caps remaining certificate
   validity and is checked before the ceremony starts and again at import.
 - All 14 external CA integrations are served when configured. `buildRunDeps`
   constructs tenant-bound AD CS, AWS PCA, Azure Key Vault, DigiCert, EJBCA,

@@ -1663,7 +1663,8 @@ func validateCASpec(spec api.CASpec) error {
 	// A25: a reviewed label must be one the import path can verify. The served
 	// signer path narrows this further (validateSignerBackedCASpec).
 	if spec.SignatureAlgorithm != "" && !crypto.ImportedCASignatureAlgorithmSupported(spec.SignatureAlgorithm) {
-		return fmt.Errorf("%w: signature_algorithm %q is not a supported CA key algorithm (ecdsa-p256, ecdsa-p384, ecdsa-p521, ed25519, rsa-2048, rsa-3072, rsa-4096)", api.ErrCAHierarchyInvalid, spec.SignatureAlgorithm)
+		return fmt.Errorf("%w: signature_algorithm %q is not a supported CA key algorithm (%s)", api.ErrCAHierarchyInvalid,
+			spec.SignatureAlgorithm, strings.Join(crypto.ImportedCASignatureAlgorithms, ", "))
 	}
 	return nil
 }

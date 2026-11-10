@@ -580,6 +580,11 @@
 
 ### Fixed
 
+- limitations.md no longer calls the served private CA hierarchy flows "remaining", and no longer
+  says every CA the served signer mints is ECDSA P-256: a ceremony mints ML-DSA-44/65/87 when its
+  `signature_algorithm` names one, and the offline-root import accepts ML-DSA roots too (DF-1, a
+  build-list doc fix). The ceremony's refusal of an unsupported algorithm now lists every algorithm
+  it accepts, ML-DSA included. A docs guard ties both statements to the routes and the key code.
 - The IIS pool configuration digest reads its locked buffer only under the buffer's lock
   (ARCH-014). It read the region through `Buffer.Bytes()`, which releases the lock before the
   slice is used, so a concurrent destroy could wipe and unmap the private configuration under
