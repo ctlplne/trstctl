@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- A test now holds that a CSR's UPN `otherName` SAN never reaches a leaf trstctl signs
+  (A160-L1). No profile can express a user principal name, and the leaf builder takes only
+  the DNS, IP, email and URI names a profile checks; a mutant that copied the CSR's SAN
+  through fails it.
 - The signed webhook, Parameter Store and Netlify secret-sync targets are counted by the
   definition-of-done census (A202-L2). They were proved only by served tests, so the README's
   secret-sync row counted ten and named them apart. Each is now a census row (WIRE-SYNC-109 to

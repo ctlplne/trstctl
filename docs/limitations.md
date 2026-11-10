@@ -4205,7 +4205,10 @@ than sending an operator looking for a credential that was never there.
   names are refused), Any Purpose, Smart Card Logon, PKINIT and Certificate
   Request Agent usages dropped, manager approval kept as dual control, 90-day
   validity. The preview is effect-free and names every change; the domain is
-  derived from the publishing CA's DNS name unless `dns_suffix` names it. **ACME and EST in front of AD CS
+  derived from the publishing CA's DNS name unless `dns_suffix` names it. A
+  profile cannot express a user principal name, and a CSR's UPN `otherName`
+  SAN never reaches a leaf trstctl signs: the leaf carries only the DNS, IP,
+  email and URI names the profile checks (A160-L1). **ACME and EST in front of AD CS
   templates are served** (A159): a certificate profile's
   `upstream_external_ca` names an `adcs` external CA (one template per
   entry), and ACME, EST, SCEP and CMP enrollments under that profile pass the
