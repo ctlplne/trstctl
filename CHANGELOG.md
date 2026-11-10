@@ -580,6 +580,11 @@
 
 ### Fixed
 
+- A custom role with `graph:read` but not `access:read` no longer reads the access side of the
+  graph (G1-L2): tenant members' subjects and names, their roles, AI agents, and the API tokens,
+  machine sessions, PAM sessions and leases they hold. Every graph route leaves it out for such a
+  caller, `GET /api/v1/graph` carries `access_omitted`, and the Graph page says what is hidden and
+  why. Built-in roles with `graph:read` also hold `access:read` and see the whole graph as before.
 - A Linux workload's `unix:path:` selector can no longer be taken from a reused pid (A203-L3). The
   host agent read `/proc/<pid>/exe` for SO_PEERCRED's pid, so a process that connected, handed its
   socket on and exited could be attested as whatever binary was later given its pid. The path now

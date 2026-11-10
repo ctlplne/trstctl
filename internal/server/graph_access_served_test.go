@@ -102,7 +102,9 @@ func TestServedWhoCanReachADatabaseNamesHolderCredentialAndApproversAcrossColdRe
 	reviewerTwo := seedScopedTokenSubject(t, h.store, h.tenant, "pam-reviewer-two", "access:approve")
 	agentToken := seedScopedTokenSubject(t, h.store, h.tenant, "agent-7", "access:read", "access:write")
 	issuer := seedScopedToken(t, h.store, h.tenant, "certs:issue")
-	reader := seedScopedTokenSubject(t, h.store, h.tenant, "graph-reader", "graph:read")
+	// Who can reach a target is access data: the reader holds access:read with
+	// graph:read, as every built-in role with graph:read does (G1-L2).
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "graph-reader", "graph:read", "access:read")
 	noGraph := seedScopedTokenSubject(t, h.store, h.tenant, "cert-reader", "certs:read")
 
 	agentIdentity := servedBrokerIssue(t, h, issuer, "g1-agent-identity", map[string]any{

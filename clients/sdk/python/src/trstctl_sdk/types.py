@@ -7913,6 +7913,7 @@ GraphReachers = TypedDict(
 GraphResponse = TypedDict(
     'GraphResponse',
     {
+        'access_omitted': bool,
         'edges': list[dict[str, Any]],
         'nodes': list[dict[str, Any]],
     },

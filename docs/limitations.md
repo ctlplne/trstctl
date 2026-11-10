@@ -1327,6 +1327,10 @@ never live in the API process. What you can do end to end against the running bi
   reach a database, host or the trstctl API: each credential, its holders and
   approvers, every link with its record and confidence, and a coverage
   statement; `GET /api/v1/graph/path` returns the path between two nodes.
+  Who holds what is access data: every graph route leaves the access side out
+  for a caller holding `graph:read` without `access:read` (a custom role; every
+  built-in role with one has both), and `GET /api/v1/graph` says so with
+  `access_omitted` (G1-L2).
   Answers are identical after a restart and a full read-model rebuild. Step 1
   sees only trstctl's own records: permissions inside the target system come from
   G2 for PostgreSQL and AWS STS leases (below), a dynamic-secret lease does not

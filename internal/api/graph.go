@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/cryptoreadiness"
@@ -19,6 +20,11 @@ import (
 type graphResponse struct {
 	Nodes []graph.Node `json:"nodes"`
 	Edges []graph.Edge `json:"edges"`
+	// AccessOmitted (G1-L2): the caller holds graph:read but not access:read,
+	// so the access side — people, roles, AI agents and the tokens, sessions
+	// and leases they hold — is left out of this graph and of every graph
+	// route's answer.
+	AccessOmitted bool `json:"access_omitted,omitempty"`
 }
 
 // reachableResponse lists the nodes reachable from a starting node.
@@ -45,7 +51,8 @@ func (a *API) getGraph(w http.ResponseWriter, r *http.Request) {
 	if !tenantOK {
 		return
 	}
-	a.writeJSON(w, http.StatusOK, graphResponse{Nodes: g.Nodes(), Edges: g.Edges()})
+	tenantID, _ := a.tenant(r)
+	a.writeJSON(w, http.StatusOK, graphResponse{Nodes: g.Nodes(), Edges: g.Edges(), AccessOmitted: graphOmitsAccess(r, tenantID)})
 }
 
 // graphReachable answers a reachability query: every node reachable from the
@@ -114,12 +121,23 @@ func (a *API) buildGraph(w http.ResponseWriter, r *http.Request) (*graph.Graph, 
 		a.writeProblem(w, problemUnauthorized())
 		return nil, false
 	}
-	g, err := graph.Build(r.Context(), a.store, tenantID)
+	g, err := graph.BuildWith(r.Context(), a.store, tenantID, graph.BuildOptions{OmitAccess: graphOmitsAccess(r, tenantID)})
 	if err != nil {
 		a.writeError(w, err)
 		return nil, false
 	}
 	return g, true
+}
+
+// graphOmitsAccess reports whether the caller may not see the graph's access
+// side (G1-L2). Every graph route needs graph:read; who holds which token,
+// session or lease, and the members' subjects and names, are access:read data.
+// Every built-in role with graph:read also holds access:read, but a custom
+// role may not, and it then gets the graph without the access side. A request
+// with no principal fails closed.
+func graphOmitsAccess(r *http.Request, tenantID string) bool {
+	principal, ok := r.Context().Value(principalCtxKey).(authz.Principal)
+	return !ok || !principal.Can(authz.AccessRead, authz.Scope{TenantID: tenantID})
 }
 
 // trustStoresResponse answers "who trusts this CA" (epic H1).

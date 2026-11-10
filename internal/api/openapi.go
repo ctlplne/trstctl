@@ -6013,6 +6013,8 @@ func componentSchemas() map[string]*Schema {
 	graphResponse := object(map[string]*Schema{
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 		"edges": {Type: "array", Items: ref("GraphEdge")},
+		"access_omitted": {Type: "boolean", Description: "The caller holds graph:read but not access:read, so the access side " +
+			"(people, roles, AI agents, and the tokens, sessions and leases they hold) is left out (G1-L2)."},
 	}, "nodes", "edges")
 	graphReachable := object(map[string]*Schema{
 		"from":  str(),

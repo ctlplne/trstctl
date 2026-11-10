@@ -42,6 +42,21 @@ const serviceDependencyFindingKind = dependencyobs.Kind
 // Every read is tenant-scoped through the store (AN-1); the graph never spans
 // tenants.
 func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error) {
+	return BuildWith(ctx, st, tenantID, BuildOptions{})
+}
+
+// BuildOptions narrows what BuildWith reads.
+type BuildOptions struct {
+	// OmitAccess leaves out the access side (G1): tenant members and their
+	// roles, AI agents, API tokens, machine sessions, PAM sessions,
+	// dynamic-secret leases, approvals, and the resources only those reach.
+	// Who holds what is access:read data, so a reader holding graph:read
+	// without access:read gets the graph without it (G1-L2).
+	OmitAccess bool
+}
+
+// BuildWith is Build with options.
+func BuildWith(ctx context.Context, st *store.Store, tenantID string, opts BuildOptions) (*Graph, error) {
 	g := New()
 
 	owners, err := st.ListOwners(ctx, tenantID)
@@ -287,8 +302,10 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 	}
 
-	if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC()); err != nil {
-		return nil, err
+	if !opts.OmitAccess {
+		if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC()); err != nil {
+			return nil, err
+		}
 	}
 	return g, nil
 }

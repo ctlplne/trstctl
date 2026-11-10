@@ -5701,6 +5701,7 @@ export interface GraphReachers {
 }
 
 export interface GraphResponse {
+  access_omitted?: boolean;
   edges: GraphEdge[];
   nodes: GraphNode[];
 }

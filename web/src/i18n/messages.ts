@@ -15992,6 +15992,11 @@ export const messages = {
     defaultMessage: "Only relationships currently known to trstctl are counted. Missing discovery coverage can make the real impact larger.",
     description: "Safety boundary on graph impact results.",
   },
+  "graph.design.accessOmitted": {
+    defaultMessage:
+      "People, roles, AI agents and the tokens, sessions and leases they hold are left out of this graph: seeing them needs access:read as well as graph:read.",
+    description: "G1-L2: the caller holds graph:read without access:read, so the access side is hidden.",
+  },
   "graph.design.disclosure.map": {
     defaultMessage: "Relationship map and filters",
     description: "Progressive disclosure for the visual graph.",

@@ -28,6 +28,21 @@ function renderGraph(path = "/graph") {
 }
 
 describe("route 027 impact-first graph design", () => {
+  it("says when the access side is left out for a reader without access:read (G1-L2)", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [{ id: "cert:payments", kind: "credential", name: "payments-cert", attrs: {} }],
+      edges: [],
+      access_omitted: true,
+    });
+    renderGraph();
+    expect(await screen.findByRole("note")).toHaveTextContent("seeing them needs access:read as well as graph:read");
+  });
+  it("says nothing about the access side when it is shown", async () => {
+    apiMock.graph.mockResolvedValue({ nodes: [{ id: "cert:payments", kind: "credential", name: "payments-cert", attrs: {} }], edges: [] });
+    renderGraph();
+    await screen.findByRole("combobox", { name: "Credential to explore" });
+    expect(screen.queryByText(/seeing them needs access:read/)).not.toBeInTheDocument();
+  });
   it("counts endpoint resources separately from bound lifecycle identities", async () => {
     apiMock.graphBlastRadius.mockResolvedValue({
       node: { id: "cert:payments", kind: "credential", name: "payments-cert" },

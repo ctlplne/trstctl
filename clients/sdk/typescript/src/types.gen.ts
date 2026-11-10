@@ -18966,6 +18966,8 @@ export interface components {
             target: components["schemas"]["GraphNode"];
         };
         GraphResponse: {
+            /** @description The caller holds graph:read but not access:read, so the access side (people, roles, AI agents, and the tokens, sessions and leases they hold) is left out (G1-L2). */
+            access_omitted?: boolean;
             edges: components["schemas"]["GraphEdge"][];
             nodes: components["schemas"]["GraphNode"][];
         };

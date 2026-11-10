@@ -1,1 +1,0 @@
-import{m as s,t}from"./schemas-BjEC_fA0.js";function r(r){return s(t,r)}export{r as t};

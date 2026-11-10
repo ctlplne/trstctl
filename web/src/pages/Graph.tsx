@@ -275,6 +275,11 @@ export function Graph() {
                 {!impact && !blastError ? <h2 className="text-title font-semibold">{translateNow("source.not.checked.d3tri00006")}</h2> : null}
                 {impact ? <ImpactAnswer impact={impact} /> : null}
                 <p className="mt-3 max-w-3xl text-caption text-muted-foreground">{t("graph.design.coverage")}</p>
+                {graph.data?.access_omitted ? (
+                  <p role="note" className="mt-2 max-w-3xl text-caption text-muted-foreground">
+                    {t("graph.design.accessOmitted")}
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
