@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2860 annotated sites across 31 rules. Each row is
+2863 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -2855,10 +2855,12 @@ not this file.
 | `internal/crypto/possession_test.go:283` | a throwaway test root key |
 | `internal/crypto/weakkey/weakkey_test.go:413` | a deliberately weak RSA-1024 key, to prove it is rated weak (CWE-326) |
 
-### G404 — CWE-338 Cryptographically weak PRNG (32 sites)
+### G404 — CWE-338 Cryptographically weak PRNG (34 sites)
 
 | Location | Reason |
 |---|---|
+| `clients/sdk/go/trstctl/client.go:303` | dedup token bound server-side to the caller's request, not a secret; the SDK stays outside the crypto boundary by design (CRYPTO-101) (CWE-338) |
+| `clients/sdk/go/trstctl/client.go:304` | dedup token bound server-side to the caller's request, not a secret; the SDK stays outside the crypto boundary by design (CRYPTO-101) (CWE-338) |
 | `cmd/trstctl-agent/backoff_test.go:22` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/backoff_test.go:49` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/backoff_test.go:68` | test jitter/shuffle, not a security decision (CWE-338) |
@@ -3200,10 +3202,11 @@ not this file.
 |---|---|
 | `internal/connector/paloalto/paloaltotest/paloaltotest.go:579` | test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502) |
 
-### G710 — CWE-601 Open redirect (taint) (4 sites)
+### G710 — CWE-601 Open redirect (taint) (5 sites)
 
 | Location | Reason |
 |---|---|
+| `clients/sdk/go/trstctl/workloads_test.go:300` | the test's own redirect to its own server; the SDK must refuse to follow it (CWE-601) |
 | `ee/enterpriseauth/auth_saml_served_test.go:289` | test IdP redirects to the SP's own SLO URL read from its metadata (CWE-601) |
 | `ee/enterpriseauth/auth_saml_served_test.go:370` | test IdP redirects to the ACS it read from the SP's own metadata (CWE-601) |
 | `ee/enterpriseauth/oidc_fixture_test.go:48` | test redirect within its own local server (CWE-601) |

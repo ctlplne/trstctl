@@ -573,6 +573,8 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	if [ -n "$$golangci_lint" ]; then \
 		echo ">> golangci-lint"; \
 		if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run $(GO_PACKAGE_DIRS); else "$$golangci_lint" run $(GO_PACKAGE_DIRS); fi; \
+		echo ">> golangci-lint (Go SDK module, from its own root; A250-L1)"; \
+		(cd clients/sdk/go && if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run ./...; else "$$golangci_lint" run ./...; fi); \
 	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! ============================================================"; \
 		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \

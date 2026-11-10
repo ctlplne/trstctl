@@ -297,9 +297,11 @@ func NewIdempotencyKey() string {
 	// free of any crypto/* import — the control plane centralizes all real
 	// cryptography behind internal/crypto (AN-3), and a consumer SDK must not need
 	// that boundary to mint a dedup key.
+	// The server binds every key to the authenticated caller and canonical
+	// request, so a key nobody else can present is all it must be (A250-L1).
 	var b [16]byte
-	binary.LittleEndian.PutUint64(b[0:8], rand.Uint64())
-	binary.LittleEndian.PutUint64(b[8:16], rand.Uint64())
+	binary.LittleEndian.PutUint64(b[0:8], rand.Uint64())  // #nosec G404 -- dedup token bound server-side to the caller's request, not a secret; the SDK stays outside the crypto boundary by design (CRYPTO-101) (CWE-338)
+	binary.LittleEndian.PutUint64(b[8:16], rand.Uint64()) // #nosec G404 -- dedup token bound server-side to the caller's request, not a secret; the SDK stays outside the crypto boundary by design (CRYPTO-101) (CWE-338)
 	return "idem-" + hex.EncodeToString(b[:])
 }
 

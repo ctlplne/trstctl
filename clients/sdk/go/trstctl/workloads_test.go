@@ -297,7 +297,7 @@ func TestSensitiveWorkloadRequestRefusesRedirectAndPreservesCallerBytes(t *testi
 	defer target.Close()
 
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect) // #nosec G710 -- the test's own redirect to its own server; the SDK must refuse to follow it (CWE-601)
 	}))
 	defer source.Close()
 

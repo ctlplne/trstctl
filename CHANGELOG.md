@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- Lint covers the Go SDK module (A250-L1). No lint gate ran over `clients/sdk/go`, which left
+  three gosec findings unseen: the idempotency key generator's `math/rand/v2` draws (a dedup
+  token the server binds to the authenticated request, kept outside the crypto boundary by
+  design under CRYPTO-101, now annotated with that reason) and a test's deliberate redirect
+  fixture (annotated). `make lint` now runs golangci-lint in the SDK module from its own root.
 - An access bundle naming an account the target registry cannot serve is refused when it is
   saved (A257-L4). A bundle could delegate an unregistered or disabled target, or a role the
   target does not allow, and was refused only when a run tried to open it. Saving now checks
