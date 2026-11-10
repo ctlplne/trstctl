@@ -559,6 +559,15 @@
 
 ### Fixed
 
+- A host renewal heals after a certificate authority outage with nothing cleared on the
+  agent host (A36, an outside lab's DNS-01 test). A job whose CA attempt was left
+  unconfirmed could never finish, every retry answered 409, and once that job was
+  cancelled the agent refused every later renewal of the target as "the encrypted pending
+  host key belongs to another job" until a file was deleted by hand. Retrying a
+  `renewal_failed` identity now ends a failed host job no agent holds (and withdraws the
+  CA request it left waiting), each new job tells its agent through which job the target's
+  renewals have ended, and the agent wipes a key one of those jobs left unsigned. An
+  outage the CA reports as not submitted still heals by the same job's next attempt.
 - A secret rotation schedule or MDM SCEP policy under a name another one holds is a 409,
   and nothing is recorded (LS-1, the rest of the class A233-L3 found). Each appended its
   event and then failed the projection on the tenant's name index (MDM SCEP policies in

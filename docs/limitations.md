@@ -3522,10 +3522,10 @@ than sending an operator looking for a credential that was never there.
   the operator restores the previous settings or runs the agent once with
   `--set-aside-pending-report`. A host renewal whose report was set aside
   keeps its retained key in the host rollback state: a retry of that job
-  resumes with it, but if the control plane fails the job instead, a later
-  renewal of that target is refused as "the encrypted pending host key belongs
-  to another job" until that renewal is rolled back on the target, which
-  clears the slot.
+  resumes with it. If the control plane ends the job instead (a retry
+  superseded it, an operator cancelled it, or it failed for good), the next
+  renewal of that target says the job has ended and the agent wipes the key
+  it left unsigned (A36); nothing on the host is cleared by hand.
   When the certificate was issued but the host could not install it, the
   agent's receipt names the step that failed (the host sandbox refused the
   write, the connector's configuration test refused the new pair, or the

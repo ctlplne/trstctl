@@ -204,10 +204,6 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		IssuingAuthorityID:       selection.ID,
 		Issuance:                 issuance,
 	}
-	payload, err := json.Marshal(intent)
-	if err != nil {
-		return fmt.Errorf("server: encode host renewal intent: %w", err)
-	}
 
 	// HOST role demanded per row, not just per kind. The kind-level vantage map
 	// already says endpoint.renew is host work; stamping the demand on the row
@@ -218,7 +214,19 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	// queue a second job for the same identity, or two agents each generate a
 	// key and one of the two certificates becomes an orphan nothing serves.
 	return d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+		// A36 heal: say through which job every renewal for this target has
+		// ended, so its agent can wipe a key an ended job left unsigned
+		// instead of refusing every later renewal as another job's.
+		ended, err := d.store.HostRenewalJobsEndedThroughTx(ctx, tx, tenantID, target.ID)
+		if err != nil {
+			return err
+		}
+		intent.EndedThroughJobID = ended
+		payload, err := json.Marshal(intent)
+		if err != nil {
+			return fmt.Errorf("server: encode host renewal intent: %w", err)
+		}
+		_, err = d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID:          tenantID,
 			Destination:       agentJobKindEndpointRenew,
 			IdempotencyKey:    idempotencyKey,

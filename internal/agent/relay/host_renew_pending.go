@@ -258,6 +258,39 @@ func (s *HostRollbackStore) ClearRolledBackHostRenewPending(connectorName, targe
 	return syncHostRenewDirectory(s.root)
 }
 
+// ReleaseEndedHostRenewPending wipes the key a host renewal job left unsigned
+// once the control plane has ended that job (A36 heal). A job that fails
+// before its certificate is signed keeps its key so the SAME job can resume;
+// when the control plane ends it instead (a retry superseded it, an operator
+// cancelled it, or it failed for good), the next job for the target says every
+// job up to endedThroughJobID has ended, and only then is a slot at or below
+// it released. It reports whether a key was released. The current job's own
+// slot, an open job's slot, and a key whose certificate was signed are left as
+// they are, so the first-writer fence still refuses a different job.
+func (s *HostRollbackStore) ReleaseEndedHostRenewPending(connectorName, targetID string, endedThroughJobID, currentJobID int64) (bool, error) {
+	if connectorName == "" || targetID == "" || endedThroughJobID <= 0 {
+		return false, nil
+	}
+	lock := s.targetLock(connectorName, targetID)
+	lock.Lock()
+	defer lock.Unlock()
+	p, err := s.loadHostRenew(connectorName, targetID)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer wipeHostRenewPending(p)
+	if p.JobID > endedThroughJobID || p.JobID == currentJobID || p.Fingerprint != "" || len(p.CertPEM) != 0 {
+		return false, nil
+	}
+	if err := os.Remove(s.hostRenewPath(connectorName, targetID)); err != nil { // #nosec G703 -- derived agent-owned state path
+		return false, err
+	}
+	return true, syncHostRenewDirectory(s.root)
+}
+
 // syncHostRenewDirectory makes a pending record's create, replace or removal
 // durable (a no-op on Windows; the record file is flushed before its rename).
 func syncHostRenewDirectory(root string) error { return fsatomic.SyncDirectory(root) }

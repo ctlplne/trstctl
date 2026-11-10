@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2858 annotated sites across 31 rules. Each row is
+2860 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -783,7 +783,7 @@ not this file.
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 | `internal/server/mcp_authorization_keycloak_test.go:272` | the lab container's own loopback URL (CWE-88) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (21 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (22 sites)
 
 | Location | Reason |
 |---|---|
@@ -803,6 +803,7 @@ not this file.
 | `internal/server/evaluate_served_test.go:66` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:533` | loopback fixture closed below (CWE-400) |
+| `internal/server/host_renewal_heal_served_test.go:107` | loopback fixture is closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
 | `internal/server/migration_appliance_served_test.go:115` | loopback fixture closed below (CWE-400) |
 | `internal/server/migration_run_served_test.go:98` | loopback fixture is closed below (CWE-400) |
@@ -2975,7 +2976,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1299` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:956` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (147 sites)
+### G703 — CWE-22 Path traversal (taint) (148 sites)
 
 | Location | Reason |
 |---|---|
@@ -2995,6 +2996,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:164` | both paths are agent-owned fixed state paths |
 | `internal/agent/relay/host_renew_pending.go:224` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:255` | derived agent-owned state path |
+| `internal/agent/relay/host_renew_pending.go:288` | derived agent-owned state path |
 | `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sessionobserve/observer_linux_test.go:132` | the proof names its report path in the environment, never a request (CWE-22) |
 | `internal/agent/sshkrl/install.go:279` | staged path is created in the bound target directory by CreateTemp |

@@ -170,6 +170,15 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		}
 		defer wipePQCPending(pending)
 	} else if hostRollback != nil {
+		// A36 heal: a job the control plane ended before its key was signed
+		// left that key in the target's slot; this job says it has ended, so
+		// wipe it rather than refuse this renewal as another job's.
+		if intent.EndedThroughJobID > 0 {
+			if _, err := hostRollback.ReleaseEndedHostRenewPending(intent.Connector, intent.TargetID, intent.EndedThroughJobID, job.JobID); err != nil {
+				report(ctx, ch, job, OutcomeFailed, "the ended job's pending host key could not be released")
+				return false
+			}
+		}
 		ordinaryPending, err = hostRollback.LoadHostRenewPending(intent.Connector, intent.TargetID, job.JobID, ordinaryBinding)
 		if err != nil {
 			report(ctx, ch, job, OutcomeFailed, "the encrypted pending host key belongs to another job or cannot be read")

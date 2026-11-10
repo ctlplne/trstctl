@@ -96,6 +96,11 @@ type DeployIntent struct {
 	// PredecessorCertificateID is control-plane bookkeeping the agent never
 	// reads. It is declared so the intent round-trips without loss.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	// EndedThroughJobID is the control plane's statement that every host
+	// renewal job for this target up to this ID has ended (A36 heal): an
+	// unsigned pending key one of them left is wiped before this job generates
+	// its own. A slot an open job holds still refuses this one.
+	EndedThroughJobID int64 `json:"ended_through_job_id,omitempty"`
 	// RotationRunID is read from the durable server-created renewal job so a
 	// signed PQC renewal can be joined to its exact lifecycle run.
 	RotationRunID string `json:"rotation_run_id,omitempty"`

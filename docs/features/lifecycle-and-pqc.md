@@ -214,11 +214,21 @@ idempotent mutation path. Verification comes from the resulting rotation run and
 connector receipt, not from a green button state.
 
 A failed agent attempt can leave the identity in `renewal_failed` while its
-existing renewal job retries. Scheduled sweeps do not start another renewal while
-that identity has pending or processing `ca.renew` or `endpoint.renew` work.
-Manual renewal previews and execution return HTTP 409 with guidance to follow the
-existing job. Once that work is terminal, a still-due identity can be renewed again.
-Revocation remains available during recovery.
+existing renewal job retries. A host job keeps the subject key it generated on the
+host, so its next attempt resumes with the same key and request once the certificate
+authority answers again (a DNS-01 outage heals this way, with nothing to clear on the
+host). Scheduled sweeps do not start another renewal while that identity has pending
+or processing `ca.renew` or `endpoint.renew` work, and manual renewal previews and
+execution return HTTP 409 with guidance to follow the existing job while an agent is
+working on it. Retrying a `renewal_failed` identity ends a host renewal job that has
+already failed and that no agent holds right now: its claim, signing and result are
+refused from then on, and a certificate authority request it left waiting is withdrawn
+(`superseded_by_retry`). So a job stuck behind a CA result that can never arrive (an
+attempt the authority left unconfirmed) does not block the retry. Each new host
+renewal job tells its agent through which job every renewal of the target has ended,
+and the agent wipes a key one of those jobs left unsigned; a key an open job holds, or
+one whose certificate was signed, stays. Once that work is terminal, a still-due
+identity can be renewed again. Revocation remains available during recovery.
 
 The control limits are intentional and visible:
 

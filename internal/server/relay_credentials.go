@@ -487,6 +487,11 @@ type RelayDeployIntent struct {
 	//
 	// Empty on a first issuance, which genuinely replaces nothing.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	// EndedThroughJobID says every host renewal job for this target up to this
+	// ID has ended (A36 heal): completed, failed or cancelled, none still
+	// pending. Its agent may wipe a key one of those jobs left unsigned; a key
+	// any open job holds is never touched.
+	EndedThroughJobID int64 `json:"ended_through_job_id,omitempty"`
 	// RotationRunID binds a renewal result to the server-created run. It is
 	// absent on first issuance and on jobs queued before result-bound runs.
 	RotationRunID          string `json:"rotation_run_id,omitempty"`

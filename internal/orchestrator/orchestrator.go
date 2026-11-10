@@ -769,6 +769,15 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				}
 			}
 			if to == StateRenewing {
+				// A36 heal: retrying a failed renewal ends the host renewal job
+				// that failed and that no agent holds, so one stuck behind a
+				// certificate authority result that can never arrive does not
+				// block the retry; the next job names it for its agent.
+				if State(locked.Status) == StateRenewalFailed {
+					if _, err := o.store.SupersedeFailedHostRenewalTx(ctx, tx, tenantID, identityID, commandTime); err != nil {
+						return err
+					}
+				}
 				pending, err := o.store.IdentityRenewalWorkPendingTx(ctx, tx, tenantID, identityID)
 				if err != nil {
 					return err
