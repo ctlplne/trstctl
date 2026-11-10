@@ -407,135 +407,140 @@ const responseDispatch = {
   ],
 };
 
-describe("incident response served execution surface", () => {
-  beforeEach(() => {
-    apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
-    apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
-    apiMock.outboxReconciliationConflicts.mockReset().mockResolvedValue({
-      guidance: "Keep the historical command and issue the intended command with a new unique idempotency key.",
-      items: [
-        {
-          id: "outbox-reconciliation-conflict:kzjS2DNXhPcrCgxJlvk7We",
-          tenant_id: "tenant-1",
-          source_event_id: "kzjS2DNXhPcrCgxJlvk7We",
-          source_event_sequence: 267,
-          source_event_type: "identity.deployed",
-          idempotency_key: "transition:demo-seed-v1:identity-warehouse-mtls-deploy",
-          existing_outbox_id: 15,
-          existing_destination: "connector.deploy",
-          existing_effect_lane: "connector.deploy:identity:5481474d-7a8b-440a-a7df-fca7c8311dd0",
-          existing_payload_sha256: "a".repeat(64),
-          candidate_destination: "connector.deploy",
-          candidate_effect_lane: "connector.deploy:identity:6ced6b6d-3777-44a8-a60f-40db05af7741",
-          candidate_payload_sha256: "b".repeat(64),
-          candidate_required_agent_role: "control_plane",
-          reason: "receiver idempotency key is already bound to a different immutable command",
-          status: "quarantined",
-          detected_at: "2026-08-09T13:51:41Z",
-        },
-      ],
-    });
-    apiMock.executeIncident.mockReset().mockResolvedValue(execution);
-    // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
-    // of the console loads; defaults keep pre-picker tests behaviorally identical.
-    apiMock.identities.mockReset().mockResolvedValue([
+// seedIncidentResponseMocks gives every served route the incidents page reads
+// its fixture. Each describe seeds it before each test, so a test passes alone,
+// in any order, without leaning on another describe's setup (WEB-O1).
+function seedIncidentResponseMocks() {
+  apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
+  apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
+  apiMock.outboxReconciliationConflicts.mockReset().mockResolvedValue({
+    guidance: "Keep the historical command and issue the intended command with a new unique idempotency key.",
+    items: [
       {
-        id: "11111111-1111-1111-1111-111111111111",
-        name: "payments-api",
-        kind: "x509_certificate",
-        status: "issued",
-        issuer_id: "77777777-7777-7777-7777-777777777777",
+        id: "outbox-reconciliation-conflict:kzjS2DNXhPcrCgxJlvk7We",
+        tenant_id: "tenant-1",
+        source_event_id: "kzjS2DNXhPcrCgxJlvk7We",
+        source_event_sequence: 267,
+        source_event_type: "identity.deployed",
+        idempotency_key: "transition:demo-seed-v1:identity-warehouse-mtls-deploy",
+        existing_outbox_id: 15,
+        existing_destination: "connector.deploy",
+        existing_effect_lane: "connector.deploy:identity:5481474d-7a8b-440a-a7df-fca7c8311dd0",
+        existing_payload_sha256: "a".repeat(64),
+        candidate_destination: "connector.deploy",
+        candidate_effect_lane: "connector.deploy:identity:6ced6b6d-3777-44a8-a60f-40db05af7741",
+        candidate_payload_sha256: "b".repeat(64),
+        candidate_required_agent_role: "control_plane",
+        reason: "receiver idempotency key is already bound to a different immutable command",
+        status: "quarantined",
+        detected_at: "2026-08-09T13:51:41Z",
       },
-      { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
-    ]);
-    apiMock.issuers.mockReset().mockResolvedValue([{ id: "77777777-7777-7777-7777-777777777777", name: "compromised intermediate", kind: "x509_ca" }]);
-    apiMock.caAuthorities.mockReset().mockResolvedValue({
-      items: [{ id: "abababab-abab-4bab-8bab-abababababab", common_name: "clean replacement CA", kind: "intermediate", status: "active" }],
-    });
-    apiMock.agents
-      .mockReset()
-      .mockResolvedValue([{ id: "12121212-1212-4212-8212-121212121212", name: "role-agent", status: "active", presence: { state: "online" } }]);
-    apiMock.connectorCatalog.mockReset().mockResolvedValue({
-      items: [
-        { name: "nginx", kind: "webserver", delivery_mode: "push", rollback: "restore previous bundle" },
-        { name: "aws-iam", kind: "cloud", delivery_mode: "api", rollback: "restore previous policy" },
-      ],
-    });
-    apiMock.nhiInventory.mockReset().mockResolvedValue({
-      generated_at: "2026-06-20T12:00:00Z",
-      items: [{ id: "nhi-payments-bot", display_name: "payments bot", kind: "secret", created_at: "2026-06-01T00:00:00Z", metadata: {} }],
-      summary: {},
-      coverage: [],
-    });
-    apiMock.remediationPlaybooks
-      .mockReset()
-      .mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
-    apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
-    apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
-    apiMock.ownerRemediationActions.mockReset().mockResolvedValue({
-      capability: "CAP-REM-02",
-      status: "served",
-      generated_at: "2026-06-20T12:25:00Z",
-      summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
-      items: [ownerAction],
-      evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
-    });
-    apiMock.remediationOwnerActions.mockReset().mockResolvedValue({
-      capability: "CAP-REM-02",
-      status: "served",
-      generated_at: "2026-06-20T12:25:00Z",
-      summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
-      items: [ownerAction],
-      evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
-    });
-    apiMock.acceptOwnerRemediationAction.mockReset().mockResolvedValue(ownerRemediationRun);
-    apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
-    apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
-    apiMock.previewFleetReissuance.mockReset().mockResolvedValue({
-      capability: "F32",
-      ready: true,
-      effect_free: true,
-      blockers: [],
-      exact_trust_store_ids: ["trust-store-1"],
-      exact_trust_hosts: ["host-1"],
-      candidate_trust_store_ids: [],
-      candidate_trust_hosts: [],
-      affected_identity_ids: ["11111111-1111-1111-1111-111111111111"],
-      outside_calls: [],
-      signer_calls: 0,
-      durable_writes: [],
-    });
-    apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
-    apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
-    apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "running", phase: "batch_resumed" });
-    apiMock.rollbackFleetReissuance.mockReset().mockResolvedValue({
-      ...fleetRun,
-      status: "rolled_back",
-      phase: "failed_cohort_rolled_back",
-      rollback_refs: [...fleetRun.rollback_refs, "restore previous credential bindings"],
-      evidence_bundle_format: "jws",
-      evidence_bundle: "fleet.audit.bundle",
-    });
-    apiMock.exportFleetReissuanceEvidence.mockReset().mockResolvedValue({
-      run_id: fleetRun.id,
-      evidence_bundle_format: "jws",
-      evidence_bundle: "fleet.audit.bundle",
-      rollback_refs: fleetRun.rollback_refs,
-      failed_targets: fleetRun.failed_targets,
-      exported_at: fleetRun.updated_at,
-    });
-    apiMock.createServiceNowTicket.mockReset().mockResolvedValue({
-      id: "55555555-5555-5555-5555-555555555555",
-      tenant_id: "tenant-1",
-      provider: "servicenow",
-      destination: "itsm.servicenow",
-      table: "incident",
-      status: "queued",
-      outbox_id: 42,
-      idempotency_key: "evt-555",
-      created_at: "2026-06-20T12:05:00Z",
-    });
+    ],
   });
+  apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+  // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
+  // of the console loads; defaults keep pre-picker tests behaviorally identical.
+  apiMock.identities.mockReset().mockResolvedValue([
+    {
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "payments-api",
+      kind: "x509_certificate",
+      status: "issued",
+      issuer_id: "77777777-7777-7777-7777-777777777777",
+    },
+    { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
+  ]);
+  apiMock.issuers.mockReset().mockResolvedValue([{ id: "77777777-7777-7777-7777-777777777777", name: "compromised intermediate", kind: "x509_ca" }]);
+  apiMock.caAuthorities.mockReset().mockResolvedValue({
+    items: [{ id: "abababab-abab-4bab-8bab-abababababab", common_name: "clean replacement CA", kind: "intermediate", status: "active" }],
+  });
+  apiMock.agents
+    .mockReset()
+    .mockResolvedValue([{ id: "12121212-1212-4212-8212-121212121212", name: "role-agent", status: "active", presence: { state: "online" } }]);
+  apiMock.connectorCatalog.mockReset().mockResolvedValue({
+    items: [
+      { name: "nginx", kind: "webserver", delivery_mode: "push", rollback: "restore previous bundle" },
+      { name: "aws-iam", kind: "cloud", delivery_mode: "api", rollback: "restore previous policy" },
+    ],
+  });
+  apiMock.nhiInventory.mockReset().mockResolvedValue({
+    generated_at: "2026-06-20T12:00:00Z",
+    items: [{ id: "nhi-payments-bot", display_name: "payments bot", kind: "secret", created_at: "2026-06-01T00:00:00Z", metadata: {} }],
+    summary: {},
+    coverage: [],
+  });
+  apiMock.remediationPlaybooks
+    .mockReset()
+    .mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
+  apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
+  apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
+  apiMock.ownerRemediationActions.mockReset().mockResolvedValue({
+    capability: "CAP-REM-02",
+    status: "served",
+    generated_at: "2026-06-20T12:25:00Z",
+    summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
+    items: [ownerAction],
+    evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
+  });
+  apiMock.remediationOwnerActions.mockReset().mockResolvedValue({
+    capability: "CAP-REM-02",
+    status: "served",
+    generated_at: "2026-06-20T12:25:00Z",
+    summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
+    items: [ownerAction],
+    evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
+  });
+  apiMock.acceptOwnerRemediationAction.mockReset().mockResolvedValue(ownerRemediationRun);
+  apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
+  apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
+  apiMock.previewFleetReissuance.mockReset().mockResolvedValue({
+    capability: "F32",
+    ready: true,
+    effect_free: true,
+    blockers: [],
+    exact_trust_store_ids: ["trust-store-1"],
+    exact_trust_hosts: ["host-1"],
+    candidate_trust_store_ids: [],
+    candidate_trust_hosts: [],
+    affected_identity_ids: ["11111111-1111-1111-1111-111111111111"],
+    outside_calls: [],
+    signer_calls: 0,
+    durable_writes: [],
+  });
+  apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
+  apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
+  apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "running", phase: "batch_resumed" });
+  apiMock.rollbackFleetReissuance.mockReset().mockResolvedValue({
+    ...fleetRun,
+    status: "rolled_back",
+    phase: "failed_cohort_rolled_back",
+    rollback_refs: [...fleetRun.rollback_refs, "restore previous credential bindings"],
+    evidence_bundle_format: "jws",
+    evidence_bundle: "fleet.audit.bundle",
+  });
+  apiMock.exportFleetReissuanceEvidence.mockReset().mockResolvedValue({
+    run_id: fleetRun.id,
+    evidence_bundle_format: "jws",
+    evidence_bundle: "fleet.audit.bundle",
+    rollback_refs: fleetRun.rollback_refs,
+    failed_targets: fleetRun.failed_targets,
+    exported_at: fleetRun.updated_at,
+  });
+  apiMock.createServiceNowTicket.mockReset().mockResolvedValue({
+    id: "55555555-5555-5555-5555-555555555555",
+    tenant_id: "tenant-1",
+    provider: "servicenow",
+    destination: "itsm.servicenow",
+    table: "incident",
+    status: "queued",
+    outbox_id: 42,
+    idempotency_key: "evt-555",
+    created_at: "2026-06-20T12:05:00Z",
+  });
+}
+
+describe("incident response served execution surface", () => {
+  beforeEach(seedIncidentResponseMocks);
 
   it("opens with the decision-first Security incidents contract", async () => {
     const user = userEvent.setup();
@@ -959,6 +964,8 @@ describe("incident response served execution surface", () => {
 // so operators and fixtures can still paste ids directly.
 
 describe("incident intake pickers (C-P1 / DA-10)", () => {
+  beforeEach(seedIncidentResponseMocks);
+
   function datalistFor(input: HTMLElement): HTMLDataListElement {
     const listId = input.getAttribute("list");
     expect(listId, "input should reference a datalist").toBeTruthy();
