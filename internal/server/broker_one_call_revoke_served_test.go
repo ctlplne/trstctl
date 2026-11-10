@@ -30,7 +30,9 @@ func TestServedAgentIdentityOneCallRevokeQ4(t *testing.T) {
 		t.Fatal(err)
 	}
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@ops.example", "certs:issue", "certs:read", "identities:write", "graph:read")
-	reader := seedScopedTokenSubject(t, h.store, h.tenant, "cert-reader", "certs:read", "graph:read")
+	// The person side of the graph needs access:read (G1-L2), which every
+	// built-in role holding graph:read also holds.
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "cert-reader", "certs:read", "graph:read", "access:read")
 	body["ttl_seconds"] = 600
 	issued := servedBrokerIssue(t, h, alice, "q4-issue", body, http.StatusCreated)
 

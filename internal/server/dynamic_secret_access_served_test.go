@@ -190,7 +190,9 @@ func TestServedLeaseAccessShowsTheDatabaseAndTheRoleG2(t *testing.T) {
 	startServedExternalCADispatcher(t, h)
 	ctx := t.Context()
 	issuer := seedScopedTokenSubject(t, h.store, h.tenant, "g2-issuer", "secrets:read", "secrets:write")
-	reader := seedScopedTokenSubject(t, h.store, h.tenant, "g2-graph-reader", "graph:read")
+	// The graph leaves leases out for a caller without access:read (G1-L2);
+	// every built-in role holding graph:read also holds access:read.
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "g2-graph-reader", "graph:read", "access:read")
 	resolve := func() {
 		t.Helper()
 		if err := h.srv.ResolveDynamicSecretAccessOnce(ctx); err != nil {
@@ -369,7 +371,9 @@ func TestServedLeaseAccessReadsLocalStackIAMG2(t *testing.T) {
 	})
 	startServedExternalCADispatcher(t, h)
 	issuer := seedScopedTokenSubject(t, h.store, h.tenant, "g2-issuer", "secrets:read", "secrets:write")
-	reader := seedScopedTokenSubject(t, h.store, h.tenant, "g2-graph-reader", "graph:read")
+	// The graph leaves leases out for a caller without access:read (G1-L2);
+	// every built-in role holding graph:read also holds access:read.
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "g2-graph-reader", "graph:read", "access:read")
 	lease, _ := issueG2Lease(t, h, issuer, "g2-localstack", "aws-publish", "publisher")
 	if err := h.srv.ResolveDynamicSecretAccessOnce(t.Context()); err != nil {
 		t.Fatal(err)

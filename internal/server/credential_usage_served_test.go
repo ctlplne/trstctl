@@ -80,7 +80,9 @@ func TestServedCredentialUsagePostureM1(t *testing.T) {
 	ctx := t.Context()
 	now := time.Now().UTC()
 	base := now.AddDate(0, 0, -40)
-	reader, _ := seedM1Token(t, h, "m1-posture-reader", "nhi:read", "graph:read")
+	// An API token's node is on the access side of the graph (G1-L2): its
+	// reader holds access:read, as every built-in role with graph:read does.
+	reader, _ := seedM1Token(t, h, "m1-posture-reader", "nhi:read", "graph:read", "access:read")
 	active, activeID := seedM1Token(t, h, "m1-ci-deployer", "nhi:read")
 	_, idleID := seedM1Token(t, h, "m1-forgotten", "nhi:read")
 	use := func(token, remote string, at time.Time) {
