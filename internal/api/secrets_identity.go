@@ -686,6 +686,9 @@ type machineAuthMethodInfo struct {
 	RequiredClaims         map[string]string   `json:"required_claims,omitempty"`
 	JWKSConfigured         bool                `json:"jwks_configured"`
 	AllowUnexpiring        bool                `json:"allow_unexpiring,omitempty"`
+	// AllowTokenReuse (kubernetes, gcp, azure; A238-L8): the operator let the
+	// same token log in again until it expires; otherwise each logs in once.
+	AllowTokenReuse bool `json:"allow_token_reuse,omitempty"`
 	// Disabled reflects the event-sourced per-tenant overlay (C-S3): a
 	// disabled method is refused by the login exchange until re-enabled.
 	Disabled bool `json:"disabled,omitempty"`
@@ -767,6 +770,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.AllowedServiceAccounts = sortedBoolKeys(v.AllowedServiceAccounts)
 		info.Scopes = append([]string(nil), v.Scopes...)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.GCPMethod:
 		info.Type = "gcp"
 		info.Issuer = v.Issuer
@@ -775,6 +779,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.AllowedProjects = sortedBoolKeys(v.AllowedProjects)
 		info.Scopes = append([]string(nil), v.Scopes...)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.AzureMethod:
 		info.Type = "azure"
 		info.Issuer = v.Issuer
@@ -784,6 +789,7 @@ func machineAuthMethodProjection(m authmethod.Method, source string) machineAuth
 		info.AllowedAzureTenants = sortedBoolKeys(v.AllowedAzureTenants)
 		info.Scopes = append([]string(nil), v.Scopes...)
 		info.JWKSConfigured = len(v.JWKS.Keys) > 0
+		info.AllowTokenReuse = v.AllowTokenReuse
 	case authmethod.AWSIAMMethod:
 		info.Type = "aws-iam"
 		info.AllowedAccounts = sortedBoolKeys(v.AllowedAccounts)

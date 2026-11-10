@@ -97,6 +97,11 @@ type KubernetesSATMethod struct {
 	Leeway                 time.Duration
 	Replay                 *JTICache
 	Guard                  ReplayGuard
+	// AllowTokenReuse marks a method whose operator let the same token log in
+	// again until it expires (A238-L8). Authenticate never reads it: the
+	// machine login's durable replay guard is attached only to a method that
+	// does not allow reuse, and the token exchange always records single use.
+	AllowTokenReuse bool
 }
 
 // Name implements Method.
@@ -173,6 +178,8 @@ type GCPMethod struct {
 	Leeway          time.Duration
 	Replay          *JTICache
 	Guard           ReplayGuard
+	// AllowTokenReuse: see KubernetesSATMethod.AllowTokenReuse.
+	AllowTokenReuse bool
 }
 
 // Name implements Method.
@@ -238,6 +245,8 @@ type AzureMethod struct {
 	Leeway              time.Duration
 	Replay              *JTICache
 	Guard               ReplayGuard
+	// AllowTokenReuse: see KubernetesSATMethod.AllowTokenReuse.
+	AllowTokenReuse bool
 }
 
 // Name implements Method.

@@ -434,6 +434,16 @@ function primeSecretsMocks() {
         jwks_configured: true,
         disabled: true,
       },
+      {
+        name: "kubernetes",
+        type: "kubernetes",
+        source: "config",
+        issuer: "https://kubernetes.default.svc.cluster.local",
+        audience: "trstctl",
+        scopes: ["secrets:read"],
+        jwks_configured: true,
+        allow_token_reuse: true,
+      },
     ],
   });
   apiMock.machineSessions.mockResolvedValue({
@@ -2988,6 +2998,11 @@ describe("secrets auth-method console (C-S4 / DA-02)", () => {
     expect(within(jwtRow).getByText("disabled")).toBeInTheDocument();
     const tokenRow = screen.getAllByText("token")[0].closest("tr") as HTMLTableRowElement;
     expect(within(tokenRow).getByText("enabled")).toBeInTheDocument();
+    // A238-L8: a method that lets the same token log in again says so; a
+    // single-use one carries no such note.
+    const kubernetesRow = screen.getByText("https://kubernetes.default.svc.cluster.local").closest("tr") as HTMLTableRowElement;
+    expect(within(kubernetesRow).getByText("Token reuse allowed: the same token logs in again until it expires")).toBeInTheDocument();
+    expect(within(jwtRow).queryByText(/Token reuse allowed/)).not.toBeInTheDocument();
   });
 
   it("reviews one exact method before accepting a credential, executes it once, and verifies the durable session", async () => {

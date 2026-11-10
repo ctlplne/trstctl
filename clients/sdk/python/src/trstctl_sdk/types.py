@@ -9329,6 +9329,7 @@ MDMTraceStep = TypedDict(
 MachineAuthMethod = TypedDict(
     'MachineAuthMethod',
     {
+        'allow_token_reuse': bool,
         'allow_unexpiring': bool,
         'allowed_accounts': list[str],
         'allowed_arns': list[str],

@@ -20322,6 +20322,8 @@ export interface components {
             stage: "requested" | "issued" | "installed" | "renewing";
         };
         MachineAuthMethod: {
+            /** @description kubernetes, gcp, azure: the operator let the same token log in again until it expires (A238-L8); otherwise each token logs in once. */
+            allow_token_reuse?: boolean;
             allow_unexpiring?: boolean;
             allowed_accounts?: string[];
             allowed_arns?: string[];

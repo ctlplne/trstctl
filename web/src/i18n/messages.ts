@@ -5072,6 +5072,10 @@ export const messages = {
   "secrets.methods.actions": { defaultMessage: "Actions", description: "Auth-methods column: actions." },
   "secrets.methods.enabled": { defaultMessage: "enabled", description: "Auth-methods status: enabled." },
   "secrets.methods.disabled": { defaultMessage: "disabled", description: "Auth-methods status: disabled by the tenant overlay." },
+  "secrets.methods.tokenReuse": {
+    defaultMessage: "Token reuse allowed: the same token logs in again until it expires",
+    description: "A238-L8: a kubernetes, gcp or azure method whose operator set allow_token_reuse.",
+  },
   "secrets.methods.enable": { defaultMessage: "Enable", description: "Auth-methods action: re-enable a method." },
   "secrets.methods.disable": { defaultMessage: "Disable", description: "Auth-methods action: disable a method (refused at login)." },
   "secrets.methods.empty": { defaultMessage: "No login methods are configured.", description: "Auth-methods empty state." },

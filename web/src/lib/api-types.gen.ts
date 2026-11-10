@@ -6721,6 +6721,7 @@ export interface MDMTraceStep {
 }
 
 export interface MachineAuthMethod {
+  allow_token_reuse?: boolean;
   allow_unexpiring?: boolean;
   allowed_accounts?: string[];
   allowed_arns?: string[];

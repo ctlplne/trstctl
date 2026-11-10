@@ -15,9 +15,13 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// withMachineCredentialReplayGuard makes every oidc and jwt machine login token
-// single-use: its use is recorded durably until it expires, so presenting it
-// again — on any replica, after a restart — is refused.
+// withMachineCredentialReplayGuard makes every oidc, jwt, kubernetes, gcp and
+// azure machine login token single-use: its use is recorded durably until it
+// expires, so presenting it again — on any replica, after a restart — is
+// refused (A238-L8 added kubernetes, gcp and azure, which the token exchange
+// already treated so). A kubernetes, gcp or azure method whose operator set
+// allow_token_reuse is left without the guard, for clients that present a
+// platform-managed token more than once (the CSI secrets driver).
 func withMachineCredentialReplayGuard(methods func(string) []authmethod.Method, st *store.Store) func(string) []authmethod.Method {
 	if methods == nil || st == nil {
 		return methods
@@ -32,6 +36,21 @@ func withMachineCredentialReplayGuard(methods func(string) []authmethod.Method, 
 				out[i] = method
 			case authmethod.JWTMethod:
 				method.Guard = guard
+				out[i] = method
+			case authmethod.KubernetesSATMethod:
+				if !method.AllowTokenReuse {
+					method.Guard = guard
+				}
+				out[i] = method
+			case authmethod.GCPMethod:
+				if !method.AllowTokenReuse {
+					method.Guard = guard
+				}
+				out[i] = method
+			case authmethod.AzureMethod:
+				if !method.AllowTokenReuse {
+					method.Guard = guard
+				}
 				out[i] = method
 			}
 		}
@@ -101,6 +120,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			AllowedNamespaces:      boolMap(c.AllowedNamespaces),
 			AllowedServiceAccounts: boolMap(c.AllowedServiceAccounts),
 			Scopes:                 append([]string(nil), c.Scopes...),
+			AllowTokenReuse:        c.AllowTokenReuse,
 		}
 	case "aws-iam":
 		return authmethod.AWSIAMMethod{
@@ -119,6 +139,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			TenantClaim:     c.TenantClaim,
 			AllowedProjects: boolMap(c.AllowedProjects),
 			Scopes:          append([]string(nil), c.Scopes...),
+			AllowTokenReuse: c.AllowTokenReuse,
 		}
 	case "azure":
 		return authmethod.AzureMethod{
@@ -130,6 +151,7 @@ func (cm configuredMachineAuthMethod) methodForTenant(tenantID string) authmetho
 			AllowedAzureTenants: boolMap(c.AllowedAzureTenants),
 			PrincipalClaim:      c.SubjectClaim,
 			Scopes:              append([]string(nil), c.Scopes...),
+			AllowTokenReuse:     c.AllowTokenReuse,
 		}
 	case "oidc":
 		return authmethod.OIDCMethod{

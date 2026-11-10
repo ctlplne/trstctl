@@ -65,6 +65,9 @@ func TestServedSecretCSIVolumeOnKindA238(t *testing.T) {
 	methods, err := machineAuthMethodsFromConfig([]config.MachineAuthMethod{{
 		Name: "kubernetes", TenantID: servedTestTenant, Issuer: discovery.Issuer, Audience: "trstctl",
 		JWKSJSON: string(jwks), AllowedNamespaces: []string{"a238-csi"}, Scopes: []string{"secrets:read"},
+		// The driver presents the kubelet's projected token until the kubelet
+		// rotates it, so its method allows token reuse (A238-L8).
+		AllowTokenReuse: true,
 	}})
 	if err != nil {
 		t.Fatal(err)

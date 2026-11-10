@@ -1398,10 +1398,13 @@ never live in the API process. What you can do end to end against the running bi
   server (kind). Needs the SPIFFE surface enabled for the tenant; JWT is the only issued
   token type; a pod exchanging more than once per kubelet rotation needs a fresh token
   per exchange.
-- Single-use machine login tokens (M4's prerequisite): an `oidc` or `jwt` machine
-  login token logs in once; trstctl records a digest of it (issuer + `jti`, else the
-  whole token) in PostgreSQL until it expires and refuses it again on any replica or
-  after a restart. `kubernetes`, `gcp` and `azure` login tokens stay reusable.
+- Single-use machine login tokens (M4's prerequisite; A238-L8): an `oidc`, `jwt`,
+  `kubernetes`, `gcp` or `azure` machine login token logs in once; trstctl records a
+  digest of it (issuer + `jti`, else the whole token) in PostgreSQL until it expires
+  and refuses it again on any replica or after a restart. A `kubernetes`, `gcp` or
+  `azure` method may set `allow_token_reuse` for clients that present a
+  platform-managed token more than once (the CSI secrets driver); its tokens then log
+  in again until they expire, and anyone who copies one can do the same.
 - Misuse detection (M2, Enterprise `governance`): every minute the leader checks the last
   two hours of M1's usage record and flags a dynamic-secret lease requested from a client
   network the token has not used on three different days (while it has one it has) and

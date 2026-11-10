@@ -133,10 +133,15 @@ func machineLoginCredentialReuse(method machineAuthMethodInfo) (bool, string) {
 	switch method.Type {
 	case "oidc", "jwt":
 		return true, "Single-use: each token logs in once. The same token is refused a second time, so mint a fresh one for every login."
+	case "kubernetes", "gcp", "azure":
+		if method.AllowTokenReuse {
+			return false, "Reusable: this method allows token reuse (allow_token_reuse), so the same token logs in again until it expires — for clients such as the CSI secrets driver that present a platform-managed token more than once."
+		}
+		return true, "Single-use: each token logs in once. The same token is refused a second time, so request a fresh one for every login, or have the operator set allow_token_reuse for clients that present a platform-managed token again."
 	case "token":
 		return false, "Reusable: the same machine token logs in again until it expires."
 	default:
-		return false, "Reusable: the same credential logs in again until it expires; only OIDC and JWT tokens are single-use."
+		return false, "Reusable: the same credential logs in again until it expires."
 	}
 }
 

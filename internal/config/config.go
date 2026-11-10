@@ -2933,6 +2933,12 @@ type MachineAuthMethod struct {
 	AllowedProjects        []string `json:"allowed_projects,omitempty"`
 	AllowedAzureTenants    []string `json:"allowed_azure_tenants,omitempty"`
 	STSEndpoint            string   `json:"sts_endpoint,omitempty"`
+	// AllowTokenReuse (kubernetes, gcp and azure only, A238-L8) lets the same
+	// token log in again until it expires. Off by default: like an oidc or jwt
+	// token, each one logs in once. Turn it on only for a method whose clients
+	// present a platform-managed token more than once — the CSI secrets driver
+	// presents the kubelet's projected token until the kubelet rotates it.
+	AllowTokenReuse bool `json:"allow_token_reuse,omitempty"`
 }
 
 // AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
@@ -5491,6 +5497,9 @@ func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
 		}
 		if hasScopesClaim && name != "oidc" && name != "jwt" {
 			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].scopes_claim is supported only for oidc or jwt", i))
+		}
+		if m.AllowTokenReuse && name != "kubernetes" && name != "gcp" && name != "azure" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].allow_token_reuse is supported only for kubernetes, gcp or azure; an oidc or jwt token always logs in once", i))
 		}
 		if name == "aws-iam" {
 			if strings.TrimSpace(m.TenantID) == "" {

@@ -55,6 +55,31 @@ func TestSecretsMachineAuthValidation(t *testing.T) {
 	}
 }
 
+// A238-L8: allow_token_reuse is a kubernetes, gcp or azure setting; an oidc or
+// jwt token always logs in once, so the setting is refused there.
+func TestSecretsMachineAuthAllowTokenReuseIsForPlatformTokensOnly(t *testing.T) {
+	for _, name := range []string{"kubernetes", "gcp", "azure"} {
+		c := Default()
+		c.Secrets.MachineAuth = []MachineAuthMethod{{
+			Name: name, TenantID: "11111111-1111-1111-1111-111111111111", Audience: "trstctl",
+			JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"}, AllowTokenReuse: true,
+		}}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("%s with allow_token_reuse rejected: %v", name, err)
+		}
+	}
+	for _, name := range []string{"oidc", "jwt"} {
+		c := Default()
+		c.Secrets.MachineAuth = []MachineAuthMethod{{
+			Name: name, TenantID: "11111111-1111-1111-1111-111111111111", Audience: "trstctl",
+			JWKSJSON: `{"keys":[]}`, Scopes: []string{"secrets:read"}, AllowTokenReuse: true,
+		}}
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "allow_token_reuse is supported only for kubernetes, gcp or azure") {
+			t.Fatalf("%s with allow_token_reuse: error = %v, want the platform-token-only refusal", name, err)
+		}
+	}
+}
+
 func TestBuiltinMachineTokenRequiresTenantPinAndExplicitScopes(t *testing.T) {
 	c := Default()
 	c.Secrets.AuthSecretFile = "/run/secrets/machine-auth"

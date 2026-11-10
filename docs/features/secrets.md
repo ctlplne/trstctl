@@ -1765,7 +1765,8 @@ plugin gets the pod's own service-account token, minted for the `trstctl` audien
 passed in the request's secrets (`serviceAccountTokenInSecrets`), which keeps it out of the
 kubelet's logs. The plugin exchanges the token at `POST /api/v1/secrets/login` through the
 `kubernetes` machine-login method, so the volume holds only what that pod's service account
-may read. A restricted environment is open only to the members granted it (the member
+may read. That method needs `allow_token_reuse: true`: machine-login tokens are single-use
+by default, and the plugin presents the kubelet's token again until the kubelet rotates it. A restricted environment is open only to the members granted it (the member
 subject is `system:serviceaccount:<namespace>:<name>`). A pod that may not read a secret
 gets no volume, and the file of a secret the pod loses access to is removed at the next
 republish. The values go into a memory filesystem (tmpfs: no devices, no set-id, nothing
@@ -1899,8 +1900,9 @@ review-first journey:
 2. **Review login.** `POST /api/v1/secrets/login/preview` receives only the method
    name. It reads configuration and returns the exact tenant binding, credential
    shape, whether the credential is single-use (`single_use`, with `credential_reuse`
-   in plain words: OIDC and JWT tokens log in once, other credentials log in again
-   until they expire), session lifetime, prerequisites, blockers, writes, outside
+   in plain words: OIDC, JWT, Kubernetes, GCP and Azure tokens log in once unless the
+   method sets `allow_token_reuse`; a machine token or an AWS IAM request logs in again
+   until it expires), session lifetime, prerequisites, blockers, writes, outside
    calls, recovery steps, verification steps, and CLI command. It does not receive a credential,
    call the verifier, create a session/event/idempotency row, or contact AWS STS.
 3. **Test reviewed login.** Only a ready plan reveals the password-style credential

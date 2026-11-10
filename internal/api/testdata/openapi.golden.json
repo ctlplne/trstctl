@@ -31734,6 +31734,10 @@
       },
       "MachineAuthMethod": {
         "properties": {
+          "allow_token_reuse": {
+            "description": "kubernetes, gcp, azure: the operator let the same token log in again until it expires (A238-L8); otherwise each token logs in once.",
+            "type": "boolean"
+          },
           "allow_unexpiring": {
             "type": "boolean"
           },

@@ -100,6 +100,18 @@ func TestServedTokenExchangeIssuesAFiveMinuteJWTSVIDM4(t *testing.T) {
 		return v
 	}
 
+	// Served tests share one tenant, and machine logins record kubernetes uses
+	// too (A238-L8): count only the records this test makes.
+	kubernetesUses := func() int {
+		t.Helper()
+		var n int
+		if err := h.store.SystemPool().QueryRow(t.Context(),
+			`SELECT count(*) FROM machine_credential_replays WHERE tenant_id = $1 AND method = 'kubernetes'`, h.tenant).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	usesBefore := kubernetesUses()
 	subject := projected("payments", "api")
 	status, out := exchange(form(subject, "scope", "secrets:read"))
 	if status != http.StatusOK || out["issued_token_type"] != tokenTypeJWT || out["token_type"] != "Bearer" ||
@@ -175,12 +187,7 @@ func TestServedTokenExchangeIssuesAFiveMinuteJWTSVIDM4(t *testing.T) {
 	}
 
 	// Every exchange is recorded; the subject token is not.
-	var recorded int
-	if err := h.store.SystemPool().QueryRow(t.Context(),
-		`SELECT count(*) FROM machine_credential_replays WHERE tenant_id = $1 AND method = 'kubernetes'`, h.tenant).Scan(&recorded); err != nil {
-		t.Fatal(err)
-	}
-	if recorded != 1 {
+	if recorded := kubernetesUses() - usesBefore; recorded != 1 {
 		t.Fatalf("single-use records = %d, want 1 (refused requests must not consume)", recorded)
 	}
 	if !h.logContains(t, "spiffe://served.test/ns/payments/sa/api") || h.logContains(t, subject) {

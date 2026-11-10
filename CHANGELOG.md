@@ -2187,6 +2187,12 @@
 
 ### Changed
 
+- Kubernetes, GCP and Azure machine-login tokens are single-use, like OIDC and JWT tokens and like
+  the token exchange (A238-L8). A projected service-account token used to log in again until it
+  expired, so anyone who copied one could open sessions with it. Each token now logs in once on any
+  replica; a method whose clients present a platform-managed token more than once sets
+  `allow_token_reuse: true` (the CSI secrets driver's `kubernetes` method needs it). The login
+  preview and `GET /api/v1/secrets/auth-methods` say which.
 - The stale NHI posture no longer calls an API token unused when trstctl has no usage telemetry for it: before
   this release every token older than 90 days read as unused.
 - An audit export or search that is an unbroken run of records selected only
