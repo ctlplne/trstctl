@@ -118,3 +118,23 @@ func TestLimitationsPureMLDSAOverCMPAndSCEPAgree(t *testing.T) {
 		}
 	}
 }
+
+// DF-5: the gcp-iam and azure-entra lease providers had no proof status. Their
+// proof is a contract test against stand-ins of the IAM keys API and Microsoft
+// Graph (create, then delete; add a password, then remove it; a second revoke
+// is a no-op), so the doc says that and that a live proof needs an account.
+func TestLimitationsGCPAndEntraLeaseProvidersStateTheirProof(t *testing.T) {
+	requireDocAnchor(t, "internal/dynsecret/providers_real_test.go", read(t, "../internal/dynsecret/providers_real_test.go"),
+		`{"gcp-iam", gcpBackend`, `{"azure-entra", azureBackend`, "double revoke must be idempotent")
+	requireDocAnchor(t, "internal/dynsecret/providers_real.go", read(t, "../internal/dynsecret/providers_real.go"),
+		"/keys:upload", "/addPassword", "/removePassword")
+	limitations := flatDoc(t, "limitations.md")
+	for _, want := range []string{
+		"The `gcp-iam` and `azure-entra` lease providers are contract-tested adapters",
+		"A live proof needs a Google Cloud project or an Entra tenant",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md should state the gcp-iam and azure-entra lease providers' proof (missing %q)", want)
+		}
+	}
+}

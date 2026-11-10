@@ -5468,6 +5468,15 @@ when off, requiring a KEK when on):
   operation rather than risking a second session. Existing `aws-iam` startup
   attachments must migrate their policy ARN role bindings to full assumable IAM
   role ARNs and set an explicit 15-minute to 12-hour `max_ttl`.
+  The `gcp-iam` and `azure-entra` lease providers are contract-tested adapters
+  too, built against stand-ins of the IAM keys API and Microsoft Graph: a
+  `gcp-iam` lease uploads a service-account key trstctl prepared (a retried
+  upload finds the key it already uploaded instead of adding a second) and
+  revocation deletes it; an `azure-entra` lease adds an application password
+  named for the lease, which Entra itself expires at the lease's end (a
+  retried issue first removes a password of that name), and revocation removes
+  it. A second revocation is a no-op for both. A live proof needs a Google
+  Cloud project or an Entra tenant.
   New Kubernetes leases record the UIDs of the ServiceAccount, bound Secret,
   and RoleBinding and delete with UID preconditions. Leases issued by older
   builds have name-only provider references; revoking one now inspects every
