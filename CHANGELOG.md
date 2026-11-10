@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- A refused ACME email reply is an audit event, not only a log line (P15-L9). The RFC 8823 reply
+  intake bounced a malformed, unsigned, unmatched or wrong reply and wrote one log line in the
+  process that read it. Each refusal is now an `acme.email_reply.refused` event with the step
+  that refused it and the From domain, never the mailbox or the message.
 - A check-out whose credential cannot be retired at its deadline raises an alert (A261-L2). When
   the rotation could not be queued (its provider removed or no longer rotating the role) the
   check-out stayed revealed past its deadline with nothing but a "rotation pending" label. It

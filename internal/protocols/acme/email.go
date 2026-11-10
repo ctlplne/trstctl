@@ -7,12 +7,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // ACME for S/MIME (RFC 8823, P15). An "email" identifier proves control of a
@@ -412,4 +414,45 @@ func csrEmailIdentifiersMatchOrder(csrDER []byte, authorized []string) error {
 		return errors.New("acme: this server issues signing-only S/MIME certificates: the CSR must ask for digitalSignature and/or nonRepudiation key usage and nothing else (encryption certificates need key escrow, which is not offered)")
 	}
 	return nil
+}
+
+// acmeEventEmailReplyRefused records a reply the RFC 8823 intake refused
+// (P15-L9): which check refused it and the sender's domain, never the
+// mailbox or the message. The ACME state replay ignores it.
+const acmeEventEmailReplyRefused = "acme.email_reply.refused"
+
+// Email reply refusal outcomes, one per check the intake makes.
+const (
+	EmailReplyRefusedMalformed     = "malformed"
+	EmailReplyRefusedDKIM          = "dkim"
+	EmailReplyRefusedUnmatched     = "unmatched"
+	EmailReplyRefusedWrongResponse = "wrong_response"
+	EmailReplyRefusedError         = "error"
+)
+
+type acmeEmailReplyRefusedEvent struct {
+	Outcome     string `json:"outcome"`
+	FromDomain  string `json:"from_domain,omitempty"`
+	ChallengeID string `json:"challenge_id,omitempty"`
+}
+
+// RecordEmailReplyRefused appends a refused reply to the tenant's audit
+// record (P15-L9): its outcome, the From domain when the message named one,
+// and the challenge a wrong response invalidated. A log failure does not
+// change the refusal the sender already got, so it is not returned.
+func (s *Server) RecordEmailReplyRefused(ctx context.Context, outcome, fromDomain, challengeID string) {
+	if s == nil || s.stateLog == nil || s.stateTenantID == "" {
+		return
+	}
+	body, err := json.Marshal(acmeEmailReplyRefusedEvent{Outcome: outcome, FromDomain: fromDomain, ChallengeID: challengeID})
+	if err != nil {
+		return
+	}
+	// Like the reply itself, the record runs under the live tenant registration.
+	ctx, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return
+	}
+	defer release()
+	_, _ = s.stateLog.Append(ctx, events.Event{Type: acmeEventEmailReplyRefused, TenantID: s.stateTenantID, Data: body})
 }

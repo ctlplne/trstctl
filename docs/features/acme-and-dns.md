@@ -530,8 +530,11 @@ Then the reply is matched to its challenge. A reply that fails a step is refused
 5xx code that names the step, so the user's mail system bounces it back:
 `550 5.7.20` for no valid DKIM signature, `550 5.6.0` for a message that isn't an RFC 8823
 reply, and `550 5.7.1` for no matching challenge or a wrong response. A signature over
-part of the body (`l=`) or `rsa-sha1` is never accepted. Like every ACME request, a
-reply must reach the control-plane process that created the order.
+part of the body (`l=`) or `rsa-sha1` is never accepted. Every refused reply is also an
+`acme.email_reply.refused` audit event: the step that refused it (`malformed`, `dkim`,
+`unmatched`, `wrong_response` or `error`), the From domain and, for a wrong response,
+the challenge it invalidated. The event never carries the mailbox or the message. Like
+every ACME request, a reply must reach the control-plane process that created the order.
 
 A stock RFC 8823 client library and a stock mail client have been run against this in
 the lab, through a real mail server that DKIM-signs both directions: the certificate

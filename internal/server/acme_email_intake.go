@@ -191,34 +191,38 @@ func (s *Server) acmeEmailIntakeSession(ctx context.Context, conn net.Conn, tlsC
 func (s *Server) acceptACMEEmailReply(ctx context.Context, msg []byte) string {
 	parsed, err := acme.ParseEmailReply(msg)
 	if err != nil {
-		s.logACMEEmailReply("malformed", "", err)
+		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedMalformed, "", "", err)
 		return "550 5.6.0 not an RFC 8823 reply: " + strings.TrimPrefix(err.Error(), "acme: ")
 	}
 	domain := strings.ToLower(parsed.From[strings.LastIndexByte(parsed.From, '@')+1:])
 	if err := s.acmeEmailIntake.verifier.VerifyDomain(ctx, msg, domain); err != nil {
-		s.logACMEEmailReply("dkim", domain, err)
+		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedDKIM, domain, "", err)
 		return "550 5.7.20 no valid DKIM signature from " + domain
 	}
-	_, err = s.protocols.acme.AcceptEmailReply(ctx, acme.EmailReply(parsed))
+	challengeID, err := s.protocols.acme.AcceptEmailReply(ctx, acme.EmailReply(parsed))
 	switch {
 	case err == nil:
 		return "250 2.0.0 reply accepted"
 	case errors.Is(err, acme.ErrEmailReplyUnmatched):
-		s.logACMEEmailReply("unmatched", domain, err)
+		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedUnmatched, domain, "", err)
 		return "550 5.7.1 no pending ACME challenge for this mailbox and token"
 	case errors.Is(err, acme.ErrEmailReplyWrongResponse):
-		s.logACMEEmailReply("wrong_response", domain, err)
+		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedWrongResponse, domain, challengeID, err)
 		return "550 5.7.1 the response does not match; the challenge is now invalid"
 	default:
-		s.logACMEEmailReply("error", domain, err)
+		s.refuseACMEEmailReply(ctx, acme.EmailReplyRefusedError, domain, "", err)
 		return "451 4.3.0 the reply could not be processed; try again later"
 	}
 }
 
-func (s *Server) logACMEEmailReply(outcome, domain string, err error) {
+// refuseACMEEmailReply logs a refused reply and records it as an audit event
+// (P15-L9), so a run of forged or misrouted replies shows in the tenant's
+// audit trail and not only in one process's log.
+func (s *Server) refuseACMEEmailReply(ctx context.Context, outcome, domain, challengeID string, err error) {
 	if s.logger != nil {
 		s.logger.Info("ACME email reply refused", slog.String("outcome", outcome), slog.String("from_domain", domain), slog.String("error", err.Error()))
 	}
+	s.protocols.acme.RecordEmailReplyRefused(ctx, outcome, domain, challengeID)
 }
 
 // readSMTPLine reads one command line, without its CRLF.

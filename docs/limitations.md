@@ -5954,7 +5954,8 @@ This is a deliberate, documented trust boundary, not an accident.
   key escrow is not offered. Replies arrive at an SMTP reply intake
   (`protocols.acme_email.smtp_listen`) that verifies each reply's DKIM signature for its
   From domain (rsa-sha256, ed25519-sha256; keys from DNS or `dkim_keys`) before the
-  ACME server matches it; refusals bounce with a 5xx reason. ACME state is per process,
+  ACME server matches it; refusals bounce with a 5xx reason and are recorded as
+  `acme.email_reply.refused` audit events (P15-L9). ACME state is per process,
   so replies must reach the process that created the order. Proven in the lab with
   stock software: an RFC 8823 client library (acme4j-smime 5.1.0) ordered a certificate
   for a mailbox through a real mail server (maddy 0.9.6) that DKIM-signed both

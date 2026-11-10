@@ -410,6 +410,32 @@ func TestServedACMEEmailReplyIntakeVerifiesDKIMP15(t *testing.T) {
 			t.Fatalf("%s: SMTP answered %q, want %s", name, got, tc.want)
 		}
 	}
+	// P15-L9: every message the intake read and refused is in the tenant's
+	// audit record with the check that refused it; the mail for another
+	// recipient never got that far. No mailbox appears in the record.
+	auditor := seedScopedTokenSubject(t, h.store, h.tenant, "p15-reply-auditor", "audit:read")
+	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/audit/events?type=acme.email_reply.refused&limit=50", auditor, nil)
+	var refusals struct {
+		Events []struct {
+			Type string `json:"type"`
+			Data struct {
+				Outcome string `json:"outcome"`
+			} `json:"data"`
+		} `json:"events"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &refusals) != nil {
+		t.Fatalf("refused replies in the audit record = %d %s", status, raw)
+	}
+	outcomes := map[string]int{}
+	for _, ev := range refusals.Events {
+		outcomes[ev.Data.Outcome]++
+	}
+	if len(refusals.Events) != 6 || outcomes["dkim"] != 3 || outcomes["malformed"] != 1 || outcomes["unmatched"] != 2 {
+		t.Fatalf("refused replies in the audit record = %d %v, want dkim 3, malformed 1, unmatched 2", len(refusals.Events), outcomes)
+	}
+	if strings.Contains(string(raw), "alice@") || strings.Contains(string(raw), "bob@") {
+		t.Fatalf("the refusal record names a mailbox: %s", raw)
+	}
 	if got := send("acme@ca.p15.test", sign(reply("alice@p15.test", tokenPart1, ""), "lab")); got != "250" {
 		t.Fatalf("the signed reply: %s", got)
 	}
