@@ -138,3 +138,28 @@ func TestLimitationsGCPAndEntraLeaseProvidersStateTheirProof(t *testing.T) {
 		}
 	}
 }
+
+// DF-6: the DNS-01 preflight reads the challenge TXT record from live DNS
+// through the control plane's resolver unless the caller supplies its own
+// observation (labeled caller_supplied), so the doc may not say it only
+// evaluates values the caller supplies. What stays true: neither the preflight
+// nor the qualification run gates a challenge before the authority validates.
+func TestLimitationsDNS01PreflightReadsLiveDNS(t *testing.T) {
+	requireDocAnchor(t, "internal/api/acme_dns01.go", read(t, "../internal/api/acme_dns01.go"),
+		`out.Source = "caller_supplied"`, `out.Source = "live_dns"`, "a.acmeTXTResolver.LookupTXT(")
+	requireDocAnchor(t, "internal/server/server.go", read(t, "../internal/server/server.go"),
+		"api.WithACMEDNS01TXTResolver(net.DefaultResolver)")
+	limitations := flatDoc(t, "limitations.md")
+	if stale := "evaluates TXT values the caller supplies rather than querying DNS itself"; strings.Contains(limitations, stale) {
+		t.Errorf("limitations.md still says the preflight %q, but it reads live DNS unless the caller supplies values", stale)
+	}
+	for _, want := range []string{
+		"propagation (read from live DNS unless the caller supplies its own observation",
+		"reads the challenge TXT record from live DNS through the control plane's resolver",
+		"neither gates a challenge before the authority validates",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md should describe the DNS-01 preflight the way it runs (missing %q)", want)
+		}
+	}
+}

@@ -7427,11 +7427,14 @@ the authority to validate. The record is published through the provider's API
 and the challenge is accepted as soon as that call returns, so a zone whose
 nameservers are slow to converge can have its authorization marked invalid and
 the order retried rather than waiting. The operator-run preflight
-(`POST /api/v1/acme/dns-01/preflight`) checks propagation for a domain, but it
-evaluates TXT values the caller supplies rather than querying DNS itself, so it
-cannot be reused as an automatic gate. Closing this needs authoritative-nameserver
-TXT verification that does not exist in the tree yet; until it does, a slow zone
-costs a retry, not a wrong answer.
+(`POST /api/v1/acme/dns-01/preflight`) reads the challenge TXT record from live
+DNS through the control plane's resolver (or compares values the caller supplies,
+which its answer labels `caller_supplied`), and a provider's qualification run
+publishes a probe record and waits until that resolver sees it; but both are
+checks an operator runs, and neither gates a challenge before the authority
+validates. Closing this needs that wait in the challenge path itself, reading the
+zone's authoritative nameservers rather than a recursive resolver's cache; until
+it exists, a slow zone costs a retry, not a wrong answer.
 
 Also not served: http-01 upstream — it would require an inbound listener
 on the validated host, which this architecture does not have and will not grow.
