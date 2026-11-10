@@ -348,17 +348,17 @@ func TestServedESXiProviderAgainstStockVcsimA271O1(t *testing.T) {
 }
 
 // Against stock vcsim configured with one administrator sign-in: a scan by a
-// provider holding the wrong administrator password fails and finds nothing,
-// and the provider reads the refusal as the host's InvalidLogin fault, decoded
-// from vim25's own fault encoding; with the right password the same scan
-// completes. No session is left open either way.
+// provider holding the wrong administrator password fails as rejected and
+// finds nothing, and the provider reads the refusal as the host's InvalidLogin
+// fault, decoded from vim25's own fault encoding; with the right password the
+// same scan completes. No session is left open either way.
 func TestServedESXiProviderNamesStockVcsimsLoginFaultA271O1(t *testing.T) {
 	const adminPassword = "vcsim-admin-password-2" // #nosec G101 -- fabricated test-only password for the simulator (CWE-798)
 	sim := startStockVcsim(t, "root", writeVcsimPassword(t, adminPassword))
 	sh, tok := vcsimProviderHarness(t, sim, "not-the-admin-password")
 	run := vcsimDiscovery(t, sh, tok, "a271o1-wrong")
-	if run.Status != "failed" || run.Accounts != 0 || len(run.Changes) != 0 {
-		t.Fatalf("a scan with the wrong administrator password: %+v, want failed with nothing found", run)
+	if run.Status != "failed" || run.Failure != "rejected" || run.Accounts != 0 || len(run.Changes) != 0 {
+		t.Fatalf("a scan with the wrong administrator password: %+v, want failed as rejected with nothing found", run)
 	}
 	transport, err := mtls.HTTPTransport(sim.caPEM)
 	if err != nil {

@@ -82,3 +82,28 @@ func TestESXiRotationA271(t *testing.T) {
 		t.Fatalf("%d sessions were left open", host.Sessions())
 	}
 }
+
+// A host that refuses the administrator's user name and password reads as
+// rejected, and a host that does not answer as unreachable, so a scan or a
+// check names which it was instead of a generic error.
+func TestESXiSignInRefusalsAreClassified(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	host := infratest.StartESXi("root", "esxi-root-password-1")
+	host.AddAccount("ops", "esxi-ops-password-1", -1)
+	b, err := NewESXiBackend(ESXiConfig{Endpoint: host.URL(), HTTPClient: host.Client(), AdminUser: "root",
+		AdminPassword: []byte("not-the-root-password"), RoleAccounts: map[string]string{"esxi/ops": "ops"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	_, err = b.DiscoverPrivilegedAccounts(ctx)
+	if got := SignInStatusOf(err); got != SignInRejected || !strings.Contains(err.Error(), "refused root's sign-in (InvalidLogin)") {
+		t.Fatalf("a wrong administrator password = %q (%v), want rejected naming InvalidLogin", got, err)
+	}
+	host.Close()
+	_, err = b.DiscoverPrivilegedAccounts(ctx)
+	if got := SignInStatusOf(err); got != SignInUnreachable {
+		t.Fatalf("a host that does not answer = %q (%v), want unreachable", got, err)
+	}
+}

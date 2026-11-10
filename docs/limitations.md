@@ -9702,8 +9702,14 @@ pinned v0.56.2 release): its SOAP envelopes, the ESX managed-object references, 
 session cookie, vim25's fault encoding and the discovery answers interoperate, and every
 session it opens is logged out. vcsim accepts a password change without storing it, so a
 new password's effect is proven by the stand-in, and on a real host by its Track B row.
+An `esxi` scan names a refused administrator sign-in (vim25's `InvalidLogin`) as
+`rejected` and a host that does not answer as `unreachable`.
 
 What comes next:
+- The other device providers (`redfish`, `vcenter-sso` and A270's network devices)
+  naming a refused administrator sign-in `rejected` and a device that does not answer
+  `unreachable`, as `esxi` does; today their scans report a refused sign-in, and a
+  refused connection, as `error` (only a timeout reads `unreachable`).
 - A vCenter run that also confirms `dir-cli`'s output on vSphere 8.
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.

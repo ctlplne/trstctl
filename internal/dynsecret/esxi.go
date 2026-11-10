@@ -159,6 +159,11 @@ func (b *ESXiBackend) soap(ctx context.Context, cookie string, operation []byte)
 	}
 	resp, err := b.client.Do(req) // #nosec G704 -- the operator's configured host through the pinned, egress-guarded client (CWE-918)
 	if err != nil {
+		// A dial, TLS handshake or deadline reads as unreachable, so a scan
+		// or a check names it instead of a generic error.
+		if class := classifyNetwork(err); class != nil {
+			return 0, nil, nil, fmt.Errorf("%w: dynsecret esxi: the host did not answer", class)
+		}
 		return 0, nil, nil, errors.New("dynsecret esxi: the host did not answer")
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -211,7 +216,14 @@ func (b *ESXiBackend) login(ctx context.Context, user string, password []byte) (
 	}
 	defer secret.Wipe(raw)
 	if status != http.StatusOK {
-		return "", fmt.Errorf("dynsecret esxi: the host refused %s's sign-in (%s)", user, esxiFault(raw))
+		// InvalidLogin is the host refusing the user name and password: the
+		// rejected class, which tells an operator the stored password is wrong
+		// or changed rather than that the host failed.
+		fault := esxiFault(raw)
+		if fault == "InvalidLogin" {
+			return "", fmt.Errorf("%w: dynsecret esxi: the host refused %s's sign-in (%s)", ErrSignInRejected, user, fault)
+		}
+		return "", fmt.Errorf("dynsecret esxi: the host refused %s's sign-in (%s)", user, fault)
 	}
 	for _, c := range cookies {
 		if c.Name == "vmware_soap_session" && c.Value != "" {

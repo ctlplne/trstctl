@@ -580,6 +580,10 @@
 
 ### Fixed
 
+- An ESXi host's refused administrator sign-in reads `rejected`, and a host that does not answer
+  `unreachable` (A271-D1). A privileged-account scan records why it failed as a class, so an
+  operator knows whether to fix the stored password or the network; the `esxi` provider returned
+  plain errors, so both read `error`. Found by proving the provider against stock vcsim.
 - A dynamic-secret lease records who requested it (G1-L1). A lease kept only a non-reversible
   request binding, so the access graph showed it with `holder_recorded: false` and no holder, and
   a review generated from the graph could not say whose access it was. The lease now records the
