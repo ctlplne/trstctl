@@ -617,8 +617,13 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if err != nil {
 			return true, err
 		}
+		// G1-L1: the lease records whose request opened it, the event's actor.
+		requestedBy := ""
+		if e.Actor != nil {
+			requestedBy = e.Actor.Subject
+		}
 		return true, p.store.ApplyDynamicSecretIssueIntentTx(ctx, tx, store.DynamicSecretLease{
-			ID: payload.ID, TenantID: e.TenantID, TenantEpoch: tenantEpoch,
+			ID: payload.ID, TenantID: e.TenantID, TenantEpoch: tenantEpoch, RequestedBy: requestedBy,
 			IdempotencyKey: payload.IdempotencyKey, RequestBinding: payload.RequestBinding,
 			Provider: payload.Provider, Role: payload.Role, State: store.DynamicSecretLeasePending,
 			SealedPreparation: payload.SealedPreparation,

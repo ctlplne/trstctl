@@ -580,6 +580,13 @@
 
 ### Fixed
 
+- A dynamic-secret lease records who requested it (G1-L1). A lease kept only a non-reversible
+  request binding, so the access graph showed it with `holder_recorded: false` and no holder, and
+  a review generated from the graph could not say whose access it was. The lease now records the
+  subject whose request opened it (migration 0437, from the pending event's actor): the lease read
+  carries `requested_by`, the graph shows that person or principal holding the lease, and privacy
+  export, erasure and retention cover the record (snapshot format 113). Leases from before name
+  no requester.
 - An access review's next review opens when it is due (Q1-L7). A keep decision recorded when its
   credential is next reviewed, and nothing acted on the date. The leader's review reconcile now
   opens a "Next review: <campaign>" campaign with the same reviewer, scope and time to decide, one

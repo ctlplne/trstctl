@@ -314,14 +314,15 @@ func ensureDynamicSecretBackend(g *Graph, provider string) {
 	}
 }
 
-// addDynamicSecretLeases adds each active lease and the backend it reaches. A
-// lease does not record who requested it (only a non-reversible binding
-// digest), so it carries holder_recorded=false rather than a guessed holder.
+// addDynamicSecretLeases adds each active lease and the backend it reaches.
+// A lease records the subject whose request opened it (G1-L1): that principal
+// holds it, and the lease carries holder_recorded=true. A lease from before the
+// record carries holder_recorded=false rather than a guessed holder.
 // Where the leader has read the lease's access (G2), the lease also reaches
 // the target itself — the database or the IAM role — and carries the login it
 // holds there with that login's grants; grants the target could not report
 // read "unknown", never empty.
-func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID string, g *Graph, _ principalIndex, now time.Time) error {
+func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID string, g *Graph, principals principalIndex, now time.Time) error {
 	for after := ""; ; {
 		page, err := st.ListDynamicSecretLeasesPage(ctx, tenantID, "", store.DynamicSecretLeaseActive, after, pageSize)
 		if err != nil {
@@ -347,11 +348,18 @@ func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID strin
 				"expires_at": l.ExpiresAt.UTC().Format(time.RFC3339), "holder_recorded": "false",
 				"access_status": "not_read",
 			}
+			if l.RequestedBy != "" {
+				attrs["holder_recorded"] = "true"
+				attrs["requested_by"] = l.RequestedBy
+			}
 			a, read := access[l.ID]
 			if read {
 				addLeaseAccessAttrs(attrs, a)
 			}
 			g.AddNode(Node{ID: id, Kind: KindCredential, Name: l.Role + "@" + l.Provider, Attrs: attrs})
+			if l.RequestedBy != "" {
+				g.AddEdge(Edge{From: principals.node(g, l.RequestedBy), To: id, Type: EdgeHolds, Source: "dynamic-secret lease requester", Confidence: confidenceAuthority})
+			}
 			ensureDynamicSecretBackend(g, l.Provider)
 			g.AddEdge(Edge{From: id, To: resourceID("dynamic-secret:" + l.Provider), Type: EdgeGrantsAccess, Source: "dynamic-secret lease", Confidence: confidenceAuthority})
 			if read && a.TargetKind != "" && a.TargetRef != "" {

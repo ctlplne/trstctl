@@ -317,7 +317,10 @@ import (
 // metadata watermark row (A266: checkpoint, re-verification cursor, recheck
 // marker): an older payload has no such columns, and restoring it would fail
 // their NOT NULL rather than start from zero.
-const SnapshotFormatVersion = 112
+// Version 113 carries G1-L1's requested_by on dynamic-secret leases: without
+// it a restored store would forget who requested each lease while its covered
+// offset skipped the pending events.
+const SnapshotFormatVersion = 113
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

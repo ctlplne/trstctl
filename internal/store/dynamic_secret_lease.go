@@ -52,9 +52,12 @@ type DynamicSecretLease struct {
 	// canonical provider/role/TTL. It outlives the response cache so the sealed
 	// credential can never be reopened for a colliding caller.
 	RequestBinding string
-	Provider       string
-	Role           string
-	BackendRef     string
+	// RequestedBy is the subject whose request opened the lease (G1-L1),
+	// from the pending event's actor; empty for leases from before.
+	RequestedBy string
+	Provider    string
+	Role        string
+	BackendRef  string
 	// SealedCredential is the envelope-sealed one-time provider result. It is
 	// retained only while the lease is active so a crash between outbox delivery
 	// and the API idempotency commit can replay the identical credential without
@@ -137,9 +140,10 @@ func (s *Store) ApplyDynamicSecretLeasePendingTx(ctx context.Context, tx pgx.Tx,
 		`INSERT INTO dynamic_secret_leases
 		        (tenant_id, tenant_epoch, id, idempotency_key, request_binding, provider, role, backend_ref,
 		         sealed_preparation, preparation_digest, prepared_at, sealed_credential, credential_digest,
-		         state, issue_outbox_id, revocation_status, issued_at, expires_at, hard_expires_at, updated_at)
+		         state, issue_outbox_id, revocation_status, issued_at, expires_at, hard_expires_at, updated_at,
+		         requested_by)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, '', COALESCE($8::bytea, ''::bytea), $9, $10,
-		         ''::bytea, '', 'pending', $11, 'none', $12, $13, $14, $15)
+		         ''::bytea, '', 'pending', $11, 'none', $12, $13, $14, $15, $16)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET id = dynamic_secret_leases.id
 		  WHERE dynamic_secret_leases.tenant_epoch = EXCLUDED.tenant_epoch
@@ -156,7 +160,7 @@ func (s *Store) ApplyDynamicSecretLeasePendingTx(ctx context.Context, tx pgx.Tx,
 		         dynamic_secret_leases.preparation_digest IN ('', EXCLUDED.preparation_digest))`,
 		lease.TenantID, lease.TenantEpoch, lease.ID, lease.IdempotencyKey, lease.RequestBinding, lease.Provider, lease.Role,
 		lease.SealedPreparation, preparationDigest, preparedAt, lease.IssueOutboxID,
-		lease.IssuedAt, lease.ExpiresAt, hardExpiresAt, updatedAt)
+		lease.IssuedAt, lease.ExpiresAt, hardExpiresAt, updatedAt, lease.RequestedBy)
 	if err != nil {
 		return err
 	}
@@ -670,7 +674,7 @@ const dynamicSecretLeaseAuthoritySelect = `SELECT id, tenant_id::text, tenant_ep
        sealed_credential, revocation_sealed_credential, sealed_preparation, preparation_digest, prepared_at,
        credential_digest, state, issue_outbox_id, revocation_status,
        revoke_outbox_id, last_error, issued_at, expires_at, hard_expires_at,
-       revoked_at, revocation_completed_at, revocation_method, updated_at
+       revoked_at, revocation_completed_at, revocation_method, updated_at, requested_by
   FROM dynamic_secret_leases
  WHERE tenant_id = $1`
 
@@ -703,6 +707,7 @@ func scanDynamicSecretLeaseAuthority(row rowScanner, lease *DynamicSecretLease) 
 		&lease.RevokeOutboxID, &lease.LastError,
 		&lease.IssuedAt, &lease.ExpiresAt, &lease.HardExpiresAt,
 		&lease.RevokedAt, &lease.RevocationCompletedAt, &lease.RevocationMethod, &lease.UpdatedAt,
+		&lease.RequestedBy,
 	)
 }
 

@@ -691,6 +691,12 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
         <dt className="font-medium text-muted-foreground">{translateNow("source.issued.0221e48751")}</dt>
         <dd>{formatDate(lease.issued_at)}</dd>
       </div>
+      {lease.requested_by ? (
+        <div>
+          <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.requestedBy")}</dt>
+          <dd className="break-all">{lease.requested_by}</dd>
+        </div>
+      ) : null}
       <div>
         <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.revocationDeadline")}</dt>
         <dd>{formatDate(lease.expires_at)}</dd>
@@ -977,6 +983,7 @@ export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     hard_expires_at: lease.hard_expires_at,
     native_expires_at: lease.native_expires_at,
     role_chaining: lease.role_chaining,
+    requested_by: lease.requested_by,
     revocation_status: lease.revocation_status,
     revoked_at: lease.revoked_at,
     revocation_completed_at: lease.revocation_completed_at,

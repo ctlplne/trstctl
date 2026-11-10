@@ -200,6 +200,9 @@ type Lease struct {
 	// RevocationMethod is how the credential ended, for a provider that says
 	// (RevocationMethodDenyPolicy or RevocationMethodNativeExpiry, N3).
 	RevocationMethod string
+	// RequestedBy is the subject whose request opened the lease (G1-L1);
+	// empty for a lease from before it was recorded.
+	RequestedBy string
 }
 
 // RevokeItem is a queued backend revocation.

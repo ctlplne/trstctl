@@ -1340,10 +1340,12 @@ never live in the API process. What you can do end to end against the running bi
   `access_omitted` (G1-L2).
   Answers are identical after a restart and a full read-model rebuild. Step 1
   sees only trstctl's own records: permissions inside the target system come from
-  G2 for PostgreSQL and AWS STS leases (below), a dynamic-secret lease does not
-  record who requested it, access granted
-  outside trstctl is invisible, and PAM sessions started before this release do
-  not record their approval. Since Q4 the person who asked the agent broker for an
+  G2 for PostgreSQL and AWS STS leases (below), access granted outside trstctl is
+  invisible, and PAM sessions started before this release do not record their
+  approval. A dynamic-secret lease records the subject whose request opened it
+  (G1-L1): the graph shows that person or principal holding it
+  (`holder_recorded: true`), and privacy export, erasure and retention cover the
+  record; leases opened before G1-L1 name no requester. Since Q4 the person who asked the agent broker for an
   identity DELEGATED to the agent, and a live agent credential reaches the tools
   its scopes name; issuances recorded before Q4 name no requester.
 - Usage-based posture (M1): trstctl records API-token use from its own activity —

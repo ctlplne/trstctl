@@ -17704,6 +17704,8 @@ export interface components {
              */
             native_expires_at?: string;
             provider: string;
+            /** @description The subject whose request opened the lease; absent for a lease from before it was recorded. */
+            requested_by?: string;
             /** Format: date-time */
             revocation_completed_at?: string;
             /**

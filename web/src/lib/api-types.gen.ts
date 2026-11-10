@@ -4591,6 +4591,7 @@ export interface DynamicLease {
   issued_at: string;
   native_expires_at?: string;
   provider: string;
+  requested_by?: string;
   revocation_completed_at?: string;
   revocation_method?: "deny_policy" | "native_expiry";
   revocation_status?: "none" | "pending" | "completed" | "failed";

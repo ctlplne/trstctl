@@ -134,6 +134,14 @@ describe("dynamic lease provider evidence", () => {
     expect(screen.getByText(/any session chained from them, may work in AWS until the time below/)).toBeInTheDocument();
   });
 
+  it("names who requested the lease (G1-L1)", async () => {
+    const requested = { ...lease, requested_by: "oidc|dana-ops" };
+    read.mockResolvedValue(requested);
+    renderReceipt(requested);
+    expect(await screen.findByText("Requested by")).toBeInTheDocument();
+    expect(screen.getByText("oidc|dana-ops")).toBeInTheDocument();
+  });
+
   it("uses the persisted original renewal limit for an active lease", async () => {
     renderReceipt(lease);
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));

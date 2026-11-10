@@ -879,7 +879,7 @@ func dynamicLeaseFromStore(record store.DynamicSecretLease) dynsecret.Lease {
 		IssuedAt: record.IssuedAt, ExpiresAt: record.ExpiresAt,
 		HardExpiresAt: record.HardExpiresAt, RevocationStatus: string(record.RevocationStatus),
 		RevokedAt: record.RevokedAt, RevocationCompletedAt: record.RevocationCompletedAt,
-		RevocationMethod: record.RevocationMethod,
+		RevocationMethod: record.RevocationMethod, RequestedBy: record.RequestedBy,
 	}
 }
 

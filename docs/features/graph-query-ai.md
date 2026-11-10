@@ -124,8 +124,8 @@ read. `unknown` never means "no grants".
 
 What the graph does not see: permissions inside systems other than PostgreSQL and AWS
 IAM, what a policy's statements allow (policies are listed by name), who requested a
-dynamic-secret lease (a lease records only a non-reversible binding digest), and access
-granted outside trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
+dynamic-secret lease opened before G1-L1 (newer leases record their requester, who holds
+them in the graph), and access granted outside trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
 started before this release do not record their approval, so their approvers read as
 "No approval recorded".
 

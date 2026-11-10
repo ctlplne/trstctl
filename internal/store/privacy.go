@@ -65,6 +65,7 @@ var privacyReadModelSelectorTables = map[string]struct{}{
 	"operation_approval_requests": {}, "operation_approval_decisions": {},
 	"workload_attester_trust_receipts": {},
 	"pam_sessions":                     {}, "discovery_sources": {}, "discovery_findings": {},
+	"dynamic_secret_leases":             {},
 	"notification_threshold_deliveries": {}, "incident_executions": {},
 	"nhi_access_review_campaigns": {}, "nhi_access_review_items": {},
 	"access_change_requests": {}, "access_change_request_decisions": {},
@@ -1613,6 +1614,17 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		r.TenantID, r.Cutoffs.AccessTerminalBefore); err != nil {
 		return err
 	}
+	// G1-L1: a lease's requester is kept under the same access-terminal
+	// cutoff as a PAM session's.
+	if _, err := tx.Exec(ctx,
+		`UPDATE dynamic_secret_leases
+		    SET requested_by = 'retained:' || left(md5($1::text || ':' || requested_by), 12)
+		  WHERE tenant_id = $1
+		    AND COALESCE(revoked_at, hard_expires_at) < $2
+		    AND requested_by <> '' AND requested_by NOT LIKE 'retained:%' AND requested_by NOT LIKE 'erased:%'`,
+		r.TenantID, r.Cutoffs.AccessTerminalBefore); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE discovery_findings
 			    SET triage_actor = CASE
@@ -2152,6 +2164,16 @@ func basePrivacyReadModelExportQueries(tenantID, subject string) []privacyReadMo
 			args: []any{tenantID, subject},
 		},
 		{
+			table: "dynamic_secret_leases",
+			sql: `SELECT id::text, ''::text,
+			             jsonb_build_object('provider', provider, 'role', role, 'state', state, 'requested_by', requested_by, 'issued_at', issued_at, 'expires_at', expires_at, 'revoked_at', revoked_at)::text,
+			             issued_at
+			        FROM dynamic_secret_leases
+			       WHERE tenant_id = $1 AND requested_by = $2
+			       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
 			table: "discovery_sources",
 			sql: `SELECT id::text, ''::text,
 				             jsonb_build_object('kind', kind, 'name', name, 'config', config, 'created_at', created_at, 'updated_at', updated_at)::text,
@@ -2337,6 +2359,7 @@ func basePrivacyReadModelSelectorQueries(tenantID, subject string) []privacyRead
 			args: []any{tenantID, subject},
 		},
 		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR ssh_principal = $2 OR revocation_requested_by = $2 OR position($2 in reason) > 0 OR position($2 in revocation_reason) > 0 OR position($2 in audit::text) > 0 OR position($2 in coalesce(attestation::text, '')) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "dynamic_secret_leases", sql: `SELECT id::text, ''::text, 0 FROM dynamic_secret_leases WHERE tenant_id = $1 AND requested_by = $2 ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
@@ -2617,6 +2640,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 		eraseOperationApprovalDecisionPrivacyRows,
 		eraseOperationApprovalRequestPrivacyRows,
 		erasePAMSessionPrivacyRows,
+		eraseDynamicSecretLeasePrivacyRows,
 		eraseDiscoverySourcePrivacyRows,
 		eraseDiscoveryFindingPrivacyRows,
 		eraseNotificationThresholdPrivacyRows,
@@ -2824,6 +2848,41 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 			  WHERE tenant_id = $1 AND id::text = $2`,
 			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.subject), redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy), redactSubjectValue(tenantID, subjectRef, placeholder, r.revocationRequestedBy),
 			redactSubjectValue(tenantID, subjectRef, placeholder, r.sshPrincipal)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// eraseDynamicSecretLeasePrivacyRows rewrites a lease's requester (G1-L1).
+func eraseDynamicSecretLeasePrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "dynamic_secret_leases")
+	if len(ids) == 0 {
+		return nil
+	}
+	type row struct{ id, requestedBy string }
+	var rowsToUpdate []row
+	rows, err := tx.Query(ctx, `SELECT id::text, requested_by FROM dynamic_secret_leases WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.requestedBy); err != nil {
+			rows.Close()
+			return err
+		}
+		rowsToUpdate = append(rowsToUpdate, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, r := range rowsToUpdate {
+		if _, err := tx.Exec(ctx,
+			`UPDATE dynamic_secret_leases SET requested_by = $3 WHERE tenant_id = $1 AND id::text = $2`,
+			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.requestedBy)); err != nil {
 			return err
 		}
 	}
@@ -3757,6 +3816,13 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			            OR audit <> '{}'::jsonb
 			            OR attestation IS NOT NULL
 				)`,
+			args: []any{tenantID, c.AccessTerminalBefore},
+		},
+		"dynamic_secret_leases": {
+			sql: `SELECT count(*) FROM dynamic_secret_leases
+				       WHERE tenant_id = $1
+				         AND COALESCE(revoked_at, hard_expires_at) < $2
+				         AND requested_by <> '' AND requested_by NOT LIKE 'retained:%' AND requested_by NOT LIKE 'erased:%'`,
 			args: []any{tenantID, c.AccessTerminalBefore},
 		},
 		"discovery_sources": {

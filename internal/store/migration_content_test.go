@@ -1161,6 +1161,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	432: true, // TestMigration0432KeepsTemplatesWithoutFreshSignIn
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
+	437: true, // TestMigration0437KeepsLeasesWithNoRequester
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup
 	373: true, // TestMigration0373KeepsRotationsUnacknowledged

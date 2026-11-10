@@ -21961,6 +21961,10 @@
           "provider": {
             "type": "string"
           },
+          "requested_by": {
+            "description": "The subject whose request opened the lease; absent for a lease from before it was recorded.",
+            "type": "string"
+          },
           "revocation_completed_at": {
             "format": "date-time",
             "type": "string"

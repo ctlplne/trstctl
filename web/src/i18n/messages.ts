@@ -8504,6 +8504,7 @@ export const messages = {
   "secrets.dynamic.renewFailed": { defaultMessage: "Could not renew this lease", description: "Dynamic lease renewal error title." },
   "secrets.dynamic.revokeFailed": { defaultMessage: "Could not confirm lease revocation", description: "Dynamic lease revocation error title." },
   "secrets.dynamic.needsAttention": { defaultMessage: "Temporary credential needs attention", description: "Dynamic workflow error wrapper title." },
+  "secrets.dynamic.requestedBy": { defaultMessage: "Requested by", description: "G1-L1: the subject whose request opened the dynamic-secret lease." },
   "secrets.dynamic.revocationDeadline": { defaultMessage: "Revocation deadline", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.renewalCeiling": { defaultMessage: "Original renewal limit", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.nativeExpiresAt": {

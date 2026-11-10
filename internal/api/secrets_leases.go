@@ -41,7 +41,9 @@ type dynamicLeaseResponse struct {
 	NativeExpiresAt *time.Time      `json:"native_expires_at,omitempty"`
 	// RoleChaining: the AWS STS session was issued able to assume other
 	// roles, so NativeExpiresAt is an hour past its own expiry (N3-L3).
-	RoleChaining          bool       `json:"role_chaining,omitempty"`
+	RoleChaining bool `json:"role_chaining,omitempty"`
+	// RequestedBy is the subject whose request opened the lease (G1-L1).
+	RequestedBy           string     `json:"requested_by,omitempty"`
 	RevocationStatus      string     `json:"revocation_status,omitempty"`
 	RevokedAt             *time.Time `json:"revoked_at,omitempty"`
 	RevocationCompletedAt *time.Time `json:"revocation_completed_at,omitempty"`
@@ -430,6 +432,7 @@ func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseRe
 		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
 		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
 		HardExpiresAt: hardExpiresAt, NativeExpiresAt: nativeExpiresAt, RoleChaining: dynsecret.AWSSTSRoleChaining(l.BackendRef),
+		RequestedBy:      l.RequestedBy,
 		RevocationStatus: l.RevocationStatus,
 		RevokedAt:        l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt, RevocationMethod: l.RevocationMethod,
 	}
