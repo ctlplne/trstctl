@@ -1351,7 +1351,8 @@ never live in the API process. What you can do end to end against the running bi
   detection needs clients that reach trstctl directly.
 - Native GitHub secret-scan webhooks (P6): `POST /api/v1/secrets/scans/hooks/{id}`
   verifies `X-Hub-Signature-256` with the hook's own secret (`secrets.scan_webhooks`)
-  before reading the delivery, refuses a missing or wrong signature, answers `ping`,
+  before reading the delivery, refuses a missing or wrong signature (recorded as a
+  `secret.scan_hook.refused` audit event, P6-L3), answers `ping`,
   and turns a verified `push` into a repository secret scan of the pushed commit;
   `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
   remain. GitLab/Bitbucket native signatures and private-repository clone credentials

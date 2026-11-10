@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- A GitHub push hook delivery refused for its signature is an audit event (P6-L3). A missing or
+  wrong `X-Hub-Signature-256` was answered with 401 and left no record. Each refusal is now a
+  `secret.scan_hook.refused` event naming the hook, GitHub's delivery ID and whether the
+  signature was missing or wrong, never the body or the signature.
 - A refused ACME email reply is an audit event, not only a log line (P15-L9). The RFC 8823 reply
   intake bounced a malformed, unsigned, unmatched or wrong reply and wrote one log line in the
   process that read it. Each refusal is now an `acme.email_reply.refused` event with the step

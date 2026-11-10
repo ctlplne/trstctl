@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -48,6 +49,32 @@ func githubDeliveryIdempotencyKey(r *http.Request) string {
 		return ""
 	}
 	return "github-delivery:" + delivery
+}
+
+// Why a delivery's signature was refused (P6-L3).
+const (
+	secretScanHookSignatureMissing = "signature_missing"
+	secretScanHookSignatureWrong   = "signature_mismatch"
+)
+
+// auditSecretScanHookRefused records a delivery the hook refused for its
+// signature (P6-L3): the hook, GitHub's delivery ID and whether the signature
+// was missing or wrong, so forged or misconfigured deliveries show in the
+// tenant's audit trail. Never the body or the signature. The route's abuse
+// control bounds how fast anyone can add these. Best-effort, like the other
+// secret audit records: the refusal stands either way.
+func (a *API) auditSecretScanHookRefused(ctx context.Context, tenantID, hookID, delivery, reason string) {
+	if a.secrets == nil || a.secrets.be.Audit == nil {
+		return
+	}
+	if delivery = strings.TrimSpace(delivery); len(delivery) > 128 {
+		delivery = ""
+	}
+	payload, err := json.Marshal(map[string]string{"hook_id": hookID, "delivery": delivery, "reason": reason})
+	if err != nil {
+		return
+	}
+	_ = auditsink.Emit(ctx, a.secrets.be.Audit, nil, "secret.scan_hook.refused", tenantID, payload)
 }
 
 type githubPushPayload struct {
@@ -90,7 +117,13 @@ func (a *API) receiveSecretScanHook(w http.ResponseWriter, r *http.Request) {
 	}
 	mac := crypto.HMACSHA256(key.Bytes(), body)
 	want := []byte("sha256=" + hex.EncodeToString(mac))
-	if !crypto.ConstantTimeEqual([]byte(strings.TrimSpace(r.Header.Get("X-Hub-Signature-256"))), want) {
+	signature := strings.TrimSpace(r.Header.Get("X-Hub-Signature-256"))
+	if !crypto.ConstantTimeEqual([]byte(signature), want) {
+		reason := secretScanHookSignatureWrong
+		if signature == "" {
+			reason = secretScanHookSignatureMissing
+		}
+		a.auditSecretScanHookRefused(r.Context(), tenantID, r.PathValue("hook_id"), r.Header.Get("X-GitHub-Delivery"), reason)
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "the webhook signature does not verify"))
 		return
 	}

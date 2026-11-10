@@ -108,6 +108,32 @@ func TestServedGitHubSecretScanHookVerifiesSignaturesP6(t *testing.T) {
 	if n := runs(); n != 0 {
 		t.Fatalf("refused deliveries queued %d scans", n)
 	}
+	// P6-L3: each refused delivery is in the tenant's audit record with its
+	// hook, delivery ID and why, never the body or the signature.
+	auditor := seedScopedTokenSubject(t, h.store, h.tenant, "p6-hook-auditor", "audit:read")
+	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/audit/events?type=secret.scan_hook.refused&limit=20", auditor, nil)
+	var refused struct {
+		Events []struct {
+			Data struct {
+				HookID   string `json:"hook_id"`
+				Delivery string `json:"delivery"`
+				Reason   string `json:"reason"`
+			} `json:"data"`
+		} `json:"events"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &refused) != nil {
+		t.Fatalf("refused deliveries in the audit record = %d %s", status, raw)
+	}
+	reasons := map[string]int{}
+	for _, ev := range refused.Events {
+		reasons[ev.Data.Reason]++
+	}
+	if len(refused.Events) != 3 || reasons["signature_mismatch"] != 2 || reasons["signature_missing"] != 1 {
+		t.Fatalf("refused deliveries in the audit record = %d %v, want two wrong signatures and one missing", len(refused.Events), reasons)
+	}
+	if bytes.Contains(raw, []byte("acme/payments")) || bytes.Contains(raw, []byte("sha256=")) {
+		t.Fatalf("the refusal record carries the body or a signature: %s", raw)
+	}
 	if status, _ := deliver("gh-unknown", "push", "d-4", sign("p6-hook-signing-secret", push), push); status != http.StatusNotFound {
 		t.Fatalf("unknown hook: HTTP %d", status)
 	}
