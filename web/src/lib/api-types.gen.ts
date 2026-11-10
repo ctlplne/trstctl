@@ -4596,6 +4596,7 @@ export interface DynamicLease {
   revocation_status?: "none" | "pending" | "completed" | "failed";
   revoked_at?: string;
   role: string;
+  role_chaining?: boolean;
   state: string;
 }
 

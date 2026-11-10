@@ -8624,8 +8624,19 @@ What comes next:
   beside small existing policies); a revocation that hits it fails and is retried,
   and the session still lapses at its expiry. A managed-policy or
   `aws:TokenIssueTime` fallback is a lead.
-- Sessions the revoked session started by assuming another role (role chaining)
-  carry the other role's `aws:userid` and are not denied.
+- A lease's session can't assume another role (N3-L3): each lease's `AssumeRole`
+  passes a session policy that keeps everything the role allows and denies
+  `sts:AssumeRole`, because a session chained into another role carries that
+  role's `aws:userid` and is reached by neither the denial nor the lease's expiry.
+  Proven against an STS authorization stand-in that evaluates session policies
+  (`TestServedSTSLeaseCannotChainIntoAnotherRoleN3L3`): a workload holding a lease
+  is refused when it assumes another role with the lease's session. A provider
+  with `allow_role_chaining: true` issues sessions that can chain; its leases say
+  `role_chaining`, their revocation stays pending an hour past the session's
+  expiry (the longest a chained session runs), and it can't be combined with
+  `revoke_with_deny_policy`. AWS enforcing the session policy is part of the live
+  proof (Track B). What a session did before its revocation stands: keys or roles
+  it created, or roles it passed to a service, are not undone.
 
 ## Decoy key detection over an organization trail (N4) — served
 

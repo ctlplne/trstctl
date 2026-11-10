@@ -116,6 +116,24 @@ describe("dynamic lease provider evidence", () => {
     expect(screen.getByText("AWS session expiry confirmed at")).toBeInTheDocument();
   });
 
+  it("says an AWS lease that could chain roles ends an hour past its session (N3-L3)", async () => {
+    const until = new Date(Date.now() + 75 * 60000).toISOString();
+    const chaining = {
+      ...lease,
+      provider: "qa-aws-sts",
+      state: "revoked",
+      revocation_status: "pending" as const,
+      native_expires_at: until,
+      role_chaining: true,
+    };
+    read.mockResolvedValue(chaining);
+    renderReceipt(chaining);
+    expect(await screen.findByText("Lease closed; AWS session may remain valid")).toBeInTheDocument();
+    expect(screen.getByText("AWS sessions from this lease end by")).toBeInTheDocument();
+    expect(screen.queryByText("AWS session expires at")).not.toBeInTheDocument();
+    expect(screen.getByText(/any session chained from them, may work in AWS until the time below/)).toBeInTheDocument();
+  });
+
   it("uses the persisted original renewal limit for an active lease", async () => {
     renderReceipt(lease);
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));

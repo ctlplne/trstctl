@@ -30,18 +30,21 @@ type dynamicLeaseRenewRequest struct {
 }
 
 type dynamicLeaseResponse struct {
-	ID                    string          `json:"id"`
-	Provider              string          `json:"provider"`
-	Role                  string          `json:"role"`
-	State                 string          `json:"state"`
-	Credential            secretJSONBytes `json:"credential,omitempty"`
-	IssuedAt              time.Time       `json:"issued_at"`
-	ExpiresAt             time.Time       `json:"expires_at"`
-	HardExpiresAt         *time.Time      `json:"hard_expires_at,omitempty"`
-	NativeExpiresAt       *time.Time      `json:"native_expires_at,omitempty"`
-	RevocationStatus      string          `json:"revocation_status,omitempty"`
-	RevokedAt             *time.Time      `json:"revoked_at,omitempty"`
-	RevocationCompletedAt *time.Time      `json:"revocation_completed_at,omitempty"`
+	ID              string          `json:"id"`
+	Provider        string          `json:"provider"`
+	Role            string          `json:"role"`
+	State           string          `json:"state"`
+	Credential      secretJSONBytes `json:"credential,omitempty"`
+	IssuedAt        time.Time       `json:"issued_at"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	HardExpiresAt   *time.Time      `json:"hard_expires_at,omitempty"`
+	NativeExpiresAt *time.Time      `json:"native_expires_at,omitempty"`
+	// RoleChaining: the AWS STS session was issued able to assume other
+	// roles, so NativeExpiresAt is an hour past its own expiry (N3-L3).
+	RoleChaining          bool       `json:"role_chaining,omitempty"`
+	RevocationStatus      string     `json:"revocation_status,omitempty"`
+	RevokedAt             *time.Time `json:"revoked_at,omitempty"`
+	RevocationCompletedAt *time.Time `json:"revocation_completed_at,omitempty"`
 	// RevocationMethod is how an AWS STS lease's session ended (N3).
 	RevocationMethod string `json:"revocation_method,omitempty"`
 }
@@ -426,8 +429,9 @@ func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseRe
 	return dynamicLeaseResponse{
 		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
 		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
-		HardExpiresAt: hardExpiresAt, NativeExpiresAt: nativeExpiresAt, RevocationStatus: l.RevocationStatus,
-		RevokedAt: l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt, RevocationMethod: l.RevocationMethod,
+		HardExpiresAt: hardExpiresAt, NativeExpiresAt: nativeExpiresAt, RoleChaining: dynsecret.AWSSTSRoleChaining(l.BackendRef),
+		RevocationStatus: l.RevocationStatus,
+		RevokedAt:        l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt, RevocationMethod: l.RevocationMethod,
 	}
 }
 

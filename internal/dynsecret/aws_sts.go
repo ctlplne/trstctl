@@ -48,13 +48,35 @@ type AWSSTSConfig struct {
 	// credentials then also need iam:PutRolePolicy, iam:GetRolePolicy,
 	// iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles.
 	RevokeWithDenyPolicy bool
+	// AllowRoleChaining lets a lease's session assume other roles (N3-L3).
+	// Without it every lease's AssumeRole passes awsSTSNoChainingSessionPolicy.
+	// A chained session runs as another role, which neither a denial on the
+	// lease's role nor the lease's expiry reaches: with it, a revocation waits
+	// AWSSTSChainedSessionMaxDuration past the session's expiry, and it can't
+	// be combined with RevokeWithDenyPolicy.
+	AllowRoleChaining bool
 }
 
+// AWSSTSChainedSessionMaxDuration is the longest a role session chained from
+// another can run: AWS limits a role-chaining session to one hour.
+const AWSSTSChainedSessionMaxDuration = time.Hour
+
+// awsSTSNoChainingSessionPolicy is the session policy a lease's AssumeRole
+// passes unless the provider allows role chaining (N3-L3). A session's
+// permissions are its role's intersected with its session policy: the Allow
+// keeps everything the role allows, and the Deny takes sts:AssumeRole away,
+// so a lease can't chain into another role whose session its revocation would
+// not reach.
+const awsSTSNoChainingSessionPolicy = `{"Version":"2012-10-17","Statement":[` +
+	`{"Sid":"TrstctlLeaseKeepsItsRole","Effect":"Allow","Action":"*","Resource":"*"},` +
+	`{"Sid":"TrstctlLeaseCannotChainRoles","Effect":"Deny","Action":"sts:AssumeRole","Resource":"*"}]}`
+
 type AWSSTSBackend struct {
-	query      *AWSIAMBackend
-	iam        *AWSIAMBackend
-	roleARNs   map[string]string
-	denyPolicy bool
+	query        *AWSIAMBackend
+	iam          *AWSIAMBackend
+	roleARNs     map[string]string
+	denyPolicy   bool
+	roleChaining bool
 }
 
 type awsSTSRef struct {
@@ -63,6 +85,9 @@ type awsSTSRef struct {
 	AssumedRoleID string    `json:"assumed_role_id"`
 	AccessKeyID   string    `json:"access_key_id"`
 	Expiration    time.Time `json:"expiration"`
+	// RoleChaining records that the session was issued able to assume other
+	// roles (N3-L3), so its revocation waits for a chained session too.
+	RoleChaining bool `json:"role_chaining,omitempty"`
 }
 
 // NewAWSSTSBackend builds a bounded AssumeRole issuer. It does not create IAM
@@ -74,6 +99,9 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 	}
 	if len(cfg.RoleARNs) == 0 {
 		return nil, errors.New("dynsecret aws-sts: at least one role ARN is required")
+	}
+	if cfg.AllowRoleChaining && cfg.RevokeWithDenyPolicy {
+		return nil, errors.New("dynsecret aws-sts: allow_role_chaining can't be combined with revoke_with_deny_policy: a denial on the lease's role does not reach a session chained into another role")
 	}
 	for role, arn := range cfg.RoleARNs {
 		if strings.TrimSpace(role) == "" || !awsSTSRoleARN.MatchString(arn) {
@@ -102,7 +130,8 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 		query.Close()
 		return nil, fmt.Errorf("dynsecret aws-sts: initialize IAM read client: %w", err)
 	}
-	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs), denyPolicy: cfg.RevokeWithDenyPolicy}, nil
+	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs),
+		denyPolicy: cfg.RevokeWithDenyPolicy, roleChaining: cfg.AllowRoleChaining}, nil
 }
 
 func (b *AWSSTSBackend) Create(context.Context, string) (string, []byte, error) {
@@ -126,10 +155,14 @@ func (b *AWSSTSBackend) CreateCredential(ctx context.Context, req GenerateReques
 		return "", nil, err
 	}
 	started := b.query.now().UTC()
-	raw, err := b.query.callService(ctx, map[string]string{
+	params := map[string]string{
 		"Action": "AssumeRole", "Version": "2011-06-15", "RoleArn": roleARN,
 		"RoleSessionName": session, "DurationSeconds": strconv.Itoa(seconds),
-	}, awsSTSService)
+	}
+	if !b.roleChaining {
+		params["Policy"] = awsSTSNoChainingSessionPolicy
+	}
+	raw, err := b.query.callService(ctx, params, awsSTSService)
 	if err != nil {
 		return "", nil, fmt.Errorf("dynsecret aws-sts: AssumeRole: %w", err)
 	}
@@ -162,7 +195,7 @@ func (b *AWSSTSBackend) CreateCredential(ctx context.Context, req GenerateReques
 	}
 	refBytes, err := json.Marshal(awsSTSRef{
 		RoleARN: roleARN, SessionName: session, AssumedRoleID: response.Result.AssumedRoleUser.ID,
-		AccessKeyID: issued.AccessKeyID, Expiration: expiration,
+		AccessKeyID: issued.AccessKeyID, Expiration: expiration, RoleChaining: b.roleChaining,
 	})
 	if err != nil {
 		return "", nil, err
@@ -202,13 +235,28 @@ func CheckAWSSTSExpiration(ref string, now time.Time) error {
 }
 
 // AWSSTSExpiration extracts only public session metadata from a provider ref.
-// It enables an operator to see when passive AWS revocation can complete.
+// It enables an operator to see when passive AWS revocation can complete: the
+// session's expiry, or for a session issued able to chain roles, an hour
+// after it, the longest a session chained from it can run (N3-L3).
 func AWSSTSExpiration(ref string) (time.Time, bool) {
 	var issued awsSTSRef
 	if err := json.Unmarshal([]byte(ref), &issued); err != nil || !awsSTSRoleARN.MatchString(issued.RoleARN) || issued.SessionName == "" || issued.AssumedRoleID == "" || issued.AccessKeyID == "" || issued.Expiration.IsZero() {
 		return time.Time{}, false
 	}
+	if issued.RoleChaining {
+		return issued.Expiration.Add(AWSSTSChainedSessionMaxDuration), true
+	}
 	return issued.Expiration, true
+}
+
+// AWSSTSRoleChaining reports whether a lease's session was issued able to
+// assume other roles (N3-L3).
+func AWSSTSRoleChaining(ref string) bool {
+	var issued awsSTSRef
+	if _, ok := AWSSTSExpiration(ref); !ok || json.Unmarshal([]byte(ref), &issued) != nil {
+		return false
+	}
+	return issued.RoleChaining
 }
 
 func (b *AWSSTSBackend) Close() {

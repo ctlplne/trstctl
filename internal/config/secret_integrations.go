@@ -152,6 +152,13 @@ type DynamicSecretProviderConfig struct {
 	// iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the
 	// bound roles. Without it a revoked session lapses at its expiry.
 	RevokeWithDenyPolicy bool `json:"revoke_with_deny_policy,omitempty"`
+	// AllowRoleChaining (aws-sts) lets a lease's session assume other roles
+	// (N3-L3). Without it each lease is issued with a session policy that
+	// denies sts:AssumeRole, so no session outlives its revocation as another
+	// role. With it a revocation waits an hour past the session's expiry (the
+	// longest a chained session runs), and it can't be combined with
+	// revoke_with_deny_policy.
+	AllowRoleChaining bool `json:"allow_role_chaining,omitempty"`
 
 	PasswordRef             string `json:"password_ref,omitempty"`
 	SecretAccessRef         string `json:"secret_access_key_ref,omitempty"`
@@ -929,6 +936,12 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	}
 	if c.RevokeWithDenyPolicy && c.Type != "aws-iam" && c.Type != "aws-sts" {
 		errs = append(errs, fmt.Errorf("%s revoke_with_deny_policy is only valid for aws-sts", where))
+	}
+	if c.AllowRoleChaining && c.Type != "aws-iam" && c.Type != "aws-sts" {
+		errs = append(errs, fmt.Errorf("%s allow_role_chaining is only valid for aws-sts", where))
+	}
+	if c.AllowRoleChaining && c.RevokeWithDenyPolicy {
+		errs = append(errs, fmt.Errorf("%s allow_role_chaining can't be combined with revoke_with_deny_policy: a denial on the lease's role does not reach a session chained into another role", where))
 	}
 	if c.IAMEndpoint != "" {
 		if c.Type != "aws-iam" && c.Type != "aws-sts" {

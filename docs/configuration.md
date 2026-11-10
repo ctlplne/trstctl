@@ -2310,6 +2310,16 @@ credentials then also need `iam:PutRolePolicy`, `iam:GetRolePolicy` and
 `iam:DeleteRolePolicy` on the bound roles. The setting is refused on any other
 provider type; without it a revoked session stays valid until it expires.
 
+A lease's session can't assume other roles (N3-L3): every `AssumeRole` passes a
+session policy that keeps what the role allows and denies `sts:AssumeRole`, so no
+session chained into another role outlives the lease's revocation. Set
+`allow_role_chaining: true` on an `aws-sts` (or `aws-iam`) provider whose workloads
+must chain roles: its leases are issued without the session policy, read
+`role_chaining: true`, and their revocation stays pending an hour past the
+session's expiry, the longest AWS lets a chained session run. It is refused
+together with `revoke_with_deny_policy`, whose denial on the lease's role does not
+reach a session chained into another role, and on any other provider type.
+
 #### Signed webhook, Parameter Store and Netlify targets
 
 A `webhook` target POSTs JSON to `endpoint` and signs every delivery with the HMAC

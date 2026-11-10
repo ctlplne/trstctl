@@ -8510,6 +8510,10 @@ export const messages = {
     defaultMessage: "AWS session expires at",
     description: "Native AWS STS credential expiration; early trstctl lease closure does not invalidate the AWS session.",
   },
+  "secrets.dynamic.chainedSessionsEndBy": {
+    defaultMessage: "AWS sessions from this lease end by",
+    description: "Native expiry of an AWS STS lease whose session could assume other roles: an hour past the session's own expiry (N3-L3).",
+  },
   "secrets.dynamic.providerRevokedAt": { defaultMessage: "Provider removal confirmed at", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.awsExpiryConfirmedAt": {
     defaultMessage: "AWS session expiry confirmed at",
@@ -8547,6 +8551,11 @@ export const messages = {
     defaultMessage:
       "STS cannot delete one issued session. The old credentials may work in AWS until the native expiration below. Replace workload credentials now and verify rejection after expiry.",
     description: "AWS STS passive expiry evidence and operator action.",
+  },
+  "secrets.dynamic.awsChainingRevocationTiming": {
+    defaultMessage:
+      "STS cannot delete one issued session, and this lease's session could assume other roles. The old credentials, and any session chained from them, may work in AWS until the time below, an hour past the session's own expiry. Replace workload credentials now and verify rejection after then.",
+    description: "AWS STS passive expiry evidence for a provider that allows role chaining (N3-L3).",
   },
   "secrets.dynamic.refreshStatus": { defaultMessage: "Refresh lease status", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.startAgain": { defaultMessage: "Create another credential", description: "Reset completed dynamic lease workflow action." },

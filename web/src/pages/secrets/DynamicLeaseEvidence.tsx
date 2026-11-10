@@ -38,7 +38,15 @@ export function DynamicLeaseEvidence({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div role="status">
           <h3 className="font-semibold">{status}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{t(awsSession ? "secrets.dynamic.awsRevocationTiming" : "secrets.dynamic.revocationTiming")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t(
+              awsSession
+                ? lease.role_chaining
+                  ? "secrets.dynamic.awsChainingRevocationTiming"
+                  : "secrets.dynamic.awsRevocationTiming"
+                : "secrets.dynamic.revocationTiming",
+            )}
+          </p>
         </div>
         <Button type="button" variant="outline" onClick={refresh}>
           {t("secrets.dynamic.refreshStatus")}

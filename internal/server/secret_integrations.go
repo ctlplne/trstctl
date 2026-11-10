@@ -838,7 +838,7 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 			SessionPrefix: cfg.UsernamePrefix, RoleARNs: cfg.RoleBindings,
 			IAMEndpoint: iamEndpoint, IAMHTTPClient: iamClient,
-			RevokeWithDenyPolicy: cfg.RevokeWithDenyPolicy,
+			RevokeWithDenyPolicy: cfg.RevokeWithDenyPolicy, AllowRoleChaining: cfg.AllowRoleChaining,
 		})
 		if err != nil {
 			return o.fail(err)

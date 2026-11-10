@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2879 annotated sites across 33 rules. Each row is
+2881 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (611 sites)
+### G101 — CWE-798 Use of hardcoded credentials (612 sites)
 
 | Location | Reason |
 |---|---|
@@ -273,8 +273,9 @@ not this file.
 | `internal/config/secret_integrations_test.go:1382` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secret_integrations_test.go:1386` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secret_integrations_test.go:1463` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:1476` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:1482` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/secret_integrations_test.go:1478` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/secret_integrations_test.go:1500` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/secret_integrations_test.go:1506` | test-only file reference paths, no credential values (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -1289,7 +1290,7 @@ not this file.
 | `internal/dynsecret/aws_cache_users.go:170` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/aws_cache_users.go:201` | the new user's password goes to the MemoryDB API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
-| `internal/dynsecret/aws_sts.go:170` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/aws_sts.go:203` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/cassandra.go:179` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/clickhouse.go:131` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/client_secrets.go:183` | the new secret is this provider's output: the outbox seals it and only its readers open it (CWE-200) |
@@ -3201,7 +3202,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (16 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (17 sites)
 
 | Location | Reason |
 |---|---|
@@ -3221,6 +3222,7 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:1101` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1172` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1282` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/server/sts_role_chaining_served_test.go:81` | test writes fixture bytes to its own local server (CWE-79) |
 
 ### G709 — CWE-502 Deserialization of untrusted data (taint) (1 sites)
 

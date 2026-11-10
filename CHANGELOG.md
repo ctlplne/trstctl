@@ -580,6 +580,15 @@
 
 ### Fixed
 
+- An AWS STS lease's session can't assume another role (N3-L3). A session chained from a lease
+  runs as the other role, which neither `revoke_with_deny_policy`'s denial on the lease's role nor
+  the lease's expiry reaches, so it outlived the lease's revocation by up to an hour. Each lease's
+  `AssumeRole` now passes a session policy that keeps what the role allows and denies
+  `sts:AssumeRole`. A provider whose workloads must chain sets `allow_role_chaining: true`: its
+  leases are issued without the policy and read `role_chaining: true`, their revocation stays
+  pending an hour past the session's expiry, and the setting is refused with
+  `revoke_with_deny_policy`. Leases issued before this change could chain. The lease view says when
+  a lease's sessions end by an hour past its session's own expiry.
 - An issuance approval no longer outlives a change to what the identity puts into the certificate
   (A245-L5). An approval bound the identity's lifecycle version, which is 0 for every first
   issuance and never moves on an attribute edit, so an approval asked for one subject key could

@@ -1469,6 +1469,30 @@ func TestValidateRevokeWithDenyPolicyIsAWSSTSOnlyN3(t *testing.T) {
 	}
 }
 
+// N3-L3: allow_role_chaining belongs to the AWS STS issuer, and it can't be
+// combined with revoke_with_deny_policy, whose denial on the lease's role
+// does not reach a session chained into another role.
+func TestValidateAllowRoleChainingIsAWSSTSOnlyAndExcludesTheDenyN3L3(t *testing.T) {
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	sts := DynamicSecretProviderConfig{TenantID: tenant, ID: "sts", Type: "aws-sts", Endpoint: "https://sts.example.test", Region: "us-east-1",
+		AccessKeyID: "AKID", SecretAccessRef: "file:/var/lib/trstctl/aws-secret", AllowedRoles: []string{"reader"}, // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+		RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:role/trstctl-reader"}, MaxTTL: "1h", AllowRoleChaining: true}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{sts}}, true); err != nil {
+		t.Fatalf("aws-sts with allow_role_chaining = %v", err)
+	}
+	both := sts
+	both.RevokeWithDenyPolicy = true
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{both}}, true); err == nil ||
+		!strings.Contains(err.Error(), "allow_role_chaining can't be combined with revoke_with_deny_policy") {
+		t.Fatalf("allow_role_chaining with revoke_with_deny_policy = %v", err)
+	}
+	pg := DynamicSecretProviderConfig{TenantID: tenant, ID: "pg", Type: "postgresql", AdminDSNRef: "file:/var/lib/trstctl/dsn", AllowedRoles: []string{"reader"}, AllowRoleChaining: true}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{pg}}, true); err == nil ||
+		!strings.Contains(err.Error(), "allow_role_chaining is only valid for aws-sts") {
+		t.Fatalf("postgresql with allow_role_chaining = %v", err)
+	}
+}
+
 // N4: a decoy account may name the trail whose S3 delivery the monitor reads;
 // the bucket, Region, organization, accounts and credential reference are
 // checked before the server starts.

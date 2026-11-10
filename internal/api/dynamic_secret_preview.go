@@ -147,6 +147,9 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	// N3: the AWS STS issuer's opt-in to end a revoked session early.
 	awsDenyPolicy := value("revoke_with_deny_policy", "Deny revoked sessions",
 		"Optional. Revoking a lease writes an inline policy on the role that denies that one session (aws:userid) until it expires, read back before the revocation counts; the caller then also needs iam:PutRolePolicy, iam:GetRolePolicy, iam:ListRolePolicies and iam:DeleteRolePolicy on the bound roles. Without it a revoked session lapses at its expiry.", false)
+	// N3-L3: a lease's session can't chain into another role unless allowed.
+	awsRoleChaining := value("allow_role_chaining", "Allow role chaining",
+		"Optional. A lease's session may assume other roles. Without it each lease is issued with a session policy that denies sts:AssumeRole, so no session chained from it outlives its revocation. With it a revocation stays pending an hour past the session's expiry, the longest a chained session runs, and revoke_with_deny_policy can't be set.", false)
 	awsGateway := value("gateway", "Gateway API binding", "Optional gateway-only account attachment: endpoint is a fixed HTTPS origin; service is s3 or sts; region is explicit. API callers get a gateway ticket, not STS key material. LocalStack wire and authorization stand-in are separate qualifications.", false)
 	awsConsole := value("console", "Native console handoff binding", "Optional aws-sts attachment with fixed federation_endpoint and destination on supported AWS commercial HTTPS hosts. The browser receives a native sign-in form, never STS keys. Strict federation/login stand-in and LocalStack STS only. Recording attests the handoff, not native console actions; require_recording templates refuse this type. Native cookies/access keys and logout are unverified.", false)
 	desktop := value("desktop", "Reviewed desktop gateway binding", "Optional static-account attachment for unix, windows or ldap: fixed RDP address, certificate_sha256, domain, width/height and explicit tls_only for xrdp. Requires a Linux gateway with the native helper, encrypted recordings and audit signing. xrdp stock-viewer/PNG replay stand-in proof; native Windows/AD sign-in unverified. Images can contain on-screen secrets; pixel redaction is not automatic.", false)
@@ -170,14 +173,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("database", "Database", "Database in which the generated user is created.", true),
 			roleAccess,
 		)},
-		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session. Early lease revocation remains pending until AWS session expiry, unless revoke_with_deny_policy denies the revoked session through an inline policy on its role.", Requirements: dynamicSecretAWSRequirements(
+		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session that can't assume other roles unless allow_role_chaining is set. Early lease revocation remains pending until AWS session expiry, unless revoke_with_deny_policy denies the revoked session through an inline policy on its role.", Requirements: dynamicSecretAWSRequirements(
 			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
 			value("region", "AWS region", "Region used to sign STS requests.", true),
 			value("access_key_id", "Caller access key ID", "Identifier of the identity allowed to call STS AssumeRole.", true),
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
-			awsDenyPolicy,
+			awsDenyPolicy, awsRoleChaining,
 			awsConsole, awsGateway,
 		)},
 		{Type: "aws-iam", Label: "AWS STS (legacy aws-iam name)", Purpose: "Compatibility name for the same expiring AssumeRole session issuer; IAM user access keys are not created.", Requirements: dynamicSecretAWSRequirements(
@@ -187,7 +190,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
 			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
 			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
-			awsDenyPolicy,
+			awsDenyPolicy, awsRoleChaining,
 		)},
 		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity. A static rotation is two-phase: the successor is a new key of the service account beside the predecessor (an account holds ten), and retirement deletes the predecessor; only keys of the bound service account are ever deleted. A new key can take a minute to work and has no side-effect-free check, so verification reports not available and retirement waits for consumer evidence or the approved deadline.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),

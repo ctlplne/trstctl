@@ -17700,7 +17700,7 @@ export interface components {
             issued_at: string;
             /**
              * Format: date-time
-             * @description AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner.
+             * @description AWS STS session expiration returned by the provider, or an hour after it when role_chaining is set (the longest a session chained from it can run). An early lease revoke remains pending until this time unless the provider has revoke_with_deny_policy, which denies the exact session through its role sooner.
              */
             native_expires_at?: string;
             provider: string;
@@ -17719,6 +17719,8 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
             role: string;
+            /** @description The AWS STS session was issued able to assume other roles (the provider has allow_role_chaining). Without it the session's policy denies sts:AssumeRole, so nothing chained from it outlives its revocation. */
+            role_chaining?: boolean;
             state: string;
         };
         DynamicLeasePreview: {

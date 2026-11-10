@@ -701,7 +701,9 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
       </div>
       {lease.native_expires_at && (
         <div>
-          <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.nativeExpiresAt")}</dt>
+          <dt className="font-medium text-muted-foreground">
+            {translateNow(lease.role_chaining ? "secrets.dynamic.chainedSessionsEndBy" : "secrets.dynamic.nativeExpiresAt")}
+          </dt>
           <dd>{formatDate(lease.native_expires_at)}</dd>
         </div>
       )}
@@ -974,6 +976,7 @@ export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     expires_at: lease.expires_at,
     hard_expires_at: lease.hard_expires_at,
     native_expires_at: lease.native_expires_at,
+    role_chaining: lease.role_chaining,
     revocation_status: lease.revocation_status,
     revoked_at: lease.revoked_at,
     revocation_completed_at: lease.revocation_completed_at,

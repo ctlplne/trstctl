@@ -6388,6 +6388,7 @@ DynamicLease = TypedDict(
         'revocation_status': str,
         'revoked_at': str,
         'role': str,
+        'role_chaining': bool,
         'state': str,
     },
     total=False,
