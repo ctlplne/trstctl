@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- A KMIP key that is not yet activated reconciles as disabled, not unknown (KMIP-O1). The
+  KMIP reducer mapped Pre-Active to "pending", which the canonical status set does not have,
+  so every reconciliation round reported such a key as drift. A Pre-Active object may not
+  be used until activated (KMIP 1.4, section 3.22), so it is now `disabled`, as a
+  deactivated one is; the mapping is spelled out state by state.
 - The bulk-revoke contract names every permission it checks (N7-L1).
   `POST /api/v1/certificates/bulk-revoke` advertised only `identities:write`, but selecting
   exact certificates (`certificate_ids`) also needs `certs:issue` and is refused with 403

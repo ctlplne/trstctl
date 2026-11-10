@@ -158,20 +158,24 @@ func algorithmID(obj ManagedObject) string {
 	}
 }
 
+// statusID maps a KMIP object state to its canon (R-7) status. A Pre-Active
+// object may not be used for any cryptographic purpose until it is activated
+// (KMIP 1.4, section 3.22), so it is disabled, as a deactivated one is; canon
+// has no "pending" status, which reduced it to unknown (KMIP-O1).
 func statusID(state State) string {
 	switch normalizeState(state) {
 	case "active":
-		return "active"
-	case "preactive", "pre-active":
-		return "pending"
+		return canon.StatusActive
+	case "preactive":
+		return canon.StatusDisabled
 	case "deactivated", "inactive":
-		return "disabled"
+		return canon.StatusDisabled
 	case "compromised", "revoked":
-		return "revoked"
+		return canon.StatusRevoked
 	case "destroyed", "destroyedcompromised":
-		return "pending_deletion"
+		return canon.StatusPendingDeletion
 	default:
-		return "unknown"
+		return canon.StatusUnknown
 	}
 }
 

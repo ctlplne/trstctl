@@ -94,9 +94,9 @@ func TestRuntime_KMIPAuthorityObservesConfiguredServer(t *testing.T) {
 	if byType[canon.RecordTypeKey] != 2 || byType[canon.RecordTypeX509Certificate] != 1 || len(obs.Set.Records) != 3 {
 		t.Fatalf("record types = %v (want 2 keys and 1 certificate; the template skipped)", byType)
 	}
-	// The reducer maps Pre-Active to "pending", which the canon vocabulary
-	// does not carry, so it reduces to unknown (recorded as a lead).
-	if byStatus[canon.StatusActive] != 2 || byStatus[canon.StatusUnknown] != 1 {
+	// A Pre-Active key may not be used until activated: canon's disabled
+	// (KMIP-O1; it used to map to "pending", which reduced to unknown).
+	if byStatus[canon.StatusActive] != 2 || byStatus[canon.StatusDisabled] != 1 {
 		t.Fatalf("statuses = %v", byStatus)
 	}
 	if srv.KeyValueReads() != 0 || len(srv.Errors()) != 0 {
