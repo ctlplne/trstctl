@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- The IIS pool configuration digest reads its locked buffer only under the buffer's lock
+  (ARCH-014). It read the region through `Buffer.Bytes()`, which releases the lock before the
+  slice is used, so a concurrent destroy could wipe and unmap the private configuration under
+  the copy or the hash; `TestSecretBufferBytesStaysDeadInCoreCryptoKeyPaths` was failing on it.
 - A test now holds that a CSR's UPN `otherName` SAN never reaches a leaf trstctl signs
   (A160-L1). No profile can express a user principal name, and the leaf builder takes only
   the DNS, IP, email and URI names a profile checks; a mutant that copied the CSR's SAN
