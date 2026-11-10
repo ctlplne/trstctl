@@ -191,6 +191,107 @@ func TestKubernetesSecretDeliveryReplacesInPlaceAndReadsBack(t *testing.T) {
 	}
 }
 
+// TestKubernetesSecretRenewalKeepsOwnersFinalizersAndOtherData (K8S-O2): the
+// Secret an Ingress names is often owned and guarded by another controller.
+// Renewing it in place with the agent's least-privilege service account keeps
+// the ownerReferences that tie it to its owner's garbage collection, the
+// finalizers that hold its deletion for a cleanup hook, and the data keys the
+// write does not name, such as a ca.crt. The admin token only arranges and
+// verifies.
+func TestKubernetesSecretRenewalKeepsOwnersFinalizersAndOtherData(t *testing.T) {
+	client, raw, ns := cluster(t)
+	ctx := context.Background()
+	name := fmt.Sprintf("trstctl-e2e-owned-%d", time.Now().UnixNano())
+	path := "/api/v1/namespaces/" + ns + "/secrets/" + name
+	ownerName := name + "-owner"
+	st, body := raw(http.MethodPost, "/api/v1/namespaces/"+ns+"/configmaps", map[string]any{
+		"apiVersion": "v1", "kind": "ConfigMap", "metadata": map[string]any{"name": ownerName},
+		"data": map[string]any{"role": "owns the TLS Secret"},
+	})
+	var owner struct {
+		Metadata struct {
+			UID string `json:"uid"`
+		} `json:"metadata"`
+	}
+	if st != http.StatusCreated || json.Unmarshal(body, &owner) != nil || owner.Metadata.UID == "" {
+		t.Fatalf("create owner ConfigMap: status %d: %s", st, body)
+	}
+	t.Cleanup(func() { raw(http.MethodDelete, "/api/v1/namespaces/"+ns+"/configmaps/"+ownerName, nil) })
+
+	dest := k8s.NewSecretDestination(client, ns, name)
+	first, err := dest.InstallAndRead(ctx, destination.Credential{CertPEM: []byte("E2E-CERT-1"), KeyPEM: []byte("E2E-KEY-1")})
+	if err != nil {
+		t.Fatalf("first InstallAndRead: %v", err)
+	}
+	t.Cleanup(func() {
+		// Release the test's finalizer so the Secret can go.
+		if st, body := raw(http.MethodGet, path, nil); st == http.StatusOK {
+			var current map[string]any
+			if json.Unmarshal(body, &current) == nil {
+				if meta, ok := current["metadata"].(map[string]any); ok {
+					delete(meta, "finalizers")
+					raw(http.MethodPut, path, current)
+				}
+			}
+		}
+		raw(http.MethodDelete, path, nil)
+	})
+
+	// Another controller takes ownership, guards deletion and adds the issuing CA.
+	st, body = raw(http.MethodGet, path, nil)
+	var current map[string]any
+	if st != http.StatusOK || json.Unmarshal(body, &current) != nil {
+		t.Fatalf("GET secret before taking ownership: status %d", st)
+	}
+	meta, _ := current["metadata"].(map[string]any)
+	meta["ownerReferences"] = []any{map[string]any{
+		"apiVersion": "v1", "kind": "ConfigMap", "name": ownerName, "uid": owner.Metadata.UID,
+	}}
+	meta["finalizers"] = []any{"trstctl.test/keep"}
+	data, _ := current["data"].(map[string]any)
+	data["ca.crt"] = base64.StdEncoding.EncodeToString([]byte("E2E-ISSUING-CA"))
+	if st, body := raw(http.MethodPut, path, current); st != http.StatusOK {
+		t.Fatalf("take ownership of the secret: status %d: %s", st, body)
+	}
+
+	renewed, err := dest.InstallAndRead(ctx, destination.Credential{CertPEM: []byte("E2E-CERT-2"), KeyPEM: []byte("E2E-KEY-2")})
+	if err != nil {
+		t.Fatalf("renewal InstallAndRead: %v", err)
+	}
+	if string(renewed.CertPEM) != "E2E-CERT-2" || renewed.UID != first.UID {
+		t.Fatalf("renewal readback = %+v, want the same Secret (uid %s) holding the new certificate", renewed, first.UID)
+	}
+	st, body = raw(http.MethodGet, path, nil)
+	if st != http.StatusOK {
+		t.Fatalf("GET secret after renewal: status %d", st)
+	}
+	var obj struct {
+		Metadata struct {
+			OwnerReferences []struct {
+				Kind string `json:"kind"`
+				Name string `json:"name"`
+				UID  string `json:"uid"`
+			} `json:"ownerReferences"`
+			Finalizers []string `json:"finalizers"`
+		} `json:"metadata"`
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		t.Fatal(err)
+	}
+	if len(obj.Metadata.OwnerReferences) != 1 || obj.Metadata.OwnerReferences[0].UID != owner.Metadata.UID {
+		t.Errorf("renewal dropped the Secret's ownerReferences: %+v", obj.Metadata.OwnerReferences)
+	}
+	if len(obj.Metadata.Finalizers) != 1 || obj.Metadata.Finalizers[0] != "trstctl.test/keep" {
+		t.Errorf("renewal dropped the Secret's finalizers: %v", obj.Metadata.Finalizers)
+	}
+	ca, _ := base64.StdEncoding.DecodeString(obj.Data["ca.crt"])
+	key, _ := base64.StdEncoding.DecodeString(obj.Data["tls.key"])
+	if string(ca) != "E2E-ISSUING-CA" || string(key) != "E2E-KEY-2" {
+		t.Errorf("after renewal ca.crt %q tls.key %q, want the CA another controller added and the renewed key", ca, key)
+	}
+}
+
 // TestCertManagerBridgeInCluster: a separately approved cert-manager
 // CertificateRequest is signed by the bridge and its status goes Ready.
 func TestCertManagerBridgeInCluster(t *testing.T) {

@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- Renewing a Kubernetes TLS Secret in place keeps what other controllers set on it (K8S-O2).
+  The update replaced the whole object, carrying only labels and annotations, so a renewal
+  dropped the Secret's `ownerReferences`, its finalizers and data keys such as `ca.crt`. The
+  agent now sends a JSON merge patch naming only the type, `tls.crt` and `tls.key`,
+  conditional on the `resourceVersion` it read; a write without a key keeps the Secret's key.
 - A cloud-store migration member whose store stays down fails its gate instead of waiting at
   it (A166-L4). A control-plane deploy or rollback that spent its retries recorded no verdict,
   so the run sat at its live gate where a relay would have reported a failed receipt. The

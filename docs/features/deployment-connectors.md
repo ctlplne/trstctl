@@ -1055,7 +1055,11 @@ A `k8s_secret` destination is the `kubernetes.io/tls` Secret an Ingress or Gatew
 names, written by a host-role agent running inside that cluster. The agent
 generates the key in the cluster, sends only a CSR, writes `tls.crt` and `tls.key`,
 and reads the Secret back: the install succeeds only when the cluster holds the
-certificate just written. The key never leaves the cluster and the control plane
+certificate just written. A Secret that already exists is updated with a JSON
+merge patch that names only its type and those two keys, conditional on the
+`resourceVersion` the agent read, so what other controllers set on it stays:
+labels, annotations, `ownerReferences`, finalizers and other data keys such as
+`ca.crt`. The key never leaves the cluster and the control plane
 never generates it, so the destination requires `"executor": "agent"`; one saved
 without it is refused. Custody records `key_origin=host_agent` and
 `key_storage=kubernetes_secret`. When `verify_address` names the listener that

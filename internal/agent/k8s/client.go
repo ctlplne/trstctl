@@ -105,10 +105,21 @@ func (c *Client) Namespace() string { return c.namespace }
 // It distinguishes clusters without reporting API endpoints or CA bytes.
 func (c *Client) ClusterID() string { return c.clusterID }
 
+// mergePatchContentType names an RFC 7386 JSON merge patch: the API server
+// changes only the fields the patch carries and keeps every other field of the
+// live object as it is, ownerReferences and finalizers included.
+const mergePatchContentType = "application/merge-patch+json"
+
 // request performs an authenticated JSON request and returns the status code
 // and response body. Non-2xx is not an error here — callers interpret the code
 // (for example 404/409 during create-or-update).
 func (c *Client) request(ctx context.Context, method, path string, body any) (int, []byte, error) {
+	return c.requestAs(ctx, method, path, "application/json", body)
+}
+
+// requestAs is request with the body sent under contentType, for the PATCH
+// flavours the API server tells apart by media type.
+func (c *Client) requestAs(ctx context.Context, method, path, contentType string, body any) (int, []byte, error) {
 	var payload []byte
 	if body != nil {
 		var err error
@@ -136,7 +147,7 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (in
 		}
 		req.Header.Set("Accept", "application/json")
 		if body != nil {
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", contentType)
 		}
 		resp, err := c.httpClient.Do(req)
 		if err != nil {

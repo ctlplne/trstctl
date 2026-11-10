@@ -80,6 +80,30 @@ func fakePath(path string) (resource, namespace, name, sub string, ok bool) {
 
 func fakeKey(namespace, name string) string { return namespace + "/" + name }
 
+// fakeMergePatch applies an RFC 7386 JSON merge patch as the API server does:
+// the patch's fields replace the target's, null removes a field, and fields
+// the patch does not name stay.
+func fakeMergePatch(target, patch any) any {
+	fields, ok := patch.(map[string]any)
+	if !ok {
+		return patch
+	}
+	out := map[string]any{}
+	if current, ok := target.(map[string]any); ok {
+		for k, v := range current {
+			out[k] = v
+		}
+	}
+	for k, v := range fields {
+		if v == nil {
+			delete(out, k)
+			continue
+		}
+		out[k] = fakeMergePatch(out[k], v)
+	}
+	return out
+}
+
 func fakeMeta(obj map[string]any) map[string]any {
 	meta, _ := obj["metadata"].(map[string]any)
 	if meta == nil {
@@ -260,6 +284,25 @@ func (f *fakeAPI) handler() http.Handler {
 				fakeMeta(obj)["namespace"] = namespace
 				updated = obj
 			}
+			_ = json.NewEncoder(w).Encode(f.putLocked(resource, "MODIFIED", updated))
+		case r.Method == http.MethodPatch:
+			// Only the JSON merge patch the Secret writer sends (K8S-O2).
+			live, ok := f.objects[resource][fakeKey(namespace, name)]
+			if !ok {
+				http.Error(w, `{"kind":"Status","code":404}`, http.StatusNotFound)
+				return
+			}
+			if r.Header.Get("Content-Type") != mergePatchContentType {
+				http.Error(w, `{"kind":"Status","code":415}`, http.StatusUnsupportedMediaType)
+				return
+			}
+			var patch map[string]any
+			_ = json.Unmarshal(body, &patch)
+			if rv, _ := fakeMeta(patch)["resourceVersion"].(string); rv != "" && rv != fakeMeta(live)["resourceVersion"] {
+				http.Error(w, `{"kind":"Status","code":409}`, http.StatusConflict)
+				return
+			}
+			updated, _ := fakeMergePatch(deepCopyObject(live), patch).(map[string]any)
 			_ = json.NewEncoder(w).Encode(f.putLocked(resource, "MODIFIED", updated))
 		case r.Method == http.MethodDelete:
 			obj, ok := f.objects[resource][fakeKey(namespace, name)]

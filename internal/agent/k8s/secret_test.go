@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -18,12 +19,39 @@ import (
 )
 
 // fakeAPIServer is a tiny in-memory stand-in for the Kubernetes Secrets API: it
-// serves GET/POST/PUT on /api/v1/namespaces/{ns}/secrets[/{name}], which is
-// exactly the wire contract the secret destination drives.
+// serves GET/POST/PUT and JSON merge PATCH on
+// /api/v1/namespaces/{ns}/secrets[/{name}], which is exactly the wire
+// contract the secret destination drives.
 type fakeAPIServer struct {
 	mu        sync.Mutex
 	secrets   map[string]map[string]any // name -> object
 	gotBearer string
+	// patchRV is the resourceVersion the last patch was conditional on.
+	patchRV string
+}
+
+// mergePatch applies an RFC 7386 JSON merge patch the way the API server
+// does: the patch's fields replace the target's, null removes a field, and
+// every field the patch does not name stays as it is.
+func mergePatch(target, patch any) any {
+	fields, ok := patch.(map[string]any)
+	if !ok {
+		return patch
+	}
+	out := map[string]any{}
+	if current, ok := target.(map[string]any); ok {
+		for k, v := range current {
+			out[k] = v
+		}
+	}
+	for k, v := range fields {
+		if v == nil {
+			delete(out, k)
+			continue
+		}
+		out[k] = mergePatch(out[k], v)
+	}
+	return out
 }
 
 func newFakeAPIServer() *fakeAPIServer {
@@ -86,6 +114,40 @@ func (f *fakeAPIServer) handler(t *testing.T) http.Handler {
 			}
 			f.secrets[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
+		case http.MethodPatch:
+			if r.Header.Get("Content-Type") != "application/merge-patch+json" {
+				http.Error(w, `{"kind":"Status","code":415}`, http.StatusUnsupportedMediaType)
+				return
+			}
+			live, exists := f.secrets[name]
+			if !exists {
+				http.Error(w, `{"kind":"Status","code":404}`, http.StatusNotFound)
+				return
+			}
+			var patch map[string]any
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &patch); err != nil {
+				http.Error(w, "bad json", http.StatusBadRequest)
+				return
+			}
+			// Like the API server, a resourceVersion in the patch is a
+			// precondition and the type of a Secret cannot change.
+			if meta, ok := patch["metadata"].(map[string]any); ok {
+				if rv, _ := meta["resourceVersion"].(string); rv != "" {
+					f.patchRV = rv
+					if liveMeta, _ := live["metadata"].(map[string]any); liveMeta["resourceVersion"] != rv {
+						http.Error(w, `{"kind":"Status","code":409}`, http.StatusConflict)
+						return
+					}
+				}
+			}
+			if kind, ok := patch["type"]; ok && kind != live["type"] {
+				http.Error(w, `{"kind":"Status","code":422,"message":"field is immutable"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			merged, _ := mergePatch(live, patch).(map[string]any)
+			f.secrets[name] = merged
+			_ = json.NewEncoder(w).Encode(merged)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -177,8 +239,61 @@ func TestSecretDestinationUpdatesExisting(t *testing.T) {
 		t.Errorf("tls.crt after update = %q, want NEW-CERT", got)
 	}
 	meta := obj["metadata"].(map[string]any)
-	if meta["resourceVersion"] != "7" {
-		t.Errorf("update did not carry the resourceVersion (got %v) — optimistic concurrency lost", meta["resourceVersion"])
+	if meta["resourceVersion"] != "7" || api.patchRV != "7" {
+		t.Errorf("update did not carry the resourceVersion (stored %v, conditional on %q) — optimistic concurrency lost",
+			meta["resourceVersion"], api.patchRV)
+	}
+}
+
+// K8S-O2: the Secret an Ingress or Gateway names is often owned and guarded by
+// another controller. Renewing its certificate in place keeps the
+// ownerReferences that tie it to its owner's garbage collection, the
+// finalizers that hold its deletion for a cleanup hook, and the data keys the
+// write does not name, such as a ca.crt. A credential without a key (the
+// destination already holds it) leaves the Secret's key as it is.
+func TestSecretDestinationKeepsOwnersFinalizersAndOtherData(t *testing.T) {
+	api := newFakeAPIServer()
+	owners := []any{map[string]any{
+		"apiVersion": "v1", "kind": "ConfigMap", "name": "web-owner", "uid": "uid-web-owner", "controller": true,
+	}}
+	encode := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	api.secrets["web-tls"] = map[string]any{
+		"apiVersion": "v1", "kind": "Secret", "type": "kubernetes.io/tls",
+		"metadata": map[string]any{
+			"name": "web-tls", "namespace": "payments", "resourceVersion": "7", "uid": "uid-web-tls",
+			"ownerReferences": owners, "finalizers": []any{"example.test/keep"},
+		},
+		"data": map[string]any{"tls.crt": encode("OLD"), "tls.key": encode("OLD"), "ca.crt": encode("ISSUING-CA")},
+	}
+	srv := httptest.NewServer(api.handler(t))
+	defer srv.Close()
+
+	client := k8s.New(srv.URL, "tok", "payments", srv.Client())
+	dest := k8s.NewSecretDestination(client, "payments", "web-tls")
+	if _, err := dest.InstallAndRead(context.Background(), destination.Credential{CertPEM: []byte("NEW-CERT"), KeyPEM: []byte("NEW-KEY")}); err != nil {
+		t.Fatalf("InstallAndRead: %v", err)
+	}
+	obj := api.stored(t, "web-tls")
+	meta := obj["metadata"].(map[string]any)
+	if !reflect.DeepEqual(meta["ownerReferences"], owners) {
+		t.Fatalf("renewal dropped the Secret's ownerReferences: %+v", meta)
+	}
+	if !reflect.DeepEqual(meta["finalizers"], []any{"example.test/keep"}) {
+		t.Fatalf("renewal dropped the Secret's finalizers: %+v", meta)
+	}
+	if got := decodeSecretData(t, obj, "ca.crt"); string(got) != "ISSUING-CA" {
+		t.Fatalf("renewal dropped the Secret's ca.crt (got %q)", got)
+	}
+	if crt, key := decodeSecretData(t, obj, "tls.crt"), decodeSecretData(t, obj, "tls.key"); string(crt) != "NEW-CERT" || string(key) != "NEW-KEY" {
+		t.Fatalf("after renewal tls.crt=%q tls.key=%q", crt, key)
+	}
+
+	if err := dest.Install(context.Background(), destination.Credential{CertPEM: []byte("CERT-ONLY")}); err != nil {
+		t.Fatalf("Install (certificate only): %v", err)
+	}
+	obj = api.stored(t, "web-tls")
+	if crt, key := decodeSecretData(t, obj, "tls.crt"), decodeSecretData(t, obj, "tls.key"); string(crt) != "CERT-ONLY" || string(key) != "NEW-KEY" {
+		t.Fatalf("a certificate-only write left tls.crt=%q tls.key=%q; want the new certificate and the key the Secret holds", crt, key)
 	}
 }
 

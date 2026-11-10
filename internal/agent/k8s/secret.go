@@ -49,8 +49,9 @@ type SecretReadback struct {
 }
 
 // Install writes the credential into the Secret. It is idempotent: if the
-// Secret exists it is updated (carrying the resourceVersion for optimistic
-// concurrency, and keeping its labels and annotations), otherwise it is created.
+// Secret exists its certificate and key are patched in place (conditional on
+// the resourceVersion read with it, and keeping everything else other
+// controllers set on it), otherwise it is created.
 func (d *SecretDestination) Install(ctx context.Context, cred destination.Credential) error {
 	return d.write(ctx, cred)
 }
@@ -95,34 +96,22 @@ func (d *SecretDestination) write(ctx context.Context, cred destination.Credenti
 	if cred.HasKey() {
 		data["tls.key"] = base64.StdEncoding.EncodeToString(cred.KeyPEM)
 	}
-	meta := map[string]any{"name": d.name, "namespace": d.namespace}
 
 	status, body, err := d.client.request(ctx, http.MethodGet, d.itemPath(), nil)
 	if err != nil {
 		return err
 	}
 	if status == http.StatusOK {
-		existing := existingMetadata(body)
-		if existing.ResourceVersion != "" {
-			meta["resourceVersion"] = existing.ResourceVersion
-		}
-		// Other tools label and annotate the Secret an Ingress names; an update
-		// replaces the object, so carry those forward instead of dropping them.
-		if len(existing.Labels) > 0 {
-			meta["labels"] = existing.Labels
-		}
-		if len(existing.Annotations) > 0 {
-			meta["annotations"] = existing.Annotations
-		}
-		return d.put(ctx, secretObject(meta, data))
+		return d.patch(ctx, existingResourceVersion(body), data)
 	}
-	// Create; fall back to update if we raced another writer.
+	// Create; fall back to a patch if we raced another writer.
+	meta := map[string]any{"name": d.name, "namespace": d.namespace}
 	st, rb, err := d.client.request(ctx, http.MethodPost, d.collectionPath(), secretObject(meta, data))
 	if err != nil {
 		return err
 	}
 	if st == http.StatusConflict {
-		return d.put(ctx, secretObject(meta, data))
+		return d.patch(ctx, "", data)
 	}
 	if st/100 != 2 {
 		return fmt.Errorf("k8s: create secret %s/%s: status %d: %s", d.namespace, d.name, st, string(rb))
@@ -130,8 +119,24 @@ func (d *SecretDestination) write(ctx context.Context, cred destination.Credenti
 	return nil
 }
 
-func (d *SecretDestination) put(ctx context.Context, obj map[string]any) error {
-	st, rb, err := d.client.request(ctx, http.MethodPut, d.itemPath(), obj)
+// patch writes the certificate, and the key when the credential carries one,
+// into the existing Secret with a JSON merge patch (K8S-O2). A Secret an
+// Ingress or Gateway names is often owned and guarded by other controllers: a
+// full-object replace dropped the ownerReferences that tie it to its owner's
+// garbage collection, the finalizers that hold its deletion for a cleanup
+// hook, and data keys such as ca.crt. The patch names only the type and the
+// data keys it writes, so the API server keeps every other field as it holds
+// it, and a credential without a key leaves the key the Secret already holds.
+// The resourceVersion read with the Secret makes the patch conditional: a
+// concurrent writer's change fails it with a conflict instead of being
+// overwritten. The type is sent as written so a Secret of another type still
+// refuses the write, as the replace did.
+func (d *SecretDestination) patch(ctx context.Context, resourceVersion string, data map[string]string) error {
+	obj := map[string]any{"type": "kubernetes.io/tls", "data": data}
+	if resourceVersion != "" {
+		obj["metadata"] = map[string]any{"resourceVersion": resourceVersion}
+	}
+	st, rb, err := d.client.requestAs(ctx, http.MethodPatch, d.itemPath(), mergePatchContentType, obj)
 	if err != nil {
 		return err
 	}
@@ -156,20 +161,17 @@ func secretObject(meta map[string]any, data map[string]string) map[string]any {
 	}
 }
 
-type secretMetadata struct {
-	ResourceVersion string            `json:"resourceVersion"`
-	Labels          map[string]string `json:"labels"`
-	Annotations     map[string]string `json:"annotations"`
-}
-
-func existingMetadata(body []byte) secretMetadata {
+// existingResourceVersion is the resourceVersion of the Secret a GET read.
+func existingResourceVersion(body []byte) string {
 	var obj struct {
-		Metadata secretMetadata `json:"metadata"`
+		Metadata struct {
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
 	}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		return secretMetadata{}
+		return ""
 	}
-	return obj.Metadata
+	return obj.Metadata.ResourceVersion
 }
 
 // Status reads the Secret without changing it and returns the API server's
