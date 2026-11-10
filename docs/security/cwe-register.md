@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2868 annotated sites across 31 rules. Each row is
+2878 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -811,7 +811,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (447 sites)
+### G115 — CWE-190 Integer overflow or wraparound (452 sites)
 
 | Location | Reason |
 |---|---|
@@ -921,6 +921,11 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:485` | a two-byte length below 1<<16 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:487` | the three bytes of a value under 1<<24 (CWE-190) |
 | `internal/crypto/mysqlsignin/mysqlsignin.go:489` | a length, never negative (CWE-190) |
+| `internal/crypto/pfx/certonly.go:157` | r is at most 0xFFFF here, so its two bytes are exact (CWE-190) |
+| `internal/crypto/pfx/certonly.go:169` | id is the KDF purpose, 1 to 3 (CWE-190) |
+| `internal/crypto/pfx/certonly.go:205` | RFC 7292 B.2 adds modulo 2^(8v): keeping the low byte and carrying is the algorithm (CWE-190) |
+| `internal/crypto/pfx/certonly.go:367` | pad is at most the block size (CWE-190) |
+| `internal/crypto/pfx/rc2.go:55` | 255 modulo a power of two up to 256 fits a byte (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:136` | a startup message is a few hundred bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:326` | a SCRAM client-first message is under 100 bytes (CWE-190) |
 | `internal/crypto/pgsignin/pgsignin.go:384` | sign-in messages are bounded and small (CWE-190) |
@@ -1454,7 +1459,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (386 sites)
+### G204 — CWE-78 OS command injection (387 sites)
 
 | Location | Reason |
 |---|---|
@@ -1564,6 +1569,7 @@ not this file.
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:92` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:136` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
+| `internal/crypto/pfx/certonly_test.go:255` | the test runs the system openssl on its own files (CWE-78) |
 | `internal/crypto/possession_openssl_test.go:25` | the test's own openssl binary and fixed arguments (CWE-78) |
 | `internal/crypto/pqc_x509_test.go:61` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
@@ -1966,7 +1972,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (709 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (710 sites)
 
 | Location | Reason |
 |---|---|
@@ -2324,6 +2330,7 @@ not this file.
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
 | `internal/crypto/parserfuzz_audit_test.go:268` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/alias_test.go:139` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
+| `internal/crypto/pfx/certonly_test.go:259` | the test's own file (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pgsignin/pgsignin.go:210` | the session's DSN names the root file on the gateway's host, as libpq's sslrootcert does (CWE-22) |
@@ -2898,6 +2905,12 @@ not this file.
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 | `internal/query/filter_test.go:150` | test shuffle, not a security decision (CWE-338) |
 
+### G405 — CWE-? (unmapped rule) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/crypto/pfx/certonly.go:303` | decrypting a legacy file's certificate contents only (CWE-327) |
+
 ### G501 — CWE-? (unmapped rule) (2 sites)
 
 | Location | Reason |
@@ -2905,7 +2918,13 @@ not this file.
 | `internal/crypto/pgsignin/pgsignin.go:18` | PostgreSQL's md5 password exchange, used only when the server demands it (CWE-327) |
 | `internal/crypto/pgsignin/pgsignin_test.go:7` | the test recomputes PostgreSQL's md5 password exchange (CWE-327) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (13 sites)
+### G502 — CWE-? (unmapped rule) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/crypto/pfx/certonly.go:9` | legacy PKCS#12 files encrypt their certificate contents with 3DES; reading them needs it, and nothing here encrypts (CWE-327) |
+
+### G505 — CWE-328 Weak hash import (SHA-1) (14 sites)
 
 | Location | Reason |
 |---|---|
@@ -2914,6 +2933,7 @@ not this file.
 | `internal/crypto/mysqlsignin/mysqlsignin.go:17` | MySQL's mysql_native_password and the RSA-OAEP padding its servers use (CWE-327) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/otp.go:7` | RFC 6238 TOTP's default HMAC hash, used as an HMAC, not a collision-resistant digest (CWE-327) |
+| `internal/crypto/pfx/certonly.go:12` | the PKCS#12 KDF, legacy MACs and PBES2 default PRF are defined over SHA-1; this only verifies and decrypts existing files (CWE-328) |
 | `internal/crypto/pqc_x509.go:6` | RFC 5280 4.2.1.2 method-1 key identifiers only (CWE-328) |
 | `internal/crypto/thumbprint.go:6` | a certificate's SHA-1 thumbprint is the identifier some CA APIs address it by; it proves nothing (CWE-328) |
 | `internal/crypto/tsa.go:20` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |

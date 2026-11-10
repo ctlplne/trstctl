@@ -1475,8 +1475,9 @@ never live in the API process. What you can do end to end against the running bi
   and the versions of TLS libraries and Go programs with whether each can negotiate
   X25519MLKEM768; the CBOM host-config scan reads HAProxy, Envoy, the OpenSSL
   configuration file and `java.security`. A PKCS#12 file holds one key here (a
-  multi-key file is not read), JCEKS is not read, a PKCS#12 key is decoded in memory
-  on the way to its certificates (wiped at once), and BoringSSL, LibreSSL, GnuTLS, NSS
+  multi-key file is not read), JCEKS is not read, a PKCS#12 key is never decrypted
+  (X2-L3: the file's MAC checks the password, only the contents holding certificates
+  are decrypted, and a key bag is noted, never opened), and BoringSSL, LibreSSL, GnuTLS, NSS
   and Java providers are not rated. Keystore and library findings are discovery
   findings, not yet CBOM assets.
 - Access reviews that act (Q1): a revoke decision runs the credential's own

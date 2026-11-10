@@ -580,6 +580,13 @@
 
 ### Fixed
 
+- Host discovery reads a PKCS#12 file's certificates without decrypting its private key (X2-L3).
+  The library decoder decrypted the key on the way to the certificates and left its own copies of
+  the decrypted key in memory. A certificate-only reader in `internal/crypto/pfx`, written from
+  RFC 7292, 8018, 9579 and 2268, checks the file's MAC with the password, decrypts only the contents
+  that hold certificates (PBES2/AES, legacy 3DES and RC2), notes a key bag without opening it, and
+  orders the key's certificate first by `localKeyId`. It returns what the library decoder returns
+  for every encoding the library and OpenSSL write, and it has a fuzz target.
 - A secret file the agent renders on Windows no longer inherits its directory's readers (A238-L10).
   The mode set only the read-only attribute, so whoever the directory's access control list let read
   could read the secret. The file now gets an explicit, protected DACL from its mode before any
