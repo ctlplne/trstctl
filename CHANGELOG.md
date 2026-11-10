@@ -580,6 +580,12 @@
 
 ### Fixed
 
+- A Linux workload's `unix:path:` selector can no longer be taken from a reused pid (A203-L3). The
+  host agent read `/proc/<pid>/exe` for SO_PEERCRED's pid, so a process that connected, handed its
+  socket on and exited could be attested as whatever binary was later given its pid. The path now
+  comes through the connecting process's own pidfd (SO_PEERPIDFD, Linux 6.5+) and is kept only while
+  that process still holds the pid; an exited caller, or a kernel without SO_PEERPIDFD, gets no path
+  selector.
 - limitations.md no longer calls the served private CA hierarchy flows "remaining", and no longer
   says every CA the served signer mints is ECDSA P-256: a ceremony mints ML-DSA-44/65/87 when its
   `signature_algorithm` names one, and the offline-root import accepts ML-DSA roots too (DF-1, a

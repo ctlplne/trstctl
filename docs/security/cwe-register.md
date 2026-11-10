@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2863 annotated sites across 31 rules. Each row is
+2866 annotated sites across 31 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1453,7 +1453,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (384 sites)
+### G204 — CWE-78 OS command injection (386 sites)
 
 | Location | Reason |
 |---|---|
@@ -1548,6 +1548,8 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:188` | HUPs the harness's own child sshd by pid (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/workloadapi/attest_darwin_test.go:75` | test runs the system nc against its own socket (CWE-78) |
+| `internal/agent/workloadapi/attest_linux_test.go:138` | the test re-executes its own binary (CWE-78) |
+| `internal/agent/workloadapi/attest_linux_test.go:155` | the system sleep binary (CWE-78) |
 | `internal/agentid/delegation/signer_subprocess_test.go:284` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
@@ -1920,7 +1922,7 @@ not this file.
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
 | `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/agent/workloadapi/attest.go:145` | a DIRECTORY, not a file. 0700 is the tightest mode that |
+| `internal/agent/workloadapi/attest.go:123` | a DIRECTORY, not a file. 0700 is the tightest mode that |
 | `internal/cloudentitlements/awsiam/session_file_posix_test.go:21` | deliberate shared-file negative fixture; SessionFile must reject it (CWE-276) |
 | `internal/cloudentitlements/bearerhttp/client_test.go:108` | negative fixture proves a public token file is refused (CWE-732) |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
@@ -3131,13 +3133,14 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (39 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (40 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl/connector.go:426` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `cmd/trstctl/connector.go:446` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
+| `internal/agent/workloadapi/attest_linux_test.go:29` | the parent test hands its own temporary socket's path to this helper process (CWE-918). |
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/windependents/rotation_native_windows_test.go:131` | both exact listener addresses validated as literal loopback before handler installation; only a validated 16-byte hex nonce varies (CWE-918) |

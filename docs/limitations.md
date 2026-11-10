@@ -6214,9 +6214,15 @@ This is a deliberate, documented trust boundary, not an accident.
     resolved only while that pid version still owns the pid, checked before and
     after the read, and LOCAL_PEERPID must agree, so a pid reused by a later
     process yields no path selector rather than the new process's; an entry
-    requiring `unix:path:` then does not match. As on Linux, the path is the
-    executable's at attestation time: a process that execs another binary after
-    connecting is attested as that binary. The control plane's own socket no longer issues
+    requiring `unix:path:` then does not match. On Linux the path comes from the
+    connecting process's own pidfd (SO_PEERPIDFD, Linux 6.5 and later, A203-L3):
+    `/proc/<pid>/exe` is kept only when that process still holds its pid after
+    the read, so a caller that connected and exited, whose pid another binary
+    was then given, yields no path selector rather than the other binary's. On a
+    kernel without SO_PEERPIDFD the path selector is omitted and only the uid and
+    gid selectors attest; an entry requiring `unix:path:` does not match there.
+    On both, the path is the executable's at attestation time: a process that
+    execs another binary after connecting is attested as that binary. The control plane's own socket no longer issues
     SVIDs to workloads unless `protocols.spiffe.serve_local_workloads: true` is
     set: `FetchX509SVID` and `FetchJWTSVID` on it are refused with a message
     naming the host agent's `--workload-api-socket`, while trust bundles and JWT

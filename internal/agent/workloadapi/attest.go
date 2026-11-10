@@ -87,35 +87,13 @@ func AttestPeer(conn net.Conn) (PeerIdentity, error) {
 		// UDS in the first place.
 		return PeerIdentity{}, errors.New("workloadapi: workload connections must arrive over a unix socket")
 	}
-	id, err := peerCredentials(unixConn)
-	if err != nil {
-		return PeerIdentity{}, err
-	}
-	if id.Path == "" {
-		id.Path = executablePath(id.PID)
-	}
-	return id, nil
-}
-
-// executablePath best-effort resolves the binary behind a pid.
-//
-// Best-effort on purpose, and the failure is silent by design: a process that
-// exited between connecting and being looked up is an ordinary race, not an
-// error, and an empty path simply yields one fewer selector. What it must never
-// do is guess — a wrong path selector would match an entry the caller is not
-// entitled to.
-func executablePath(pid int) string {
-	if pid <= 0 {
-		return ""
-	}
-	// Linux exposes it directly; darwin resolves it while reading the peer's
-	// credentials, against the connecting process's audit token. Other
-	// platforms fall through to empty, which costs a selector rather than
-	// correctness.
-	if resolved, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe")); err == nil {
-		return resolved
-	}
-	return ""
+	// The executable is resolved while reading the peer's credentials, bound to
+	// the connecting process itself: its audit token on darwin, its pidfd on
+	// Linux (A203-L3). A caller whose executable cannot be known exactly gets
+	// no path selector — the failure is silent by design, an empty path is one
+	// fewer selector, and a wrong one would match an entry the caller is not
+	// entitled to. Nothing here falls back to reading a bare pid.
+	return peerCredentials(unixConn)
 }
 
 // SocketPath is the default per-host Workload API socket.
