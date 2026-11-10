@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -199,6 +200,9 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 	ledgerID := servedCreateID(t, h, lead, "q1-ledger-identity", "/api/v1/identities", map[string]any{
 		"kind": "x509_certificate", "name": "ledger.example.test", "owner_id": stale,
 	})
+	ledgerAPIID := servedCreateID(t, h, lead, "q1-ledger-api-identity", "/api/v1/identities", map[string]any{
+		"kind": "x509_certificate", "name": "api.ledger.example.test", "owner_id": stale,
+	})
 	servedCreateID(t, h, lead, "q1-billing-identity", "/api/v1/identities", map[string]any{
 		"kind": "x509_certificate", "name": "billing.example.test", "owner_id": fresh,
 	})
@@ -250,6 +254,34 @@ func TestServedAccessReviewThatActsQ1(t *testing.T) {
 	if err != nil || owner.OwnershipVerifiedAt == nil || owner.OwnershipVerifiedBy != "review-bob" ||
 		time.Since(*owner.OwnershipVerifiedAt) > time.Minute {
 		t.Fatalf("the keep decision did not renew the owner's attestation as the reviewer: %+v (%v)", owner, err)
+	}
+	// Q1-L6: the same owner's second kept credential in this campaign does
+	// not attest it again; one campaign attests an owner once.
+	var secondItem q1Item
+	for _, candidate := range generated.Campaign.Items {
+		if candidate.NHIID == "id:"+ledgerAPIID {
+			secondItem = candidate
+		}
+	}
+	if secondItem.ItemID == "" {
+		t.Fatalf("the owner's second credential is not in the stale review: %+v", generated.Campaign.Items)
+	}
+	secondPath := "/api/v1/access/reviews/" + generated.Campaign.ID + "/items/" + secondItem.ItemID + "/decision"
+	status, raw = secretsReqKey(t, h, http.MethodPost, secondPath, bob, "q1-keep-second", map[string]any{"decision": "certified", "next_review_days": 30})
+	if second := q1ItemFrom(t, status, raw, secondItem.ItemID); second.Status != "certified" {
+		t.Fatalf("second keep = %+v", second)
+	}
+	attestations := 0
+	if err := h.log.Replay(ctx, 0, func(e events.Event) error {
+		if e.TenantID == h.tenant && e.Type == projections.EventOwnershipAttested && strings.Contains(string(e.Data), stale) {
+			attestations++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if attestations != 1 {
+		t.Fatalf("one campaign attested owner %s %d times, want once", stale, attestations)
 	}
 
 	// A keep whose owner cannot be attested is refused before anything is recorded.

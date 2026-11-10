@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- One access review campaign attests an owner once (Q1-L6). Every kept item appended its own
+  ownership attestation, so an owner with several credentials in one campaign was attested
+  as many times. A keep now records nothing more when the owner was already attested after
+  the campaign began and its application and environment have not changed since.
 - A stale-owner access review lists the credentials of owners that cannot be attested (Q1-L5).
   An owner with no application or environment can never be attested, and
   `stale_owner_attestation` skipped it, so no campaign ever brought it to a reviewer. Its

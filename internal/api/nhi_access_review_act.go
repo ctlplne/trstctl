@@ -133,6 +133,16 @@ func (a *API) actOnNHIReviewDecision(ctx context.Context, tenantID string, campa
 			return a.orch.RecordNHIReviewRevocation(ctx, tenantID, campaign.ID, item.ItemID, status, detail)
 		case "certified":
 			if ownerID, ok := strings.CutPrefix(item.OwnerRef, "wl:"); ok && ownerID != "" {
+				// Q1-L6: one campaign attests an owner once. A keep on the
+				// owner's next item records nothing more while the attestation
+				// an earlier keep of this campaign made is still current.
+				attested, err := a.ownerAttestedByCampaign(ctx, tenantID, campaign, item, ownerID)
+				if err != nil {
+					return campaign, err
+				}
+				if attested {
+					continue
+				}
 				if _, err := a.orch.AttestOwnership(ctx, tenantID, ownerID, item.DecisionBy); err != nil {
 					return campaign, err
 				}
@@ -140,6 +150,32 @@ func (a *API) actOnNHIReviewDecision(ctx context.Context, tenantID string, campa
 		}
 	}
 	return campaign, nil
+}
+
+// ownerAttestedByCampaign reports whether another item of the campaign kept
+// the same owner and the owner was attested after the campaign began, with its
+// model unchanged since: then this keep's attestation would only repeat it
+// (Q1-L6).
+func (a *API) ownerAttestedByCampaign(ctx context.Context, tenantID string, campaign store.NHIReviewCampaign, item store.NHIReviewItem, ownerID string) (bool, error) {
+	earlier := false
+	for _, other := range campaign.Items {
+		if other.ItemID != item.ItemID && other.OwnerRef == item.OwnerRef && other.Status == "certified" {
+			earlier = true
+			break
+		}
+	}
+	if !earlier {
+		return false, nil
+	}
+	owner, err := a.store.GetOwner(ctx, tenantID, ownerID)
+	if err != nil {
+		return false, err
+	}
+	if owner.OwnershipVerifiedAt == nil || owner.OwnershipVerifiedAt.Before(campaign.CreatedAt) || owner.OwnershipModelDigest == "" {
+		return false, nil
+	}
+	digest, err := store.OwnerModelDigest(owner)
+	return err == nil && digest == owner.OwnershipModelDigest, nil
 }
 
 // checkNHIReviewKeep refuses a keep decision whose owner cannot be attested
