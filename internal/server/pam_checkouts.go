@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -430,7 +431,8 @@ func (s *pamService) endCheckout(ctx context.Context, c store.PAMCheckout, statu
 
 // expireCheckouts ends every check-out past its deadline at now, each with
 // the rotation that retires its revealed credential. One that cannot be
-// ended stays revealed, past its deadline, for the next tick.
+// ended stays revealed, past its deadline, for the next tick, and raises one
+// critical alert (A261-L2): until it ends, its credential still signs in.
 func (s *pamService) expireCheckouts(ctx context.Context, now time.Time) {
 	due, err := s.store.ListDuePAMCheckouts(ctx, now, pamCheckoutExpiryBatch)
 	if err != nil {
@@ -438,8 +440,54 @@ func (s *pamService) expireCheckouts(ctx context.Context, now time.Time) {
 	}
 	ctx = events.ContextWithActor(ctx, events.Actor{Subject: pamCheckoutExpiryActor, Roles: []string{"worker"}})
 	for _, c := range due {
-		_ = s.endCheckout(ctx, c, "expired", pamCheckoutExpiryActor)
+		if err := s.endCheckout(ctx, c, "expired", pamCheckoutExpiryActor); err != nil {
+			s.alertCheckoutRotationBlocked(ctx, c, err)
+		}
 	}
+}
+
+// alertCheckoutRotationBlocked raises the one critical alert a check-out
+// past its deadline gets when it cannot be ended (A261-L2). The key names the
+// check-out, so every later tick that still cannot end it finds the alert
+// already queued instead of paging again. It names the check-out, the
+// account's target, its requester and why, in the words the API would have
+// answered; never the credential.
+func (s *pamService) alertCheckoutRotationBlocked(ctx context.Context, c store.PAMCheckout, cause error) {
+	if s.outbox == nil {
+		return
+	}
+	entry, err := pamCheckoutRotationBlockedAlert(c, cause)
+	if err != nil {
+		return
+	}
+	var inserted bool
+	if err := s.store.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error {
+		var err error
+		inserted, err = s.outbox.EnqueueIfAbsent(ctx, tx, entry)
+		return err
+	}); err == nil && inserted && s.wakeOutbox != nil {
+		s.wakeOutbox()
+	}
+}
+
+func pamCheckoutRotationBlockedAlert(c store.PAMCheckout, cause error) (orchestrator.Entry, error) {
+	why := api.ErrorDetail(cause)
+	if why == "" {
+		why = "the control plane could not record the rotation that retires it"
+	}
+	key := "pam-checkout-rotation-blocked:" + c.RequestID
+	payload, err := json.Marshal(notify.Alert{
+		Kind: notify.KindCheckoutRotationBlocked, TenantID: c.TenantID, OperationID: key,
+		Subject: c.TargetType + "/" + c.TargetID, Severity: notify.AlertSeverityCritical,
+		Detail: fmt.Sprintf("Check-out %s of %s/%s, revealed to %s, passed its deadline and its credential still signs in: "+
+			"the rotation that retires it could not be queued (%s). Restore the account's rotation provider or role, "+
+			"or rotate the account; the check-out ends at the next expiry tick once a rotation can be queued.",
+			c.RequestID, c.TargetType, c.TargetID, c.RequestedBy, why),
+	})
+	if err != nil {
+		return orchestrator.Entry{}, err
+	}
+	return orchestrator.Entry{TenantID: c.TenantID, Destination: notify.DestinationRisk, IdempotencyKey: key, Payload: payload}, nil
 }
 
 func (s *pamService) ListPAMCheckouts(ctx context.Context, tenantID string) ([]api.PAMCheckout, error) {

@@ -594,6 +594,13 @@ a schedule rotates the account after the reveal, that rotation replaces the reve
 so checking in (or the deadline) adopts it: the check-out ends at once and names that rotation
 as the one that retires its credential, rather than waiting for it to finish.
 
+If the deadline passes and no rotation can be queued, for example because the account's
+rotation provider was removed or no longer rotates the role, the check-out stays revealed (the
+console shows it as rotation pending) and its credential still signs in. It raises one critical
+`pam.checkout.rotation_blocked` alert on the risk channel, naming the check-out, the target, who
+it was revealed to and why the rotation was refused; it never carries the credential. Restore
+the provider or role, or rotate the account, and the next expiry tick ends the check-out.
+
 Group account targets into folders to give them the same access policy. The folder's
 template supplies the reason, number of approvals and longest session; requests cannot
 substitute another template. A template with `require_recording: true` refuses unrecorded

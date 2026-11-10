@@ -9141,8 +9141,9 @@ proofs and console component checks, not an exact-image or live IdP-group qualif
 
 Remaining limits:
 - A check-out whose rotation cannot be queued (its provider removed or no longer rotating the
-  role) stays revealed past its deadline, shown as "rotation pending"; it is not yet raised as
-  an alert.
+  role) stays revealed past its deadline, shown as "rotation pending", and raises one critical
+  `pam.checkout.rotation_blocked` alert (A261-L2); it ends at the next expiry tick once a
+  rotation can be queued, and nothing retires its credential before then.
 - Vaulted accounts on the other database types the gateway serves.
 - A host's sudo rights when the administrator cannot read the sudoers files are reported
   unknown (`sudoers: unreadable`), not guessed; keys outside `~/.ssh/authorized_keys` (an

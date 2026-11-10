@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- A check-out whose credential cannot be retired at its deadline raises an alert (A261-L2). When
+  the rotation could not be queued (its provider removed or no longer rotating the role) the
+  check-out stayed revealed past its deadline with nothing but a "rotation pending" label. It
+  now raises one critical `pam.checkout.rotation_blocked` alert naming the check-out, target,
+  requester and the refusal, and later ticks that still cannot end it raise no second one.
 - A check-in while another rotation of the account is running ends the check-out on that
   rotation (A261-L1). It was refused with 409 until the rotation finished, and the deadline
   retried every tick. A rotation queued after the reveal replaces the revealed version, so the

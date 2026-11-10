@@ -133,7 +133,11 @@ const (
 	KindUrgentRisk             = "risk.urgent"
 	// KindSessionRiskAlert (A275): a command in a privileged session matched
 	// an alert rule of its access template; the alert links the recording.
-	KindSessionRiskAlert          = "pam.session.risk"
+	KindSessionRiskAlert = "pam.session.risk"
+	// KindCheckoutRotationBlocked (A261-L2): a vaulted account's check-out
+	// passed its deadline and the rotation that retires its revealed
+	// credential could not be queued, so that credential still signs in.
+	KindCheckoutRotationBlocked   = "pam.checkout.rotation_blocked"
 	KindHoneyTokenTriggered       = "honeytoken.triggered"
 	KindEndpointContainmentFailed = "endpoint.containment_failed"
 )

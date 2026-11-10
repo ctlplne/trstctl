@@ -44,6 +44,17 @@ func ErrorStatus(err error) int {
 	return 0
 }
 
+// ErrorDetail reports the public problem detail an ErrStatus or ErrWithStatus
+// error carries, or "" for any other error, so a worker can state a refusal
+// in the words an operator would have been shown.
+func ErrorDetail(err error) string {
+	var public *apiError
+	if errors.As(err, &public) {
+		return public.detail
+	}
+	return ""
+}
+
 // Mutate runs a licensed mutating handler through the same idempotency path as
 // core routes.
 func (a *API) Mutate(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
