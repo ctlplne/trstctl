@@ -438,6 +438,9 @@ func (a *API) decideIssuanceRequest(to string) http.HandlerFunc {
 					return 0, nil, errStatus(http.StatusForbidden,
 						"only the requester can withdraw this request; an independent reviewer can deny it with a reason")
 				}
+				if errors.Is(err, issuancerequest.ErrRequesterCannotDecide) {
+					return 0, nil, errStatusFrom(http.StatusForbidden, err)
+				}
 				return 0, nil, err
 			}
 			return http.StatusOK, toIssuanceRequestResponse(out), nil

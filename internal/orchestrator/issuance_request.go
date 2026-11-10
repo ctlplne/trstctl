@@ -139,6 +139,9 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 			if err := issuancerequest.CanDecide(current.Requester, decidedBy); err != nil {
 				return store.IssuanceRequest{}, err
 			}
+			if err := o.requesterIsNotDecider(ctx, tenantID, current.Requester, decidedBy); err != nil {
+				return store.IssuanceRequest{}, err
+			}
 		}
 	}
 	// Canceling is the requester's own right, and only theirs.
@@ -164,6 +167,41 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 		current.IdentityID = identityID
 	}
 	return current, nil
+}
+
+// requesterIsNotDecider refuses a decider who is the request's requester
+// under another identifier (A225-L1). A ticket's requester is recorded as the
+// ticket system names them (an email or a display name), while the decider
+// signs in under a login subject; comparing the two strings let the same
+// person approve their own ticket. Each side's tenant member record adds its
+// email and display name: the decider's to the decider, and, when the
+// requester is a member subject, the requester's to the requester. A display
+// name two people share refuses the second one too; another member decides.
+func (o *Orchestrator) requesterIsNotDecider(ctx context.Context, tenantID, requester, decidedBy string) error {
+	identifiers := func(subject string) ([]string, error) {
+		ids := []string{subject}
+		member, err := o.store.GetTenantMember(ctx, tenantID, subject)
+		if err != nil {
+			if store.IsNotFound(err) {
+				return ids, nil
+			}
+			return nil, err
+		}
+		return append(ids, member.Email, member.DisplayName), nil
+	}
+	requesterIDs, err := identifiers(requester)
+	if err != nil {
+		return err
+	}
+	deciderIDs, err := identifiers(decidedBy)
+	if err != nil {
+		return err
+	}
+	if issuancerequest.SameIdentity(requesterIDs, deciderIDs) {
+		return fmt.Errorf("%w: %s is this request's requester %q under another identifier, by their member record; "+
+			"another member must decide it", issuancerequest.ErrRequesterCannotDecide, decidedBy, requester)
+	}
+	return nil
 }
 
 // PrepareIssuanceRequest creates or recovers the one deterministic requested

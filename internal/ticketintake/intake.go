@@ -334,7 +334,7 @@ func parseJiraPage(r io.Reader, intent SyncIntent) (Page, error) {
 		row := Ticket{
 			SourceRef: issue.ID, ExternalKey: strings.TrimSpace(issue.Key),
 			Subject: jiraField(issue.Fields, intent.SubjectField), Profile: jiraField(issue.Fields, intent.ProfileField),
-			Requester: jiraField(issue.Fields, intent.RequesterField), Justification: jiraField(issue.Fields, intent.JustificationField),
+			Requester: jiraUserField(issue.Fields, intent.RequesterField), Justification: jiraField(issue.Fields, intent.JustificationField),
 			OwnerEmail: ownerEmailField(issue.Fields, intent.OwnerField, true),
 		}
 		if err := validateTicket(row); err != nil {
@@ -459,6 +459,27 @@ func jiraField(fields map[string]json.RawMessage, name string) string {
 		}
 	}
 	return ""
+}
+
+// jiraUserField reads a user field (the requester) by the identifier that
+// names the person most exactly: their email when Jira shares it, else their
+// display name, else the other keys jiraField reads (A225-L1). The requester
+// is compared with the approver's member email and display name, so a
+// display name chosen ahead of a shared email hid the one exact match.
+func jiraUserField(fields map[string]json.RawMessage, name string) string {
+	name = strings.TrimSpace(name)
+	raw, ok := fields[name]
+	if name == "" || !ok {
+		return ""
+	}
+	var user map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &user); err == nil {
+		var email string
+		if candidate, ok := user["emailAddress"]; ok && json.Unmarshal(candidate, &email) == nil && strings.TrimSpace(email) != "" {
+			return strings.TrimSpace(email)
+		}
+	}
+	return jiraField(fields, name)
 }
 
 func validateTicket(ticket Ticket) error {

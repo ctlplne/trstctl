@@ -580,6 +580,13 @@
 
 ### Fixed
 
+- A ticket's requester can no longer approve their own issuance request under their login
+  (A225-L1). The request recorded the requester as the ticket system names them (Jira's reporter
+  by display name, a ServiceNow display value), the approver signs in under a login subject, and
+  the separation-of-duties check compared the two strings exactly. The check now also refuses a
+  decider whose tenant member record holds the requester's email or display name (ignoring case),
+  the Jira reporter is read by the email Jira shares ahead of the display name, and the refusal is
+  answered 403. A requester named by an identifier no member record holds cannot be told apart.
 - A tenant baseline, and the Provider tenant template that applies one, may name a webhook at a
   private address, decided by the operator's grant for the tenant it is applied to (A223-L1). The
   baseline is validated before any tenant is known, and that validation refused every private

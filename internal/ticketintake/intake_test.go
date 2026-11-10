@@ -137,6 +137,19 @@ func TestJiraEnhancedSearchPageMapsFieldsAndTokenAUD47(t *testing.T) {
 		page.NextCursor != "opaque-next" || page.Complete || page.ExpectedCount == nil || *page.ExpectedCount != 201 {
 		t.Fatalf("Jira page = %+v", page)
 	}
+	// A225-L1: the reporter is read by the email Jira shares, ahead of the
+	// display name, so it can be matched with an approver's member email.
+	fresh := intent
+	fresh.Cursor, fresh.ReadCount = "", 0
+	withEmail, err := ticketintake.ParsePage(strings.NewReader(`{
+		"issues":[{"id":"10002","key":"NHI-102","fields":{
+			"customfield_10010":"api2.example.test","customfield_10011":"tls-server",
+			"reporter":{"displayName":"Dana Ops","emailAddress":"dana@ops.example","accountId":"5b10"},"summary":"rotate"}}],
+		"isLast":true,"total":1
+	}`), fresh)
+	if err != nil || len(withEmail.Tickets) != 1 || withEmail.Tickets[0].Requester != "dana@ops.example" {
+		t.Fatalf("Jira reporter with an email = %+v %v, want the email", withEmail.Tickets, err)
+	}
 	if _, err := ticketintake.Endpoint(ticketintake.SyncIntent{
 		System: ticketintake.SystemJira, InstanceURL: "https://acme.atlassian.net", JiraProject: "NHI",
 		Query: "status = Open ORDER BY created DESC", SubjectField: "a", ProfileField: "b", PageLimit: 100,

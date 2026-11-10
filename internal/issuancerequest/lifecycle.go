@@ -9,7 +9,11 @@
 // a rule that holds until somebody adds a second handler.
 package issuancerequest
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // The states a request can be in.
 //
@@ -89,10 +93,36 @@ func CanDecide(requester, principal string) error {
 	if requester == "" || principal == "" {
 		return fmt.Errorf("issuancerequest: both requester and approver must be known")
 	}
-	if requester == principal {
+	if SameIdentity([]string{requester}, []string{principal}) {
 		return fmt.Errorf(
-			"issuancerequest: %s opened this request and cannot decide it; self-approval would make "+
-				"the approval record look legitimate while nobody independent ever looked", principal)
+			"%w: %s opened this request and cannot decide it; self-approval would make "+
+				"the approval record look legitimate while nobody independent ever looked", ErrRequesterCannotDecide, principal)
 	}
 	return nil
+}
+
+// ErrRequesterCannotDecide marks the separation-of-duties refusal: the
+// principal deciding a request is the person who asked for it.
+var ErrRequesterCannotDecide = errors.New("issuancerequest: the requester cannot decide their own request")
+
+// SameIdentity reports whether two sets of identifiers name one person: any
+// non-empty identifier of one equals one of the other, ignoring case and
+// surrounding space (A225-L1). A request's requester can be recorded under
+// another system's identifier (a ticket's requester email or display name)
+// while its approver signs in under a login subject; the sets carry each
+// side's subject with the email and display name its tenant member record
+// holds, so the same person under two identifiers is still the same person.
+func SameIdentity(requester, approver []string) bool {
+	for _, r := range requester {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		for _, a := range approver {
+			if strings.EqualFold(r, strings.TrimSpace(a)) {
+				return true
+			}
+		}
+	}
+	return false
 }
