@@ -580,6 +580,10 @@
 
 ### Fixed
 
+- A managed key generated in a PKCS#11 HSM can only sign (P9-L4). The key-pair template left the
+  token's defaults for the other uses, so SoftHSM made the private key usable to decrypt and unwrap
+  and the public key to encrypt and wrap. The template now sets those uses false, and a SoftHSM
+  test reads each attribute back from the token.
 - The SMTP relay password no longer lingers in memory after a send (P15-L5). net/smtp's client
   base64-encoded the PLAIN response into a command string and its writer's buffer, copies nothing
   could wipe. The email channel now drives the SMTP exchange itself (the same commands net/smtp

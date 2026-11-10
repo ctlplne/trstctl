@@ -211,11 +211,16 @@ func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (s
 		return handle, der, nil
 	}
 	label := fmt.Sprintf("%s-%s", s.label, hex.EncodeToString(keyID))
+	// P9-L4: a managed key signs and verifies, nothing else. The token's
+	// defaults would let the private key decrypt and unwrap and the public key
+	// encrypt and wrap (SoftHSM did), so the template says so explicitly.
 	publicAttrs := []*p11.Attribute{
 		p11.NewAttribute(p11.CKA_CLASS, p11.CKO_PUBLIC_KEY),
 		p11.NewAttribute(p11.CKA_KEY_TYPE, p11.CKK_RSA),
 		p11.NewAttribute(p11.CKA_TOKEN, true),
 		p11.NewAttribute(p11.CKA_VERIFY, true),
+		p11.NewAttribute(p11.CKA_ENCRYPT, false),
+		p11.NewAttribute(p11.CKA_WRAP, false),
 		p11.NewAttribute(p11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
 		p11.NewAttribute(p11.CKA_MODULUS_BITS, 2048),
 		p11.NewAttribute(p11.CKA_LABEL, label),
@@ -227,6 +232,8 @@ func (s *moduleSession) generateKeyWithID(alg crypto.Algorithm, keyID []byte) (s
 		p11.NewAttribute(p11.CKA_TOKEN, true),
 		p11.NewAttribute(p11.CKA_PRIVATE, true),
 		p11.NewAttribute(p11.CKA_SIGN, true),
+		p11.NewAttribute(p11.CKA_DECRYPT, false),
+		p11.NewAttribute(p11.CKA_UNWRAP, false),
 		p11.NewAttribute(p11.CKA_SENSITIVE, true),
 		p11.NewAttribute(p11.CKA_EXTRACTABLE, false),
 		p11.NewAttribute(p11.CKA_LABEL, label),

@@ -6342,7 +6342,8 @@ This is a deliberate, documented trust boundary, not an accident.
     key, bound with `managed_key_provider`/`managed_key_id`): the signer journals each
     managed-key signature by the signing command, so the served path signs once per
     command, proven with SoftHSM standing in for the HSM (an RSA-2048 key generated in
-    the token, never extractable; a certificate request and code signatures made inside
+    the token, never extractable and sign-only — the private key cannot decrypt or
+    unwrap, the public key cannot encrypt or wrap (P9-L4); a certificate request and code signatures made inside
     it; a repeated command answered from the journal; another tenant refused). The
     PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next.
     Stock Notation 1.3.2 signs an image in a local registry through the plugin and
