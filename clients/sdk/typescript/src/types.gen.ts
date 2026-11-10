@@ -28700,9 +28700,9 @@ export interface operations {
     };
     deletePAMAutoApprovalRule: {
         parameters: {
-            query?: {
+            query: {
                 /** @description the rule revision read */
-                revision?: number;
+                revision: number;
             };
             header: {
                 /** @description Caller-supplied idempotency key; replays return the original mutation result. */
@@ -31063,9 +31063,9 @@ export interface operations {
     };
     deletePAMFolder: {
         parameters: {
-            query?: {
+            query: {
                 /** @description the folder's revision you read */
-                revision?: number;
+                revision: number;
             };
             header: {
                 /** @description Caller-supplied idempotency key; replays return the original mutation result. */
@@ -31196,9 +31196,9 @@ export interface operations {
     };
     deletePAMGatewayPool: {
         parameters: {
-            query?: {
+            query: {
                 /** @description the pool's revision you read */
-                revision?: number;
+                revision: number;
             };
             header: {
                 /** @description Caller-supplied idempotency key; replays return the original mutation result. */

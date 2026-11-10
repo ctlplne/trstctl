@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- The access deletes' OpenAPI contract requires the `revision` the caller read (A261-L4).
+  `DELETE /api/v1/access/folders/{name}`, `/auto-approval-rules/{id}` and
+  `/gateway-pools/{name}` refuse a delete without it (400), but the served contract marked
+  the query parameter optional, so a generated client could omit it. It is now required in
+  the contract and the regenerated SDKs.
 - An ACME finalize the certificate profile refuses answers the client's error (P15-L10). It
   answered `500 serverInternal` ("issuance failed: profile ... does not permit DNS SAN
   ..."), telling the client the server had failed, so clients retried a request that could

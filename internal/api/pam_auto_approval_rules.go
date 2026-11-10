@@ -52,7 +52,7 @@ func (a *API) pamAutoApprovalRuleRoutes() []route {
 	return []route{
 		{method: "GET", path: "/api/v1/access/auto-approval-rules", opID: "listPAMAutoApprovalRules", summary: "List automatic access reviews in rule ID order", handler: a.listPAMAutoApprovalRules, resSchema: "PAMAutoApprovalRuleList", successCode: "200", perm: authz.AccessRead},
 		{method: "PUT", path: "/api/v1/access/auto-approval-rules/{id}", opID: "savePAMAutoApprovalRule", summary: "Save a scoped automatic access review rule at the revision read", handler: a.savePAMAutoApprovalRule, pathParams: id, reqSchema: "PAMAutoApprovalRuleRequest", resSchema: "PAMAutoApprovalRule", successCode: "200", mutation: true, perm: authz.AccessWrite},
-		{method: "DELETE", path: "/api/v1/access/auto-approval-rules/{id}", opID: "deletePAMAutoApprovalRule", summary: "Delete an automatic review rule at the revision read", handler: a.deletePAMAutoApprovalRule, pathParams: id, query: []param{{name: "revision", typ: "integer", desc: "the rule revision read"}}, resSchema: "PAMAutoApprovalRuleDeleted", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "DELETE", path: "/api/v1/access/auto-approval-rules/{id}", opID: "deletePAMAutoApprovalRule", summary: "Delete an automatic review rule at the revision read", handler: a.deletePAMAutoApprovalRule, pathParams: id, query: []param{{required: true, name: "revision", typ: "integer", desc: "the rule revision read"}}, resSchema: "PAMAutoApprovalRuleDeleted", successCode: "200", mutation: true, perm: authz.AccessWrite},
 	}
 }
 func (a *API) autoApprovalRules() (PAMAutoApprovalRuleService, error) {

@@ -61568,6 +61568,7 @@
             "description": "the rule revision read",
             "in": "query",
             "name": "revision",
+            "required": true,
             "schema": {
               "type": "integer"
             }
@@ -65226,6 +65227,7 @@
             "description": "the folder's revision you read",
             "in": "query",
             "name": "revision",
+            "required": true,
             "schema": {
               "type": "integer"
             }
@@ -65423,6 +65425,7 @@
             "description": "the pool's revision you read",
             "in": "query",
             "name": "revision",
+            "required": true,
             "schema": {
               "type": "integer"
             }

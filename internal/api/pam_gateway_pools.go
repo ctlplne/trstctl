@@ -57,7 +57,7 @@ func (a *API) pamGatewayPoolRoutes() []route {
 	return []route{
 		{method: "GET", path: "/api/v1/access/gateway-pools", opID: "listPAMGatewayPools", summary: "List gateway pools: the gateways that share sessions, each one's health and live sessions", handler: a.listPAMGatewayPools, resSchema: "PAMGatewayPoolList", successCode: "200", perm: authz.AccessRead},
 		{method: "PUT", path: "/api/v1/access/gateway-pools/{name}", opID: "savePAMGatewayPool", summary: "Create a gateway pool, or replace one at the revision read: its members and which of them are draining", handler: a.savePAMGatewayPool, pathParams: name, reqSchema: "PAMGatewayPoolRequest", resSchema: "PAMGatewayPool", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
-		{method: "DELETE", path: "/api/v1/access/gateway-pools/{name}", opID: "deletePAMGatewayPool", summary: "Delete a gateway pool at the revision you read; its gateways then serve only the targets bound to each", handler: a.deletePAMGatewayPool, pathParams: name, query: []param{{name: "revision", typ: "integer", desc: "the pool's revision you read"}}, resSchema: "PAMGatewayPoolDeleted", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
+		{method: "DELETE", path: "/api/v1/access/gateway-pools/{name}", opID: "deletePAMGatewayPool", summary: "Delete a gateway pool at the revision you read; its gateways then serve only the targets bound to each", handler: a.deletePAMGatewayPool, pathParams: name, query: []param{{required: true, name: "revision", typ: "integer", desc: "the pool's revision you read"}}, resSchema: "PAMGatewayPoolDeleted", successCode: "200", mutation: true, perm: authz.AccessTargetsWrite},
 	}
 }
 
