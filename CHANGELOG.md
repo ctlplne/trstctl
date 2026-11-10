@@ -565,6 +565,11 @@
 
 ### Fixed
 
+- A check-in while another rotation of the account is running ends the check-out on that
+  rotation (A261-L1). It was refused with 409 until the rotation finished, and the deadline
+  retried every tick. A rotation queued after the reveal replaces the revealed version, so the
+  check-in, or the deadline, now adopts it and records it as the rotation that retires the
+  revealed credential.
 - A PAN-OS renewal picked up again after its certificate import finishes instead of stopping
   (PANOS-O1). PAN-OS replaces a job's pending request with the certificate imported for it, so
   a reclaim after a failed commit or a lost job had nothing left to sign and stopped. The relay

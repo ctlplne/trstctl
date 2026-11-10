@@ -9140,9 +9140,6 @@ whole-pattern anchoring and changed canonical authority. These are local real Po
 proofs and console component checks, not an exact-image or live IdP-group qualification.
 
 Remaining limits:
-- A check-in while another rotation of the same account is in flight is refused (409), and at
-  the deadline the expiry worker retries on each tick (every 30 seconds by default); adopting
-  the in-flight rotation when it started after the reveal would end the check-out at once.
 - A check-out whose rotation cannot be queued (its provider removed or no longer rotating the
   role) stays revealed past its deadline, shown as "rotation pending"; it is not yet raised as
   an alert.

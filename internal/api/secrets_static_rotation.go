@@ -885,7 +885,15 @@ func (a *API) CheckVaultedAccountRotation(ctx context.Context, tenantID, provide
 // check-out's revealed credential (A261 part 2), at its check-in or deadline,
 // and returns the command's ID. The check-out names the command: a retry, or
 // the deadline racing a check-in, finds the one command already queued.
-func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error) {
+//
+// Another rotation of the account may already be in flight when the check-out
+// ends: one an operator or a schedule queued after the reveal (a reveal is
+// refused while a rotation is in flight). It replaces the version the
+// check-out revealed, so it retires the revealed credential too, and the
+// check-out adopts it (A261-L1) instead of being refused with 409 at its
+// check-in and retried at every deadline tick until it finishes.
+func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string,
+	revealedAt time.Time, revealedVersion int) (string, error) {
 	if a.secrets == nil {
 		return "", errStatus(http.StatusServiceUnavailable, staticRotationProviderUnavailableDetail)
 	}
@@ -899,6 +907,11 @@ func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, provide
 		return existing.ID, nil
 	} else if !errors.Is(err, store.ErrSecretStaticRotationCommandNotFound) {
 		return "", err
+	}
+	if adopted, ok, err := a.inFlightRotationRetiringReveal(ctx, tenantID, providerID, key, revealedAt, revealedVersion); err != nil {
+		return "", err
+	} else if ok {
+		return adopted, nil
 	}
 	oldRef, err := a.vaultedAccountPredecessor(ctx, tenantID, providerID, key, currentAccount)
 	if err != nil {
@@ -916,6 +929,25 @@ func (a *API) QueueVaultedAccountRotation(ctx context.Context, tenantID, provide
 	}
 	a.auditSecret(ctx, "secret.rotation.queued", tenantID, key, 0)
 	return cmd.ID, nil
+}
+
+// inFlightRotationRetiringReveal finds the account's rotation still in flight
+// that retires what a check-out revealed (A261-L1): queued at or after the
+// reveal, by the account's own provider, replacing exactly the revealed
+// version. Anything else is not adopted, and the in-flight refusal stands.
+func (a *API) inFlightRotationRetiringReveal(ctx context.Context, tenantID, providerID, key string,
+	revealedAt time.Time, revealedVersion int) (string, bool, error) {
+	if revealedAt.IsZero() || revealedVersion <= 0 {
+		return "", false, nil
+	}
+	latest, found, err := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, key)
+	if err != nil || !found || latest.Terminal() {
+		return "", false, err
+	}
+	if latest.Provider != providerID || latest.ExpectedVersion != revealedVersion || latest.CreatedAt.Before(revealedAt) {
+		return "", false, nil
+	}
+	return latest.ID, true, nil
 }
 
 // NativeWindowsAccountBound reports whether providerID rotates role as one

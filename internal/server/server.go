@@ -2588,11 +2588,12 @@ func (s *Server) configurePAMSurface(d Deps) error {
 				}
 				return s.api.CheckVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount)
 			},
-			queue: func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error) {
+			queue: func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string,
+				revealedAt time.Time, revealedVersion int) (string, error) {
 				if s.api == nil {
 					return "", errors.New("server: the secrets API is not served")
 				}
-				return s.api.QueueVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount, requestID)
+				return s.api.QueueVaultedAccountRotation(ctx, tenantID, providerID, key, currentAccount, requestID, revealedAt, revealedVersion)
 			},
 			native: func(tenantID, providerID, role string) bool {
 				return s.api != nil && s.api.NativeWindowsAccountBound(tenantID, providerID, role)

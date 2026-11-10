@@ -50,7 +50,10 @@ type pamAccountRotation struct {
 	// check says whether a rotation could retire the account's credential now.
 	check func(ctx context.Context, tenantID, providerID, key, currentAccount string) error
 	// queue queues the check-out's one rotation and returns its command ID.
-	queue func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string) (string, error)
+	// An in-flight rotation queued after the reveal that replaces the revealed
+	// version is adopted (A261-L1).
+	queue func(ctx context.Context, tenantID, providerID, key, currentAccount, requestID string,
+		revealedAt time.Time, revealedVersion int) (string, error)
 	// native says whether a provider rotates a role as one exact Windows
 	// local account on its enrolled host (A268).
 	native func(tenantID, providerID, role string) bool
@@ -401,7 +404,7 @@ func (s *pamService) endCheckout(ctx context.Context, c store.PAMCheckout, statu
 		return err
 	}
 	secret.Wipe(value)
-	commandID, err := s.rotation.queue(ctx, c.TenantID, c.ProviderID, c.AccountSecret, account, c.RequestID)
+	commandID, err := s.rotation.queue(ctx, c.TenantID, c.ProviderID, c.AccountSecret, account, c.RequestID, c.RevealedAt, c.SecretVersion)
 	if err != nil {
 		return err
 	}

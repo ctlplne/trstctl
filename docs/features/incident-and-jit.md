@@ -589,6 +589,11 @@ An account whose rotation mints a new principal (rather than switching between t
 changing one in place) can be checked out only after its first rotation, so what is revealed is
 always something a rotation can retire.
 
+A credential cannot be revealed while a rotation of its account is running. If a custodian or
+a schedule rotates the account after the reveal, that rotation replaces the revealed version,
+so checking in (or the deadline) adopts it: the check-out ends at once and names that rotation
+as the one that retires its credential, rather than waiting for it to finish.
+
 Group account targets into folders to give them the same access policy. The folder's
 template supplies the reason, number of approvals and longest session; requests cannot
 substitute another template. A template with `require_recording: true` refuses unrecorded
