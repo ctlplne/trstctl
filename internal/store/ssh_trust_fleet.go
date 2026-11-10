@@ -146,8 +146,6 @@ func (s *Store) GetSSHTrustFleetRollout(ctx context.Context, tenantID, id string
 			return err
 		}
 		defer rows.Close()
-		ready, verified, failed := 0, 0, false
-		queued := false
 		for rows.Next() {
 			var h SSHTrustFleetHost
 			var receipt []byte
@@ -159,31 +157,9 @@ func (s *Store) GetSSHTrustFleetRollout(ctx context.Context, tenantID, id string
 					return err
 				}
 			}
-			if h.State != "skipped" {
-				ready++
-			}
-			if h.State == "queued" {
-				queued = true
-			}
-			if h.State == "verified" {
-				verified++
-			}
-			if h.State == "failed" || h.State == "refused" {
-				failed = true
-			}
 			r.Hosts = append(r.Hosts, h)
 		}
-		r.State = "pending"
-		if ready > 0 && verified == ready {
-			r.State = "verified"
-		}
-		if failed {
-			r.State = "attention_required"
-		}
-		r.WindowExpired = queued && !time.Now().UTC().Before(r.Plan.ExpiresAt)
-		if r.WindowExpired {
-			r.State = "execution_window_expired"
-		}
+		r.State, r.WindowExpired = sshTrustFleetRolloutState(r.Hosts, r.Plan.ExpiresAt, time.Now().UTC())
 		return rows.Err()
 	})
 	return r, err
@@ -215,4 +191,39 @@ func (s *Store) ListSSHTrustFleetRolloutIDs(ctx context.Context, tenantID string
 		return rows.Err()
 	})
 	return ids, err
+}
+
+// sshTrustFleetRolloutState is a rollout's headline from its hosts: verified
+// once every host it reaches is, attention_required when any host failed or
+// refused, execution_window_expired when hosts are still queued past the
+// plan's window and none failed, and pending otherwise. A failure keeps the
+// headline (A226-L3); windowExpired is reported on its own either way.
+func sshTrustFleetRolloutState(hosts []SSHTrustFleetHost, expiresAt, now time.Time) (state string, windowExpired bool) {
+	ready, verified, failed, queued := 0, 0, false, false
+	for _, h := range hosts {
+		if h.State != "skipped" {
+			ready++
+		}
+		if h.State == "queued" {
+			queued = true
+		}
+		if h.State == "verified" {
+			verified++
+		}
+		if h.State == "failed" || h.State == "refused" {
+			failed = true
+		}
+	}
+	state = "pending"
+	if ready > 0 && verified == ready {
+		state = "verified"
+	}
+	if failed {
+		state = "attention_required"
+	}
+	windowExpired = queued && !now.Before(expiresAt)
+	if windowExpired && !failed {
+		state = "execution_window_expired"
+	}
+	return state, windowExpired
 }

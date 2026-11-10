@@ -60,7 +60,7 @@ func sshTrustFleetHostSchema() *Schema {
 }
 func sshTrustFleetRolloutSchema() *Schema {
 	return object(map[string]*Schema{
-		"tenant_id": {Type: "string", Format: "uuid"}, "id": {Type: "string", Format: "uuid"}, "plan": ref("SSHTrustFleetPlan"), "plan_digest": {Type: "string"}, "approval_request_id": {Type: "string", Format: "uuid"}, "requester": {Type: "string"}, "state": {Type: "string", Enum: []string{"pending", "verified", "attention_required", "execution_window_expired"}}, "window_expired": {Type: "boolean"}, "created_at": {Type: "string", Format: "date-time"}, "updated_at": {Type: "string", Format: "date-time"}, "hosts": {Type: "array", Items: ref("SSHTrustFleetHost")},
+		"tenant_id": {Type: "string", Format: "uuid"}, "id": {Type: "string", Format: "uuid"}, "plan": ref("SSHTrustFleetPlan"), "plan_digest": {Type: "string"}, "approval_request_id": {Type: "string", Format: "uuid"}, "requester": {Type: "string"}, "state": {Type: "string", Enum: []string{"pending", "verified", "attention_required", "execution_window_expired"}, Description: "attention_required whenever a host failed or refused, even with other hosts still queued past the window; execution_window_expired only when hosts are queued past it and none failed. window_expired reports the expiry on its own."}, "window_expired": {Type: "boolean"}, "created_at": {Type: "string", Format: "date-time"}, "updated_at": {Type: "string", Format: "date-time"}, "hosts": {Type: "array", Items: ref("SSHTrustFleetHost")},
 	}, "tenant_id", "id", "plan", "plan_digest", "approval_request_id", "requester", "state", "window_expired", "created_at", "updated_at", "hosts")
 }
 func sshTrustFleetListSchema() *Schema {

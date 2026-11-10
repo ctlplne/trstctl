@@ -25849,7 +25849,10 @@ export interface components {
             plan: components["schemas"]["SSHTrustFleetPlan"];
             plan_digest: string;
             requester: string;
-            /** @enum {string} */
+            /**
+             * @description attention_required whenever a host failed or refused, even with other hosts still queued past the window; execution_window_expired only when hosts are queued past it and none failed. window_expired reports the expiry on its own.
+             * @enum {string}
+             */
             state: "pending" | "verified" | "attention_required" | "execution_window_expired";
             /** Format: uuid */
             tenant_id: string;

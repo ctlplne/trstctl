@@ -565,6 +565,10 @@
 
 ### Fixed
 
+- An SSH trust fleet rollout with a failed host reads `attention_required` even when other
+  hosts are still queued past the window (A226-L3). `execution_window_expired` used to
+  override it, so the rollout list read as a timing problem while a host had failed; the
+  expiry still shows on its own as `window_expired`.
 - A Kubernetes TrustBundle refuses a certificate that does not parse (TB-O1). The agent
   checked only that each PEM block said `CERTIFICATE`, so a truncated or garbled certificate
   reached ConfigMaps, Secrets and CSI volumes (only the API server's ClusterTrustBundle
