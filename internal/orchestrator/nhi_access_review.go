@@ -260,6 +260,12 @@ func normalizeEvidenceRefs(refs []string) ([]string, error) {
 		if ref == "" {
 			continue
 		}
+		if store.IsNHIReviewNextReviewRef(ref) {
+			// Q1-L7: only the review reconcile links a next review to the
+			// item it reviews again; a person's link could cancel another
+			// item's next review.
+			return nil, fmt.Errorf("evidence_refs may not use the reserved next-review-of: link")
+		}
 		out = append(out, ref)
 	}
 	return out, nil

@@ -580,6 +580,12 @@
 
 ### Fixed
 
+- An access review's next review opens when it is due (Q1-L7). A keep decision recorded when its
+  credential is next reviewed, and nothing acted on the date. The leader's review reconcile now
+  opens a "Next review: <campaign>" campaign with the same reviewer, scope and time to decide, one
+  pending item per due credential carrying its facts and a `next-review-of:` link to the item it
+  reviews again; projecting it clears that item's pending date, so each opens once. A campaign a
+  person starts cannot carry that link.
 - An access review item whose credential trstctl no longer holds now closes (Q1-L3). A revoke
   decision's item closed only when its credential read revoked; a credential whose record was
   removed read as no evidence at all, so the item stayed open on every reconcile pass and a failed

@@ -1492,7 +1492,11 @@ never live in the API process. What you can do end to end against the running bi
   and the item closes only when the credential reads revoked; certificates and
   identities are left to their own revocation and close when trstctl sees them
   revoked. A keep decision renews the named owner's attestation and records a
-  next review date without changing any upstream right.
+  next review date without changing any upstream right; when that date passes,
+  the leader's review reconcile opens a "Next review" campaign with the same
+  reviewer, scope and time to decide, one pending item per due credential
+  linked to the item it reviews again, and clears that item's pending date so it
+  opens once (Q1-L7). A person cannot start a campaign carrying that link.
   `POST /api/v1/access/reviews/generate` builds a campaign from who can reach a
   graph node (with the graph's coverage statement) or from stale owner
   attestations. A failed revoke stays visible and is retried (Q1-L2): the

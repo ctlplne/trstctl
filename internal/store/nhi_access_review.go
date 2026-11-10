@@ -142,7 +142,8 @@ func (s *Store) ApplyNHIReviewCampaignStartedTx(ctx context.Context, tx pgx.Tx, 
 			return err
 		}
 	}
-	return nil
+	// Q1-L7: a next review the reconcile opened takes its items' due dates.
+	return clearNextReviewsOpenedByTx(ctx, tx, c, items)
 }
 
 // ApplyNHIReviewItemDecidedTx projects a reviewer decision. A second decision
