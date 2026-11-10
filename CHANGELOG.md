@@ -580,6 +580,11 @@
 
 ### Fixed
 
+- A host agent's Workload API can issue workload identities: `protocols.spiffe.entries` binds a
+  workload's SPIFFE ID to the selectors a named host agent must observe (B8-D1). Entries a host
+  agent may deliver must name that agent, and nothing could, so every workload that dialed an
+  agent's `--workload-api-socket` was refused. Each entry is scoped to the agent's own
+  certificate identity; malformed entries are refused at start.
 - A Redfish controller that answers a new session with any success carrying `X-Auth-Token` opens
   a session (A271-D2). The `redfish` provider accepted only `201 Created`, as DSP0266 has a service
   answer; DMTF's reference client accepts any success that carries the token, and DMTF's reference

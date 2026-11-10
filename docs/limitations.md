@@ -6252,6 +6252,11 @@ This is a deliberate, documented trust boundary, not an accident.
     deliverable by no agent at all and stays on the control plane's socket — so a
     forgotten field refuses rather than widening who may impersonate a workload,
     and scoping an entry moves it rather than duplicating it.
+    An operator binds entries to agents in `protocols.spiffe.entries` (B8-D1:
+    before it, nothing could scope an entry to an agent, so a host's Workload API
+    issued nothing). They are read at start; registering, changing or retiring an
+    entry without a restart, through the API and the console with each change an
+    event, is what comes next.
     On darwin the path comes from the connecting process's audit token
     (LOCAL_PEERTOKEN): its pid and pid version, read at connect time. The path is
     resolved only while that pid version still owns the pid, checked before and

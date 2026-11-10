@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/enrollmentdiag"
@@ -1133,6 +1134,17 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		SPIFFEID:  "spiffe://" + td + "/workload",
 		Selectors: []string{"unix"},
 	}}
+	// B8-D1: an operator's entry is deliverable only by the host agent it
+	// names. Its ParentID is that agent's own certificate identity, the value
+	// the agent channel derives from the certificate a caller presents, so no
+	// other agent can obtain it and the control plane's own socket never
+	// serves it.
+	for _, e := range cfg.Entries {
+		entries = append(entries, spiffe.RegistrationEntry{
+			SPIFFEID: e.SPIFFEID, Selectors: append([]string(nil), e.Selectors...),
+			ParentID: mtls.AgentSPIFFEID(tenant, e.Agent),
+		})
+	}
 	tenantIssuer := tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck, work: s.store.BeginTenantService, store: s.store}
 	wl, err := spiffe.New(spiffe.Config{
 		Issuer: tenantIssuer, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,

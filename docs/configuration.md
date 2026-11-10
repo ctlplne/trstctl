@@ -3770,6 +3770,32 @@ an account without EAB, even if the account predates the configuration change.
 | `TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS` | `false` | Keep the control plane's own Workload API socket issuing SVIDs to workloads on the control-plane machine (`protocols.spiffe.serve_local_workloads`). Off, the socket serves trust bundles and JWT validation only and refuses `FetchX509SVID`/`FetchJWTSVID`, naming the host agent's `--workload-api-socket`; every refusal and, when on, every issuance is recorded as `spiffe.workload_api.local_socket_used`. The eval profile turns it on. |
 | `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
 
+Host agents deliver workload identities through `protocols.spiffe.entries` in the
+config file (there is no environment variable for a list). Each entry binds a
+workload's SPIFFE ID, inside `protocols.spiffe.trust_domain`, to the selectors the
+host agent must observe of the calling process and to the agent, by the name it
+enrolled with, whose `--workload-api-socket` may deliver it:
+
+```yaml
+protocols:
+  spiffe:
+    enabled: true
+    tenant_id: 11111111-1111-1111-1111-111111111111
+    trust_domain: example.org
+    entries:
+      - spiffe_id: spiffe://example.org/payments
+        selectors: ["unix:uid:1000", "unix:path:/usr/local/bin/payments"]
+        agent: host-a
+```
+
+Every selector must be observed: `unix:uid:<n>`, `unix:gid:<n>` or
+`unix:path:<executable>`; a bare `unix` would match every process on the host and is
+refused. The control plane scopes each entry to that agent's own certificate identity,
+so no other agent can obtain it and the control plane's own socket never serves it.
+An entry outside the trust domain, in the reserved `/_trstctl` namespace, with no
+selectors or no agent, or repeated for the same agent is refused at start. Entries are
+read at start, so a change takes a restart.
+
 ## Agent mTLS channel
 
 The served agent gRPC channel is a real listener the control plane exposes for

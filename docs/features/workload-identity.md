@@ -376,8 +376,11 @@ still uses a stock go-spiffe or spiffe-helper client against the reported
 `unix://...` path.
 
 The control plane's own socket no longer issues SVIDs to workloads by default. Run
-`trstctl-agent` on each host, bind registration entries to that node, and mount
-only the host-local Workload API socket into workloads. This limits a compromised
+`trstctl-agent` on each host with `--workload-api-socket`, bind registration entries
+to that node in `protocols.spiffe.entries` (each names the workload's SPIFFE ID, the
+selectors the agent must observe and the agent's enrolled name; see
+[configuration](../configuration.md)), and mount only the host-local Workload API
+socket into workloads. This limits a compromised
 host to identities assigned to that host instead of widening it to the trust domain.
 The control-plane socket keeps serving `FetchX509Bundles`, `FetchJWTBundles`, and
 `ValidateJWTSVID` for validators; a workload that still dials it for an SVID is

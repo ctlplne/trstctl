@@ -1285,6 +1285,71 @@ type SPIFFEProtocol struct {
 	// credentials) can trust the tokens POST /oauth2/token exchanges: they then
 	// carry that issuer as iss. Empty publishes no issuer.
 	OIDCIssuerURL string `json:"oidc_issuer_url,omitempty"`
+	// Entries (B8-D1) register the workloads host agents deliver: each binds a
+	// SPIFFE ID to the selectors the agent must observe of the calling process
+	// and to the enrolled agent, by name, whose host Workload API
+	// (--workload-api-socket) may deliver it. The control plane scopes the
+	// entry to that agent's own certificate identity, so no other agent can
+	// obtain it. They are read at start; changing one takes a restart.
+	Entries []SPIFFEEntry `json:"entries,omitempty"`
+}
+
+// SPIFFEEntry is one workload a named host agent may deliver (B8-D1).
+type SPIFFEEntry struct {
+	// SPIFFEID is the workload's identity, inside protocols.spiffe.trust_domain.
+	SPIFFEID string `json:"spiffe_id"`
+	// Selectors are what the agent must observe, every one of them:
+	// unix:uid:<n>, unix:gid:<n> or unix:path:<executable>. A bare "unix"
+	// would match every process on the host, so each names a value.
+	Selectors []string `json:"selectors"`
+	// Agent is the name the host agent enrolled with.
+	Agent string `json:"agent"`
+}
+
+// spiffeEntryAgentName is an enrolled agent's name as it appears in its
+// certificate: letters, digits, dot, dash and underscore.
+var spiffeEntryAgentName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// validateSPIFFEEntries checks protocols.spiffe.entries (B8-D1).
+func validateSPIFFEEntries(p SPIFFEProtocol) []error {
+	if len(p.Entries) == 0 {
+		return nil
+	}
+	if !p.Enabled {
+		return []error{errors.New("protocols.spiffe.entries needs protocols.spiffe.enabled: the entries are served by its trust domain")}
+	}
+	var errs []error
+	seen := map[string]bool{}
+	for i, e := range p.Entries {
+		where := fmt.Sprintf("protocols.spiffe.entries[%d]", i)
+		id, err := crypto.ParseSPIFFEID(e.SPIFFEID)
+		switch {
+		case err != nil:
+			errs = append(errs, fmt.Errorf("%s.spiffe_id: %v", where, err))
+		case !strings.EqualFold(id.Host, strings.TrimSpace(p.TrustDomain)):
+			errs = append(errs, fmt.Errorf("%s.spiffe_id %q is outside protocols.spiffe.trust_domain %q", where, e.SPIFFEID, p.TrustDomain))
+		case crypto.IsReservedWorkloadSPIFFEID(e.SPIFFEID):
+			errs = append(errs, fmt.Errorf("%s.spiffe_id %q is in trstctl's reserved namespace", where, e.SPIFFEID))
+		}
+		if len(e.Selectors) == 0 {
+			errs = append(errs, fmt.Errorf("%s.selectors: an entry needs at least one selector", where))
+		}
+		for _, selector := range e.Selectors {
+			kind, value, ok := strings.Cut(selector, ":")
+			if !ok || kind == "" || value == "" || strings.TrimSpace(selector) != selector || strings.ContainsAny(selector, " \t\r\n") {
+				errs = append(errs, fmt.Errorf("%s.selectors: %q must name a type and a value, such as unix:uid:1000", where, selector))
+			}
+		}
+		if !spiffeEntryAgentName.MatchString(e.Agent) {
+			errs = append(errs, fmt.Errorf("%s.agent %q must be the name a host agent enrolled with", where, e.Agent))
+		}
+		key := e.SPIFFEID + "\x00" + e.Agent
+		if seen[key] {
+			errs = append(errs, fmt.Errorf("%s repeats spiffe_id %q for agent %q", where, e.SPIFFEID, e.Agent))
+		}
+		seen[key] = true
+	}
+	return errs
 }
 
 // ValidateOIDCIssuerURL checks an N5 issuer base: an absolute https URL with a
@@ -1350,6 +1415,7 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 			errs = append(errs, err)
 		}
 	}
+	errs = append(errs, validateSPIFFEEntries(p.SPIFFE)...)
 	return errs
 }
 

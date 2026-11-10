@@ -163,8 +163,16 @@ func signedJobReport(t *testing.T, a *agent.Agent, jobID int64, attempt int,
 
 func newAgentChannelHarness(t *testing.T, opts ...func(*Deps)) *agentChannelHarness {
 	t.Helper()
+	return newAgentChannelHarnessWithProtocols(t, config.Protocols{}, opts...)
+}
+
+// newAgentChannelHarnessWithProtocols is newAgentChannelHarness for a control
+// plane that also serves protocols (the SPIFFE trust domain a host agent's
+// Workload API reaches through this channel, for one).
+func newAgentChannelHarnessWithProtocols(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *agentChannelHarness {
+	t.Helper()
 	all := append([]func(*Deps){withAgentChannel}, opts...)
-	h := newServedHarness(t, config.Protocols{}, all...)
+	h := newServedHarness(t, protocols, all...)
 	if !h.srv.AgentChannelServed() {
 		t.Fatal("agent channel is not served")
 	}
