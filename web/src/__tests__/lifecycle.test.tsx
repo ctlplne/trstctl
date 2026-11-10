@@ -408,8 +408,9 @@ describe("lifecycle actions from the UI", () => {
       .closest("tr")!;
     expect(within(row).getByText(outcome === "succeeded" ? "deployed" : "Renewal Failed")).toBeInTheDocument();
     expect(within(drawer).getByText(new RegExp(`${outcome} via manual; successor`))).toBeInTheDocument();
-    // Both successful completion and the served renewal_failed retry edge allow renewal.
-    expect(within(drawer).getByRole("button", { name: /^renew$/i })).toBeEnabled();
+    // Both successful completion and the served renewal_failed retry edge allow
+    // renewal; from renewal_failed the one action says it retries (A36).
+    expect(within(drawer).getByRole("button", { name: outcome === "succeeded" ? /^renew$/i : /^retry renewal$/i })).toBeEnabled();
     const visibleReads = apiMock.identities.mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_050);

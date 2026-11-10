@@ -8029,6 +8029,7 @@ Identity = TypedDict(
         'not_after': str,
         'not_before': str,
         'owner_id': str,
+        'renewal_failure': dict[str, Any],
         'renewal_paused': list[dict[str, Any]],
         'status': str,
         'tenant_id': str,

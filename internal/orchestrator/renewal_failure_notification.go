@@ -41,6 +41,12 @@ func renewalFailureNotification(identity store.Identity, eventID string, evidenc
 		RenewalJobID:         evidence.RenewalJobID,
 		RenewalAttempt:       evidence.RenewalAttempt,
 	}
+	if evidence.Cause != "" {
+		// A36: why, in plain words, and the one action that retries it.
+		alert.Detail = "A renewal attempt failed. Why: " + evidence.Cause +
+			" The endpoint keeps serving its current certificate until a renewal succeeds; Retry renewal on /identities?identity=" +
+			identity.ID + " starts a new attempt. Verify the current listener certificate and its expiry."
+	}
 	if evidence.RenewalJobID != 0 {
 		alert.Detail += fmt.Sprintf(" Failed host job %d, attempt %d.", evidence.RenewalJobID, evidence.RenewalAttempt)
 	}

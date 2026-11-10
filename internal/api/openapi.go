@@ -1115,6 +1115,16 @@ func componentSchemas() map[string]*Schema {
 		// A244: what the inventory says the certificate is.
 		"inventory_state": {Type: "string", Enum: []string{"requested", "issued", "delivered", "served", "revoked", "retired"},
 			Description: "issued: the active certificate is not delivered; delivered: a target took it; served: it was seen served (read back by the delivering connector, or observed by an endpoint verification)."},
+		// A36: why the last host renewal did not complete.
+		"renewal_failure": func() *Schema {
+			s := object(map[string]*Schema{
+				"cause":   {Type: "string", Description: "Why, in plain words, from the control plane's own records (the job's certificate authority request, or whether a certificate was signed); never the agent's own text."},
+				"job_id":  {Type: "integer", Format: "int64"},
+				"attempt": {Type: "integer"},
+			}, "cause", "job_id", "attempt")
+			s.Description = "On a single identity read while status is renewal_failed: the newest host renewal job that did not complete, and why. Retry renewal (a transition to renewing) starts a new attempt."
+			return s
+		}(),
 	}, "id", "kind", "name", "owner_id", "status")
 	identityReq := object(map[string]*Schema{
 		"kind": {Type: "string", Enum: identityKinds}, "name": str(), "owner_id": uuid(),

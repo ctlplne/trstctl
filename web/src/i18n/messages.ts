@@ -36500,6 +36500,14 @@ export const messages = {
     description: "Identity health summary read failed.",
   },
   "identities.health.retry": { defaultMessage: "Check counts again", description: "Retry the complete tenant identity summary read." },
+  "identities.lifecycle.retryRenewal": {
+    defaultMessage: "Retry renewal",
+    description: "Start a failed renewal again; a host job that already failed is ended first.",
+  },
+  "identities.lifecycle.renewalFailedCause": {
+    defaultMessage: "The last renewal failed. {cause}",
+    description: "Plain cause of the identity's failed host renewal, read from the control plane's own records.",
+  },
   "privacy.review.erasureAction": { defaultMessage: "Review erasure", description: "Request an effect-free exact subject-erasure review." },
   "privacy.review.retentionAction": { defaultMessage: "Review retention", description: "Request an effect-free exact retention review." },
   "privacy.review.reviewing": { defaultMessage: "Reviewing…", description: "Busy label while a privacy preview is requested." },

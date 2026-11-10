@@ -21,6 +21,9 @@ type RenewalFailureContext struct {
 	RotationRunID                                 string
 	RenewalJobID                                  int64
 	RenewalAttempt                                int
+	// Cause is the plain account of why the failed host job did not complete
+	// (A36), from the control plane's own records.
+	Cause string
 }
 
 // RenewalAttempt identifies a report's authenticated host-job claim. A run is
@@ -55,6 +58,11 @@ func (s *Store) RenewalFailureExecutionTx(ctx context.Context, tx pgx.Tx, identi
 		return result, errors.New("renewal failure differs from its queued identity")
 	}
 	result.RenewalJobID, result.RenewalAttempt = attempt.JobID, attempt.Attempt
+	cause, err := hostRenewalFailureCauseTx(ctx, tx, identity.TenantID, attempt.JobID)
+	if err != nil {
+		return result, err
+	}
+	result.Cause = cause
 	if intent.RotationRunID == "" {
 		// Legacy jobs can identify an attempt, but have no retained run binding.
 		return result, nil

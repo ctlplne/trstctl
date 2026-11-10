@@ -19029,6 +19029,14 @@ export interface components {
             not_before?: string;
             /** Format: uuid */
             owner_id: string;
+            /** @description On a single identity read while status is renewal_failed: the newest host renewal job that did not complete, and why. Retry renewal (a transition to renewing) starts a new attempt. */
+            renewal_failure?: {
+                attempt: number;
+                /** @description Why, in plain words, from the control plane's own records (the job's certificate authority request, or whether a certificate was signed); never the agent's own text. */
+                cause: string;
+                /** Format: int64 */
+                job_id: number;
+            };
             renewal_paused?: components["schemas"]["IdentityRenewalPause"][];
             status: string;
             /** Format: uuid */

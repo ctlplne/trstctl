@@ -108,7 +108,16 @@ three signals, tenant-isolated at the database layer:
   one warning for the affected identity and owner. It preserves the standing
   deployment and points the operator to rotation history, retry status, and the
   listener's certificate and expiry. The warning does not imply the retry job has
-  ended; an existing retry can still recover automatically.
+  ended; an existing retry can still recover automatically. For a host renewal it
+  leads with why, in plain words read from the control plane's own records (never the
+  agent's text): the certificate authority's closed error class for the job's request
+  (domain validation failed, no DNS-01 provider covers the name, the ACME account or
+  finalization failed, an earlier attempt left an unconfirmed result, the attempt was
+  ended, or the authority did not issue), or whether a certificate was signed for the
+  job. It names Retry renewal, the one action from `renewal_failed`. `GET
+  /api/v1/identities/{id}` carries the same cause as `renewal_failure` (`cause`,
+  `job_id`, `attempt`) while the identity is `renewal_failed`, and the identity view
+  shows it above that action.
 - **The CA calendar.** CA authorities run on their own clock. A leaf that expires is a
   page; a root that expires is an outage across every leaf beneath it, and the fix — get
   a new anchor into every relying party — takes quarters, not an afternoon. So the same

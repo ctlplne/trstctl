@@ -34,6 +34,7 @@ import { IdentityApplicationPanel } from "@/pages/identities/IdentityApplication
 import { IdentityRevocationReport } from "@/pages/identities/IdentityRevocationReport";
 import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
 import { IdentityRenewalHold } from "@/pages/identities/IdentityRenewalHold";
+import { IdentityRenewalFailure } from "@/pages/identities/IdentityRenewalFailure";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -186,9 +187,13 @@ function actionsFor(state: string): Action[] {
         { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
       ];
     case "deployed":
-    case "renewal_failed":
       return [
         { label: translateNow("source.renew.90c1689b0b"), to: "renewing" },
+        { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
+      ];
+    case "renewal_failed":
+      return [
+        { label: translateNow("identities.lifecycle.retryRenewal"), to: "renewing" },
         { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
       ];
     case "renewing":
@@ -1700,6 +1705,7 @@ function IdentityDetailPanel({
             </h3>
             <p className="mt-1 text-muted-foreground">{kind?.description ?? translateNow("source.a.non.human.identity.bound.to.this.tenant.f58740df6d")}</p>
             {terminal && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">{terminal}</p>}
+            <IdentityRenewalFailure identity={identity} />
           </section>
 
           <dl className="grid gap-3 md:grid-cols-2">

@@ -222,6 +222,36 @@ func TestServedHostRenewalHealsAfterAnOutageA36(t *testing.T) {
 		}
 		return n
 	}
+	// A36 console part: the identity read and the renewal_failed alert say
+	// why the job did not complete, in plain words, and name the one retry.
+	causeIs := func(label, want string, alert bool) {
+		t.Helper()
+		code, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/identities/"+identityID, token, nil)
+		var read struct {
+			Status         string `json:"status"`
+			RenewalFailure *struct {
+				Cause string `json:"cause"`
+				JobID int64  `json:"job_id"`
+			} `json:"renewal_failure"`
+		}
+		if code != http.StatusOK || json.Unmarshal(body, &read) != nil || read.RenewalFailure == nil ||
+			read.RenewalFailure.Cause != want || read.RenewalFailure.JobID == 0 {
+			t.Fatalf("%s: identity read = %d %s, want renewal_failure.cause %q", label, code, body, want)
+		}
+		if !alert {
+			return
+		}
+		var detail string
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT convert_from(payload, 'UTF8')::jsonb ->> 'detail' FROM outbox
+			   WHERE tenant_id = $1 AND destination = 'notification.renewal_failure' ORDER BY id DESC LIMIT 1`, h.tenant).Scan(&detail)
+		}); err != nil {
+			t.Fatalf("%s: read the renewal_failed alert: %v", label, err)
+		}
+		if !strings.Contains(detail, "Why: "+want) || !strings.Contains(detail, "Retry renewal") {
+			t.Fatalf("%s: the alert says %q, want the cause %q and the retry", label, detail, want)
+		}
+	}
 	healed := func(label, before string) string {
 		t.Helper()
 		channel := pass(label)
@@ -260,6 +290,7 @@ func TestServedHostRenewalHealsAfterAnOutageA36(t *testing.T) {
 	if got := status(); got != "renewal_failed" || pendingSlots() != 1 {
 		t.Fatalf("after the outage: identity %s, %d pending keys", got, pendingSlots())
 	}
+	causeIs("not-submitted outage", store.RenewalCauseCADidNotIssue, true)
 	upstream.down.Store(false)
 	dueNow()
 	fingerprint = healed("DNS back, same job", fingerprint)
@@ -279,6 +310,7 @@ func TestServedHostRenewalHealsAfterAnOutageA36(t *testing.T) {
 	if channel := pass("DNS back, stuck job"); channel.lastOutcome != transport.JobOutcomeFailed || served() != fingerprint {
 		t.Fatalf("the unconfirmed job completed on its own: %q %q", channel.lastOutcome, channel.lastDetail)
 	}
+	causeIs("unconfirmed outage", store.RenewalCauseCAUnconfirmed, false)
 	startRenewal("retry-after-unconfirmed")
 	var superseded int
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {

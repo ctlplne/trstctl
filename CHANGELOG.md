@@ -2,6 +2,12 @@
 
 ### Added
 
+- A failed host renewal says why in plain words, with one retry (A36's console part). The
+  `renewal_failed` alert leads with the cause, one of a closed set read from the control
+  plane's own records (the certificate authority's error class for the job's request, or
+  whether a certificate was signed), and names Retry renewal. `GET /api/v1/identities/{id}`
+  carries it as `renewal_failure` while the identity is `renewal_failed`; the identity view
+  shows "The last renewal failed. <cause>" and offers Retry renewal as its one action.
 - Enterprise-scale harness (A266; build list section 35, item 4): `make perf-scale` and `scripts/perf/run-scale.sh`
   (`--inventory`, `--renewals`, `--clients`, `--chunk`, `--seed`, `--fleet-lifetime`, `--timeout`, `--out`) boot the
   local eval stack and drive it through the API: an inventory generated from the seed and imported through the

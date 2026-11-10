@@ -914,6 +914,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					evidence.RotationRunID = execution.RotationRunID
 					evidence.RenewalJobID = execution.RenewalJobID
 					evidence.RenewalAttempt = execution.RenewalAttempt
+					evidence.Cause = execution.Cause
 				}
 				alertBody, err := renewalFailureNotification(locked, eventID, evidence)
 				if err != nil {

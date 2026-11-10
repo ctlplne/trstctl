@@ -5785,6 +5785,7 @@ export interface Identity {
   not_after?: string;
   not_before?: string;
   owner_id: string;
+  renewal_failure?: { attempt: number; cause: string; job_id: number };
   renewal_paused?: IdentityRenewalPause[];
   status: string;
   tenant_id?: string;

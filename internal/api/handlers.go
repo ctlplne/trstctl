@@ -144,6 +144,17 @@ type identityResponse struct {
 	// requested, issued, delivered, served, revoked or retired. Set on lists
 	// and the application view.
 	InventoryState string `json:"inventory_state,omitempty"`
+	// RenewalFailure says why the last host renewal did not complete (A36),
+	// on the identity read while it is renewal_failed.
+	RenewalFailure *identityRenewalFailureResponse `json:"renewal_failure,omitempty"`
+}
+
+// identityRenewalFailureResponse is the plain cause of a failed host renewal
+// and the job it names.
+type identityRenewalFailureResponse struct {
+	Cause   string `json:"cause"`
+	JobID   int64  `json:"job_id"`
+	Attempt int    `json:"attempt"`
 }
 
 // identityRenewalPauseResponse is one held target: where, since when, and why.
@@ -496,6 +507,16 @@ func (a *API) getIdentity(w http.ResponseWriter, r *http.Request) {
 	response := toIdentityResponse(it)
 	response.TerminalTargetState = pending[it.ID]
 	response.TerminalPending = response.TerminalTargetState != ""
+	if it.Status == "renewal_failed" {
+		failure, found, err := a.store.LatestHostRenewalFailure(r.Context(), tenantID, it.ID)
+		if err != nil {
+			a.writeError(w, errStatusFrom(http.StatusInternalServerError, err))
+			return
+		}
+		if found {
+			response.RenewalFailure = &identityRenewalFailureResponse{Cause: failure.Cause, JobID: failure.JobID, Attempt: failure.Attempt}
+		}
+	}
 	a.writeJSON(w, http.StatusOK, response)
 }
 
