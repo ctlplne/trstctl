@@ -1411,8 +1411,9 @@ never live in the API process. What you can do end to end against the running bi
   environment, exists only in another tenant or doesn't resolve blocks the plan, as does a
   retired, revoked or expired source credential; a concurrent edit makes the plan stale;
   target-only secrets are kept; a created secret takes its source's owner, named in the
-  plan (A236-L2), and an updated one keeps its own. Four-eyes approval for promotions into restricted
-  environments is not served.
+  plan (A236-L2), and an updated one keeps its own. A promotion into a restricted
+  environment waits for the tenant's required number of distinct approvers who write there,
+  and consumes that exact plan's approval with the versions it writes (A236-L1).
 - Folder restore (A236 part b): `POST /api/v1/secrets/projects/{project}/restores/preview`
   and `.../restores` (`trstctl secrets projects restore preview|apply`, console Promote or
   restore) put an environment or folder back to a point in time as one reserved batch of

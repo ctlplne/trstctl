@@ -5466,6 +5466,11 @@ export const messages = {
     defaultMessage: "{count} secrets got a new version.",
     description: "Applied result.",
   },
+  "secrets.transfers.awaitingApproval": {
+    defaultMessage: "This promotion into a restricted environment waits for its approvers: request {request}. Apply it again once they approve it.",
+    description: "A236-L1: a promotion into a restricted environment needs approval by members who write there.",
+  },
+  "secrets.transfers.openApprovals": { defaultMessage: "Open Approvals", description: "A236-L1: link to the approval queue." },
   "secrets.transfers.error": {
     defaultMessage: "Promote or restore failed",
     description: "Error title.",

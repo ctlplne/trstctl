@@ -2,6 +2,13 @@
 
 ### Added
 
+- A promotion into a restricted secrets environment needs four-eyes approval (A236-L1). The apply
+  writes nothing and names the approval request until other members who hold write there approve
+  that exact plan: the tenant's required number of distinct approvers, two by default. The approval
+  is consumed with the versions the promotion writes, so it is used once. The console's Promote or
+  restore panel names the request and links Approvals. Approval requests for a restricted
+  environment's secret changes and promotions are listed to, and decided on the generic route by,
+  only the members who hold write there.
 - A dynamic-secret provider can be placed in a secrets project environment (A235-L2):
   `secret_environment: "<project>/<environment>"` in its configuration. In a restricted environment
   only the members granted it see the provider and its leases. Only its developers and admins

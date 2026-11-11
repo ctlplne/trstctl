@@ -374,7 +374,37 @@ func (a *API) approvalListVisibility(r *http.Request, principal authz.Principal,
 
 func (a *API) approvalRecordAuthorized(r *http.Request, principal authz.Principal, tenantID string, record ApprovalRequestRecord) bool {
 	permission, ok := approvalRecordPermission(record.ResourceKind, record.Action)
-	return ok && a.approvalPermissionAuthorized(r, principal, tenantID, permission)
+	if !ok || !a.approvalPermissionAuthorized(r, principal, tenantID, permission) {
+		return false
+	}
+	// A236-L1: a request about a restricted environment's secret, or a
+	// promotion into one, is listed only to the members granted it.
+	allowed, err := a.approvalRecordSecretScopeAllows(r.Context(), tenantID, record, false)
+	return err == nil && allowed
+}
+
+// approvalRecordSecretName is the secret-store name whose environment governs
+// a secret approval record (A236-L1): a secret change's secret, or a
+// promotion's target environment. ok is false for every other kind.
+func approvalRecordSecretName(record ApprovalRequestRecord) (string, bool) {
+	switch record.ResourceKind {
+	case "secret":
+		return strings.CutPrefix(record.ResourceID, "secret:")
+	case secretPromotionApprovalKind:
+		return record.ResourceID + "/", record.ResourceID != ""
+	}
+	return "", false
+}
+
+// approvalRecordSecretScopeAllows says whether the caller may see (write
+// false) or decide (write true) a secret approval record under its restricted
+// environment; other records are governed by their kind's permission alone.
+func (a *API) approvalRecordSecretScopeAllows(ctx context.Context, tenantID string, record ApprovalRequestRecord, write bool) (bool, error) {
+	name, ok := approvalRecordSecretName(record)
+	if !ok {
+		return true, nil
+	}
+	return a.secretScopeAllows(ctx, tenantID, name, write)
 }
 
 func (a *API) approvalPermissionAuthorized(r *http.Request, principal authz.Principal, tenantID string, permission authz.Permission) bool {
@@ -391,6 +421,14 @@ func (a *API) authorizeGenericApprovalDecision(r *http.Request, record ApprovalR
 	permission, mapped := approvalRecordPermission(record.ResourceKind, record.Action)
 	if !mapped || !a.approvalPermissionAuthorized(r, principal, tenantID, permission) {
 		return errStatus(http.StatusForbidden, "forbidden: approval request belongs to another review domain")
+	}
+	// A236-L1: deciding a change to a restricted environment's secret, or a
+	// promotion into one, needs write access there, on this route as on the
+	// secret's own approval route.
+	if allowed, err := a.approvalRecordSecretScopeAllows(r.Context(), tenantID, record, true); err != nil {
+		return err
+	} else if !allowed {
+		return errStatus(http.StatusForbidden, "approving a change in a restricted environment needs write access there")
 	}
 	// The preflight supplies the immutable target shown to the reviewer. Copy it
 	// into the command so RecordApproval rechecks the exact kind/resource/action
@@ -422,6 +460,10 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.CertsIssue, action == "start"
 	case "secret":
 		return authz.SecretsWrite, action == "create" || action == "rotate" || action == "recover" || action == "delete"
+	case secretPromotionApprovalKind:
+		// A236-L1: a promotion into a restricted environment is reviewed by
+		// those who write secrets there.
+		return authz.SecretsWrite, action == "promote"
 	case "managed_key":
 		return authz.KeysApprove, action == ManagedKeyActionRotate || action == ManagedKeyActionRevoke || action == ManagedKeyActionZeroize
 	case "cloud_machine":

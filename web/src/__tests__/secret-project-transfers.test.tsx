@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { SecretProjectTransfers } from "@/pages/secrets/SecretProjectTransfers";
 import type { SecretProject } from "@/lib/api-types.gen";
 
@@ -113,6 +114,36 @@ describe("A236 promote and restore", () => {
     await user.click(await screen.findByRole("button", { name: "Promote these secrets" }));
     await screen.findByText("Promote or restore failed");
     expect(apiMock.previewSecretPromotion).toHaveBeenCalledTimes(2);
+  });
+
+  // A236-L1: a promotion into a restricted environment waits for its
+  // approvers; the panel names the request, links the queue, keeps the plan
+  // and does not preview again.
+  it("names the approval a promotion into a restricted environment waits for", async () => {
+    apiMock.previewSecretPromotion.mockResolvedValue(promotionPlan);
+    apiMock.applySecretPromotion.mockRejectedValueOnce(
+      new Error(
+        "dual control: approval_required:orders/stage request_id=11111111-2222-4333-8444-555555555555 intent_digest=sha256:" +
+          "a".repeat(64) +
+          ": approval request awaits 2 distinct approval(s)",
+      ),
+    );
+    apiMock.applySecretPromotion.mockResolvedValueOnce({ operation: "promote", plan_digest: "d".repeat(64), items: [{ name: "orders/stage/db/password" }] });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SecretProjectTransfers project={project} onApplied={vi.fn()} />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole("button", { name: "Preview the plan" }));
+    await user.click(await screen.findByRole("button", { name: "Promote these secrets" }));
+    const notice = await screen.findByText(/waits for its approvers: request 11111111-2222-4333-8444-555555555555/);
+    expect(within(notice).getByRole("link", { name: "Open Approvals" })).toHaveAttribute("href", "/approvals");
+    expect(screen.queryByText("Promote or restore failed")).not.toBeInTheDocument();
+    expect(apiMock.previewSecretPromotion).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Promote these secrets" }));
+    expect(apiMock.applySecretPromotion).toHaveBeenLastCalledWith("orders", { from: "dev", to: "stage", folder: undefined, plan_digest: "d".repeat(64) });
+    expect(screen.queryByText(/waits for its approvers/)).not.toBeInTheDocument();
   });
 
   it("restores a folder to a point in time", async () => {

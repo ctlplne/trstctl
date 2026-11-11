@@ -49,6 +49,10 @@ type ApplicationSecretBatchVersion struct {
 	Operation            string                              `json:"operation"`
 	PlanDigest           string                              `json:"plan_digest"`
 	Items                []ApplicationSecretBatchVersionItem `json:"items"`
+	// Approval is the exact single-use approval a promotion into a restricted
+	// environment carries (A236-L1); the projection consumes it with the
+	// versions it writes. Absent on every other batch.
+	Approval *store.OperationApprovalUse `json:"approval,omitempty"`
 }
 
 // ApplicationSecretBatchVersionPrivacyPruned is the privacy rewrite: items whose
@@ -81,6 +85,19 @@ func init() {
 		{Path: "/items/*/source_name", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/source_version", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/owner_id", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/request_id", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/intent_digest", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/requester", Mode: events.PrivacyFieldIdentityExact},
+		{Path: "/approval/resource_kind", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/resource_id", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/action", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/from_state", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/to_state", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/target_version", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/required_approvals", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/approval/reason", Mode: events.PrivacyFieldFreeTextClear},
+		{Path: "/approval/evidence_refs", Mode: events.PrivacyFieldFreeTextClear},
+		{Path: "/approval/issuance", Mode: events.PrivacyFieldOpaqueExact},
 	}
 	if err := events.RegisterPrivacyEventPolicy(EventApplicationSecretBatchVersioned,
 		ApplicationSecretBatchVersionSchemaVersion, events.PrivacyEventPolicy{
@@ -180,6 +197,12 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 	}, semantic, items, privacyPruned)
 	if errors.Is(err, store.ErrApplicationSecretTenantEpochMismatch) {
 		return true, nil
+	}
+	if err == nil && payload.Approval != nil {
+		// A236-L1: the promotion consumes its exact single-use approval with
+		// the versions it writes; a replay of this event finds it consumed by
+		// this same event.
+		err = p.store.ConsumeOperationApprovalTx(ctx, tx, event.TenantID, *payload.Approval, event.ID, event.Time)
 	}
 	return true, err
 }

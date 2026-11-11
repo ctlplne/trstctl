@@ -229,6 +229,18 @@ secrets with no source are never touched or deleted. A plan with nothing to chan
 first receipt. You need read access to the source environment and write access to the
 target. Every new version is audited like a single write.
 
+A promotion into a **restricted** environment needs four-eyes approval (A236-L1). The
+first apply writes nothing and answers `403` naming the approval request
+(`dual control: approval_required:<project>/<environment> request_id=…`). Other members
+who hold write in that environment approve that exact plan in Approvals: the tenant's
+required number of distinct approvers, two by default. The requester can't approve its
+own promotion, and a member not granted the environment neither sees nor decides the
+request. The requester then applies again with the same body and `Idempotency-Key`. The
+versions and the approval are recorded together, so the approval is used once, and the
+next plan needs its own. A promotion into an open environment needs no approval. A secret
+change's approval in a restricted environment is likewise listed to, and decided by, only
+the members who hold write there, on the generic Approvals route as on the secret's own.
+
 ### Restoring a folder to a point in time (A236)
 
 A **restore** puts an environment, or one folder of it, back to how it stood at a point in

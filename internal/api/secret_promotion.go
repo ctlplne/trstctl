@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -208,9 +209,13 @@ func (a *API) applySecretPromotion(w http.ResponseWriter, r *http.Request) {
 		if authorizedTenant != tenantID {
 			return 0, nil, errors.New("api: secret promotion tenant changed")
 		}
+		authorize, err := a.secretPromotionApproval(ctx, tenantID, project, req)
+		if err != nil {
+			return 0, nil, err
+		}
 		return withStoredSecretCreationFence(ctx, tenantID, func(work context.Context) (int, any, error) {
-			receipt, err := a.executeSecretVersionBatch(work, tenantID, store.ApplicationSecretBatchPromotion,
-				idempotencyKey, keyDigest, binding, req.PlanDigest,
+			receipt, err := a.executeApprovedSecretVersionBatch(work, tenantID, store.ApplicationSecretBatchPromotion,
+				idempotencyKey, keyDigest, binding, req.PlanDigest, authorize,
 				func(ctx context.Context) ([]projections.ApplicationSecretBatchVersionItem, int, error) {
 					return a.sealSecretPromotion(ctx, tenantID, project, req)
 				})
@@ -223,6 +228,90 @@ func (a *API) applySecretPromotion(w http.ResponseWriter, r *http.Request) {
 			return http.StatusCreated, receipt, nil
 		})
 	})
+}
+
+// secretPromotionApprovalKind is the approval request kind of a promotion
+// into a restricted environment (A236-L1); its resource is
+// "<project>/<environment>".
+const secretPromotionApprovalKind = "secret_promotion"
+
+// secretPromotionApproval is four-eyes for a promotion into a restricted
+// environment (A236-L1): an exact single-use approval of this plan, decided by
+// a second member who holds write there. A promotion into an open environment
+// needs none (nil).
+func (a *API) secretPromotionApproval(ctx context.Context, tenantID, project string, req secretPromotionRequest) (func(context.Context) (*store.OperationApprovalUse, error), error) {
+	_, envs, _, err := a.store.GetSecretProject(ctx, tenantID, project)
+	if errors.Is(err, store.ErrSecretProjectNotFound) {
+		return nil, errStatus(http.StatusNotFound, "no such secrets project")
+	}
+	if err != nil {
+		return nil, err
+	}
+	restricted := false
+	for _, env := range envs {
+		if env.Slug == req.To {
+			restricted = env.Restricted
+		}
+	}
+	if !restricted {
+		return nil, nil
+	}
+	return func(ctx context.Context) (*store.OperationApprovalUse, error) {
+		return a.authorizeSecretPromotion(ctx, tenantID, project, req)
+	}, nil
+}
+
+// authorizeSecretPromotion asks for, or finds, the exact approval of this
+// plan. Until a second member approves it the answer is 403 naming the
+// request, which the requester applies again once it is approved.
+func (a *API) authorizeSecretPromotion(ctx context.Context, tenantID, project string, req secretPromotionRequest) (*store.OperationApprovalUse, error) {
+	if a.gate.Checker == nil {
+		return nil, errStatus(http.StatusForbidden, "a promotion into a restricted environment needs four-eyes approval, and no approval store is configured")
+	}
+	exact, ok := a.gate.Checker.(ExactApprovalChecker)
+	if !ok {
+		return nil, errStatus(http.StatusForbidden, "a promotion into a restricted environment needs exact single-use approval authority")
+	}
+	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		return nil, errStatus(http.StatusUnauthorized, "an authenticated requester is required")
+	}
+	folder := strings.TrimSpace(req.Folder)
+	name := project + ": " + req.From + " into " + req.To
+	if folder != "" {
+		name += " (folder " + folder + ")"
+	}
+	intent := ApprovalIntent{
+		TenantID: tenantID, ResourceKind: secretPromotionApprovalKind, ResourceID: project + "/" + req.To,
+		ResourceName: name, Action: "promote", Requester: principal.Subject,
+		FromState: "plan:" + req.PlanDigest, ToState: req.To, TargetVersion: 1,
+		Reason:       "promote " + name + " by the reviewed plan " + req.PlanDigest,
+		EvidenceRefs: []string{"plan_digest:" + req.PlanDigest},
+	}
+	authority, approved, reason := exact.AuthorizeApproval(ctx, intent)
+	if authority.RequestID == "" || authority.IntentDigest == "" ||
+		authority.Requester != principal.Subject || authority.ResourceKind != intent.ResourceKind ||
+		authority.ResourceID != intent.ResourceID || authority.Action != intent.Action ||
+		authority.FromState != intent.FromState || authority.ToState != intent.ToState ||
+		authority.TargetVersion != intent.TargetVersion || authority.RequiredApprovals <= 0 {
+		return nil, approvalAPIError(store.ErrApprovalDrifted)
+	}
+	if !approved {
+		if reason == "" {
+			reason = "this exact promotion awaits a second member's approval"
+		}
+		return nil, errStatus(http.StatusForbidden, fmt.Sprintf(
+			"dual control: approval_required:%s request_id=%s intent_digest=%s: %s",
+			intent.ResourceID, authority.RequestID, authority.IntentDigest, reason))
+	}
+	return &store.OperationApprovalUse{
+		RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+		Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+		ResourceID: authority.ResourceID, Action: authority.Action,
+		FromState: authority.FromState, ToState: authority.ToState,
+		TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+		Reason: authority.Reason, EvidenceRefs: authority.EvidenceRefs,
+	}, nil
 }
 
 type secretPromotionPlanned struct {
@@ -609,6 +698,20 @@ func (a *API) executeSecretVersionBatch(
 	ctx context.Context, tenantID, operation, idempotencyKey, keyDigest, binding, planDigest string,
 	prepare func(context.Context) ([]projections.ApplicationSecretBatchVersionItem, int, error),
 ) (secretVersionBatchReceipt, error) {
+	return a.executeApprovedSecretVersionBatch(ctx, tenantID, operation, idempotencyKey, keyDigest, binding, planDigest, nil, prepare)
+}
+
+// executeApprovedSecretVersionBatch is executeSecretVersionBatch for a batch
+// that may need an exact approval (A236-L1). authorize runs only for a new
+// batch with something to write — after prepare, before anything is recorded —
+// and the approval it returns rides in the event for the projection to consume
+// with the versions. A retry of a recorded batch replays its receipt without
+// asking again.
+func (a *API) executeApprovedSecretVersionBatch(
+	ctx context.Context, tenantID, operation, idempotencyKey, keyDigest, binding, planDigest string,
+	authorize func(context.Context) (*store.OperationApprovalUse, error),
+	prepare func(context.Context) ([]projections.ApplicationSecretBatchVersionItem, int, error),
+) (secretVersionBatchReceipt, error) {
 	out := secretVersionBatchReceipt{Operation: operation, PlanDigest: planDigest, Items: []secretVersionBatchItemResponse{}}
 	if a.secrets.be.Store == nil || a.secrets.be.EventLog == nil || a.secrets.be.CommandMAC == nil {
 		return out, errors.New("api: event-sourced secret batches are unavailable")
@@ -659,6 +762,12 @@ func (a *API) executeSecretVersionBatch(
 				return out, err
 			}
 		}
+		var approval *store.OperationApprovalUse
+		if authorize != nil {
+			if approval, err = authorize(ctx); err != nil {
+				return out, err
+			}
+		}
 		evidence, err := a.secretVersionBatchEvidence(tenantID, epoch, idempotencyKey, operation, planDigest, items)
 		if err != nil {
 			return out, err
@@ -666,6 +775,7 @@ func (a *API) executeSecretVersionBatch(
 		payload = projections.ApplicationSecretBatchVersion{
 			TenantEpoch: epoch, IdempotencyKeyDigest: keyDigest, RequestBinding: binding,
 			CommandEvidence: evidence, Surface: "native", Operation: operation, PlanDigest: planDigest, Items: items,
+			Approval: approval,
 		}
 		raw, err := json.Marshal(payload)
 		if err != nil {

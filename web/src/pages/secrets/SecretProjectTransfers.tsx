@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,9 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 // A236: promote an environment (or a folder) into another, or restore one to a
 // point in time. Both preview a value-free plan first and apply it by its
 // digest; a blocked item blocks the whole batch, and a plan that went stale
-// is previewed again before anything is written.
+// is previewed again before anything is written. A promotion into a restricted
+// environment waits for its approvers (A236-L1): the panel names the request
+// and keeps the reviewed plan to apply again once it is approved.
 
 type Mode = "promote" | "restore";
 
@@ -28,11 +31,13 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [awaiting, setAwaiting] = useState<string | null>(null);
 
   const atISO = () => (at ? new Date(at).toISOString() : "");
 
   async function preview(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+    setAwaiting(null);
     setBusy(true);
     setMessage(null);
     try {
@@ -64,6 +69,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
               })
             : null;
       setMessage(receipt ? t("secrets.transfers.applied", { count: String(receipt.items.length) }) : null);
+      setAwaiting(null);
       setPromotion(null);
       setRestore(null);
       setError(null);
@@ -72,6 +78,12 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
       // A stale or blocked plan: preview again so the operator reviews what
       // would happen now, and keep the reason nothing was applied in view.
       const reason = apiProblemMessage(cause, t("secrets.transfers.applyFailed"));
+      const pending = /approval_required:\S+ request_id=([0-9a-f-]{36})/.exec(reason);
+      if (pending) {
+        setError(null);
+        setAwaiting(pending[1]);
+        return;
+      }
       await preview();
       setError(reason);
     } finally {
@@ -149,6 +161,14 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
         </Button>
       </form>
       {error ? <ErrorState title={t("secrets.transfers.error")}>{error}</ErrorState> : null}
+      {awaiting ? (
+        <p role="status" className="rounded-control border border-border p-3">
+          {t("secrets.transfers.awaitingApproval", { request: awaiting })}{" "}
+          <Link to="/approvals" className="text-primary underline">
+            {t("secrets.transfers.openApprovals")}
+          </Link>
+        </p>
+      ) : null}
       {message ? <p role="status">{message}</p> : null}
       {plan ? (
         <div className="grid gap-2">
