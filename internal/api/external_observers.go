@@ -114,6 +114,11 @@ func (a *API) registerObserver(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, err
 		}
+		// A235-L2: the observer signs events with this key for events_url; a
+		// caller may name only a secret it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "credential_ref", req.CredentialRef); err != nil {
+			return 0, nil, err
+		}
 		observer, err := a.orch.RegisterObserver(ctx, tenantID, observerInput(req, true))
 		if err != nil {
 			return 0, nil, mapObserverError(err)
@@ -130,6 +135,11 @@ func (a *API) updateObserver(w http.ResponseWriter, r *http.Request) {
 		}
 		var req observerRequest
 		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, err
+		}
+		// A235-L2: the observer signs events with this key for events_url; a
+		// caller may name only a secret it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "credential_ref", req.CredentialRef); err != nil {
 			return 0, nil, err
 		}
 		observer, err := a.orch.UpdateObserver(ctx, tenantID, r.PathValue("id"), observerInput(req, true))

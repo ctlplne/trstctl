@@ -1392,7 +1392,12 @@ never live in the API process. What you can do end to end against the running bi
   rotations, Vault-compatible KV), membership under `access:write` or by the project's
   admin (with `secrets:write`) within its own grant (A235-L1), and a project view
   naming unknown ownership; the console Projects view (`/secrets/projects`) with the
-  application view of the owner's certificates and identities.
+  application view of the owner's certificates and identities. A `secret://` reference
+  into a restricted environment is set up only by a member granted it, on every API
+  surface trstctl later redeems by name (A235-L2). What comes next: a reference set up
+  before its environment was restricted, or before its author's grant was revoked, keeps
+  working until it is changed, because redemption runs with no caller to check; and
+  references in the configuration file are the operator's.
 - Environment promotion (A236 part a): `POST /api/v1/secrets/projects/{project}/promotions/preview`
   and `.../promotions` (`trstctl secrets projects promote preview|apply`) promote an
   environment or folder into another as one reserved batch of new versions after a

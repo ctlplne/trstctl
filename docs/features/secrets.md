@@ -147,7 +147,23 @@ The rule holds on every surface that reads or writes by name. That covers the na
 read, list, history, preview, create, rotate, delete, recover, import, sync and rotation
 routes, every hop of a `${secret.…}` reference, and the Vault-compatible KV routes. A
 read the rule denies answers exactly as a missing secret, so names don't reveal what
-exists, and a denied write is 403. Projects and environments change under
+exists, and a denied write is 403.
+
+A `secret://` reference is a read too (A235-L2). trstctl redeems one later by name
+with no caller present: a network relay per attempt, a connector run, a notification
+send or a verifier. So only a member granted a restricted environment can set up a
+reference into it. That covers a connector target's credentials (and an inline endpoint
+destination's), a notification channel's or an observer's credential, a ticket intake's or
+an MDM poll's token, a DNS-01 provider's credentials, an MDM SCEP challenge key, an ACME
+EAB key, a discovery source's bind password or SSH key, and a secret sync's workload
+proof. The rule holds whichever way the reference is spelled, and is checked again on
+every update. So a non-member can't repoint a channel or a target that keeps one at an
+endpoint of its own. The refusal (403) doesn't say whether the secret exists, and a
+leaked-secret move naming a restricted secret answers as for a missing one. A
+reference outside every restricted environment stays governed by the route's own
+permission.
+
+Projects and environments change under
 `access:write`. Membership changes under `access:write`, or under `secrets:write` by a
 member holding the project's `admin` role, within its own grant (A235-L1): an admin
 restricted to some environments grants only those, can't grant every environment, and

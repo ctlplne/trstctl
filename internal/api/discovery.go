@@ -945,6 +945,11 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
 			return 0, nil, err
 		}
+		// A235-L2: an SSH collection key or an AD CS bind password the relay
+		// redeems by name; a caller may name only secrets it could read.
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "config", cfg); err != nil {
+			return 0, nil, err
+		}
 		kind := strings.TrimSpace(req.Kind)
 		// Agent inventory sources are created by the mTLS receiver under a
 		// deterministic agent: name. Letting a generic tenant declaration claim

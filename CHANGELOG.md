@@ -2,6 +2,15 @@
 
 ### Added
 
+- A `secret://` reference into a restricted secrets environment is now a read (A235-L2). Only a
+  member granted that environment can set one up on any API surface trstctl later redeems by name
+  with no caller present. That covers connector targets and inline endpoint destinations,
+  notification channels, observers, ticket intake and MDM poll schedules, DNS-01 provider
+  credentials, MDM SCEP challenge keys, ACME EAB keys, discovery sources and secret-sync workload
+  proofs. Before, a caller with an integration's permission could have trstctl send a restricted
+  secret to an endpoint the same request named. Every spelling a redeemer resolves is checked, on
+  create and on every update. The refusal (403) does not reveal whether the secret exists. A
+  leaked-secret move naming a restricted secret now answers as for a missing one.
 - A secrets project's admins manage its membership (A235-L1). A caller holding secrets:write and the
   project's admin role grants and revokes that project's members without access:write, within its own
   grant: an admin restricted to some environments grants only those environments, cannot grant every

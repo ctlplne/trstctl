@@ -171,6 +171,11 @@ func (a *API) rotateACMEEABCredential(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(strings.TrimSpace(req.HMACKeyRef), "secret://") {
 			return 0, nil, errStatus(http.StatusBadRequest, "hmac_key_ref must be a secret:// reference into the tenant secret store; the key itself is never accepted here")
 		}
+		// A235-L2: the key verifies external account bindings; a caller may
+		// name only a secret it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "hmac_key_ref", req.HMACKeyRef); err != nil {
+			return 0, nil, err
+		}
 		credential, ok, err := a.acmeEABRotate(ctx, tenantID, keyID, req)
 		if err != nil {
 			return 0, nil, errStatusFrom(http.StatusUnprocessableEntity, err)

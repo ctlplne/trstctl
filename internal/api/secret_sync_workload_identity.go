@@ -181,6 +181,11 @@ func (a *API) decodeSecretSyncWorkloadIdentitySourceRequest(ctx context.Context,
 	req.Subject = strings.TrimSpace(req.Subject)
 	req.TargetID = strings.TrimSpace(req.TargetID)
 	req.WorkloadProofRef = strings.TrimSpace(req.WorkloadProofRef)
+	// A235-L2: the proof is presented to the cloud's STS; a caller may name
+	// only a secret it could read.
+	if err := a.requireSecretReferencesRead(ctx, tenantID, "workload_proof_ref", req.WorkloadProofRef); err != nil {
+		return req, err
+	}
 	req.TrustSourceID = strings.TrimSpace(req.TrustSourceID)
 	if req.Enabled == nil {
 		on := true

@@ -677,6 +677,10 @@ func (a *API) baselineTargetStep(tenantID, scope string, x BaselineDeploymentTar
 			if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
 				return "", "", err
 			}
+			// A235-L2: a target's secret:// references, as for an operator's create.
+			if err := a.requireSecretReferencesReadIn(ctx, tenantID, "config", req.Config); err != nil {
+				return "", "", err
+			}
 			if enabled {
 				if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
 					return "", "", err

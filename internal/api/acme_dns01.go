@@ -258,6 +258,12 @@ func (a *API) createACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			return 0, nil, err
 		}
+		// A235-L2: the provider sends or signs with these credentials (a
+		// webhook provider's bearer token goes to config.endpoint); a caller
+		// may name only secrets it could read.
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "credential_refs", req.CredentialRefs, req.Config); err != nil {
+			return 0, nil, err
+		}
 		id := googleuuid.NewString()
 		if err := a.emitACMEDNS01ProviderConfig(ctx, tenantID, id, req); err != nil {
 			return 0, nil, err
@@ -316,6 +322,12 @@ func (a *API) updateACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Reque
 		}
 		req, err := a.decodeACMEDNS01ProviderConfigRequest(r)
 		if err != nil {
+			return 0, nil, err
+		}
+		// A235-L2: the provider sends or signs with these credentials (a
+		// webhook provider's bearer token goes to config.endpoint); a caller
+		// may name only secrets it could read.
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "credential_refs", req.CredentialRefs, req.Config); err != nil {
 			return 0, nil, err
 		}
 		if err := a.emitACMEDNS01ProviderConfig(ctx, tenantID, id, req); err != nil {

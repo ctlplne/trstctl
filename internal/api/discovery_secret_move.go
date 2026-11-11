@@ -108,7 +108,14 @@ func (a *API) moveDiscoveryFindingSecret(w http.ResponseWriter, r *http.Request)
 		if f.Kind != leakedSecretFindingKind {
 			return 0, nil, errStatus(http.StatusConflict, "only a leaked-secret finding moves into the secret store")
 		}
-		if _, err := a.store.GetSecretVersion(ctx, tenantID, req.SecretName, req.SecretVersion); err != nil {
+		// A235-L2: a secret in a restricted environment the caller is not
+		// granted answers exactly as a missing one, so the move is no
+		// existence or version oracle.
+		readErr := a.requireSecretRead(ctx, tenantID, req.SecretName)
+		if readErr == nil {
+			_, readErr = a.store.GetSecretVersion(ctx, tenantID, req.SecretName, req.SecretVersion)
+		}
+		if err := readErr; err != nil {
 			if errors.Is(err, store.ErrSecretNotFound) {
 				return 0, nil, errStatus(http.StatusConflict, "store the value first: the named secret version does not exist")
 			}

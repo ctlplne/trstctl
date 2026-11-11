@@ -266,6 +266,14 @@ func (a *API) createMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		// A235-L2: the challenge key mints SCEP challenges and the trust
+		// anchors admit devices; a caller may name only secrets it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "challenge_credential_ref", req.ChallengeCredentialRef); err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "trust_anchor_refs", req.TrustAnchorRefs); err != nil {
+			return 0, nil, err
+		}
 		plan := a.mdmSCEPPolicyPlan(req, "create", "")
 		if !plan.Ready {
 			return 0, nil, errStatus(mdmSCEPPolicyBlockStatus(req), strings.Join(plan.Blockers, " "))
@@ -321,6 +329,14 @@ func (a *API) updateMDMSCEPPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		req, err := decodeMDMSCEPPolicyRequest(r)
 		if err != nil {
+			return 0, nil, err
+		}
+		// A235-L2: the challenge key mints SCEP challenges and the trust
+		// anchors admit devices; a caller may name only secrets it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "challenge_credential_ref", req.ChallengeCredentialRef); err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "trust_anchor_refs", req.TrustAnchorRefs); err != nil {
 			return 0, nil, err
 		}
 		plan := a.mdmSCEPPolicyPlan(req, "update", id)

@@ -112,6 +112,12 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if req.Target != nil {
+			// A235-L2: an inline destination's references, as for a target.
+			if err := a.requireSecretReferencesReadIn(ctx, tenantID, "target.config", req.Target.Config); err != nil {
+				return 0, nil, err
+			}
+		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		requestJSON, err := json.Marshal(struct {
 			Subject string

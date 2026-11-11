@@ -410,6 +410,12 @@ func notificationChannelFromRequest(tenantID, pathID string, req notificationCha
 }
 
 func (a *API) appendNotificationChannelUpsert(ctx context.Context, tenantID string, channel store.NotificationChannel) (store.NotificationChannel, error) {
+	// A235-L2: the channel sends or keys with this credential; whoever sets
+	// it up (an operator, a change set, a baseline) may name only a secret it
+	// could read.
+	if err := a.requireSecretReferencesRead(ctx, tenantID, "credential_ref", channel.CredentialRef); err != nil {
+		return store.NotificationChannel{}, err
+	}
 	payload, err := json.Marshal(projections.NotificationChannelUpserted{
 		ID:            channel.ID,
 		ChannelType:   channel.ChannelType,

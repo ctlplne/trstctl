@@ -111,6 +111,11 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"token_ref must be a secret:// reference redeemed by the network relay per attempt")
 		}
+		// A235-L2: the relay sends this token to base_url (or the client
+		// secret to authority); a caller may name only a secret it could read.
+		if err := a.requireSecretReferencesRead(ctx, tenantID, "token_ref", body.TokenRef); err != nil {
+			return 0, nil, err
+		}
 		requiredAgentID := strings.TrimSpace(body.RequiredAgentID)
 		if body.Enabled && requiredAgentID == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "required_agent_id must name the exact enrolled network relay before enabling a schedule")

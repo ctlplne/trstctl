@@ -541,6 +541,11 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
 			return 0, nil, err
 		}
+		// A235-L2: every secret:// reference in the config is redeemed for
+		// the connector's endpoint; a caller may name only secrets it could read.
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "config", req.Config); err != nil {
+			return 0, nil, err
+		}
 		if deploymentTargetRequestEnabled(req.Enabled) {
 			if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
 				return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
@@ -606,6 +611,11 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		if err := a.requireModuleInputs(ctx, tenantID, req.Connector, req.Config); err != nil {
+			return 0, nil, err
+		}
+		// A235-L2: every secret:// reference in the config is redeemed for
+		// the connector's endpoint; a caller may name only secrets it could read.
+		if err := a.requireSecretReferencesReadIn(ctx, tenantID, "config", req.Config); err != nil {
 			return 0, nil, err
 		}
 		current, err := a.store.GetDeploymentTarget(ctx, tenantID, id)
@@ -1024,6 +1034,13 @@ func (a *API) previewEndpointBinding(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.writeError(w, err)
 		return
+	}
+	if req.Target != nil {
+		// A235-L2: an inline destination's references, as for a target.
+		if err := a.requireSecretReferencesReadIn(r.Context(), tenantID, "target.config", req.Target.Config); err != nil {
+			a.writeError(w, err)
+			return
+		}
 	}
 	preview, err := a.endpointBindingPreview(r.Context(), tenantID, req)
 	if err != nil {
