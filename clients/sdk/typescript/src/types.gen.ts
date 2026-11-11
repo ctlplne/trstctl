@@ -4718,6 +4718,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/oauth-grant/unblock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unblock at the identity or SaaS provider the application a discovery finding's OAuth grant names */
+        post: operations["unblockOAuthAppAtProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/findings/{id}/remove-distrusted-root": {
         parameters: {
             query?: never;
@@ -21858,7 +21875,7 @@ export interface components {
         };
         OAuthProviderActionResult: {
             /** @enum {string} */
-            action: "revoke_grant" | "block_app";
+            action: "revoke_grant" | "block_app" | "unblock_app";
             app_id: string;
             /** Format: uuid */
             finding_id: string;
@@ -42022,6 +42039,53 @@ export interface operations {
         };
     };
     revokeOAuthGrantAtProvider: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OAuthProviderActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthProviderActionResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unblockOAuthAppAtProvider: {
         parameters: {
             query?: never;
             header: {

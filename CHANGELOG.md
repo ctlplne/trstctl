@@ -2,6 +2,12 @@
 
 ### Added
 
+- An application blocked at the provider can be unblocked from the same finding (A171-L1). `POST
+  /api/v1/discovery/findings/{id}/oauth-grant/unblock` (`trstctl-cli discovery findings
+  unblock-oauth-app`) reactivates the Okta application or re-enables the Entra service principal through
+  the source's admin connection, reads the change back, and records it on the finding; the finding panel
+  offers **Unblock app at provider** once a block is confirmed. Google Workspace, whose API cannot block
+  an app, cannot unblock one either.
 - OAuth provider actions read the change back before recording it (A170-L2). After the provider
   confirms a revoke, block or admin-consent revoke, trstctl reads the grants, tokens or application back
   (up to three reads a second apart) and records the read back in the finding's detail; a grant still

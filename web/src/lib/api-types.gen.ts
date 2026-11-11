@@ -8037,7 +8037,7 @@ export interface OAuthProviderActionRequest {
 }
 
 export interface OAuthProviderActionResult {
-  action: "revoke_grant" | "block_app";
+  action: "revoke_grant" | "block_app" | "unblock_app";
   app_id: string;
   finding_id: string;
   principal?: string;

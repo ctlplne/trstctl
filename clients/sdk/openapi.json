@@ -37238,7 +37238,8 @@
           "action": {
             "enum": [
               "revoke_grant",
-              "block_app"
+              "block_app",
+              "unblock_app"
             ],
             "type": "string"
           },
@@ -81992,6 +81993,82 @@
           }
         ],
         "summary": "Revoke at the identity or SaaS provider the OAuth grant a discovery finding names",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/oauth-grant/unblock": {
+      "post": {
+        "operationId": "unblockOAuthAppAtProvider",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthProviderActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthProviderActionResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Unblock at the identity or SaaS provider the application a discovery finding's OAuth grant names",
         "x-trstctl-permission": "connectors:write"
       }
     },

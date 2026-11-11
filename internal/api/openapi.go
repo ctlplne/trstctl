@@ -651,7 +651,7 @@ func componentSchemas() map[string]*Schema {
 	}, "request_id", "finding_id", "provider", "object", "status")
 	oauthProviderActionResult := object(map[string]*Schema{
 		"request_id": uuid(), "finding_id": uuid(),
-		"action":   {Type: "string", Enum: []string{"revoke_grant", "block_app"}},
+		"action":   {Type: "string", Enum: []string{"revoke_grant", "block_app", "unblock_app"}},
 		"provider": {Type: "string", Enum: []string{"okta", "microsoft", "google"}},
 		"app_id":   str(), "principal": str(),
 		"status": {Type: "string", Enum: []string{"queued"}},

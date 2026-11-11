@@ -279,6 +279,17 @@ func (s *Server) okta(w http.ResponseWriter, r *http.Request, parts []string) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"id": app, "status": status})
+	case r.Method == http.MethodPost && len(parts) == 4 && parts[0] == "apps" && parts[2] == "lifecycle" && parts[3] == "activate":
+		app := unescape(parts[1])
+		if _, ok := s.oktaApps[app]; !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if !s.sticky {
+			s.oktaApps[app] = true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
 	case r.Method == http.MethodPost && len(parts) == 4 && parts[0] == "apps" && parts[2] == "lifecycle" && parts[3] == "deactivate":
 		app := unescape(parts[1])
 		if _, ok := s.oktaApps[app]; !ok {

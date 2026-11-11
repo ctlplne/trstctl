@@ -35,6 +35,8 @@ const DestinationOAuthProviderAction = "oauth.provider_action"
 const (
 	OAuthActionRevokeGrant = "revoke_grant"
 	OAuthActionBlockApp    = "block_app"
+	// OAuthActionUnblockApp undoes a block (A171-L1).
+	OAuthActionUnblockApp = "unblock_app"
 )
 
 // OAuth provider action statuses, as the finding records them.
@@ -70,7 +72,7 @@ func (o *Orchestrator) QueueOAuthProviderAction(ctx context.Context, tenantID, r
 	if o.outbox == nil {
 		return OAuthProviderActionIntent{}, errors.New("orchestrator: OAuth provider action outbox is unavailable")
 	}
-	if (in.Action != OAuthActionRevokeGrant && in.Action != OAuthActionBlockApp) || strings.TrimSpace(in.FindingID) == "" ||
+	if (in.Action != OAuthActionRevokeGrant && in.Action != OAuthActionBlockApp && in.Action != OAuthActionUnblockApp) || strings.TrimSpace(in.FindingID) == "" ||
 		strings.TrimSpace(in.SourceID) == "" || strings.TrimSpace(in.Provider) == "" || strings.TrimSpace(in.AppID) == "" ||
 		(in.Action == OAuthActionRevokeGrant && strings.TrimSpace(in.Principal) == "" && !in.TenantWide) {
 		return OAuthProviderActionIntent{}, errors.New("orchestrator: OAuth provider action is incomplete")

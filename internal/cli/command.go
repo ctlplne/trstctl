@@ -60,7 +60,8 @@ func (c Command) Destructive() bool {
 	}
 	if name == "connector target contain" || name == "identities compromise" || name == "identities compromise-retry" ||
 		name == "discovery findings remove-distrusted-root" ||
-		name == "discovery findings revoke-oauth-grant" || name == "discovery findings block-oauth-app" {
+		name == "discovery findings revoke-oauth-grant" || name == "discovery findings block-oauth-app" ||
+		name == "discovery findings unblock-oauth-app" {
 		return true
 	}
 	for _, marker := range []string{
@@ -270,6 +271,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "findings", "revoke-oauth-grant"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/oauth-grant/revoke", Body: bodyFile, Summary: "Revoke at the identity or SaaS provider the OAuth grant a discovery finding names"},
 	{Name: []string{"discovery", "findings", "annotate"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/annotate", Body: bodyFile, Summary: "Write a leaked-secret finding back at the provider where the credential was seen"},
 	{Name: []string{"discovery", "findings", "block-oauth-app"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/oauth-grant/block", Body: bodyFile, Summary: "Block at the identity or SaaS provider the application a discovery finding's OAuth grant names"},
+	{Name: []string{"discovery", "findings", "unblock-oauth-app"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/oauth-grant/unblock", Body: bodyFile, Summary: "Unblock at the identity or SaaS provider the application a discovery finding's OAuth grant names"},
 	{Name: []string{"nhi", "posture", "exposure", "attack-paths"}, Method: "POST", Path: "/api/v1/nhi/posture/exposure/attack-paths", Body: bodyFile, ExampleFile: "nhi-attack-paths.json", Summary: "Validate exposed NHI endpoints against the cloud account's own routes, network ACLs and security groups"},
 	{Name: []string{"nhi", "posture", "stale", "handoff"}, Method: "POST", Path: "/api/v1/nhi/posture/stale/handoff", Body: bodyFile, ExampleFile: "nhi-handoff.json", Summary: "Hand stale NHIs to a new accountable owner and notify them"},
 	{Name: []string{"nhi", "posture", "exposure"}, Method: "GET", Path: "/api/v1/nhi/posture/exposure", Summary: "List internet-exposed and insecure-deployment NHI posture findings"},

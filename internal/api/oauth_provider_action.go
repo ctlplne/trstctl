@@ -51,6 +51,10 @@ func (a *API) oauthProviderActionRoutes() []route {
 			summary: "Block at the identity or SaaS provider the application a discovery finding's OAuth grant names",
 			handler: a.blockOAuthAppAtProvider, pathParams: idPath, reqSchema: "OAuthProviderActionRequest", reqOptional: true,
 			resSchema: "OAuthProviderActionResult", successCode: "202", mutation: true, perm: authz.ConnectorsWrite},
+		{method: "POST", path: "/api/v1/discovery/findings/{id}/oauth-grant/unblock", opID: "unblockOAuthAppAtProvider",
+			summary: "Unblock at the identity or SaaS provider the application a discovery finding's OAuth grant names",
+			handler: a.unblockOAuthAppAtProvider, pathParams: idPath, reqSchema: "OAuthProviderActionRequest", reqOptional: true,
+			resSchema: "OAuthProviderActionResult", successCode: "202", mutation: true, perm: authz.ConnectorsWrite},
 	}
 }
 
@@ -68,6 +72,18 @@ func (a *API) revokeOAuthGrantAtProvider(w http.ResponseWriter, r *http.Request)
 func (a *API) blockOAuthAppAtProvider(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	binding, run, ok := a.oauthProviderAction(w, r, idempotencyKey, orchestrator.OAuthActionBlockApp)
+	if !ok {
+		return
+	}
+	a.mutateDurableBound(w, r, idempotencyKey, binding, run)
+}
+
+// unblockOAuthAppAtProvider undoes a block at the provider (A171-L1).
+//
+//trstctl:mutation
+func (a *API) unblockOAuthAppAtProvider(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	binding, run, ok := a.oauthProviderAction(w, r, idempotencyKey, orchestrator.OAuthActionUnblockApp)
 	if !ok {
 		return
 	}
@@ -145,7 +161,7 @@ func (a *API) oauthProviderActionIntent(ctx context.Context, tenantID, findingID
 	if action == orchestrator.OAuthActionRevokeGrant && user == "" && !tenantWide {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "the grant names no user to revoke it for; block the application instead")
 	}
-	if action == orchestrator.OAuthActionBlockApp && !oauthrevoke.CanBlock(provider) {
+	if (action == orchestrator.OAuthActionBlockApp || action == orchestrator.OAuthActionUnblockApp) && !oauthrevoke.CanBlock(provider) {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "the provider's API cannot block an application; Google Workspace exposes app access control only in its admin console")
 	}
 	source, err := a.store.GetDiscoverySource(ctx, tenantID, finding.SourceID)

@@ -62,6 +62,8 @@ func (d *issuanceDispatcher) handleOAuthProviderAction(ctx context.Context, m or
 		result, err = provider.RevokeGrant(ctx, oauthrevoke.Grant{Principal: in.Principal, AppID: in.AppID, TenantWide: in.TenantWide})
 	case orchestrator.OAuthActionBlockApp:
 		result, err = provider.BlockApp(ctx, in.AppID)
+	case orchestrator.OAuthActionUnblockApp:
+		result, err = provider.UnblockApp(ctx, in.AppID)
 	default:
 		return fail("unknown action " + in.Action)
 	}

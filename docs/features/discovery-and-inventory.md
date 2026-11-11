@@ -695,7 +695,9 @@ A171):
 From a grant finding, **Revoke grant at provider** (or `trstctl-cli discovery findings
 revoke-oauth-grant ID`) removes every grant and refresh token that user gave the
 application, and **Block app at provider** (`... block-oauth-app ID`) deactivates the
-Okta app or disables the Entra service principal. Google Workspace grants can be
+Okta app or disables the Entra service principal; once a block is confirmed,
+**Unblock app at provider** (`... unblock-oauth-app ID`, A171-L1) reactivates the app or
+re-enables the service principal. Google Workspace grants can be
 revoked; its apps are blocked in its own admin console. An Entra application an
 administrator consented to for every user (a Graph grant with consent type
 `AllPrincipals`, which names no user) offers **Revoke admin consent at provider**

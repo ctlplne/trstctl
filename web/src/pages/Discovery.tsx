@@ -2294,7 +2294,12 @@ function FindingTable({
     setActionBusy(true);
     onNotice(null);
     try {
-      const queued = action === "revoke" ? await api.revokeOAuthGrantAtProvider(finding.id, {}) : await api.blockOAuthAppAtProvider(finding.id, {});
+      const queued =
+        action === "revoke"
+          ? await api.revokeOAuthGrantAtProvider(finding.id, {})
+          : action === "unblock"
+            ? await api.unblockOAuthAppAtProvider(finding.id, {})
+            : await api.blockOAuthAppAtProvider(finding.id, {});
       onNotice({ kind: "success", message: t("discovery.findings.oauthProvider.queued", { provider: queued.provider, request: queued.request_id }) });
     } catch (err) {
       onNotice(noticeForError(err, t("discovery.findings.oauthProvider.error")));

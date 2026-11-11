@@ -5278,7 +5278,11 @@ tenant-wide consent grant for this action. `POST
 deactivates the Okta application or disables the Entra service principal so no
 one can sign in to it or grant it again; Google Workspace exposes app access
 control only in its admin console, so a block there is refused with that
-reason. Both take `connectors:write`, are idempotent, and run from a
+reason. `POST /api/v1/discovery/findings/{id}/oauth-grant/unblock` (`...
+unblock-oauth-app`, A171-L1) undoes a block: it reactivates the Okta
+application or re-enables the Entra service principal, and the panel offers
+**Unblock app at provider** once a block is confirmed. All three take
+`connectors:write`, are idempotent, and run from a
 control-plane outbox row; the finding records the request as queued and then
 what the provider confirmed (`metadata.provider_actions`: confirmed, already
 absent, or failed with the provider's status). Each action reads the change

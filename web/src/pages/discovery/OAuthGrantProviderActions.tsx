@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { DiscoveryFinding } from "@/lib/api";
 
-export type OAuthProviderAction = "revoke" | "block";
+export type OAuthProviderAction = "revoke" | "block" | "unblock";
 
 type ProviderActionState = { status?: string; detail?: string; provider?: string };
 
@@ -42,7 +42,10 @@ export function OAuthGrantProviderActions({
   const states: [string, ProviderActionState | undefined][] = [
     [t("discovery.findings.oauthProvider.revokeLabel"), actions.revoke_grant],
     [t("discovery.findings.oauthProvider.blockLabel"), actions.block_app],
+    [t("discovery.findings.oauthProvider.unblockLabel"), actions.unblock_app],
   ];
+  // A171-L1: an app blocked at the provider can be unblocked there.
+  const blocked = canBlock && actions.block_app?.status === "confirmed";
 
   async function run(action: OAuthProviderAction) {
     await onAction(action);
@@ -71,9 +74,11 @@ export function OAuthGrantProviderActions({
           <p>
             {confirm === "block"
               ? t("discovery.findings.oauthProvider.blockConfirm", { app: app || "-" })
-              : tenantWide
-                ? t("discovery.findings.oauthProvider.revokeTenantWideConfirm", { app: app || "-" })
-                : t("discovery.findings.oauthProvider.revokeConfirm", { app: app || "-", user: user || "-" })}
+              : confirm === "unblock"
+                ? t("discovery.findings.oauthProvider.unblockConfirm", { app: app || "-" })
+                : tenantWide
+                  ? t("discovery.findings.oauthProvider.revokeTenantWideConfirm", { app: app || "-" })
+                  : t("discovery.findings.oauthProvider.revokeConfirm", { app: app || "-", user: user || "-" })}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => void run(confirm)}>
@@ -95,6 +100,11 @@ export function OAuthGrantProviderActions({
             </Button>
           ) : (
             <span className="text-muted-foreground">{t("discovery.findings.oauthProvider.blockUnsupported")}</span>
+          )}
+          {blocked && (
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setConfirm("unblock")}>
+              {t("discovery.findings.oauthProvider.unblock")}
+            </Button>
           )}
         </div>
       )}

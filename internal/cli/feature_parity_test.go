@@ -431,8 +431,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// reviews result`. A278 adds `access gateway-pools list|save|delete`.
 	// A162-L5 adds `revocation relay-waits`. Q1-L2 adds `access reviews
 	// retry-revocation`. N5-L3 adds `workloads jwt-keys list|rotate`.
-	if len(out) != 870 {
-		t.Fatalf("CLI commands = %d, want 870", len(out))
+	// A171-L1 adds `discovery findings unblock-oauth-app`.
+	if len(out) != 871 {
+		t.Fatalf("CLI commands = %d, want 871", len(out))
 	}
 	return out
 }

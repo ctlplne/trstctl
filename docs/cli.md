@@ -1510,6 +1510,7 @@ trstctl-cli discovery findings list
 # app there, through the source's admin connection (Okta, Entra, Google).
 trstctl-cli discovery findings revoke-oauth-grant FINDING_ID --force
 trstctl-cli discovery findings block-oauth-app FINDING_ID --force
+trstctl-cli discovery findings unblock-oauth-app FINDING_ID --force
 
 # Write a third-party scan finding back where the credential was seen: a Slack
 # thread reply, a Jira comment, a commit status, or an image referrer.

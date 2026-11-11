@@ -71,6 +71,9 @@ type Result struct {
 type Provider interface {
 	RevokeGrant(ctx context.Context, g Grant) (Result, error)
 	BlockApp(ctx context.Context, appID string) (Result, error)
+	// UnblockApp undoes BlockApp (A171-L1): the application is active again
+	// and users can sign in to it and grant it access.
+	UnblockApp(ctx context.Context, appID string) (Result, error)
 }
 
 // Doer is the egress-guarded HTTP client seam.
@@ -376,6 +379,40 @@ func (o okta) BlockApp(ctx context.Context, appID string) (Result, error) {
 	return withReadBack(Result{Status: Confirmed, Detail: "Okta deactivated the application; no user can sign in to it or grant it access"}, phrase), nil
 }
 
+// UnblockApp reactivates the Okta application (A171-L1).
+func (o okta) UnblockApp(ctx context.Context, appID string) (Result, error) {
+	status, _, err := o.do(ctx, http.MethodPost, "/api/v1/apps/"+url.PathEscape(appID)+"/lifecycle/activate", nil)
+	switch {
+	case err != nil:
+		return Result{}, fmt.Errorf("oauthrevoke: okta activate app: %w", err)
+	case status == http.StatusNotFound:
+		return Result{Status: AlreadyAbsent, Detail: "Okta has no such application"}, nil
+	case status != http.StatusOK && status != http.StatusNoContent:
+		return Result{}, statusError("okta activate app", status)
+	}
+	phrase, err := o.confirm(ctx, "Okta shows the application ACTIVE", "Okta still shows the application inactive",
+		func(ctx context.Context) (bool, error) {
+			status, raw, err := o.do(ctx, http.MethodGet, "/api/v1/apps/"+url.PathEscape(appID), nil)
+			switch {
+			case err != nil:
+				return false, err
+			case status != http.StatusOK:
+				return false, statusError("okta read back app", status)
+			}
+			var app struct {
+				Status string `json:"status"`
+			}
+			if err := json.Unmarshal(raw, &app); err != nil {
+				return false, errors.New("the provider's application answer is not JSON")
+			}
+			return app.Status != "ACTIVE", nil
+		})
+	if err != nil {
+		return Result{}, err
+	}
+	return withReadBack(Result{Status: Confirmed, Detail: "Okta reactivated the application; users can sign in to it and grant it access again"}, phrase), nil
+}
+
 type graph struct{ client }
 
 func (m graph) RevokeGrant(ctx context.Context, g Grant) (Result, error) {
@@ -471,6 +508,40 @@ func (m graph) BlockApp(ctx context.Context, appID string) (Result, error) {
 	return withReadBack(Result{Status: Confirmed, Detail: "Microsoft Graph disabled the service principal; no user can sign in to the application"}, phrase), nil
 }
 
+// UnblockApp re-enables the Entra service principal (A171-L1).
+func (m graph) UnblockApp(ctx context.Context, appID string) (Result, error) {
+	status, _, err := m.do(ctx, http.MethodPatch, "/v1.0/servicePrincipals/"+url.PathEscape(appID), map[string]any{"accountEnabled": true})
+	switch {
+	case err != nil:
+		return Result{}, fmt.Errorf("oauthrevoke: graph enable service principal: %w", err)
+	case status == http.StatusNotFound:
+		return Result{Status: AlreadyAbsent, Detail: "Microsoft Graph has no such service principal"}, nil
+	case status != http.StatusNoContent && status != http.StatusOK:
+		return Result{}, statusError("graph enable service principal", status)
+	}
+	phrase, err := m.confirm(ctx, "Microsoft Graph shows the service principal enabled", "Microsoft Graph still shows the service principal disabled",
+		func(ctx context.Context) (bool, error) {
+			status, raw, err := m.do(ctx, http.MethodGet, "/v1.0/servicePrincipals/"+url.PathEscape(appID)+"?$select=accountEnabled", nil)
+			switch {
+			case err != nil:
+				return false, err
+			case status != http.StatusOK:
+				return false, statusError("graph read back service principal", status)
+			}
+			var sp struct {
+				AccountEnabled *bool `json:"accountEnabled"`
+			}
+			if err := json.Unmarshal(raw, &sp); err != nil || sp.AccountEnabled == nil {
+				return false, errors.New("the provider's service principal answer names no accountEnabled")
+			}
+			return !*sp.AccountEnabled, nil
+		})
+	if err != nil {
+		return Result{}, err
+	}
+	return withReadBack(Result{Status: Confirmed, Detail: "Microsoft Graph re-enabled the service principal; users can sign in to the application again"}, phrase), nil
+}
+
 // odataQuote escapes a value for an OData string literal.
 func odataQuote(value string) string { return strings.ReplaceAll(value, "'", "''") }
 
@@ -514,5 +585,9 @@ func (g google) RevokeGrant(ctx context.Context, grant Grant) (Result, error) {
 }
 
 func (google) BlockApp(context.Context, string) (Result, error) {
+	return Result{}, fmt.Errorf("%w: Google Workspace exposes app access control only in its admin console", ErrUnsupported)
+}
+
+func (google) UnblockApp(context.Context, string) (Result, error) {
 	return Result{}, fmt.Errorf("%w: Google Workspace exposes app access control only in its admin console", ErrUnsupported)
 }

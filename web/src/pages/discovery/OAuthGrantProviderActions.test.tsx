@@ -57,6 +57,26 @@ describe("OAuth grant provider actions", () => {
     expect(screen.getByRole("button", { name: "Revoke grant at provider" })).toBeDisabled();
   });
 
+  // A171-L1: once an app is blocked at the provider, the panel offers
+  // unblocking it there, behind a confirmation that says what it reopens.
+  it("unblocks an app it blocked", async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<OAuthGrantProviderActions finding={finding("okta")} busy={false} onAction={onAction} />);
+    expect(screen.queryByRole("button", { name: "Unblock app at provider" })).not.toBeInTheDocument();
+    rerender(
+      <OAuthGrantProviderActions
+        finding={finding("okta", { provider_actions: { block_app: { status: "confirmed", detail: "Okta deactivated the application" } } })}
+        busy={false}
+        onAction={onAction}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Unblock app at provider" }));
+    expect(screen.getByText("Unblock 0oa-exfil at the provider? Users will be able to sign in to it and grant it access again.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(onAction).toHaveBeenCalledWith("unblock");
+  });
+
   it("offers no block where the provider's API cannot, and nothing for other findings", () => {
     const { rerender } = render(<OAuthGrantProviderActions finding={finding("google")} busy={false} onAction={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "Block app at provider" })).not.toBeInTheDocument();

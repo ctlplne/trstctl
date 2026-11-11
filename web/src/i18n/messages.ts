@@ -16452,6 +16452,15 @@ export const messages = {
   },
   "discovery.findings.oauthProvider.revokeLabel": { defaultMessage: "Grant revocation", description: "Label of the revoke action in its status line." },
   "discovery.findings.oauthProvider.blockLabel": { defaultMessage: "App block", description: "Label of the block action in its status line." },
+  "discovery.findings.oauthProvider.unblockLabel": { defaultMessage: "App unblock", description: "A171-L1: label of the unblock action in its status line." },
+  "discovery.findings.oauthProvider.unblock": {
+    defaultMessage: "Unblock app at provider",
+    description: "A171-L1: button that starts unblocking, at the provider, an application trstctl blocked.",
+  },
+  "discovery.findings.oauthProvider.unblockConfirm": {
+    defaultMessage: "Unblock {app} at the provider? Users will be able to sign in to it and grant it access again.",
+    description: "A171-L1: confirmation before unblocking an OAuth application at the provider.",
+  },
   "discovery.findings.oauthProvider.state": {
     defaultMessage: "{action}: {status}. {detail}",
     description: "Status line of one provider action: queued, confirmed, already absent or failed, with the provider's detail.",

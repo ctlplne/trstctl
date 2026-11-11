@@ -2473,6 +2473,8 @@ export interface Api {
   revokeOAuthGrantAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
   annotateFindingAtProvider(id: string, input: FindingAnnotationRequest): Promise<FindingAnnotationResult>;
   blockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
+  /** A171-L1: undo a block at the provider. */
+  unblockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
@@ -3481,6 +3483,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/revoke`, input),
   blockOAuthAppAtProvider: (id, input) =>
     mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/block`, input),
+  unblockOAuthAppAtProvider: (id, input) =>
+    mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/unblock`, input),
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
