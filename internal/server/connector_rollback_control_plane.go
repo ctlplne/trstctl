@@ -184,6 +184,14 @@ func (d *issuanceDispatcher) handleControlPlaneConnectorRollback(ctx context.Con
 		if result.LegacyObject {
 			receipt.Detail = "the control plane re-bound " + req.Target + " to the object installed under its target-derived name; its contents were not re-read."
 		}
+		if connector.RollbackReimports(req.Connector) {
+			// A166-L1: the provider kept the predecessor; the rollback made it
+			// current again by importing that retained copy, key included.
+			receipt.Detail = "the control plane made the predecessor certificate serial " + req.PredecessorSerial +
+				" (fingerprint " + req.PredecessorFingerprint + ") current again on " + req.Target + " through the " + req.Connector +
+				" API, by importing the provider's own retained copy of that version as the newest version. The key came from the provider's copy; trstctl uploaded none of its own. " +
+				"Consumers that read the certificate by version are not re-pointed by this operation."
+		}
 		if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, servedstatus.ConnectorRolledBack, "rolled_back"); err != nil {
 			return nil, err
 		}

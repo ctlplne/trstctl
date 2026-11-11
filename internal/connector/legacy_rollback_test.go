@@ -19,11 +19,13 @@ func TestLegacyObjectNameIsTheFingerprintlessDerivation(t *testing.T) {
 		t.Fatal("a deploy with no fingerprint and the legacy re-bind name differ")
 	}
 	for _, name := range connector.RollbackCapableConnectors() {
-		if name == "fortigate" || name == "paloalto" || name == "gcp-certificate-manager" || name == "cisco" {
+		if name == "fortigate" || name == "paloalto" || name == "gcp-certificate-manager" || name == "cisco" || name == "azure-keyvault" {
 			// These re-bind only to fingerprint-named objects and never fall
 			// back to a legacy target-named object, so there is no legacy
 			// object for a takedown to clean up. (cisco re-binds only ISE
-			// system certificates its fingerprint-named deploys imported.)
+			// system certificates its fingerprint-named deploys imported;
+			// azure-keyvault re-imports the predecessor's retained version
+			// under the target's own certificate name, A166-L1.)
 			continue
 		}
 		if !connector.CanTakedown(name) {

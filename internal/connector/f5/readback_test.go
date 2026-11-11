@@ -95,8 +95,10 @@ func TestAMissingProfileReadsAsAbsent(t *testing.T) {
 // verdict nobody measured.
 func TestAFamilyThatCannotReadBackSaysSo(t *testing.T) {
 	t.Parallel()
-	// cisco left this list when an ISE target became readable (A122).
-	for _, family := range []string{"aws-acm", "azure-keyvault"} {
+	// cisco left this list when an ISE target became readable (A122), and
+	// azure-keyvault when its readback read the version served by name
+	// (A166-L1).
+	for _, family := range []string{"aws-acm"} {
 		if connector.CanReadback(family) {
 			t.Errorf("%s is listed as readback-capable, but its API exposes no call that reports "+
 				"an installed object separately from uploading one", family)

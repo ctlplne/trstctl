@@ -21,7 +21,7 @@ func TestRollbackReadinessMirrorsTheRollbackRouteRefusals(t *testing.T) {
 		"cisco without an ISE node":                      {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"endpoint":"https://ise"}`)}, "re-bind", false, "names no node_hostname"},
 		"cisco with an ISE node and no identity":         {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"node_hostname":"ise-01","certificate_roles":["eap"]}`)}, "re-bind", false, "no identity is bound"},
 		"aws-acm says why":                               {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "keeps no previous version"},
-		"azure-keyvault says why":                        {rollbackReadinessInputs{Family: "azure-keyvault"}, "none", false, "serves the newest"},
+		"azure-keyvault with no identity":                {rollbackReadinessInputs{Family: "azure-keyvault", Rebind: true}, "re-bind", false, "no identity is bound"},
 		"plugin family says why":                         {rollbackReadinessInputs{Family: "acme-corp-wasm"}, "none", false, "no rollback entrypoint"},
 		"gcp without certificate_map_entry":              {rollbackReadinessInputs{Family: "gcp-certificate-manager", Rebind: true, Config: []byte(`{"project":"p"}`)}, "re-bind", false, "names no certificate_map_entry"},
 		"gcp with certificate_map_entry and no identity": {rollbackReadinessInputs{Family: "gcp-certificate-manager", Rebind: true, Config: []byte(`{"certificate_map_entry":"m/e"}`)}, "re-bind", false, "no identity is bound"},

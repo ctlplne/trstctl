@@ -2,6 +2,14 @@
 
 ### Added
 
+- An Azure Key Vault target can be rolled back (A166-L1). Key Vault keeps every imported version but
+  serves the newest by name, so the rollback finds the predecessor's version by its fingerprint, reads
+  that version's retained secret and imports it again as the newest version; the key comes from the
+  vault's own copy, and trstctl's imports now mark the key exportable (Key Vault's default for an
+  import) so it can. The rollback runs where the family's deploys run (the control plane, or the
+  tenant's network relay), its receipt says the predecessor was re-imported from the vault's copy, and
+  the connector now reads back the version the vault serves, so Key Vault completes its parity gates
+  like GCP Certificate Manager. Before, Key Vault rollbacks were refused.
 - A rogue certificate's confirmed revocation at its issuer resolves its Certificate Transparency
   finding (A163-L2). The finding's triage becomes remediated, recorded by trstctl with the issuer's
   confirmation as the evidence of the fix, so an operator no longer resolves it by hand; a redelivery

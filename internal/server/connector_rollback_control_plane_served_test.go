@@ -294,12 +294,15 @@ func TestServedRollbackRefusalsNameTheProviderReason(t *testing.T) {
 	if status, body := rollback(acm); status != http.StatusConflict || !jsonContains(t, body, "no executable rollback route") || !jsonContains(t, body, "keeps no previous version") {
 		t.Fatalf("aws-acm rollback = %d %s", status, body)
 	}
+	// A166-L1: Key Vault rolls back by re-importing the predecessor's retained
+	// version, so an unbound target says what it needs instead of refusing the
+	// family.
 	akv := create("a58-vault", "azure-keyvault", map[string]any{"endpoint": "https://a58.vault.azure.net", "bearer_token_ref": "secret://connectors/akv/a58"})
-	if model, reason := readinessReason(akv); model != "none" || !strings.Contains(reason, "serves the newest") {
+	if model, reason := readinessReason(akv); model != "re-bind" || !strings.Contains(reason, "no identity is bound") {
 		t.Fatalf("azure-keyvault readiness = %q %q", model, reason)
 	}
-	if status, body := rollback(akv); status != http.StatusConflict || !jsonContains(t, body, "serves the newest") {
-		t.Fatalf("azure-keyvault rollback = %d %s", status, body)
+	if status, body := rollback(akv); status != http.StatusConflict || jsonContains(t, body, "serves the newest") || jsonContains(t, body, "rollback_queued") {
+		t.Fatalf("azure-keyvault rollback with nothing bound = %d %s", status, body)
 	}
 	// A122: a cisco target re-binds once it names its ISE node and roles; one
 	// without them says which fields it lacks.

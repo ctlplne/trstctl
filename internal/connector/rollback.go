@@ -197,6 +197,22 @@ var rollbackCapableFamilies = []string{
 	// ErrRollbackNotConfigured (A58). Its work executes in the control plane,
 	// the family's shipped vantage, never on a relay.
 	"gcp-certificate-manager",
+	// azure-keyvault keeps every imported version but serves the newest, so
+	// its Rollback makes the predecessor current again by importing that
+	// version's own retained secret as the newest version (A166-L1): the key
+	// comes from the vault, never from trstctl, and only an exportable key
+	// can be re-imported. Its work executes in the control plane or on the
+	// tenant's network relay, wherever the family's deploy runs.
+	"azure-keyvault",
+}
+
+// RollbackReimports reports whether a family rolls back by importing the
+// provider's own retained copy of the predecessor as its newest version,
+// rather than re-pointing a binding at an object that is still installed
+// (A166-L1). A receipt says which happened: the first re-imports a key the
+// provider kept; the second uploads nothing.
+func RollbackReimports(name string) bool {
+	return name == "azure-keyvault"
 }
 
 // RollbackUnsupportedReason explains, per family, why a connector that is in
@@ -210,8 +226,6 @@ func RollbackUnsupportedReason(name string) string {
 	switch name {
 	case "aws-acm":
 		return "AWS Certificate Manager re-imports in place under one certificate ARN and keeps no previous version, so the predecessor leaves the account on renewal; restoring it would mean re-uploading its key, which the control plane no longer holds. Re-pointing a load balancer or distribution at another ARN is outside this connector"
-	case "azure-keyvault":
-		return "Azure Key Vault keeps every imported version but serves the newest to consumers that read by name, and exposes no call that makes an older version current; re-pointing consumers at a version is outside this connector"
 	}
 	if _, shipped := ShippedTargetVantage(name); !shipped {
 		return "signed WASM connector plugins export deploy only; the plugin ABI has no rollback entrypoint, so the control plane cannot ask a plugin to re-bind or restore"

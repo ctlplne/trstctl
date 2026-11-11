@@ -22,7 +22,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | --- | --- | --- | --- | --- |
 | `a10` | A10 Thunder aXAPI v3 | `migrated` | yes (re-bind) | no |
 | `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `architecture_exception` | no | no |
-| `azure-keyvault` | Azure Key Vault Certificates REST import API v7.4 | `architecture_exception` | no | no |
+| `azure-keyvault` | Azure Key Vault Certificates and Secrets REST API v7.4 (import, versions, version secret) | `migrated` | yes (re-bind) | no |
 | `cisco` | Cisco ISE OpenAPI system certificates (import, per-node list, role update) for targets with node_hostname and certificate_roles; the legacy certificate-import call (HTTP Basic, JSON) otherwise | `migrated` | yes (re-bind) | no |
 | `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
 | `f5` | F5 BIG-IP iControl REST | `migrated` | yes (re-bind) | no |
@@ -68,19 +68,21 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## azure-keyvault
 
-**API/local contract:** Azure Key Vault Certificates REST import API v7.4
+**API/local contract:** Azure Key Vault Certificates and Secrets REST API v7.4 (import, versions, version secret)
 
-**E1 disposition:** `architecture_exception`
+**E1 disposition:** `migrated`
 
 **Exercised against a faithful management-API double:**
 
-- deploy: import a PEM certificate and key as a new version of a named vault certificate
+- deploy: import a PEM certificate and an exportable key as a new version of a named vault certificate
+- rollback: find the predecessor's version by fingerprint, read that version's retained secret and import it as the newest version (A166-L1)
+- readback: the fingerprint of the version the vault serves by name
 - authentication contract: acquire and wipe an Entra ID bearer token per operation
 
 **Known limits:**
 
-- no rollback: Key Vault keeps every imported version but serves the newest to consumers that read by name and exposes no call that makes an older version current; re-pointing consumers at a version is outside this connector, and there is no readback of what a consumer serves
-- E1 architecture exception: an enrolled network relay executes imports and the control plane's egress-guarded client remains the executor where no relay is enrolled; rollback and readback are not expressible, so the family keeps E1 open
+- rollback re-imports the predecessor's key from the vault's own copy, so it needs that version's key to be exportable and the identity to be allowed to read secrets; consumers that read a certificate by version, not by name, are not re-pointed
+- proven against a Key Vault stand-in written from the REST API; a live vault is not yet proven
 
 ## cisco
 

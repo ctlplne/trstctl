@@ -174,14 +174,14 @@ const (
 // which point it must pass the same gates as everyone else, not skip them.
 var cpRetainedFamilies = []string{
 	// cisco left this census when an ISE target became re-bindable and
-	// readable (A122, owner decision 2026-10-26).
-	// ACM re-imports in place under one ARN with no previous version; Key
-	// Vault serves the newest version by name with no call that makes an
-	// older one current. Neither API can express a re-bind or a readback, so
-	// like cisco they execute on a relay where one is enrolled and keep the
-	// control-plane path as an explicit exception (A58, A59).
+	// readable (A122, owner decision 2026-10-26), and azure-keyvault when its
+	// rollback became a re-import of the predecessor's retained version and
+	// its readback a read of the version served by name (A166-L1).
+	// ACM re-imports in place under one ARN with no previous version, so its
+	// API can express neither a re-bind nor a readback; it executes on a relay
+	// where one is enrolled and keeps the control-plane path as an explicit
+	// exception (A58, A59).
 	"aws-acm",
-	"azure-keyvault",
 }
 
 // CPRetained reports whether a family's control-plane execution remains as an
@@ -203,11 +203,6 @@ var retainedScopeNotes = map[string]string{
 		"the control-plane path remains because ACM re-imports in place under one certificate ARN " +
 		"and keeps no previous version, so relay rollback and readback are not expressible; this " +
 		"family keeps E1 open and its support-matrix row records the limitation",
-	"azure-keyvault": "open architecture exception: an enrolled network relay executes Key Vault " +
-		"imports, but the control-plane path remains because Key Vault serves the newest version " +
-		"by name and exposes no call that makes an older version current, so relay rollback and " +
-		"readback are not expressible; this family keeps E1 open and its support-matrix row " +
-		"records the limitation",
 }
 
 // unimplementedScopeNotes state where each omitted family executes today and

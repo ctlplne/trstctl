@@ -96,6 +96,9 @@ var readbackCapableFamilies = []string{
 	// gcp-certificate-manager answers for targets that name a certificate map
 	// entry: the entry says which certificate it serves (A58).
 	"gcp-certificate-manager",
+	// azure-keyvault answers with the certificate version the vault serves by
+	// name, which is what every consumer that reads by name gets (A166-L1).
+	"azure-keyvault",
 }
 
 // CanReadback reports whether a family can be asked what it has installed.

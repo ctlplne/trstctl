@@ -88,19 +88,18 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "azure-keyvault",
-		APIContract: "Azure Key Vault Certificates REST import API v7.4",
+		APIContract: "Azure Key Vault Certificates and Secrets REST API v7.4 (import, versions, version secret)",
 		ProvenOperations: []string{
-			"deploy: import a PEM certificate and key as a new version of a named vault certificate",
+			"deploy: import a PEM certificate and an exportable key as a new version of a named vault certificate",
+			"rollback: find the predecessor's version by fingerprint, read that version's retained secret and import it as the newest version (A166-L1)",
+			"readback: the fingerprint of the version the vault serves by name",
 			"authentication contract: acquire and wipe an Entra ID bearer token per operation",
 		},
 		KnownLimits: []string{
-			"no rollback: Key Vault keeps every imported version but serves the newest to consumers " +
-				"that read by name and exposes no call that makes an older version current; " +
-				"re-pointing consumers at a version is outside this connector, and there is no readback " +
-				"of what a consumer serves",
-			"E1 architecture exception: an enrolled network relay executes imports and the control " +
-				"plane's egress-guarded client remains the executor where no relay is enrolled; " +
-				"rollback and readback are not expressible, so the family keeps E1 open",
+			"rollback re-imports the predecessor's key from the vault's own copy, so it needs that version's key to be " +
+				"exportable and the identity to be allowed to read secrets; consumers that read a certificate by version, " +
+				"not by name, are not re-pointed",
+			"proven against a Key Vault stand-in written from the REST API; a live vault is not yet proven",
 		},
 	},
 	{
