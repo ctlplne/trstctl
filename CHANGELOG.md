@@ -2,6 +2,15 @@
 
 ### Added
 
+- A secrets project's admins manage its membership (A235-L1). A caller holding secrets:write and the
+  project's admin role grants and revokes that project's members without access:write, within its own
+  grant: an admin restricted to some environments grants only those environments, cannot grant every
+  environment, and cannot change or revoke a member whose grant reaches past its own. access:write keeps
+  full control, even on its own; projects and environments still change under it; and a secrets:write
+  token still cannot grant itself an environment. The member routes admit the computed
+  `secrets:members.manage` predicate (access:write or secrets:write, never grantable), and the tenant's
+  ABAC policy is evaluated against the permission the caller acts under. The project view says whether
+  the caller can manage members, and the console shows the grant form and revoke buttons accordingly.
 - The SPIRE upstream authority plugin implements `SubscribeToLocalBundle` (A205-L3). SPIRE Server
   receives the trust domain's bundle as trstctl sees it, the root the configured `ca_authority_id`
   chains to and the JWT keys the tenant's SPIRE servers and trstctl publish, and the open stream sends

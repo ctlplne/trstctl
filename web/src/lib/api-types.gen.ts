@@ -11666,9 +11666,11 @@ export interface SecretMigrationRequest {
 }
 
 export interface SecretProject {
+  can_manage_members?: boolean;
   created_at: string;
   created_by?: string;
   environments?: ({ access: "open" | "member" | "restricted"; name?: string; restricted: boolean; secrets: { key: string; name: string; owner: string; owner_id?: string; version: number }[]; slug: string })[];
+  manageable_environments?: string[];
   members?: ({ environments: string[]; granted_at: string; granted_by?: string; role: "viewer" | "developer" | "admin"; subject: string })[];
   name?: string;
   owner: string;

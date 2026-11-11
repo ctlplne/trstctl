@@ -94,6 +94,35 @@ describe("A235 secrets projects", () => {
     });
   });
 
+  // A235-L1: a project admin without access:write manages members within its
+  // own grant, as the server reports it: the grant form, a revoke only for a
+  // member inside that grant, and no project creation.
+  it("lets a project admin restricted to stage manage stage members only", async () => {
+    can.value = false;
+    apiMock.getSecretProject.mockResolvedValue({
+      ...payments,
+      can_manage_members: true,
+      manageable_environments: ["stage"],
+      members: [
+        { subject: "team-a-ci", role: "developer", environments: ["stage"], granted_at: "2026-11-01T00:00:00Z" },
+        { subject: "release-bot", role: "admin", environments: [], granted_at: "2026-11-01T00:00:00Z" },
+      ],
+    });
+    apiMock.putSecretProjectMember.mockResolvedValue(payments);
+    const user = userEvent.setup();
+    render(<SecretProjectsWorkflow />);
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    await screen.findByText("release-bot");
+    expect(screen.queryByRole("button", { name: "Create project" })).not.toBeInTheDocument();
+    expect(screen.getByText("As this project's admin you grant and revoke members within stage.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Revoke" })).toHaveLength(1);
+    const form = within(screen.getByRole("form", { name: "Grant a project member" }));
+    await user.type(form.getByRole("textbox", { name: "Member subject" }), "team-b-ci");
+    await user.type(form.getByRole("textbox", { name: "Environments" }), "stage");
+    await user.click(form.getByRole("button", { name: "Grant" }));
+    expect(apiMock.putSecretProjectMember).toHaveBeenCalledWith("payments", "team-b-ci", { role: "developer", environments: ["stage"] });
+  });
+
   it("offers no create, grant or revoke without access:write", async () => {
     can.value = false;
     const user = userEvent.setup();

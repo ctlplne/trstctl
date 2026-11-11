@@ -135,6 +135,15 @@ const (
 	// certificate, secret, and managed-key separation.
 	ApprovalsReview Permission = "approvals:review"
 
+	// SecretsMembersManage is a computed route-admission predicate like
+	// ApprovalsReview (A235-L1): Principal.Can derives it from access:write or
+	// secrets:write. The secrets-project membership handlers then decide which
+	// one the caller acts under: access:write manages every project in full;
+	// secrets:write manages only a project whose admin role the caller holds,
+	// within its own grant; and they evaluate ABAC against that real
+	// permission. Never grantable and never in a role.
+	SecretsMembersManage Permission = "secrets:members.manage"
+
 	// AgentsGrantRelay authorizes minting an enrollment token that carries the
 	// NETWORK role (epic A2) — an agent that relays for devices which cannot host
 	// an agent themselves, and therefore holds the credentials that drive them —
@@ -327,12 +336,23 @@ func (p Principal) Can(perm Permission, target Scope) bool {
 	if perm == ApprovalsReview {
 		return p.Can(CertsIssue, target) || p.Can(SecretsWrite, target) || p.Can(KeysApprove, target) || p.Can(AccessApprove, target)
 	}
+	if perm == SecretsMembersManage {
+		return p.Can(AccessWrite, target) || p.Can(SecretsWrite, target)
+	}
 	for _, g := range p.Grants {
 		if g.Scope.Covers(target) && g.Role.Allows(perm) {
 			return true
 		}
 	}
 	return false
+}
+
+// IsComputed reports whether perm is a computed route-admission predicate
+// (ApprovalsReview, SecretsMembersManage) rather than a grantable permission:
+// route admission does not send it through ABAC, and its handlers evaluate
+// ABAC against the real permission the caller acts under.
+func IsComputed(perm Permission) bool {
+	return perm == ApprovalsReview || perm == SecretsMembersManage
 }
 
 // Registry is the catalog of role definitions — the built-in roles plus any

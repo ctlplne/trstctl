@@ -5733,6 +5733,14 @@ export const messages = {
   "secrets.projects.members": { defaultMessage: "Members", description: "Secrets project members heading." },
   "secrets.projects.noMembers": { defaultMessage: "No members yet.", description: "Secrets project without members." },
   "secrets.projects.allEnvironments": { defaultMessage: "All environments", description: "A member granted every environment." },
+  "secrets.projects.manageableEnvironments": {
+    defaultMessage: "As this project's admin you grant and revoke members within {environments}.",
+    description: "A235-L1: shown to a project admin restricted to some environments above the grant form.",
+  },
+  "secrets.projects.grantLabel": {
+    defaultMessage: "Grant a project member",
+    description: "A235-L1: accessible name of the project member grant form.",
+  },
   "secrets.projects.revoke": { defaultMessage: "Revoke", description: "Revoke a project member." },
   "secrets.projects.memberSubject": { defaultMessage: "Member subject", description: "Subject (user or token) to grant." },
   "secrets.projects.memberRole": { defaultMessage: "Role", description: "Project member role." },

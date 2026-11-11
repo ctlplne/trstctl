@@ -1601,8 +1601,8 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/secrets/projects", opID: "listSecretProjects", summary: "List secrets projects with their owners (unknown when none)", handler: a.listSecretProjects, resSchema: "SecretProjectList", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/projects/{project}", opID: "getSecretProject", summary: "Show a secrets project: environments, the secrets you may see with their owners, and members", handler: a.getSecretProject, pathParams: []param{pathString("project", "secrets project slug")}, resSchema: "SecretProject", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/projects/{project}/environments", opID: "addSecretProjectEnvironment", summary: "Add an environment to a secrets project", handler: a.addSecretProjectEnvironment, pathParams: []param{pathString("project", "secrets project slug")}, reqSchema: "SecretProjectEnvironmentRequest", resSchema: "SecretProject", successCode: "200", mutation: true, perm: authz.AccessWrite},
-		{method: "PUT", path: "/api/v1/secrets/projects/{project}/members/{subject}", opID: "putSecretProjectMember", summary: "Grant a subject a role in a secrets project, optionally for listed environments only", handler: a.putSecretProjectMember, pathParams: []param{pathString("project", "secrets project slug"), pathString("subject", "member subject")}, reqSchema: "SecretProjectMemberRequest", resSchema: "SecretProject", successCode: "200", mutation: true, perm: authz.AccessWrite},
-		{method: "DELETE", path: "/api/v1/secrets/projects/{project}/members/{subject}", opID: "deleteSecretProjectMember", summary: "Revoke a subject's access to a secrets project", handler: a.deleteSecretProjectMember, pathParams: []param{pathString("project", "secrets project slug"), pathString("subject", "member subject")}, resSchema: "SecretProject", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "PUT", path: "/api/v1/secrets/projects/{project}/members/{subject}", opID: "putSecretProjectMember", summary: "Grant a subject a role in a secrets project, optionally for listed environments only (access:write, or secrets:write as the project's admin within its own grant)", handler: a.putSecretProjectMember, pathParams: []param{pathString("project", "secrets project slug"), pathString("subject", "member subject")}, reqSchema: "SecretProjectMemberRequest", resSchema: "SecretProject", successCode: "200", mutation: true, perm: authz.SecretsMembersManage},
+		{method: "DELETE", path: "/api/v1/secrets/projects/{project}/members/{subject}", opID: "deleteSecretProjectMember", summary: "Revoke a subject's access to a secrets project (access:write, or secrets:write as the project's admin within its own grant)", handler: a.deleteSecretProjectMember, pathParams: []param{pathString("project", "secrets project slug"), pathString("subject", "member subject")}, resSchema: "SecretProject", successCode: "200", mutation: true, perm: authz.SecretsMembersManage},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/import", opID: "importSecrets", summary: "Atomically import up to 100 application secrets from one event", handler: a.importSecrets, reqSchema: "SecretImportRequest", resSchema: "SecretImportResponse", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store/history/{name...}", opID: "getSecretVersion", summary: "Read one historical application-secret version", handler: a.getSecretVersion, pathParams: secretNamePath, query: []param{{name: "version", typ: "integer", desc: "historical version number to read"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
@@ -2060,13 +2060,15 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}
-		// approvals:review is a computed route-admission token, not a grantable
-		// domain permission. The approval handlers evaluate ABAC against each real
-		// permission (certs:issue, secrets:write, or keys:approve) and bind decisions
-		// to the exact locked request. Sending this synthetic token through ABAC
-		// would let an unknown-permission rule block an otherwise valid reviewer and
-		// would evaluate policy against the wrong domain vocabulary.
-		if perm != authz.ApprovalsReview {
+		// approvals:review and secrets:members.manage are computed
+		// route-admission tokens, not grantable domain permissions. Their
+		// handlers evaluate ABAC against the real permission the caller acts
+		// under (certs:issue, secrets:write or keys:approve for a review;
+		// access:write or secrets:write for project membership, A235-L1) and bind
+		// decisions to the exact request. Sending a synthetic token through ABAC
+		// would let an unknown-permission rule block an otherwise valid caller
+		// and would evaluate policy against the wrong domain vocabulary.
+		if !authz.IsComputed(perm) {
 			if err := a.checkABAC(r.Context(), r, principal, perm, target); err != nil {
 				a.writeError(w, err)
 				return

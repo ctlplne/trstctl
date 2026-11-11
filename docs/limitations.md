@@ -1389,7 +1389,8 @@ never live in the API process. What you can do end to end against the running bi
 - Secrets workspace (A235): projects with environments over the native store (by name
   prefix `<project>/<environment>/`), restricted environments open only to granted
   members on every read/write surface (native API, references, previews, imports, syncs,
-  rotations, Vault-compatible KV), membership under `access:write`, and a project view
+  rotations, Vault-compatible KV), membership under `access:write` or by the project's
+  admin (with `secrets:write`) within its own grant (A235-L1), and a project view
   naming unknown ownership; the console Projects view (`/secrets/projects`) with the
   application view of the owner's certificates and identities.
 - Environment promotion (A236 part a): `POST /api/v1/secrets/projects/{project}/promotions/preview`

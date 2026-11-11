@@ -147,8 +147,15 @@ The rule holds on every surface that reads or writes by name. That covers the na
 read, list, history, preview, create, rotate, delete, recover, import, sync and rotation
 routes, every hop of a `${secret.…}` reference, and the Vault-compatible KV routes. A
 read the rule denies answers exactly as a missing secret, so names don't reveal what
-exists, and a denied write is 403. Projects, environments and membership change under
-`access:write`, so a `secrets:write` token can't grant itself an environment. A tenant
+exists, and a denied write is 403. Projects and environments change under
+`access:write`. Membership changes under `access:write`, or under `secrets:write` by a
+member holding the project's `admin` role, within its own grant (A235-L1): an admin
+restricted to some environments grants only those, can't grant every environment, and
+can't change or revoke a member whose grant reaches past its own. So a `secrets:write`
+token still can't grant itself an environment. The member routes admit the computed
+`secrets:members.manage` predicate (`access:write` or `secrets:write`; no role or token
+can be granted it), and the tenant's ABAC policy is evaluated against the permission the
+caller acts under. A tenant
 administrator who needs a restricted value grants themselves membership, which is
 recorded. `projects show` lists each environment's secrets with their owner, or
 `unknown` when none is set, and shows a restricted environment the caller isn't granted
@@ -160,7 +167,7 @@ projects with their owners. "Unknown owner" is shown plainly, never guessed. A p
 opens to its environments, each marked open, restricted and granted to you, or
 restricted. A restricted environment you aren't granted shows no names. Each secret
 shows its key, version and owner, and the page lists the members, with grant and revoke
-for `access:write` holders. When the project has an owner, the **application view** also
+for `access:write` holders and for the project's admins within their own grant. When the project has an owner, the **application view** also
 shows how many certificates and identities that owner holds. It lists the soonest-expiring
 of each with its health (ok, expiring within 30 days, expired), so an application's
 certificates, workload identities and secrets read as one inventory. With no owner,

@@ -84,7 +84,7 @@ func TestMinimalAuthzStateDoesNotChangeLegacyOffboardedTenants(t *testing.T) {
 // rejecting arbitrary caller strings. This uses the authorization engine's live
 // vocabulary, rather than generating both sides from the minimal-audit map.
 func TestMinimalAuthzCoversCompiledPermissionVocabulary(t *testing.T) {
-	permissions := append(authz.CustomRoleVocabulary(), authz.AgentsHeartbeat, authz.AgentsJobPoll, authz.AgentsJobComplete, authz.AgentsJobReport, authz.ApprovalsReview)
+	permissions := append(authz.CustomRoleVocabulary(), authz.AgentsHeartbeat, authz.AgentsJobPoll, authz.AgentsJobComplete, authz.AgentsJobReport, authz.ApprovalsReview, authz.SecretsMembersManage)
 	for _, permission := range permissions {
 		event := minimalAuthzFixture()
 		wire, err := json.Marshal(MinimalAuthzDecision{Permission: string(permission), Decision: "deny", DetailsOmitted: "key_preparing"})

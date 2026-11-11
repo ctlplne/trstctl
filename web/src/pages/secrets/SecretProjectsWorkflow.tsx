@@ -17,10 +17,22 @@ import { SecretProjectTransfers } from "./SecretProjectTransfers";
 // "<project>/<environment>/…"). A restricted environment is open only to the
 // members granted it, so the server leaves its names out for everyone else and
 // this view says so. Owners are named, or shown as unknown — never guessed.
-// Nothing here reads a secret value. Changing projects or members needs
-// access:write.
+// Nothing here reads a secret value. Changing projects needs access:write;
+// members change under access:write or, within its own grant, by the
+// project's admin holding secrets:write (A235-L1), as the server says in
+// can_manage_members.
 
 type Role = "viewer" | "developer" | "admin";
+
+// canManageMember reports whether the caller may revoke a member: the server
+// says it may manage members, and a project admin restricted to some
+// environments manages only members inside them (A235-L1).
+function canManageMember(project: SecretProject, environments: string[]): boolean {
+  if (!project.can_manage_members) return false;
+  const own = project.manageable_environments ?? [];
+  if (own.length === 0) return true;
+  return environments.length > 0 && environments.every((env) => own.includes(env));
+}
 
 function slugs(value: string): string[] {
   return value
@@ -230,7 +242,7 @@ export function SecretProjectsWorkflow() {
                     <span className="text-muted-foreground">
                       {member.environments.length === 0 ? t("secrets.projects.allEnvironments") : member.environments.join(", ")}
                     </span>
-                    {canManage ? (
+                    {canManageMember(selected, member.environments) ? (
                       <Button type="button" variant="outline" onClick={() => void revoke(member.subject)} disabled={busy}>
                         {t("secrets.projects.revoke")}
                       </Button>
@@ -239,8 +251,13 @@ export function SecretProjectsWorkflow() {
                 ))}
               </ul>
             )}
-            {canManage ? (
-              <form onSubmit={(event) => void grant(event)} className="grid max-w-xl gap-3">
+            {selected.can_manage_members ? (
+              <form onSubmit={(event) => void grant(event)} className="grid max-w-xl gap-3" aria-label={t("secrets.projects.grantLabel")}>
+                {selected.manageable_environments?.length ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t("secrets.projects.manageableEnvironments", { environments: selected.manageable_environments.join(", ") })}
+                  </p>
+                ) : null}
                 <Field label={t("secrets.projects.memberSubject")}>
                   {(control) => (
                     <Input {...control} value={memberSubject} maxLength={256} required onChange={(event) => setMemberSubject(event.target.value)} />

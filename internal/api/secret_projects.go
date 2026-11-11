@@ -7,10 +7,12 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -22,9 +24,12 @@ import (
 // to the project members granted it, on every surface that reads or writes by
 // name — the native API, every hop of a reference, previews, imports, syncs and
 // the Vault-compatible KV routes. A read it denies answers as "no such secret",
-// so names are not an existence oracle; a denied write is 403. Projects,
-// environments and membership change under access:write, so a secrets:write
-// token cannot grant itself an environment.
+// so names are not an existence oracle; a denied write is 403. Projects and
+// environments change under access:write. Membership changes under
+// access:write, or under secrets:write by a member holding the project's admin
+// role, within its own grant (A235-L1): it grants and revokes only
+// environments it holds itself, so a secrets:write token still cannot grant
+// itself an environment.
 
 var secretProjectSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
@@ -110,6 +115,89 @@ type secretProjectResponse struct {
 	Members      []secretProjectMemberResponse      `json:"members,omitempty"`
 	// OwnerResources is absent when the owner is unknown: nothing is guessed.
 	OwnerResources *secretProjectOwnerResources `json:"owner_resources,omitempty"`
+	// CanManageMembers says whether the caller may grant and revoke members
+	// (A235-L1): access:write, or the project's admin role. A project admin
+	// restricted to some environments manages only those, listed in
+	// ManageableEnvironments; empty means every environment.
+	CanManageMembers       bool     `json:"can_manage_members"`
+	ManageableEnvironments []string `json:"manageable_environments,omitempty"`
+}
+
+// secretProjectMemberManager is who may change a project's membership and
+// within what (A235-L1): access:write manages every project in full; a caller
+// with secrets:write holding the project's admin role manages it within its
+// own grant, never past it.
+type secretProjectMemberManager struct {
+	full bool
+	// perm is the real permission the change is made under, which the
+	// tenant's ABAC policy is evaluated against: access:write in full,
+	// secrets:write for a project admin.
+	perm authz.Permission
+	// environments is a delegated admin's own grant; empty is every
+	// environment.
+	environments []string
+}
+
+// secretProjectMemberManagerFor resolves principal's authority over a
+// project's membership at target from the members already loaded for the
+// project. The routes admit authz.SecretsMembersManage (access:write or
+// secrets:write); this decides which of the two the caller acts under.
+func secretProjectMemberManagerFor(principal authz.Principal, target authz.Scope, project string, members []store.SecretProjectMember) (secretProjectMemberManager, error) {
+	if principal.Subject == "" {
+		return secretProjectMemberManager{}, errStatus(http.StatusUnauthorized, "an authenticated principal is required")
+	}
+	if principal.Can(authz.AccessWrite, target) {
+		return secretProjectMemberManager{full: true, perm: authz.AccessWrite}, nil
+	}
+	if principal.Can(authz.SecretsWrite, target) {
+		for _, m := range members {
+			if m.Subject == principal.Subject && m.Role == store.SecretProjectRoleAdmin {
+				return secretProjectMemberManager{perm: authz.SecretsWrite, environments: append([]string(nil), m.Environments...)}, nil
+			}
+		}
+	}
+	return secretProjectMemberManager{}, errStatus(http.StatusForbidden, "managing project "+project+"'s members needs access:write, or secrets:write and the project's admin role")
+}
+
+// secretProjectMemberManagerOf resolves the request's manager and evaluates
+// the tenant's ABAC policy against the permission the change is made under,
+// as route admission does for a route with one real permission: the route's
+// computed predicate is never sent through ABAC.
+func (a *API) secretProjectMemberManagerOf(ctx context.Context, r *http.Request, project string, members []store.SecretProjectMember) (secretProjectMemberManager, error) {
+	principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+	if !ok {
+		return secretProjectMemberManager{}, errStatus(http.StatusUnauthorized, "an authenticated principal is required")
+	}
+	target, err := requestTargetScope(principal, r, nil)
+	if err != nil {
+		return secretProjectMemberManager{}, err
+	}
+	manager, err := secretProjectMemberManagerFor(principal, target, project, members)
+	if err != nil {
+		return secretProjectMemberManager{}, err
+	}
+	if err := a.checkABAC(ctx, r, principal, manager.perm, target); err != nil {
+		return secretProjectMemberManager{}, err
+	}
+	return manager, nil
+}
+
+// covers reports whether the manager's authority covers a grant of envs
+// (empty: every environment). A delegated admin restricted to some
+// environments covers only grants inside them.
+func (m secretProjectMemberManager) covers(envs []string) bool {
+	if m.full || len(m.environments) == 0 {
+		return true
+	}
+	if len(envs) == 0 {
+		return false
+	}
+	for _, env := range envs {
+		if !slices.Contains(m.environments, env) {
+			return false
+		}
+	}
+	return true
 }
 
 // secretScopeAllows reports whether the request's principal may read (or
@@ -303,9 +391,23 @@ func (a *API) putSecretProjectMember(w http.ResponseWriter, r *http.Request) {
 		if member == "" || len(member) > 256 {
 			return 0, nil, errStatus(http.StatusBadRequest, "subject is required (at most 256 characters)")
 		}
-		_, envs, _, err := a.store.GetSecretProject(ctx, tenantID, project)
+		_, envs, members, err := a.store.GetSecretProject(ctx, tenantID, project)
 		if err != nil {
 			return 0, nil, secretProjectError(err)
+		}
+		// A235-L1: access:write, or the project's admin within its own grant,
+		// for the new grant and for the member's grant it replaces.
+		manager, err := a.secretProjectMemberManagerOf(ctx, r, project, members)
+		if err != nil {
+			return 0, nil, err
+		}
+		if !manager.covers(req.Environments) {
+			return 0, nil, errStatus(http.StatusForbidden, "a project admin grants only environments of its own grant")
+		}
+		for _, m := range members {
+			if m.Subject == member && !manager.covers(m.Environments) {
+				return 0, nil, errStatus(http.StatusForbidden, "a project admin changes only members within its own grant")
+			}
 		}
 		known := map[string]bool{}
 		for _, env := range envs {
@@ -342,12 +444,22 @@ func (a *API) deleteSecretProjectMember(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return 0, nil, secretProjectError(err)
 		}
-		found := false
-		for _, m := range members {
-			found = found || m.Subject == member
+		var target *store.SecretProjectMember
+		for i := range members {
+			if members[i].Subject == member {
+				target = &members[i]
+			}
 		}
-		if !found {
+		if target == nil {
 			return 0, nil, errStatus(http.StatusNotFound, "no such member of project "+project)
+		}
+		// A235-L1: access:write, or the project's admin within its own grant.
+		manager, err := a.secretProjectMemberManagerOf(ctx, r, project, members)
+		if err != nil {
+			return 0, nil, err
+		}
+		if !manager.covers(target.Environments) {
+			return 0, nil, errStatus(http.StatusForbidden, "a project admin revokes only members within its own grant")
 		}
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
@@ -458,6 +570,14 @@ func (a *API) secretProjectView(ctx context.Context, tenantID, slug string) (sec
 			envs = []string{}
 		}
 		resp.Members = append(resp.Members, secretProjectMemberResponse{Subject: m.Subject, Role: m.Role, Environments: envs, GrantedBy: m.GrantedBy, GrantedAt: m.GrantedAt})
+	}
+	if principal, ok := ctx.Value(principalCtxKey).(authz.Principal); ok {
+		if manager, err := secretProjectMemberManagerFor(principal, authz.Scope{TenantID: tenantID}, slug, members); err == nil {
+			resp.CanManageMembers = true
+			if !manager.full {
+				resp.ManageableEnvironments = manager.environments
+			}
+		}
 	}
 	return resp, nil
 }

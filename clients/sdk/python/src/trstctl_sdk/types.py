@@ -16238,9 +16238,11 @@ SecretMigrationRequest = TypedDict(
 SecretProject = TypedDict(
     'SecretProject',
     {
+        'can_manage_members': bool,
         'created_at': str,
         'created_by': str,
         'environments': list[dict[str, Any]],
+        'manageable_environments': list[str],
         'members': list[dict[str, Any]],
         'name': str,
         'owner': str,

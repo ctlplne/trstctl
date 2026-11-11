@@ -10221,10 +10221,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Grant a subject a role in a secrets project, optionally for listed environments only */
+        /** Grant a subject a role in a secrets project, optionally for listed environments only (access:write, or secrets:write as the project's admin within its own grant) */
         put: operations["putSecretProjectMember"];
         post?: never;
-        /** Revoke a subject's access to a secrets project */
+        /** Revoke a subject's access to a secrets project (access:write, or secrets:write as the project's admin within its own grant) */
         delete: operations["deleteSecretProjectMember"];
         options?: never;
         head?: never;
@@ -26439,6 +26439,8 @@ export interface components {
             }[];
         };
         SecretProject: {
+            /** @description whether the caller may grant and revoke members: access:write, or the project's admin role (A235-L1) */
+            can_manage_members?: boolean;
             /** Format: date-time */
             created_at: string;
             created_by?: string;
@@ -26456,6 +26458,8 @@ export interface components {
                 }[];
                 slug: string;
             }[];
+            /** @description the environments a project admin restricted to some environments may grant and revoke; absent: every environment */
+            manageable_environments?: string[];
             members?: {
                 environments: string[];
                 /** Format: date-time */

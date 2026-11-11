@@ -54100,6 +54100,10 @@
       },
       "SecretProject": {
         "properties": {
+          "can_manage_members": {
+            "description": "whether the caller may grant and revoke members: access:write, or the project's admin role (A235-L1)",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -54164,6 +54168,13 @@
                 "secrets"
               ],
               "type": "object"
+            },
+            "type": "array"
+          },
+          "manageable_environments": {
+            "description": "the environments a project admin restricted to some environments may grant and revoke; absent: every environment",
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -105354,8 +105365,8 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Revoke a subject's access to a secrets project",
-        "x-trstctl-permission": "access:write"
+        "summary": "Revoke a subject's access to a secrets project (access:write, or secrets:write as the project's admin within its own grant)",
+        "x-trstctl-permission": "secrets:members.manage"
       },
       "put": {
         "operationId": "putSecretProjectMember",
@@ -105438,8 +105449,8 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Grant a subject a role in a secrets project, optionally for listed environments only",
-        "x-trstctl-permission": "access:write"
+        "summary": "Grant a subject a role in a secrets project, optionally for listed environments only (access:write, or secrets:write as the project's admin within its own grant)",
+        "x-trstctl-permission": "secrets:members.manage"
       }
     },
     "/api/v1/secrets/projects/{project}/promotions": {

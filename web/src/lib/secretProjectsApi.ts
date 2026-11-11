@@ -13,7 +13,8 @@ import type {
 // A235: the secrets workspace. A project groups an application's secrets by
 // environment over the same native store; a restricted environment is open
 // only to the members granted it. Reads list names, owners and versions —
-// never values. Managing projects and members needs access:write.
+// never values. Managing projects needs access:write; members change under
+// access:write or by the project's admin holding secrets:write (A235-L1).
 
 export const listSecretProjects = () => req<SecretProjectList>("/api/v1/secrets/projects");
 

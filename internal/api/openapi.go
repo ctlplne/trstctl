@@ -7400,7 +7400,9 @@ func componentSchemas() map[string]*Schema {
 	secretProject := object(map[string]*Schema{
 		"slug": str(), "name": str(), "owner_id": str(), "owner": str(), "created_by": str(), "created_at": timestamp(),
 		"environments": {Type: "array", Items: secretProjectEnvironment}, "members": {Type: "array", Items: secretProjectMember},
-		"owner_resources": secretProjectOwnerResources,
+		"owner_resources":         secretProjectOwnerResources,
+		"can_manage_members":      {Type: "boolean", Description: "whether the caller may grant and revoke members: access:write, or the project's admin role (A235-L1)"},
+		"manageable_environments": {Type: "array", Items: str(), Description: "the environments a project admin restricted to some environments may grant and revoke; absent: every environment"},
 	}, "slug", "owner", "created_at")
 	secretProjectEnvironmentReq := object(map[string]*Schema{"slug": str(), "name": str(), "restricted": {Type: "boolean"}}, "slug")
 	secretProjectCreateReq := object(map[string]*Schema{
