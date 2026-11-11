@@ -9,6 +9,16 @@
   `--`-named tokens with plain values). Beside the brand, above the fold on the sign-in page and in
   the header on every page, it shows "Powered by trstctl" on fixed trstctl styling that no brand
   field or token override can change or hide, at well over 4.5:1 contrast in both themes.
+- Every other surface that shows a white-label brand says "Powered by trstctl" too (MSP-1, part 2).
+  A branded email carries the line in its header; the customer assurance report shows it beside
+  the brand on its cover and at the foot of every printed page, in a repeating footer row that
+  never covers a row; a white-labeled customer's Slack, Teams and email notifications carry it as
+  a line and its webhook payloads as `powered_by`; and Slack approval requests end with it. One
+  rule decides when a brand is white-label (any field differs from the built-in brand, so a brand
+  that changes only colors or email strings counts), and the console's public brand route uses it
+  too. The provider brand write now refuses a field the brand document does not have, naming the
+  fields it does have, instead of saving the rest and dropping it silently; no field turns the
+  line off. A branded email whose brand sets no product name keeps its logo and footer.
 - The console sets PKCS#11 vendor attestation for an edge segment (A175-L1). A segment's PKCS#11
   token vendor roots and the requirement that a PKCS#11 request carry the token's attestation could be
   set only through the API or CLI. When PKCS#11 custody is allowed, the edge segment form takes the

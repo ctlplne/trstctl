@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/branding"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/slackapp"
 )
@@ -132,6 +133,10 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 		d.RequireApproval, d.RequiredApprovals = true, 1
 		d.SlackApp = slackCfg
 	})
+	// MSP-1: the tenant is white-labeled, so its approval messages end with
+	// "Powered by trstctl", posted and decided alike.
+	branding.SetSource(tenantBrandSource{tenant: h.tenant, brand: branding.Brand{ProductName: "Northwind Managed PKI"}})
+	t.Cleanup(func() { branding.SetSource(nil) })
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "slack-admin@example.test",
 		string(authz.ConnectorsRead), string(authz.ConnectorsWrite), string(authz.AccessWrite), string(authz.AccessRead), "access:role.assign")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "slack-requester@example.test",
@@ -252,6 +257,9 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(buttons), &post)
 	value := post.Blocks[1].Elements[0].Value
+	if !strings.Contains(buttons, `{"elements":[{"text":"Powered by trstctl","type":"mrkdwn"}],"type":"context"}],"channel":"C0SECURITY"`) {
+		t.Fatalf("the white-labeled tenant's approval post does not end with Powered by trstctl: %s", buttons)
+	}
 	// A277: the value is trstctl's signed decision; its payload names the
 	// request.
 	var decision struct {
@@ -294,6 +302,10 @@ func TestServedSlackAppApprovesFromButtonsN8(t *testing.T) {
 	}
 	stand.mu.Lock()
 	updated := len(stand.updates) == 1 && strings.Contains(fmt.Sprint(stand.updates[0]["text"]), "approved by slack-reviewer@example.test")
+	if updated {
+		decided, _ := json.Marshal(stand.updates[0]["blocks"])
+		updated = strings.HasSuffix(string(decided), `{"elements":[{"text":"Powered by trstctl","type":"mrkdwn"}],"type":"context"}]`)
+	}
 	stand.mu.Unlock()
 	if !updated {
 		t.Fatalf("the message was not updated with the outcome: %v", stand.updates)

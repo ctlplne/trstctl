@@ -94,7 +94,9 @@ type CustomerBrand struct {
 	LogoDataURI string `json:"logo_data_uri,omitempty"`
 	Accent      string `json:"accent"`
 	Footer      string `json:"footer,omitempty"`
-	// Custom is false when the tenant has no white-label brand.
+	// Custom is false when the tenant has no white-label brand
+	// (branding.IsCustom). A custom report shows "Powered by trstctl" on its
+	// cover and on every printed page (MSP-1).
 	Custom bool `json:"custom"`
 }
 
@@ -333,7 +335,7 @@ func customerBrand(b branding.Brand) CustomerBrand {
 		ProductName: firstNonEmpty(strings.TrimSpace(b.ProductName), def.ProductName), Accent: defaultAccent,
 		Footer: strings.TrimSpace(b.EmailFooter),
 	}
-	out.Custom = out.ProductName != def.ProductName || b.LogoDataURI != "" || len(b.TokenOverrides) > 0 || out.Footer != ""
+	out.Custom = branding.IsCustom(b)
 	if len(b.LogoDataURI) <= maxLogoBytes && logoDataURI.MatchString(b.LogoDataURI) {
 		out.LogoDataURI = b.LogoDataURI
 	}

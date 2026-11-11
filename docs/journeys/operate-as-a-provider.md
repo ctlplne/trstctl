@@ -203,6 +203,19 @@ with fixed trstctl styling (white on deep forest, 12px, at least 22px tall), so 
 stays legible at well over 4.5:1 contrast in the light and the dark theme whatever
 the brand's colors.
 
+Every other surface that shows the brand carries the same line. An email in the
+brand has **Powered by trstctl** in its header, under the logo or product name. The
+customer assurance report shows it beside the brand on its cover and at the foot of
+every printed page, in a repeating footer row with space of its own, so it never
+covers a row of the report. A white-labeled customer's notifications carry it as a
+line: Slack and Teams messages under the alert, email as the body's first line, and
+a webhook's JSON as `powered_by`; Slack approval requests end with it, posted and
+decided alike. A brand counts as white-label when any of its fields differs from
+the built-in brand, so a brand that changes only colors or only the email strings
+carries the line too. The brand document has no field for it: a brand write that
+names a field the document does not have is refused with the list of the fields it
+does have, instead of saving the rest.
+
 The deployment administrator initializes customer access on the control-plane
 host, using the running service's configuration. The setup view supplies a command
 bound to the selected customer. The equivalent command below uses the customer ID

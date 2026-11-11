@@ -235,6 +235,13 @@ type Alert struct {
 	// Report identifies the signed scheduled report a KindComplianceReportReady
 	// notice announces (A103).
 	Report *AlertReport `json:"report,omitempty"`
+
+	// PoweredBy is "Powered by trstctl" when the tenant's brand is a
+	// white-label brand and empty otherwise (MSP-1). The dispatcher sets it
+	// from the tenant's resolved brand on every delivery, over whatever the
+	// payload carried: Slack and Teams messages show it as a line, an email
+	// as its first line, and a webhook's JSON carries it as powered_by.
+	PoweredBy string `json:"powered_by,omitempty"`
 }
 
 // AlertReport references one signed scheduled report. It never carries the

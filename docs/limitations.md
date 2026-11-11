@@ -4442,7 +4442,11 @@ than sending an operator looking for a credential that was never there.
   and always shows "Powered by trstctl" beside it, on fixed trstctl styling no
   brand field or token override can change (MSP-1; proven in a real browser on
   every console route in both themes by `web/e2e/powered-by-trstctl.spec.ts`
-  against the preview bundle). A
+  against the preview bundle). Branded emails (header line), the customer
+  assurance report (cover and every printed page), notifications (Slack,
+  Teams, email, webhook `powered_by`) and Slack approval requests carry the
+  same line; PSA tickets will carry it when the PSA connectors land (MSP-3 to
+  MSP-6), which do not exist today. A
   duplicate custom domain is refused before event append, and replay retains
   a rejected outcome for older conflicts. Customer lifecycle, quota, brand, delegation,
   and break-glass state now rebuild exactly from one immutable provider

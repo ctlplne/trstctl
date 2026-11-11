@@ -155,10 +155,15 @@ func TestServedCustomerAssuranceReportA187(t *testing.T) {
 	}
 
 	firstRun, _, first := runReport("first period")
+	// MSP-1: in the tenant's brand, with "Powered by trstctl" on the cover and
+	// every page, and trstctl named nowhere else.
+	const coverMark = `<a class="powered-by" href="https://trstctl.com">Powered by trstctl</a>`
+	const pageMark = `<span class="powered-by-page">Powered by trstctl</span>`
 	if first.Brand.ProductName != "AcmeTrust" || first.Brand.LogoDataURI != a187Logo || !first.Brand.Custom ||
 		!strings.Contains(first.HTML, "AcmeTrust assurance report") || !strings.Contains(html.UnescapeString(first.HTML), `src="`+a187Logo+`"`) ||
-		strings.Contains(strings.ToLower(first.HTML), "trstctl") {
-		t.Fatalf("the first report is not in the tenant's brand: %+v", first.Brand)
+		!strings.Contains(first.HTML, coverMark) || !strings.Contains(first.HTML, pageMark) ||
+		strings.Contains(strings.ToLower(strings.NewReplacer(coverMark, "", pageMark, "").Replace(first.HTML)), "trstctl") {
+		t.Fatalf("the first report is not in the tenant's brand with its Powered by trstctl marks: %+v", first.Brand)
 	}
 	if first.Inventory.ActiveCertificates != 3 || first.Inventory.OwnedCertificates != 2 || first.Credentials.Expiring != 1 ||
 		len(first.Credentials.ExpiringSoonest) != 1 || first.Credentials.ExpiringSoonest[0].Owner != "payments-team" ||

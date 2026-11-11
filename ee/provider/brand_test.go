@@ -4,9 +4,11 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -167,5 +169,68 @@ func TestBrandCollisionAndPersistenceErrorsAreSafeForOperators(t *testing.T) {
 	if internal.Code != http.StatusInternalServerError || strings.Contains(internal.Body.String(), "tenant_branding_domain_key") ||
 		strings.Contains(internal.Body.String(), "secret detail") {
 		t.Fatalf("persistence detail leaked = %d %s", internal.Code, internal.Body.String())
+	}
+}
+
+// MSP-1: the brand API has no switch for "Powered by trstctl". A brand write
+// that names a field the brand document does not have, such as one meant to
+// hide the mark, is refused and saves nothing, instead of saving the rest and
+// dropping that field silently; the stored brand, the brand read back and the
+// published request schema have no such field.
+func TestTheBrandAPIHasNoSwitchForPoweredByTrstctlMSP1(t *testing.T) {
+	brands := &memBrandStore{}
+	h := twoCustomerHandlerWithBrands(t, fullyDelegated("op-1", "tenant-alpha"), brands)
+	path := "/provider/v1/tenants/tenant-alpha/brand"
+	for _, body := range []string{
+		`{"product_name":"Northwind","hide_powered_by":true}`,
+		`{"product_name":"Northwind","powered_by":""}`,
+		`{"product_name":"Northwind","show_powered_by":false}`,
+		`{"product_name":"Northwind","token_overrides":{"--foreground":"0 0% 100%"},"attribution":"none"}`,
+	} {
+		rec := providerRequest(t, h, http.MethodPut, path, body)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "is not a brand setting") ||
+			!strings.Contains(rec.Body.String(), "product_name, logo_data_uri") {
+			t.Errorf("%s = %d %s, want refused naming the brand's fields", body, rec.Code, rec.Body.String())
+		}
+	}
+	if len(brands.byTenant) != 0 {
+		t.Fatalf("a refused write saved a brand: %+v", brands.byTenant)
+	}
+	if ok := providerRequest(t, h, http.MethodPut, path, `{"product_name":"Northwind","token_overrides":{"--foreground":"0 0% 100%"}}`); ok.Code != http.StatusNoContent {
+		t.Fatalf("a brand with only its own fields = %d %s", ok.Code, ok.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(providerRequest(t, h, http.MethodGet, path, "").Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	fields := []string{}
+	for field := range doc {
+		fields = append(fields, field)
+	}
+	brandType := reflect.TypeFor[TenantBrand]()
+	for i := range brandType.NumField() {
+		fields = append(fields, brandType.Field(i).Name)
+	}
+	spec := httptest.NewRecorder()
+	NewHandler(Config{License: providerLicense(t, 10)}).ServeHTTP(spec, httptest.NewRequest(http.MethodGet, "/provider/v1/openapi.json", nil))
+	var published struct {
+		Components struct {
+			Schemas map[string]map[string]any `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(spec.Body.Bytes(), &published); err != nil {
+		t.Fatalf("provider OpenAPI = %d: %v", spec.Code, err)
+	}
+	request := published.Components.Schemas["ProviderBrandRequest"]
+	for field := range request["properties"].(map[string]any) {
+		fields = append(fields, field)
+	}
+	if request["additionalProperties"] != false {
+		t.Errorf("the published brand request schema admits other fields: %v", request["additionalProperties"])
+	}
+	for _, field := range fields {
+		if lower := strings.ToLower(field); strings.Contains(lower, "powered") || strings.Contains(lower, "attribution") || strings.Contains(lower, "trstctl") {
+			t.Errorf("the brand has a field %q", field)
+		}
 	}
 }

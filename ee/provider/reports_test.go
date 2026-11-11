@@ -225,10 +225,16 @@ func TestProviderSharesASignedBrandedAssuranceReport(t *testing.T) {
 		return report
 	}
 	first := verify(download(listed.Runs[0].RunID))
+	// MSP-1: the customer's brand, with "Powered by trstctl" on the cover and
+	// every page, and trstctl named nowhere else.
+	const coverMark = `<a class="powered-by" href="https://trstctl.com">Powered by trstctl</a>`
+	const pageMark = `<span class="powered-by-page">Powered by trstctl</span>`
+	unmarked := strings.NewReplacer(coverMark, "", pageMark, "").Replace(first.HTML)
 	if first.Brand.ProductName != "AcmeTrust" || first.Brand.Accent != "#aa3300" || !strings.Contains(first.HTML, "AcmeTrust assurance report") ||
 		!strings.Contains(html.UnescapeString(first.HTML), `src="`+reportTestLogo+`"`) || !strings.Contains(first.HTML, "AcmeTrust managed PKI") ||
-		strings.Contains(strings.ToLower(first.HTML), "trstctl") || first.TenantName != "Assurance Customer" {
-		t.Fatalf("the report is not in the customer's brand: %+v", first.Brand)
+		!strings.Contains(first.HTML, coverMark) || !strings.Contains(first.HTML, pageMark) ||
+		strings.Contains(strings.ToLower(unmarked), "trstctl") || first.TenantName != "Assurance Customer" {
+		t.Fatalf("the report is not in the customer's brand with its Powered by trstctl marks: %+v", first.Brand)
 	}
 	if first.Inventory.ActiveCertificates != 1 || first.Changes.Comparable {
 		t.Fatalf("first report = %+v %+v", first.Inventory, first.Changes)

@@ -809,8 +809,10 @@ func (h *handler) setBrand(w http.ResponseWriter, r *http.Request) {
 		CustomDomain   string            `json:"custom_domain"`
 		TokenOverrides map[string]string `json:"token_overrides"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeProviderError(w, err)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeProviderError(w, brandBodyError(err))
 		return
 	}
 	if err := h.svc.SetTenantBrand(r.Context(), op, customerID, TenantBrand{
@@ -826,6 +828,20 @@ func (h *handler) setBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// brandBodyError names the brand document's fields when a write sends one it
+// does not have, instead of saving the rest and dropping it silently.
+// "Powered by trstctl" is not among them (MSP-1): it shows beside every
+// white-label brand, so no brand document can turn it off.
+func brandBodyError(err error) error {
+	field, ok := strings.CutPrefix(err.Error(), "json: unknown field ")
+	if !ok {
+		return err
+	}
+	return fmt.Errorf("the brand document has no field %s. Its fields are product_name, logo_data_uri, login_message, "+
+		"email_from_name, email_footer, custom_domain and token_overrides; \"Powered by trstctl\" shows beside every "+
+		"white-label brand and is not a brand setting", field)
 }
 
 func parseBrandIfMatch(header string) (string, error) {

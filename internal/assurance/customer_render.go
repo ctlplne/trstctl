@@ -10,7 +10,15 @@ import (
 
 // customerTemplate renders a report as one self-contained HTML page: styles
 // inline, the logo embedded, nothing fetched. html/template escapes every
-// value the tenant or its inventory supplied.
+// value the tenant or its inventory supplied. A report in a white-label brand
+// shows "Powered by trstctl" beside the brand on its cover and on every
+// printed page (MSP-1): the report sits in a one-cell layout table whose
+// footer row holds the mark, and browsers repeat a table's footer at the
+// bottom of each printed page in space of its own, so the mark never covers a
+// row. Fixed trstctl styling (white on #0b2e24, over 14:1, 12px), never the
+// brand's accent, printed with its own background. These marks are the only
+// places such a report names trstctl; a report in the built-in brand renders
+// exactly as before.
 var customerTemplate = template.Must(template.New("customer").Funcs(template.FuncMap{
 	"day": func(t time.Time) string { return t.UTC().Format("2006-01-02") },
 	"dayp": func(t *time.Time) string {
@@ -60,17 +68,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 code { font-size: 13px; overflow-wrap: anywhere; }
 footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 @media print { main { padding: 0; } }
-</style>
+{{if .R.Brand.Custom}}.powered-by, .powered-by-page { display: inline-block !important; padding: 3px 10px; border-radius: 9999px; background: #0b2e24 !important; color: #ffffff !important; font: 600 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif !important; text-decoration: none; white-space: nowrap; visibility: visible !important; opacity: 1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.powered-by { margin-left: auto; }
+table.report-frame { margin: 0; }
+table.report-frame > tbody > tr > td, table.report-frame > tfoot > tr > td { padding: 0; border: 0; }
+.page-foot { max-width: 880px; margin: 0 auto; padding: 6px 16px 16px; text-align: right; }
+@media print { .page-foot { padding: 6px 0 0; } }
+{{end}}</style>
 </head>
 <body>
-<main>
+{{if .R.Brand.Custom}}<table class="report-frame" role="presentation"><tbody><tr><td>
+{{end}}<main>
 <header>
 {{if .Logo}}<img src="{{.Logo}}" alt="{{.R.Brand.ProductName}}">{{end}}
 <div>
 <h1>{{.R.Brand.ProductName}} assurance report</h1>
 <p class="period">{{.R.TenantName}} &middot; {{day .R.PeriodFrom}} to {{day .R.PeriodThrough}}</p>
 </div>
-</header>
+{{if .R.Brand.Custom}}<a class="powered-by" href="https://trstctl.com">Powered by trstctl</a>
+{{end}}</header>
 
 <section>
 <h2>Summary</h2>
@@ -152,7 +168,10 @@ footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line);
 <p>Generated {{stamp .R.GeneratedAt}}. This page is the rendering inside a signed report; verify the signed report offline before relying on it.</p>
 </footer>
 </main>
-</body>
+{{if .R.Brand.Custom}}</td></tr></tbody>
+<tfoot><tr><td><div class="page-foot"><span class="powered-by-page">Powered by trstctl</span></div></td></tr></tfoot>
+</table>
+{{end}}</body>
 </html>
 `))
 

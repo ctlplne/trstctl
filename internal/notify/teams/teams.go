@@ -94,11 +94,17 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 			return fmt.Errorf("msteams: validate webhook endpoint: %w", err)
 		}
 	}
+	text := notify.FormatMessage(alert)
+	if alert.PoweredBy != "" {
+		// MSP-1: a white-labeled tenant's card says so on its own line (a
+		// MessageCard's text needs a blank line to break).
+		text += "\n\n" + alert.PoweredBy
+	}
 	body, err := json.Marshal(messageCard{
 		Type:    "MessageCard",
 		Context: "http://schema.org/extensions",
 		Summary: "trstctl alert",
-		Text:    notify.FormatMessage(alert),
+		Text:    text,
 	})
 	if err != nil {
 		return fmt.Errorf("msteams: encode card: %w", err)

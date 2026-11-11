@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"trstctl.com/trstctl/internal/branding"
 	"trstctl.com/trstctl/internal/crypto"
 )
 
@@ -257,6 +258,9 @@ func (d *Dispatcher) DispatchMessage(ctx context.Context, message DeliveryMessag
 }
 
 func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage, alert Alert) error {
+	// MSP-1: a white-labeled tenant's notifications say "Powered by trstctl".
+	// The line comes from the tenant's brand, never from the payload.
+	alert.PoweredBy = branding.PoweredByLine(ctx, alert.TenantID)
 	channels, route, err := d.effectiveChannels(ctx, alert)
 	if err != nil {
 		return err

@@ -102,8 +102,12 @@ func TestCustomerReportSaysItPlainlyInTheTenantBrandAndComparesPeriods(t *testin
 			t.Errorf("HTML lacks %q", want)
 		}
 	}
-	if strings.Contains(r.HTML, "<script>") || strings.Contains(strings.ToLower(r.HTML), "trstctl") {
-		t.Fatal("the white-label rendering carries script or the product's own name")
+	// MSP-1: the white-label rendering names trstctl only in its two
+	// "Powered by trstctl" marks.
+	rest := strings.NewReplacer(`<a class="powered-by" href="https://trstctl.com">Powered by trstctl</a>`, "",
+		`<span class="powered-by-page">Powered by trstctl</span>`, "").Replace(r.HTML)
+	if strings.Contains(r.HTML, "<script>") || strings.Contains(strings.ToLower(rest), "trstctl") {
+		t.Fatal("the white-label rendering carries script, or names the product outside its Powered by trstctl marks")
 	}
 	if r.Incidents.Items[0].Evidence != "header.payload.signature" ||
 		r.Incidents.Items[0].EvidenceSHA256 != crypto.SHA256Hex([]byte("header.payload.signature")) {
@@ -158,5 +162,60 @@ func TestCustomerReportRefusesUnsafeBrandingAndBoundsEvidence(t *testing.T) {
 	def, err := BuildCustomerReport(CustomerInputs{TenantID: "t1", GeneratedAt: base, From: base.Add(-time.Hour), Through: base})
 	if err != nil || def.Brand.Custom || def.Brand.ProductName != branding.Default().ProductName || def.TenantName != "t1" {
 		t.Fatalf("default brand = %+v, %v", def.Brand, err)
+	}
+}
+
+// MSP-1: a report in a white-label brand shows "Powered by trstctl" on its
+// cover, beside the brand, and on every printed page: the repeating footer row
+// of the layout table the report sits in, printed with its own background, in
+// fixed trstctl colors that no brand value reaches (the hostile accent below is
+// refused, and the mark never reads the accent). A brand that sets only a login
+// message is still a white-label brand. A report in the built-in brand carries
+// no mark and no frame.
+func TestCustomerReportShowsPoweredByTrstctlOnTheCoverAndEveryPageMSP1(t *testing.T) {
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	render := func(brand branding.Brand) CustomerReport {
+		t.Helper()
+		r, err := BuildCustomerReport(CustomerInputs{TenantID: "t1", TenantName: "Customer One", Brand: brand,
+			GeneratedAt: base, From: base.Add(-24 * time.Hour), Through: base, Facts: customerTestFacts(base)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	const cover = `<a class="powered-by" href="https://trstctl.com">Powered by trstctl</a>`
+	const everyPage = `<span class="powered-by-page">Powered by trstctl</span>`
+	for name, brand := range map[string]branding.Brand{
+		"full brand with a hostile accent": {ProductName: "Northwind Managed PKI", LogoDataURI: testLogo,
+			TokenOverrides: map[string]string{"accent": "red;}.powered-by{display:none", "--foreground": "0 0% 100%"}},
+		"login message only": {LoginMessage: "Northwind customers sign in with their Northwind account."},
+	} {
+		r := render(brand)
+		header := r.HTML[strings.Index(r.HTML, "<header>"):strings.Index(r.HTML, "</header>")]
+		if !r.Brand.Custom || !strings.Contains(header, cover) {
+			t.Errorf("%s: the cover does not show the mark beside the brand:\n%s", name, header)
+		}
+		if !strings.Contains(r.HTML, everyPage) {
+			t.Errorf("%s: no per-page mark", name)
+		}
+		// The per-page mark is the footer row of the layout table the report
+		// sits in, which a browser repeats at the bottom of each printed page.
+		if !strings.Contains(r.HTML, `<table class="report-frame" role="presentation"><tbody><tr><td>`) ||
+			!strings.Contains(r.HTML, `<tfoot><tr><td><div class="page-foot">`+everyPage+`</div></td></tr></tfoot>`) {
+			t.Errorf("%s: the per-page mark is not the report's repeating footer row", name)
+		}
+		for _, rule := range []string{"print-color-adjust: exact;", "background: #0b2e24 !important;",
+			"color: #ffffff !important;", "font: 600 12px/16px", "visibility: visible !important;"} {
+			if !strings.Contains(r.HTML, rule) {
+				t.Errorf("%s: the mark's fixed styling lacks %q", name, rule)
+			}
+		}
+		if strings.Contains(r.HTML, ".powered-by{display:none") || r.Brand.Accent != defaultAccent {
+			t.Errorf("%s: a brand value reached the stylesheet (accent %q)", name, r.Brand.Accent)
+		}
+	}
+	if def := render(branding.Brand{}); def.Brand.Custom || strings.Contains(def.HTML, "Powered by trstctl") ||
+		strings.Contains(def.HTML, "report-frame") || strings.Contains(def.HTML, "powered-by") {
+		t.Fatal("a report in the built-in brand carries the mark or its layout")
 	}
 }

@@ -92,7 +92,12 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 			return fmt.Errorf("slack: validate webhook endpoint: %w", err)
 		}
 	}
-	body, err := json.Marshal(payload{Text: notify.FormatMessage(alert)})
+	text := notify.FormatMessage(alert)
+	if alert.PoweredBy != "" {
+		// MSP-1: a white-labeled tenant's message says so on its own line.
+		text += "\n" + alert.PoweredBy
+	}
+	body, err := json.Marshal(payload{Text: text})
 	if err != nil {
 		return fmt.Errorf("slack: encode message: %w", err)
 	}

@@ -169,3 +169,40 @@ func TestHostileLogoURIIsNotEmbedded(t *testing.T) {
 		})
 	}
 }
+
+// MSP-1: every email in a white-label brand carries "Powered by trstctl" in
+// its header, under the brand's logo or name and before the body, not only in
+// the footer, in fixed trstctl colors. A brand that sets only an email footer
+// (no product name) is still white-label, keeps that footer, and carries the
+// line; an email in the built-in brand does not.
+func TestBrandedEmailHeaderSaysPoweredByTrstctlMSP1(t *testing.T) {
+	_, resolver := seededResolver(t)
+	const line = `<a href="https://trstctl.com" style="color:#ffffff;font:bold 12px/16px Arial,Helvetica,sans-serif;text-decoration:none;">Powered by trstctl</a>`
+	for name, brand := range map[string]branding.Brand{
+		"resolved tenant brand": resolver.Resolve(context.Background(), "", "tenant-a"),
+		"email footer only":     {EmailFooter: "Northwind Managed PKI"},
+		"hostile colors only":   {TokenOverrides: map[string]string{"--background": "0 0% 100%", "color": "#ffffff"}},
+	} {
+		html, _, err := RenderEmail(brand, Email{Subject: "Certificate expiring", BodyHTML: template.HTML("<p>Rotate api.acme.example</p>")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		at, body := strings.Index(html, line), strings.Index(html, "<p>Rotate api.acme.example</p>")
+		if at < 0 || body < 0 || at > body {
+			t.Errorf("%s: the header has no Powered by trstctl line ahead of the body:\n%s", name, html)
+		}
+		if !strings.Contains(html, `bgcolor="#0b2e24" style="background-color:#0b2e24;`) {
+			t.Errorf("%s: the line is not on its fixed background", name)
+		}
+		if brand.EmailFooter != "" && !strings.Contains(html, brand.EmailFooter) {
+			t.Errorf("%s: the brand's footer was dropped", name)
+		}
+	}
+	html, _, err := RenderEmail(branding.Default(), Email{Subject: "x", BodyHTML: template.HTML("<p>ok</p>")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(html, "Powered by trstctl") {
+		t.Fatal("an email in the built-in brand carries the line")
+	}
+}

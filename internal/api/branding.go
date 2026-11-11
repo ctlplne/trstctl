@@ -53,18 +53,19 @@ type brandResponse struct {
 	// Custom reports whether a provider brand was actually resolved, so the
 	// console can tell "the default, because nothing is configured" from "the
 	// default, because this host has no brand". Both render identically and
-	// only one is a misconfiguration.
+	// only one is a misconfiguration. It is branding.IsCustom: any field that
+	// differs from the built-in brand, colors and email strings included, and
+	// the console shows "Powered by trstctl" beside every custom brand (MSP-1).
 	Custom bool `json:"custom"`
 }
 
 func (a *API) getBrand(w http.ResponseWriter, r *http.Request) {
 	b := branding.Resolve(r.Context(), r.Host, "")
-	def := branding.Default()
 	a.writeJSON(w, http.StatusOK, brandResponse{
 		ProductName:  b.ProductName,
 		LogoDataURI:  b.LogoDataURI,
 		LoginMessage: b.LoginMessage,
 		Tokens:       b.TokenOverrides,
-		Custom:       b.ProductName != def.ProductName || b.LogoDataURI != "" || b.LoginMessage != "",
+		Custom:       branding.IsCustom(b),
 	})
 }

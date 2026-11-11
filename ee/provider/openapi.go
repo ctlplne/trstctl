@@ -211,6 +211,11 @@ func providerOpenAPISchemas() map[string]any {
 		"email_from_name": str, "email_footer": str, "custom_domain": str,
 		"token_overrides": map[string]any{"type": "object", "additionalProperties": str},
 	})
+	// MSP-1: a brand write names only these fields, and none of them turns off
+	// "Powered by trstctl".
+	brandRequest["additionalProperties"] = false
+	brandRequest["description"] = "A customer's white-label brand. A field not listed here is refused. " +
+		"\"Powered by trstctl\" shows beside every white-label brand and is not a brand setting."
 	baselineObject := map[string]any{"type": "object", "description": "A tenant baseline: profiles, policy, issuers (CA bindings), deployment_targets (connector defaults), notification_channels, members (role grants) and report_schedules, each in the shape the core API accepts for that object."}
 	baselineState := object(map[string]any{"kind": str, "key": str, "object_id": str,
 		"status":          map[string]any{"type": "string", "enum": []string{"in_sync", "drifted", "missing"}},

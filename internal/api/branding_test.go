@@ -75,8 +75,7 @@ func TestTheDefaultBrandIsReportedAsNotCustom(t *testing.T) {
 	if b.ProductName != def.ProductName {
 		t.Fatalf("product name = %q with no source installed, want the built-in default", b.ProductName)
 	}
-	custom := b.ProductName != def.ProductName || b.LogoDataURI != "" || b.LoginMessage != ""
-	if custom {
+	if branding.IsCustom(b) {
 		t.Fatal("the built-in default was reported as a custom brand; an operator could not tell " +
 			"an unconfigured deployment from one whose host has no brand")
 	}
@@ -96,6 +95,29 @@ func TestTheBrandRouteDeclaresWhatItDoesNotExpose(t *testing.T) {
 		if !strings.Contains(r, must) {
 			t.Errorf("the rationale does not state %q — a public route whose rationale does not "+
 				"bound its contents invites tenant data into it later", must)
+		}
+	}
+}
+
+// MSP-1: a brand that changes only colors (here, hostile ones that would blank
+// the page) or only the email strings is still a white-label brand, so the
+// console shows "Powered by trstctl" beside it and applies its overrides only
+// with the mark present. Before, the route called such a brand not custom.
+func TestABrandThatChangesOnlyColorsOrEmailIsCustomMSP1(t *testing.T) {
+	for name, brand := range map[string]branding.Brand{
+		"hostile colors only": {ProductName: "trstctl", TokenOverrides: map[string]string{"--foreground": "0 0% 100%", "--font-size-body": "0px"}},
+		"email footer only":   {ProductName: "trstctl", EmailFooter: "Northwind Managed PKI"},
+	} {
+		branding.SetSource(&fakeBrandSource{brand: brand})
+		rec := httptest.NewRecorder()
+		(&API{}).getBrand(rec, httptest.NewRequest(http.MethodGet, "/api/v1/brand", nil))
+		branding.SetSource(nil)
+		var got brandResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if !got.Custom {
+			t.Errorf("a brand with %s was served as not custom: %s", name, rec.Body.String())
 		}
 	}
 }

@@ -29,6 +29,7 @@ const emailTemplate = `<!DOCTYPE html>
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;padding:32px;">
 <tr><td style="padding-bottom:16px;">
 {{if .LogoDataURI}}<img src="{{.LogoDataURI}}" alt="{{.ProductName}}" height="32" style="display:block;">{{else}}<strong style="font-size:18px;">{{.ProductName}}</strong>{{end}}
+{{if .PoweredBy}}<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td bgcolor="#0b2e24" style="background-color:#0b2e24;border-radius:9999px;padding:3px 10px;"><a href="https://trstctl.com" style="color:#ffffff;font:bold 12px/16px Arial,Helvetica,sans-serif;text-decoration:none;">{{.PoweredBy}}</a></td></tr></table>{{end}}
 </td></tr>
 <tr><td style="font-size:16px;line-height:1.5;">{{.Body}}</td></tr>
 <tr><td style="padding-top:24px;font-size:12px;color:#6b7280;">{{if .EmailFooter}}{{.EmailFooter}}{{else}}Sent by {{.ProductName}}.{{end}}</td></tr>
@@ -40,9 +41,16 @@ const emailTemplate = `<!DOCTYPE html>
 
 var emailTmpl = template.Must(template.New("email").Parse(emailTemplate))
 
+// RenderEmail renders an email in the brand. An email in a white-label brand
+// carries "Powered by trstctl" in its header, under the brand's logo or name
+// (MSP-1), in fixed trstctl styling that no brand field reaches.
 func RenderEmail(brand branding.Brand, email Email) (html string, from string, err error) {
-	if brand.ProductName == "" {
-		brand = branding.Default()
+	var poweredBy string
+	if branding.IsCustom(brand) {
+		poweredBy = branding.PoweredBy
+	}
+	if strings.TrimSpace(brand.ProductName) == "" {
+		brand.ProductName = branding.Default().ProductName
 	}
 	var buf bytes.Buffer
 	data := struct {
@@ -50,6 +58,7 @@ func RenderEmail(brand branding.Brand, email Email) (html string, from string, e
 		Preheader   string
 		ProductName string
 		LogoDataURI template.URL
+		PoweredBy   string
 		EmailFooter string
 		Body        template.HTML
 	}{
@@ -57,6 +66,7 @@ func RenderEmail(brand branding.Brand, email Email) (html string, from string, e
 		Preheader:   email.Preheader,
 		ProductName: brand.ProductName,
 		LogoDataURI: safeLogoURI(brand.LogoDataURI),
+		PoweredBy:   poweredBy,
 		EmailFooter: brand.EmailFooter,
 		Body:        email.BodyHTML,
 	}

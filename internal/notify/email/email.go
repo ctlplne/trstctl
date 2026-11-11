@@ -132,7 +132,13 @@ func (c *Channel) NotifyDelivery(ctx context.Context, alert notify.Alert, delive
 	}
 	// The reserved domain is an identifier namespace, not a delivery address.
 	messageID := "<" + crypto.SHA256Base64URL(binding) + "@trstctl.invalid>"
-	msg, err := buildMessage(c.from, c.to, messageSubject(alert), notify.FormatMessage(alert), messageID, time.Now().UTC())
+	body := notify.FormatMessage(alert)
+	if alert.PoweredBy != "" {
+		// MSP-1: a white-labeled tenant's email carries the line in its header,
+		// ahead of the message.
+		body = alert.PoweredBy + "\n\n" + body
+	}
+	msg, err := buildMessage(c.from, c.to, messageSubject(alert), body, messageID, time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("email: render alert: %w", err)
 	}

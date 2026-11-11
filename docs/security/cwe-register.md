@@ -645,7 +645,7 @@ not this file.
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:235` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/slack_app_lost_answer_served_test.go:31` | env: references to test-only values, no credential (CWE-798) |
-| `internal/server/slack_app_served_test.go:126` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_app_served_test.go:127` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
@@ -1478,9 +1478,9 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
-| `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
-| `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
+| `ee/whitelabel/email.go:109` | scheme and host validated above; https only (CWE-79) |
+| `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
+| `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
 ### G204 — CWE-78 OS command injection (391 sites)
 

@@ -25,6 +25,25 @@ func Default() Brand {
 	return Brand{ProductName: "trstctl"}
 }
 
+// PoweredBy is the attribution every surface that shows a white-label brand
+// carries beside it (MSP-1): the console header and sign-in page, every email's
+// header, the customer assurance report's cover and pages, and notifications.
+// It is not a brand field, so no brand document can change or remove it.
+const PoweredBy = "Powered by trstctl"
+
+// PoweredByURL is where the attribution links.
+const PoweredByURL = "https://trstctl.com"
+
+// IsCustom reports whether b is a white-label brand: any field differs from the
+// built-in brand. It is the one rule for when a surface shows PoweredBy, so a
+// brand that changes only colors or only the email strings is still custom.
+func IsCustom(b Brand) bool {
+	name := strings.TrimSpace(b.ProductName)
+	return (name != "" && name != Default().ProductName) || strings.TrimSpace(b.LogoDataURI) != "" ||
+		strings.TrimSpace(b.LoginMessage) != "" || len(b.TokenOverrides) > 0 ||
+		strings.TrimSpace(b.EmailFromName) != "" || strings.TrimSpace(b.EmailFooter) != ""
+}
+
 type Source interface {
 	Resolve(ctx context.Context, host, tenantID string) Brand
 	TenantForHost(ctx context.Context, host string) string
@@ -55,6 +74,16 @@ func Resolve(ctx context.Context, host, tenantID string) Brand {
 	s := src
 	mu.RUnlock()
 	return s.Resolve(ctx, NormalizeHost(host), tenantID)
+}
+
+// PoweredByLine is PoweredBy when the tenant's resolved brand is a white-label
+// brand and "" when it is the built-in brand. Notifications, tickets and posts
+// sent for a tenant carry this line; it reads the brand, never a setting.
+func PoweredByLine(ctx context.Context, tenantID string) string {
+	if IsCustom(Resolve(ctx, "", tenantID)) {
+		return PoweredBy
+	}
+	return ""
 }
 
 func TenantForHost(ctx context.Context, host string) string {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/branding"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -496,11 +497,22 @@ func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteract
 			verb := map[bool]string{true: "approved", false: "denied"}[approve]
 			text := fmt.Sprintf("Approval request %s was %s by %s.", d.Request, verb, subject)
 			_ = a.client.Update(ctx, token, slackapp.Message{Channel: in.Container.ChannelID, TS: in.Container.MessageTS}, text,
-				[]any{map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": text}}})
+				append([]any{map[string]any{"type": "section", "text": map[string]any{"type": "mrkdwn", "text": text}}}, slackPoweredBy(ctx, tenantID)...))
 			secret.Wipe(token)
 		}
 	}
 	return ""
+}
+
+// slackPoweredBy is the block a white-labeled tenant's approval messages end
+// with, posted and decided alike: "Powered by trstctl" (MSP-1). A tenant on
+// the built-in brand gets none.
+func slackPoweredBy(ctx context.Context, tenantID string) []any {
+	line := branding.PoweredByLine(ctx, tenantID)
+	if line == "" {
+		return nil
+	}
+	return []any{map[string]any{"type": "context", "elements": []any{map[string]any{"type": "mrkdwn", "text": line}}}}
 }
 
 // slackApprovalTag is the metadata an approval request's message carries.
@@ -569,6 +581,7 @@ func (a *slackAppServer) postApproval(ctx context.Context, tenantID string, aler
 			map[string]any{"type": "button", "action_id": "deny", "style": "danger", "value": values["deny"], "text": map[string]any{"type": "plain_text", "text": "Deny"}},
 		}},
 	}
+	blocks = append(blocks, slackPoweredBy(ctx, tenantID)...)
 	msg, err := a.client.PostTagged(ctx, token, in.ApprovalChannelID, "Approval requested: "+alert.Detail, blocks, tag)
 	if err != nil {
 		return false, err
