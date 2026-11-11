@@ -64,6 +64,9 @@ const (
 	DestinationRisk = "notification.risk"
 	// DestinationHoneyToken carries the first observed use of an inert decoy.
 	DestinationHoneyToken = "notification.honeytoken"
+	// DestinationSecretSync carries a scoped secret sync's failed delivery of
+	// a key it manages (A237-L4): its write or its delete failed for good.
+	DestinationSecretSync = "notification.secret_sync" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	// DestinationContainment pages tenant operators when an exact emergency
 	// host stop could not be verified. It is separate from ordinary endpoint
 	// verification because a compromised leaf may still be serving.
@@ -143,6 +146,9 @@ const (
 	// so a use of the bait is not seen until it can.
 	KindHoneyTokenWatchGap        = "honeytoken.watch_gap"
 	KindEndpointContainmentFailed = "endpoint.containment_failed"
+	// KindScopedSyncDeliveryFailed (A237-L4): a scoped secret sync could not
+	// write or delete a destination key it manages.
+	KindScopedSyncDeliveryFailed = "secret.scoped_sync.delivery_failed" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

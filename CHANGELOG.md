@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- A scoped sync's failed delivery raises a warning (A237-L4). When the write or the delete of a
+  destination key a scoped secret sync manages failed for good, only `scoped-syncs show` said so, and
+  nobody was told. Each such failure now raises one warning on the notification surface
+  (`secret.scoped_sync.delivery_failed` on `notification.secret_sync`), in the transaction that records
+  it, naming the sync, the key, the target and the closed reason, never a value. A replay or a rebuild
+  from the log raises no second alert.
 - A report removal that keeps failing says why (A206-L1). When the report retention could not remove a
   report, the outbox recorded only `external_delivery_failed`, so an operator could not tell an
   archive that refused the delete from one that kept the report or could not be read without the

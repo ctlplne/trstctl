@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2897 annotated sites across 33 rules. Each row is
+2901 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (619 sites)
+### G101 — CWE-798 Use of hardcoded credentials (623 sites)
 
 | Location | Reason |
 |---|---|
@@ -339,7 +339,9 @@ not this file.
 | `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/mdm/entra_test.go:22` | an unsigned stand-in token shape, not a credential (CWE-798) |
 | `internal/mdm/entra_test.go:99` | malformed stand-in token responses, no credential value (CWE-798) |
-| `internal/notify/notify.go:89` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/notify/notify.go:69` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/notify/notify.go:92` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/notify/notify.go:151` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/oauthrevoke/oauthrevoke_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -568,6 +570,7 @@ not this file.
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_integrations.go:1504` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/secret_scoped_sync_alert_served_test.go:81` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_static_rotation_ldap_two_user_container_test.go:245` | fabricated lab password the first rotation retires (CWE-798) |
@@ -669,7 +672,8 @@ not this file.
 | `internal/store/secret_migrations.go:223` | SQL column list, no credential (CWE-798) */ `id::text, project, state, digest, plan, accepted_open, created_by, created_at, staged_at, staged_by, |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/store/secret_scoped_sync.go:304` | SQL column list, no credential (CWE-798) |
+| `internal/store/secret_scoped_sync.go:364` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/store/secret_scoped_sync.go:404` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:359` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |

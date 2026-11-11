@@ -982,7 +982,11 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if errors.Is(err, pgx.ErrNoRows) {
 			return true, nil
 		}
-		return true, err
+		if err != nil {
+			return true, err
+		}
+		// A237-L4: a scoped sync's managed key the job wrote raises a warning.
+		return true, p.store.AlertSecretScopedSyncJobFailedTx(ctx, tx, e.TenantID, payload.ID, payload.Error, e.Time)
 	case EventSecretSyncReceiverSettled:
 		var payload SecretSyncReceiverSettled
 		if err := decode(e, &payload); err != nil {

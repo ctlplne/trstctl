@@ -284,20 +284,120 @@ func (s *Store) ApplySecretScopedSyncKeyDeletedTx(ctx context.Context, tx pgx.Tx
 }
 
 // ApplySecretScopedSyncDeleteFailedTx records a delete that exhausted its
-// retries; the key stays managed so the next plan proposes it again.
+// retries; the key stays managed so the next plan proposes it again. The
+// failure raises one warning (A237-L4).
 func (s *Store) ApplySecretScopedSyncDeleteFailedTx(ctx context.Context, tx pgx.Tx, tenantID, deleteID, reason string, at time.Time, sequence uint64) error {
 	seq, err := secretProjectSequence(sequence)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		UPDATE secret_scoped_sync_deletes SET state = 'failed', error = $3, updated_at = $4, event_sequence = $5
-		 WHERE tenant_id = $1 AND id = $2 AND state = 'queued'`, tenantID, deleteID, reason, at.UTC(), seq); err != nil {
+		 WHERE tenant_id = $1 AND id = $2 AND state = 'queued'`, tenantID, deleteID, reason, at.UTC(), seq)
+	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		UPDATE secret_scoped_sync_keys SET state = 'synced', delete_id = NULL, updated_at = $3
-		 WHERE tenant_id = $1 AND delete_id = $2`, tenantID, deleteID, at.UTC())
+		 WHERE tenant_id = $1 AND delete_id = $2`, tenantID, deleteID, at.UTC()); err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+	var syncID, target, remoteKey string
+	if err := tx.QueryRow(ctx, `SELECT sync_id::text, target, remote_key FROM secret_scoped_sync_deletes WHERE tenant_id = $1 AND id = $2`,
+		tenantID, deleteID).Scan(&syncID, &target, &remoteKey); err != nil {
+		return err
+	}
+	return alertSecretScopedSyncDeliveryFailedTx(ctx, tx, tenantID, "delete:"+deleteID, syncID, at,
+		func(name string) string {
+			return "Scoped sync " + name + " could not delete " + remoteKey + " from target " + target + " (" + reason +
+				"). The key stays managed, and the sync's next plan proposes deleting it again."
+		})
+}
+
+// AlertSecretScopedSyncJobFailedTx raises one warning (A237-L4) when the job
+// that writes a scoped sync's managed key failed for good: the destination key
+// keeps whatever it held before. A job no scoped sync manages raises none.
+func (s *Store) AlertSecretScopedSyncJobFailedTx(ctx context.Context, tx pgx.Tx, tenantID, jobID, reason string, at time.Time) error {
+	if jobID == "" {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT k.sync_id::text, k.remote_key, s.target
+		  FROM secret_scoped_sync_keys k
+		  JOIN secret_scoped_syncs s ON s.tenant_id = k.tenant_id AND s.id = k.sync_id
+		 WHERE k.tenant_id = $1 AND k.job_id = $2
+		 ORDER BY k.sync_id, k.remote_key`, tenantID, jobID)
+	if err != nil {
+		return err
+	}
+	type managed struct{ syncID, remoteKey, target string }
+	var keys []managed
+	for rows.Next() {
+		var k managed
+		if err := rows.Scan(&k.syncID, &k.remoteKey, &k.target); err != nil {
+			rows.Close()
+			return err
+		}
+		keys = append(keys, k)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if err := alertSecretScopedSyncDeliveryFailedTx(ctx, tx, tenantID, "job:"+jobID+":"+k.syncID, k.syncID, at,
+			func(name string) string {
+				return "Scoped sync " + name + " could not write " + k.remoteKey + " to target " + k.target + " (" + reason +
+					"). The destination key keeps what it held before; fix the target, then preview the sync to see what an apply writes."
+			}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SecretScopedSyncAlertDestination is the notification destination of a
+// scoped sync's failed deliveries (A237-L4).
+const SecretScopedSyncAlertDestination = "notification.secret_sync" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+
+// secretScopedSyncAlertWindow is how old a failure may be and still raise its
+// alert. The alert's outbox row is what keeps a replay from raising it twice,
+// and delivered rows are reclaimed a day after delivery (outboxgc's default
+// retention), so a rebuild replaying an older failure raises nothing.
+const secretScopedSyncAlertWindow = 24 * time.Hour
+
+// alertSecretScopedSyncDeliveryFailedTx enqueues one warning for a scoped
+// sync's failed delivery, keyed by the failure, in the transaction that
+// records it (AN-6). It names the definition, the destination key, the target
+// and the closed reason, never a value.
+func alertSecretScopedSyncDeliveryFailedTx(ctx context.Context, tx pgx.Tx, tenantID, failure, syncID string, at time.Time, detail func(name string) string) error {
+	if time.Since(at) > secretScopedSyncAlertWindow {
+		return nil
+	}
+	var name string
+	err := tx.QueryRow(ctx, `SELECT name FROM secret_scoped_syncs WHERE tenant_id = $1 AND id = $2`, tenantID, syncID).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	key := "secret.scoped_sync.delivery_failed:" + failure
+	alert, err := json.Marshal(map[string]any{
+		"kind": "secret.scoped_sync.delivery_failed", "tenant_id": tenantID, "operation_id": key,
+		"subject": name, "severity": "warning", "detail": detail(name),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+		 SELECT $1, $2, $3, $4
+		  WHERE NOT EXISTS (SELECT 1 FROM outbox WHERE tenant_id = $1 AND destination = $2 AND idempotency_key = $4)`,
+		tenantID, SecretScopedSyncAlertDestination, alert, key)
 	return err
 }
 

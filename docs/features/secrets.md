@@ -1829,8 +1829,12 @@ It then queues the durable per-secret sync jobs for the writes and one outbox co
 per delete. A source or destination that changed since the preview makes the plan
 stale (`409`, code `plan_stale`). A crash after a remote write is settled on retry by
 reading the destination back, so the value isn't written twice. `scoped-syncs show`
-lists the keys a sync manages with each delivery's status. Removing a definition leaves
-its destination keys where they are.
+lists the keys a sync manages with each delivery's status. A write or delete of a
+managed key that fails for good also raises a warning on the notification surface
+(`secret.scoped_sync.delivery_failed`, routed like other trust-operations alerts): it
+names the sync, the destination key, the target and the reason, never a value, and a
+failed delete keeps the key managed so the next plan proposes deleting it again.
+Removing a definition leaves its destination keys where they are.
 
 A definition is `manual` (it waits for a reviewed apply) or `auto`
 (`trstctl secrets scoped-syncs mode <id> -f mode.json` with `{"mode":"auto"}`, or

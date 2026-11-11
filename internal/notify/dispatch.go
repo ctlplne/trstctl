@@ -703,6 +703,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Decoy credential was used")
 	case KindHoneyTokenWatchGap:
 		b.WriteString("A decoy credential is not being watched")
+	case KindScopedSyncDeliveryFailed:
+		b.WriteString("A scoped secret sync could not deliver a key")
 	case KindEndpointContainmentFailed:
 		b.WriteString("Emergency endpoint containment failed")
 	case KindApprovalRequest:
