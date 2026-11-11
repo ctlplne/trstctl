@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ErrorState } from "@/components/StatePrimitives";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import { api, type AccessActivityFilter, type AccessAuthority, type AccessRun, type AccessRunIssued } from "@/lib/api";
+import { api, type AccessActivityFilter, type AccessAuthority, type AccessBundle, type AccessRun, type AccessRunIssued } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 
 // A251: agent access bundles. A bundle is a reusable set of permissions for
@@ -23,6 +24,46 @@ const list = (value: string) =>
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
+
+// A257-L3: a bundle's access targets as text, one per line: type/id: role, role.
+type AccessBundleTarget = AccessBundle["access_targets"][number];
+const accessTargetTypes: readonly AccessBundleTarget["target_type"][] = [
+  "aws",
+  "aws-console",
+  "azure",
+  "clickhouse",
+  "gcp",
+  "kubernetes",
+  "mongodb",
+  "mysql",
+  "postgres",
+  "rdp",
+  "redis",
+  "snowflake",
+  "ssh",
+];
+const formatTarget = (target: AccessBundleTarget) => `${target.target_type}/${target.target_id}: ${target.roles.join(", ")}`;
+const formatTargets = (targets: AccessBundleTarget[] = []) => targets.map(formatTarget).join("\n");
+
+function parseTargets(text: string): { targets: AccessBundleTarget[]; invalid: string[] } {
+  const targets: AccessBundleTarget[] = [];
+  const invalid: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const colon = line.indexOf(":");
+    const slash = line.indexOf("/");
+    const type = accessTargetTypes.find((known) => known === line.slice(0, slash).trim());
+    const id = colon > slash ? line.slice(slash + 1, colon).trim() : "";
+    const roles = colon > slash ? list(line.slice(colon + 1)) : [];
+    if (slash < 1 || !type || !id || roles.length === 0) {
+      invalid.push(line);
+      continue;
+    }
+    targets.push({ target_type: type, target_id: id, roles });
+  }
+  return { targets, invalid };
+}
 
 const runStatusKey: Record<string, MessageKey> = {
   active: "agentAccess.run.status.active",
@@ -76,6 +117,7 @@ export function AgentAccess() {
     name: "",
     description: "",
     permissions: "",
+    targets: "",
     ttlMinutes: "15",
     audiences: { ci: true } as Partial<Record<Audience, boolean>>,
   });
@@ -83,6 +125,7 @@ export function AgentAccess() {
   const [lookup, setLookup] = useState("");
   const [run, setRun] = useState({ ttlMinutes: "15", label: "" });
   const [filter, setFilter] = useState({ principal: "", q: "" });
+  const [targetEdit, setTargetEdit] = useState<{ id: string; revision: number; text: string } | null>(null);
 
   const act = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -104,14 +147,17 @@ export function AgentAccess() {
 
   const createBundle = () =>
     act(async () => {
+      const parsed = parseTargets(draft.targets);
+      if (parsed.invalid.length > 0) throw new Error(t("agentAccess.targets.invalid", { lines: parsed.invalid.join("; ") }));
       const created = await api.createAccessBundle({
         name: draft.name.trim(),
         description: draft.description.trim(),
         permissions: list(draft.permissions),
         audiences: audiences.filter((a) => draft.audiences[a]),
         max_run_ttl_seconds: Math.round(Number(draft.ttlMinutes) * 60),
+        ...(parsed.targets.length > 0 ? { access_targets: parsed.targets } : {}),
       });
-      setDraft({ ...draft, name: "", description: "", permissions: "" });
+      setDraft({ ...draft, name: "", description: "", permissions: "", targets: "" });
       setSelected(created.id);
       refresh();
     });
@@ -165,6 +211,27 @@ export function AgentAccess() {
     });
 
   const bundle = detail.data;
+  // The edit box starts from the bundle's saved targets and is dropped when
+  // the bundle or its revision changes, so a save always names what it read.
+  const targetText =
+    bundle && targetEdit && targetEdit.id === bundle.id && targetEdit.revision === bundle.revision ? targetEdit.text : formatTargets(bundle?.access_targets);
+  const saveTargets = () =>
+    act(async () => {
+      if (!bundle) return;
+      const parsed = parseTargets(targetText);
+      if (parsed.invalid.length > 0) throw new Error(t("agentAccess.targets.invalid", { lines: parsed.invalid.join("; ") }));
+      await api.updateAccessBundle(bundle.id, {
+        name: bundle.name,
+        description: bundle.description,
+        permissions: bundle.permissions,
+        audiences: bundle.audiences,
+        max_run_ttl_seconds: bundle.max_run_ttl_seconds,
+        access_targets: parsed.targets,
+        revision: bundle.revision,
+      });
+      setTargetEdit(null);
+      refresh();
+    });
   return (
     <div className="space-y-6">
       <header className="space-y-2">
@@ -185,6 +252,7 @@ export function AgentAccess() {
               <tr className="text-left">
                 <th>{t("agentAccess.bundles.col.name")}</th>
                 <th>{t("agentAccess.bundles.col.permissions")}</th>
+                <th>{t("agentAccess.bundles.col.targets")}</th>
                 <th>{t("agentAccess.bundles.col.ceiling")}</th>
                 <th>{t("agentAccess.bundles.col.use")}</th>
                 <th />
@@ -199,6 +267,19 @@ export function AgentAccess() {
                     </Button>
                   </td>
                   <td>{b.permissions.join(", ")}</td>
+                  <td>
+                    {b.access_targets.length === 0 ? (
+                      <span className="text-muted-foreground">{t("agentAccess.bundles.targetsNone")}</span>
+                    ) : (
+                      <ul>
+                        {b.access_targets.map((target) => (
+                          <li key={target.target_type + "/" + target.target_id} className="font-mono text-xs">
+                            {formatTarget(target)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td>{t("agentAccess.bundles.ceiling", { minutes: Math.round(b.max_run_ttl_seconds / 60) })}</td>
                   <td>{t("agentAccess.bundles.use", { grants: b.live_grants, runs: b.active_runs })}</td>
                   <td>
@@ -243,6 +324,11 @@ export function AgentAccess() {
                 />
               )}
             </Field>
+            <div className="md:col-span-2">
+              <Field label={t("agentAccess.targets.label")} controlId="bundle-targets" description={t("agentAccess.targets.help")}>
+                {(control) => <Textarea {...control} rows={3} value={draft.targets} onChange={(e) => setDraft({ ...draft, targets: e.target.value })} />}
+              </Field>
+            </div>
             <fieldset className="flex flex-wrap gap-4 md:col-span-2">
               <legend className="text-sm">{t("agentAccess.bundles.audiences")}</legend>
               {audiences.map((a) => (
@@ -318,6 +404,27 @@ export function AgentAccess() {
                 {t("agentAccess.grants.give")}
               </Button>
             </div>
+
+            <section className="grid gap-3" aria-labelledby="agent-access-targets">
+              <h2 id="agent-access-targets" className="font-medium">
+                {t("agentAccess.targets.title", { name: bundle.name })}
+              </h2>
+              <Field label={t("agentAccess.targets.label")} controlId="bundle-targets-edit" description={t("agentAccess.targets.help")}>
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    rows={4}
+                    value={targetText}
+                    onChange={(e) => setTargetEdit({ id: bundle.id, revision: bundle.revision, text: e.target.value })}
+                  />
+                )}
+              </Field>
+              <div>
+                <Button type="button" disabled={busy || targetText === formatTargets(bundle.access_targets)} onClick={() => void saveTargets()}>
+                  {t("agentAccess.targets.save")}
+                </Button>
+              </div>
+            </section>
 
             <section className="grid gap-3 md:grid-cols-3" aria-labelledby="agent-access-run">
               <h2 id="agent-access-run" className="font-medium md:col-span-3">

@@ -36882,6 +36882,35 @@ export const messages = {
   },
   "agentAccess.bundles.title": { defaultMessage: "Bundles", description: "Bundles card title." },
   "agentAccess.bundles.col.name": { defaultMessage: "Bundle", description: "Bundles table column." },
+  "agentAccess.bundles.col.targets": {
+    defaultMessage: "Access targets",
+    description: "A257-L3: bundle table column for the accounts a run may open privileged sessions to.",
+  },
+  "agentAccess.bundles.targetsNone": {
+    defaultMessage: "None",
+    description: "A257-L3: a bundle that names no access target.",
+  },
+  "agentAccess.targets.title": {
+    defaultMessage: "Access targets for {name}",
+    description: "A257-L3: heading of the selected bundle's access target editor.",
+  },
+  "agentAccess.targets.label": {
+    defaultMessage: "Access targets (one per line: type/id: role, role)",
+    description: "A257-L3: access target text box label.",
+  },
+  "agentAccess.targets.help": {
+    defaultMessage:
+      "Accounts a run may open privileged sessions to: a registered target and the roles allowed on it, such as ssh/bastion-01: ops. Types: aws, aws-console, azure, clickhouse, gcp, kubernetes, mongodb, mysql, postgres, rdp, redis, snowflake, ssh. A bundle that names targets carries access:sessions.open.",
+    description: "A257-L3: how to write access targets.",
+  },
+  "agentAccess.targets.save": {
+    defaultMessage: "Save access targets",
+    description: "A257-L3: saves the selected bundle's access targets at the revision read.",
+  },
+  "agentAccess.targets.invalid": {
+    defaultMessage: "Write each access target as type/id: role, role with a known type. Not understood: {lines}",
+    description: "A257-L3: access target lines the console could not read.",
+  },
   "agentAccess.bundles.col.permissions": { defaultMessage: "Permissions", description: "Bundles table column." },
   "agentAccess.bundles.col.ceiling": { defaultMessage: "Longest run", description: "Bundles table column: the longest a run may live." },
   "agentAccess.bundles.col.use": { defaultMessage: "In use", description: "Bundles table column: live grants and active runs." },

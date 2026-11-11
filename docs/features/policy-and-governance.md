@@ -233,7 +233,9 @@ TRSTCTL_TOKEN=<the machine's own token> trstctl-cli access runs create -f run.js
   own sessions and nothing else of access. Like every other field, an update replaces the
   list: omit it and the bundle delegates nothing. `trstctl-cli access agent` launches an
   agent with these accounts through the access gateway and no credential
-  (`docs/design/access-gateway.md`, "Agent launcher").
+  (`docs/design/access-gateway.md`, "Agent launcher"). The Agent access page lists each
+  bundle's accounts, sets them when it creates a bundle, and edits a bundle's accounts at the
+  revision it read, one per line as `type/id: role, role`.
 
 **Activity and the launcher.** `GET /api/v1/access/activity` (`trstctl-cli access activity`)
 searches every change (bundles saved and deleted, grants given and removed, runs issued and

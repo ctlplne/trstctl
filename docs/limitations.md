@@ -9035,8 +9035,6 @@ What comes next:
   waits for its reviewers (no automatic approval is added by default).
 - Confining the command's network to its tunnels (namespaces or a sandbox); today it holds no
   credential for its accounts, but it can reach whatever its host can.
-- The console creates bundles without delegated accounts and does not show them yet; the API
-  and CLI read and set them (`access_targets`).
 
 ## Credential health, access templates and emergency access (A258) — served
 

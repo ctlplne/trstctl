@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     accessBundles: vi.fn(),
     accessBundle: vi.fn(),
     createAccessBundle: vi.fn(),
+    updateAccessBundle: vi.fn(),
     deleteAccessBundle: vi.fn(),
     grantAccessBundle: vi.fn(),
     ungrantAccessBundle: vi.fn(),
@@ -134,6 +135,82 @@ describe("A251 agent access in the console", () => {
       }),
     );
     await waitFor(() => expect(apiMock.accessBundle).toHaveBeenCalledWith("b-new"));
+  });
+
+  // A257-L3: a bundle's access targets are shown, set at creation and edited
+  // at the revision read.
+  it("shows a bundle's access targets and creates a bundle with targets", async () => {
+    apiMock.accessBundles.mockResolvedValue({
+      items: [{ ...full, access_targets: [{ target_type: "ssh", target_id: "bastion-01", roles: ["ops", "read"] }] }],
+    });
+    apiMock.createAccessBundle.mockResolvedValue({ ...full, id: "b-new", name: "jump-hosts" });
+    const user = userEvent.setup();
+    renderPage();
+    expect(await screen.findByText("ssh/bastion-01: ops, read")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Bundle name"), "jump-hosts");
+    await user.type(screen.getByLabelText("Permissions (comma-separated, such as certs:read, owners:read)"), "access:sessions.open");
+    const targets = screen.getByRole("textbox", { name: "Access targets (one per line: type/id: role, role)" });
+    await user.type(targets, "ssh/bastion-01: ops{Enter}postgres/orders-db: reporting, audit");
+    await user.click(screen.getByRole("button", { name: "Create bundle" }));
+    await waitFor(() =>
+      expect(apiMock.createAccessBundle).toHaveBeenCalledWith({
+        name: "jump-hosts",
+        description: "",
+        permissions: ["access:sessions.open"],
+        audiences: ["ci"],
+        max_run_ttl_seconds: 900,
+        access_targets: [
+          { target_type: "ssh", target_id: "bastion-01", roles: ["ops"] },
+          { target_type: "postgres", target_id: "orders-db", roles: ["reporting", "audit"] },
+        ],
+      }),
+    );
+  });
+
+  it("edits a bundle's access targets at the revision it read", async () => {
+    const targeted = {
+      ...full,
+      permissions: ["access:sessions.open"],
+      access_targets: [{ target_type: "ssh" as const, target_id: "bastion-01", roles: ["ops"] }],
+    };
+    apiMock.accessBundles.mockResolvedValue({ items: [targeted] });
+    apiMock.accessBundle.mockResolvedValue({ ...targeted, grants: [], runs: [] });
+    apiMock.updateAccessBundle.mockResolvedValue({ ...targeted, revision: 2 });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "deploy-full" }));
+    const editor = within(await screen.findByRole("region", { name: "Access targets for deploy-full" }));
+    const box = editor.getByRole("textbox", { name: "Access targets (one per line: type/id: role, role)" });
+    expect(box).toHaveValue("ssh/bastion-01: ops");
+    await user.clear(box);
+    await user.type(box, "rdp/finance-ws: admin{Enter}ssh/bastion-01: ops, read");
+    await user.click(editor.getByRole("button", { name: "Save access targets" }));
+    await waitFor(() =>
+      expect(apiMock.updateAccessBundle).toHaveBeenCalledWith("b-full", {
+        name: "deploy-full",
+        description: "",
+        permissions: ["access:sessions.open"],
+        audiences: ["ci"],
+        max_run_ttl_seconds: 1800,
+        access_targets: [
+          { target_type: "rdp", target_id: "finance-ws", roles: ["admin"] },
+          { target_type: "ssh", target_id: "bastion-01", roles: ["ops", "read"] },
+        ],
+        revision: 1,
+      }),
+    );
+  });
+
+  it("refuses an access target line it cannot read without saving", async () => {
+    apiMock.accessBundle.mockResolvedValue({ ...full, grants: [], runs: [] });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "deploy-full" }));
+    const editor = within(await screen.findByRole("region", { name: "Access targets for deploy-full" }));
+    await user.type(editor.getByRole("textbox", { name: "Access targets (one per line: type/id: role, role)" }), "telnet/old-switch: admin");
+    await user.click(editor.getByRole("button", { name: "Save access targets" }));
+    expect(await screen.findByText(/Not understood: telnet\/old-switch: admin/)).toBeInTheDocument();
+    expect(apiMock.updateAccessBundle).not.toHaveBeenCalled();
   });
 
   it("shows the authority that remains after one of several grants is removed", async () => {
