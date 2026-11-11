@@ -2,6 +2,11 @@
 
 ### Added
 
+- The SPIRE upstream authority plugin implements `SubscribeToLocalBundle` (A205-L3). SPIRE Server
+  receives the trust domain's bundle as trstctl sees it, the root the configured `ca_authority_id`
+  chains to and the JWT keys the tenant's SPIRE servers and trstctl publish, and the open stream sends
+  it again when a key is published or the root changes, so SPIRE keeps its local bundle in step
+  without minting or rotating. A trstctl without JWT key publication contributes the root alone.
 - The SPIRE upstream JWT key set carries trstctl's own SPIFFE JWT authority (A205-L2).
   `/api/v1/spiffe/upstream-jwt-keys` (and so every SPIRE server running the trstctl upstream authority
   plugin) now lists the workload JWT keys trstctl publishes, the signing key, a next key published ahead

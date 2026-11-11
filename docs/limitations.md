@@ -6671,7 +6671,14 @@ This is a deliberate, documented trust boundary, not an accident.
   every workload JWT key it publishes, the signing one, a next key published
   ahead and a retiring one until it retires, as `published_by:
   trstctl-spiffe-jwt-authority`), so SPIRE servers verify the JWT-SVIDs trstctl
-  issues. SPIRE's optional `SubscribeToLocalBundle` is not implemented. Against a
+  issues. The plugin also implements SPIRE's `SubscribeToLocalBundle` (A205-L3):
+  SPIRE receives the root the configured authority chains to and the shared
+  JWT key set, and the stream sends again when another key is published or
+  the root changes (checked every `jwt_key_refresh_seconds`), so SPIRE keeps its
+  bundle in step without minting or rotating; proven through the SPIRE plugin
+  SDK's own client against the served API (the root read from trstctl's CA
+  authority listing, a published key reaching the open stream), while a
+  long-running SPIRE deployment's root rotation is a Track B observation. Against a
   trstctl that does not serve that route (an older trstctl's 404, or a 405 or
   501), the plugin reports JWT key publication as unsupported, so SPIRE keeps
   its JWT keys in its own bundle and still starts; the next JWT key rotation
