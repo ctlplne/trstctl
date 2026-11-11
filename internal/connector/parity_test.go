@@ -80,8 +80,11 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// PostgreSQL and MySQL execute on host agents and remain in the
 		// accepted denominator rather than being removed from it.
 		// A60: Envoy's SDS surface is proven against the envoytest double.
-		"envoy":   {migrated: false, disposition: ParityDispositionUnimplemented, missing: []ParityGate{ParityGateRollback, ParityGateReadback, ParityGateRelayExecutionProof, ParityGateCPPathRefusal}},
-		"aws-acm": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException, missing: []ParityGate{ParityGateRollback, ParityGateReadback}},
+		"envoy": {migrated: false, disposition: ParityDispositionUnimplemented, missing: []ParityGate{ParityGateRollback, ParityGateReadback, ParityGateRelayExecutionProof, ParityGateCPPathRefusal}},
+		// A166-L2: a listener target re-points the listener and reads back
+		// what it serves; deploys stay with the control plane where no relay
+		// is enrolled (ControlPlaneCarriesNatively), so routing does not change.
+		"aws-acm": {migrated: true, disposition: ParityDispositionMigrated},
 		// A166-L1: Key Vault rolls back by re-importing the predecessor's
 		// retained version and reads back the version served by name. Like
 		// GCP, its deploys stay with the control plane where no relay is
@@ -144,7 +147,7 @@ func TestNoFamilyIsUnmigratedWithoutSayingWhy(t *testing.T) {
 // wiring the control-plane refusal to it cannot change host or cloud routing.
 func TestOnlyApplianceFamiliesCanBeRelayMigrated(t *testing.T) {
 	t.Parallel()
-	for _, family := range []string{"nginx", "apache", "iis", "tomcat", "aws-acm",
+	for _, family := range []string{"nginx", "apache", "iis", "tomcat",
 		"postgresql", "", "does-not-exist"} {
 		if RelayMigrated(family) {
 			t.Errorf("%q reports relay-migrated; the control plane would refuse to deploy it "+
@@ -154,7 +157,7 @@ func TestOnlyApplianceFamiliesCanBeRelayMigrated(t *testing.T) {
 	// A cloud store that passed its gates stays with the control plane's own
 	// client where no relay is enrolled (A59), so its migration cannot leave
 	// a tenant without an executor.
-	for _, family := range []string{"gcp-certificate-manager", "azure-keyvault"} {
+	for _, family := range []string{"gcp-certificate-manager", "azure-keyvault", "aws-acm"} {
 		if RelayMigrated(family) && !ControlPlaneCarriesNatively(family) {
 			t.Errorf("%q reports relay-migrated but the control plane does not carry it natively; "+
 				"a tenant with no relay would have no executor for its deploys", family)

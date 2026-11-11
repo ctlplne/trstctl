@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2920 annotated sites across 33 rules. Each row is
+2921 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (640 sites)
+### G101 — CWE-798 Use of hardcoded credentials (641 sites)
 
 | Location | Reason |
 |---|---|
@@ -452,6 +452,7 @@ not this file.
 | `internal/server/audit_feed_syslog_elastic_served_test.go:63` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_syslog_elastic_served_test.go:65` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/auth_unit_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/aws_acm_listener_rollback_served_test.go:31` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/aws_honeytoken_served_test.go:140` | the fixture's fake decoy secret, not a credential (CWE-798) |
 | `internal/server/azure_keyvault_rollback_served_test.go:32` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -524,7 +525,7 @@ not this file.
 | `internal/server/journey_delivery_served_test.go:36` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:560` | fabricated test-only credential (CWE-798) |
 | `internal/server/journey_delivery_served_test.go:735` | fabricated test-only credential (CWE-798) |
-| `internal/server/journey_delivery_served_test.go:953` | fabricated test-only credential (CWE-798) |
+| `internal/server/journey_delivery_served_test.go:955` | fabricated test-only credential (CWE-798) |
 | `internal/server/key_vault_disable_served_test.go:78` | test-only environment variable names, no credential values (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:31` | fabricated fixture credential; no value is real (CWE-798) |
 | `internal/server/load_balancer_tls_served_test.go:32` | fabricated fixture credential; no value is real (CWE-798) |

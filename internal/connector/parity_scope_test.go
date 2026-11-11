@@ -45,12 +45,14 @@ func TestE1ScopeEveryAcceptedFamilyHasOneTruthfulDisposition(t *testing.T) {
 		}
 	}
 
-	// A59: GCP Certificate Manager migrated; ACM is a retained exception;
-	// Envoy, PostgreSQL and MySQL remain host-local work. A122 (owner decision
-	// 2026-10-26): cisco migrated once an ISE target became re-bindable and
-	// readable. A166-L1: Key Vault migrated once its rollback re-imported the
-	// predecessor's retained version and its readback read the served one.
-	if counts[ParityDispositionMigrated] != 9 || counts[ParityDispositionArchitectureException] != 1 || counts[ParityDispositionUnimplemented] != 3 {
-		t.Errorf("E1 disposition counts = %v, want migrated=9 architecture_exception=1 unimplemented=3", counts)
+	// A59: GCP Certificate Manager migrated; Envoy, PostgreSQL and MySQL
+	// remain host-local work. A122 (owner decision 2026-10-26): cisco migrated
+	// once an ISE target became re-bindable and readable. A166-L1: Key Vault
+	// migrated once its rollback re-imported the predecessor's retained version
+	// and its readback read the served one; A166-L2: ACM once a listener target
+	// re-pointed its listener and read back what it serves. No family is a
+	// retained architecture exception.
+	if counts[ParityDispositionMigrated] != 10 || counts[ParityDispositionArchitectureException] != 0 || counts[ParityDispositionUnimplemented] != 3 {
+		t.Errorf("E1 disposition counts = %v, want migrated=10 architecture_exception=0 unimplemented=3", counts)
 	}
 }

@@ -176,12 +176,11 @@ var cpRetainedFamilies = []string{
 	// cisco left this census when an ISE target became re-bindable and
 	// readable (A122, owner decision 2026-10-26), and azure-keyvault when its
 	// rollback became a re-import of the predecessor's retained version and
-	// its readback a read of the version served by name (A166-L1).
-	// ACM re-imports in place under one ARN with no previous version, so its
-	// API can express neither a re-bind nor a readback; it executes on a relay
-	// where one is enrolled and keeps the control-plane path as an explicit
-	// exception (A58, A59).
-	"aws-acm",
+	// its readback a read of the version served by name (A166-L1), and aws-acm
+	// when a target naming its load balancer listener began importing each
+	// deploy under a new ARN and re-pointing the listener (A166-L2). No family
+	// is retained today; the census stays for one whose API cannot express a
+	// re-bind or a readback.
 }
 
 // CPRetained reports whether a family's control-plane execution remains as an
@@ -198,12 +197,7 @@ func CPRetained(family string) bool {
 
 // retainedScopeNotes are the operator-facing sentences for the retained
 // families, each naming the API property that keeps E1 open for it.
-var retainedScopeNotes = map[string]string{
-	"aws-acm": "open architecture exception: an enrolled network relay executes ACM imports, but " +
-		"the control-plane path remains because ACM re-imports in place under one certificate ARN " +
-		"and keeps no previous version, so relay rollback and readback are not expressible; this " +
-		"family keeps E1 open and its support-matrix row records the limitation",
-}
+var retainedScopeNotes = map[string]string{}
 
 // unimplementedScopeNotes state where each omitted family executes today and
 // which E1 proof is absent. They are deliberately per family: one generic

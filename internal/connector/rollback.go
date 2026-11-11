@@ -197,6 +197,13 @@ var rollbackCapableFamilies = []string{
 	// ErrRollbackNotConfigured (A58). Its work executes in the control plane,
 	// the family's shipped vantage, never on a relay.
 	"gcp-certificate-manager",
+	// aws-acm re-binds only when the target names the Elastic Load Balancing
+	// listener that serves it (listener_arn): each deploy then imports a new
+	// certificate tagged with its fingerprint and points the listener at it,
+	// so the predecessor stays in the account. An in-place target re-imports
+	// under one ARN and its Rollback answers ErrRollbackNotConfigured
+	// (A166-L2).
+	"aws-acm",
 	// azure-keyvault keeps every imported version but serves the newest, so
 	// its Rollback makes the predecessor current again by importing that
 	// version's own retained secret as the newest version (A166-L1): the key
@@ -222,10 +229,6 @@ func RollbackReimports(name string) bool {
 func RollbackUnsupportedReason(name string) string {
 	if CanExecuteRollback(name) {
 		return ""
-	}
-	switch name {
-	case "aws-acm":
-		return "AWS Certificate Manager re-imports in place under one certificate ARN and keeps no previous version, so the predecessor leaves the account on renewal; restoring it would mean re-uploading its key, which the control plane no longer holds. Re-pointing a load balancer or distribution at another ARN is outside this connector"
 	}
 	if _, shipped := ShippedTargetVantage(name); !shipped {
 		return "signed WASM connector plugins export deploy only; the plugin ABI has no rollback entrypoint, so the control plane cannot ask a plugin to re-bind or restore"

@@ -99,6 +99,9 @@ var readbackCapableFamilies = []string{
 	// azure-keyvault answers with the certificate version the vault serves by
 	// name, which is what every consumer that reads by name gets (A166-L1).
 	"azure-keyvault",
+	// aws-acm answers for targets that name their load balancer listener: the
+	// listener says which certificate it serves (A166-L2).
+	"aws-acm",
 }
 
 // CanReadback reports whether a family can be asked what it has installed.

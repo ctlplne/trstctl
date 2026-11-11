@@ -72,18 +72,20 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "aws-acm",
-		APIContract: "AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4)",
+		APIContract: "AWS Certificate Manager (AWS JSON 1.1) and Elastic Load Balancing v2 listeners (Query API), SigV4",
 		ProvenOperations: []string{
 			"deploy: import an externally issued certificate and key into a new or existing ACM ARN",
-			"request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox",
+			"listener target (listener_arn): import each deploy as a new certificate tagged with its fingerprint and point the listener's default certificate at it (A166-L2)",
+			"rollback: point the listener back at the predecessor, found by its tag and confirmed by reading it back, uploading nothing (listener targets)",
+			"readback: the certificate the listener serves by default (listener targets)",
+			"request contract: sign the exact AWS JSON 1.1 and Query API requests with SigV4 through the connector sandbox",
 		},
 		KnownLimits: []string{
-			"no rollback: ACM re-imports in place under one certificate ARN and keeps no previous " +
-				"version, so there is no installed predecessor to re-bind and no readback; restoring one " +
-				"would mean re-uploading a key the control plane no longer holds",
-			"E1 architecture exception: an enrolled network relay executes imports and the control " +
-				"plane's egress-guarded client remains the executor where no relay is enrolled; " +
-				"rollback and readback are not expressible, so the family keeps E1 open",
+			"a target without listener_arn re-imports in place under one certificate ARN, which keeps no previous " +
+				"version, so it can neither roll back nor read back",
+			"a listener target re-points the listener's default certificate only; SNI certificates added to the " +
+				"listener and CloudFront distributions are not re-pointed",
+			"proven against ACM and Elastic Load Balancing stand-ins that verify SigV4; a live account is not yet proven",
 		},
 	},
 	{

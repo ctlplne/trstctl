@@ -2,6 +2,15 @@
 
 ### Added
 
+- An AWS Certificate Manager target can name the Elastic Load Balancing listener it serves
+  (`listener_arn`) and then roll back (A166-L2). ACM re-imports in place under one ARN and keeps no
+  previous version, so such a target instead imports each deploy as a new certificate tagged with its
+  fingerprint and points the listener's default certificate at it; the predecessor stays in the
+  account, a rollback points the listener back at it (found by its tag and confirmed by reading the
+  certificate back, uploading nothing), and a readback reports the certificate the listener serves.
+  Requests to both services are signed with SigV4. A target without a listener deploys in place as
+  before and still cannot roll back. With this, no connector family remains an E1 architecture
+  exception.
 - An Azure Key Vault target can be rolled back (A166-L1). Key Vault keeps every imported version but
   serves the newest by name, so the rollback finds the predecessor's version by its fingerprint, reads
   that version's retained secret and imports it again as the newest version; the key comes from the

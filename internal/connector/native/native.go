@@ -99,6 +99,12 @@ type Target struct {
 	// fingerprint-named and bound, which is what makes the target
 	// rollback-capable (A58).
 	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
+	// ListenerARN makes an aws-acm target a listener target (A166-L2): each
+	// deploy imports a new certificate and points this Elastic Load Balancing
+	// listener at it, which is what makes the target rollback-capable.
+	// ELBEndpoint overrides the regional load balancing endpoint.
+	ListenerARN string `json:"listener_arn,omitempty"`
+	ELBEndpoint string `json:"elb_endpoint,omitempty"`
 	// Vantage lets an envoy target declare "network" so a relay drives a
 	// remote SDS endpoint instead of the co-resident host agent (A61).
 	Vantage string `json:"vantage,omitempty"`
@@ -141,7 +147,7 @@ var targetFields = map[string]map[string]bool{
 	"cisco":                   fields("endpoint", "username", "password_ref", "node_hostname", "certificate_roles"),
 	"fortigate":               fields("endpoint", "token_ref"),
 	"paloalto":                fields("endpoint", "api_key_ref"),
-	"aws-acm":                 fields("endpoint", "region", "access_key_id", "secret_access_key_ref", "session_token_ref"),
+	"aws-acm":                 fields("endpoint", "region", "access_key_id", "secret_access_key_ref", "session_token_ref", "listener_arn", "elb_endpoint"),
 	"azure-keyvault":          fields("endpoint", "bearer_token_ref", "api_version"),
 	"gcp-certificate-manager": fields("endpoint", "project", "location", "bearer_token_ref", "poll_interval", "certificate_map_entry"),
 }
@@ -235,6 +241,13 @@ func validateTarget(name string, target Target) error {
 	case "aws-acm":
 		if !require(target.Endpoint, target.Region, target.AccessKeyID, target.SecretAccessKeyRef) {
 			return fmt.Errorf("connector: aws-acm requires endpoint, region, access_key_id, and secret_access_key_ref")
+		}
+		if target.ListenerARN != "" {
+			if err := acm.ValidateListenerARN(target.ListenerARN); err != nil {
+				return err
+			}
+		} else if target.ELBEndpoint != "" {
+			return fmt.Errorf("connector: aws-acm elb_endpoint needs a listener_arn")
 		}
 	case "azure-keyvault":
 		if !require(target.Endpoint, target.BearerTokenRef) {
@@ -450,9 +463,13 @@ func buildCloud(name string, target Target, require Require) (connector.Connecto
 				return nil, nil, err
 			}
 		}
+		options := []acm.Option{acm.WithEndpoint(target.Endpoint)}
+		if target.ListenerARN != "" {
+			options = append(options, acm.WithListener(target.ListenerARN), acm.WithELBEndpoint(target.ELBEndpoint))
+		}
 		return acm.New(target.Region, acm.Credentials{
 			AccessKeyID: target.AccessKeyID, SecretAccessKey: accessSecret, SessionToken: session,
-		}, acm.WithEndpoint(target.Endpoint)), nil, nil
+		}, options...), nil, nil
 	case "azure-keyvault":
 		token, err := credential(require, target.BearerTokenRef, "Azure bearer token")
 		if err != nil {

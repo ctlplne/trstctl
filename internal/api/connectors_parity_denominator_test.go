@@ -32,13 +32,14 @@ func TestConnectorCatalogPublishesTheAcceptedThirteenFamilyParityProgram(t *test
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("catalog parity families = %v, want the accepted E1 denominator %v", got, want)
 	}
-	// A59: GCP Certificate Manager migrated; ACM is a retained exception;
-	// Envoy, PostgreSQL and MySQL remain host work. A122: cisco migrated once
-	// an ISE target became re-bindable and readable; A166-L1: Key Vault once
-	// its rollback re-imported the predecessor version and its readback read
-	// the version served by name.
-	if counts["migrated"] != 9 || counts["architecture_exception"] != 1 || counts["unimplemented"] != 3 || len(counts) != 3 {
-		t.Fatalf("catalog parity dispositions = %v, want migrated=9 architecture_exception=1 unimplemented=3", counts)
+	// A59: GCP Certificate Manager migrated; Envoy, PostgreSQL and MySQL
+	// remain host work. A122: cisco migrated once an ISE target became
+	// re-bindable and readable; A166-L1: Key Vault once its rollback
+	// re-imported the predecessor version and its readback read the version
+	// served by name; A166-L2: ACM once a listener target re-pointed its
+	// listener. No family remains a retained exception.
+	if counts["migrated"] != 10 || counts["architecture_exception"] != 0 || counts["unimplemented"] != 3 || len(counts) != 2 {
+		t.Fatalf("catalog parity dispositions = %v, want migrated=10 architecture_exception=0 unimplemented=3", counts)
 	}
 }
 

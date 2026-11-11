@@ -288,10 +288,12 @@ func TestServedRollbackRefusalsNameTheProviderReason(t *testing.T) {
 	acm := create("arn:aws:acm:us-east-1:123456789012:certificate/a58", "aws-acm", map[string]any{
 		"region": "us-east-1", "access_key_id": "AKIDA58", "secret_access_key_ref": "secret://connectors/aws-acm/a58",
 	})
-	if model, reason := readinessReason(acm); model != "none" || !strings.Contains(reason, "keeps no previous version") {
+	// A166-L2: an ACM target re-binds once it names its load balancer
+	// listener; one without says so.
+	if model, reason := readinessReason(acm); model != "re-bind" || !strings.Contains(reason, "names no listener_arn") {
 		t.Fatalf("aws-acm readiness = %q %q", model, reason)
 	}
-	if status, body := rollback(acm); status != http.StatusConflict || !jsonContains(t, body, "no executable rollback route") || !jsonContains(t, body, "keeps no previous version") {
+	if status, body := rollback(acm); status != http.StatusConflict || !jsonContains(t, body, "names no listener_arn") || jsonContains(t, body, "rollback_queued") {
 		t.Fatalf("aws-acm rollback = %d %s", status, body)
 	}
 	// A166-L1: Key Vault rolls back by re-importing the predecessor's retained

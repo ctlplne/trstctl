@@ -17,10 +17,11 @@ func TestRollbackReadinessMirrorsTheRollbackRouteRefusals(t *testing.T) {
 		ready  bool
 		reason string
 	}{
-		"family without rollback":                        {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "no executable rollback"},
+		"family without rollback":                        {rollbackReadinessInputs{Family: "acme-corp-wasm"}, "none", false, "no executable rollback"},
 		"cisco without an ISE node":                      {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"endpoint":"https://ise"}`)}, "re-bind", false, "names no node_hostname"},
 		"cisco with an ISE node and no identity":         {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"node_hostname":"ise-01","certificate_roles":["eap"]}`)}, "re-bind", false, "no identity is bound"},
-		"aws-acm says why":                               {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "keeps no previous version"},
+		"aws-acm without a listener":                     {rollbackReadinessInputs{Family: "aws-acm", Rebind: true, Config: []byte(`{"region":"us-east-1"}`)}, "re-bind", false, "names no listener_arn"},
+		"aws-acm with a listener and no identity":        {rollbackReadinessInputs{Family: "aws-acm", Rebind: true, Config: []byte(`{"listener_arn":"arn:aws:elasticloadbalancing:us-east-1:1:listener/app/w/1/2"}`)}, "re-bind", false, "no identity is bound"},
 		"azure-keyvault with no identity":                {rollbackReadinessInputs{Family: "azure-keyvault", Rebind: true}, "re-bind", false, "no identity is bound"},
 		"plugin family says why":                         {rollbackReadinessInputs{Family: "acme-corp-wasm"}, "none", false, "no rollback entrypoint"},
 		"gcp without certificate_map_entry":              {rollbackReadinessInputs{Family: "gcp-certificate-manager", Rebind: true, Config: []byte(`{"project":"p"}`)}, "re-bind", false, "names no certificate_map_entry"},

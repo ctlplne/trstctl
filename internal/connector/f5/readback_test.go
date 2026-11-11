@@ -95,10 +95,11 @@ func TestAMissingProfileReadsAsAbsent(t *testing.T) {
 // verdict nobody measured.
 func TestAFamilyThatCannotReadBackSaysSo(t *testing.T) {
 	t.Parallel()
-	// cisco left this list when an ISE target became readable (A122), and
+	// cisco left this list when an ISE target became readable (A122),
 	// azure-keyvault when its readback read the version served by name
-	// (A166-L1).
-	for _, family := range []string{"aws-acm"} {
+	// (A166-L1), and aws-acm when a listener target read back its listener
+	// (A166-L2). Host families and plugins still have nothing to ask.
+	for _, family := range []string{"nginx", "acme-corp-wasm", "does-not-exist"} {
 		if connector.CanReadback(family) {
 			t.Errorf("%s is listed as readback-capable, but its API exposes no call that reports "+
 				"an installed object separately from uploading one", family)

@@ -21,7 +21,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | Family | API/local contract | E1 disposition | Rollback | External target tested |
 | --- | --- | --- | --- | --- |
 | `a10` | A10 Thunder aXAPI v3 | `migrated` | yes (re-bind) | no |
-| `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `architecture_exception` | no | no |
+| `aws-acm` | AWS Certificate Manager (AWS JSON 1.1) and Elastic Load Balancing v2 listeners (Query API), SigV4 | `migrated` | yes (re-bind) | no |
 | `azure-keyvault` | Azure Key Vault Certificates and Secrets REST API v7.4 (import, versions, version secret) | `migrated` | yes (re-bind) | no |
 | `cisco` | Cisco ISE OpenAPI system certificates (import, per-node list, role update) for targets with node_hostname and certificate_roles; the legacy certificate-import call (HTTP Basic, JSON) otherwise | `migrated` | yes (re-bind) | no |
 | `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
@@ -52,19 +52,23 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## aws-acm
 
-**API/local contract:** AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4)
+**API/local contract:** AWS Certificate Manager (AWS JSON 1.1) and Elastic Load Balancing v2 listeners (Query API), SigV4
 
-**E1 disposition:** `architecture_exception`
+**E1 disposition:** `migrated`
 
 **Exercised against a faithful management-API double:**
 
 - deploy: import an externally issued certificate and key into a new or existing ACM ARN
-- request contract: sign the exact AWS JSON 1.1 request with SigV4 through the connector sandbox
+- listener target (listener_arn): import each deploy as a new certificate tagged with its fingerprint and point the listener's default certificate at it (A166-L2)
+- rollback: point the listener back at the predecessor, found by its tag and confirmed by reading it back, uploading nothing (listener targets)
+- readback: the certificate the listener serves by default (listener targets)
+- request contract: sign the exact AWS JSON 1.1 and Query API requests with SigV4 through the connector sandbox
 
 **Known limits:**
 
-- no rollback: ACM re-imports in place under one certificate ARN and keeps no previous version, so there is no installed predecessor to re-bind and no readback; restoring one would mean re-uploading a key the control plane no longer holds
-- E1 architecture exception: an enrolled network relay executes imports and the control plane's egress-guarded client remains the executor where no relay is enrolled; rollback and readback are not expressible, so the family keeps E1 open
+- a target without listener_arn re-imports in place under one certificate ARN, which keeps no previous version, so it can neither roll back nor read back
+- a listener target re-points the listener's default certificate only; SNI certificates added to the listener and CloudFront distributions are not re-pointed
+- proven against ACM and Elastic Load Balancing stand-ins that verify SigV4; a live account is not yet proven
 
 ## azure-keyvault
 

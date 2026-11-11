@@ -30,6 +30,8 @@ import (
 const (
 	target        = "CertificateManager.ImportCertificate"
 	previewTarget = "CertificateManager.ListCertificates"
+	tagsTarget    = "CertificateManager.ListTagsForCertificate"
+	getTarget     = "CertificateManager.GetCertificate"
 )
 
 // Imported is a credential the fake ACM received.
@@ -37,6 +39,9 @@ type Imported struct {
 	Certificate []byte
 	PrivateKey  []byte
 	Chain       []byte
+	// Tags are the tags the first import applied (A166-L2); ACM refuses tags
+	// on a re-import.
+	Tags map[string]string
 }
 
 // Server is a fake ACM ImportCertificate endpoint.
@@ -47,9 +52,17 @@ type Server struct {
 
 	mu      sync.Mutex
 	imports map[string]Imported // ARN -> credential
+	order   []string            // ARNs in the order they were minted
 	calls   int
 	preview int
 	minted  int
+}
+
+// ARNs returns every certificate ARN in the account, in the order minted.
+func (s *Server) ARNs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.order...)
 }
 
 // New starts a fake ACM that accepts SigV4 requests signed with the given
@@ -101,23 +114,22 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	operation := r.Header.Get("X-Amz-Target")
-	if operation != target && operation != previewTarget {
+	if operation != target && operation != previewTarget && operation != tagsTarget && operation != getTarget {
 		s.fail(w, http.StatusBadRequest, "UnknownOperationException", "unexpected X-Amz-Target")
 		return
 	}
 	body, _ := io.ReadAll(r.Body)
 
-	if !s.verifySigV4(r, body) {
+	if !verifySigV4(r, body, s.accessKeyID, s.secretAccessKey, "acm") {
 		s.fail(w, http.StatusForbidden, "SignatureDoesNotMatch", "the request signature does not match")
 		return
 	}
-	if operation == previewTarget {
-		s.mu.Lock()
-		s.preview++
-		s.mu.Unlock()
-		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"CertificateSummaryList":[]}`))
+	switch operation {
+	case previewTarget:
+		s.listCertificates(w, body)
+		return
+	case tagsTarget, getTarget:
+		s.readCertificate(w, operation, body)
 		return
 	}
 
@@ -126,9 +138,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		PrivateKeyValue       string `json:"PrivateKey"`
 		CertificateChainValue string `json:"CertificateChain"`
 		CertificateArn        string `json:"CertificateArn"`
+		Tags                  []struct {
+			Key   string `json:"Key"`
+			Value string `json:"Value"`
+		} `json:"Tags"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		s.fail(w, http.StatusBadRequest, "SerializationException", err.Error())
+		return
+	}
+	if in.CertificateArn != "" && len(in.Tags) > 0 {
+		s.fail(w, http.StatusBadRequest, "ValidationException", "tags cannot be applied when re-importing a certificate")
 		return
 	}
 	cert, err1 := base64.StdEncoding.DecodeString(in.CertificateValue)
@@ -145,11 +165,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.calls++
 	arn := in.CertificateArn
+	tags := map[string]string{}
 	if arn == "" {
 		arn = fmt.Sprintf("arn:aws:acm:us-east-1:000000000000:certificate/%08d", s.minted)
 		s.minted++
+		s.order = append(s.order, arn)
+		for _, tag := range in.Tags {
+			tags[tag.Key] = tag.Value
+		}
+	} else {
+		if _, known := s.imports[arn]; !known {
+			s.order = append(s.order, arn)
+		}
+		tags = s.imports[arn].Tags
 	}
-	s.imports[arn] = Imported{Certificate: cert, PrivateKey: key, Chain: chain}
+	s.imports[arn] = Imported{Certificate: cert, PrivateKey: key, Chain: chain, Tags: tags}
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
@@ -157,11 +187,80 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"CertificateArn": arn})
 }
 
+// listCertificates answers ListCertificates two ARNs a page, so a client must
+// follow NextToken (the real page size is larger; the protocol is the same).
+func (s *Server) listCertificates(w http.ResponseWriter, body []byte) {
+	var in struct {
+		NextToken string `json:"NextToken"`
+	}
+	_ = json.Unmarshal(body, &in)
+	s.mu.Lock()
+	s.preview++
+	start := 0
+	if in.NextToken != "" {
+		_, _ = fmt.Sscanf(in.NextToken, "page-%d", &start)
+	}
+	end := min(start+2, len(s.order))
+	if start > end {
+		start = end
+	}
+	items := make([]map[string]string, 0, end-start)
+	for _, arn := range s.order[start:end] {
+		items = append(items, map[string]string{"CertificateArn": arn})
+	}
+	out := map[string]any{"CertificateSummaryList": items}
+	if end < len(s.order) {
+		out["NextToken"] = fmt.Sprintf("page-%d", end)
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// readCertificate answers ListTagsForCertificate and GetCertificate.
+func (s *Server) readCertificate(w http.ResponseWriter, operation string, body []byte) {
+	var in struct {
+		CertificateArn string `json:"CertificateArn"`
+	}
+	_ = json.Unmarshal(body, &in)
+	s.mu.Lock()
+	imported, ok := s.imports[in.CertificateArn]
+	s.mu.Unlock()
+	if !ok {
+		s.fail(w, http.StatusBadRequest, "ResourceNotFoundException", "no certificate with that ARN")
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+	if operation == getTarget {
+		_ = json.NewEncoder(w).Encode(map[string]string{"Certificate": string(imported.Certificate), "CertificateChain": string(imported.Chain)})
+		return
+	}
+	tags := []map[string]string{}
+	for k, v := range imported.Tags {
+		tags = append(tags, map[string]string{"Key": k, "Value": v})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"Tags": tags})
+}
+
+// SetTag changes one tag on a certificate, as anyone with tag rights in the
+// account could (a test of a rollback that must not trust a tag alone).
+func (s *Server) SetTag(arn, key, value string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	imported := s.imports[arn]
+	if imported.Tags == nil {
+		imported.Tags = map[string]string{}
+	}
+	imported.Tags[key] = value
+	s.imports[arn] = imported
+}
+
 // verifySigV4 reconstructs the canonical request from the received request and
 // the client's declared SignedHeaders, recomputes the signature under the test
 // secret, and compares it to the one presented — exactly the server side of
-// SigV4. It returns false on any structural problem or mismatch.
-func (s *Server) verifySigV4(r *http.Request, body []byte) bool {
+// SigV4, for the named service. It returns false on any structural problem or
+// mismatch.
+func verifySigV4(r *http.Request, body []byte, wantAccessKeyID, secretAccessKey, wantService string) bool {
 	auth := r.Header.Get("Authorization")
 	const algo = "AWS4-HMAC-SHA256 "
 	if !strings.HasPrefix(auth, algo) {
@@ -186,7 +285,7 @@ func (s *Server) verifySigV4(r *http.Request, body []byte) bool {
 	accessKeyID := scope[0]
 	credScope := scope[1] // date/region/service/aws4_request
 	cs := strings.Split(credScope, "/")
-	if accessKeyID != s.accessKeyID || len(cs) != 4 || cs[3] != "aws4_request" {
+	if accessKeyID != wantAccessKeyID || len(cs) != 4 || cs[3] != "aws4_request" || cs[2] != wantService {
 		return false
 	}
 	date, region, svc := cs[0], cs[1], cs[2]
@@ -214,7 +313,7 @@ func (s *Server) verifySigV4(r *http.Request, body []byte) bool {
 		crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
 
-	kDate := crypto.HMACSHA256([]byte("AWS4"+s.secretAccessKey), []byte(date))
+	kDate := crypto.HMACSHA256([]byte("AWS4"+secretAccessKey), []byte(date))
 	kRegion := crypto.HMACSHA256(kDate, []byte(region))
 	kService := crypto.HMACSHA256(kRegion, []byte(svc))
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))

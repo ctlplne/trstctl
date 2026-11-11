@@ -26,11 +26,23 @@ func TestE1DocsUseTheAcceptedDenominatorAndOpenStatuses(t *testing.T) {
 			t.Errorf("limitations still contains narrowed E1 claim %q", stale)
 		}
 	}
+	// The counts come from the parity program itself, so the prose cannot
+	// keep a count the code has moved past (it said four/three/six while the
+	// program reported eight/two/three).
+	counts := map[connector.ParityDisposition]int{}
+	for _, status := range connector.ParityProgram() {
+		counts[status.Disposition]++
+	}
+	words := []string{"none", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen"}
+	exceptions := words[counts[connector.ParityDispositionArchitectureException]] + " are open `architecture_exception` rows"
+	if counts[connector.ParityDispositionArchitectureException] == 0 {
+		exceptions = "none is an `architecture_exception` row"
+	}
 	for _, phrase := range []string{
 		"thirteen-family source-plan denominator",
-		"four are `migrated`",
-		"three are open `architecture_exception` rows",
-		"six are `unimplemented`",
+		words[counts[connector.ParityDispositionMigrated]] + " are `migrated`",
+		exceptions,
+		words[counts[connector.ParityDispositionUnimplemented]] + " are `unimplemented`",
 	} {
 		if !strings.Contains(limitationsWords, phrase) {
 			t.Errorf("limitations missing E1 denominator truth %q", phrase)

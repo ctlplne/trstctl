@@ -909,8 +909,10 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		"identity_id": ident.ID,
 		"reason":      "journey-001 rollback drill",
 	})
+	// A166-L2: an in-place ACM target (no listener_arn) is refused for the
+	// reason its configuration gives; a listener target would re-bind.
 	if status != http.StatusConflict || jsonContains(t, body, "rollback_recorded") ||
-		!jsonContains(t, body, "no executable rollback route") {
+		!jsonContains(t, body, "re-imports in place under one certificate ARN") {
 		t.Fatalf("unsupported rollback was not honestly refused: status %d body %s", status, body)
 	}
 	afterRefusal := connectorDeliveriesForIdentity(t, h, tok, ident.ID)

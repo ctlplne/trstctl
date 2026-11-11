@@ -20,6 +20,17 @@
 //
 // Key material is carried as []byte and PEM is treated as opaque (AN-8); the
 // leaf/chain split is structural (encoding/pem), not a certificate parse.
+//
+// Listener mode (A166-L2): ACM re-imports in place under one ARN and keeps no
+// previous version, so an in-place target cannot roll back. A target that
+// names the Elastic Load Balancing listener serving it (listener_arn) instead
+// imports each deploy as a NEW ACM certificate tagged with its fingerprint and
+// points the listener's default certificate at it. The predecessor stays in
+// the account, so a rollback re-points the listener at it again (found by its
+// tag, then confirmed by reading the certificate back), uploading nothing, and
+// a readback reports the certificate the listener serves. The listener calls
+// use the ELB v2 Query API, signed the same way for the elasticloadbalancing
+// service.
 package acm
 
 import (
@@ -28,7 +39,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -48,6 +62,15 @@ const (
 	amzTarget        = "CertificateManager.ImportCertificate"
 	amzPreviewTarget = "CertificateManager.ListCertificates"
 	jsonType         = "application/x-amz-json-1.1"
+	elbService       = "elasticloadbalancing"
+	elbVersion       = "2015-12-01"
+	formType         = "application/x-www-form-urlencoded; charset=utf-8"
+	// FingerprintTag is the ACM tag a listener-mode import carries: the
+	// certificate's fingerprint, which a rollback looks the predecessor up by.
+	FingerprintTag = "trstctl-fingerprint"
+	// maxRollbackCertificates bounds how many certificates a rollback reads
+	// while looking for the predecessor.
+	maxRollbackCertificates = 1000
 )
 
 // Credentials are the AWS access credentials used to sign requests. SessionToken
@@ -69,9 +92,18 @@ type Connector struct {
 	host     string // host[:port] of endpoint, for the net.dial grant and signing
 	creds    Credentials
 	now      func() time.Time
+	// listener is the ELB listener a listener-mode target serves through
+	// (A166-L2); empty is the in-place target.
+	listener    string
+	elbEndpoint string
+	elbHost     string
 }
 
-var _ connector.Connector = (*Connector)(nil)
+var (
+	_ connector.Connector  = (*Connector)(nil)
+	_ connector.Rollbacker = (*Connector)(nil)
+	_ connector.Readbacker = (*Connector)(nil)
+)
 
 // Option configures a Connector.
 type Option func(*Connector)
@@ -82,6 +114,32 @@ func WithEndpoint(endpoint string) Option {
 	return func(c *Connector) { c.setEndpoint(endpoint) }
 }
 
+// WithListener makes the target a listener-mode target (A166-L2): each deploy
+// imports a new certificate and points the ELB listener listenerARN at it.
+func WithListener(listenerARN string) Option {
+	return func(c *Connector) { c.listener = strings.TrimSpace(listenerARN) }
+}
+
+// ValidateListenerARN checks that arn names an Elastic Load Balancing (v2)
+// listener, the only thing a listener-mode target may re-point.
+func ValidateListenerARN(arn string) error {
+	parts := strings.SplitN(strings.TrimSpace(arn), ":", 6)
+	if len(parts) != 6 || parts[0] != "arn" || !strings.HasPrefix(parts[1], "aws") || parts[2] != "elasticloadbalancing" ||
+		parts[3] == "" || parts[4] == "" || !strings.HasPrefix(parts[5], "listener/") || strings.ContainsAny(arn, " \t\r\n") {
+		return fmt.Errorf("connector: aws-acm listener_arn must be an Elastic Load Balancing listener ARN (arn:aws:elasticloadbalancing:<region>:<account>:listener/...)")
+	}
+	return nil
+}
+
+// WithELBEndpoint overrides the regional Elastic Load Balancing endpoint.
+func WithELBEndpoint(endpoint string) Option {
+	return func(c *Connector) {
+		if strings.TrimSpace(endpoint) != "" {
+			c.setELBEndpoint(endpoint)
+		}
+	}
+}
+
 // New returns an ACM connector for region, signing with creds. The endpoint
 // defaults to the regional ACM service host.
 func New(region string, creds Credentials, opts ...Option) *Connector {
@@ -89,10 +147,18 @@ func New(region string, creds Credentials, opts ...Option) *Connector {
 	creds.SessionToken = secrettext.Clone(creds.SessionToken)
 	c := &Connector{region: region, creds: creds, now: time.Now}
 	c.setEndpoint(fmt.Sprintf("https://acm.%s.amazonaws.com", region))
+	c.setELBEndpoint(fmt.Sprintf("https://elasticloadbalancing.%s.amazonaws.com", region))
 	for _, o := range opts {
 		o(c)
 	}
 	return c
+}
+
+func (c *Connector) setELBEndpoint(endpoint string) {
+	c.elbEndpoint = strings.TrimRight(endpoint, "/")
+	if u, err := url.Parse(endpoint); err == nil {
+		c.elbHost = u.Host
+	}
 }
 
 // Close destroys the request-signing credential copies owned by this one-shot
@@ -115,25 +181,42 @@ func (c *Connector) setEndpoint(endpoint string) {
 func (c *Connector) Name() string { return "aws-acm" }
 
 // Capabilities declares the least privilege the connector needs: reach the ACM
-// endpoint over the network. No filesystem, no exec.
+// endpoint over the network, and the ELB endpoint for a listener-mode target.
+// No filesystem, no exec.
 func (c *Connector) Capabilities() pluginhost.Grant {
-	return pluginhost.NewGrant(pluginhost.CapNetDial).
+	grant := pluginhost.NewGrant(pluginhost.CapNetDial).
 		WithPathPrefix(pluginhost.CapNetDial, c.host)
+	if c.listener != "" {
+		grant = grant.WithPathPrefix(pluginhost.CapNetDial, c.elbHost)
+	}
+	return grant
 }
 
 // Deploy imports the renewed certificate and key into the ACM certificate named
 // by dep.Target (its ARN); an empty target imports a new certificate.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
+	if c.listener != "" {
+		return c.deployToListener(ctx, sb, dep)
+	}
+	_, err := c.importCertificate(ctx, sb, dep, dep.Target, nil)
+	return err
+}
+
+// importCertificate imports dep under arn (a re-import), or as a new
+// certificate carrying tags when arn is empty, and returns the ARN ACM
+// answered.
+func (c *Connector) importCertificate(ctx context.Context, sb connector.Sandbox, dep connector.Deployment, arn string, tags []tag) (string, error) {
 	leaf, chain := splitLeafChain(dep.CertPEM)
 
 	reqBody, err := json.Marshal(importRequest{
 		Certificate:      secretjson.Base64Bytes(leaf),
 		PrivateKey:       secretjson.Base64Bytes(dep.KeyPEM),
 		CertificateChain: b64(chain),
-		CertificateArn:   dep.Target,
+		CertificateArn:   arn,
+		Tags:             tags,
 	})
 	if err != nil {
-		return fmt.Errorf("acm: encode request: %w", err)
+		return "", fmt.Errorf("acm: encode request: %w", err)
 	}
 	// reqBody carries the base64 private key on the wire — the transient edge copy
 	// (the long-lived key stays []byte in dep.KeyPEM). Wipe it after the request so
@@ -142,7 +225,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/", bytes.NewReader(reqBody))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", jsonType)
 	req.Header.Set("X-Amz-Target", amzTarget)
@@ -150,14 +233,222 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 	resp, err := sb.Request(req)
 	if err != nil {
-		return fmt.Errorf("acm: import certificate: %w", err)
+		return "", fmt.Errorf("acm: import certificate: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		_ = secret.DrainBounded(resp.Body, 4<<10)
-		return fmt.Errorf("acm: import certificate: status %d (response body redacted)", resp.StatusCode)
+		return "", fmt.Errorf("acm: import certificate: status %d (response body redacted)", resp.StatusCode)
+	}
+	var out struct {
+		CertificateArn string `json:"CertificateArn"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil && arn == "" {
+		return "", fmt.Errorf("acm: decode import answer: %w", err)
 	}
 	_ = secret.DrainBounded(resp.Body, 1<<20)
+	if arn == "" && strings.TrimSpace(out.CertificateArn) == "" {
+		return "", errors.New("acm: the import answered no certificate ARN")
+	}
+	return out.CertificateArn, nil
+}
+
+// deployToListener imports dep as a new certificate tagged with its
+// fingerprint and points the listener's default certificate at it (A166-L2).
+// The predecessor stays in the account for a rollback.
+func (c *Connector) deployToListener(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
+	fingerprint := strings.TrimSpace(dep.Fingerprint)
+	if fingerprint == "" {
+		fingerprint = connector.CertificateFingerprint(dep.CertPEM)
+	}
+	arn, err := c.importCertificate(ctx, sb, dep, "", []tag{{Key: FingerprintTag, Value: fingerprint}})
+	if err != nil {
+		return err
+	}
+	if err := c.pointListener(ctx, sb, arn); err != nil {
+		return fmt.Errorf("acm: point listener at the new certificate %s: %w", arn, err)
+	}
+	return nil
+}
+
+// Rollback points a listener-mode target's listener back at the
+// predecessor's certificate, which a listener-mode deploy left in the account
+// (A166-L2). The predecessor is looked up by its fingerprint tag and confirmed
+// by reading the certificate back, since anyone with tag rights could move a
+// tag. Nothing is uploaded. An in-place target re-imports under one ARN and
+// keeps no predecessor: ErrRollbackNotConfigured.
+func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb connector.Rollback) error {
+	if c.listener == "" {
+		return connector.ErrRollbackNotConfigured
+	}
+	want := strings.ToLower(strings.TrimSpace(rb.PredecessorFingerprint))
+	if want == "" {
+		return connector.ErrNoPredecessorInstalled
+	}
+	var next string
+	for read := 0; read < maxRollbackCertificates; {
+		var page struct {
+			CertificateSummaryList []struct {
+				CertificateArn string `json:"CertificateArn"`
+			} `json:"CertificateSummaryList"`
+			NextToken string `json:"NextToken"`
+		}
+		in := map[string]any{"MaxItems": 100}
+		if next != "" {
+			in["NextToken"] = next
+		}
+		if err := c.callACM(ctx, sb, amzPreviewTarget, in, &page); err != nil {
+			return err
+		}
+		for _, summary := range page.CertificateSummaryList {
+			read++
+			var tags struct {
+				Tags []tag `json:"Tags"`
+			}
+			if err := c.callACM(ctx, sb, "CertificateManager.ListTagsForCertificate", map[string]string{"CertificateArn": summary.CertificateArn}, &tags); err != nil {
+				return err
+			}
+			tagged := false
+			for _, t := range tags.Tags {
+				tagged = tagged || t.Key == FingerprintTag && strings.EqualFold(t.Value, want)
+			}
+			if !tagged {
+				continue
+			}
+			fingerprint, err := c.certificateFingerprint(ctx, sb, summary.CertificateArn)
+			if err != nil {
+				return err
+			}
+			if fingerprint != want {
+				continue
+			}
+			if err := c.pointListener(ctx, sb, summary.CertificateArn); err != nil {
+				return fmt.Errorf("acm: point listener back at the predecessor %s: %w", summary.CertificateArn, err)
+			}
+			return nil
+		}
+		if next = page.NextToken; next == "" {
+			break
+		}
+	}
+	return connector.ErrNoPredecessorInstalled
+}
+
+// Readback reports the certificate a listener-mode target's listener serves
+// by default, read from ACM. An in-place target has no listener to ask:
+// ErrReadbackNotConfigured.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string) (connector.Installed, error) {
+	if c.listener == "" {
+		return connector.Installed{}, connector.ErrReadbackNotConfigured
+	}
+	var described struct {
+		Listeners []struct {
+			ListenerArn  string `xml:"ListenerArn"`
+			Certificates []struct {
+				CertificateArn string `xml:"CertificateArn"`
+			} `xml:"Certificates>member"`
+		} `xml:"DescribeListenersResult>Listeners>member"`
+	}
+	if err := c.callELB(ctx, sb, url.Values{"Action": {"DescribeListeners"}, "ListenerArns.member.1": {c.listener}}, &described); err != nil {
+		return connector.Installed{}, err
+	}
+	if len(described.Listeners) != 1 || described.Listeners[0].ListenerArn != c.listener {
+		return connector.Installed{}, errors.New("acm: the load balancer did not describe the configured listener")
+	}
+	if len(described.Listeners[0].Certificates) == 0 || described.Listeners[0].Certificates[0].CertificateArn == "" {
+		return connector.Installed{ObjectName: c.listener}, nil
+	}
+	arn := described.Listeners[0].Certificates[0].CertificateArn
+	fingerprint, err := c.certificateFingerprint(ctx, sb, arn)
+	if err != nil {
+		return connector.Installed{}, err
+	}
+	return connector.Installed{Fingerprint: fingerprint, ObjectName: arn, Bound: true}, nil
+}
+
+// certificateFingerprint reads an ACM certificate back and fingerprints it.
+func (c *Connector) certificateFingerprint(ctx context.Context, sb connector.Sandbox, arn string) (string, error) {
+	var got struct {
+		Certificate string `json:"Certificate"`
+	}
+	if err := c.callACM(ctx, sb, "CertificateManager.GetCertificate", map[string]string{"CertificateArn": arn}, &got); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(got.Certificate) == "" {
+		return "", fmt.Errorf("acm: certificate %s has no certificate body", arn)
+	}
+	return connector.CertificateFingerprint([]byte(got.Certificate)), nil
+}
+
+// pointListener makes arn the listener's default certificate.
+func (c *Connector) pointListener(ctx context.Context, sb connector.Sandbox, arn string) error {
+	var modified struct {
+		Listeners []struct {
+			ListenerArn string `xml:"ListenerArn"`
+		} `xml:"ModifyListenerResult>Listeners>member"`
+	}
+	if err := c.callELB(ctx, sb, url.Values{"Action": {"ModifyListener"}, "ListenerArn": {c.listener},
+		"Certificates.member.1.CertificateArn": {arn}}, &modified); err != nil {
+		return err
+	}
+	if len(modified.Listeners) != 1 || modified.Listeners[0].ListenerArn != c.listener {
+		return errors.New("acm: the load balancer did not confirm the listener change")
+	}
+	return nil
+}
+
+// callACM makes one read-only ACM JSON 1.1 call (no key material) and decodes
+// its bounded answer.
+func (c *Connector) callACM(ctx context.Context, sb connector.Sandbox, target string, in, out any) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("X-Amz-Target", target)
+	c.signV4(req, body, c.now().UTC())
+	resp, err := sb.Request(req)
+	if err != nil {
+		return fmt.Errorf("acm: %s: %w", target, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("acm: %s: status %d (response body redacted)", target, resp.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(out); err != nil {
+		return fmt.Errorf("acm: decode %s: %w", target, err)
+	}
+	return nil
+}
+
+// callELB makes one Elastic Load Balancing v2 Query API call and decodes its
+// bounded XML answer.
+func (c *Connector) callELB(ctx context.Context, sb connector.Sandbox, form url.Values, out any) error {
+	form.Set("Version", elbVersion)
+	body := []byte(form.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.elbEndpoint+"/", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", formType)
+	c.signV4For(req, body, c.now().UTC(), elbService, c.elbHost, false)
+	resp, err := sb.Request(req)
+	if err != nil {
+		return fmt.Errorf("acm: elastic load balancing %s: %w", form.Get("Action"), err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return fmt.Errorf("acm: elastic load balancing %s: status %d (response body redacted)", form.Get("Action"), resp.StatusCode)
+	}
+	if err := xml.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out); err != nil {
+		return fmt.Errorf("acm: decode elastic load balancing %s: %w", form.Get("Action"), err)
+	}
 	return nil
 }
 
@@ -198,11 +489,24 @@ type importRequest struct {
 	PrivateKey       secretjson.Base64Bytes `json:"PrivateKey"`
 	CertificateChain secretjson.Base64Bytes `json:"CertificateChain,omitempty"`
 	CertificateArn   string                 `json:"CertificateArn,omitempty"`
+	Tags             []tag                  `json:"Tags,omitempty"`
 }
 
-// signV4 adds AWS Signature Version 4 headers to req over body. Digests and the
-// keyed MAC route through the crypto boundary (AN-3).
+// tag is one ACM tag.
+type tag struct {
+	Key   string `json:"Key"`
+	Value string `json:"Value"`
+}
+
+// signV4 signs an ACM JSON 1.1 request.
 func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
+	c.signV4For(req, body, t, service, c.host, true)
+}
+
+// signV4For adds AWS Signature Version 4 headers to req over body, for the
+// named service at host; a JSON 1.1 request also signs its X-Amz-Target.
+// Digests and the keyed MAC route through the crypto boundary (AN-3).
+func (c *Connector) signV4For(req *http.Request, body []byte, t time.Time, svc, host string, signsTarget bool) {
 	amzDate := t.Format("20060102T150405Z")
 	dateStamp := t.Format("20060102")
 
@@ -211,7 +515,10 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 		req.Header.Set("X-Amz-Security-Token", secrettext.String(c.creds.SessionToken))
 	}
 
-	signed := []string{"content-type", "host", "x-amz-date", "x-amz-target"}
+	signed := []string{"content-type", "host", "x-amz-date"}
+	if signsTarget {
+		signed = append(signed, "x-amz-target")
+	}
 	if len(c.creds.SessionToken) > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
@@ -223,7 +530,7 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 		canonHeaders = append(canonHeaders, ':')
 		switch h {
 		case "host":
-			canonHeaders = append(canonHeaders, c.host...)
+			canonHeaders = append(canonHeaders, host...)
 		case "x-amz-security-token":
 			// The session token already has one unavoidable string copy in the
 			// HTTP header. Build the signed canonical copy directly from the
@@ -250,7 +557,7 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	secret.Wipe(canonicalRequest)
 	secret.Wipe(canonHeaders)
 
-	credScope := dateStamp + "/" + c.region + "/" + service + "/aws4_request"
+	credScope := dateStamp + "/" + c.region + "/" + svc + "/aws4_request"
 	stringToSign := strings.Join([]string{
 		"AWS4-HMAC-SHA256",
 		amzDate,
@@ -268,7 +575,7 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	secret.Wipe(seed)
 	kRegion := crypto.HMACSHA256(kDate, []byte(c.region))
 	secret.Wipe(kDate)
-	kService := crypto.HMACSHA256(kRegion, []byte(service))
+	kService := crypto.HMACSHA256(kRegion, []byte(svc))
 	secret.Wipe(kRegion)
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
 	secret.Wipe(kService)
