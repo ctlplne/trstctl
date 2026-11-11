@@ -383,6 +383,8 @@ var TenantScopedTables = []string{
 	"aws_honey_uses",
 	"aws_honey_scans",
 	"aws_honey_cloudtrail_slots",
+	// Q6-L1: secret decoy readers; no foreign keys.
+	"honey_token_readers",
 	"honey_tokens",
 	"machine_sessions",
 	"machine_auth_method_overrides",

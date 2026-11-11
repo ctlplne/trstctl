@@ -2016,11 +2016,17 @@ reference resolved with `?resolve=true`, and the Vault-compatible
 `honeytoken.triggered` with the authenticated reader. The first read moves the decoy
 to `triggered` and keeps that reader, method and route; every distinct reader queues
 exactly one critical `notification.honeytoken` alert naming them, so a second reader is
-not hidden behind the first and a reader repeating the read is not re-alerted. Listing
+not hidden behind the first. The decoy keeps its readers, each as a tenant-bound one-way
+reference (never its name) with its first and last read and how many reads it made, so a
+reader repeating the read is not re-alerted however long after, even once the delivered
+alert has left the outbox. The decoy reports how many readers read it, how many reads they
+made and when it was last read (`readers`, `reads`, `last_read_at`), and the console's
+decoy list says so. Listing
 names, reading metadata (native or Vault), the access preview, a template read without
 `resolve`, the NHI inventory, the credential graph, secret sync and trstctl's other
 internal reads never serve the value to a caller and never alert. A full read-model
-rebuild keeps the decoy's state and adds no alert. `retire` stops watching; the
+rebuild keeps the decoy's state and its readers, and adds no alert while the readers'
+alerts are still in the outbox (see the limitations). `retire` stops watching; the
 secret stays in place until you delete it.
 
 A decoy's value planted on purpose, in a repository as a lure for example, is found

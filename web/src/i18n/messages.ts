@@ -6098,6 +6098,11 @@ export const messages = {
   "secrets.decoys.plant": { defaultMessage: "Plant decoy secret", description: "Button that plants a decoy secret." },
   "secrets.decoys.empty": { defaultMessage: "No decoy secrets planted.", description: "Empty decoy secret list." },
   "secrets.decoys.firstRead": { defaultMessage: "First read by {reader} at {at}", description: "Who first read a decoy secret." },
+  "secrets.decoys.readers": {
+    defaultMessage:
+      "Read {reads, plural, one {once} other {# times}} by {readers, plural, one {one reader} other {# readers}}, last at {at}; each reader alerts once.",
+    description: "How often a decoy secret was read, by how many readers, and when last (Q6-L1).",
+  },
   "secrets.decoys.retire": { defaultMessage: "Stop watching", description: "Button that retires a decoy secret." },
   "secrets.decoys.error": { defaultMessage: "Decoy secrets", description: "Decoy secret error title." },
   "secrets.decoys.readFailed": { defaultMessage: "Could not read decoy secrets", description: "Decoy list failure." },

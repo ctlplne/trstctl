@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/privacy"
 )
 
 // Secret decoys (Q6): an application secret registered as bait. trstctl is in
@@ -58,9 +60,10 @@ func (s *Store) ListDecoySecretsPage(ctx context.Context, tenantID, afterID stri
 // ApplyDecoySecretReadTx projects one read of a secret decoy's value. The first
 // read moves the decoy to triggered and keeps that reader; every distinct reader
 // enqueues exactly one critical alert naming them, so a second thief is not
-// hidden behind the first and a reader repeating the read is not re-alerted
-// (until the delivered alert leaves the outbox at its retention). A retired
-// decoy records nothing.
+// hidden behind the first, and a reader repeating the read is not re-alerted,
+// however long after (Q6-L1): the decoy's readers are kept in
+// honey_token_readers as one-way references with their reads. A retired decoy
+// records nothing.
 func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID, id, reader, method, path string, at time.Time) error {
 	if _, err := tx.Exec(ctx,
 		`UPDATE honey_tokens SET state = 'triggered', triggered_at = $3,
@@ -79,12 +82,19 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 	if err != nil {
 		return err
 	}
-	// The outbox carries no unique idempotency index (receivers collapse
-	// retries), so one alert per reader is enforced here: serialize reads of
-	// this decoy and enqueue only when no alert for this reader exists. The
-	// outbox is not a read model, so a rebuild replaying these reads finds the
-	// alerts already queued and adds none.
+	// One alert per reader: serialize reads of this decoy, record the read
+	// against its reader, and alert only for a reader seen for the first time.
+	// The reader record is a read model, so it outlives the alert's outbox row
+	// (reclaimed a day after delivery) and a rebuild reconstructs it from the
+	// reads. The outbox carries no unique idempotency index (receivers
+	// collapse retries) and is not a read model, so the alert is also enqueued
+	// only when none for this reader is queued: a rebuild replaying a first
+	// read whose alert is still in the outbox adds none.
 	if err := lockUpsertArbiterTx(ctx, tx, "honey_token_reader_alerts", tenantID, id); err != nil {
+		return err
+	}
+	firstRead, err := recordDecoySecretReaderTx(ctx, tx, tenantID, id, reader, at)
+	if err != nil || !firstRead {
 		return err
 	}
 	alertKey := decoyAlertKey(id, reader)
@@ -104,6 +114,29 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 		                     WHERE tenant_id = $1 AND destination = 'notification.honeytoken'
 		                       AND idempotency_key = $3)`, tenantID, alert, alertKey)
 	return err
+}
+
+// recordDecoySecretReaderTx counts one read of a secret decoy against its
+// reader, kept as the reader's tenant-bound one-way reference, and reports
+// whether it is the reader's first (Q6-L1). The caller holds the decoy's read
+// lock.
+func recordDecoySecretReaderTx(ctx context.Context, tx pgx.Tx, tenantID, id, reader string, at time.Time) (bool, error) {
+	ref := privacy.SubjectRef(tenantID, reader)
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO honey_token_readers (tenant_id, honey_token_id, reader_ref, first_read_at, last_read_at, reads)
+		 VALUES ($1, $2, $3, $4, $4, 1)
+		 ON CONFLICT (tenant_id, honey_token_id, reader_ref) DO NOTHING`, tenantID, id, ref, at)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 1 {
+		return true, nil
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE honey_token_readers
+		    SET first_read_at = LEAST(first_read_at, $4), last_read_at = GREATEST(last_read_at, $4), reads = reads + 1
+		  WHERE tenant_id = $1 AND honey_token_id = $2 AND reader_ref = $3`, tenantID, id, ref, at)
+	return false, err
 }
 
 // TenantsWithActiveDatabaseDecoys enumerates tenants holding an untriggered

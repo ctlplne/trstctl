@@ -4084,8 +4084,11 @@ export interface DecoySecret {
   created_at: string;
   id: string;
   kind: "secret";
+  last_read_at?: string;
   name: string;
   placement: string;
+  readers?: number;
+  reads?: number;
   revoked_at?: string;
   secret_name: string;
   state: "active" | "triggered" | "revoked";

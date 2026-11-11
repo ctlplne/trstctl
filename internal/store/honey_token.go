@@ -47,6 +47,12 @@ type HoneyToken struct {
 	// why. Nil while it is watched.
 	WatchGapSince  *time.Time `json:"watch_gap_since,omitempty"`
 	WatchGapReason string     `json:"watch_gap_reason,omitempty"`
+	// Readers, Reads and LastReadAt summarize a secret decoy's reads (Q6-L1):
+	// how many distinct readers read its value, how many reads they made in
+	// all, and when the latest was. Each reader alerts once.
+	Readers    int64      `json:"readers,omitempty"`
+	Reads      int64      `json:"reads,omitempty"`
+	LastReadAt *time.Time `json:"last_read_at,omitempty"`
 }
 
 // #nosec G101 -- SQL column names only; this string contains no credential material.
@@ -56,7 +62,10 @@ const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, tok
     created_at, triggered_at, COALESCE(trigger_method, ''), COALESCE(trigger_path, ''), revoked_at,
     COALESCE(secret_name, ''), COALESCE(trigger_subject, ''),
     COALESCE(db_provider_id, ''), COALESCE(db_lease_id, ''), COALESCE(db_role, ''),
-    watch_gap_since, COALESCE(watch_gap_reason, '')`
+    watch_gap_since, COALESCE(watch_gap_reason, ''),
+    (SELECT count(*) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
+    (SELECT COALESCE(sum(r.reads), 0) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id),
+    (SELECT max(r.last_read_at) FROM honey_token_readers r WHERE r.tenant_id = honey_tokens.tenant_id AND r.honey_token_id = honey_tokens.id)`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
@@ -65,7 +74,7 @@ func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 		&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
 		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
 		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
-		&h.WatchGapSince, &h.WatchGapReason)
+		&h.WatchGapSince, &h.WatchGapReason, &h.Readers, &h.Reads, &h.LastReadAt)
 	return h, err
 }
 
@@ -99,13 +108,8 @@ func (s *Store) ListHoneyTokensPage(ctx context.Context, tenantID, afterID strin
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var h HoneyToken
-			if err := rows.Scan(&h.ID, &h.TenantID, &h.Kind, &h.Name, &h.Placement, &h.TokenHash,
-				&h.AWSAccountConfigID, &h.AWSAccountID, &h.AWSAccessKeyID, &h.AWSLeaseID,
-				&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
-				&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
-				&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
-				&h.WatchGapSince, &h.WatchGapReason); err != nil {
+			h, err := scanHoneyToken(rows)
+			if err != nil {
 				return err
 			}
 			out = append(out, h)

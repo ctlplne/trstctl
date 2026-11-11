@@ -281,11 +281,11 @@ func Catalog() []CatalogEntry {
 		},
 		{
 			ID:             "honey_tokens.readers",
-			Location:       "honey_tokens.trigger_subject; outbox notification.honeytoken alert detail",
+			Location:       "honey_tokens.trigger_subject; honey_token_readers.reader_ref/first_read_at/last_read_at/reads; outbox notification.honeytoken alert detail",
 			Category:       "the principal that read a decoy secret's value",
-			Purpose:        "decoy alerting and the investigation of who read the bait",
+			Purpose:        "decoy alerting, one alert per reader, and the investigation of who read the bait",
 			RetentionClass: "audit",
-			Erasure:        "subject export includes the decoys the subject read first; privacy.subject.erased pseudonymizes the decoy's first reader and replaces the subject in the text of their alerts, delivered or still waiting, keeping other readers' alerts; an alert's key keeps a one-way digest of its reader",
+			Erasure:        "subject export includes the decoys the subject read, first or later, with their own reads; privacy.subject.erased pseudonymizes the decoy's first reader, moves the subject's reader record (a tenant-bound one-way reference with their read times and count) to their placeholder's reference, and replaces the subject in the text of their alerts, delivered or still waiting, keeping other readers' alerts; an alert's key keeps a one-way digest of its reader",
 			Owner:          "incident response",
 		},
 		{

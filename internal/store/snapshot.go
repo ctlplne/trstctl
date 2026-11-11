@@ -323,7 +323,10 @@ import (
 // Version 114 carries N5-L3's workload JWT key rotations: without them a
 // restored store would sign with, and publish, the first key again while its
 // covered offset skipped the rotations.
-const SnapshotFormatVersion = 114
+// Version 115 carries Q6-L1's secret decoy readers: without them a restored
+// store would forget who already read each decoy, and a reader reading again
+// would alert again.
+const SnapshotFormatVersion = 115
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -459,6 +462,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"honey_tokens", "aws_honey_scans", "aws_honey_uses",
 	// Format 84: N4's read trail files.
 	"aws_honey_trail_objects",
+	// Format 115: Q6-L1's secret decoy readers.
+	"honey_token_readers",
 	// Format 85: N8's Slack app.
 	"slack_installs", "slack_user_links", "slack_approval_messages",
 	// Format 57 (A91): agent lifecycle receipts, the record the agents usage
@@ -746,6 +751,7 @@ SELECT jsonb_build_object(
   'honey_tokens',          (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM honey_tokens t),
   'aws_honey_scans',       (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_scans t),
   'aws_honey_uses',        (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM aws_honey_uses t),
+  'honey_token_readers',   (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM honey_token_readers t),
   'pqc_pilots',            (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pqc_pilots t),
   'pqc_pilot_waves',       (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pqc_pilot_waves t),
   'compromised_subject_keys', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM compromised_subject_keys t),

@@ -931,7 +931,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"slack_installs", "slack_user_links", "slack_approval_messages",
 	// Decoy metadata and one-way bearer hashes rebuild from honeytoken events;
 	// N4's read trail files from honeytoken.aws.trail_object_scanned.
-	"honey_tokens", "aws_honey_scans", "aws_honey_uses", "aws_honey_trail_objects"}
+	"honey_tokens", "aws_honey_scans", "aws_honey_uses", "aws_honey_trail_objects",
+	// Q6-L1: projected from honeytoken.triggered events that name a reader.
+	"honey_token_readers"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

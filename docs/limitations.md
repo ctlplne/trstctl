@@ -5567,15 +5567,19 @@ when off, requiring a KEK when on):
   raises one critical alert per distinct reader, naming the reader, on every
   value read served to a caller (native, history, resolved references,
   Vault-compatible KV); names, metadata, the access preview, inventory, the
-  graph and internal reads never alert, and a rebuild adds no alert. A secret scan
+  graph and internal reads never alert, and a rebuild adds no alert while the readers'
+  alerts are still in the outbox. A secret scan
   finding whose line holds a live decoy's value is marked as that known decoy
   (`known_decoy`, risk 10) rather than a leak (Q6-L4). One secret
   has one decoy: registrations of it that arrive together make one, and the rest
-  are refused (409). A decoy's readers are subjects: a subject export lists the
-  decoys they read first, and an erasure pseudonymizes the decoy's first reader and
-  replaces them in the text of their alerts in the outbox, delivered or waiting. A reader
-  who repeats a read after the delivered alert has left the outbox (retention)
-  alerts again. Decoy database logins: a tenant PostgreSQL dynamic-secret
+  are refused (409). The decoy keeps its readers as one-way references with their
+  reads, so a reader who reads again is not re-alerted however long after (Q6-L1); a
+  read-model rebuild replays each reader's first read, and once that reader's delivered
+  alert has left the outbox (a day after delivery) the rebuild raises it again. A decoy's
+  readers are subjects: a subject export lists the decoys they read, first or later, with
+  their own reads, and an erasure pseudonymizes the decoy's first reader, moves their
+  reader record to their placeholder and replaces them in the text of their alerts in the
+  outbox, delivered or waiting. Decoy database logins: a tenant PostgreSQL dynamic-secret
   provider listing the role `decoy` mints a login reaching only its own empty
   database (`/api/v1/secrets/honeytokens/databases`); the leader reads that
   database's session counter (PostgreSQL 14+) and the first use raises one

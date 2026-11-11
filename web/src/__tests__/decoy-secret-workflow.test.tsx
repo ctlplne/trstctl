@@ -25,6 +25,9 @@ const triggered = {
   created_at: "2026-11-01T00:00:00Z",
   triggered_at: "2026-11-01T01:00:00Z",
   trigger_subject: "ci-runner-7",
+  readers: 2,
+  reads: 5,
+  last_read_at: "2026-11-03T02:00:00Z",
 };
 
 describe("Q6 decoy secrets", () => {
@@ -54,6 +57,11 @@ describe("Q6 decoy secrets", () => {
     await user.click(screen.getByRole("button", { name: "Plant decoy secret" }));
     expect(apiMock.createSecret).toHaveBeenCalledWith({ name: "prod/billing/api-key", value: expect.stringMatching(/^key_/) });
     expect(apiMock.registerDecoySecret).toHaveBeenCalledWith({ secret_name: "prod/billing/api-key", name: "billing key bait", placement: "wiki page" });
+  });
+
+  it("shows how often the decoy was read and by how many readers, each alerting once (Q6-L1)", async () => {
+    render(<DecoySecretWorkflow />);
+    expect(await screen.findByText(/^Read 5 times by 2 readers, last at .+; each reader alerts once\.$/)).toBeInTheDocument();
   });
 
   it("never registers over a real secret and does not plant twice on retry", async () => {

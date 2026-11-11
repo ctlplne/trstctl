@@ -17160,8 +17160,17 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "secret";
+            /**
+             * Format: date-time
+             * @description Q6-L1: when the decoy's value was last read
+             */
+            last_read_at?: string;
             name: string;
             placement: string;
+            /** @description Q6-L1: how many distinct principals read the decoy's value; each alerts once, however often it reads */
+            readers?: number;
+            /** @description Q6-L1: how many value reads those principals made in all */
+            reads?: number;
             /** Format: date-time */
             revoked_at?: string;
             secret_name: string;

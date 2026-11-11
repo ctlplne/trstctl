@@ -19765,11 +19765,24 @@
             ],
             "type": "string"
           },
+          "last_read_at": {
+            "description": "Q6-L1: when the decoy's value was last read",
+            "format": "date-time",
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
           "placement": {
             "type": "string"
+          },
+          "readers": {
+            "description": "Q6-L1: how many distinct principals read the decoy's value; each alerts once, however often it reads",
+            "type": "integer"
+          },
+          "reads": {
+            "description": "Q6-L1: how many value reads those principals made in all",
+            "type": "integer"
           },
           "revoked_at": {
             "format": "date-time",

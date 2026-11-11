@@ -632,6 +632,15 @@
 
 ### Fixed
 
+- A decoy secret alerts once per reader for good (Q6-L1). A decoy raises one critical alert per
+  distinct reader, but the alert's outbox row was the only record of who had read it, and the outbox
+  sweep reclaims a delivered row a day after delivery, so the same reader reading again a day later
+  alerted again. The decoy now keeps its readers, each as a tenant-bound one-way reference with its
+  first and last read and its read count, and alerts only for a reader it has not seen; a rebuild
+  reconstructs them from the reads and snapshots carry them. The decoy API (`readers`, `reads`,
+  `last_read_at`) and the console's decoy list show how many readers read it, how many reads they
+  made and when it was last read. A subject's export lists every decoy they read with their own
+  reads, and an erasure moves their reader record to their placeholder.
 - A private key found in a secret store is linked to its certificate (A172-L3). A stored PEM private key
   was fingerprinted by its text only, so nothing tied it to the certificate it belongs to. Its finding
   now also records `spki_sha256`, the SHA-256 of its public key (read behind the crypto boundary; none

@@ -154,6 +154,16 @@ export function DecoySecretWorkflow() {
                 {item.name} · {item.placement}
               </p>
               {item.triggered_at ? <p>{t("secrets.decoys.firstRead", { reader: item.trigger_subject ?? "", at: formatDateTime(item.triggered_at) })}</p> : null}
+              {/* Q6-L1: the decoy keeps its readers, so a reader who reads again stays one alert. */}
+              {item.readers && item.last_read_at ? (
+                <p>
+                  {t("secrets.decoys.readers", {
+                    reads: item.reads ?? item.readers,
+                    readers: item.readers,
+                    at: formatDateTime(item.last_read_at),
+                  })}
+                </p>
+              ) : null}
               {item.state !== "revoked" ? (
                 <Button type="button" variant="outline" className="mt-2" onClick={() => void retire(item.id)} disabled={busy}>
                   {t("secrets.decoys.retire")}

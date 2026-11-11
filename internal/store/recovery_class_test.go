@@ -564,3 +564,16 @@ func TestWorkloadJWTKeysUseEventRecoveryAndSnapshotsN5L3(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without workload JWT key rotations", SnapshotFormatVersion)
 	}
 }
+
+// TestDecoySecretReadersUseEventRecoveryAndSnapshotsQ6L1: a secret decoy's
+// readers are erased with their tenant, rebuilt from the decoy's read events
+// and carried by snapshots from format 115.
+func TestDecoySecretReadersUseEventRecoveryAndSnapshotsQ6L1(t *testing.T) {
+	const table = "honey_token_readers"
+	if !containsRecoveryTable(TenantScopedTables, table) || !containsRecoveryTable(ReadModelTables, table) || !containsRecoveryTable(snapshotTables, table) {
+		t.Fatalf("%s must be erased with its tenant and survive rebuild and snapshot restore", table)
+	}
+	if SnapshotFormatVersion < 115 {
+		t.Fatalf("snapshot format %d could restore a payload without decoy readers", SnapshotFormatVersion)
+	}
+}

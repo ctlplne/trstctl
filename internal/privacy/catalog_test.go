@@ -23,6 +23,13 @@ func TestPrivacyCatalogCoversSchemaAndRuntimePII(t *testing.T) {
 			},
 		},
 		{
+			id:     "honey_tokens.readers",
+			source: "../store/migrations/0441_honey_token_readers.sql",
+			markers: []string{
+				"reader_ref text NOT NULL",
+			},
+		},
+		{
 			id:     "pam_sessions.subjects",
 			source: "../store/migrations/0049_pam_sessions.sql",
 			markers: []string{

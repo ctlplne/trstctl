@@ -4742,6 +4742,9 @@ func componentSchemas() map[string]*Schema {
 		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
 		"trigger_subject": {Type: "string", Description: "the first principal that read the decoy's value"},
 		"revoked_at":      timestamp(),
+		"readers":         {Type: "integer", Description: "Q6-L1: how many distinct principals read the decoy's value; each alerts once, however often it reads"},
+		"reads":           {Type: "integer", Description: "Q6-L1: how many value reads those principals made in all"},
+		"last_read_at":    {Type: "string", Format: "date-time", Description: "Q6-L1: when the decoy's value was last read"},
 	}, "id", "kind", "name", "placement", "secret_name", "state", "created_at")
 	// Q6: a decoy PostgreSQL login minted by a tenant's dynamic-secret provider.
 	databaseDecoyFields := map[string]*Schema{
