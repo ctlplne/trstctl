@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Decoy database login watch (Q6). A decoy login is a PostgreSQL role with
@@ -115,6 +116,20 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 		}
 		providers := s.secretIntegrations.dynamicProvidersForTenant(tenantID)
 		for _, decoy := range decoys {
+			// Q6-L9: a decoy lives as long as its lease. Once the lease has
+			// ended, its login and database are gone or going: one last read
+			// still catches a use before the end, then the decoy retires, so it
+			// no longer reads as watching.
+			ended, err := s.decoyLeaseEnded(ctx, tenantID, decoy.DBLeaseID)
+			if err != nil {
+				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+				continue
+			}
+			retire := func() {
+				if err := s.orch.RevokeHoneyToken(ctx, tenantID, decoy.ID); err != nil {
+					note(fmt.Errorf("decoy %s: retire after its lease ended: %w", decoy.ID, err))
+				}
+			}
 			var reader decoySessionReader
 			for _, provider := range providers {
 				if provider.Name() == decoy.DBProviderID {
@@ -122,11 +137,19 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				}
 			}
 			if reader == nil {
+				if ended {
+					retire()
+					continue
+				}
 				note(fmt.Errorf("decoy %s: provider %q is not configured for decoy logins", decoy.ID, decoy.DBProviderID))
 				continue
 			}
 			sessions, exists, err := reader.DecoySessions(ctx, decoy.DBRole)
 			if err != nil {
+				if ended {
+					retire()
+					continue
+				}
 				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
 				continue
 			}
@@ -140,6 +163,11 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 					continue
 				}
 				if len(elsewhere) == 0 {
+					if ended {
+						retire()
+					} else if !exists {
+						note(fmt.Errorf("decoy %s: its database is gone while its lease is active", decoy.ID))
+					}
 					continue
 				}
 				database = elsewhere[0]
@@ -150,4 +178,21 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+// decoyLeaseEnded reports whether a decoy login's lease has ended: revoked,
+// failed, past its hard expiry, or gone from the lease store.
+func (s *Server) decoyLeaseEnded(ctx context.Context, tenantID, leaseID string) (bool, error) {
+	lease, err := s.store.GetDynamicSecretLease(ctx, tenantID, leaseID)
+	if store.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	switch lease.State {
+	case store.DynamicSecretLeaseRevoked, store.DynamicSecretLeaseFailed:
+		return true, nil
+	}
+	return !lease.HardExpiresAt.IsZero() && !lease.HardExpiresAt.After(time.Now()), nil
 }

@@ -16,7 +16,7 @@ import (
 
 // plantServedDecoyLogin serves a tenant PostgreSQL provider that mints decoy
 // logins against a real PostgreSQL and plants one, returning the harness, the
-// planted decoy and the admin DSN.
+// planted decoy and the planter's token.
 func plantServedDecoyLogin(t *testing.T, key string) (*servedHarness, servedDecoyLogin, string) {
 	t.Helper()
 	pgDSN, stopPG := startPAMPostgres(t)
@@ -37,8 +37,13 @@ func plantServedDecoyLogin(t *testing.T, key string) (*servedHarness, servedDeco
 	})
 	startServedExternalCADispatcher(t, h)
 	planter := seedScopedTokenSubject(t, h.store, h.tenant, "decoy-planter", "secrets:read", "secrets:write")
+	return h, plantAnotherServedDecoyLogin(t, h, planter, key), planter
+}
+
+func plantAnotherServedDecoyLogin(t *testing.T, h *servedHarness, planter, key string) servedDecoyLogin {
+	t.Helper()
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/honeytokens/databases", planter, key,
-		map[string]any{"provider": "warehouse-pg", "name": "warehouse db bait", "placement": "ops wiki runbook", "ttl_seconds": 1800})
+		map[string]any{"provider": "warehouse-pg", "name": "warehouse db bait " + key, "placement": "ops wiki runbook", "ttl_seconds": 1800})
 	if status != http.StatusCreated {
 		t.Fatalf("plant decoy login: HTTP %d %s", status, body)
 	}
@@ -46,7 +51,7 @@ func plantServedDecoyLogin(t *testing.T, key string) (*servedHarness, servedDeco
 	if err := json.Unmarshal(body, &planted); err != nil || planted.DSN == "" {
 		t.Fatalf("planted decoy login = %+v (%v)", planted, err)
 	}
-	return h, planted, pgDSN
+	return planted
 }
 
 type servedDecoyLogin struct {
@@ -101,5 +106,66 @@ func TestServedDecoyLoginInAnotherDatabaseAlertsQ6L8(t *testing.T) {
 	}
 	if alerts != 1 {
 		t.Fatalf("%d alerts, want the decoy's one", alerts)
+	}
+}
+
+// Q6-L9: a decoy lives as long as its lease. When the lease ends, an unused
+// decoy retires instead of staying active with nothing to watch, and a decoy
+// the bait used before the end still raises its alert first.
+func TestServedDecoyLoginRetiresWhenItsLeaseEndsQ6L9(t *testing.T) {
+	h, unused, planter := plantServedDecoyLogin(t, "q6l9-unused")
+	used := plantAnotherServedDecoyLogin(t, h, planter, "q6l9-used")
+	ctx := t.Context()
+	watch := func() {
+		t.Helper()
+		if err := h.srv.WatchDecoyLoginsOnce(ctx); err != nil {
+			t.Fatalf("decoy login watch: %v", err)
+		}
+	}
+	watch()
+	for _, decoy := range []servedDecoyLogin{unused, used} {
+		if state, _ := servedDecoyState(t, h, decoy.ID); state != "active" {
+			t.Fatalf("decoy %s reads %q before its lease ends", decoy.ID, state)
+		}
+	}
+	bait, err := pgx.Connect(ctx, used.DSN)
+	if err != nil {
+		t.Fatalf("the decoy DSN does not log in: %v", err)
+	}
+	if _, err := bait.Exec(ctx, `SELECT 1`); err != nil {
+		t.Fatal(err)
+	}
+	_ = bait.Close(ctx)
+	for _, decoy := range []servedDecoyLogin{unused, used} {
+		if _, err := h.store.SystemPool().Exec(ctx,
+			`UPDATE dynamic_secret_leases SET expires_at = now() - interval '1 minute', hard_expires_at = now() - interval '1 minute'
+			  WHERE tenant_id = $1 AND id = $2`,
+			h.tenant, decoy.DBLeaseID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		watch()
+		usedState, _ := servedDecoyState(t, h, used.ID)
+		unusedState, _ := servedDecoyState(t, h, unused.ID)
+		if usedState != "active" && unusedState != "active" {
+			if unusedState != "revoked" || usedState != "triggered" {
+				t.Fatalf("after the leases ended: unused decoy %q, used decoy %q; want revoked and triggered", unusedState, usedState)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("decoys still active after their leases ended: unused %q, used %q", unusedState, usedState)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	var alerts int
+	if err := h.store.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'notification.honeytoken'`, h.tenant).Scan(&alerts); err != nil {
+		t.Fatal(err)
+	}
+	if alerts != 1 {
+		t.Fatalf("%d alerts, want the used decoy's one", alerts)
 	}
 }

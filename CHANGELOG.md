@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- A decoy login retires when its lease ends (Q6-L9). A database decoy lives as long as the lease
+  that minted its login, but when the lease expired or was revoked the decoy stayed active: its
+  database was gone, the watcher saw nothing to count and raised nothing, and the decoy kept reading as
+  watching. Each check now reads the lease; once it has ended, a last check still raises the alert of
+  a decoy the bait used, and an unused decoy retires. A decoy whose database is gone while its lease is
+  active is reported by the watch instead of read as unused.
 - A decoy login used in another database alerts (Q6-L8). A decoy PostgreSQL login has CONNECT only
   on its own empty database, but PUBLIC keeps CONNECT on databases such as `postgres`, and a session
   the bait opened there counted nowhere the watcher looked. The watcher now also reads the role's live

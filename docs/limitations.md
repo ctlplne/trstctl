@@ -5572,7 +5572,9 @@ when off, requiring a KEK when on):
   databases such as `postgres` and PostgreSQL cannot refuse it to one role, so the
   bait can log in there: the watcher also reads the role's live sessions in every
   other database and alerts on one, naming that database, but a session that opens
-  and closes between two checks (30 seconds apart) there is not seen. A failed login with a
+  and closes between two checks (30 seconds apart) there is not seen. A decoy lives
+  as long as its lease: when the lease ends, a last check still catches a use, and an
+  unused decoy retires instead of reading as watching. A failed login with a
   wrong password is not detected, a statistics reset hides earlier uses, and only
   PostgreSQL providers can mint decoys. Decoy SSH keys and Kubernetes tokens are
   not built.
