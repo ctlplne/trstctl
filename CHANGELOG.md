@@ -632,6 +632,11 @@
 
 ### Fixed
 
+- A backup set covers the PAM recording chunks waiting for the object store (found A278-D1). A278's
+  staged recording chunks (`pam_recording_uploads`), each written with its outbox entry until the
+  outbox worker stores it, were in no backup class, so a restore dropped chunks that were still on
+  their way while restoring their outbox entries. They are now recovered from the PostgreSQL dump
+  with the outbox and restored beside it.
 - The upgrade preflight counts a migration destructive by what its statements do (A246-L2). It
   matched a word list anywhere in a migration's text, so 0160, which only empties the disposable
   read-model snapshots, read as destructive and the preflight demanded a fresh backup before it,

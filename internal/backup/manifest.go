@@ -125,6 +125,11 @@ var RecoveredFromPostgresBackup = []string{
 	"issuance_approval_requests",
 	"issuance_approvals",
 	"outbox",
+	// A278: a gateway's recording chunk staged with its outbox entry in one
+	// transaction, until the outbox worker stores it in the object store and
+	// deletes the row. Delivery state like the outbox: a chunk not yet stored
+	// is recovered with its entry from the PostgreSQL dump and delivered again.
+	"pam_recording_uploads",
 	"policy_bindings",
 	// This event-populated AN-5 receiver deliberately survives read-model rebuild:
 	// a pending raw Idempotency-Key still needs the exact canonical erasure

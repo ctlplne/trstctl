@@ -1310,6 +1310,10 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"issuance_approval_requests",
 		"issuance_approvals",
 		"outbox",
+		// A278: staged recording chunks pair with their outbox entries by
+		// session and order, with no foreign key; they restore beside them so
+		// the recovered worker stores each chunk once.
+		"pam_recording_uploads",
 		"policy_bindings",
 		// The non-PII preparation is the durable cross-store crash bridge. It is
 		// normally absent because capture refuses an active row, but classifying
