@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -404,5 +405,67 @@ func TestTenantScopedLifecycleLabelsTheKeysTenantA168L1(t *testing.T) {
 	}
 	if doer.disableEffects != 1 {
 		t.Fatalf("disable effects = %d, want 1", doer.disableEffects)
+	}
+}
+
+// countingTokenSource is a workload identity token source that hands out one
+// token and counts what it mints and what the backend wipes.
+type countingTokenSource struct {
+	mu     sync.Mutex
+	token  string
+	err    error
+	minted int
+	wiped  int
+}
+
+func (s *countingTokenSource) Token(context.Context) ([]byte, func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return nil, func() {}, s.err
+	}
+	s.minted++
+	return []byte(s.token), func() {
+		s.mu.Lock()
+		s.wiped++
+		s.mu.Unlock()
+	}, nil
+}
+
+// A169-L1: the backend authorizes every Cloud KMS request with a token from
+// the workload identity source and wipes it once the request is authorized; a
+// source that cannot mint fails the request before anything is sent; exactly
+// one credential is accepted.
+func TestTokenSourceAuthorizesEachRequestA169L1(t *testing.T) {
+	doer := newLifecycleDoer(t, "gcp-token")
+	source := &countingTokenSource{token: "gcp-token"}
+	b, err := NewSecure("projects/p/locations/us/keyRings/trstctl", Credentials{TokenSource: source},
+		WithEndpoint("https://cloudkms.test/v1"), WithHTTPClient(doer), WithOpTimeout(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, _, err := b.GenerateManagedKeyForOperation(ctx, "a169l1-generate", crypto.RSA2048); err != nil {
+		t.Fatalf("generate through the token source: %v", err)
+	}
+	source.mu.Lock()
+	minted, wiped := source.minted, source.wiped
+	source.mu.Unlock()
+	if minted < 2 || wiped != minted {
+		t.Fatalf("tokens minted %d, wiped %d; want one per request, each wiped", minted, wiped)
+	}
+	effects := doer.createEffects
+	source.mu.Lock()
+	source.err = errors.New("sts unavailable")
+	source.mu.Unlock()
+	if _, _, err := b.GenerateManagedKeyForOperation(ctx, "a169l1-refused", crypto.RSA2048); err == nil ||
+		!strings.Contains(err.Error(), "workload identity token") || doer.createEffects != effects {
+		t.Fatalf("generate with a failing source = %v (creates %d -> %d); want refused before sending", err, effects, doer.createEffects)
+	}
+	if _, err := NewSecure("projects/p/locations/us/keyRings/trstctl", Credentials{BearerToken: []byte("x"), TokenSource: source}); err == nil {
+		t.Fatal("both a bearer token and a token source were accepted")
+	}
+	if _, err := NewSecure("projects/p/locations/us/keyRings/trstctl", Credentials{}); err == nil {
+		t.Fatal("no credential was accepted")
 	}
 }

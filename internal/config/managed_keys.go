@@ -191,13 +191,66 @@ func validateManagedKeysAzureCredential(a ManagedKeysAzureKV) []error {
 
 // ManagedKeysGCPKMS configures Google Cloud KMS custody for managed keys. Parent
 // is the key ring resource, for example projects/P/locations/L/keyRings/R.
+// WorkloadIdentity replaces the static bearer token (A169-L1): the signer
+// exchanges the platform's projected OIDC token at GCP Security Token Service
+// for short-lived access tokens itself.
 type ManagedKeysGCPKMS struct {
-	Parent                string   `json:"parent,omitempty"`
-	Endpoint              string   `json:"endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	BearerToken           []byte   `json:"bearer_token,omitempty"`
-	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	Parent                string                          `json:"parent,omitempty"`
+	Endpoint              string                          `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool                            `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte                          `json:"bearer_token,omitempty"`
+	BearerTokenFile       string                          `json:"bearer_token_file,omitempty"`
+	WorkloadIdentity      *ManagedKeysGCPWorkloadIdentity `json:"workload_identity,omitempty"`
+	PrivateEgressCIDRs    []string                        `json:"private_egress_cidrs,omitempty"`
+}
+
+// ManagedKeysGCPWorkloadIdentity names the workload identity pool provider
+// whose trust admits the platform's token (A169-L1). Audience is that
+// provider's resource name with the //iam.googleapis.com/ prefix;
+// SubjectTokenFile is the projected OIDC token the platform rotates (a
+// Kubernetes service-account token, for example), re-read at each exchange.
+// ServiceAccount, when set, is impersonated so Cloud KMS sees that account;
+// STSEndpoint and ImpersonationEndpoint default to Google's public endpoints.
+type ManagedKeysGCPWorkloadIdentity struct {
+	Audience              string `json:"audience,omitempty"`
+	SubjectTokenFile      string `json:"subject_token_file,omitempty"`
+	ServiceAccount        string `json:"service_account,omitempty"`
+	STSEndpoint           string `json:"sts_endpoint,omitempty"`
+	ImpersonationEndpoint string `json:"impersonation_endpoint,omitempty"`
+}
+
+// validateManagedKeysGCPCredential requires exactly one GCP credential: a
+// static bearer token (or its file) or a workload identity (A169-L1).
+func validateManagedKeysGCPCredential(g ManagedKeysGCPKMS) []error {
+	static := len(g.BearerToken) > 0 || strings.TrimSpace(g.BearerTokenFile) != ""
+	wi := g.WorkloadIdentity
+	switch {
+	case wi == nil && !static:
+		return []error{errors.New("managed_keys.gcp.bearer_token, bearer_token_file or workload_identity is required when managed-key custody uses GCP Cloud KMS")}
+	case wi == nil:
+		return nil
+	case static:
+		return []error{errors.New("managed_keys.gcp.workload_identity replaces the static bearer token; set one, not both")}
+	}
+	var errs []error
+	if !strings.HasPrefix(strings.TrimSpace(wi.Audience), "//iam.googleapis.com/") {
+		errs = append(errs, errors.New("managed_keys.gcp.workload_identity.audience must be the workload identity pool provider, //iam.googleapis.com/projects/N/locations/global/workloadIdentityPools/POOL/providers/PROVIDER"))
+	}
+	if strings.TrimSpace(wi.SubjectTokenFile) == "" {
+		errs = append(errs, errors.New("managed_keys.gcp.workload_identity.subject_token_file is required"))
+	}
+	if sa := strings.TrimSpace(wi.ServiceAccount); sa != "" && (!strings.Contains(sa, "@") || strings.ContainsAny(sa, "/?# ")) {
+		errs = append(errs, errors.New("managed_keys.gcp.workload_identity.service_account must be a service account email"))
+	}
+	if strings.TrimSpace(wi.ImpersonationEndpoint) != "" && strings.TrimSpace(wi.ServiceAccount) == "" {
+		errs = append(errs, errors.New("managed_keys.gcp.workload_identity.impersonation_endpoint needs a service_account"))
+	}
+	for _, endpoint := range []struct{ field, value string }{{"sts_endpoint", wi.STSEndpoint}, {"impersonation_endpoint", wi.ImpersonationEndpoint}} {
+		if strings.TrimSpace(endpoint.value) != "" {
+			errs = append(errs, validateManagedKeyEndpoint("managed_keys.gcp.workload_identity."+endpoint.field, endpoint.value, g.AllowInsecureLoopback)...)
+		}
+	}
+	return errs
 }
 
 // ManagedKeysPKCS11HSM configures a local PKCS#11 module for managed-key custody.
@@ -313,9 +366,7 @@ func validateManagedKeyProvider(m ManagedKeys, provider string) []error {
 		if strings.TrimSpace(m.GCP.Parent) == "" {
 			errs = append(errs, errors.New("managed_keys.gcp.parent is required when managed-key custody uses GCP Cloud KMS"))
 		}
-		if len(m.GCP.BearerToken) == 0 && strings.TrimSpace(m.GCP.BearerTokenFile) == "" {
-			errs = append(errs, errors.New("managed_keys.gcp.bearer_token or managed_keys.gcp.bearer_token_file is required when managed-key custody uses GCP Cloud KMS"))
-		}
+		errs = append(errs, validateManagedKeysGCPCredential(m.GCP)...)
 		if m.GCP.Endpoint != "" {
 			errs = append(errs, validateManagedKeyEndpoint("managed_keys.gcp.endpoint", m.GCP.Endpoint, m.GCP.AllowInsecureLoopback)...)
 		}

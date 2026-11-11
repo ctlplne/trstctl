@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/cloudauth"
+	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/kms/awskms"
@@ -96,12 +97,22 @@ type azureWorkloadIdentity struct {
 }
 
 type gcpConfig struct {
-	Parent                string   `json:"parent,omitempty"`
-	Endpoint              string   `json:"endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	BearerToken           []byte   `json:"bearer_token,omitempty"`
-	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	Parent                string               `json:"parent,omitempty"`
+	Endpoint              string               `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool                 `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte               `json:"bearer_token,omitempty"`
+	BearerTokenFile       string               `json:"bearer_token_file,omitempty"`
+	WorkloadIdentity      *gcpWorkloadIdentity `json:"workload_identity,omitempty"`
+	PrivateEgressCIDRs    []string             `json:"private_egress_cidrs,omitempty"`
+}
+
+// gcpWorkloadIdentity mirrors config.ManagedKeysGCPWorkloadIdentity (A169-L1).
+type gcpWorkloadIdentity struct {
+	Audience              string `json:"audience,omitempty"`
+	SubjectTokenFile      string `json:"subject_token_file,omitempty"`
+	ServiceAccount        string `json:"service_account,omitempty"`
+	STSEndpoint           string `json:"sts_endpoint,omitempty"`
+	ImpersonationEndpoint string `json:"impersonation_endpoint,omitempty"`
 }
 
 type pkcs11Config struct {
@@ -286,7 +297,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		if err := kmsconn.ValidateEndpoints("gcp managed-key", cfg.GCP.AllowInsecureLoopback, cfg.GCP.Endpoint); err != nil {
 			return "", nil, err
 		}
-		token, wipe, err := credential("gcp bearer token", cfg.GCP.BearerToken, cfg.GCP.BearerTokenFile, true)
+		creds, wipe, err := gcpCredentials(cfg.GCP)
 		if err != nil {
 			return "", nil, err
 		}
@@ -299,7 +310,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		if cfg.GCP.Endpoint != "" {
 			opts = append(opts, gcpkms.WithEndpoint(cfg.GCP.Endpoint))
 		}
-		backend, err := gcpkms.NewSecure(cfg.GCP.Parent, gcpkms.Credentials{BearerToken: token}, opts...)
+		backend, err := gcpkms.NewSecure(cfg.GCP.Parent, creds, opts...)
 		return "gcp-kms", backend, err
 	case providerPKCS11:
 		pin, wipe, err := credential("pkcs11 user PIN", cfg.PKCS11.UserPIN, cfg.PKCS11.UserPINFile, true)
@@ -398,6 +409,56 @@ func azureCredentials(cfg cloudTokenConfig) (azurekv.Credentials, func(), error)
 		return azurekv.Credentials{}, func() {}, fmt.Errorf("azure managed-key: %w", err)
 	}
 	return azurekv.Credentials{TokenSource: source}, func() {}, nil
+}
+
+// gcpCredentials returns the Cloud KMS credential the configuration names: the
+// static bearer token file, or a workload identity token source that exchanges
+// the platform's projected OIDC token at GCP Security Token Service, and
+// optionally impersonates a service account, for short-lived access tokens
+// (A169-L1). The two are exclusive.
+func gcpCredentials(cfg gcpConfig) (gcpkms.Credentials, func(), error) {
+	wi := cfg.WorkloadIdentity
+	if wi == nil {
+		token, wipe, err := credential("gcp bearer token", cfg.BearerToken, cfg.BearerTokenFile, true)
+		if err != nil {
+			return gcpkms.Credentials{}, func() {}, err
+		}
+		return gcpkms.Credentials{BearerToken: token}, wipe, nil
+	}
+	if len(cfg.BearerToken) > 0 || strings.TrimSpace(cfg.BearerTokenFile) != "" {
+		return gcpkms.Credentials{}, func() {}, fmt.Errorf("gcp managed-key: workload_identity replaces the static bearer token; set one, not both")
+	}
+	sts := strings.TrimSpace(wi.STSEndpoint)
+	if sts == "" {
+		sts = cloudauth.DefaultGCPSTSEndpoint
+	}
+	// EgressClient admits each endpoint over HTTPS, or plain HTTP only on an
+	// allowed loopback stand-in, and keeps the SSRF guard on every redirect.
+	stsClient, err := kmsconn.EgressClient(cfg.PrivateEgressCIDRs, sts, cfg.AllowInsecureLoopback)
+	if err != nil {
+		return gcpkms.Credentials{}, func() {}, fmt.Errorf("gcp workload identity egress: %w", err)
+	}
+	impersonation := strings.TrimSpace(wi.ImpersonationEndpoint)
+	if impersonation == "" && strings.TrimSpace(wi.ServiceAccount) != "" {
+		impersonation = cloudauth.GCPImpersonationEndpoint(wi.ServiceAccount)
+	}
+	var impersonationClient cloudhttp.Doer
+	if impersonation != "" {
+		client, err := kmsconn.EgressClient(cfg.PrivateEgressCIDRs, impersonation, cfg.AllowInsecureLoopback)
+		if err != nil {
+			return gcpkms.Credentials{}, func() {}, fmt.Errorf("gcp workload identity egress: %w", err)
+		}
+		impersonationClient = client
+	}
+	source, err := cloudauth.NewGCPWorkloadIdentityTokenSource(cloudauth.GCPWorkloadIdentityTokenSourceConfig{
+		Audience: wi.Audience, SubjectTokenFile: wi.SubjectTokenFile, STSEndpoint: sts,
+		ServiceAccount: wi.ServiceAccount, ImpersonationEndpoint: impersonation,
+		Doer: stsClient, ImpersonationDoer: impersonationClient,
+	})
+	if err != nil {
+		return gcpkms.Credentials{}, func() {}, fmt.Errorf("gcp managed-key: %w", err)
+	}
+	return gcpkms.Credentials{TokenSource: source}, func() {}, nil
 }
 
 // azureKeyVaultScope is the token scope the vault URL implies: Managed HSM

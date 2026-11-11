@@ -44,10 +44,18 @@ const defaultEndpoint = "https://cloudkms.googleapis.com/v1"
 const defaultOpTimeout = 30 * time.Second
 
 // Credentials are the OAuth2 access credentials used to authenticate to Cloud KMS. The
-// BearerToken is a short-lived access token minted by the caller (service account or
-// workload identity); it is opaque here and never logged.
+// BearerToken is a short-lived access token minted by the caller; it is opaque here and
+// never logged. TokenSource replaces it with one minted per request from a workload
+// identity and refreshed before it expires (A169-L1); exactly one of the two is set.
 type Credentials struct {
 	BearerToken []byte
+	TokenSource TokenSource
+}
+
+// TokenSource yields the access token for one request. The bytes are valid until wipe is
+// called, which the backend does once the request is authorized.
+type TokenSource interface {
+	Token(ctx context.Context) (token []byte, wipe func(), err error)
 }
 
 // HTTPDoer is the minimal HTTP client seam (tests inject the double's client).
@@ -61,6 +69,7 @@ type Backend struct {
 	parent    string
 	endpoint  string
 	token     *secret.Buffer
+	tokens    TokenSource
 	doer      HTTPDoer
 	now       func() time.Time
 	opTimeout time.Duration
@@ -114,16 +123,19 @@ func New(parent string, creds Credentials, opts ...Option) *Backend {
 // NewSecure retains the OAuth bearer only in locked, non-dumpable memory.
 // Production signer composition uses this constructor and propagates failures.
 func NewSecure(parent string, creds Credentials, opts ...Option) (*Backend, error) {
-	if len(creds.BearerToken) == 0 {
-		return nil, fmt.Errorf("gcp-kms: bearer token is required")
-	}
-	token, err := secret.NewFrom(creds.BearerToken)
-	if err != nil {
-		return nil, fmt.Errorf("gcp-kms: protect bearer token: %w", err)
+	if (len(creds.BearerToken) == 0) == (creds.TokenSource == nil) {
+		return nil, fmt.Errorf("gcp-kms: exactly one of a bearer token or a workload identity token source is required")
 	}
 	b := &Backend{
-		parent: strings.Trim(parent, "/"), endpoint: defaultEndpoint, token: token,
+		parent: strings.Trim(parent, "/"), endpoint: defaultEndpoint, tokens: creds.TokenSource,
 		doer: netsec.SafeClient(defaultOpTimeout), now: time.Now, opTimeout: defaultOpTimeout,
+	}
+	if creds.TokenSource == nil {
+		token, err := secret.NewFrom(creds.BearerToken)
+		if err != nil {
+			return nil, fmt.Errorf("gcp-kms: protect bearer token: %w", err)
+		}
+		b.token = token
 	}
 	for _, o := range opts {
 		o(b)
@@ -293,7 +305,7 @@ func (b *Backend) call(ctx context.Context, method, path string, in any, out any
 
 // send is call with the JSON body already encoded; a nil body sends none.
 func (b *Backend) send(ctx context.Context, method, path string, body []byte, out any) error {
-	if b.initErr != nil || b.token == nil {
+	if b.initErr != nil || (b.token == nil && b.tokens == nil) {
 		return fmt.Errorf("gcp-kms: credentials unavailable: %w", b.initErr)
 	}
 	var reader io.Reader
@@ -308,7 +320,22 @@ func (b *Backend) send(ctx context.Context, method, path string, body []byte, ou
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
+	// A workload identity source mints (or reuses, until shortly before expiry)
+	// the token for this request (A169-L1).
+	if b.tokens != nil {
+		token, wipe, err := b.tokens.Token(ctx)
+		if wipe == nil {
+			wipe = func() {}
+		}
+		if err != nil {
+			wipe()
+			return fmt.Errorf("gcp-kms: workload identity token: %w", err)
+		}
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		wipe()
+	} else {
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
+	}
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("gcp-kms: %w", err)
 	}

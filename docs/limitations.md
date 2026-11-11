@@ -5923,7 +5923,15 @@ platform's projected federated token for short-lived Entra tokens through the sa
 `internal/cloudauth` exchange, keeping each in locked memory until shortly before it
 expires; exactly one of the two credentials may be set. Proven against an Entra token
 stand-in and the Key Vault double (conformance through the managed-key backend with no
-static token); a live tenant is Track B.
+static token); a live tenant is Track B. GCP Cloud KMS custody takes one too (A169-L1):
+`managed_keys.gcp.workload_identity` (or the `TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_*`
+variables) replaces `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN(_FILE)`, and the signer
+exchanges the platform's projected OIDC token at GCP Security Token Service for the
+workload identity pool provider's audience (RFC 8693, the same `internal/cloudauth`
+exchange), impersonates the named service account through IAM Credentials when one is
+set, and keeps each access token in locked memory until shortly before it expires;
+exactly one of the two credentials may be set. Proven against STS and IAM Credentials
+stand-ins and the Cloud KMS double; a live project is Track B.
 `TestServedAzureFederatedOutboxTenantIsolationTokenRedaction` and
 `TestServedAzureFederatedAirGapIsTerminalWithoutNetwork` prove the served Azure
 exchange, target readback, tenant isolation, token redaction, and zero-network

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2938 annotated sites across 33 rules. Each row is
+2943 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (657 sites)
+### G101 — CWE-798 Use of hardcoded credentials (661 sites)
 
 | Location | Reason |
 |---|---|
@@ -97,6 +97,7 @@ not this file.
 | `ee/enterpriseauth/scim_writeback_served_test.go:101` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_served_test.go:102` | fabricated fixture credential (CWE-798) |
 | `ee/governance/misuse/misuse.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `ee/managedkeys/signerwiring/gcp_workload_test.go:46` | a stand-in fixture value, not a credential (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/aud59_test.go:22` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
@@ -214,13 +215,14 @@ not this file.
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/cloudauth/gcp_token_source_test.go:53` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/config/ai_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config.go:3494` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:4280` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:4293` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_awskms_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:25` | credential file paths only, no credential value (CWE-798) |
 | `internal/config/config_gcpkms_azurekv_test.go:28` | credential file paths only, no credential value (CWE-798) |
@@ -255,6 +257,8 @@ not this file.
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/managed_keys_azure_workload_test.go:15` | fixture tenant/client UUIDs and a token path, no credential value (CWE-798) |
 | `internal/config/managed_keys_azure_workload_test.go:43` | fixture tenant/client UUIDs and a token path, no credential value (CWE-798) |
+| `internal/config/managed_keys_gcp_workload_test.go:18` | a token path, no credential value (CWE-798) |
+| `internal/config/managed_keys_gcp_workload_test.go:47` | a pool audience, a service account and a token path, no credential value (CWE-798) |
 | `internal/config/managed_keys_providers_test.go:78` | fabricated fixture values; nothing here is real (CWE-798) |
 | `internal/config/migrate_config_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/migrate_config_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -2025,7 +2029,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (714 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (715 sites)
 
 | Location | Reason |
 |---|---|
@@ -2180,7 +2184,7 @@ not this file.
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
 | `ee/enterpriseauth/scim_config.go:70` | the operator's own configured CA file (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
-| `ee/managedkeys/signerwiring/wiring.go:130` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
+| `ee/managedkeys/signerwiring/wiring.go:141` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `internal/agent/csisecrets/driver_test.go:224` | the test's own temp file (CWE-22) |
 | `internal/agent/csisecrets/driver_test.go:253` | the test's own temp file (CWE-22) |
 | `internal/agent/csisecrets/driver_test.go:390` | the test's own temp file (CWE-22) |
@@ -2353,10 +2357,11 @@ not this file.
 | `internal/cli/secret_scan_hook_test_cmd.go:57` | the operator names their own payload file (CWE-22) |
 | `internal/cli/switching_import.go:42` | the operator names the export file to read (CWE-22 not applicable) |
 | `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
+| `internal/cloudauth/gcp_token_source.go:109` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:3589` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4924` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4943` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4937` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4956` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:310` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -3101,8 +3106,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4924` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4943` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4937` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4956` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

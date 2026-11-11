@@ -2,6 +2,12 @@
 
 ### Added
 
+- GCP Cloud KMS managed-key custody can run on a workload identity instead of a static bearer token
+  (A169-L1). `managed_keys.gcp.workload_identity` (or `TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_*`) names the
+  workload identity pool provider and the projected OIDC token file; the isolated signer exchanges that
+  token at GCP Security Token Service, optionally impersonates a service account, and reuses each
+  short-lived access token from locked memory until shortly before it expires. Exactly one of the
+  static token and the workload identity may be set.
 - Reconciliation rounds can compare a Google Cloud KMS key ring and an Azure Key Vault vault with
   trstctl's managed-key record (A168-L1). New `gcpkms` and `azurekv` authority sources read a ring's
   keys and versions, or a vault's keys, versions, version public keys and deleted keys (read-only, with

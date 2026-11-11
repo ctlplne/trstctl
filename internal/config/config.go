@@ -3942,6 +3942,19 @@ func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 	setBool(getenv, "TRSTCTL_MANAGED_KEYS_GCP_ALLOW_INSECURE_LOOPBACK", &m.GCP.AllowInsecureLoopback)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN", &m.GCP.BearerToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE", &m.GCP.BearerTokenFile)
+	// A169-L1: workload identity in place of the static bearer token.
+	var gwi ManagedKeysGCPWorkloadIdentity
+	if m.GCP.WorkloadIdentity != nil {
+		gwi = *m.GCP.WorkloadIdentity
+	}
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_AUDIENCE", &gwi.Audience)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_SUBJECT_TOKEN_FILE", &gwi.SubjectTokenFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_SERVICE_ACCOUNT", &gwi.ServiceAccount)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_STS_ENDPOINT", &gwi.STSEndpoint)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_IMPERSONATION_ENDPOINT", &gwi.ImpersonationEndpoint)
+	if gwi != (ManagedKeysGCPWorkloadIdentity{}) {
+		m.GCP.WorkloadIdentity = &gwi
+	}
 	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_GCP_PRIVATE_EGRESS_CIDRS", &m.GCP.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", &m.PKCS11.ModulePath)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL", &m.PKCS11.TokenLabel)
