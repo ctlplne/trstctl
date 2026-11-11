@@ -1752,7 +1752,12 @@ never live in the API process. What you can do end to end against the running bi
     group, not in the account, or unknown with the reason. A rule that admits a
     partner range does not make an endpoint internet-reachable; only the
     internet-wide range decides. The exposure posture shows the latest verdict
-    per record (`attack_path`) and counts validated and open records. Nothing is
+    per record (`attack_path`) and counts validated and open records; an open
+    verdict raises the record's exposure severity to at least high (critical
+    with weak authentication, insecure transport or wildcard reachability),
+    adds `cloud_path_open` and raises its risk score, in the posture and in
+    the posture automation's rule input (A167-L3), while a blocked verdict
+    lowers nothing. Nothing is
     sent to the endpoints and nothing in the account changes. Proven against an
     in-repository EC2 stand-in that verifies each request's signature; a live
     account is Track B. A Google Cloud project is served too (A167-L1,

@@ -2,6 +2,12 @@
 
 ### Added
 
+- An open cloud attack path raises the record's exposure finding (A167-L3). When a cloud account
+  confirms the internet reaches an exposed endpoint, the finding becomes at least high, critical when
+  the endpoint also authenticates weakly, uses insecure transport or admits wildcard reachability; it
+  gains the `cloud_path_open` finding type, a risk score to match and a recommendation to close the
+  rule the Cloud path names, and the posture automation's rules see the same. A blocked verdict lowers
+  nothing, since paths the adapters do not read yet may still reach the endpoint.
 - Attack-path validation can read an Azure subscription (A167-L1). A `cloud_network_path` source
   with `provider: azure-network` names the subscription and a token reference, and validating
   exposed endpoints through it reads, from Azure Resource Manager, the public IP holding each

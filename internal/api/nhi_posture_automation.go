@@ -130,8 +130,10 @@ func (a *API) listNHIPostureAutomation(w http.ResponseWriter, r *http.Request) {
 }
 
 // nhiPostureFactsForItem merges one inventory row's posture families into the
-// input.nhi object. ok is false when no family fired for the row.
-func nhiPostureFactsForItem(item nhiInventoryItem, now time.Time) (policy.NHIFacts, nhiPostureFamilies, bool) {
+// input.nhi object. ok is false when no family fired for the row. attackPath is
+// the row's latest provider-native validation, if any (A167-L3): an open one
+// raises the exposure family as it does in the exposure posture.
+func nhiPostureFactsForItem(item nhiInventoryItem, now time.Time, attackPath *nhiExposureAttackPath) (policy.NHIFacts, nhiPostureFamilies, bool) {
 	facts := policy.NHIFacts{
 		InventoryID: item.ID, Kind: item.Kind, Source: item.Source, DisplayName: item.DisplayName,
 		OwnerID: item.OwnerID, Status: item.Status, Managed: strings.HasPrefix(item.ID, "identity/"),
@@ -172,6 +174,7 @@ func nhiPostureFactsForItem(item nhiInventoryItem, now time.Time) (policy.NHIFac
 		facts.CredentialAgeDays, facts.RotationAgeDays = f.CredentialAgeDays, f.RotationAgeDays
 	}
 	if f, ok := nhiExposureFindingForItem(item); ok {
+		nhiExposureApplyAttackPath(&f, attackPath)
 		merge("exposure", f.Severity, f.RiskScore, f.FindingTypes, f.OwnerStatus)
 	}
 	sort.Strings(facts.FindingTypes)
@@ -230,8 +233,12 @@ func (a *API) nhiPostureAutomationPlan(ctx context.Context, tenantID string, now
 	if err != nil {
 		return nhiPostureAutomationResponse{}, err
 	}
+	attackPaths, _, err := a.nhiExposureAttackPathsByInventory(ctx, tenantID)
+	if err != nil {
+		return nhiPostureAutomationResponse{}, err
+	}
 	for _, item := range inventory.Items {
-		facts, families, ok := nhiPostureFactsForItem(item, now)
+		facts, families, ok := nhiPostureFactsForItem(item, now, attackPaths[item.ID])
 		if !ok {
 			continue
 		}

@@ -154,7 +154,14 @@ with the reason — and
 the exposure panel has a **Validate paths in the cloud** button and a **Cloud path**
 column that shows the verdict with the reason beneath it. A probe says something
 answered; the attack path says which resource lets it, or which one to change to stop
-it.
+it. An open verdict is the account's own confirmation, so it also raises the record's
+exposure finding (A167-L3): to at least high, to critical when the endpoint also
+authenticates weakly, uses insecure transport or admits wildcard reachability, with the
+`cloud_path_open` finding type, a risk score to match and a recommendation to close the
+rule the Cloud path names. The posture automation's `nhi_posture` rules see the same
+raised severity, risk and finding type. A blocked verdict lowers nothing, because paths
+the provider adapters do not read yet (load balancers, NAT, gateways) may still reach
+the endpoint.
 
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):

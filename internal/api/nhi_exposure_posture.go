@@ -215,7 +215,7 @@ func (a *API) nhiExposurePosture(ctx context.Context, tenantID string) (nhiExpos
 			}
 		}
 		if view := attackPaths[finding.InventoryID]; view != nil {
-			finding.AttackPath = view
+			nhiExposureApplyAttackPath(&finding, view)
 			finding.EvidenceRefs = append(finding.EvidenceRefs, pathEvidence[finding.InventoryID]...)
 			out.Summary.PathValidated++
 			if view.Status == "open" {
@@ -524,6 +524,41 @@ func hasNHIWildcardReachability(meta map[string]any) bool {
 	return false
 }
 
+// nhiExposureCloudPathOpen is the finding type an open provider-native
+// attack path adds (A167-L3).
+const nhiExposureCloudPathOpen = "cloud_path_open"
+
+// nhiExposureApplyAttackPath joins a record's latest attack-path verdict to
+// its exposure finding (A167-L3). An open verdict is the cloud account's own
+// confirmation that the internet reaches the endpoint, so it raises the
+// finding to at least high, to critical when the endpoint also authenticates
+// weakly, uses insecure transport or admits wildcard reachability, adds the
+// cloud_path_open finding type and raises the risk score to match. A blocked
+// verdict never lowers either: paths the provider adapters do not read yet
+// (load balancers, NAT, gateways) may still reach the endpoint.
+func nhiExposureApplyAttackPath(finding *nhiExposurePostureFinding, view *nhiExposureAttackPath) {
+	finding.AttackPath = view
+	if view == nil || view.Status != "open" {
+		return
+	}
+	if !nhiStringSliceContains(finding.FindingTypes, nhiExposureCloudPathOpen) {
+		finding.FindingTypes = append(finding.FindingTypes, nhiExposureCloudPathOpen)
+	}
+	raised := "high"
+	for _, typ := range []string{"weak_authentication", "insecure_transport", "wildcard_reachability"} {
+		if nhiStringSliceContains(finding.FindingTypes, typ) {
+			raised = "critical"
+		}
+	}
+	if severityRank(raised) > severityRank(finding.Severity) {
+		finding.Severity = raised
+	}
+	if computed := nhiExposureRiskScore(finding.Severity, finding.FindingTypes); computed > finding.RiskScore {
+		finding.RiskScore = computed
+	}
+	finding.Recommendation = nhiExposureRecommendation(finding.FindingTypes)
+}
+
 func nhiExposureSeverity(internetExposed, insecureTransport, weakAuth, publicCallback, missingNetworkPolicy, wildcardReachability, insecureDeployment bool) string {
 	switch {
 	case internetExposed && weakAuth && (insecureTransport || wildcardReachability):
@@ -554,6 +589,8 @@ func nhiExposureRecommendation(types []string) string {
 	switch {
 	case parts["internet_exposed"] && parts["weak_authentication"] && parts["insecure_transport"]:
 		return "Remove the public route, require strong service-to-service authentication, and re-enable TLS before this NHI is used again."
+	case parts[nhiExposureCloudPathOpen]:
+		return "The cloud account confirms the internet reaches this endpoint: close the rule its Cloud path names, then bind the NHI to a private network path or require strong authentication."
 	case parts["internet_exposed"] && parts["wildcard_reachability"]:
 		return "Replace wildcard reachability with explicit CIDR/service allowlists and bind the NHI to a private network path."
 	case parts["public_callback"] && parts["insecure_transport"]:
