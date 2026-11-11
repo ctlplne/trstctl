@@ -2,6 +2,13 @@
 
 ### Added
 
+- Command rules on network devices read the lines typed in an interactive shell (A270-L1). A
+  ruled device session used to refuse a shell, since only exec commands were read. Now every key
+  reaches the device as typed, and each line's submission (Enter, or Ctrl-Z) waits for the rules:
+  an allowed line runs, a refused one is killed at the device with Ctrl-U and runs nothing, is
+  recorded as blocked evidence like an exec command, and the client is told. The gateway follows
+  erase, kill-line and erase-word keys; a line edited with history recall, completion or cursor
+  keys is refused as uninspectable.
 - A failed access review revocation is retried (Q1-L2). It used to stay failed: nothing retried it,
   and a retry under the decision's own key could not work, because PAM refuses to retry a failed
   revocation under the key that failed. The leader's reconcile now retries on its own, waiting as

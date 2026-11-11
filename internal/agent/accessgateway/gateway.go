@@ -676,7 +676,7 @@ func (g *Gateway) serve(ctx context.Context, conn net.Conn) {
 				if err != nil {
 					return &sshgateway.RequestGuard{Inspect: func(context.Context, string, []byte) bool { return false }, Reserve: func(int) (func(), bool) { return nil, false }}
 				}
-				return &sshgateway.RequestGuard{Inspect: c.netDeviceRequest, Reserve: c.reserveFrame}
+				return &sshgateway.RequestGuard{Inspect: c.netDeviceRequest, Reserve: c.reserveFrame, Line: c.netDeviceLine}
 			}
 		}
 		err = sshgateway.ServeGuardedPassword(ctx, conn, host, password, sshgateway.Upstream{Address: s.intent.SSHAddress,

@@ -160,6 +160,12 @@ func Serve(ctx context.Context, client net.Conn, host *HostKey, key *SessionKey,
 type RequestGuard struct {
 	Inspect func(context.Context, string, []byte) bool
 	Reserve func(int) (func(), bool)
+	// Line, when set, judges the channel's typed input line by line (A270-L1,
+	// an interactive device shell): each line reaches the target as it is
+	// typed, and its submission waits for Line. The line is borrowed for the
+	// call; readable is false when the client used a key the gateway cannot
+	// follow, and such a line must be refused.
+	Line func(ctx context.Context, line []byte, readable bool) bool
 }
 
 // ServeGuarded adds a separate guard per channel. Nil preserves ordinary SSH.
@@ -342,7 +348,16 @@ func relaySession(ctx context.Context, nc ssh.NewChannel, upstream *ssh.Client, 
 		forwardRequests(upRequests, down, nil, func(string) bool { return true }, recordRequest(rec, ch, "target"))
 	}()
 	go func() {
-		_, _ = io.Copy(up, recorded(down, rec, ch, "in"))
+		input := recorded(down, rec, ch, "in")
+		if guard != nil && guard.Line != nil {
+			_ = pumpTypedLines(ctx, input, up, down, guard.Line, func() {
+				if rec != nil {
+					rec.Request(ch, "client", "command-refused", []byte("gateway command guardrail refused this typed line"))
+				}
+			})
+		} else {
+			_, _ = io.Copy(up, input)
+		}
 		_ = up.CloseWrite()
 	}()
 	var output sync.WaitGroup

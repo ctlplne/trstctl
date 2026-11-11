@@ -9673,8 +9673,16 @@ EOS's enable password rotates too. Discovery stages each device's local accounts
 their level, never a hash. A `netdevice` access target brokers sessions to each
 device through the gateway, which signs in over SSH with the vaulted password (the
 client holds none); sessions are recorded with the password masked, and `netdevice`
-command rules block device verbs (by abbreviation too) in exec commands, while an
-interactive shell answers to every rule. Proof today: `TestNetworkDeviceRotationA270`,
+command rules block device verbs (by abbreviation too) in exec commands and in the
+typed lines of an interactive shell (A270-L1). In a shell under rules every key reaches
+the device as typed, so its own echo and editing work, and only a line's submission
+(Enter, or Ctrl-Z) waits for the rules: an allowed line runs; a refused one is killed at
+the device with Ctrl-U, runs nothing, is recorded as blocked evidence like an exec
+command and marked in the recording, and the client is told. The gateway follows the
+editing keys the five platforms share (erase, kill line, erase word, `?` for help); a
+line edited with keys it cannot follow (history recall, completion, cursor movement) is
+refused as uninspectable, so a ruled shell is retyped rather than recalled. Proof today:
+`TestNetworkDeviceRotationA270`,
 `TestNetworkAPIRotationA270`, `TestServedNetworkDeviceRotationA270`,
 `TestServedNetworkAPIDeviceRotationA270`, `TestGatewaySignsInToADeviceWithItsVaultedPasswordA270`
 and `TestServedNetworkDeviceSessionsA270` against stand-ins built from each vendor's
@@ -9687,10 +9695,8 @@ password. The stand-in follows the administrator object; a FortiGate run decides
 the provider needs the monitor endpoint with the stored predecessor.
 
 What comes next:
-- Command rules on the typed lines of an interactive device shell (today exec commands
-  are read and a shell answers to every rule).
-- A real device or vendor image run of the same proofs on each platform; none is in the
-  lab.
+- A real device or vendor image run of the same proofs on each platform, including a
+  ruled interactive shell; none is in the lab.
 - BIG-IP's root password (changed through its own endpoint with the old password) and
   FortiGate administrators in other VDOMs.
 - Accounts held in a TACACS+ or RADIUS server rotate there, not on the device; today

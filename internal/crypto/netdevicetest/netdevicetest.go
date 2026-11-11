@@ -35,6 +35,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -317,29 +318,57 @@ func (d *Device) generic(lines *lineReader, write func(string), user string) {
 	}
 }
 
+// lineReader is a device's command-line editor: it builds each line from the
+// keys typed, applying the editing keys every vendor's editor shares — erase
+// (Backspace, Delete), kill line (Ctrl-U, and Ctrl-C, which abandons it) and
+// erase word (Ctrl-W) — and runs it on Enter.
 type lineReader struct {
 	r    io.Reader
 	buf  []byte
+	line []byte
 	echo func()
 }
 
 func (l *lineReader) next() (string, bool) {
 	for {
-		if i := bytes.IndexAny(l.buf, "\r\n"); i >= 0 {
-			line := string(l.buf[:i])
-			l.buf = l.buf[i+1:]
-			if line == "" {
-				continue
+		for len(l.buf) > 0 {
+			b := l.buf[0]
+			l.buf = l.buf[1:]
+			switch b {
+			case '\r', '\n':
+				line := string(l.line)
+				l.line = l.line[:0]
+				if line == "" {
+					continue
+				}
+				if l.echo != nil {
+					l.echo()
+				}
+				return line, true
+			case 0x08, 0x7f:
+				if len(l.line) > 0 {
+					_, size := utf8.DecodeLastRune(l.line)
+					l.line = l.line[:len(l.line)-size]
+				}
+			case 0x15, 0x03:
+				l.line = l.line[:0]
+			case 0x17:
+				end := len(l.line)
+				for end > 0 && l.line[end-1] == ' ' {
+					end--
+				}
+				for end > 0 && l.line[end-1] != ' ' {
+					end--
+				}
+				l.line = l.line[:end]
+			default:
+				l.line = append(l.line, b)
 			}
-			if l.echo != nil {
-				l.echo()
-			}
-			return line, true
 		}
 		chunk := make([]byte, 512)
 		n, err := l.r.Read(chunk)
 		l.buf = append(l.buf, chunk[:n]...)
-		if err != nil {
+		if err != nil && n == 0 {
 			return "", false
 		}
 	}

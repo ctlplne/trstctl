@@ -39,9 +39,10 @@ import (
 // the client's command as that account, and the sealed recording holds the
 // command but never the password. Under a template's netdevice command rule
 // blocking "write", the abbreviation "wr mem" is refused before the device
-// sees it and is recorded as blocked evidence, and an interactive shell
-// (whose typed lines are not inspected) is refused under the rule. The
-// enable secret and a provider without an SSH route cannot be targets.
+// sees it and is recorded as blocked evidence; an interactive shell opens
+// under the rule and its typed "wr mem" is refused the same way, while the
+// lines around it run (A270-L1). The enable secret and a provider without an
+// SSH route cannot be targets.
 func TestServedNetworkDeviceSessionsA270(t *testing.T) {
 	if testing.Short() {
 		t.Skip("gateway session proof")
@@ -256,28 +257,42 @@ func TestServedNetworkDeviceSessionsA270(t *testing.T) {
 	if output, err := command("terminal length 0").CombinedOutput(); err != nil {
 		t.Fatalf("an unruled command was refused: %v %s", err, output)
 	}
-	if output, err := command().CombinedOutput(); err == nil {
-		t.Fatalf("an uninspected interactive shell was accepted under the rule: %s", output)
+	// A270-L1: an interactive shell opens under the rule, and each typed line
+	// is judged as the device would run it. "wr mem" is refused: the device
+	// kills the typed line and runs nothing; the lines around it run, and a
+	// "write mem" killed with Ctrl-U before Enter was never submitted.
+	shell := command()
+	shell.Stdin = strings.NewReader("terminal length 0\rwr mem\rwrite mem\x15show version\r")
+	shellOutput, err := shell.CombinedOutput()
+	if err != nil {
+		t.Fatalf("an interactive shell under the rule: %v %s", err, shellOutput)
+	}
+	if !strings.Contains(string(shellOutput), "the gateway refused this line under the session's command rules") {
+		t.Fatalf("the shell's output = %q, want the refusal", shellOutput)
 	}
 	stop()
-	if slices.Contains(core.ssh.Ran(), "wr mem") || core.ssh.Writes() != writesBefore {
-		t.Fatal("the blocked command reached the device")
+	ran := core.ssh.Ran()
+	if slices.Contains(ran, "wr mem") || slices.Contains(ran, "write mem") || core.ssh.Writes() != writesBefore {
+		t.Fatalf("a blocked command reached the device: ran %q", ran)
+	}
+	if !slices.Contains(ran, "show version") {
+		t.Fatalf("the allowed typed line did not run: ran %q", ran)
 	}
 	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/access/sessions/"+session.ID+"/actions", f.requester, nil)
 	var page api.PAMCommandActionList
 	if status != http.StatusOK || json.Unmarshal(body, &page) != nil {
 		t.Fatalf("the device refusal evidence = %d %s", status, body)
 	}
-	var execBlocked, shellBlocked bool
+	// Two blocked writes: the exec request and the typed line, each bound to
+	// the rule, with no command text in the evidence.
+	blockedWrites := 0
 	for _, item := range page.Items {
-		switch {
-		case item.Phase == "exec" && item.Status == "blocked" && slices.Equal(item.Operations, []string{"write"}) && slices.Equal(item.RuleIDs, []string{ruleID}) && item.Protocol == "netdevice":
-			execBlocked = true
-		case item.Phase == "control" && item.Status == "blocked" && item.Reason == "unsupported_control":
-			shellBlocked = true
+		if item.Phase == "exec" && item.Status == "blocked" && item.Reason == "matched_rule" && slices.Equal(item.Operations, []string{"write"}) &&
+			slices.Equal(item.RuleIDs, []string{ruleID}) && item.Protocol == "netdevice" {
+			blockedWrites++
 		}
 	}
-	if !execBlocked || !shellBlocked || len(page.Items) != 2 || strings.Contains(string(body), "wr mem") {
+	if blockedWrites != 2 || len(page.Items) != 2 || strings.Contains(string(body), "wr mem") {
 		t.Fatalf("the device refusal evidence = %s", body)
 	}
 	revoke(session.ID)

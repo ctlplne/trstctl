@@ -344,3 +344,12 @@ it("offers risk categories apart from operation names and saves them as the prot
     ),
   );
 });
+
+it("says network device rules read each line typed in a device shell (A270-L1)", async () => {
+  const user = userEvent.setup();
+  mount(<PAMCommandRulesPanel canManage />);
+  await user.click(await screen.findByRole("button", { name: "Add command rule" }));
+  const dialog = screen.getByRole("dialog");
+  expect(await within(dialog).findByText(/network device rules read exec commands and each line typed in an interactive device shell/)).toBeInTheDocument();
+  expect(within(dialog).getByText(/an interactive SSH shell answers to every rule/)).toBeInTheDocument();
+});

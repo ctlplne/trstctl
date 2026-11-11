@@ -1302,7 +1302,7 @@ export const messages = {
   "admin.access.rules.mysql": { defaultMessage: "MySQL", description: "MySQL target protocol name." },
   "admin.access.rules.protocolHelp": {
     defaultMessage:
-      "PostgreSQL, MySQL or ClickHouse statements, Redis or MongoDB command names, SSH exec requests, or network device command verbs (matched by abbreviation). SSH and network device rules read exec commands; an interactive shell answers to every rule. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
+      "PostgreSQL, MySQL or ClickHouse statements, Redis or MongoDB command names, SSH exec requests, or network device command verbs (matched by abbreviation). SSH rules read exec commands, and an interactive SSH shell answers to every rule; network device rules read exec commands and each line typed in an interactive device shell, refusing a line edited with history recall, completion or cursor keys. Some encoded forms and transactions are explicitly refused; check the protocol limits.",
     description: "Gateway command guardrail configuration or durable action evidence.",
   },
   "admin.access.rules.operationsHelp": {
