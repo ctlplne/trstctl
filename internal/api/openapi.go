@@ -3443,7 +3443,7 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "provider": str(), "zone": str(), "challenge_domain": str(),
 		"delegation_target": str(), "credential_refs": {Type: "object"},
 		"config": {Type: "object"}, "caa_issuer_domain": str(),
-		"allowed_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}}},
+		"allowed_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01", "dns-persist-01"}}},
 		"allow_wildcards": {Type: "boolean"}, "allow_upstream_dv": {Type: "boolean"},
 	}, "name", "provider")
 	acmeDNS01ProviderConfig := object(map[string]*Schema{

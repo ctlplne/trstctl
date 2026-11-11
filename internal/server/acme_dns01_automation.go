@@ -348,7 +348,9 @@ func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID
 		}
 		for _, method := range cfg.AllowedMethods {
 			method = strings.TrimSpace(strings.ToLower(method))
-			if wildcard && method != acme.ChallengeDNS01 {
+			// A wildcard validates over DNS only: dns-01, or dns-persist-01,
+			// whose standing record must then carry policy=wildcard (P1-L3).
+			if wildcard && method != acme.ChallengeDNS01 && method != acme.ChallengeDNSPersist01 {
 				continue
 			}
 			if method != "" {
@@ -363,7 +365,7 @@ func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID
 		return nil, true, fmt.Errorf("server: multiple DNS-01 provider configs cover %s at the same specificity; narrow their zones or remove the duplicate", domain)
 	}
 	methods := make([]string, 0, len(allowed))
-	for _, method := range []string{acme.ChallengeHTTP01, acme.ChallengeDNS01, acme.ChallengeTLSALPN01} {
+	for _, method := range []string{acme.ChallengeHTTP01, acme.ChallengeDNS01, acme.ChallengeTLSALPN01, acme.ChallengeDNSPersist01} {
 		if allowed[method] {
 			methods = append(methods, method)
 		}

@@ -428,7 +428,10 @@ Protocols page. The preflight route previews the selected method and denial reas
 the served ACME order path enforces the same policy before validation: new orders only
 advertise challenge types allowed by the matching config, and challenge acceptance
 re-checks the policy so stale or updated orders cannot use a method that is no longer
-allowed.
+allowed. The policy may name `http-01`, `dns-01`, `tls-alpn-01` and, where
+`protocols.acme_dns_persist` names this CA, `dns-persist-01` (P1); a wildcard under a
+policy validates over DNS only, with `dns-01` or with `dns-persist-01` whose standing
+record carries `policy=wildcard`.
 
 ### Wildcards (F74)
 

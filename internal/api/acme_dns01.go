@@ -517,13 +517,15 @@ func normalizeDNS01Methods(in []string) ([]string, error) {
 	for _, m := range in {
 		m = strings.TrimSpace(m)
 		switch m {
-		case acmesrv.ChallengeHTTP01, acmesrv.ChallengeDNS01, acmesrv.ChallengeTLSALPN01:
+		case acmesrv.ChallengeHTTP01, acmesrv.ChallengeDNS01, acmesrv.ChallengeTLSALPN01, acmesrv.ChallengeDNSPersist01:
+			// P1-L3: dns-persist-01 may be required too; the ACME server offers
+			// it only where protocols.acme_dns_persist names this CA.
 			if !seen[m] {
 				out = append(out, m)
 				seen[m] = true
 			}
 		default:
-			return nil, errStatus(http.StatusBadRequest, "allowed_methods must contain only http-01, dns-01, or tls-alpn-01")
+			return nil, errStatus(http.StatusBadRequest, "allowed_methods must contain only http-01, dns-01, tls-alpn-01, or dns-persist-01")
 		}
 	}
 	return out, nil

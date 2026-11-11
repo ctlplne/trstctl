@@ -1438,7 +1438,9 @@ function formatDate(value?: string): string {
   return formatDateTimePolicy(value);
 }
 
-const acmeMethodOptions = ["http-01", "dns-01", "tls-alpn-01"] as const;
+// P1-L3: dns-persist-01 can be required too; the ACME server offers it only
+// where protocols.acme_dns_persist names this CA.
+const acmeMethodOptions = ["http-01", "dns-01", "tls-alpn-01", "dns-persist-01"] as const;
 type ACMEChallengeMethod = (typeof acmeMethodOptions)[number];
 
 function isACMEChallengeMethod(value: string): value is ACMEChallengeMethod {

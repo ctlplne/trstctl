@@ -2014,6 +2014,44 @@ describe("protocol surface", () => {
     expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
   });
 
+  // P1-L3: the DV policy picker offers dns-persist-01 and saves it.
+  it("lets a DNS-01 provider config require dns-persist-01", async () => {
+    const user = userEvent.setup();
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValueOnce({ items: [] });
+    apiMock.createACMEDNS01ProviderConfig.mockResolvedValue({
+      id: "01900000-0000-7000-8000-000000000171",
+      tenant_id: "11111111-1111-1111-1111-111111111111",
+      name: "persist-policy",
+      provider: "cloudflare",
+      zone: "example.test",
+      credential_refs: { api_token_ref: "secret://dns/cloudflare/persist" },
+      config: {},
+      allowed_methods: ["dns-persist-01"],
+      allow_wildcards: false,
+      allow_upstream_dv: false,
+      secret_handling: "credential_refs_only",
+      created_at: "2026-11-11T00:00:00Z",
+      updated_at: "2026-11-11T00:00:00Z",
+    });
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Add DNS-01 provider" }));
+    const dialog = screen.getByRole("dialog", { name: "Add DNS-01 provider config" });
+    await user.type(within(dialog).getByRole("textbox", { name: "Config name" }), "persist-policy");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Provider" }), "cloudflare");
+    await user.type(within(dialog).getByRole("textbox", { name: "Zone (optional)" }), "example.test");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Credential references JSON \(optional\)/ }), {
+      target: { value: '{"api_token_ref":"secret://dns/cloudflare/persist"}' },
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "dns-persist-01" }));
+    await user.click(within(dialog).getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add DNS-01 provider config" })).not.toBeInTheDocument());
+    expect(apiMock.createACMEDNS01ProviderConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "persist-policy", allowed_methods: ["dns-persist-01"] }),
+    );
+  });
+
   it("validates and saves the served DNS-01 config form without accepting raw non-object JSON", async () => {
     const user = userEvent.setup();
     await renderProtocols();

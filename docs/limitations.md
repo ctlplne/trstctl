@@ -6059,7 +6059,10 @@ This is a deliberate, documented trust boundary, not an accident.
   URL, and every order validates against it again: renewals need no DNS change
   and no DNS API key, while a deleted record, a record naming another account, a
   wildcard without `policy=wildcard` or a passed `persistUntil` refuses the next
-  order with the reason. Upstream, an ACME authority configured with
+  order with the reason. A tenant's DNS-01 provider config may require it
+  (`allowed_methods`, in the API and on the Protocols page): the zone's names,
+  wildcards included, are then offered only dns-persist-01, and a wildcard's
+  standing record must carry `policy=wildcard`. Upstream, an ACME authority configured with
   `upstream_dns_persist` (which needs `upstream_dns01`) answers the challenge by
   publishing that record once through the consenting DNS-01 provider configs and
   never retracting it. Proven against trstctl's own server (two orders on one

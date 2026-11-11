@@ -11994,7 +11994,7 @@ export interface components {
         ACMEDNS01ProviderConfigRequest: {
             allow_upstream_dv?: boolean;
             allow_wildcards?: boolean;
-            allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01")[];
+            allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01" | "dns-persist-01")[];
             caa_issuer_domain?: string;
             challenge_domain?: string;
             config?: Record<string, never>;

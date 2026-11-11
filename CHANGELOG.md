@@ -2,6 +2,12 @@
 
 ### Added
 
+- A domain-validation policy can require dns-persist-01 (P1-L3). A tenant's DNS-01 provider config
+  names the methods its zone's ACME orders may use, but only http-01, dns-01 and tls-alpn-01 could be
+  saved, and the served policy dropped anything else, so persistent DNS validation was never offered
+  under a policy. `allowed_methods` now takes `dns-persist-01` in the API and on the Protocols page,
+  and the zone's names, wildcards included (their standing record carries `policy=wildcard`), are
+  then offered that challenge.
 - Misuse findings are listed, not only alerted (M2-L1). Enterprise governance raises an alert
   for each misuse finding within a per-tenant hourly budget, and a finding past the budget was
   recorded but could be read nowhere. `GET /api/v1/misuse/findings` (audit:read) lists the

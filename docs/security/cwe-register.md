@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2893 annotated sites across 33 rules. Each row is
+2894 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (617 sites)
+### G101 — CWE-798 Use of hardcoded credentials (618 sites)
 
 | Location | Reason |
 |---|---|
@@ -162,7 +162,7 @@ not this file.
 | `internal/aimodel/redactor_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/aimodel/redactor_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/access_bundles.go:1056` | environment variable names and placeholder launch lines; no credential value present (CWE-798) |
-| `internal/api/acme_dns01.go:561` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/acme_dns01.go:563` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/agents.go:59` | source-kind label naming where key material was located; no credential value present (CWE-798) |
 | `internal/api/aisurface_contract_test.go:148` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/compliance_report_dispatch_test.go:17` | fabricated fixture reference; no value is real (CWE-798) |
@@ -409,6 +409,7 @@ not this file.
 | `internal/server/acme_adcs_upstream_served_test.go:133` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
+| `internal/server/acme_dns_persist_policy_served_test.go:41` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_eab_rotation_served_test.go:40` | logical fixture name, not secret material (CWE-798) |
 | `internal/server/acme_eab_rotation_served_test.go:41` | a reference, not secret material (CWE-798) |
 | `internal/server/adcs_endpoint_probe_command_test.go:23` | public secret:// reference fixture; contains no credential value (CWE-798). |
