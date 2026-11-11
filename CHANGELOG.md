@@ -632,6 +632,13 @@
 
 ### Fixed
 
+- A report removal that keeps failing says why (A206-L1). When the report retention could not remove a
+  report, the outbox recorded only `external_delivery_failed`, so an operator could not tell an
+  archive that refused the delete from one that kept the report or could not be read without the
+  logs. The removal's outbox row now keeps one of three closed classes (`report_removal_refused`,
+  `report_removal_kept`, `report_removal_unconfirmed`), never the archive's own words, and the run's
+  API answer carries `artifact_removal_failure` (reason, attempts, whether it still retries and when
+  next), which the console's signed runs show.
 - The report retention removes every version of a report (A206-L2). On a bucket that keeps versions
   (versioning is on whenever a bucket has S3 Object Lock), a plain delete only adds a delete marker:
   HEAD then answers 404 while the report's version stays in the bucket, and the run was recorded

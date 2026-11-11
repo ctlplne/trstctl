@@ -24,6 +24,12 @@ func TestPersistedDeliveryErrorAcceptsOnlyClosedSafeClasses(t *testing.T) {
 	if got := persistedDeliveryError(classifiedOutboxTestError{class: "external_ca_finalize_failed"}); got != "external_ca_finalize_failed" {
 		t.Fatalf("known safe class = %q", got)
 	}
+	// A206-L1: why a report removal under the retention did not complete.
+	for _, class := range []string{"report_removal_refused", "report_removal_kept", "report_removal_unconfirmed"} {
+		if got := persistedDeliveryError(classifiedOutboxTestError{class: class}); got != class {
+			t.Fatalf("report removal class %s = %q", class, got)
+		}
+	}
 	if got := persistedDeliveryError(errors.New("crypto: leaf profile violation: profile maximum validity leaves no usable lifetime")); got != "external_delivery_failed" {
 		t.Fatal("error prose impersonated local validity refusal")
 	}

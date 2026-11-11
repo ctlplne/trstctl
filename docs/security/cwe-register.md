@@ -1139,9 +1139,9 @@ not this file.
 | `internal/store/compliance_report_retention.go:62` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:69` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:93` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:125` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:145` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:159` | non-negative by constraint (CWE-190) |
+| `internal/store/compliance_report_retention.go:176` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:196` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:210` | non-negative by constraint (CWE-190) |
 | `internal/store/compliance_report_run.go:294` | non-negative by constraint (CWE-190) |
 | `internal/store/compliance_report_run.go:312` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |

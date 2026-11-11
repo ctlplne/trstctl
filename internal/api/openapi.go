@@ -5095,6 +5095,14 @@ func componentSchemas() map[string]*Schema {
 		Description: "when the report retention removed the report; the download then answers 410"}
 	complianceReportRemovalDeferredUntil := &Schema{Type: "string", Format: "date-time",
 		Description: "until when the archive's S3 Object Lock keeps the report from the report retention"}
+	complianceReportRemovalFailure := object(map[string]*Schema{
+		"reason": {Type: "string", Enum: []string{"refused", "kept", "unconfirmed", "timeout", "failed"},
+			Description: "why the last attempt failed: the archive refused the delete, acknowledged it but still has the report, could not be read to confirm the report is gone, did not answer in time, or failed otherwise"},
+		"attempts":        {Type: "integer", Description: "attempts made so far"},
+		"retrying":        {Type: "boolean", Description: "whether the removal is still retried"},
+		"next_attempt_at": timestamp(),
+	}, "reason", "attempts", "retrying")
+	complianceReportRemovalFailure.Description = "why the report retention's queued removal of the report keeps failing; absent while it has not failed"
 	complianceReportRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "schedule_id": uuid(),
 		"due_at": timestamp(), "framework": str(), "report_type": str(),
@@ -5103,8 +5111,9 @@ func componentSchemas() map[string]*Schema {
 		"next_attempt_at": timestamp(), "error_code": str(),
 		"artifact_ref": str(), "artifact_digest": str(), "completed_at": timestamp(),
 		"legal_hold": complianceReportLegalHold, "artifact_expired_at": complianceReportArtifactExpiredAt, "artifact_removal_deferred_until": complianceReportRemovalDeferredUntil,
-		"dispatch":       ref("ComplianceReportRunDispatch"),
-		"event_sequence": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
+		"artifact_removal_failure": complianceReportRemovalFailure,
+		"dispatch":                 ref("ComplianceReportRunDispatch"),
+		"event_sequence":           {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "schedule_id", "due_at", "framework", "report_type", "status", "retry_generation", "attempt", "event_sequence", "created_at", "updated_at")
 	scheduledComplianceArtifact := object(map[string]*Schema{
 		"manifest": {Type: "object"}, "signature": {Type: "string", Format: "byte"},

@@ -1841,7 +1841,8 @@ never live in the API process. What you can do end to end against the running bi
   recorded expired there may still hold a noncurrent version, which a lifecycle
   rule for noncurrent versions removes. A removal the object store refuses, or
   acknowledges without applying, retries in the outbox and the run stays
-  unexpired. The run receipt and its SHA-256 remain after removal; a backup
+  unexpired; the run and the console say why (`artifact_removal_failure`:
+  refused, kept, unconfirmed, timeout or failed) with the attempts so far. The run receipt and its SHA-256 remain after removal; a backup
   taken before it still holds the report. With the archive object store under
   S3 Object Lock (`object_store.object_lock_mode` and
   `object_lock_retention`), every audit archive segment, report and backup set

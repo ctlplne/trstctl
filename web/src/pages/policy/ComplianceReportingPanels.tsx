@@ -15,6 +15,15 @@ const storageHoldMessageKeys: Record<string, MessageKey> = {
   failed: "policy.reporting.storageHoldFailed",
 };
 
+// A206-L1: why the report retention's removal of a report keeps failing.
+const removalFailureMessageKeys: Record<string, MessageKey> = {
+  refused: "policy.reporting.removalRefused",
+  kept: "policy.reporting.removalKept",
+  unconfirmed: "policy.reporting.removalUnconfirmed",
+  timeout: "policy.reporting.removalTimeout",
+  failed: "policy.reporting.removalFailed",
+};
+
 const reportTypeMessageKeys: Record<string, MessageKey> = {
   inventory_snapshot: "policy.reportType.inventorySnapshot",
   framework_evidence_pack: "policy.reportType.frameworkEvidencePack",
@@ -269,6 +278,21 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
               <p className="text-sm text-muted-foreground">
                 {t("policy.reporting.removalDeferred", { date: formatDateTime(run.artifact_removal_deferred_until) })}
               </p>
+            )}
+            {run.artifact_removal_failure && !run.artifact_expired_at && (
+              <>
+                <p className="text-sm text-destructive">
+                  {t(removalFailureMessageKeys[run.artifact_removal_failure.reason] ?? "policy.reporting.removalFailed")}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {run.artifact_removal_failure.retrying && run.artifact_removal_failure.next_attempt_at
+                    ? t("policy.reporting.removalRetrying", {
+                        attempts: run.artifact_removal_failure.attempts,
+                        date: formatDateTime(run.artifact_removal_failure.next_attempt_at),
+                      })
+                    : t("policy.reporting.removalStopped", { attempts: run.artifact_removal_failure.attempts })}
+                </p>
+              </>
             )}
             {holdFor === run.id && (
               <form

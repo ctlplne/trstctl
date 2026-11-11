@@ -93,12 +93,21 @@ func (a *API) reportStorageHoldObject(run store.ComplianceReportRun) string {
 // complianceReportRunResponses adds each held run's storage hold.
 func (a *API) complianceReportRunResponses(ctx context.Context, tenantID string, runs ...store.ComplianceReportRun) ([]complianceReportRunResponse, error) {
 	ids := make([]string, 0, len(runs))
+	removing := make([]string, 0, len(runs))
 	for _, run := range runs {
 		if run.Retention.Held() {
 			ids = append(ids, run.ID)
 		}
+		if run.Retention.ExpiryRequestedAt != nil && run.Retention.ArtifactExpiredAt == nil {
+			removing = append(removing, run.ID)
+		}
 	}
 	holds, err := a.store.ArchiveLegalHoldsForReportRuns(ctx, tenantID, ids)
+	if err != nil {
+		return nil, err
+	}
+	// A206-L1: a queued removal that keeps failing says why.
+	failures, err := a.store.ComplianceReportRemovalFailures(ctx, tenantID, removing)
 	if err != nil {
 		return nil, err
 	}
@@ -107,6 +116,9 @@ func (a *API) complianceReportRunResponses(ctx context.Context, tenantID string,
 		resp := toComplianceReportRunResponse(run)
 		if h, ok := holds[run.ID]; ok && resp.LegalHold != nil {
 			resp.LegalHold.Storage = &archiveStorageHoldStatus{ID: h.ID, Status: h.Status, Detail: h.StatusDetail}
+		}
+		if f, ok := failures[run.ID]; ok {
+			resp.ArtifactRemovalFailure = toComplianceReportRemovalFailure(f)
 		}
 		out = append(out, resp)
 	}

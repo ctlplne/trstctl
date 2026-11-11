@@ -304,7 +304,13 @@ archive directory or the object store, then reads the archive; only when the
 report is gone does the run record `artifact_expired_at`. From then on the run
 receipt and its SHA-256 remain and the download answers `410 Gone`. A removal the
 object store refuses, or acknowledges without applying, retries with backoff and
-the run stays unexpired.
+the run stays unexpired. While it fails, the run says why in
+`artifact_removal_failure`: `reason` is `refused` (the archive refused the delete),
+`kept` (it acknowledged the delete but still has the report), `unconfirmed` (it
+could not be read to confirm the report is gone), `timeout` or `failed`, with the
+`attempts` so far, whether it is still `retrying` and its `next_attempt_at`. The
+console's signed runs show the same. The outbox keeps only that reason, never the
+archive's own error text, which the log carries.
 
 On a bucket that keeps versions (versioning is on whenever the bucket has S3 Object
 Lock), a plain delete only adds a delete marker and leaves the report's version in

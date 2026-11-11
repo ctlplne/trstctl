@@ -1333,7 +1333,8 @@ func safePersistableDeliveryClass(err error) (string, bool) {
 		case "external_ca_account_failed", "external_ca_order_failed", "external_ca_finalize_failed", "external_ca_protocol_failed",
 			"external_ca_provider_failed", "external_ca_record_failed", "external_ca_result_encode_failed",
 			"external_ca_idempotency_failed", "external_ca_result_decode_failed", "external_ca_observation_failed",
-			"external_ca_dns01_unconfigured", "notification_receiver_not_configured", "notification_receipt_binding_conflict":
+			"external_ca_dns01_unconfigured", "notification_receiver_not_configured", "notification_receipt_binding_conflict",
+			"report_removal_refused", "report_removal_kept", "report_removal_unconfirmed":
 			return class, true
 		}
 	}

@@ -17973,6 +17973,34 @@ export const messages = {
     defaultMessage: "The archive's Object Lock keeps this report until {date}. The report retention removes it after that.",
     description: "A208: the report retention waits for the archive's S3 Object Lock.",
   },
+  "policy.reporting.removalRefused": {
+    defaultMessage: "The report retention could not remove this report: the archive refused to delete it. Check that the archive's credentials may delete it.",
+    description: "A206-L1: the archive refused the report's removal.",
+  },
+  "policy.reporting.removalKept": {
+    defaultMessage: "The report retention could not remove this report: the archive acknowledged the delete but still has the report.",
+    description: "A206-L1: the archive acknowledged the removal without applying it.",
+  },
+  "policy.reporting.removalUnconfirmed": {
+    defaultMessage: "The report retention could not confirm this report is gone: the archive could not be read.",
+    description: "A206-L1: the archive could not be read after the removal.",
+  },
+  "policy.reporting.removalTimeout": {
+    defaultMessage: "The report retention could not remove this report: the archive did not answer in time.",
+    description: "A206-L1: the archive timed out during the removal.",
+  },
+  "policy.reporting.removalFailed": {
+    defaultMessage: "The report retention could not remove this report.",
+    description: "A206-L1: the removal failed for another reason.",
+  },
+  "policy.reporting.removalRetrying": {
+    defaultMessage: "{attempts, plural, one {Tried once} other {Tried # times}}; the next try is at {date}. The report stays until a removal is confirmed.",
+    description: "A206-L1: the failing removal is retried.",
+  },
+  "policy.reporting.removalStopped": {
+    defaultMessage: "{attempts, plural, one {Tried once} other {Tried # times}}; the removal is no longer retried. The report stays.",
+    description: "A206-L1: the failing removal stopped retrying.",
+  },
   "policy.reporting.reportRemoved": {
     defaultMessage: "The report retention removed this report on {date}. The run receipt and its digest remain.",
     description: "A206: the signed report is gone; its receipt stays.",

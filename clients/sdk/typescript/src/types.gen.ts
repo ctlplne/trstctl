@@ -16337,6 +16337,20 @@ export interface components {
              * @description until when the archive's S3 Object Lock keeps the report from the report retention
              */
             artifact_removal_deferred_until?: string;
+            /** @description why the report retention's queued removal of the report keeps failing; absent while it has not failed */
+            artifact_removal_failure?: {
+                /** @description attempts made so far */
+                attempts: number;
+                /** Format: date-time */
+                next_attempt_at?: string;
+                /**
+                 * @description why the last attempt failed: the archive refused the delete, acknowledged it but still has the report, could not be read to confirm the report is gone, did not answer in time, or failed otherwise
+                 * @enum {string}
+                 */
+                reason: "refused" | "kept" | "unconfirmed" | "timeout" | "failed";
+                /** @description whether the removal is still retried */
+                retrying: boolean;
+            };
             attempt: number;
             /** Format: date-time */
             completed_at?: string;

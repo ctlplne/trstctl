@@ -3547,6 +3547,7 @@ export interface ComplianceReportRun {
   artifact_expired_at?: string;
   artifact_ref?: string;
   artifact_removal_deferred_until?: string;
+  artifact_removal_failure?: { attempts: number; next_attempt_at?: string; reason: "refused" | "kept" | "unconfirmed" | "timeout" | "failed"; retrying: boolean };
   attempt: number;
   completed_at?: string;
   created_at: string;

@@ -1151,6 +1151,55 @@ describe("policy governance surface", () => {
     expect(apiMock.downloadScheduledReport).toHaveBeenCalledWith(failed.id);
   });
 
+  // A206-L1: a report removal that keeps failing says why, how often it was
+  // tried and whether it is still retried.
+  it("says why the report retention's removal of a report keeps failing", async () => {
+    const user = userEvent.setup();
+    const run = (id: string, dueAt: string, failure: Record<string, unknown>) => ({
+      id,
+      tenant_id: "tenant-1",
+      schedule_id: complianceSchedule().id,
+      due_at: dueAt,
+      framework: "soc2",
+      report_type: "inventory_snapshot",
+      status: "completed",
+      retry_generation: 0,
+      attempt: 1,
+      artifact_digest: "b".repeat(64),
+      event_sequence: 80,
+      created_at: dueAt,
+      updated_at: dueAt,
+      artifact_removal_failure: failure,
+    });
+    apiMock.complianceReportRuns.mockResolvedValue({
+      items: [
+        run("11111111-1111-4111-8111-111111111111", "2026-06-27T12:00:00Z", {
+          reason: "refused",
+          attempts: 2,
+          retrying: true,
+          next_attempt_at: "2026-07-01T00:00:00Z",
+        }),
+        run("22222222-2222-4222-8222-222222222222", "2026-05-27T12:00:00Z", {
+          reason: "kept",
+          attempts: 1,
+          retrying: true,
+          next_attempt_at: "2026-07-01T00:00:00Z",
+        }),
+        run("33333333-3333-4333-8333-333333333333", "2026-04-27T12:00:00Z", { reason: "unconfirmed", attempts: 9, retrying: false }),
+      ],
+    });
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance inventory report" });
+    await user.click(screen.getByRole("button", { name: "Signed runs" }));
+    expect(await screen.findByText(/the archive refused to delete it/)).toBeInTheDocument();
+    expect(screen.getByText(/the archive acknowledged the delete but still has the report/)).toBeInTheDocument();
+    expect(screen.getByText(/could not confirm this report is gone/)).toBeInTheDocument();
+    expect(screen.getByText(/Tried 2 times; the next try is at/)).toBeInTheDocument();
+    expect(screen.getByText(/Tried once; the next try is at/)).toBeInTheDocument();
+    expect(screen.getByText(/Tried 9 times; the removal is no longer retried/)).toBeInTheDocument();
+  });
+
   // A206: a person holds a completed signed report past the report retention
   // and releases it; a report the retention removed keeps its receipt and
   // offers no download.

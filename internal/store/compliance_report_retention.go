@@ -107,6 +107,57 @@ func (s *Store) ApplyComplianceReportArtifactExpiryRequestedTx(ctx context.Conte
 	return err
 }
 
+// ComplianceReportRemovalFailure is why a run's queued report removal has not
+// completed (A206-L1): the closed failure class its outbox row keeps, how many
+// attempts were made, and when the next is due. Retrying is false once the
+// outbox stopped retrying the row.
+type ComplianceReportRemovalFailure struct {
+	Class         string
+	Attempts      int
+	Retrying      bool
+	NextAttemptAt time.Time
+}
+
+// ComplianceReportRemovalFailures reads, for each run given, the latest
+// removal the retention queued for it, when that removal's last attempt
+// failed. A run whose latest removal has not failed is not in the map.
+func (s *Store) ComplianceReportRemovalFailures(ctx context.Context, tenantID string, runIDs []string) (map[string]ComplianceReportRemovalFailure, error) {
+	out := make(map[string]ComplianceReportRemovalFailure, len(runIDs))
+	if len(runIDs) == 0 {
+		return out, nil
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT run.id::text, o.status, o.attempts, o.last_error, o.next_attempt_at
+			   FROM unnest($2::uuid[]) AS run(id)
+			   JOIN LATERAL (
+			        SELECT status, attempts, coalesce(last_error, '') AS last_error, next_attempt_at
+			          FROM outbox
+			         WHERE tenant_id = $1 AND destination = $3
+			           AND idempotency_key LIKE 'report-expiry:' || run.id::text || ':%'
+			         ORDER BY id DESC
+			         LIMIT 1
+			   ) o ON true
+			  WHERE o.last_error <> '' AND o.status <> 'delivered'`,
+			tenantID, runIDs, ComplianceReportArtifactExpiryDestination)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var runID, status string
+			var failure ComplianceReportRemovalFailure
+			if err := rows.Scan(&runID, &status, &failure.Attempts, &failure.Class, &failure.NextAttemptAt); err != nil {
+				return err
+			}
+			failure.Retrying = status != "failed"
+			out[runID] = failure
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ApplyComplianceReportArtifactExpiryDeferredTx projects a removal the
 // archive's Object Lock refused: the run waits until lockedUntil and its queued
 // removal is cleared, so the sweep asks again then.

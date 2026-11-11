@@ -41,9 +41,43 @@ type complianceReportRunResponse struct {
 	// ArtifactRemovalDeferredUntil is until when the archive's S3 Object Lock
 	// keeps the report from the report retention (A208).
 	ArtifactRemovalDeferredUntil *time.Time `json:"artifact_removal_deferred_until,omitempty"`
-	EventSequence                uint64     `json:"event_sequence"`
-	CreatedAt                    time.Time  `json:"created_at"`
-	UpdatedAt                    time.Time  `json:"updated_at"`
+	// ArtifactRemovalFailure is why the queued removal of the report keeps
+	// failing (A206-L1).
+	ArtifactRemovalFailure *complianceReportRemovalFailureResponse `json:"artifact_removal_failure,omitempty"`
+	EventSequence          uint64                                  `json:"event_sequence"`
+	CreatedAt              time.Time                               `json:"created_at"`
+	UpdatedAt              time.Time                               `json:"updated_at"`
+}
+
+// complianceReportRemovalFailureResponse is the last failed attempt of a
+// run's queued report removal. Reason is refused (the archive refused the
+// delete), kept (it acknowledged the delete but still has the report),
+// unconfirmed (it could not be read to confirm the report is gone), timeout,
+// or failed (any other failure).
+type complianceReportRemovalFailureResponse struct {
+	Reason        string     `json:"reason"`
+	Attempts      int        `json:"attempts"`
+	Retrying      bool       `json:"retrying"`
+	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty"`
+}
+
+func toComplianceReportRemovalFailure(f store.ComplianceReportRemovalFailure) *complianceReportRemovalFailureResponse {
+	out := &complianceReportRemovalFailureResponse{Reason: "failed", Attempts: f.Attempts, Retrying: f.Retrying}
+	switch f.Class {
+	case "report_removal_refused":
+		out.Reason = "refused"
+	case "report_removal_kept":
+		out.Reason = "kept"
+	case "report_removal_unconfirmed":
+		out.Reason = "unconfirmed"
+	case "external_delivery_timeout":
+		out.Reason = "timeout"
+	}
+	if f.Retrying && !f.NextAttemptAt.IsZero() {
+		next := f.NextAttemptAt
+		out.NextAttemptAt = &next
+	}
+	return out
 }
 
 func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceReportRunResponse {

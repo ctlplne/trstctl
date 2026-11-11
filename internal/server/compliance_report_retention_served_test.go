@@ -386,9 +386,10 @@ func TestServedReportRetentionNeverRecordsARemovalItCannotConfirm(t *testing.T) 
 	if status, _ := r.download(t, run.ID); status != http.StatusOK {
 		t.Fatalf("download while the removal retries = %d", status)
 	}
-	// The outbox keeps the row pending under its failure class and retries.
+	// The outbox keeps the row pending under its failure class (A206-L1:
+	// the store kept the report) and retries.
 	rows := r.expiryRows(t, run.ID)
-	if len(rows) != 1 || !strings.Contains(rows[0], " pending external_delivery_failed") {
+	if len(rows) != 1 || !strings.Contains(rows[0], " pending report_removal_kept") {
 		t.Fatalf("removal rows = %q, want one retrying", rows)
 	}
 	objects.keep.Store(false)

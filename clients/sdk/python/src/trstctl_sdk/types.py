@@ -4963,6 +4963,7 @@ ComplianceReportRun = TypedDict(
         'artifact_expired_at': str,
         'artifact_ref': str,
         'artifact_removal_deferred_until': str,
+        'artifact_removal_failure': dict[str, Any],
         'attempt': int,
         'completed_at': str,
         'created_at': str,

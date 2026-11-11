@@ -84,6 +84,26 @@ func (s *Server) expireComplianceReportsOnce(ctx context.Context, now time.Time)
 	return requested, nil
 }
 
+// A206-L1: why a removal did not complete, as a closed, credential-free class
+// the outbox keeps on the row (the cause itself stays in memory, for the log):
+// the archive refused the delete, acknowledged it but still has the report, or
+// could not be read to confirm the report is gone. The run's API answer and the
+// console show it while the removal retries.
+const (
+	complianceReportRemovalRefused     = "report_removal_refused"
+	complianceReportRemovalKept        = "report_removal_kept"
+	complianceReportRemovalUnconfirmed = "report_removal_unconfirmed"
+)
+
+type complianceReportRemovalError struct {
+	class string
+	err   error
+}
+
+func (e *complianceReportRemovalError) Error() string             { return e.err.Error() }
+func (e *complianceReportRemovalError) Unwrap() error             { return e.err }
+func (e *complianceReportRemovalError) SafeDeliveryClass() string { return e.class }
+
 // complianceReportExpiry is the outbox delivery that removes one report.
 type complianceReportExpiry struct {
 	store   *store.Store
@@ -133,12 +153,19 @@ func (e *complianceReportExpiry) Deliver(ctx context.Context, m orchestrator.Mes
 				}
 				return e.orch.DeferComplianceReportArtifactExpiry(ctx, current.TenantID, current.ID, current.ArtifactDigest, until, locked.LegalHold)
 			}
-			outcome = fmt.Errorf("server: remove report %s under retention: %w", current.ID, err)
+			outcome = &complianceReportRemovalError{complianceReportRemovalRefused,
+				fmt.Errorf("server: remove report %s under retention: %w", current.ID, err)}
 			return nil
 		}
 		gone, err := e.archive.Gone(ctx, current.ArtifactRef, current.TenantID, current.ID, current.ArtifactDigest)
-		if err != nil || !gone {
-			outcome = fmt.Errorf("server: report %s is still present after removal (%v)", current.ID, err)
+		switch {
+		case err != nil:
+			outcome = &complianceReportRemovalError{complianceReportRemovalUnconfirmed,
+				fmt.Errorf("server: confirm report %s is gone: %w", current.ID, err)}
+			return nil
+		case !gone:
+			outcome = &complianceReportRemovalError{complianceReportRemovalKept,
+				fmt.Errorf("server: report %s is still present after removal", current.ID)}
 			return nil
 		}
 		return e.orch.RecordComplianceReportArtifactExpired(ctx, current.TenantID, current.ID, current.ArtifactDigest,
