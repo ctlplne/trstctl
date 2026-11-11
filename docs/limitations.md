@@ -9656,7 +9656,11 @@ template reaches the gateway's session intent, and a session without a template
 carries deny. Sessions now keep the approval they consumed when read back.
 
 What comes next:
-- Window titles in the index where the protocol carries them (part 3).
+- Window titles in the index where the protocol carries them (part 3). RDP names a
+  session's windows only in RemoteApp mode, so this needs RemoteApp sessions and a
+  Windows RD Session Host that publishes a RemoteApp to prove them against: the lab's
+  xrdp 0.9.21 accepts a RemoteApp request but sends no window, even to the stock
+  FreeRDP client (a Track B row). A full desktop's window titles are only pixels.
 - Windows network-level authentication on windows-latest: the gateway's native
   helper is Linux-only and a hosted Windows runner cannot be reached from a Linux
   job, so this is recorded as a limit unless a runner path is found.
