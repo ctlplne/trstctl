@@ -124,6 +124,25 @@ func (s *Store) ApplyAWSHoneyTrailObjectScannedTx(ctx context.Context, tx pgx.Tx
 // AWSHoneyTrailDecoyKeys maps the access key of each AWS decoy a trail read
 // must match to its decoy: every decoy not retired, and a retired one for 72
 // hours after its key was deleted, because CloudTrail delivers late.
+// AWSHoneyTrailWatchedSince is when the oldest decoy a trail watches for was
+// created (N4-L2): a decoy key cannot appear in a log file delivered before
+// it existed. The decoys are those AWSHoneyTrailDecoyKeys returns.
+func (s *Store) AWSHoneyTrailWatchedSince(ctx context.Context, tenantID string) (time.Time, error) {
+	var since *time.Time
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT min(h.created_at)
+			FROM honey_tokens h
+			LEFT JOIN dynamic_secret_leases l ON l.tenant_id = h.tenant_id AND l.id = h.aws_lease_id
+			WHERE h.tenant_id = $1 AND h.kind = 'aws' AND coalesce(h.aws_access_key_id, '') <> ''
+			  AND (l.id IS NULL OR l.state <> 'revoked' OR l.revocation_completed_at IS NULL
+			       OR l.revocation_completed_at > now() - interval '72 hours')`, tenantID).Scan(&since)
+	})
+	if err != nil || since == nil {
+		return time.Now().UTC(), err
+	}
+	return since.UTC(), nil
+}
+
 func (s *Store) AWSHoneyTrailDecoyKeys(ctx context.Context, tenantID string) (map[string]string, error) {
 	keys := map[string]string{}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

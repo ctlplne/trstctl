@@ -759,8 +759,11 @@ type Server struct {
 	// reads the trails they name (N4), and awsHoneyTrailClock paces that.
 	awsHoneyAccounts   AWSHoneyAccountRegistry
 	awsHoneyTrailClock awsHoneyTrailClock
-	scimWriteback      api.SCIMWritebackHandler
-	ldapWriteback      api.LDAPWritebackHandler
+	// awsHoneyTrailDays remembers the day folders each trail has read in full
+	// (N4-L2).
+	awsHoneyTrailDays awsHoneyTrailDays
+	scimWriteback     api.SCIMWritebackHandler
+	ldapWriteback     api.LDAPWritebackHandler
 	// secretIntegrations is the secret.sync/dynsecret outbox receiver; the
 	// served secret-sync reconciliation resolves it lazily because the API's
 	// secrets backend is built before the dispatcher.

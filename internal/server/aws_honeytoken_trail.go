@@ -36,7 +36,61 @@ const (
 	awsHoneyTrailMaxAccounts     = 10000
 	awsHoneyTrailMaxRegions      = 64
 	awsHoneyTrailMaxPages        = 50
+	// awsHoneyTrailMaxFoldersPerPass bounds the day folders one pass lists
+	// per trail; what it leaves, the next pass lists (N4-L2).
+	awsHoneyTrailMaxFoldersPerPass = 1000
+	// awsHoneyTrailMaxDays is how far back a trail is read: from the day the
+	// oldest watched decoy was created, at most this many days (N4-L2).
+	awsHoneyTrailMaxDays = 90
 )
+
+// awsHoneyTrailDays remembers, per trail, account and Region, the last day
+// folder read in full on this leader (N4-L2). CloudTrail files a log under
+// the UTC day it delivers it, so a folder of a day before yesterday gains
+// nothing more once it has been read; a pass resumes after the last one.
+// After a leader change the folders are listed again from the start, and the
+// files already read are skipped.
+type awsHoneyTrailDays struct {
+	mu      sync.Mutex
+	through map[string]time.Time
+}
+
+func (d *awsHoneyTrailDays) readThrough(key string) (time.Time, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	day, ok := d.through[key]
+	return day, ok
+}
+
+func (d *awsHoneyTrailDays) record(key string, day time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.through == nil {
+		d.through = map[string]time.Time{}
+	}
+	if day.After(d.through[key]) {
+		d.through[key] = day
+	}
+}
+
+// awsHoneyTrailDayRange is the UTC days a trail is read for: from the day
+// the oldest watched decoy was created (at most awsHoneyTrailMaxDays back)
+// through today, oldest first.
+func awsHoneyTrailDayRange(since, now time.Time) []time.Time {
+	today := now.UTC().Truncate(24 * time.Hour)
+	first := since.UTC().Truncate(24 * time.Hour)
+	if floor := today.AddDate(0, 0, -awsHoneyTrailMaxDays); first.Before(floor) {
+		first = floor
+	}
+	if first.After(today) {
+		first = today
+	}
+	var days []time.Time
+	for day := first; !day.After(today); day = day.AddDate(0, 0, 1) {
+		days = append(days, day)
+	}
+	return days
+}
 
 // awsHoneyTrailClock remembers when each trail was last read, on this leader.
 type awsHoneyTrailClock struct {
@@ -100,13 +154,22 @@ func (s *Server) ReadAWSHoneyTrailsOnce(ctx context.Context) (int, error) {
 	return total, errors.Join(errs...)
 }
 
-// readAWSHoneyTrail reads one trail's unread log files from today's and
-// yesterday's day folders (UTC) of every account and Region it holds.
+// readAWSHoneyTrail reads one trail's unread log files from the day folders
+// (UTC) of every account and Region it holds, from the day its oldest watched
+// decoy was created through today (N4-L2: not only today and yesterday, so
+// files delivered while the control plane was down are read when it is back).
 func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account *awsHoneyProvider, now time.Time) (int, error) {
 	decoys, err := s.store.AWSHoneyTrailDecoyKeys(ctx, tenantID)
 	if err != nil || len(decoys) == 0 {
 		return 0, err
 	}
+	since, err := s.store.AWSHoneyTrailWatchedSince(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	days := awsHoneyTrailDayRange(since, now)
+	yesterday := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	folders := 0
 	keys := make(map[string]bool, len(decoys))
 	for key := range decoys {
 		keys[key] = true
@@ -144,15 +207,27 @@ func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account
 			if !dynsecret.ValidAWSTrailRegion(region) {
 				continue
 			}
-			for _, day := range []time.Time{now.Add(-24 * time.Hour), now} {
+			daysKey := tenantID + "\x00" + account.cfg.ID + "\x00" + accountID + "\x00" + region
+			through, known := s.awsHoneyTrailDays.readThrough(daysKey)
+			for _, day := range days {
+				if known && !day.After(through) {
+					continue
+				}
+				if folders >= awsHoneyTrailMaxFoldersPerPass {
+					return read, nil
+				}
+				folders++
 				folder, err := dynsecret.AWSTrailDayFolder(accountsPrefix, accountID, region, day)
 				if err != nil {
 					return read, err
 				}
-				n, err := s.readAWSHoneyTrailFolder(ctx, tenantID, account.cfg.ID, bucket, folder, decoys, keys, awsHoneyTrailMaxReadsPerPass-read)
+				n, complete, err := s.readAWSHoneyTrailFolder(ctx, tenantID, account.cfg.ID, bucket, folder, decoys, keys, awsHoneyTrailMaxReadsPerPass-read)
 				read += n
 				if err != nil {
 					return read, err
+				}
+				if complete && day.Before(yesterday) {
+					s.awsHoneyTrailDays.record(daysKey, day)
 				}
 				if read >= awsHoneyTrailMaxReadsPerPass {
 					return read, nil
@@ -164,15 +239,16 @@ func (s *Server) readAWSHoneyTrail(ctx context.Context, tenantID string, account
 }
 
 // readAWSHoneyTrailFolder records up to budget unread log files of one day
-// folder, oldest name first.
+// folder, oldest name first, and reports whether it read the folder in full.
 func (s *Server) readAWSHoneyTrailFolder(ctx context.Context, tenantID, configID string, bucket *objectstore.S3, folder string,
-	decoys map[string]string, keys map[string]bool, budget int) (int, error) {
+	decoys map[string]string, keys map[string]bool, budget int) (int, bool, error) {
 	var names []string
 	after := ""
+	listed := false
 	for page := 0; page < awsHoneyTrailMaxPages; page++ {
 		objects, more, err := bucket.ListAfter(ctx, folder, after, 1000)
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		for _, object := range objects {
 			if dynsecret.AWSTrailLogFileName(object.Name) {
@@ -181,19 +257,21 @@ func (s *Server) readAWSHoneyTrailFolder(ctx context.Context, tenantID, configID
 			after = object.Name
 		}
 		if !more || len(objects) == 0 {
+			listed = true
 			break
 		}
 	}
 	done, err := s.store.AWSHoneyTrailObjectsRead(ctx, tenantID, configID, names)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	read := 0
+	read, complete := 0, listed
 	for _, name := range names {
 		if done[name] {
 			continue
 		}
 		if read >= budget {
+			complete = false
 			break
 		}
 		scan, err := s.scanAWSHoneyTrailObject(ctx, bucket, configID, name, decoys, keys)
@@ -201,14 +279,14 @@ func (s *Server) readAWSHoneyTrailFolder(ctx context.Context, tenantID, configID
 			continue // gone since the listing; nothing to record
 		}
 		if err != nil {
-			return read, err
+			return read, false, err
 		}
 		if err := s.orch.RecordAWSHoneyTrailObject(ctx, tenantID, scan); err != nil {
-			return read, err
+			return read, false, err
 		}
 		read++
 	}
-	return read, nil
+	return read, complete, nil
 }
 
 // scanAWSHoneyTrailObject reads one log file and returns its record. A file

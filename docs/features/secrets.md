@@ -2140,8 +2140,10 @@ whose role needs only `s3:ListBucket` and `s3:GetObject` on the trail's prefix. 
 organization trail holds every account in the organization, and a trail that logs
 data events holds them too, so a decoy key used against an S3 object in another
 account, or logged by an account other than its own, is found; LookupEvents finds
-neither. The leader reads today's and yesterday's day folders (UTC) of every
-account and Region at the attachment's poll interval, records each log file once
+neither. The leader reads the day folders (UTC) of every account and Region at the
+attachment's poll interval, from the day the oldest watched decoy was created (at
+most 90 days back) through today, so files delivered while the control plane was
+down are read when it is back, and records each log file once
 by its key as an immutable event (`honeytoken.aws.trail_object_scanned`, with the
 decoy records in it), and the first new use triggers the decoy through the same
 alert route. A use shows the account whose key made the call, the account whose

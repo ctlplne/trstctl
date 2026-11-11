@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- A decoy trail's older day folders are read (N4-L2). The organization trail reader read only today's
+  and yesterday's day folders, so a log file delivered while the control plane was down for longer
+  than a day was never read, and a decoy key used then was never found. It now reads every day folder
+  from the day the oldest watched decoy was created (at most 90 days back) through today, oldest first;
+  a folder of a day before yesterday is not listed again once read in full, files already read are
+  skipped as before, and one pass lists at most 1,000 folders, leaving the rest for the next.
 - A decoy login the watcher cannot read records a monitoring gap (Q6-L10). When a decoy's provider
   stayed unreachable, or its database was gone while its lease was active, the watcher only logged it
   every 30 seconds, so nobody learned that uses of the bait were not being seen. A decoy unread for

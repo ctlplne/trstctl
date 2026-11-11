@@ -8720,16 +8720,19 @@ Status: served. An AWS decoy account attachment may name the CloudTrail trail
 whose S3 log files its decoys are also looked for in; an organization trail holds
 every account in the organization and a trail that logs data events holds them,
 so a decoy key used against an S3 object in another account, or logged by an
-account other than its own, triggers the decoy. The leader reads today's and
-yesterday's day folders of every account and Region at the attachment's poll
-interval, records each file once by its key, and records each decoy use with the
+account other than its own, triggers the decoy. The leader reads the day folders
+of every account and Region at the attachment's poll interval, from the day the
+oldest watched decoy was created (at most 90 days back) through today, so files
+delivered while the control plane was down are read when it is back; a folder of a
+day before yesterday is not listed again once read in full, and one pass lists at
+most 1,000 folders. It records each file once by its key, and records each decoy use with the
 calling and logging accounts, CloudTrail's category and where it was found.
 Proven against LocalStack S3 with log files written in CloudTrail's layout and
 schema (`TestServedAWSHoneyTrailFindsDataEventsInEveryAccountN4`): the decoy
 key's management call in its own account and its data event in another account
 are both found and trigger the decoy, another key's records are dropped, a file
 that is not a log file is recorded as refused, a second pass reads nothing again,
-and a new delivery is read.
+a new delivery is read, and so is a file delivered three days earlier.
 
 What comes next:
 - Community LocalStack does not deliver trails, so the proof writes the files;
@@ -8739,7 +8742,6 @@ What comes next:
   is seen when the file lands rather than at the next pass; a large organization
   (hundreds of accounts in every Region) makes each pass list every account's
   day folders.
-- A file delivered for a day older than yesterday (UTC) is not read.
 
 ## trstctl as the OpenID issuer for cloud workload federation (N5) — served
 

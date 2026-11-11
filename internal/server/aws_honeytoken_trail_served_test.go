@@ -234,6 +234,31 @@ func TestServedAWSHoneyTrailFindsDataEventsInEveryAccountN4(t *testing.T) {
 	if got := catalog(); got != bucketName+" objects=5 uses=3 refused=1" {
 		t.Fatalf("trail read summary after the new delivery = %s", got)
 	}
+	// N4-L2: a file delivered on a day before yesterday, as during a control
+	// plane outage of several days, is read too: every day folder from the
+	// day the oldest decoy was created, not only today and yesterday.
+	if _, err := h.store.SystemPool().Exec(t.Context(),
+		`UPDATE honey_tokens SET created_at = now() - interval '5 days' WHERE tenant_id = $1 AND id = $2`, tenant, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	missedDay := now.AddDate(0, 0, -3)
+	missedBody := logFile(record(key, decoyAccount, otherAccount, "s3.amazonaws.com", "GetObject", "Data", "n4l2-missed-1"))
+	missed := fmt.Sprintf("AWSLogs/%s/%s/CloudTrail/%s/%s/%s_CloudTrail_%s_%sZ_%s.json.gz", organization, otherAccount, "us-east-1",
+		missedDay.Format("2006/01/02"), otherAccount, "us-east-1", missedDay.Format("20060102T1504"), "missed")
+	if err := writer.Create(t.Context(), missed, bytes.NewReader(missedBody), int64(len(missedBody)), crypto.SHA256Sum(missedBody)); err != nil {
+		t.Fatal(err)
+	}
+	h.srv.awsHoneyTrailClock = awsHoneyTrailClock{}
+	if n, err := h.srv.ReadAWSHoneyTrailsOnce(t.Context()); err != nil || n != 1 {
+		t.Fatalf("a pass after a delivery three days ago read %d files: %v", n, err)
+	}
+	if got := catalog(); got != bucketName+" objects=6 uses=4 refused=1" {
+		t.Fatalf("trail read summary after the missed day = %s", got)
+	}
+	h.srv.awsHoneyTrailClock = awsHoneyTrailClock{}
+	if n, err := h.srv.ReadAWSHoneyTrailsOnce(t.Context()); err != nil || n != 0 {
+		t.Fatalf("a pass after the missed day was read read %d files again: %v", n, err)
+	}
 	if h.logContains(t, "operator-test-session") {
 		t.Fatal("the trail reader's session token reached the event log")
 	}
