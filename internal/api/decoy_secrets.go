@@ -77,12 +77,20 @@ func (a *API) registerDecoySecret(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			return 0, nil, err
 		}
-		if _, live, err := a.store.LookupLiveDecoySecret(ctx, tenantID, req.SecretName); err != nil {
-			return 0, nil, err
-		} else if live {
-			return 0, nil, errStatus(http.StatusConflict, "this secret is already a decoy")
-		}
-		h, err := a.orch.RegisterDecoySecret(ctx, tenantID, req.Name, req.Placement, req.SecretName)
+		// Q6-L2: the projection lock spans the live-decoy check, the append and
+		// its projection, so two concurrent registrations of one secret cannot
+		// both pass the check: the second sees the first's decoy.
+		var h store.HoneyToken
+		err := a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+			if _, live, err := a.store.LookupLiveDecoySecret(ctx, tenantID, req.SecretName); err != nil {
+				return err
+			} else if live {
+				return errStatus(http.StatusConflict, "this secret is already a decoy")
+			}
+			var err error
+			h, err = a.orch.RegisterDecoySecret(ctx, tenantID, req.Name, req.Placement, req.SecretName)
+			return err
+		})
 		if err != nil {
 			return 0, nil, err
 		}

@@ -632,6 +632,11 @@
 
 ### Fixed
 
+- Registering one secret as a decoy twice at once makes one decoy (Q6-L2). The register route checked
+  that no live decoy watched the secret, then appended the new decoy's event; two registrations that
+  arrived together could both pass the check and both create a decoy. The check, the append and its
+  projection now run under the projection lock, so the second sees the first's decoy and is refused
+  (409); sixteen concurrent registrations make exactly one.
 - A misuse alert is no longer lost when its transaction fails (M2-L4). Misuse detection appends a
   finding's event, then projects it and enqueues its alert in one tenant transaction; when that
   transaction failed after the append, the event tail projected the finding later but nothing wrote

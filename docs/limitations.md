@@ -5558,7 +5558,9 @@ when off, requiring a KEK when on):
   raises one critical alert per distinct reader, naming the reader, on every
   value read served to a caller (native, history, resolved references,
   Vault-compatible KV); names, metadata, the access preview, inventory, the
-  graph and internal reads never alert, and a rebuild adds no alert. A reader
+  graph and internal reads never alert, and a rebuild adds no alert. One secret
+  has one decoy: registrations of it that arrive together make one, and the rest
+  are refused (409). A reader
   who repeats a read after the delivered alert has left the outbox (retention)
   alerts again. Decoy database logins: a tenant PostgreSQL dynamic-secret
   provider listing the role `decoy` mints a login reaching only its own empty
