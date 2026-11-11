@@ -8116,9 +8116,11 @@ What the report decides from, and what it does not establish:
   verify` needs the signing key obtained separately and never trusts the key
   inside the file. A run signed before a key rotation verifies under the key
   that signed it.
-- **The Provider reads reports on its API.** The Provider console does not show
-  a customer's reports yet; `/provider/v1/tenants/{id}/assurance-reports` lists
-  and downloads them. A console view is what comes next.
+- **The Provider reads reports in its console and on its API.** A customer's
+  panel in the Provider console lists its signed runs with the SHA-256 of the key
+  that signs them and downloads each run exactly as archived, naming the offline
+  verify command (A187-L1); `/provider/v1/tenants/{id}/assurance-reports` lists and
+  downloads them on the API.
 
 ## Endpoint verification
 

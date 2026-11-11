@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateNow } from "@/i18n/I18nProvider";
 import { ProviderAuthError, providerApi, type ProviderTenant } from "@/lib/providerApi";
+import { ProviderAssuranceReports } from "@/pages/provider/ProviderAssuranceReports";
 import { useApiQuery } from "@/lib/query";
 
 function shellQuote(value: string): string {
@@ -82,6 +83,9 @@ export function ProviderSetupPanel({
               </p>
               {iso.note ? <p className="text-muted-foreground">{iso.note}</p> : null}
             </div>
+          ) : null}
+          {typeof providerApi.assuranceReports === "function" ? (
+            <ProviderAssuranceReports tenant={tenant} authorityKey={authorityKey} onAuthError={onAuthError} />
           ) : null}
           {!active ? (
             <p className="text-caption">{translateNow("provider.setup.inactive")}</p>

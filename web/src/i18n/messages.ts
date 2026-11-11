@@ -11604,6 +11604,27 @@ export const messages = {
     defaultMessage: "No rogue or non-compliant certificates found in the current posture.",
     description: "Empty state for the rogue certificate posture panel.",
   },
+  "provider.assuranceReports.title": {
+    defaultMessage: "Signed assurance reports",
+    description: "Provider console customer assurance reports heading (A187-L1).",
+  },
+  "provider.assuranceReports.signingKey": {
+    defaultMessage: "Signed by the governance report key, SHA-256 {sha256}. Share this fingerprint with the customer over a channel of its own.",
+    description: "The public key that signs a customer's assurance reports (A187-L1).",
+  },
+  "provider.assuranceReports.none": {
+    defaultMessage: "No assurance report has run for this customer yet. Schedule one through a template's report schedules.",
+    description: "A customer with no completed assurance report run (A187-L1).",
+  },
+  "provider.assuranceReports.run": {
+    defaultMessage: "Due {due}, completed {completed}, file {digest}",
+    description: "One signed assurance report run (A187-L1).",
+  },
+  "provider.assuranceReports.download": { defaultMessage: "Download the report due {due}", description: "Saves one signed assurance report run (A187-L1)." },
+  "provider.assuranceReports.verify": {
+    defaultMessage: "The customer verifies a downloaded report offline with trstctl-cli compliance report-runs verify.",
+    description: "How a customer verifies an assurance report (A187-L1).",
+  },
   "provider.templates.heading": { defaultMessage: "Tenant templates", description: "Provider console tenant templates panel heading (A186-L1)." },
   "provider.templates.intro": {
     defaultMessage:

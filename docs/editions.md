@@ -498,7 +498,9 @@ and its SHA-256. `GET /provider/v1/tenants/{id}/assurance-reports/{run_id}`
 returns one run's exact signed bytes, read back from the archive and verified
 before they are handed out. Both need the operator's `read` delegation on that
 customer. The Provider shares the file and the key's SHA-256; the customer
-verifies the file offline with `trstctl-cli compliance report-runs verify`.
+verifies the file offline with `trstctl-cli compliance report-runs verify`. In
+the Provider console, a customer's panel lists the same runs and the key's
+SHA-256, and downloads each run.
 
 ### Usage metering and invoice evidence
 

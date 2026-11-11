@@ -279,6 +279,14 @@ export interface ProviderTemplateDetail {
   tenants: ProviderTemplateApplication[];
 }
 
+/** A187: a delegated customer's signed assurance report runs, newest first,
+ * with the key that signs them. */
+export interface ProviderAssuranceReports {
+  tenant_id: string;
+  signing_key: { public_key_pem: string; public_key_der: string; sha256: string };
+  runs: { run_id: string; schedule_id: string; due_at: string; completed_at?: string; artifact_sha256: string }[];
+}
+
 export class ProviderAuthError extends Error {}
 
 export class ProviderApiError extends Error {
@@ -443,6 +451,22 @@ async function downloadProviderEvidence(customerId: string, periodStart: string,
   URL.revokeObjectURL(objectURL);
 }
 
+/** A187-L1: saves one signed assurance report run exactly as the plane serves
+ * it (read back from the archive and verified there); the customer verifies
+ * the file offline. */
+async function downloadProviderAssuranceReport(customerId: string, runId: string): Promise<void> {
+  const response = await providerFetch(`/provider/v1/tenants/${encodeURIComponent(customerId)}/assurance-reports/${encodeURIComponent(runId)}`, {
+    headers: { Accept: "application/json" },
+  });
+  const blob = await response.blob();
+  const objectURL = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectURL;
+  anchor.download = `assurance-report-${customerId}-${runId}.json`;
+  anchor.click();
+  URL.revokeObjectURL(objectURL);
+}
+
 async function providerCustomerHealth(customerId: string): Promise<ProviderTenantSnapshot> {
   const snapshot = await providerReq<ProviderTenantSnapshot>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/health`);
   if (
@@ -505,6 +529,9 @@ export const providerApi = {
   customerHealth: providerCustomerHealth,
   customerIsolation: (customerId: string): Promise<ProviderCustomerIsolation> =>
     providerReq<ProviderCustomerIsolation>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/isolation`),
+  assuranceReports: (customerId: string): Promise<ProviderAssuranceReports> =>
+    providerReq<ProviderAssuranceReports>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/assurance-reports`),
+  downloadAssuranceReport: downloadProviderAssuranceReport,
   usageEvidence: (customerId: string, periodStart: string, periodEnd: string): Promise<ProviderUsageEvidence> =>
     providerReq<ProviderUsageEvidence>(providerEvidencePath(customerId, periodStart, periodEnd)),
   evidenceVerificationKeys: (): Promise<ProviderEvidenceJWKSet> => providerReq<ProviderEvidenceJWKSet>("/provider/v1/evidence/verification-keys"),

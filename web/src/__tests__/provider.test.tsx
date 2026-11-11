@@ -38,6 +38,8 @@ const { providerMock } = vi.hoisted(() => ({
     signOut: vi.fn(),
     listTemplates: vi.fn(),
     getTemplate: vi.fn(),
+    assuranceReports: vi.fn(),
+    downloadAssuranceReport: vi.fn(),
   },
 }));
 
@@ -98,6 +100,12 @@ describe("provider console (L3)", () => {
     providerMock.downloadUsageEvidence.mockResolvedValue(undefined);
     providerMock.signOut.mockResolvedValue(undefined);
     providerMock.listTemplates.mockResolvedValue([]);
+    providerMock.assuranceReports.mockImplementation(async (id: string) => ({
+      tenant_id: id,
+      signing_key: { public_key_pem: "", public_key_der: "", sha256: "f".repeat(64) },
+      runs: [],
+    }));
+    providerMock.downloadAssuranceReport.mockResolvedValue(undefined);
   });
 
   it("offers OIDC sign-in instead of a token box and keeps nothing in browser storage", async () => {
@@ -282,6 +290,38 @@ describe("provider console (L3)", () => {
     expect(screen.getByText("Globex")).toBeInTheDocument();
     // The suspended customer shows its status; the active one offers suspend.
     expect(screen.getByText("suspended")).toBeInTheDocument();
+  });
+
+  // A187-L1: a customer's signed assurance reports, the key that signs them,
+  // and a download of each run as archived.
+  it("lists a customer's signed assurance reports and downloads one", async () => {
+    const tenant = {
+      id: "4054b878-56cb-5591-ba98-71aa09012048",
+      slug: "assured",
+      name: "Assured customer",
+      status: "active",
+      created_at: "2026-09-28T00:00:00Z",
+      updated_at: "2026-09-28T00:00:00Z",
+    };
+    providerMock.listTenants.mockResolvedValue([tenant]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: tenant.id, health: "healthy", active_certificates: 3, workspace_initialized: true });
+    providerMock.assuranceReports.mockResolvedValue({
+      tenant_id: tenant.id,
+      signing_key: { public_key_pem: "", public_key_der: "", sha256: "ab".repeat(32) },
+      runs: [
+        { run_id: "run-2", schedule_id: "monthly", due_at: "2026-11-01T00:00:00Z", completed_at: "2026-11-01T00:05:00Z", artifact_sha256: "c".repeat(64) },
+      ],
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.click(await screen.findByRole("button", { name: "View setup" }));
+    const reports = await screen.findByRole("group", { name: "Signed assurance reports" });
+    expect(await within(reports).findByText(/SHA-256 abababab/)).toBeInTheDocument();
+    expect(within(reports).getByText(/Due 2026-11-01 00:00 UTC, completed 2026-11-01 00:05 UTC, file cccccccccccc/)).toBeInTheDocument();
+    expect(within(reports).getByText(/trstctl-cli compliance report-runs verify/)).toBeInTheDocument();
+    fireEvent.click(within(reports).getByRole("button", { name: "Download the report due 2026-11-01 00:00 UTC" }));
+    expect(providerMock.downloadAssuranceReport).toHaveBeenCalledWith(tenant.id, "run-2");
+    expect(providerMock.assuranceReports).toHaveBeenCalledWith(tenant.id);
   });
 
   // A186-L1: the console shows the tenant templates the provider records.
