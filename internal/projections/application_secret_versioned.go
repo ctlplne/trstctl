@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -31,6 +32,10 @@ type ApplicationSecretBatchVersionItem struct {
 	Sealed          []byte `json:"sealed"`
 	SourceName      string `json:"source_name"`
 	SourceVersion   int    `json:"source_version"`
+	// OwnerID is the owner a promotion's newly created secret takes from its
+	// source (A236-L2); absent on an update, a restore, a migration, and a
+	// batch recorded before it was carried.
+	OwnerID string `json:"owner_id,omitempty"`
 }
 
 // ApplicationSecretBatchVersion carries no plaintext and no raw
@@ -75,6 +80,7 @@ func init() {
 		{Path: "/items/*/sealed", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/source_name", Mode: events.PrivacyFieldOpaqueExact},
 		{Path: "/items/*/source_version", Mode: events.PrivacyFieldOpaqueExact},
+		{Path: "/items/*/owner_id", Mode: events.PrivacyFieldOpaqueExact},
 	}
 	if err := events.RegisterPrivacyEventPolicy(EventApplicationSecretBatchVersioned,
 		ApplicationSecretBatchVersionSchemaVersion, events.PrivacyEventPolicy{
@@ -137,6 +143,10 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 			item.ResultVersion != item.ExpectedVersion+1 || item.SourceName == "" || item.SourceVersion < 1 {
 			return true, errors.New("projections: invalid versioned secret batch item")
 		}
+		if item.OwnerID != "" && (item.ExpectedVersion != 0 || payload.Operation != store.ApplicationSecretBatchPromotion ||
+			uuid.Validate(item.OwnerID) != nil) {
+			return true, errors.New("projections: only a promotion's created secret takes an owner")
+		}
 		var recovered *int
 		if payload.Operation == store.ApplicationSecretBatchRestore {
 			if item.SourceName != item.Name {
@@ -148,7 +158,7 @@ func (p *Projector) applyApplicationSecretBatchVersionTx(ctx context.Context, tx
 		names = append(names, item.Name)
 		items = append(items, store.ApplicationSecretVersionItem{
 			Name: item.Name, ExpectedVersion: item.ExpectedVersion, ResultVersion: item.ResultVersion,
-			Sealed: item.Sealed, RecoveredFrom: recovered,
+			Sealed: item.Sealed, RecoveredFrom: recovered, OwnerID: item.OwnerID,
 		})
 	}
 	if !slices.IsSorted(names) {

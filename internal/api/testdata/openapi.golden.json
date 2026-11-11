@@ -54407,6 +54407,15 @@
           "key": {
             "type": "string"
           },
+          "owner_id": {
+            "description": "A236-L2: the owner a created target secret takes from its source; absent for an update, which keeps the target's owner, or a source with no owner",
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
+            "description": "A236-L2: that owner's name",
+            "type": "string"
+          },
           "reason": {
             "type": "string"
           },

@@ -632,6 +632,11 @@
 
 ### Fixed
 
+- A secret an environment promotion creates takes its source's owner (A236-L2). Promoting dev into
+  stage created each missing stage secret with no owner, so the project view showed it as unknown and
+  the owner's application view left it out. The plan now names the owner each created secret takes
+  from its source (`owner_id`, `owner_name`, bound by the plan digest), the console's plan shows it,
+  and the batch writes it; a source with no owner gives none, and an update keeps the target's own.
 - Reading what a dynamic-secret lease reaches records an event only when it changes (G2-L3). The
   leader reads each active lease's access every six hours, and every read appended a
   `dynsecret.lease.access_observed` event even when nothing had changed: 40,000 events a day at

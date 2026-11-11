@@ -1386,7 +1386,8 @@ never live in the API process. What you can do end to end against the running bi
   rewritten to the target; a reference that cycles, crosses into an ungranted restricted
   environment, exists only in another tenant or doesn't resolve blocks the plan, as does a
   retired, revoked or expired source credential; a concurrent edit makes the plan stale;
-  target-only secrets are kept. Four-eyes approval for promotions into restricted
+  target-only secrets are kept; a created secret takes its source's owner, named in the
+  plan (A236-L2), and an updated one keeps its own. Four-eyes approval for promotions into restricted
   environments is not served.
 - Folder restore (A236 part b): `POST /api/v1/secrets/projects/{project}/restores/preview`
   and `.../restores` (`trstctl secrets projects restore preview|apply`, console Promote or

@@ -51,6 +51,8 @@ type ApplicationSecretVersionItem struct {
 	Sealed          []byte
 	// RecoveredFrom is the restored version (restore only).
 	RecoveredFrom *int
+	// OwnerID is the owner a created secret takes (a promotion's, A236-L2).
+	OwnerID string
 }
 
 func validApplicationSecretBatchOperation(operation string) bool {
@@ -226,11 +228,11 @@ func (s *Store) ApplyApplicationSecretVersionBatchTx(
 		var rec ApplicationSecretImportItem
 		if item.ExpectedVersion == 0 {
 			err = tx.QueryRow(ctx, `
-				INSERT INTO secret_store (tenant_id, name, sealed, version, created_at, updated_at)
-				VALUES ($1, $2, $3, 1, $4, $4)
+				INSERT INTO secret_store (tenant_id, name, sealed, version, created_at, updated_at, owner_id)
+				VALUES ($1, $2, $3, 1, $4, $4, NULLIF($5, '')::uuid)
 				ON CONFLICT (tenant_id, name) DO NOTHING
 				RETURNING name, version, created_at, updated_at`,
-				batch.TenantID, item.Name, item.Sealed, at).
+				batch.TenantID, item.Name, item.Sealed, at, item.OwnerID).
 				Scan(&rec.Name, &rec.Version, &rec.CreatedAt, &rec.UpdatedAt)
 		} else {
 			err = tx.QueryRow(ctx, `

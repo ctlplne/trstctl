@@ -26494,6 +26494,13 @@ export interface components {
             /** @enum {string} */
             action: "create" | "update" | "unchanged" | "blocked";
             key: string;
+            /**
+             * Format: uuid
+             * @description A236-L2: the owner a created target secret takes from its source; absent for an update, which keeps the target's owner, or a source with no owner
+             */
+            owner_id?: string;
+            /** @description A236-L2: that owner's name */
+            owner_name?: string;
             reason?: string;
             references?: string[];
             rewritten_references?: number;

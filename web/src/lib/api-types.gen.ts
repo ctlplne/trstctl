@@ -11697,6 +11697,8 @@ export interface SecretProjectMemberRequest {
 export interface SecretPromotionItem {
   action: "create" | "update" | "unchanged" | "blocked";
   key: string;
+  owner_id?: string;
+  owner_name?: string;
   reason?: string;
   references?: string[];
   rewritten_references?: number;

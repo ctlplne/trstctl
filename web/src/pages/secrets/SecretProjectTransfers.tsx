@@ -165,6 +165,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
                         target: item.target_version ? t("secrets.transfers.version", { version: String(item.target_version) }) : t("secrets.transfers.new"),
                       })}
                     </span>
+                    {item.owner_name ? <span>{t("secrets.transfers.takesOwner", { owner: item.owner_name })}</span> : null}
                     {item.reason ? <span className="text-risk-high">{item.reason}</span> : null}
                   </li>
                 ))

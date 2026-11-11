@@ -67,6 +67,10 @@ type secretPromotionItem struct {
 	Reason              string   `json:"reason,omitempty"`
 	References          []string `json:"references,omitempty"`
 	RewrittenReferences int      `json:"rewritten_references,omitempty"`
+	// OwnerID and OwnerName are the owner a created target secret takes from
+	// its source (A236-L2); an update keeps the target's own owner.
+	OwnerID   string `json:"owner_id,omitempty"`
+	OwnerName string `json:"owner_name,omitempty"`
 }
 
 type secretPromotionPlan struct {
@@ -123,6 +127,8 @@ func secretVersionBatchSchemas() map[string]*Schema {
 			"action": {Type: "string", Enum: []string{secretPromotionCreate, secretPromotionUpdate,
 				secretPromotionUnchanged, secretPromotionBlocked}},
 			"reason": str(), "references": {Type: "array", Items: str()}, "rewritten_references": {Type: "integer"},
+			"owner_id":   {Type: "string", Format: "uuid", Description: "A236-L2: the owner a created target secret takes from its source; absent for an update, which keeps the target's owner, or a source with no owner"},
+			"owner_name": {Type: "string", Description: "A236-L2: that owner's name"},
 		}, "key", "source_name", "source_version", "target_name", "target_version", "action"),
 		"SecretPromotionPlan": object(map[string]*Schema{
 			"project": str(), "from": str(), "to": str(), "folder": str(), "plan_digest": str(),
@@ -396,6 +402,16 @@ func (a *API) planPromotedSecret(
 		item.References = append(item.References, ref)
 	}
 	item.Action = secretPromotionCreate
+	if item.TargetVersion == 0 && source.OwnerID != "" {
+		// A236-L2: the created secret takes its source's owner, if that owner
+		// is still one of the tenant's.
+		if owner, err := a.store.GetOwner(ctx, tenantID, source.OwnerID); err == nil {
+			item.OwnerID, item.OwnerName = owner.ID, owner.Name
+		} else if !store.IsNotFound(err) {
+			secret.Wipe(value)
+			return nil, err
+		}
+	}
 	if item.TargetVersion > 0 {
 		item.Action = secretPromotionUpdate
 		current, err := a.secrets.open(ctx, tenantID, targetSealed, sealAAD(tenantID, item.TargetName))
@@ -575,7 +591,7 @@ func (a *API) sealSecretPromotion(
 		}
 		items = append(items, projections.ApplicationSecretBatchVersionItem{
 			Name: item.TargetName, ExpectedVersion: item.TargetVersion, ResultVersion: item.TargetVersion + 1,
-			Sealed: sealed, SourceName: item.SourceName, SourceVersion: item.SourceVersion,
+			Sealed: sealed, SourceName: item.SourceName, SourceVersion: item.SourceVersion, OwnerID: item.OwnerID,
 		})
 		if item.TargetVersion == 0 {
 			creates++
@@ -745,11 +761,13 @@ func (a *API) secretVersionBatchEvidence(
 		SourceName      string `json:"source_name"`
 		SourceVersion   int    `json:"source_version"`
 		SealedSHA256    string `json:"sealed_sha256"`
+		OwnerID         string `json:"owner_id,omitempty"`
 	}
 	list := make([]evidenceItem, 0, len(items))
 	for _, item := range items {
 		list = append(list, evidenceItem{Name: item.Name, ExpectedVersion: item.ExpectedVersion,
-			SourceName: item.SourceName, SourceVersion: item.SourceVersion, SealedSHA256: crypto.SHA256Hex(item.Sealed)})
+			SourceName: item.SourceName, SourceVersion: item.SourceVersion, SealedSHA256: crypto.SHA256Hex(item.Sealed),
+			OwnerID: item.OwnerID})
 	}
 	material, err := json.Marshal(struct {
 		TenantID       string         `json:"tenant_id"`

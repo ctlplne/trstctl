@@ -5470,6 +5470,10 @@ export const messages = {
     defaultMessage: "Plan",
     description: "Accessible label of the plan list.",
   },
+  "secrets.transfers.takesOwner": {
+    defaultMessage: "takes its source's owner, {owner}",
+    description: "A promotion plan's created secret takes its source's owner (A236-L2).",
+  },
   "secrets.transfers.new": {
     defaultMessage: "new",
     description: "Target version label for a secret the promotion creates.",

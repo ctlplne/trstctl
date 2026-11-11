@@ -43,7 +43,16 @@ const promotionPlan = {
       target_version: 1,
       action: "update",
     },
-    { key: "db/url", source_name: "orders/dev/db/url", source_version: 1, target_name: "orders/stage/db/url", target_version: 0, action: "create" },
+    {
+      key: "db/url",
+      source_name: "orders/dev/db/url",
+      source_version: 1,
+      target_name: "orders/stage/db/url",
+      target_version: 0,
+      action: "create",
+      owner_id: "0b3d1c2e-5a6f-4b7c-8d9e-0f1a2b3c4d5e",
+      owner_name: "orders team",
+    },
   ],
   kept: ["orders/stage/only-in-stage"],
   changes: 2,
@@ -65,6 +74,9 @@ describe("A236 promote and restore", () => {
     const plan = await screen.findByRole("list", { name: "Plan" });
     expect(within(plan).getByText("db/url")).toBeInTheDocument();
     expect(within(plan).getByText("Create")).toBeInTheDocument();
+    // A236-L2: a created secret takes its source's owner; an update keeps the target's.
+    expect(within(plan).getByText("takes its source's owner, orders team")).toBeInTheDocument();
+    expect(within(plan).getAllByText(/takes its source's owner/)).toHaveLength(1);
     expect(screen.getByText("Left alone in the target: orders/stage/only-in-stage")).toBeInTheDocument();
     expect(apiMock.previewSecretPromotion).toHaveBeenCalledWith("orders", { from: "dev", to: "stage", folder: undefined });
     await user.click(screen.getByRole("button", { name: "Promote these secrets" }));

@@ -172,7 +172,10 @@ A **promotion** copies one environment's secrets, or one folder of them, into an
 environment of the same project as new versions, all in one batch. Preview first: the
 plan is value-free and lists each key's source and target versions and its action
 (`create`, `update`, `unchanged` or `blocked`), the target secrets the promotion leaves
-alone (`kept`), and a `plan_digest`. Apply the plan by that digest:
+alone (`kept`), and a `plan_digest`. A secret the promotion creates takes its source's
+owner (A236-L2): the plan names it (`owner_id`, `owner_name`) and the console's plan
+shows it, a source with no owner gives none, and an update keeps the target's own owner.
+Apply the plan by that digest:
 
 ```
 trstctl secrets projects promote preview payments -f promote.json   # {"from":"dev","to":"stage","folder":"db"}

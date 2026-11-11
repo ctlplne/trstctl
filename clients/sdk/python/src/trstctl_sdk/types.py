@@ -16285,6 +16285,8 @@ SecretPromotionItem = TypedDict(
     {
         'action': str,
         'key': str,
+        'owner_id': str,
+        'owner_name': str,
         'reason': str,
         'references': list[str],
         'rewritten_references': int,
