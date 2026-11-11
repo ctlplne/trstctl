@@ -57285,6 +57285,10 @@
           "configured": {
             "type": "boolean"
           },
+          "duplicate_post_check": {
+            "description": "N8-L1: the install may read the approval channel's recent messages, so a post retried after its answer was lost finds the first instead of posting twice; false for an install made before trstctl asked for that, until it is installed again",
+            "type": "boolean"
+          },
           "installed": {
             "type": "boolean"
           },

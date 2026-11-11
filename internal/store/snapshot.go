@@ -326,7 +326,10 @@ import (
 // Version 115 carries Q6-L1's secret decoy readers: without them a restored
 // store would forget who already read each decoy, and a reader reading again
 // would alert again.
-const SnapshotFormatVersion = 115
+// Version 116 carries N8-L1's granted Slack scopes: a payload without them
+// would restore an install that cannot say whether it checks the approval
+// channel before posting.
+const SnapshotFormatVersion = 116
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

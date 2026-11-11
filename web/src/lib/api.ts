@@ -29,6 +29,7 @@ import * as estate from "./estateApi";
 import * as changeSets from "./changeSetsApi";
 import * as agentAccess from "./agentAccessApi";
 import * as decoy from "./decoyApi";
+import * as slack from "./slackApi";
 import * as secretProjects from "./secretProjectsApi";
 import * as scopedSyncs from "./scopedSyncsApi";
 import * as secretMigrations from "./secretMigrationsApi";
@@ -377,6 +378,11 @@ import type {
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
+  SlackApp,
+  SlackApprovalChannel,
+  SlackChannelList,
+  SlackInstallStart,
+  SlackLinkCode,
   SecretProject,
   SecretProjectCreateRequest,
   SecretProjectEnvironmentRequest,
@@ -929,6 +935,7 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type { SlackApp, SlackApprovalChannel, SlackChannelList, SlackInstallStart, SlackLinkCode } from "./api-types.gen";
 export type { IdentityApplicationView } from "./api-types.gen";
 export type {
   SecretProject,
@@ -2991,6 +2998,12 @@ export interface Api {
   getHoneyToken(id: string): Promise<HoneyToken>;
   revokeHoneyToken(id: string): Promise<HoneyToken>;
   registerDecoySecret(input: DecoySecretRegisterRequest, idempotencyKey?: string): Promise<DecoySecret>;
+  getSlackApp(): Promise<SlackApp>;
+  startSlackInstall(idempotencyKey?: string): Promise<SlackInstallStart>;
+  listSlackChannels(): Promise<SlackChannelList>;
+  setSlackApprovalChannel(input: SlackApprovalChannel, idempotencyKey?: string): Promise<SlackApp>;
+  createSlackLinkCode(idempotencyKey?: string): Promise<SlackLinkCode>;
+  uninstallSlackApp(idempotencyKey?: string): Promise<void>;
   listSecretProjects(): Promise<SecretProjectList>;
   getSecretProject(project: string): Promise<SecretProject>;
   createSecretProject(input: SecretProjectCreateRequest, idempotencyKey?: string): Promise<SecretProject>;
@@ -4174,6 +4187,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
   revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
   registerDecoySecret: decoy.registerDecoySecret,
+  getSlackApp: slack.getSlackApp,
+  startSlackInstall: slack.startSlackInstall,
+  listSlackChannels: slack.listSlackChannels,
+  setSlackApprovalChannel: slack.setSlackApprovalChannel,
+  createSlackLinkCode: slack.createSlackLinkCode,
+  uninstallSlackApp: slack.uninstallSlackApp,
   listSecretProjects: secretProjects.listSecretProjects,
   getSecretProject: secretProjects.getSecretProject,
   createSecretProject: secretProjects.createSecretProject,

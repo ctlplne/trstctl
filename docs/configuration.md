@@ -682,8 +682,11 @@ Zero open witnesses alone do not establish agreement or current authority health
 
 ### Slack app (`slack_app`, N8, A277)
 
-Register an app at Slack with the bot scopes `chat:write`, `channels:read` and
-`groups:read`, a `/trstctl` slash command, interactivity, and the redirect URL
+Register an app at Slack with the bot scopes `chat:write`, `channels:read`,
+`groups:read`, `channels:history` and `groups:history` (the last two let a retried
+approval post find the first instead of posting twice, N8-L1; an install made before
+they were asked for checks nothing until it is installed again), a `/trstctl` slash
+command, interactivity, and the redirect URL
 `<public_url>/integrations/slack/oauth/callback` (the installing member's browser follows
 it; Slack never calls it).
 

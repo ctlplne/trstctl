@@ -8843,9 +8843,14 @@ the request signature.
 
 What comes next:
 - A live workspace install is a Track B proof (a Slack account).
-- Posting is at-least-once: a crash between Slack accepting a message and trstctl
-  recording it can post the request twice (Slack has no idempotent post); both
-  messages decide the same request.
+- Posting is at-least-once at Slack, which has no idempotent post, so a post retried
+  after its answer was lost first looks in the approval channel's last day of messages
+  (at most 1,000) for the request's earlier post by its message metadata and records it
+  instead of posting again (N8-L1; `TestServedSlackApprovalPostedOnceAfterALostAnswerN8L1`).
+  An install made before trstctl asked for the channel history scopes cannot look and can
+  still post twice until it is installed again; the console's Approvals page and
+  `duplicate_post_check` say which. A first post lost past a day, or behind 1,000 newer
+  messages, is posted again; both messages decide the same request.
 - Deny from Slack records the reason "denied in Slack by <member>"; asking the
   reviewer for a reason in a Slack dialog is what comes next.
 

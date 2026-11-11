@@ -22,16 +22,23 @@ import (
 )
 
 // n8SlackStandIn plays Slack's Web API from its reference: the OAuth code
-// exchange, the channel list, and posting and updating messages.
+// exchange, the channel list, posting and updating messages, and a channel's
+// history with each message's metadata (N8-L1).
 type n8SlackStandIn struct {
 	*httptest.Server
 	mu      sync.Mutex
 	posts   []map[string]any
 	updates []map[string]any
+	// scope is what the code exchange says the workspace granted.
+	scope string
+	// dropPostAnswers keeps that many posts while dropping the connection
+	// before their answer, as a network or a crash would.
+	dropPostAnswers int
+	historyReads    int
 }
 
 func newN8SlackStandIn(t *testing.T) *n8SlackStandIn {
-	s := &n8SlackStandIn{}
+	s := &n8SlackStandIn{scope: slackapp.BotScopes}
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -42,7 +49,7 @@ func newN8SlackStandIn(t *testing.T) *n8SlackStandIn {
 				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_code"}`)
 				return
 			}
-			_, _ = fmt.Fprint(w, `{"ok":true,"token_type":"bot","access_token":"xoxb-n8-bot-token","bot_user_id":"U0BOT","app_id":"A0N8","team":{"id":"T0N8TEAM","name":"N8 Workspace"}}`)
+			_, _ = fmt.Fprintf(w, `{"ok":true,"token_type":"bot","access_token":"xoxb-n8-bot-token","bot_user_id":"U0BOT","app_id":"A0N8","scope":%q,"team":{"id":"T0N8TEAM","name":"N8 Workspace"}}`, s.scope)
 		case "/api/conversations.list":
 			if r.Header.Get("Authorization") != "Bearer xoxb-n8-bot-token" {
 				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
@@ -61,8 +68,40 @@ func newN8SlackStandIn(t *testing.T) *n8SlackStandIn {
 				_, _ = fmt.Fprint(w, `{"ok":true}`)
 				return
 			}
+			body["ts"] = fmt.Sprintf("1762246800.00%04d", len(s.posts)+1)
 			s.posts = append(s.posts, body)
-			_, _ = fmt.Fprintf(w, `{"ok":true,"channel":"%v","ts":"1762246800.00%04d"}`, body["channel"], len(s.posts))
+			if s.dropPostAnswers > 0 {
+				s.dropPostAnswers--
+				if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+					_ = conn.Close()
+				}
+				return
+			}
+			_, _ = fmt.Fprintf(w, `{"ok":true,"channel":"%v","ts":"%v"}`, body["channel"], body["ts"])
+		case "/api/conversations.history":
+			if r.Header.Get("Authorization") != "Bearer xoxb-n8-bot-token" {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"invalid_auth"}`)
+				return
+			}
+			if !strings.Contains(s.scope, "channels:history") {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"missing_scope"}`)
+				return
+			}
+			s.historyReads++
+			q := r.URL.Query()
+			messages := []map[string]any{}
+			for i := len(s.posts) - 1; i >= 0; i-- {
+				post := s.posts[i]
+				if post["channel"] != q.Get("channel") {
+					continue
+				}
+				m := map[string]any{"type": "message", "ts": post["ts"], "app_id": "A0N8", "bot_id": "B0N8", "text": post["text"]}
+				if meta, ok := post["metadata"]; ok && q.Get("include_all_metadata") == "true" {
+					m["metadata"] = meta
+				}
+				messages = append(messages, m)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "messages": messages, "has_more": false})
 		default:
 			http.NotFound(w, r)
 		}

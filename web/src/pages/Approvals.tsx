@@ -34,12 +34,13 @@ import {
   type ApprovalQueueRow,
 } from "@/lib/approvalQueue";
 import { PAMReconciliationIntent } from "./PAMReconciliationIntent";
+import { SlackApprovalsPanel } from "./SlackApprovalsPanel";
 import { CloudChangeIntent } from "./discovery/CloudChangeIntent";
 import { getCloudMachineChange } from "@/lib/cloudMachineApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 type Notice = { kind: "permission" | "error"; message: string };
-type OpenSections = { queue: boolean; history: boolean; specialized: boolean };
+type OpenSections = { queue: boolean; history: boolean; specialized: boolean; slack: boolean };
 const profileApprovalsQueryKey = ["profile-edit-approvals"] as const;
 
 export function Approvals() {
@@ -102,7 +103,7 @@ export function Approvals() {
   const [issuanceRejectionReason, setIssuanceRejectionReason] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<ProfileEditApprovalRecord | null>(null);
   const profileReviewHeadingRef = useRef<HTMLHeadingElement>(null);
-  const [open, setOpen] = useState<OpenSections>({ queue: false, history: false, specialized: false });
+  const [open, setOpen] = useState<OpenSections>({ queue: false, history: false, specialized: false, slack: false });
   const generalHistory = useInfiniteQuery({
     queryKey: approvalRequestHistoryQueryKey,
     queryFn: ({ pageParam }) => api.approvalRequestHistory({ cursor: pageParam, limit: 100 }),
@@ -631,6 +632,14 @@ export function Approvals() {
             </p>
           )}
         </section>
+      </ApprovalDetails>
+
+      <ApprovalDetails
+        title={t("approvals.design.disclosure.slack")}
+        open={open.slack}
+        onToggle={(value) => setOpen((current) => ({ ...current, slack: value }))}
+      >
+        <SlackApprovalsPanel />
       </ApprovalDetails>
 
       <Dialog

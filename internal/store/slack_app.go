@@ -21,6 +21,7 @@ type SlackInstall struct {
 	TeamName            string    `json:"team_name"`
 	BotUserID           string    `json:"bot_user_id"`
 	AppID               string    `json:"app_id"`
+	Scopes              string    `json:"scopes"`
 	SealedBotToken      []byte    `json:"-"`
 	ApprovalChannelID   string    `json:"approval_channel_id"`
 	ApprovalChannelName string    `json:"approval_channel_name"`
@@ -69,16 +70,17 @@ func (s *Store) ApplySlackInstalledTx(ctx context.Context, tx pgx.Tx, in SlackIn
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO slack_installs
-		(tenant_id, team_id, team_name, bot_user_id, app_id, sealed_bot_token, installed_by, installed_at, updated_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+		(tenant_id, team_id, team_name, bot_user_id, app_id, sealed_bot_token, installed_by, installed_at, updated_at, event_sequence, scopes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
 		ON CONFLICT (tenant_id) DO UPDATE SET
 		  approval_channel_id = CASE WHEN slack_installs.team_id = EXCLUDED.team_id THEN slack_installs.approval_channel_id ELSE '' END,
 		  approval_channel_name = CASE WHEN slack_installs.team_id = EXCLUDED.team_id THEN slack_installs.approval_channel_name ELSE '' END,
 		  team_id = EXCLUDED.team_id, team_name = EXCLUDED.team_name, bot_user_id = EXCLUDED.bot_user_id,
 		  app_id = EXCLUDED.app_id, sealed_bot_token = EXCLUDED.sealed_bot_token, installed_by = EXCLUDED.installed_by,
-		  installed_at = EXCLUDED.installed_at, updated_at = EXCLUDED.updated_at, event_sequence = EXCLUDED.event_sequence
+		  installed_at = EXCLUDED.installed_at, updated_at = EXCLUDED.updated_at, event_sequence = EXCLUDED.event_sequence,
+		  scopes = EXCLUDED.scopes
 		WHERE slack_installs.event_sequence < EXCLUDED.event_sequence`,
-		in.TenantID, in.TeamID, in.TeamName, in.BotUserID, in.AppID, in.SealedBotToken, in.InstalledBy, at, seq)
+		in.TenantID, in.TeamID, in.TeamName, in.BotUserID, in.AppID, in.SealedBotToken, in.InstalledBy, at, seq, in.Scopes)
 	return err
 }
 
@@ -161,9 +163,10 @@ func (s *Store) GetSlackInstall(ctx context.Context, tenantID string) (SlackInst
 	var in SlackInstall
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT tenant_id::text, team_id, team_name, bot_user_id, app_id, sealed_bot_token,
-			approval_channel_id, approval_channel_name, installed_by, installed_at, updated_at
+			approval_channel_id, approval_channel_name, installed_by, installed_at, updated_at, scopes
 			FROM slack_installs WHERE tenant_id = $1`, tenantID).Scan(&in.TenantID, &in.TeamID, &in.TeamName, &in.BotUserID,
-			&in.AppID, &in.SealedBotToken, &in.ApprovalChannelID, &in.ApprovalChannelName, &in.InstalledBy, &in.InstalledAt, &in.UpdatedAt)
+			&in.AppID, &in.SealedBotToken, &in.ApprovalChannelID, &in.ApprovalChannelName, &in.InstalledBy, &in.InstalledAt, &in.UpdatedAt,
+			&in.Scopes)
 	})
 	return in, err
 }

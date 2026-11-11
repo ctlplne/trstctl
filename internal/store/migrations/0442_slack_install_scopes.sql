@@ -1,0 +1,11 @@
+-- SPDX-License-Identifier: BUSL-1.1
+-- N8-L1: the bot scopes a workspace granted the Slack app. trstctl now asks
+-- for the approval channel's history, so a post retried after its answer was
+-- lost finds the first instead of posting twice; an install recorded before
+-- that keeps an empty list and checks nothing until it is installed again.
+-- Projected from slack.app.installed.
+--
+-- online-safe: a nullable-free column with a constant default is added as
+-- catalog metadata only (PostgreSQL 11+), without rewriting the table or
+-- scanning it, and slack_installs holds one row per tenant.
+ALTER TABLE slack_installs ADD COLUMN IF NOT EXISTS scopes text NOT NULL DEFAULT '';

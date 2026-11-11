@@ -12365,6 +12365,7 @@ export interface SlackApp {
   approval_channel_id?: string;
   approval_channel_name?: string;
   configured: boolean;
+  duplicate_post_check?: boolean;
   installed: boolean;
   installed_at?: string;
   installed_by?: string;

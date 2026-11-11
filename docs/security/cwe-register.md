@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2910 annotated sites across 33 rules. Each row is
+2911 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (631 sites)
+### G101 — CWE-798 Use of hardcoded credentials (632 sites)
 
 | Location | Reason |
 |---|---|
@@ -644,7 +644,8 @@ not this file.
 | `internal/server/servicenow_two_way_served_test.go:204` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:221` | an env: reference to a test-only value (CWE-798) |
 | `internal/server/servicenow_two_way_served_test.go:235` | an env: reference to a test-only value (CWE-798) |
-| `internal/server/slack_app_served_test.go:87` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_app_lost_answer_served_test.go:31` | env: references to test-only values, no credential (CWE-798) |
+| `internal/server/slack_app_served_test.go:126` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/slack_socket_served_test.go:128` | env: references to test-only values, no credential (CWE-798) |
 | `internal/server/ssh_agentless_collection_served_test.go:27` | public host pin, restricted account and vault-reference fixtures contain no credential value (CWE-798). |
 | `internal/server/thirdparty_collect_served_test.go:194` | env: references to test-only stand-in tokens, no credential values (CWE-798) |
@@ -1234,9 +1235,9 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:306` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:402` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:426` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/slack_app.go:51` | bounded above (CWE-190) |
-| `internal/store/snapshot.go:853` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:873` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/slack_app.go:52` | bounded above (CWE-190) |
+| `internal/store/snapshot.go:856` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:876` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -1464,7 +1465,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4216` | closed test table list above |
+| `internal/store/migration_content_test.go:4217` | closed test table list above |
 
 ### G202 — CWE-? (unmapped rule) (2 sites)
 

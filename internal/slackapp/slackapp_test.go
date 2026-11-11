@@ -103,3 +103,74 @@ func TestVerifyRequestN8(t *testing.T) {
 		}
 	}
 }
+
+// N8-L1: a tagged post keeps its tag as Slack message metadata, and
+// FindTagged finds the one message this app posted with the tag, paging the
+// channel's recent history: a message with another request's tag, or the same
+// tag from another app, is not it. A token without the history scopes is
+// refused, and CanFindTagged says so from the granted scopes.
+func TestFindTaggedFindsOnlyThisAppsTaggedMessageN8L1(t *testing.T) {
+	var posted map[string]any
+	var since string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "Bearer xoxb-no-history" {
+			_, _ = fmt.Fprint(w, `{"ok":false,"error":"missing_scope"}`)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/chat.postMessage":
+			_ = json.NewDecoder(r.Body).Decode(&posted)
+			_, _ = fmt.Fprint(w, `{"ok":true,"channel":"C0SEC","ts":"1762246800.000100"}`)
+		case "/api/conversations.history":
+			q := r.URL.Query()
+			if q.Get("channel") != "C0SEC" || q.Get("include_all_metadata") != "true" {
+				_, _ = fmt.Fprint(w, `{"ok":false,"error":"channel_not_found"}`)
+				return
+			}
+			since = q.Get("oldest")
+			if q.Get("cursor") == "" {
+				_, _ = fmt.Fprint(w, `{"ok":true,"messages":[
+					{"ts":"1762246800.000300","app_id":"A0APP","metadata":{"event_type":"trstctl_approval_request","event_payload":{"approval_request":"req-2"}}},
+					{"ts":"1762246800.000200","app_id":"A0OTHER","metadata":{"event_type":"trstctl_approval_request","event_payload":{"approval_request":"req-1"}}},
+					{"ts":"1762246800.000150","text":"a person's message"}],
+					"response_metadata":{"next_cursor":"p2"}}`)
+				return
+			}
+			_, _ = fmt.Fprint(w, `{"ok":true,"messages":[
+				{"ts":"1762246800.000100","bot_profile":{"app_id":"A0APP"},"metadata":{"event_type":"trstctl_approval_request","event_payload":{"approval_request":"req-1"}}}],
+				"response_metadata":{"next_cursor":""}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := Client{BaseURL: srv.URL, Doer: srv.Client()}
+	ctx := context.Background()
+	tag := Tag{EventType: "trstctl_approval_request", Fields: map[string]string{"approval_request": "req-1"}}
+	if _, err := c.PostTagged(ctx, []byte("xoxb-bot-token"), "C0SEC", "Approval requested", []any{}, tag); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := posted["metadata"].(map[string]any)
+	payload, _ := meta["event_payload"].(map[string]any)
+	if meta["event_type"] != "trstctl_approval_request" || payload["approval_request"] != "req-1" {
+		t.Fatalf("the post's metadata = %v", posted["metadata"])
+	}
+	oldest := time.Unix(1762160400, 0)
+	msg, found, err := c.FindTagged(ctx, []byte("xoxb-bot-token"), "C0SEC", "A0APP", tag, oldest, 5)
+	if err != nil || !found || msg.TS != "1762246800.000100" || msg.Channel != "C0SEC" {
+		t.Fatalf("FindTagged = %+v %v %v, want this app's req-1 message on the second page", msg, found, err)
+	}
+	if since != "1762160400.000000" {
+		t.Fatalf("history read from %q", since)
+	}
+	if _, found, err := c.FindTagged(ctx, []byte("xoxb-bot-token"), "C0SEC", "A0APP", tag, oldest, 1); err != nil || found {
+		t.Fatalf("one page found %v (%v); the message is on the second", found, err)
+	}
+	if _, found, err := c.FindTagged(ctx, []byte("xoxb-no-history"), "C0SEC", "A0APP", tag, oldest, 5); !errors.Is(err, ErrRefused) || found {
+		t.Fatalf("a token without the history = %v %v, want refused", found, err)
+	}
+	if !CanFindTagged(BotScopes) || !CanFindTagged("chat:write, channels:history,groups:history") ||
+		CanFindTagged("chat:write,channels:read,groups:read") || CanFindTagged("chat:write,channels:history") || CanFindTagged("") {
+		t.Fatal("CanFindTagged does not follow the granted history scopes")
+	}
+}

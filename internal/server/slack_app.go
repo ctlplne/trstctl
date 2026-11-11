@@ -105,6 +105,11 @@ func slackSocketHTTPClient(endpoint string, allowPrivate bool, privateCIDRs []st
 const (
 	slackDecisionDomain   = "trstctl-slack-decision-v1"
 	slackDecisionLifetime = 24 * time.Hour
+	// slackApprovalEventType tags an approval request's message in Slack's
+	// message metadata (N8-L1), and slackHistoryPages bounds how many pages
+	// of 200 recent messages a post reads looking for an earlier one.
+	slackApprovalEventType = "trstctl_approval_request"
+	slackHistoryPages      = 5
 )
 
 type slackDecision struct {
@@ -187,7 +192,8 @@ func (a *slackAppServer) install(ctx context.Context, tenantID string) (store.Sl
 func slackStatusFor(in store.SlackInstall) api.SlackAppStatus {
 	at := in.InstalledAt
 	return api.SlackAppStatus{Configured: true, Installed: true, TeamID: in.TeamID, TeamName: in.TeamName,
-		ApprovalChannelID: in.ApprovalChannelID, ApprovalChannelName: in.ApprovalChannelName, InstalledBy: in.InstalledBy, InstalledAt: &at}
+		ApprovalChannelID: in.ApprovalChannelID, ApprovalChannelName: in.ApprovalChannelName, InstalledBy: in.InstalledBy, InstalledAt: &at,
+		DuplicatePostCheck: slackapp.CanFindTagged(in.Scopes)}
 }
 
 // SlackStatus implements api.SlackAppService.
@@ -323,7 +329,7 @@ func (a *slackAppServer) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.s.orch.RecordSlackEvent(ctx, tenantID, projections.EventSlackInstalled, projections.SlackInstalled{
 		TeamID: install.TeamID, TeamName: install.TeamName, BotUserID: install.BotUserID, AppID: install.AppID,
-		SealedBotToken: sealed, InstalledBy: subject}); err != nil {
+		SealedBotToken: sealed, InstalledBy: subject, Scopes: install.Scopes}); err != nil {
 		slackPage(w, http.StatusServiceUnavailable, "The install could not be recorded.")
 		return
 	}
@@ -497,6 +503,11 @@ func (a *slackAppServer) handleInteraction(ctx context.Context, in slackInteract
 	return ""
 }
 
+// slackApprovalTag is the metadata an approval request's message carries.
+func slackApprovalTag(requestID string) slackapp.Tag {
+	return slackapp.Tag{EventType: slackApprovalEventType, Fields: map[string]string{"approval_request": requestID}}
+}
+
 // postApproval posts an approval request to the tenant's approval channel
 // with Approve and Deny buttons, once per request. It reports false when the
 // tenant has no install or no channel.
@@ -522,6 +533,22 @@ func (a *slackAppServer) postApproval(ctx context.Context, tenantID string, aler
 		return false, err
 	}
 	defer secret.Wipe(token)
+	// N8-L1: a post whose answer was lost (the connection dropped, or trstctl
+	// stopped before recording it) is already in the channel, and the outbox
+	// delivers this again. Find that message by its metadata and record it
+	// instead of posting a second one. An install made before trstctl asked
+	// for the channel's history cannot look, and posts as before.
+	tag := slackApprovalTag(requestID)
+	if slackapp.CanFindTagged(in.Scopes) {
+		msg, found, err := a.client.FindTagged(ctx, token, in.ApprovalChannelID, in.AppID, tag, a.now().Add(-slackDecisionLifetime), slackHistoryPages)
+		if err != nil {
+			// A refused read must not stop the approval reaching reviewers.
+			a.s.logger.Warn("slack approval post could not check the channel for an earlier post", "error_class", fmt.Sprintf("%T", err))
+		} else if found {
+			return true, a.s.orch.RecordSlackEvent(ctx, tenantID, projections.EventSlackApprovalPosted,
+				projections.SlackApprovalPosted{ApprovalRequestID: requestID, ChannelID: msg.Channel, MessageTS: msg.TS})
+		}
+	}
 	nonce, err := crypto.RandomBytes(16)
 	if err != nil {
 		return false, err
@@ -542,7 +569,7 @@ func (a *slackAppServer) postApproval(ctx context.Context, tenantID string, aler
 			map[string]any{"type": "button", "action_id": "deny", "style": "danger", "value": values["deny"], "text": map[string]any{"type": "plain_text", "text": "Deny"}},
 		}},
 	}
-	msg, err := a.client.Post(ctx, token, in.ApprovalChannelID, "Approval requested: "+alert.Detail, blocks)
+	msg, err := a.client.PostTagged(ctx, token, in.ApprovalChannelID, "Approval requested: "+alert.Detail, blocks, tag)
 	if err != nil {
 		return false, err
 	}

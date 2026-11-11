@@ -33,9 +33,15 @@ const (
 	// SignatureWindow is how old a signed request may be (Slack's own rule).
 	SignatureWindow = 5 * time.Minute
 	// BotScopes are what the app asks for at install: posting and updating its
-	// messages and listing the channels the picker shows.
-	BotScopes = "chat:write,channels:read,groups:read"
+	// messages, listing the channels the picker shows, and reading a channel's
+	// recent messages, so a post retried after its answer was lost finds the
+	// first instead of posting twice (N8-L1).
+	BotScopes = "chat:write,channels:read,groups:read,channels:history,groups:history"
 )
+
+// historyScopes are what FindTagged needs: a public channel's history and a
+// private channel's.
+var historyScopes = []string{"channels:history", "groups:history"}
 
 var (
 	ErrRefused   = errors.New("slackapp: Slack refused the call")
@@ -67,6 +73,9 @@ type Install struct {
 	TeamName  string
 	BotUserID string
 	AppID     string
+	// Scopes are the bot scopes the workspace granted, comma-separated as
+	// Slack answers them.
+	Scopes string
 	// BotToken is the caller's to seal and wipe.
 	BotToken []byte
 }
@@ -92,6 +101,7 @@ func (c Client) Exchange(ctx context.Context, clientID string, clientSecret []by
 		AccessToken secret.JSONBytes `json:"access_token"`
 		BotUserID   string           `json:"bot_user_id"`
 		AppID       string           `json:"app_id"`
+		Scope       string           `json:"scope"`
 		Team        struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
@@ -108,7 +118,8 @@ func (c Client) Exchange(ctx context.Context, clientID string, clientSecret []by
 		secret.Wipe(answer.AccessToken)
 		return Install{}, fmt.Errorf("%w: oauth.v2.access answered no bot token for a workspace", ErrRefused)
 	}
-	return Install{TeamID: answer.Team.ID, TeamName: answer.Team.Name, BotUserID: answer.BotUserID, AppID: answer.AppID, BotToken: answer.AccessToken}, nil
+	return Install{TeamID: answer.Team.ID, TeamName: answer.Team.Name, BotUserID: answer.BotUserID, AppID: answer.AppID,
+		Scopes: answer.Scope, BotToken: answer.AccessToken}, nil
 }
 
 // Channel is one channel the picker offers.
@@ -163,6 +174,31 @@ type Message struct {
 
 // Post sends blocks (with text as the notification fallback) to a channel.
 func (c Client) Post(ctx context.Context, token []byte, channel, text string, blocks []any) (Message, error) {
+	return c.post(ctx, token, channel, map[string]any{"channel": channel, "text": text, "blocks": blocks})
+}
+
+// Tag is message metadata, which Slack keeps with a message unseen by its
+// readers: an event type and the string fields that say what the message is.
+type Tag struct {
+	EventType string
+	Fields    map[string]string
+}
+
+func (t Tag) metadata() map[string]any {
+	payload := make(map[string]any, len(t.Fields))
+	for k, v := range t.Fields {
+		payload[k] = v
+	}
+	return map[string]any{"event_type": t.EventType, "event_payload": payload}
+}
+
+// PostTagged is Post with tag kept as the message's metadata, for FindTagged
+// to find.
+func (c Client) PostTagged(ctx context.Context, token []byte, channel, text string, blocks []any, tag Tag) (Message, error) {
+	return c.post(ctx, token, channel, map[string]any{"channel": channel, "text": text, "blocks": blocks, "metadata": tag.metadata()})
+}
+
+func (c Client) post(ctx context.Context, token []byte, channel string, body map[string]any) (Message, error) {
 	if !channelID.MatchString(channel) {
 		return Message{}, fmt.Errorf("%w: %q is not a channel ID", ErrRefused, channel)
 	}
@@ -172,13 +208,94 @@ func (c Client) Post(ctx context.Context, token []byte, channel, text string, bl
 		Channel string `json:"channel"`
 		TS      string `json:"ts"`
 	}
-	if err := c.call(ctx, token, http.MethodPost, "chat.postMessage", map[string]any{"channel": channel, "text": text, "blocks": blocks}, &answer); err != nil {
+	if err := c.call(ctx, token, http.MethodPost, "chat.postMessage", body, &answer); err != nil {
 		return Message{}, err
 	}
 	if !answer.OK || answer.TS == "" {
 		return Message{}, fmt.Errorf("%w: chat.postMessage answered %q", ErrRefused, answer.Error)
 	}
 	return Message{Channel: answer.Channel, TS: answer.TS}, nil
+}
+
+// CanFindTagged reports whether an install's granted scopes, as Slack lists
+// them, let FindTagged read a public or a private channel.
+func CanFindTagged(scopes string) bool {
+	granted := map[string]bool{}
+	for _, scope := range strings.Split(scopes, ",") {
+		granted[strings.TrimSpace(scope)] = true
+	}
+	for _, scope := range historyScopes {
+		if !granted[scope] {
+			return false
+		}
+	}
+	return true
+}
+
+// FindTagged looks through a channel's messages since oldest, newest first
+// and at most pages pages of 200, for one the app appID posted with tag (an
+// empty appID matches any app). It needs channels:history, or groups:history
+// for a private channel; Slack's refusal is the error.
+func (c Client) FindTagged(ctx context.Context, token []byte, channel, appID string, tag Tag, oldest time.Time, pages int) (Message, bool, error) {
+	if !channelID.MatchString(channel) {
+		return Message{}, false, fmt.Errorf("%w: %q is not a channel ID", ErrRefused, channel)
+	}
+	cursor := ""
+	for page := 0; page < pages; page++ {
+		q := url.Values{"channel": {channel}, "oldest": {strconv.FormatInt(oldest.Unix(), 10) + ".000000"},
+			"include_all_metadata": {"true"}, "limit": {"200"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		var answer struct {
+			OK       bool   `json:"ok"`
+			Error    string `json:"error"`
+			Messages []struct {
+				TS         string `json:"ts"`
+				AppID      string `json:"app_id"`
+				BotProfile struct {
+					AppID string `json:"app_id"`
+				} `json:"bot_profile"`
+				Metadata struct {
+					EventType    string         `json:"event_type"`
+					EventPayload map[string]any `json:"event_payload"`
+				} `json:"metadata"`
+			} `json:"messages"`
+			Meta struct {
+				NextCursor string `json:"next_cursor"`
+			} `json:"response_metadata"`
+		}
+		if err := c.call(ctx, token, http.MethodGet, "conversations.history?"+q.Encode(), nil, &answer); err != nil {
+			return Message{}, false, err
+		}
+		if !answer.OK {
+			return Message{}, false, fmt.Errorf("%w: conversations.history answered %q", ErrRefused, answer.Error)
+		}
+		for _, m := range answer.Messages {
+			poster := m.AppID
+			if poster == "" {
+				poster = m.BotProfile.AppID
+			}
+			if m.TS == "" || m.Metadata.EventType != tag.EventType || (appID != "" && poster != appID) {
+				continue
+			}
+			match := true
+			for k, v := range tag.Fields {
+				if got, _ := m.Metadata.EventPayload[k].(string); got != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				return Message{Channel: channel, TS: m.TS}, true, nil
+			}
+		}
+		if answer.Meta.NextCursor == "" {
+			break
+		}
+		cursor = answer.Meta.NextCursor
+	}
+	return Message{}, false, nil
 }
 
 // Update replaces a posted message's text and blocks.

@@ -577,3 +577,16 @@ func TestDecoySecretReadersUseEventRecoveryAndSnapshotsQ6L1(t *testing.T) {
 		t.Fatalf("snapshot format %d could restore a payload without decoy readers", SnapshotFormatVersion)
 	}
 }
+
+// TestSlackInstallScopesNeedSnapshotFormat116N8L1: a Slack install's granted
+// scopes are rebuilt from its install event and carried by snapshots from
+// format 116, so a restored install still says whether it checks the
+// approval channel before posting.
+func TestSlackInstallScopesNeedSnapshotFormat116N8L1(t *testing.T) {
+	if !containsRecoveryTable(ReadModelTables, "slack_installs") || !containsRecoveryTable(snapshotTables, "slack_installs") {
+		t.Fatal("slack_installs must survive rebuild and snapshot restore")
+	}
+	if SnapshotFormatVersion < 116 {
+		t.Fatalf("snapshot format %d could restore a payload without the install's scopes", SnapshotFormatVersion)
+	}
+}

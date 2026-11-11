@@ -31,6 +31,11 @@ type SlackAppStatus struct {
 	ApprovalChannelName string     `json:"approval_channel_name,omitempty"`
 	InstalledBy         string     `json:"installed_by,omitempty"`
 	InstalledAt         *time.Time `json:"installed_at,omitempty"`
+	// DuplicatePostCheck says the install's token may read the approval
+	// channel's recent messages, so a post retried after its answer was lost
+	// finds the first instead of posting twice (N8-L1). An install made before
+	// trstctl asked for that is false until it is installed again.
+	DuplicatePostCheck bool `json:"duplicate_post_check"`
 }
 
 // SlackAppService is the server side of the Slack app.
@@ -129,6 +134,7 @@ func slackAppSchemas() map[string]*Schema {
 		"SlackApp": {Type: "object", Properties: map[string]*Schema{
 			"configured": {Type: "boolean"}, "installed": {Type: "boolean"}, "team_id": str(), "team_name": str(),
 			"approval_channel_id": str(), "approval_channel_name": str(), "installed_by": str(), "installed_at": ts(),
+			"duplicate_post_check": {Type: "boolean", Description: "N8-L1: the install may read the approval channel's recent messages, so a post retried after its answer was lost finds the first instead of posting twice; false for an install made before trstctl asked for that, until it is installed again"},
 		}, Required: []string{"configured", "installed"}},
 		"SlackInstallStart": {Type: "object", Properties: map[string]*Schema{
 			"authorize_url": {Type: "string", Description: "Slack's consent screen; open it in a browser signed in to the workspace"}, "expires_at": ts(),

@@ -632,6 +632,16 @@
 
 ### Fixed
 
+- A Slack approval request is posted once when the answer to its post is lost (N8-L1). Slack has
+  no idempotent post, so when Slack kept a message but the connection dropped (or trstctl stopped)
+  before trstctl recorded it, the outbox delivered the post again and the request appeared twice.
+  Each post now carries its request in Slack's message metadata, and before posting trstctl looks
+  through the approval channel's last day of messages for that request's earlier post and records
+  it instead. The app asks for `channels:history` and `groups:history` for that; an install made
+  earlier checks nothing until it is installed again, which `GET /api/v1/integrations/slack`
+  (`duplicate_post_check`) and the console say. The console gains **Approvals → Approve from
+  Slack**: the install, its channel and its check, install or install again through Slack's
+  consent screen, the channel picker, a reviewer's link code, and uninstall.
 - A decoy secret alerts once per reader for good (Q6-L1). A decoy raises one critical alert per
   distinct reader, but the alert's outbox row was the only record of who had read it, and the outbox
   sweep reclaims a delivered row a day after delivery, so the same reader reading again a day later

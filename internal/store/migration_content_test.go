@@ -1162,6 +1162,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	389: true, // TestMigration0389KeepsTargetsUnpinnedAndSessionsWithoutPrincipal
 	388: true, // TestMigration0388KeepsSessionsDirectAndTargetsUnbound
 	437: true, // TestMigration0437KeepsLeasesWithNoRequester
+	442: true, // TestMigration0442KeepsSlackInstallsWithNoScopes
 	382: true, // TestMigration0382KeepsLeasesWithNoRevocationMethod
 	383: true, // TestMigration0383KeepsDecoyUsesAsFoundByLookup
 	373: true, // TestMigration0373KeepsRotationsUnacknowledged

@@ -437,7 +437,17 @@ is replied to the presser through the press's `response_url`. In request-URL mod
 five minutes. The
 message is then updated with the outcome; a request decided elsewhere keeps its
 message. `DELETE /api/v1/integrations/slack` removes the install, the links and the
-message records. Status: served. Microsoft Teams approvals are not offered: a Teams bot
+message records. Each request is posted once (N8-L1): the post carries the request in
+Slack's message metadata, and before posting trstctl looks through the approval
+channel's last day of messages (at most 1,000) for that request's earlier post, so a
+post retried after its answer was lost (the connection dropped, or trstctl stopped
+before recording it) records the first message instead of posting a second. That look
+needs the channel history scopes; an install made before trstctl asked for them cannot
+look until it is installed again, and `GET /api/v1/integrations/slack` says which
+(`duplicate_post_check`). The console's **Approvals → Approve from Slack** shows the
+install, its approval channel and whether it checks before posting, installs or
+installs again through Slack's consent screen, picks the channel, gives a reviewer
+their link code and uninstalls after a confirmation. Status: served. Microsoft Teams approvals are not offered: a Teams bot
 receives its activities on an inbound HTTPS endpoint, which this design does not open.
 
 ### Access-change approvals

@@ -36,6 +36,9 @@ type SlackInstalled struct {
 	AppID          string `json:"app_id"`
 	SealedBotToken []byte `json:"sealed_bot_token"`
 	InstalledBy    string `json:"installed_by"`
+	// Scopes are the bot scopes the workspace granted (N8-L1); absent from
+	// an install recorded before they were.
+	Scopes string `json:"scopes,omitempty"`
 }
 
 // SlackApprovalChannelSet is the payload of slack.app.approval_channel_set.
@@ -93,7 +96,7 @@ func (p *Projector) applySlackAppTx(ctx context.Context, tx pgx.Tx, e events.Eve
 			return true, err
 		}
 		return true, p.store.ApplySlackInstalledTx(ctx, tx, store.SlackInstall{TenantID: e.TenantID, TeamID: d.TeamID, TeamName: d.TeamName,
-			BotUserID: d.BotUserID, AppID: d.AppID, SealedBotToken: d.SealedBotToken, InstalledBy: d.InstalledBy}, e.Time, e.Sequence)
+			BotUserID: d.BotUserID, AppID: d.AppID, SealedBotToken: d.SealedBotToken, InstalledBy: d.InstalledBy, Scopes: d.Scopes}, e.Time, e.Sequence)
 	case EventSlackApprovalChannelSet:
 		var d SlackApprovalChannelSet
 		if err := decode(&d); err != nil {
@@ -144,7 +147,8 @@ func addSlackAppPrivacyPolicies(policies map[privacyEventPolicyKey]events.Privac
 	)
 	policies[privacyEventPolicyKey{EventSlackInstalled, 1}] = privacyRules(
 		privacyRule("/team_id", opaque), privacyRule("/team_name", opaque), privacyRule("/bot_user_id", opaque),
-		privacyRule("/app_id", opaque), privacyRule("/sealed_bot_token", opaque), privacyRule("/installed_by", exact))
+		privacyRule("/app_id", opaque), privacyRule("/sealed_bot_token", opaque), privacyRule("/installed_by", exact),
+		privacyRule("/scopes", opaque))
 	policies[privacyEventPolicyKey{EventSlackApprovalChannelSet, 1}] = privacyRules(
 		privacyRule("/channel_id", opaque), privacyRule("/channel_name", opaque), privacyRule("/set_by", exact))
 	policies[privacyEventPolicyKey{EventSlackUninstalled, 1}] = privacyRules(privacyRule("/team_id", opaque), privacyRule("/by", exact))

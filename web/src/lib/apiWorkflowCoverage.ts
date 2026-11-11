@@ -11,6 +11,48 @@ export interface ApiWorkflowCoverage {
 
 export const apiWorkflowCoverage = [
   {
+    path: "/api/v1/integrations/slack",
+    route: "/approvals",
+    owner: "SURFACE/approvals",
+    kind: "console-flow",
+    workflow: "Slack approvals install status and uninstall",
+    rationale:
+      "Approvals → Approve from Slack shows the workspace, the approval channel, who installed it and whether the install checks the channel before posting (N8-L1), and uninstalls after a confirmation.",
+  },
+  {
+    path: "/api/v1/integrations/slack/install",
+    route: "/approvals",
+    owner: "SURFACE/approvals",
+    kind: "console-flow",
+    workflow: "Install the Slack app through Slack's consent screen",
+    rationale:
+      "Approvals → Approve from Slack starts the install, or installs again to grant the channel history, and links to Slack's single-use consent screen.",
+  },
+  {
+    path: "/api/v1/integrations/slack/channels",
+    route: "/approvals",
+    owner: "SURFACE/approvals",
+    kind: "console-flow",
+    workflow: "List the channels the Slack app sees",
+    rationale: "Approvals → Approve from Slack lists the workspace's channels the app sees, public and private, for the approval channel picker.",
+  },
+  {
+    path: "/api/v1/integrations/slack/approval-channel",
+    route: "/approvals",
+    owner: "SURFACE/approvals",
+    kind: "console-flow",
+    workflow: "Pick the Slack approval channel",
+    rationale: "Approvals → Approve from Slack sets the channel approval requests are posted to with Approve and Deny buttons.",
+  },
+  {
+    path: "/api/v1/integrations/slack/link-codes",
+    route: "/approvals",
+    owner: "SURFACE/approvals",
+    kind: "console-flow",
+    workflow: "Link a reviewer's Slack user",
+    rationale: "Approvals → Approve from Slack gives a reviewer a one-time code to type into Slack, so their button presses count as their reviews.",
+  },
+  {
     path: "/api/v1/access/session-requests",
     route: "/admin/access",
     owner: "SURFACE/access",

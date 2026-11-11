@@ -17189,6 +17189,7 @@ SlackApp = TypedDict(
         'approval_channel_id': str,
         'approval_channel_name': str,
         'configured': bool,
+        'duplicate_post_check': bool,
         'installed': bool,
         'installed_at': str,
         'installed_by': str,

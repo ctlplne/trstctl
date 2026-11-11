@@ -6073,6 +6073,67 @@ export const messages = {
   },
   "secrets.tasks.honeytokens.action": { defaultMessage: "Open decoy credentials", description: "Open honeytoken workflow." },
   "secrets.honeytokens.heading": { defaultMessage: "Decoy credentials", description: "Honeytoken workflow heading." },
+  "approvals.slack.heading": { defaultMessage: "Approve from Slack", description: "Slack approvals panel heading (N8)." },
+  "approvals.slack.description": {
+    defaultMessage:
+      "trstctl posts each approval request to one Slack channel with Approve and Deny buttons. A reviewer's press counts as their review once they link their Slack user to themselves.",
+    description: "Slack approvals panel description (N8).",
+  },
+  "approvals.slack.error": { defaultMessage: "Slack approvals", description: "Slack approvals error title." },
+  "approvals.slack.readFailed": { defaultMessage: "Could not read the Slack app's install", description: "Slack status read failure." },
+  "approvals.slack.installFailed": { defaultMessage: "Could not start the Slack install", description: "Slack install start failure." },
+  "approvals.slack.channelsFailed": { defaultMessage: "Could not list the workspace's channels", description: "Slack channel list failure." },
+  "approvals.slack.saveFailed": { defaultMessage: "Could not set the approval channel", description: "Slack approval channel save failure." },
+  "approvals.slack.linkFailed": { defaultMessage: "Could not get a link code", description: "Slack link code failure." },
+  "approvals.slack.uninstallFailed": { defaultMessage: "Could not uninstall the Slack app", description: "Slack uninstall failure." },
+  "approvals.slack.notConfigured": {
+    defaultMessage: "The Slack app is not configured on this control plane; its operator sets slack_app in the configuration.",
+    description: "Slack app not configured on the control plane.",
+  },
+  "approvals.slack.notInstalled": { defaultMessage: "The Slack app is not installed for this tenant.", description: "Slack app not installed." },
+  "approvals.slack.workspace": { defaultMessage: "Workspace", description: "Slack workspace label." },
+  "approvals.slack.channel": { defaultMessage: "Approval channel", description: "Slack approval channel label." },
+  "approvals.slack.channelNone": {
+    defaultMessage: "none picked; approval requests are not posted",
+    description: "No Slack approval channel picked.",
+  },
+  "approvals.slack.channelChoose": { defaultMessage: "Choose a channel", description: "Slack channel picker placeholder." },
+  "approvals.slack.privateChannel": { defaultMessage: "{name} (private)", description: "A private Slack channel in the picker." },
+  "approvals.slack.publicChannel": { defaultMessage: "#{name}", description: "A public Slack channel's name." },
+  "approvals.slack.installed": { defaultMessage: "Installed", description: "Slack install label." },
+  "approvals.slack.installedBy": { defaultMessage: "by {by} at {at}", description: "Who installed the Slack app and when." },
+  "approvals.slack.checkOn": {
+    defaultMessage:
+      "Before posting, trstctl looks in the channel for an earlier post of the same request, so a post retried after its answer was lost is not posted twice.",
+    description: "The Slack install checks for an earlier post (N8-L1).",
+  },
+  "approvals.slack.checkOff": {
+    defaultMessage:
+      "This install cannot read the channel's messages, so a post retried after its answer was lost can appear twice. Install the app again to grant it.",
+    description: "The Slack install cannot check for an earlier post (N8-L1).",
+  },
+  "approvals.slack.install": { defaultMessage: "Install in Slack", description: "Button that starts the Slack install." },
+  "approvals.slack.installAgain": { defaultMessage: "Install again", description: "Button that installs the Slack app again." },
+  "approvals.slack.consent": {
+    defaultMessage: "Open Slack's consent screen (valid until {at}, once)",
+    description: "Link to Slack's consent screen.",
+  },
+  "approvals.slack.refresh": { defaultMessage: "I approved it in Slack", description: "Button that rereads the install after consent." },
+  "approvals.slack.pickChannel": { defaultMessage: "Pick the approval channel", description: "Button that lists Slack channels." },
+  "approvals.slack.saveChannel": { defaultMessage: "Post approvals here", description: "Button that saves the Slack approval channel." },
+  "approvals.slack.link": { defaultMessage: "Link my Slack user", description: "Button that gets a Slack link code." },
+  "approvals.slack.linkCode": {
+    defaultMessage: "In Slack, type /trstctl link {code} before {at}. The code works once.",
+    description: "How to use a Slack link code.",
+  },
+  "approvals.slack.uninstall": { defaultMessage: "Uninstall", description: "Button that starts uninstalling the Slack app." },
+  "approvals.slack.uninstallConfirm": {
+    defaultMessage: "Remove the install, its user links and its approval messages?",
+    description: "Slack uninstall confirmation.",
+  },
+  "approvals.slack.uninstallYes": { defaultMessage: "Uninstall the Slack app", description: "Confirms the Slack uninstall." },
+  "approvals.slack.uninstallNo": { defaultMessage: "Keep it", description: "Cancels the Slack uninstall." },
+  "approvals.design.disclosure.slack": { defaultMessage: "Approve from Slack", description: "Approvals page Slack disclosure title (N8)." },
   "secrets.decoys.heading": { defaultMessage: "Decoy secrets", description: "Decoy secret workflow heading." },
   "secrets.decoys.description": {
     defaultMessage:

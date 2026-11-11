@@ -27276,6 +27276,8 @@ export interface components {
             approval_channel_id?: string;
             approval_channel_name?: string;
             configured: boolean;
+            /** @description N8-L1: the install may read the approval channel's recent messages, so a post retried after its answer was lost finds the first instead of posting twice; false for an install made before trstctl asked for that, until it is installed again */
+            duplicate_post_check?: boolean;
             installed: boolean;
             /** Format: date-time */
             installed_at?: string;
