@@ -55744,7 +55744,8 @@
           "mode": {
             "enum": [
               "manual",
-              "auto"
+              "auto",
+              "approved"
             ],
             "type": "string"
           },
@@ -55759,7 +55760,8 @@
               "applied",
               "unchanged",
               "blocked",
-              "failed"
+              "failed",
+              "awaiting_approval"
             ],
             "type": "string"
           },
@@ -55821,7 +55823,8 @@
           "mode": {
             "enum": [
               "manual",
-              "auto"
+              "auto",
+              "approved"
             ],
             "type": "string"
           }
@@ -55983,7 +55986,8 @@
           "mode": {
             "enum": [
               "manual",
-              "auto"
+              "auto",
+              "approved"
             ],
             "type": "string"
           },
@@ -107452,7 +107456,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Switch a scoped sync between manual (a reviewed apply) and auto (applied when its sources change and nothing is blocked)",
+        "summary": "Set a scoped sync's mode: manual (a reviewed apply), auto (applied when its sources change and nothing is blocked) or approved (as auto, each plan applied once approved)",
         "x-trstctl-permission": "secrets:write"
       }
     },

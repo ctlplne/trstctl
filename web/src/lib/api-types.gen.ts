@@ -12022,10 +12022,10 @@ export interface SecretScopedSync {
   last_applied_at?: string;
   last_plan_digest?: string;
   last_reconcile_at?: string;
-  mode: "manual" | "auto";
+  mode: "manual" | "auto" | "approved";
   name: string;
   reconcile_reason?: string;
-  reconcile_status?: "applied" | "unchanged" | "blocked" | "failed";
+  reconcile_status?: "applied" | "unchanged" | "blocked" | "failed" | "awaiting_approval";
   source_prefix: string;
   target: string;
   updated_at: string;
@@ -12041,7 +12041,7 @@ export interface SecretScopedSyncList {
 }
 
 export interface SecretScopedSyncModeRequest {
-  mode: "manual" | "auto";
+  mode: "manual" | "auto" | "approved";
 }
 
 export interface SecretScopedSyncPlan {
@@ -12066,7 +12066,7 @@ export interface SecretScopedSyncRequest {
   delete_scope?: "none" | "managed" | "prefix";
   destination_prefix?: string;
   key_transform?: "path" | "env";
-  mode?: "manual" | "auto";
+  mode?: "manual" | "auto" | "approved";
   name: string;
   source_prefix: string;
   target: string;

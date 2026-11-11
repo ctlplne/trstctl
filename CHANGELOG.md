@@ -2,6 +2,14 @@
 
 ### Added
 
+- Approval-gated convergence for scoped secret syncs (A237-L1): a third mode, `approved`. The control
+  plane plans the sync when its sources change, as for `auto`, but applies a plan with changes only
+  after the tenant's required number of distinct approvers (members who write in the source's
+  environment) approve that exact plan. Until then the definition reads `awaiting_approval` and names
+  the request. A manual apply waits for the same kind of approval, and each approval is used once.
+  Leaving the mode, or removing an approved sync, needs `access:write`. The plan digest now binds the
+  definition's route, rules, mode and author rather than its reconcile bookkeeping, so a waiting plan
+  keeps its digest. The console sets the mode and links the request a plan waits for.
 - A promotion into a restricted secrets environment needs four-eyes approval (A236-L1). The apply
   writes nothing and names the approval request until other members who hold write there approve
   that exact plan: the tenant's required number of distinct approvers, two by default. The approval

@@ -48,8 +48,10 @@ type SecretScopedSync struct {
 	UpdatedAt         time.Time
 	LastPlanDigest    string
 	LastAppliedAt     *time.Time
-	// Mode is manual (a reviewed apply) or auto (the reconciler applies a plan
-	// with nothing blocked when the sources change or the drift check is due).
+	// Mode is manual (a reviewed apply), auto (the reconciler applies a plan
+	// with nothing blocked when the sources change or the drift check is due)
+	// or approved (as auto, but each plan with changes waits for its exact
+	// approval, A237-L1).
 	Mode                string
 	SourceDigest        string
 	LastReconcileAt     *time.Time
@@ -166,11 +168,12 @@ func (s *Store) SecretScopedSyncSourceDigest(ctx context.Context, tenantID, pref
 	return crypto.SHA256Hex([]byte(prefix + "\x00" + listing)), nil
 }
 
-// TenantsWithAutoScopedSyncs lists tenants holding an auto scoped sync.
+// TenantsWithAutoScopedSyncs lists tenants holding an auto or an approved
+// (approval-gated, A237-L1) scoped sync: the definitions the reconciler plans.
 func (s *Store) TenantsWithAutoScopedSyncs(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		//trstctl:system-query — cross-tenant by design: enumerates which tenants hold an auto scoped sync so the leader-only reconciler can visit each tenant under its own RLS context (AN-1 exemption).
-		`SELECT DISTINCT tenant_id::text FROM secret_scoped_syncs WHERE mode = 'auto' ORDER BY 1`)
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants hold an auto or approved scoped sync so the leader-only reconciler can visit each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM secret_scoped_syncs WHERE mode IN ('auto', 'approved') ORDER BY 1`)
 	if err != nil {
 		return nil, err
 	}

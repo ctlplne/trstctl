@@ -10668,7 +10668,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Switch a scoped sync between manual (a reviewed apply) and auto (applied when its sources change and nothing is blocked) */
+        /** Set a scoped sync's mode: manual (a reviewed apply), auto (applied when its sources change and nothing is blocked) or approved (as auto, each plan applied once approved) */
         put: operations["setSecretScopedSyncMode"];
         post?: never;
         delete?: never;
@@ -26930,11 +26930,11 @@ export interface components {
             /** Format: date-time */
             last_reconcile_at?: string;
             /** @enum {string} */
-            mode: "manual" | "auto";
+            mode: "manual" | "auto" | "approved";
             name: string;
             reconcile_reason?: string;
             /** @enum {string} */
-            reconcile_status?: "applied" | "unchanged" | "blocked" | "failed";
+            reconcile_status?: "applied" | "unchanged" | "blocked" | "failed" | "awaiting_approval";
             source_prefix: string;
             target: string;
             /** Format: date-time */
@@ -26949,7 +26949,7 @@ export interface components {
         };
         SecretScopedSyncModeRequest: {
             /** @enum {string} */
-            mode: "manual" | "auto";
+            mode: "manual" | "auto" | "approved";
         };
         SecretScopedSyncPlan: {
             blocked: number;
@@ -26989,7 +26989,7 @@ export interface components {
             /** @enum {string} */
             key_transform?: "path" | "env";
             /** @enum {string} */
-            mode?: "manual" | "auto";
+            mode?: "manual" | "auto" | "approved";
             name: string;
             source_prefix: string;
             target: string;

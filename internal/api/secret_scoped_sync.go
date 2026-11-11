@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -41,7 +42,25 @@ const (
 	scopedSyncDestinationLimit = 1000
 
 	scopedSyncReconcilerSubject = "system:scoped-sync-reconciler"
+
+	// scopedSyncModeApproved is approval-gated convergence (A237-L1): the
+	// reconciler re-plans the definition like an auto one, but a plan with
+	// changes is applied only once the tenant's required number of distinct
+	// approvers approve that exact plan; a manual apply waits for the same
+	// approval.
+	scopedSyncModeApproved = "approved"
+	// scopedSyncApprovalKind is the approval request kind of an approved
+	// definition's plan; its resource is the definition's ID.
+	scopedSyncApprovalKind = "secret_scoped_sync"
+	// scopedSyncAwaitingApproval is the reconcile status of an approved
+	// definition whose current plan waits for its approvers.
+	scopedSyncAwaitingApproval = "awaiting_approval"
 )
+
+// validScopedSyncMode is a mode a definition can hold.
+func validScopedSyncMode(mode string) bool {
+	return mode == "manual" || mode == "auto" || mode == scopedSyncModeApproved
+}
 
 var scopedSyncNamespace = googleuuid.MustParse("d98c96a4-b0ce-58d4-9771-9c85e2aca8e0")
 
@@ -143,7 +162,7 @@ func (a *API) secretScopedSyncRoutes() []route {
 			summary: "Remove a scoped sync; the destination keys it wrote stay", handler: a.removeSecretScopedSync,
 			pathParams: id, successCode: "204", mutation: true, perm: authz.SecretsWrite},
 		{method: "PUT", path: "/api/v1/secrets/scoped-syncs/{id}/mode", opID: "setSecretScopedSyncMode",
-			summary: "Switch a scoped sync between manual (a reviewed apply) and auto (applied when its sources change and nothing is blocked)",
+			summary: "Set a scoped sync's mode: manual (a reviewed apply), auto (applied when its sources change and nothing is blocked) or approved (as auto, each plan applied once approved)",
 			handler: a.setSecretScopedSyncMode, pathParams: id, reqSchema: "SecretScopedSyncModeRequest", resSchema: "SecretScopedSync",
 			successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scoped-syncs/{id}/preview", opID: "previewSecretScopedSync",
@@ -169,17 +188,17 @@ func secretScopedSyncSchemas() map[string]*Schema {
 			"key_transform":  {Type: "string", Enum: []string{"path", "env"}},
 			"delete_scope":   {Type: "string", Enum: []string{"none", "managed", "prefix"}},
 			"adopt_existing": {Type: "boolean"},
-			"mode":           {Type: "string", Enum: []string{"manual", "auto"}},
+			"mode":           {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}},
 		}, "name", "source_prefix", "target"),
 		"SecretScopedSyncModeRequest": object(map[string]*Schema{
-			"mode": {Type: "string", Enum: []string{"manual", "auto"}},
+			"mode": {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}},
 		}, "mode"),
 		"SecretScopedSync": object(map[string]*Schema{
 			"id": str(), "name": str(), "source_prefix": str(), "target": str(), "destination_prefix": str(),
 			"key_transform": str(), "delete_scope": str(), "adopt_existing": {Type: "boolean"}, "defined_by": str(),
 			"created_at": timestamp(), "updated_at": timestamp(), "last_plan_digest": str(), "last_applied_at": timestamp(),
-			"mode": {Type: "string", Enum: []string{"manual", "auto"}}, "last_reconcile_at": timestamp(),
-			"reconcile_status": {Type: "string", Enum: []string{"applied", "unchanged", "blocked", "failed"}}, "reconcile_reason": str(),
+			"mode": {Type: "string", Enum: []string{"manual", "auto", scopedSyncModeApproved}}, "last_reconcile_at": timestamp(),
+			"reconcile_status": {Type: "string", Enum: []string{"applied", "unchanged", "blocked", "failed", scopedSyncAwaitingApproval}}, "reconcile_reason": str(),
 			"keys": {Type: "array", Items: key},
 		}, "id", "name", "source_prefix", "target", "key_transform", "delete_scope", "adopt_existing", "mode", "created_at", "updated_at"),
 		"SecretScopedSyncList": object(map[string]*Schema{
@@ -253,8 +272,8 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "destination_prefix is a relative path without empty or dot segments")
 		case transform != "path" && transform != "env":
 			return 0, nil, errStatus(http.StatusBadRequest, "key_transform is path or env")
-		case req.Mode != "" && req.Mode != "manual" && req.Mode != "auto":
-			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual or auto")
+		case req.Mode != "" && !validScopedSyncMode(req.Mode):
+			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual, auto or approved")
 		case scope != "none" && scope != "managed" && scope != "prefix":
 			return 0, nil, errStatus(http.StatusBadRequest, "delete_scope is none, managed (keys this sync wrote) or prefix (every key under the destination prefix)")
 		}
@@ -372,6 +391,13 @@ func (a *API) removeSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		// A237-L1: an approval-gated definition is not removed (and then
+		// defined again ungated) by those it gates.
+		if d.Mode == scopedSyncModeApproved {
+			if err := requireScopedSyncGateAuthority(ctx, tenantID, "removing an approval-gated scoped sync"); err != nil {
+				return 0, nil, err
+			}
+		}
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
 			return 0, nil, err
@@ -394,12 +420,19 @@ func (a *API) setSecretScopedSyncMode(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if req.Mode != "manual" && req.Mode != "auto" {
-			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual or auto")
+		if !validScopedSyncMode(req.Mode) {
+			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual, auto or approved")
 		}
 		d, err := a.loadScopedSync(ctx, tenantID, r.PathValue("id"))
 		if err != nil {
 			return 0, nil, err
+		}
+		// A237-L1: leaving approval-gated convergence is the tenant
+		// administrator's decision, not one the gated members make.
+		if d.Mode == scopedSyncModeApproved && req.Mode != scopedSyncModeApproved {
+			if err := requireScopedSyncGateAuthority(ctx, tenantID, "leaving approval-gated convergence"); err != nil {
+				return 0, nil, err
+			}
 		}
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
@@ -588,13 +621,30 @@ func (a *API) planSecretScopedSync(ctx context.Context, tenantID string, d store
 			plan.Blocked++
 		}
 	}
+	// The digest binds what the plan means — the definition's route, rules,
+	// mode and author, the items and the destination it saw — and not the
+	// reconciler's bookkeeping on the definition, which changes on every pass:
+	// an approved definition's plan must stay the same plan while it waits for
+	// its approvers (A237-L1).
+	definition := struct {
+		ID                string `json:"id"`
+		Name              string `json:"name"`
+		SourcePrefix      string `json:"source_prefix"`
+		Target            string `json:"target"`
+		DestinationPrefix string `json:"destination_prefix"`
+		KeyTransform      string `json:"key_transform"`
+		DeleteScope       string `json:"delete_scope"`
+		AdoptExisting     bool   `json:"adopt_existing"`
+		DefinedBy         string `json:"defined_by"`
+		Mode              string `json:"mode"`
+	}{d.ID, d.Name, d.SourcePrefix, d.Target, d.DestinationPrefix, d.KeyTransform, d.DeleteScope, d.AdoptExisting, d.DefinedBy, d.Mode}
 	material, err := json.Marshal(struct {
 		Domain     string                 `json:"domain"`
-		Definition store.SecretScopedSync `json:"definition"`
+		Definition any                    `json:"definition"`
 		Items      []secretScopedSyncItem `json:"items"`
 		Digests    map[string]string      `json:"destination_digests"`
 		Existing   []string               `json:"existing"`
-	}{"trstctl.secret.scoped-sync-plan.v1", d, plan.Items, digests, existing})
+	}{"trstctl.secret.scoped-sync-plan.v2", definition, plan.Items, digests, existing})
 	if err != nil {
 		return plan, err
 	}
@@ -725,6 +775,14 @@ func (a *API) executeSecretScopedSync(ctx context.Context, tenantID string, d st
 			return receipt, &apiError{status: http.StatusConflict, detail: "the plan has blocked items; nothing was synced",
 				ext: map[string]any{"code": "plan_blocked", "plan": plan}}
 		}
+		// A237-L1: an approved definition applies a plan only with its exact
+		// approval, which the event carries for the projection to consume.
+		var approval *store.OperationApprovalUse
+		if d.Mode == scopedSyncModeApproved {
+			if approval, err = a.authorizeScopedSyncApply(ctx, tenantID, d, planDigest); err != nil {
+				return receipt, err
+			}
+		}
 		// The reconciler applies an auto definition's plan with no request
 		// principal; its applies name it.
 		subject, err := requestPrincipalSubject(ctx)
@@ -732,7 +790,7 @@ func (a *API) executeSecretScopedSync(ctx context.Context, tenantID string, d st
 			subject = scopedSyncReconcilerSubject
 		}
 		applied = projections.SecretScopedSyncApplied{TenantEpoch: epoch, ID: d.ID, Target: d.Target, PlanDigest: planDigest,
-			AppliedBy: subject, Items: []projections.SecretScopedSyncAppliedItem{}}
+			AppliedBy: subject, Items: []projections.SecretScopedSyncAppliedItem{}, Approval: approval}
 		for _, item := range plan.Items {
 			switch item.Action {
 			case "create", "update":
@@ -819,7 +877,7 @@ func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, 
 			continue
 		}
 		for _, d := range defs {
-			if d.Mode != "auto" {
+			if d.Mode != "auto" && d.Mode != scopedSyncModeApproved {
 				continue
 			}
 			digest, err := a.store.SecretScopedSyncSourceDigest(ctx, tenantID, d.SourcePrefix)
@@ -828,7 +886,10 @@ func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, 
 				continue
 			}
 			key := tenantID + "/" + d.ID
-			if seen, ok := state[key]; ok && seen.SourceDigest == digest && now.Sub(seen.PlannedAt) < driftEvery {
+			// A plan awaiting approval is looked at every pass, so an approval
+			// is acted on as soon as it is given.
+			awaiting := d.Mode == scopedSyncModeApproved && d.LastReconcileStatus == scopedSyncAwaitingApproval
+			if seen, ok := state[key]; ok && !awaiting && seen.SourceDigest == digest && now.Sub(seen.PlannedAt) < driftEvery {
 				continue
 			}
 			state[key] = ScopedSyncSeen{SourceDigest: digest, PlannedAt: now}
@@ -861,7 +922,96 @@ func (a *API) reconcileScopedSync(ctx context.Context, tenantID string, d store.
 		return "unchanged", "", plan.PlanDigest
 	}
 	if _, err := a.executeSecretScopedSync(ctx, tenantID, d, plan.PlanDigest); err != nil {
+		var wait *scopedSyncApprovalWait
+		if errors.As(err, &wait) {
+			if wait.terminal {
+				return "blocked", "the plan's approval request " + wait.requestID + " was denied, expired or used; a changed plan asks again", plan.PlanDigest
+			}
+			return scopedSyncAwaitingApproval, strconv.Itoa(plan.Changes) + " changes await approval request " + wait.requestID, plan.PlanDigest
+		}
 		return "failed", "the plan could not be applied; preview it to see why", plan.PlanDigest
 	}
 	return "applied", strconv.Itoa(plan.Changes) + " changes applied", plan.PlanDigest
 }
+
+// scopedSyncApprovalWait is an approved definition's plan without its approval
+// yet (A237-L1): the apply route answers its 403; the reconciler records the
+// request it waits for, or that the request can no longer approve this plan.
+type scopedSyncApprovalWait struct {
+	requestID string
+	terminal  bool
+	cause     error
+}
+
+func (e *scopedSyncApprovalWait) Error() string { return e.cause.Error() }
+func (e *scopedSyncApprovalWait) Unwrap() error { return e.cause }
+
+// requireScopedSyncGateAuthority is access:write, for what would lift an
+// approval gate (A237-L1).
+func requireScopedSyncGateAuthority(ctx context.Context, tenantID, what string) error {
+	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+	if !principal.Can(authz.AccessWrite, authz.Scope{TenantID: tenantID}) {
+		return errStatus(http.StatusForbidden, what+" needs access:write")
+	}
+	return nil
+}
+
+// authorizeScopedSyncApply asks for, or finds, the exact approval of an
+// approved definition's plan (A237-L1). A manual apply asks as its caller; the
+// reconciler, which has no caller, asks as the definition's author. Either way
+// the requester cannot approve its own request, and the approvers are members
+// who write in the source's environment. Until approved, the answer is 403
+// naming the request.
+func (a *API) authorizeScopedSyncApply(ctx context.Context, tenantID string, d store.SecretScopedSync, planDigest string) (*store.OperationApprovalUse, error) {
+	if a.gate.Checker == nil {
+		return nil, errStatus(http.StatusForbidden, "an approval-gated scoped sync needs the approval store, and none is configured")
+	}
+	exact, ok := a.gate.Checker.(ExactApprovalChecker)
+	if !ok {
+		return nil, errStatus(http.StatusForbidden, "an approval-gated scoped sync needs exact single-use approval authority")
+	}
+	destination := d.Target
+	if d.DestinationPrefix != "" {
+		destination += "/" + d.DestinationPrefix
+	}
+	requester := d.DefinedBy
+	if subject, err := requestPrincipalSubject(ctx); err == nil {
+		requester = subject
+	}
+	intent := ApprovalIntent{
+		TenantID: tenantID, ResourceKind: scopedSyncApprovalKind, ResourceID: d.ID,
+		ResourceName: d.Name + ": " + d.SourcePrefix + " to " + destination, Action: "apply", Requester: requester,
+		FromState: "plan:" + planDigest, ToState: destination, TargetVersion: 1,
+		Reason:       "apply scoped sync " + d.Name + " by the plan " + planDigest,
+		EvidenceRefs: []string{"plan_digest:" + planDigest, scopedSyncSourceEvidence + d.SourcePrefix},
+	}
+	authority, approved, reason := exact.AuthorizeApproval(ctx, intent)
+	if authority.RequestID == "" || authority.IntentDigest == "" ||
+		authority.Requester != intent.Requester || authority.ResourceKind != intent.ResourceKind ||
+		authority.ResourceID != intent.ResourceID || authority.Action != intent.Action ||
+		authority.FromState != intent.FromState || authority.ToState != intent.ToState ||
+		authority.TargetVersion != intent.TargetVersion || authority.RequiredApprovals <= 0 {
+		return nil, approvalAPIError(store.ErrApprovalDrifted)
+	}
+	if !approved {
+		if reason == "" {
+			reason = "this exact plan awaits its approvers"
+		}
+		return nil, &scopedSyncApprovalWait{requestID: authority.RequestID, terminal: authority.Disposition.Terminal(),
+			cause: errStatus(http.StatusForbidden, fmt.Sprintf("dual control: approval_required:%s request_id=%s intent_digest=%s: %s",
+				d.ID, authority.RequestID, authority.IntentDigest, reason))}
+	}
+	return &store.OperationApprovalUse{
+		RequestID: authority.RequestID, IntentDigest: authority.IntentDigest,
+		Requester: authority.Requester, ResourceKind: authority.ResourceKind,
+		ResourceID: authority.ResourceID, Action: authority.Action,
+		FromState: authority.FromState, ToState: authority.ToState,
+		TargetVersion: authority.TargetVersion, RequiredApprovals: authority.RequiredApprovals,
+		Reason: authority.Reason, EvidenceRefs: authority.EvidenceRefs,
+	}, nil
+}
+
+// scopedSyncSourceEvidence prefixes the evidence ref naming an approved
+// definition's source prefix, which the approval routes check the approver's
+// grant against.
+const scopedSyncSourceEvidence = "source:"

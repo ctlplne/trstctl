@@ -392,6 +392,13 @@ func approvalRecordSecretName(record ApprovalRequestRecord) (string, bool) {
 		return strings.CutPrefix(record.ResourceID, "secret:")
 	case secretPromotionApprovalKind:
 		return record.ResourceID + "/", record.ResourceID != ""
+	case scopedSyncApprovalKind:
+		// A237-L1: the definition's source prefix, from its evidence.
+		for _, ref := range record.EvidenceRefs {
+			if source, ok := strings.CutPrefix(ref, scopedSyncSourceEvidence); ok && source != "" {
+				return source, true
+			}
+		}
 	}
 	return "", false
 }
@@ -464,6 +471,10 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		// A236-L1: a promotion into a restricted environment is reviewed by
 		// those who write secrets there.
 		return authz.SecretsWrite, action == "promote"
+	case scopedSyncApprovalKind:
+		// A237-L1: an approved scoped sync's plan is reviewed by those who
+		// write secrets.
+		return authz.SecretsWrite, action == "apply"
 	case "managed_key":
 		return authz.KeysApprove, action == ManagedKeyActionRotate || action == ManagedKeyActionRevoke || action == ManagedKeyActionZeroize
 	case "cloud_machine":

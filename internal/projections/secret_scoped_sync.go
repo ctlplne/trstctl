@@ -35,7 +35,8 @@ type SecretScopedSyncDefined struct {
 	DeleteScope       string `json:"delete_scope"`
 	AdoptExisting     bool   `json:"adopt_existing,omitempty"`
 	DefinedBy         string `json:"defined_by"`
-	// Mode is manual or auto (A237 part b); absent reads as manual.
+	// Mode is manual, auto (A237 part b) or approved (A237-L1); absent reads
+	// as manual.
 	Mode string `json:"mode,omitempty"`
 }
 
@@ -63,6 +64,10 @@ type SecretScopedSyncApplied struct {
 	PlanDigest  string                        `json:"plan_digest"`
 	AppliedBy   string                        `json:"applied_by"`
 	Items       []SecretScopedSyncAppliedItem `json:"items"`
+	// Approval is the exact single-use approval an approved-mode definition's
+	// plan carries (A237-L1); the projection consumes it with the apply.
+	// Absent for manual and auto definitions.
+	Approval *store.OperationApprovalUse `json:"approval,omitempty"`
 }
 
 // SecretScopedSyncModeSet is the payload of secret.scoped_sync.mode_set.
@@ -126,7 +131,7 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 		if err := decode(e, &pl); err != nil {
 			return true, err
 		}
-		if pl.ID == "" || (pl.Mode != "manual" && pl.Mode != "auto") || e.Time.IsZero() {
+		if pl.ID == "" || (pl.Mode != "manual" && pl.Mode != "auto" && pl.Mode != "approved") || e.Time.IsZero() {
 			return incomplete()
 		}
 		return true, p.store.ApplySecretScopedSyncModeSetTx(ctx, tx, e.TenantID, pl.ID, pl.Mode, e.Time, e.Sequence)
@@ -163,8 +168,13 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 				Action: item.Action, JobID: item.JobID, DeleteID: item.DeleteID,
 			})
 		}
-		return true, p.store.ApplySecretScopedSyncAppliedTx(ctx, tx, e.TenantID, pl.TenantEpoch, pl.ID, pl.Target,
-			pl.PlanDigest, items, e.Time, e.Sequence)
+		if err := p.store.ApplySecretScopedSyncAppliedTx(ctx, tx, e.TenantID, pl.TenantEpoch, pl.ID, pl.Target,
+			pl.PlanDigest, items, e.Time, e.Sequence); err != nil || pl.Approval == nil {
+			return true, err
+		}
+		// A237-L1: the apply consumes its exact single-use approval; a
+		// replay of this event finds it consumed by this same event.
+		return true, p.store.ConsumeOperationApprovalTx(ctx, tx, e.TenantID, *pl.Approval, e.ID, e.Time)
 	case EventSecretScopedSyncKeyDeleted:
 		var pl SecretScopedSyncKeyDeleted
 		if err := decode(e, &pl); err != nil {
@@ -215,7 +225,15 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 		privacyRule("/plan_digest", opaque), privacyRule("/applied_by", exact),
 		privacyRule("/items/*/remote_key", opaque), privacyRule("/items/*/source_name", opaque),
 		privacyRule("/items/*/source_version", opaque), privacyRule("/items/*/action", opaque),
-		privacyRule("/items/*/job_id", opaque), privacyRule("/items/*/delete_id", opaque))
+		privacyRule("/items/*/job_id", opaque), privacyRule("/items/*/delete_id", opaque),
+		privacyRule("/approval/request_id", opaque), privacyRule("/approval/intent_digest", opaque),
+		privacyRule("/approval/requester", exact), privacyRule("/approval/resource_kind", opaque),
+		privacyRule("/approval/resource_id", opaque), privacyRule("/approval/action", opaque),
+		privacyRule("/approval/from_state", opaque), privacyRule("/approval/to_state", opaque),
+		privacyRule("/approval/target_version", opaque), privacyRule("/approval/required_approvals", opaque),
+		privacyRule("/approval/reason", events.PrivacyFieldFreeTextClear),
+		privacyRule("/approval/evidence_refs", events.PrivacyFieldFreeTextClear),
+		privacyRule("/approval/issuance", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncKeyDeleted, 1}] = privacyRules(
 		privacyRule("/tenant_epoch", opaque), privacyRule("/delete_id", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncDeleteFailed, 1}] = privacyRules(

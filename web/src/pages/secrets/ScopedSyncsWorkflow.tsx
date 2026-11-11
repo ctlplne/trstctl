@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,18 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 // destination key with its action. Keys the sync didn't write are never
 // touched unless the reviewed delete scope includes them. Auto definitions are
 // applied by the control plane when their sources change; manual ones wait for
-// a reviewed apply here.
+// a reviewed apply here; approval-gated ones (A237-L1) are planned like auto
+// ones but applied only once members who write in the source approve each
+// exact plan, and the panel names the request a plan waits for.
 
 type DeleteScope = "none" | "managed" | "prefix";
+type Mode = "manual" | "auto" | "approved";
+
+// approvalRequestOf is the approval request an approval-gated plan waits for,
+// as the apply's refusal or the reconciler's reason names it.
+function approvalRequestOf(text: string): string | null {
+  return /request(?:_id=| )([0-9a-f]{8}-[0-9a-f-]{27})/.exec(text)?.[1] ?? null;
+}
 
 export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
   const { t } = useTranslation();
@@ -33,7 +43,9 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
   const [target, setTarget] = useState(targets[0] ?? "");
   const [destination, setDestination] = useState("");
   const [deleteScope, setDeleteScope] = useState<DeleteScope>("none");
-  const [auto, setAuto] = useState(false);
+  const [mode, setMode] = useState<Mode>("manual");
+  const [nextMode, setNextMode] = useState<Mode>("manual");
+  const [awaiting, setAwaiting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,9 +66,12 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
 
   async function open(id: string) {
     try {
-      setSelected(await api.getSecretScopedSync(id));
+      const opened = await api.getSecretScopedSync(id);
+      setSelected(opened);
+      setNextMode(opened.mode as Mode);
       setPlan(null);
       setMessage(null);
+      setAwaiting(null);
       setError(null);
     } catch (cause) {
       setError(apiProblemMessage(cause, t("secrets.scopedSyncs.readFailed")));
@@ -73,12 +88,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
         target,
         destination_prefix: destination.trim() || undefined,
         delete_scope: deleteScope,
-        mode: auto ? "auto" : "manual",
+        mode,
       });
       setName("");
       setSource("");
       setDestination("");
       setSelected(created);
+      setNextMode(created.mode as Mode);
       setPlan(null);
       setError(null);
       await refresh();
@@ -110,10 +126,17 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
       const receipt = await api.applySecretScopedSync(selected.id, { plan_digest: plan.plan_digest });
       setMessage(t("secrets.scopedSyncs.applied", { writes: String(receipt.writes.length), deletes: String(receipt.deletes.length) }));
       setPlan(null);
+      setAwaiting(null);
       setError(null);
       setSelected(await api.getSecretScopedSync(selected.id));
     } catch (cause) {
       const reason = apiProblemMessage(cause, t("secrets.scopedSyncs.applyFailed"));
+      const request = reason.includes("approval_required:") ? approvalRequestOf(reason) : null;
+      if (request) {
+        setError(null);
+        setAwaiting(request);
+        return;
+      }
       await preview();
       setError(reason);
     } finally {
@@ -125,7 +148,9 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
     if (!selected) return;
     setBusy(true);
     try {
-      setSelected(await api.setSecretScopedSyncMode(selected.id, { mode: selected.mode === "auto" ? "manual" : "auto" }));
+      const changed = await api.setSecretScopedSyncMode(selected.id, { mode: nextMode });
+      setSelected(changed);
+      setNextMode(changed.mode as Mode);
       setError(null);
       await refresh();
     } catch (cause) {
@@ -145,7 +170,20 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
     unmanaged: t("secrets.scopedSyncs.action.unmanaged"),
     blocked: t("secrets.scopedSyncs.action.blocked"),
   };
-  const modeLabel = (mode: string) => (mode === "auto" ? t("secrets.scopedSyncs.mode.auto") : t("secrets.scopedSyncs.mode.manual"));
+  const modeLabel = (value: string) =>
+    value === "auto"
+      ? t("secrets.scopedSyncs.mode.auto")
+      : value === "approved"
+        ? t("secrets.scopedSyncs.mode.approved")
+        : t("secrets.scopedSyncs.mode.manual");
+  const modeOptions = (
+    <>
+      <option value="manual">{t("secrets.scopedSyncs.mode.manual")}</option>
+      <option value="auto">{t("secrets.scopedSyncs.mode.auto")}</option>
+      <option value="approved">{t("secrets.scopedSyncs.mode.approved")}</option>
+    </>
+  );
+  const waitingFor = awaiting ?? (selected?.reconcile_status === "awaiting_approval" ? approvalRequestOf(selected.reconcile_reason ?? "") : null);
 
   return (
     <section aria-labelledby="scoped-syncs-heading" className="grid gap-4 border-t border-border pt-4">
@@ -197,6 +235,14 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
               })}
             </p>
           ) : null}
+          {waitingFor ? (
+            <p role="status" className="rounded-control border border-border p-3">
+              {t("secrets.scopedSyncs.awaitingApproval", { request: waitingFor })}{" "}
+              <Link to="/approvals" className="text-primary underline">
+                {t("secrets.scopedSyncs.openApprovals")}
+              </Link>
+            </p>
+          ) : null}
           {(selected.keys ?? []).length > 0 ? (
             <ul className="grid gap-1" aria-label={t("secrets.scopedSyncs.keysLabel")}>
               {(selected.keys ?? []).map((key) => (
@@ -214,9 +260,18 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
               {t("secrets.scopedSyncs.preview")}
             </Button>
             {canWrite ? (
-              <Button type="button" variant="outline" onClick={() => void switchMode()} disabled={busy}>
-                {selected.mode === "auto" ? t("secrets.scopedSyncs.toManual") : t("secrets.scopedSyncs.toAuto")}
-              </Button>
+              <>
+                <Field label={t("secrets.scopedSyncs.changeMode")}>
+                  {(control) => (
+                    <Select {...control} value={nextMode} onChange={(event) => setNextMode(event.target.value as Mode)}>
+                      {modeOptions}
+                    </Select>
+                  )}
+                </Field>
+                <Button type="button" variant="outline" onClick={() => void switchMode()} disabled={busy || nextMode === selected.mode}>
+                  {t("secrets.scopedSyncs.setMode")}
+                </Button>
+              </>
             ) : null}
           </div>
           {plan ? (
@@ -272,10 +327,13 @@ export function ScopedSyncsWorkflow({ targets }: { targets: string[] }) {
               </Select>
             )}
           </Field>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={auto} onChange={(event) => setAuto(event.target.checked)} />
-            {t("secrets.scopedSyncs.autoLabel")}
-          </label>
+          <Field label={t("secrets.scopedSyncs.modeLabel")} description={t("secrets.scopedSyncs.modeHelp")}>
+            {(control) => (
+              <Select {...control} value={mode} onChange={(event) => setMode(event.target.value as Mode)}>
+                {modeOptions}
+              </Select>
+            )}
+          </Field>
           <Button type="submit" disabled={busy || !name.trim() || !source.trim() || !target}>
             {t("secrets.scopedSyncs.define")}
           </Button>

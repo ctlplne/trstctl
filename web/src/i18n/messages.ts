@@ -5548,6 +5548,10 @@ export const messages = {
     defaultMessage: "Auto",
     description: "Mode: applied when sources change.",
   },
+  "secrets.scopedSyncs.mode.approved": {
+    defaultMessage: "Approval-gated",
+    description: "A237-L1 mode: planned like auto, applied only once approved.",
+  },
   "secrets.scopedSyncs.mode.manual": {
     defaultMessage: "Manual",
     description: "Mode: waits for a reviewed apply.",
@@ -5571,14 +5575,6 @@ export const messages = {
   "secrets.scopedSyncs.preview": {
     defaultMessage: "Preview the plan",
     description: "Button: compute the value-free plan.",
-  },
-  "secrets.scopedSyncs.toAuto": {
-    defaultMessage: "Switch to auto",
-    description: "Button: make the sync automatic.",
-  },
-  "secrets.scopedSyncs.toManual": {
-    defaultMessage: "Switch to manual",
-    description: "Button: make the sync wait for review.",
   },
   "secrets.scopedSyncs.summary": {
     defaultMessage: "{changes} keys would change; {blocked} are blocked.",
@@ -5640,10 +5636,19 @@ export const messages = {
     defaultMessage: "Every key under the destination prefix",
     description: "Delete scope prefix.",
   },
-  "secrets.scopedSyncs.autoLabel": {
-    defaultMessage: "Apply automatically when sources change (nothing blocked)",
-    description: "Checkbox: auto mode.",
+  "secrets.scopedSyncs.modeLabel": { defaultMessage: "Mode", description: "A237-L1: how the sync is applied." },
+  "secrets.scopedSyncs.modeHelp": {
+    defaultMessage:
+      "Manual waits for a reviewed apply. Auto applies a plan with nothing blocked when the sources change. Approval-gated plans like auto but applies each plan only once members who write in the source approve it.",
+    description: "A237-L1: the three modes.",
   },
+  "secrets.scopedSyncs.changeMode": { defaultMessage: "Change mode", description: "A237-L1: the mode picker on an existing sync." },
+  "secrets.scopedSyncs.setMode": { defaultMessage: "Set mode", description: "A237-L1: apply the chosen mode." },
+  "secrets.scopedSyncs.awaitingApproval": {
+    defaultMessage: "This plan waits for its approvers: request {request}. It is applied once they approve it.",
+    description: "A237-L1: an approval-gated plan waits for approval.",
+  },
+  "secrets.scopedSyncs.openApprovals": { defaultMessage: "Open Approvals", description: "A237-L1: link to the approval queue." },
   "secrets.scopedSyncs.define": {
     defaultMessage: "Define scoped sync",
     description: "Button: define.",

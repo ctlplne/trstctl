@@ -5873,7 +5873,10 @@ blocked; a blocked or failed plan is recorded on the definition and writes nothi
 managed key's write or delete that fails for good raises one warning
 (`secret.scoped_sync.delivery_failed`) beside its status in `show`. The
 console's Secrets → Sync page defines, previews, applies and switches scoped syncs.
-Approval-gated convergence is not served.
+Approval-gated convergence (A237-L1): an `approved` definition is planned like an auto one,
+and each plan with changes is applied only after the tenant's required number of distinct
+approvers who write in the source's environment approve that exact plan. Leaving the mode,
+or removing such a definition, needs `access:write`.
 Migration and coexistence kit (A243) — served. A migration run reads an export in
 common formats — dotenv, JSON and YAML, per environment and folder — into project
 names, translating its references into the store's `${secret.<name>}` so chains stay

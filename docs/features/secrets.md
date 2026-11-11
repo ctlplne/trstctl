@@ -1899,9 +1899,23 @@ A definition is `manual` (it waits for a reviewed apply) or `auto`
 drift, it plans the sync again. A plan with changes and nothing blocked is applied exactly
 as a reviewed apply would be, and the receipt names the reconciler. A blocked or failed
 plan is recorded on the definition (`reconcile_status`, `reconcile_reason`) and writes
-nothing until someone reviews it. In the console, **Secrets → Sync** lists the scoped
-syncs. It defines new ones, previews and applies plans for `secrets:write` holders, and
-switches a sync between manual and auto.
+nothing until someone reviews it.
+
+A third mode, `approved`, is approval-gated convergence (A237-L1). The control plane
+plans an approved sync like an auto one. A plan with changes is applied only once the
+tenant's required number of distinct approvers approve that exact plan; two are required
+by default. The approvers are members who hold write in the source's environment, and the
+requester never approves its own request. Until then the definition reads
+`awaiting_approval`, naming the request (asked for by the sync's author). The next pass
+after the approval applies the plan, and the approval is used once. A manual apply of an
+approved sync waits for the same kind of approval, asked for by its caller. A changed plan
+asks again. Leaving the `approved` mode, or removing an approved sync, needs
+`access:write`, so the members it gates can't lift the gate themselves.
+
+In the console, **Secrets → Sync** lists the scoped syncs. `secrets:write` holders can
+define new ones, preview and apply plans, and set a sync's mode: manual, auto or
+approval-gated. An approval-gated sync names the request its plan waits for and links
+Approvals.
 
 ### The auth-method framework (F58)
 

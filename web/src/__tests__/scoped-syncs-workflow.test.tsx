@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { ScopedSyncsWorkflow } from "@/pages/secrets/ScopedSyncsWorkflow";
 
 const { apiMock, can } = vi.hoisted(() => ({
@@ -94,7 +95,7 @@ describe("A237 scoped syncs", () => {
     render(<ScopedSyncsWorkflow targets={["vault"]} />);
     await user.type(await screen.findByRole("textbox", { name: "Name" }), "payments-prod");
     await user.type(screen.getByRole("textbox", { name: "Source prefix" }), "payments/prod/");
-    await user.click(screen.getByRole("checkbox"));
+    await user.selectOptions(screen.getByLabelText("Mode"), "auto");
     await user.click(screen.getByRole("button", { name: "Define scoped sync" }));
     expect(apiMock.defineSecretScopedSync).toHaveBeenCalledWith({
       name: "payments-prod",
@@ -104,8 +105,45 @@ describe("A237 scoped syncs", () => {
       delete_scope: "none",
       mode: "auto",
     });
-    await user.click(await screen.findByRole("button", { name: "Switch to manual" }));
+    await user.selectOptions(await screen.findByLabelText("Change mode"), "manual");
+    await user.click(screen.getByRole("button", { name: "Set mode" }));
     expect(apiMock.setSecretScopedSyncMode).toHaveBeenCalledWith("s1", { mode: "manual" });
+  });
+
+  // A237-L1: an approval-gated sync names the request its plan waits for,
+  // from the reconciler's reason and from a refused apply, and links the
+  // approval queue.
+  it("names the approval an approval-gated plan waits for", async () => {
+    const waiting = {
+      ...sync,
+      mode: "approved",
+      reconcile_status: "awaiting_approval",
+      reconcile_reason: "1 changes await approval request 11111111-2222-4333-8444-555555555555",
+      last_reconcile_at: "2026-11-12T00:00:00Z",
+    };
+    apiMock.getSecretScopedSync.mockResolvedValue(waiting);
+    apiMock.previewSecretScopedSync.mockResolvedValue(plan);
+    apiMock.applySecretScopedSync.mockRejectedValue(
+      new Error(
+        "dual control: approval_required:s1 request_id=66666666-7777-4888-8999-000000000000 intent_digest=sha256:" +
+          "b".repeat(64) +
+          ": approval request awaits 2 distinct approval(s)",
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ScopedSyncsWorkflow targets={["vault"]} />
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Open" }));
+    expect(await screen.findByText("Mode: Approval-gated")).toBeInTheDocument();
+    const fromReconcile = await screen.findByText(/waits for its approvers: request 11111111-2222-4333-8444-555555555555/);
+    expect(within(fromReconcile).getByRole("link", { name: "Open Approvals" })).toHaveAttribute("href", "/approvals");
+    await user.click(screen.getByRole("button", { name: "Preview the plan" }));
+    await user.click(await screen.findByRole("button", { name: "Apply this plan" }));
+    expect(await screen.findByText(/waits for its approvers: request 66666666-7777-4888-8999-000000000000/)).toBeInTheDocument();
+    expect(apiMock.previewSecretScopedSync).toHaveBeenCalledTimes(1);
   });
 
   it("offers no define, apply or mode switch without secrets:write", async () => {
@@ -117,7 +155,7 @@ describe("A237 scoped syncs", () => {
     await user.click(await screen.findByRole("button", { name: "Preview the plan" }));
     await screen.findByRole("list", { name: "Plan" });
     expect(screen.queryByRole("button", { name: "Apply this plan" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Switch to auto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Set mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Define scoped sync" })).not.toBeInTheDocument();
   });
 });
