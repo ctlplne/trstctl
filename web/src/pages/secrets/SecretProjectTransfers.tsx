@@ -18,6 +18,19 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 
 type Mode = "promote" | "restore";
 
+// environmentFolders lists the folders of an environment the project view
+// shows secrets for (A236-L6): every parent path of a key, so "db/pg/user"
+// offers "db" and "db/pg". A restricted environment the caller is not granted
+// shows no secrets, so it offers only the whole environment.
+function environmentFolders(project: SecretProject, env: string): string[] {
+  const folders = new Set<string>();
+  for (const secret of project.environments?.find((candidate) => candidate.slug === env)?.secrets ?? []) {
+    const parts = secret.key.split("/");
+    for (let i = 1; i < parts.length; i++) folders.add(parts.slice(0, i).join("/"));
+  }
+  return [...folders].sort();
+}
+
 export function SecretProjectTransfers({ project, onApplied }: { project: SecretProject; onApplied: () => void }) {
   const { t } = useTranslation();
   const envs = (project.environments ?? []).map((env) => env.slug);
@@ -34,6 +47,7 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
   const [awaiting, setAwaiting] = useState<string | null>(null);
 
   const atISO = () => (at ? new Date(at).toISOString() : "");
+  const folders = environmentFolders(project, from);
 
   async function preview(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -127,7 +141,14 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
       <form onSubmit={(event) => void preview(event)} className="grid max-w-xl gap-3">
         <Field label={mode === "promote" ? t("secrets.transfers.from") : t("secrets.transfers.environment")}>
           {(control) => (
-            <Select {...control} value={from} onChange={(event) => setFrom(event.target.value)}>
+            <Select
+              {...control}
+              value={from}
+              onChange={(event) => {
+                setFrom(event.target.value);
+                setFolder("");
+              }}
+            >
               {envs.map((env) => (
                 <option key={env} value={env}>
                   {env}
@@ -154,7 +175,16 @@ export function SecretProjectTransfers({ project, onApplied }: { project: Secret
           </Field>
         )}
         <Field label={t("secrets.transfers.folder")} description={t("secrets.transfers.folderHelp")}>
-          {(control) => <Input {...control} value={folder} maxLength={256} onChange={(event) => setFolder(event.target.value)} />}
+          {(control) => (
+            <Select {...control} value={folder} onChange={(event) => setFolder(event.target.value)}>
+              <option value="">{t("secrets.transfers.wholeEnvironment")}</option>
+              {folders.map((path) => (
+                <option key={path} value={path}>
+                  {path}
+                </option>
+              ))}
+            </Select>
+          )}
         </Field>
         <Button type="submit" variant="outline" disabled={busy || !from || (mode === "promote" ? !to || to === from : !at)}>
           {t("secrets.transfers.preview")}

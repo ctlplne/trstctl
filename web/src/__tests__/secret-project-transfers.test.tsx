@@ -25,7 +25,17 @@ const project: SecretProject = {
   owner: "unknown",
   created_at: "2026-11-01T00:00:00Z",
   environments: [
-    { slug: "dev", restricted: false, access: "open", secrets: [] },
+    {
+      slug: "dev",
+      restricted: false,
+      access: "open",
+      secrets: [
+        { name: "orders/dev/db/password", key: "db/password", version: 3, owner: "unknown" },
+        { name: "orders/dev/db/pg/user", key: "db/pg/user", version: 1, owner: "unknown" },
+        { name: "orders/dev/app/token", key: "app/token", version: 2, owner: "unknown" },
+        { name: "orders/dev/root", key: "root", version: 1, owner: "unknown" },
+      ],
+    },
     { slug: "stage", restricted: false, access: "open", secrets: [] },
   ],
 };
@@ -146,6 +156,26 @@ describe("A236 promote and restore", () => {
     expect(screen.queryByText(/waits for its approvers/)).not.toBeInTheDocument();
   });
 
+  // A236-L6: the folder is picked from the source environment's folders,
+  // and choosing another source environment starts again from the whole one.
+  it("picks a folder of the source environment", async () => {
+    apiMock.previewSecretPromotion.mockResolvedValue(promotionPlan);
+    const user = userEvent.setup();
+    render(<SecretProjectTransfers project={project} onApplied={vi.fn()} />);
+    const picker = screen.getByLabelText("Folder (optional)");
+    expect(
+      within(picker)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Whole environment", "app", "db", "db/pg"]);
+    await user.selectOptions(picker, "db/pg");
+    await user.click(screen.getByRole("button", { name: "Preview the plan" }));
+    expect(apiMock.previewSecretPromotion).toHaveBeenCalledWith("orders", { from: "dev", to: "stage", folder: "db/pg" });
+    await user.selectOptions(screen.getByLabelText("From environment"), "stage");
+    expect(screen.getByLabelText("Folder (optional)")).toHaveValue("");
+    expect(within(screen.getByLabelText("Folder (optional)")).getAllByRole("option")).toHaveLength(1);
+  });
+
   it("restores a folder to a point in time", async () => {
     apiMock.previewSecretRestore.mockResolvedValue({
       project: "orders",
@@ -166,7 +196,7 @@ describe("A236 promote and restore", () => {
     await user.click(screen.getByRole("button", { name: "Restore" }));
     // jsdom sanitizes a datetime-local value typed key by key; set it whole.
     fireEvent.change(screen.getByLabelText("Restore to"), { target: { value: "2026-11-01T10:00:00" } });
-    await user.type(screen.getByLabelText("Folder (optional)"), "db");
+    await user.selectOptions(screen.getByLabelText("Folder (optional)"), "db");
     await user.click(screen.getByRole("button", { name: "Preview the plan" }));
     expect(await screen.findByText("Created since — kept")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Restore these secrets" }));

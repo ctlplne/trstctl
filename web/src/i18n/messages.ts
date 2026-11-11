@@ -5447,8 +5447,12 @@ export const messages = {
     description: "Folder path inside the environment.",
   },
   "secrets.transfers.folderHelp": {
-    defaultMessage: "Limit it to one folder, for example db.",
-    description: "Help for the folder field.",
+    defaultMessage: "Limit it to one folder of the source environment, or take the whole environment.",
+    description: "Help for the folder picker (A236-L6).",
+  },
+  "secrets.transfers.wholeEnvironment": {
+    defaultMessage: "Whole environment",
+    description: "A236-L6: the folder picker's first choice, every secret of the environment.",
   },
   "secrets.transfers.preview": {
     defaultMessage: "Preview the plan",
