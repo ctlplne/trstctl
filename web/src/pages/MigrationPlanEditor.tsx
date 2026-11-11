@@ -5,6 +5,7 @@ import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -26,6 +27,9 @@ const CONTROL_PLANE_EXECUTOR = "control-plane";
 type PlanForm = {
   plan_id: string;
   new_authority_id: string;
+  // P3-L3: a planned CA switch revokes each predecessor once its successor is
+  // verified live.
+  revoke_predecessors: boolean;
   waves: { id: string; members: Member[] }[];
 };
 
@@ -33,6 +37,7 @@ const newMember = (): Member => ({ identity_id: "", agent_id: "", trust_anchor_p
 const initialPlan: PlanForm = {
   plan_id: "",
   new_authority_id: "",
+  revoke_predecessors: false,
   waves: [{ id: "canary", members: [newMember()] }],
 };
 
@@ -44,6 +49,7 @@ const advancedMemberSchema = z.strictObject({
 const advancedSchema = z.strictObject({
   plan_id: z.string().trim().min(1),
   new_authority_id: z.string().trim().min(1),
+  revoke_predecessors: z.boolean().optional(),
   waves: z.array(z.strictObject({ id: z.string().trim().min(1), ordinal: z.number().int().positive(), members: z.array(advancedMemberSchema).min(1) })).min(1),
 });
 
@@ -63,8 +69,10 @@ function parseAdvanced(value: string): MigrationRunStartRequest | null {
 }
 
 function requestFromForm(form: PlanForm): MigrationRunStartRequest {
+  const { revoke_predecessors, ...plan } = form;
   return {
-    ...form,
+    ...plan,
+    ...(revoke_predecessors ? { revoke_predecessors: true } : {}),
     waves: form.waves.map((wave, index) => ({
       ...wave,
       ordinal: index + 1,
@@ -104,6 +112,7 @@ export function MigrationPlanEditor({
       .object({
         plan_id: z.string().trim().min(1, required),
         new_authority_id: z.string().trim().min(1, required),
+        revoke_predecessors: z.boolean(),
         waves: z.array(z.object({ id: z.string().trim().min(1, required), members: z.array(member).min(1, required) })).min(1, required),
       })
       .superRefine((plan, context) => {
@@ -296,6 +305,13 @@ export function MigrationPlanEditor({
                       </Select>
                     )}
                   </Field>
+                  <label className="flex items-start gap-2 text-body font-medium">
+                    <Checkbox className="mt-1" {...register("revoke_predecessors")} />
+                    <span>
+                      {t("migration.form.revokePredecessors")}
+                      <span className="mt-1 block text-caption font-normal text-muted-foreground">{t("migration.form.revokePredecessorsHelp")}</span>
+                    </span>
+                  </label>
                 </div>
               ) : null}
               {step === 1 ? (
@@ -438,6 +454,8 @@ export function MigrationPlanEditor({
                     <dd>
                       {selectedAuthority?.common_name ?? planForReview.new_authority_id} <code className="break-all">{planForReview.new_authority_id}</code>
                     </dd>
+                    <dt className="text-muted-foreground">{t("migration.form.predecessors")}</dt>
+                    <dd>{planForReview.revoke_predecessors ? t("migration.form.predecessorsRevoked") : t("migration.form.predecessorsKept")}</dd>
                   </dl>
                   {(planForReview.waves ?? []).map((wave, index) => (
                     <Card key={`${wave.id}-${index}`}>

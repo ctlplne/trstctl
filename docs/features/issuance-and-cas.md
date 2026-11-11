@@ -496,7 +496,8 @@ is there. Missing wire evidence is never recorded as a failed member. When a mem
 both proofs, the observer's findings for its predecessor certificate at that endpoint
 are marked remediated, naming the live receipt and the observed connections.
 
-**Planned CA switch (P3).** A run started with `"revoke_predecessors": true` moves its
+**Planned CA switch (P3).** A run started with `"revoke_predecessors": true` (on the
+Migration page, "Revoke each predecessor once its successor is verified live") moves its
 members to the new issuer and retires what they served before. Each cohort runs the
 same gates — the new root distributed and read back first, then the successor issued
 and deployed, then the signed live receipt that the endpoint serves the new chain

@@ -119,6 +119,51 @@ describe("migration operator plan", () => {
     });
   });
 
+  // P3-L3: a planned CA switch can revoke each predecessor once its successor
+  // is verified live; the choice is reviewed, sent, and shown on the run.
+  it("starts a planned CA switch that revokes each predecessor", async () => {
+    const user = userEvent.setup();
+    apiMock.assessMigration.mockResolvedValue({
+      plan_id: "ca-switch",
+      members: 1,
+      migratable: 1,
+      guidance: "Any unknown blocks the start of a migration.",
+      unknowns: [],
+      waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+    });
+    apiMock.startMigrationRun.mockResolvedValue({ id: "run-switch", plan_id: "ca-switch", status: "running", revoke_predecessors: true, waves: [] });
+    renderRoute();
+    await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.type(screen.getByLabelText("Plan ID"), "ca-switch");
+    await user.selectOptions(await screen.findByLabelText("New CA authority"), authorityID);
+    const revoke = screen.getByRole("checkbox", { name: /Revoke each predecessor once its successor is verified live/ });
+    expect(revoke).not.toBeChecked();
+    await user.click(revoke);
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    await user.selectOptions(screen.getByLabelText("Identity"), identityID);
+    await user.selectOptions(screen.getByLabelText("Host agent"), agentID);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(screen.getByText("Revoked once each successor is verified live")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    await user.click(await screen.findByRole("button", { name: "Start migration" }));
+    expect(apiMock.startMigrationRun).toHaveBeenCalledWith({
+      plan_id: "ca-switch",
+      new_authority_id: authorityID,
+      revoke_predecessors: true,
+      waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: identityID, agent_id: agentID, trust_anchor_path: "/etc/trstctl/next-root.pem" }] }],
+    });
+  });
+
+  it("says on a run whether it revokes predecessors", async () => {
+    const user = userEvent.setup();
+    apiMock.migrationRuns.mockResolvedValue({
+      items: [{ id: "run-switch", plan_id: "ca-switch", status: "running", revoke_predecessors: true, waves: [] }],
+    });
+    renderRoute();
+    await user.click(await screen.findByText("Run history, wave evidence, and rollback controls"));
+    expect(await screen.findByText("Revoked once each successor is verified live")).toBeInTheDocument();
+  });
+
   it("keeps JSON as an explicit advanced path and rejects incomplete input before the API", async () => {
     const user = userEvent.setup();
     renderRoute();

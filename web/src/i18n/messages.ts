@@ -16231,6 +16231,18 @@ export const messages = {
     defaultMessage: "Review every mapping. Checking readiness changes no trust; starting the run is a separate decision.",
     description: "Exact-plan review guidance.",
   },
+  "migration.form.revokePredecessors": {
+    defaultMessage: "Revoke each predecessor once its successor is verified live",
+    description: "P3-L3: planned CA switch toggle on the migration plan.",
+  },
+  "migration.form.revokePredecessorsHelp": {
+    defaultMessage:
+      "For a planned CA switch: each member's previous certificate is revoked (superseded) through the trstctl CA that issued it after the successor is verified live. A failed verification pauses the run, and a resume retries the failed members.",
+    description: "P3-L3: what revoking predecessors does.",
+  },
+  "migration.form.predecessors": { defaultMessage: "Predecessors", description: "P3-L3: review label for what happens to each member's previous certificate." },
+  "migration.form.predecessorsRevoked": { defaultMessage: "Revoked once each successor is verified live", description: "P3-L3: the run revokes predecessors." },
+  "migration.form.predecessorsKept": { defaultMessage: "Kept until they expire", description: "P3-L3: the run leaves predecessors to expire." },
   "migration.form.planId": {
     defaultMessage: "Plan ID",
     description: "Operator-chosen migration plan identifier.",

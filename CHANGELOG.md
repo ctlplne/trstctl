@@ -2,6 +2,11 @@
 
 ### Added
 
+- The console starts a planned CA switch (P3-L3). A migration run that revokes each predecessor once
+  its successor is verified live could be started only through the API or CLI. The Migration page's
+  plan now offers "Revoke each predecessor once its successor is verified live", shows the choice in
+  the plan review and the start summary, sends `revoke_predecessors` only when chosen, and says on a
+  run that it revokes predecessors.
 - The console shows device first-boot batches (P12-L3). Factory batches were reachable only through
   the API and CLI. The CA hierarchy page's Device first-boot batches panel lists each batch's quota,
   birth lifetime and reconciled births, shows a batch's devices with their birth certificates and

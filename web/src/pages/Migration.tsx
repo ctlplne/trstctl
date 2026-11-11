@@ -190,6 +190,8 @@ export function Migration() {
                     <dd className="break-all font-mono text-xs">{reviewed.new_authority_id}</dd>
                     <dt className="text-muted-foreground">{t("migration.design.waves")}</dt>
                     <dd>{reviewed.waves.length}</dd>
+                    <dt className="text-muted-foreground">{t("migration.form.predecessors")}</dt>
+                    <dd>{reviewed.revoke_predecessors ? t("migration.form.predecessorsRevoked") : t("migration.form.predecessorsKept")}</dd>
                   </dl>
                   <Button className="mt-4" type="button" loading={busy} onClick={() => void perform("start")}>
                     {t("migration.design.startRun")}
@@ -218,6 +220,7 @@ export function Migration() {
                 <p className="mt-1 text-caption text-muted-foreground">
                   <code className="break-all">{run.id}</code> · {run.status}
                 </p>
+                {run.revoke_predecessors ? <p className="mt-1 text-caption">{t("migration.form.predecessorsRevoked")}</p> : null}
                 {run.halt_reason ? <p className="mt-2 text-sm text-status-warning">{run.halt_reason}</p> : null}
                 <ol className="mt-4 grid gap-3">
                   {run.waves.map((wave) => {
