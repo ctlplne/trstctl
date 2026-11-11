@@ -18,6 +18,7 @@ import { useCapabilities, useCapabilityAction } from "@/lib/capabilities";
 import { useApiQuery } from "@/lib/query";
 import { formatCommandArgv, leaseMetadataOnly } from "./SecretsPageParts";
 import { DynamicLeaseEvidence } from "./DynamicLeaseEvidence";
+import { TOTPSeedReplacePanel } from "./TOTPSeedReplacePanel";
 import { useDynamicLeaseMetadata } from "./useDynamicLeaseMetadata";
 
 type DynamicLeaseForm = {
@@ -410,6 +411,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
                   ) : null}
                 </CardContent>
               </Card>
+              {selectedProvider?.type === "totp" ? <TOTPSeedReplacePanel provider={selectedProvider.id} /> : null}
               <Card>
                 <CardHeader>
                   <CardTitle>{selectedSetup?.label ?? t("secrets.dynamic.requirements")}</CardTitle>

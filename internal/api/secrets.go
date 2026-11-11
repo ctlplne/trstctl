@@ -827,6 +827,15 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "value is required"))
 		return
 	}
+	a.rotateApplicationSecret(w, r, name, idempotencyKey, req)
+}
+
+// rotateApplicationSecret writes req.Value as the next version of secret name,
+// as PUT /api/v1/secrets/store/{name} does: the caller's write access to the
+// name (restricted environments included), the request binding, the mutation
+// fence and the event. A TOTP provider's seed replacement (A239-L5) writes
+// its seed reference through it too.
+func (a *API) rotateApplicationSecret(w http.ResponseWriter, r *http.Request, name, idempotencyKey string, req secretWriteRequest) {
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
 		a.writeError(w, err)

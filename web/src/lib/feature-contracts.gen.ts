@@ -5905,12 +5905,14 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: getDynamicSecretLease",
             "OpenAPI operationId: renewDynamicSecretLease",
             "OpenAPI operationId: revokeDynamicSecretLease",
+            "OpenAPI operationId: replaceTOTPProviderSeed",
             "CLI command: secrets leases providers",
             "CLI command: secrets leases preview",
             "CLI command: secrets leases issue",
             "CLI command: secrets leases get",
             "CLI command: secrets leases renew",
-            "CLI command: secrets leases revoke"
+            "CLI command: secrets leases revoke",
+            "CLI command: secrets leases totp-seed"
           ]
         }
       },

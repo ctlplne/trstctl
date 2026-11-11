@@ -1241,6 +1241,7 @@ public final class OpenApiSchemas {
       "SwitchingWaveRollbackRequest",
       "SystemDependency",
       "SystemReadout",
+      "TOTPSeedReplaceRequest",
       "TSACertificate",
       "TSACertificateList",
       "TSAQualification",

@@ -2,6 +2,12 @@
 
 ### Added
 
+- A TOTP provider's seed is replaced through the API (A239-L5): `POST
+  /api/v1/secrets/leases/providers/{provider}/totp-seed` (`trstctl secrets leases totp-seed`) takes the
+  newly enrolled seed and a current code from it, checks the code (one step of skew), then writes the seed
+  as the next version of the provider's `secret://` reference through the secret store's own write path.
+  The next lease's code comes from it. A seed in a `file:` reference is replaced in the file. The console's
+  TOTP provider view has a Replace the seed form.
 - LDAP leases over StartTLS (A239-L3): a generic LDAP provider with `start_tls` connects to the directory's
   plain port (389) and upgrades with StartTLS, verifying the directory's certificate before the
   administrator binds. A refused or failed upgrade ends the connection, never falling back to plaintext.

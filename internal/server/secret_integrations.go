@@ -300,6 +300,23 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 
 func (p *configuredDynamicProvider) Name() string { return p.id }
 
+// DynamicSecretTOTPSeed is a TOTP provider's seed reference and code
+// parameters (A239-L5): where a replacement seed is stored, and how its proof
+// code is checked. ok is false for every other type.
+func (p *configuredDynamicProvider) DynamicSecretTOTPSeed() (ref string, digits int, period time.Duration, algorithm string, ok bool) {
+	if p.cfg.Type != "totp" {
+		return "", 0, 0, "", false
+	}
+	if raw := strings.TrimSpace(p.cfg.Period); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return "", 0, 0, "", false
+		}
+		period = parsed
+	}
+	return strings.TrimSpace(p.cfg.SeedRef), p.cfg.Digits, period, p.cfg.Algorithm, true
+}
+
 // DynamicSecretProviderType is the non-secret backend family displayed by the
 // operator review. It deliberately does not expose endpoint or credential refs.
 func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return p.cfg.Type }

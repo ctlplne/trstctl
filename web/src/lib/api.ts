@@ -3060,6 +3060,7 @@ export interface Api {
   /** C-S3 (DA-02): the event-sourced issued-session ledger. */
   machineSessions(options?: { limit?: number }): Promise<MachineSessionList>;
   revokeMachineSession(id: string): Promise<MachineSession>;
+  replaceTOTPProviderSeed(provider: string, input: { seed: string; code: string }): Promise<SecretMeta>;
   disableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
   enableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
   previewShare(input: SharePreviewRequest): Promise<SharePreview>;
@@ -4270,6 +4271,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),
   machineSessions: (options) => req<MachineSessionList>(`/api/v1/secrets/sessions${options?.limit ? `?limit=${options.limit}` : ""}`),
   revokeMachineSession: (id) => mutate<MachineSession>("POST", `/api/v1/secrets/sessions/${encodeURIComponent(id)}/revoke`),
+  replaceTOTPProviderSeed: (provider, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/leases/providers/${encodeURIComponent(provider)}/totp-seed`, input),
   disableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/disable`),
   enableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/enable`),
   previewShare: (input) => postRead<SharePreview>("/api/v1/secrets/shares/preview", input),

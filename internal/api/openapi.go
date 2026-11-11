@@ -7267,6 +7267,10 @@ func componentSchemas() map[string]*Schema {
 	secretRotateReq := object(map[string]*Schema{
 		"value": str(),
 	}, "value")
+	totpSeedReplaceReq := object(map[string]*Schema{
+		"seed": {Type: "string", Description: "The new base32 seed, as the identity provider's enrollment shows it; stored, never returned."},
+		"code": {Type: "string", Description: "A code an authenticator made from the new seed now; it proves the seed and the clock before the seed is stored."},
+	}, "seed", "code")
 	secretImportReq := object(map[string]*Schema{
 		"prefix": str(), "values": {Type: "object", AdditionalProperties: str()},
 	}, "values")
@@ -9536,6 +9540,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretAccessPreviewRequest":      secretAccessPreviewReq,
 		"SecretAccessPreview":             secretAccessPreview,
 		"SecretRotateRequest":             secretRotateReq,
+		"TOTPSeedReplaceRequest":          totpSeedReplaceReq,
 		"SecretImportRequest":             secretImportReq,
 		"SecretImportResponse":            secretImportResp,
 		"SecretRecoverRequest":            secretRecoverReq,

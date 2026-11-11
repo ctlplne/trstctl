@@ -58532,6 +58532,23 @@
         ],
         "type": "object"
       },
+      "TOTPSeedReplaceRequest": {
+        "properties": {
+          "code": {
+            "description": "A code an authenticator made from the new seed now; it proves the seed and the clock before the seed is stored.",
+            "type": "string"
+          },
+          "seed": {
+            "description": "The new base32 seed, as the identity provider's enrollment shows it; stored, never returned.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seed",
+          "code"
+        ],
+        "type": "object"
+      },
       "TSACertificate": {
         "properties": {
           "cert_pem": {
@@ -104080,6 +104097,83 @@
         ],
         "summary": "List tenant-configured dynamic-secret providers and secret-free setup requirements",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/leases/providers/{provider}/totp-seed": {
+      "post": {
+        "operationId": "replaceTOTPProviderSeed",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "TOTP provider id",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TOTPSeedReplaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMeta"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace a TOTP provider's seed with a newly enrolled one, proven by a current code from it, as the next version of its secret:// seed reference",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/leases/{lease_id}": {

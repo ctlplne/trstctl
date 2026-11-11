@@ -142,6 +142,36 @@ func (b *TOTPBackend) CreateCredential(_ context.Context, req GenerateRequest) (
 	return "totp-step-" + strconv.FormatInt(step, 10), credential, nil
 }
 
+// VerifyCode reports whether code is the seed's code for the current step or
+// one step either side (an authenticator's clock skew), compared in constant
+// time. A replacement seed is proven by a code from it before it is stored
+// (A239-L5).
+func (b *TOTPBackend) VerifyCode(code []byte) (bool, error) {
+	now := b.now().Unix()
+	if now < 0 {
+		return false, errors.New("dynsecret totp: the clock is before 1970")
+	}
+	step := now / b.period
+	match := false
+	err := b.seed.Use(func(seed []byte) error {
+		for _, s := range []int64{step - 1, step, step + 1} {
+			if s < 0 {
+				continue
+			}
+			want, err := crypto.HOTP(seed, uint64(s), b.digits, b.algorithm) // #nosec G115 -- s is checked non-negative above (CWE-190)
+			if err != nil {
+				return err
+			}
+			if crypto.ConstantTimeEqual(want, code) {
+				match = true
+			}
+			secret.Wipe(want)
+		}
+		return nil
+	})
+	return match, err
+}
+
 // Revoke implements Backend. A code can't be withdrawn: it lapses at the end
 // of its step, which the lease already records as its expiry.
 func (b *TOTPBackend) Revoke(context.Context, string) error { return nil }

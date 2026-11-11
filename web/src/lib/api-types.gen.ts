@@ -12521,6 +12521,11 @@ export interface SystemReadout {
   version: string;
 }
 
+export interface TOTPSeedReplaceRequest {
+  code: string;
+  seed: string;
+}
+
 export interface TSACertificate {
   cert_pem: string;
   cert_sha256: string;

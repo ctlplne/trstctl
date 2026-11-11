@@ -873,6 +873,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "store", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/store/{name}", Summary: "Delete a stored secret"},
 	{Name: []string{"secrets", "approvals", "approve"}, Method: "POST", Path: "/api/v1/secrets/store/approvals/{name}", Body: bodyApprovalFile, Summary: "Approve an exact immutable secret-store change request"},
 	{Name: []string{"secrets", "leases", "providers"}, Method: "GET", Path: "/api/v1/secrets/leases/providers", Summary: "List configured dynamic-secret providers and safe setup requirements"},
+	{Name: []string{"secrets", "leases", "totp-seed"}, Method: "POST", Path: "/api/v1/secrets/leases/providers/{provider}/totp-seed", Body: bodyFile, Summary: "Replace a TOTP provider's seed with a newly enrolled one, proven by a current code from it"},
 	{Name: []string{"secrets", "leases", "preview"}, Method: "POST", Path: "/api/v1/secrets/leases/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact effect-free dynamic-secret lease plan"},
 	{Name: []string{"secrets", "leases", "issue"}, Method: "POST", Path: "/api/v1/secrets/leases", Body: bodyFile, Summary: "Issue a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "get"}, Method: "GET", Path: "/api/v1/secrets/leases/{lease_id}", Summary: "Get dynamic secret lease metadata"},

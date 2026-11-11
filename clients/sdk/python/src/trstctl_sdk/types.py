@@ -17423,6 +17423,15 @@ SystemReadout = TypedDict(
     total=False,
 )
 
+TOTPSeedReplaceRequest = TypedDict(
+    'TOTPSeedReplaceRequest',
+    {
+        'code': str,
+        'seed': str,
+    },
+    total=False,
+)
+
 TSACertificate = TypedDict(
     'TSACertificate',
     {

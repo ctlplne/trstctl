@@ -2750,6 +2750,18 @@ allowed role reads the same seed's codes, so `role_bindings` is not used. A code
 can't be withdrawn or renewed; revoking the lease closes it, and the code lapses
 at `valid_until`.
 
+When the account's MFA is enrolled again, a seed kept in the tenant secret store
+(`secret://`) is replaced through the API (A239-L5): `POST
+/api/v1/secrets/leases/providers/{provider}/totp-seed` (`trstctl-cli secrets leases
+totp-seed <provider> -f body.json`) takes the new `seed` and a `code` an
+authenticator made from it now. The code proves the seed and the clocks (the
+current step or one either side). Only then is the seed written, as the next
+version of the reference, through the secret store's own write path: the caller
+needs write access to that name, restricted environments included. The next
+lease's code comes from it. A wrong code, or a seed that isn't base32 of at least
+80 bits, is refused (422) and nothing is written. A seed in a `file:` reference is
+replaced in the file (409).
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",

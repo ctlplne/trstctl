@@ -104,7 +104,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		"rotateStaticSecret", "createSecretRotationSchedule", "listSecretRotationSchedules", "runDueSecretRotationSchedules",
 		"previewSecretSync", "syncSecret", "receiveSecretRepositoryWebhook", "ingestThirdPartySecretScan", "scanSecrets", "approveSecretChange",
 		"listDynamicSecretProviders", "previewDynamicSecretLease", "issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",
-		"previewShare", "createShare", "redeemShare", "issuePKISecret", "previewMachineLogin", "machineLogin", "listMachineAuthMethods", "listMachineSessions",
+		"previewShare", "createShare", "redeemShare", "issuePKISecret", "previewMachineLogin", "machineLogin", "replaceTOTPProviderSeed", "listMachineAuthMethods", "listMachineSessions",
 		"revokeMachineSession", "revokeOwnMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod",
 		"createSecretProject", "listSecretProjects", "getSecretProject", "addSecretProjectEnvironment", "renameSecretProject", "renameSecretProjectEnvironment", "putSecretProjectMember", "deleteSecretProjectMember",
 		"previewSecretPromotion", "applySecretPromotion", "previewSecretRestore", "applySecretRestore",

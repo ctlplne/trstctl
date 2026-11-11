@@ -9906,6 +9906,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/leases/providers/{provider}/totp-seed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace a TOTP provider's seed with a newly enrolled one, proven by a current code from it, as the next version of its secret:// seed reference */
+        post: operations["replaceTOTPProviderSeed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/leases/{lease_id}": {
         parameters: {
             query?: never;
@@ -27700,6 +27717,12 @@ export interface components {
             started_at: string;
             uptime_seconds: number;
             version: string;
+        };
+        TOTPSeedReplaceRequest: {
+            /** @description A code an authenticator made from the new seed now; it proves the seed and the clock before the seed is stored. */
+            code: string;
+            /** @description The new base32 seed, as the identity provider's enrollment shows it; stored, never returned. */
+            seed: string;
         };
         TSACertificate: {
             cert_pem: string;
@@ -57330,6 +57353,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DynamicSecretProviderCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceTOTPProviderSeed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description TOTP provider id */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TOTPSeedReplaceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMeta"];
                 };
             };
             /** @description client error */

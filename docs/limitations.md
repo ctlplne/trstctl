@@ -5551,7 +5551,9 @@ when off, requiring a KEK when on):
   nothing, with no plaintext fallback. TOTP (A239) is proven with stock
   oathtool: it computes the leased code for the lease's time step, accepts it
   there and rejects it one step later; a renewal is refused, and revocation only
-  closes the lease (the code lapses at `valid_until`). OAuth 2.0 access tokens
+  closes the lease (the code lapses at `valid_until`). A seed kept in the tenant
+  secret store is replaced through the API with a current code from the new seed
+  (A239-L5); a seed in a file is replaced in the file. OAuth 2.0 access tokens
   (A239) are proven against stock Keycloak 26.8.1: a lease's token carries only
   its role's scope, stock curl reads the realm through Keycloak's admin API with
   it, a renewal is refused, and after the lease is revoked (RFC 7009, through the

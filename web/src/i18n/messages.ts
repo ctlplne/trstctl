@@ -8633,6 +8633,28 @@ export const messages = {
     defaultMessage: "Copy this directly to the workload. Do not put it in tickets, chat, logs, screenshots, or browser storage.",
     description: "Dynamic lease credential custody warning.",
   },
+  "secrets.dynamic.totpSeed.title": { defaultMessage: "Replace the seed", description: "TOTP provider (A239-L5): seed replacement panel title." },
+  "secrets.dynamic.totpSeed.description": {
+    defaultMessage:
+      "When the account's MFA is enrolled again, bring the new seed and a code your authenticator makes from it now. The code is checked before the seed is stored, as the next version of the provider's secret:// seed reference, and the next lease's code comes from it.",
+    description: "TOTP provider: what replacing the seed does.",
+  },
+  "secrets.dynamic.totpSeed.seed": { defaultMessage: "New seed", description: "TOTP provider: the new base32 seed field." },
+  "secrets.dynamic.totpSeed.seedHelp": {
+    defaultMessage: "Base32, as the identity provider's enrollment shows it. It is stored, never shown again.",
+    description: "TOTP provider: the new seed field's help.",
+  },
+  "secrets.dynamic.totpSeed.code": { defaultMessage: "Current code from the new seed", description: "TOTP provider: the proof code field." },
+  "secrets.dynamic.totpSeed.codeHelp": {
+    defaultMessage: "The code your authenticator shows for the new seed right now.",
+    description: "TOTP provider: the proof code field's help.",
+  },
+  "secrets.dynamic.totpSeed.replace": { defaultMessage: "Replace seed", description: "TOTP provider: replace the seed action." },
+  "secrets.dynamic.totpSeed.failed": { defaultMessage: "The seed was not replaced", description: "TOTP provider: seed replacement failed title." },
+  "secrets.dynamic.totpSeed.replaced": {
+    defaultMessage: "The seed is now version {version} of {name}; the next lease's code comes from it.",
+    description: "TOTP provider: the seed was replaced.",
+  },
   "secrets.dynamic.sshKeyTitle": {
     defaultMessage: "Reveal-once SSH private key for {id}",
     description: "SSH certificate lease (A239-L11): the private key's reveal title.",
