@@ -129,7 +129,8 @@ func (b *RedfishBackend) do(ctx context.Context, method, path, token string, hea
 	}
 	resp, err := b.client.Do(req) // #nosec G704 -- the operator's configured controller through the pinned, egress-guarded client (CWE-918)
 	if err != nil {
-		return 0, nil, nil, errors.New("dynsecret redfish: the controller did not answer")
+		// A dial, TLS handshake or deadline reads as unreachable (DEV-D1).
+		return 0, nil, nil, withSignInClass(classifyNetwork(err), errors.New("dynsecret redfish: the controller did not answer"))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, networkAPIMaxBody+1))
@@ -161,6 +162,11 @@ func (b *RedfishBackend) session(ctx context.Context, user string, password []by
 	// token is what a session needs: DMTF's reference client accepts any
 	// success that carries one, and DMTF's reference mockup answers 204.
 	token, location := header.Get("X-Auth-Token"), header.Get("Location")
+	if status == http.StatusUnauthorized {
+		// DSP0266: a session refused for its credentials is 401, the rejected
+		// class (DEV-D1).
+		return "", "", fmt.Errorf("%w: dynsecret redfish: the controller refused %s's session (HTTP %d)", ErrSignInRejected, user, status)
+	}
 	if status < http.StatusOK || status >= http.StatusMultipleChoices || token == "" {
 		return "", "", fmt.Errorf("dynsecret redfish: the controller refused %s's session (HTTP %d)", user, status)
 	}

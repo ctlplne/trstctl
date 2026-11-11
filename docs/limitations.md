@@ -9795,7 +9795,13 @@ session cookie, vim25's fault encoding and the discovery answers interoperate, a
 session it opens is logged out. vcsim accepts a password change without storing it, so a
 new password's effect is proven by the stand-in, and on a real host by its Track B row.
 An `esxi` scan names a refused administrator sign-in (vim25's `InvalidLogin`) as
-`rejected` and a host that does not answer as `unreachable`. The `redfish` provider opens a
+`rejected` and a host that does not answer as `unreachable`, and so do the other device
+providers (DEV-D1): `redfish` and `vcenter-sso` (a session refused with 401, vCenter's
+`dir-cli` refusing the administrator with LDAP error 49, a root key the appliance's SSH
+refuses), A270's `iosxe` and `junos` (SSH refusing every credential after the device
+proves its pinned key) and `eos`, `fortigate` and `bigip` (eAPI or iControl REST sign-in
+refused with 401, a FortiOS API token refused with 401, a `/logincheck` that does not
+answer `1`). The `redfish` provider opens a
 session on any success that carries `X-Auth-Token` (DSP0266 has a service answer `201
 Created`; DMTF's reference mockup answers `204 No Content`), and it is proven against DMTF's
 stock Redfish Mockup Server serving DMTF's `public-rackmount1` mockup
@@ -9806,10 +9812,6 @@ a patched password back. The mockup authenticates nothing, so a new password's e
 proven by the stand-in, and on a real controller by its Track B row.
 
 What comes next:
-- The other device providers (`redfish`, `vcenter-sso` and A270's network devices)
-  naming a refused administrator sign-in `rejected` and a device that does not answer
-  `unreachable`, as `esxi` does; today their scans report a refused sign-in, and a
-  refused connection, as `error` (only a timeout reads `unreachable`).
 - A vCenter run that also confirms `dir-cli`'s output on vSphere 8.
 - A real controller run (HPE iLO's Track B row): iLO-specific privileges
   (`Oem.Hpe.Privileges`) and controllers that require `If-Match` on every PATCH.

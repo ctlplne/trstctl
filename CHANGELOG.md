@@ -632,6 +632,14 @@
 
 ### Fixed
 
+- Every device provider's scan says why it could not sign in (DEV-D1). A privileged-account scan
+  records a failure class (rejected, expired, locked, unreachable or error) so an operator knows
+  whether to fix the stored administrator credential or the network; after the `esxi` fix (A271-D1),
+  `redfish`, `vcenter-sso`, `iosxe`, `junos`, `eos`, `fortigate` and `bigip` still read a refused
+  sign-in, and a refused connection, as `error`. Each now reads its device's refusal (a 401 session
+  or sign-in, a refused FortiOS API token or `/logincheck`, vCenter `dir-cli`'s LDAP error 49, an SSH
+  host refusing every credential after proving its pinned key) as `rejected`, and a device that does
+  not answer as `unreachable`.
 - A backup set covers the PAM recording chunks waiting for the object store (found A278-D1). A278's
   staged recording chunks (`pam_recording_uploads`), each written with its outbox entry until the
   outbox worker stores it, were in no backup class, so a restore dropped chunks that were still on

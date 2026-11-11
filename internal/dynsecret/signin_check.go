@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -79,6 +80,28 @@ func classifyNetwork(err error) error {
 		return ErrSignInUnreachable
 	}
 	return nil
+}
+
+// classifySSH is the class of the crypto boundary's SSH refusals (DEV-D1): a
+// target the dial never reached is unreachable, and a host that proved its
+// pinned key and then refused the credential rejected it. Anything else has
+// no class.
+func classifySSH(err error) error {
+	switch {
+	case errors.Is(err, crypto.ErrSSHTargetUnreachable):
+		return ErrSignInUnreachable
+	case errors.Is(err, crypto.ErrSSHAuthenticationRefused):
+		return ErrSignInRejected
+	}
+	return nil
+}
+
+// withSignInClass wraps err in class, when it has one, keeping its text.
+func withSignInClass(class, err error) error {
+	if class == nil || err == nil {
+		return err
+	}
+	return fmt.Errorf("%w: %w", class, err)
 }
 
 // classifyPostgresSignIn maps a pgx connection error to its class. PostgreSQL

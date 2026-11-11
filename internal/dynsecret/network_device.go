@@ -138,7 +138,8 @@ func (b *NetworkDeviceBackend) run(ctx context.Context, steps []crypto.CLIStep) 
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("dynsecret %s: %w", b.vendor, err)
+		// The device's SSH refusals carry their sign-in class (DEV-D1).
+		return nil, withSignInClass(classifySSH(err), fmt.Errorf("dynsecret %s: %w", b.vendor, err))
 	}
 	return out, nil
 }
@@ -228,7 +229,7 @@ func (b *NetworkDeviceBackend) VerifyCredential(ctx context.Context, credential 
 		return err
 	}
 	if err := crypto.VerifySSHAccountPassword(ctx, b.target, parsed.Username, parsed.Password); err != nil {
-		return fmt.Errorf("dynsecret %s: %w", b.vendor, err)
+		return withSignInClass(classifySSH(err), fmt.Errorf("dynsecret %s: %w", b.vendor, err))
 	}
 	return nil
 }

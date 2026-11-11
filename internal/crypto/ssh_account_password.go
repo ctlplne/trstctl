@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 	"time"
 	"unicode/utf16"
@@ -176,6 +177,15 @@ var sshHostKeyAlgorithmGroups = [][]string{
 
 // dialPinnedSSH connects to the target, pins its host key and authenticates
 // as user; the returned func closes the client and its socket.
+// ErrSSHTargetUnreachable is a target the dial never reached (DEV-D1): no
+// sign-in exchange took place.
+var ErrSSHTargetUnreachable = errors.New("SSH account rotation target is unreachable")
+
+// ErrSSHAuthenticationRefused is a host that proved its pinned key and then
+// refused every credential offered (DEV-D1): the account or its password or
+// key is wrong.
+var ErrSSHAuthenticationRefused = errors.New("SSH account rotation authentication was refused")
+
 func dialPinnedSSH(ctx context.Context, target SSHAccountTarget, user string, auth ...ssh.AuthMethod) (*ssh.Client, func(), error) {
 	if target.Address == "" || user == "" || len(target.HostKeyFingerprint) < len("SHA256:")+1 || target.HostKeyFingerprint[:7] != "SHA256:" {
 		return nil, nil, errors.New("SSH account rotation requires a pinned target and an account")
@@ -201,7 +211,7 @@ func dialPinnedSSHWith(ctx context.Context, target SSHAccountTarget, user string
 	conn, err := dialer.DialContext(bounded, "tcp", target.Address)
 	if err != nil {
 		cancel()
-		return nil, nil, false, errors.New("SSH account rotation target is unreachable")
+		return nil, nil, false, ErrSSHTargetUnreachable
 	}
 	deadline, _ := bounded.Deadline()
 	_ = conn.SetDeadline(deadline)
@@ -242,7 +252,11 @@ func dialPinnedSSHWith(ctx context.Context, target SSHAccountTarget, user string
 	if err != nil {
 		release()
 		// Without a verified host key nothing was authenticated: another key
-		// was offered, or none of these algorithms is the host's.
+		// was offered, or none of these algorithms is the host's. With it, a
+		// host that answered every credential with a refusal refused them.
+		if verified && !mismatched && strings.Contains(err.Error(), "unable to authenticate") {
+			return nil, nil, false, ErrSSHAuthenticationRefused
+		}
 		return nil, nil, mismatched || !verified, errors.New("SSH account rotation host identity or authentication failed")
 	}
 	client := ssh.NewClient(connection, channels, requests)

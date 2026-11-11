@@ -297,8 +297,8 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
-| `internal/crypto/ssh_account_password.go:42` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/crypto/ssh_account_password.go:43` | a command path the profile runs, not a credential (CWE-798) |
+| `internal/crypto/ssh_account_password.go:44` | a command path the profile runs, not a credential (CWE-798) |
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `internal/discovery/adcs/endpoint_probe_test.go:15` | public logical reference fixture, never a credential value (CWE-798). |
@@ -3218,11 +3218,11 @@ not this file.
 | `internal/dynsecret/rabbitmq.go:212` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/rabbitmq.go:260` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/redfish.go:130` | the operator's configured controller through the pinned, egress-guarded client (CWE-918) |
-| `internal/dynsecret/signin_check.go:232` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
+| `internal/dynsecret/signin_check.go:255` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/snowflake.go:315` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
 | `internal/dynsecret/tailscale.go:197` | the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918) |
-| `internal/dynsecret/vcenter_sso.go:215` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |
-| `internal/dynsecret/vcenter_sso.go:229` | same configured appliance (CWE-918) |
+| `internal/dynsecret/vcenter_sso.go:222` | the operator's configured appliance through the pinned, egress-guarded client (CWE-918) |
+| `internal/dynsecret/vcenter_sso.go:239` | same configured appliance (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:53` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:60` | the runner's own lab search engine (CWE-918) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:65` | test calls the cluster its runner named (CWE-918) |

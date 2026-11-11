@@ -159,10 +159,17 @@ func (b *VCenterSSOBackend) dirCLI(ctx context.Context, command []byte) ([]byte,
 		})
 	})
 	if err != nil {
-		return nil, fmt.Errorf("dynsecret vcenter-sso: %w", err)
+		// The root shell's SSH refusals carry their sign-in class (DEV-D1).
+		return nil, withSignInClass(classifySSH(err), fmt.Errorf("dynsecret vcenter-sso: %w", err))
 	}
 	if bytes.Contains(out, []byte("dir-cli failed")) {
+		// LDAP error 49 is the directory refusing the administrator's user
+		// name and password: the rejected class (DEV-D1).
+		refused := bytes.Contains(out, []byte("Error 49: Invalid credentials"))
 		secret.Wipe(out)
+		if refused {
+			return nil, fmt.Errorf("%w: dynsecret vcenter-sso: dir-cli refused the administrator's credentials (LDAP error 49)", ErrSignInRejected)
+		}
 		return nil, errors.New("dynsecret vcenter-sso: dir-cli refused the command")
 	}
 	return out, nil
@@ -214,10 +221,13 @@ func (b *VCenterSSOBackend) VerifyCredential(ctx context.Context, credential []b
 	req.Header.Set("Authorization", authorization)
 	resp, err := b.client.Do(req) // #nosec G704 -- the operator's configured appliance through the pinned, egress-guarded client (CWE-918)
 	if err != nil {
-		return errors.New("dynsecret vcenter-sso: the appliance did not answer")
+		return withSignInClass(classifyNetwork(err), errors.New("dynsecret vcenter-sso: the appliance did not answer"))
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("%w: dynsecret vcenter-sso: the appliance refused %s's session (HTTP %d)", ErrSignInRejected, parsed.Username, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("dynsecret vcenter-sso: the appliance refused %s's session (HTTP %d)", parsed.Username, resp.StatusCode)
 	}

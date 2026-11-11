@@ -157,7 +157,8 @@ func (b *NetworkAPIBackend) do(ctx context.Context, method, path string, header 
 	}
 	resp, err := b.client.Do(req) // #nosec G704 -- the operator's configured device endpoint through the pinned, egress-guarded client (CWE-918)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("dynsecret %s: the device did not answer", b.vendor)
+		// A dial, TLS handshake or deadline reads as unreachable (DEV-D1).
+		return 0, nil, nil, withSignInClass(classifyNetwork(err), fmt.Errorf("dynsecret %s: the device did not answer", b.vendor))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, networkAPIMaxBody+1))
@@ -212,7 +213,7 @@ func (b *NetworkAPIBackend) eapi(ctx context.Context, user string, password []by
 	}
 	defer secret.Wipe(raw)
 	if status == http.StatusUnauthorized {
-		return nil, fmt.Errorf("dynsecret eos: the device refused %s's sign-in", user)
+		return nil, fmt.Errorf("%w: dynsecret eos: the device refused %s's sign-in", ErrSignInRejected, user)
 	}
 	var reply struct {
 		Result []json.RawMessage `json:"result"`
@@ -328,6 +329,9 @@ func (b *NetworkAPIBackend) set(ctx context.Context, account string, password []
 			var reply struct {
 				Status string `json:"status"`
 			}
+			if status == http.StatusUnauthorized {
+				return fmt.Errorf("%w: dynsecret fortigate: the device refused the API token (HTTP %d)", ErrSignInRejected, status)
+			}
 			if status != http.StatusOK || json.Unmarshal(raw, &reply) != nil || reply.Status != "success" {
 				return fmt.Errorf("dynsecret fortigate: the device refused the change (HTTP %d)", status)
 			}
@@ -382,6 +386,10 @@ func (b *NetworkAPIBackend) bigipLogin(ctx context.Context, user string, passwor
 		return nil, err
 	}
 	defer secret.Wipe(raw)
+	if status == http.StatusUnauthorized {
+		// iControl REST answers a refused user name or password with 401.
+		return nil, fmt.Errorf("%w: dynsecret bigip: the device refused %s's sign-in (HTTP %d)", ErrSignInRejected, user, status)
+	}
 	if status != http.StatusOK {
 		return nil, fmt.Errorf("dynsecret bigip: the device refused %s's sign-in (HTTP %d)", user, status)
 	}
@@ -467,6 +475,10 @@ func (b *NetworkAPIBackend) fortigateSignIn(ctx context.Context, user string, pa
 		if c.Name == "ccsrftoken" {
 			csrf = strings.Trim(c.Value, `"`)
 		}
+	}
+	if status == http.StatusUnauthorized || (status == http.StatusOK && !ok) {
+		// FortiOS answers a refused /logincheck with a body that is not "1".
+		return fmt.Errorf("%w: dynsecret fortigate: the device refused %s's sign-in", ErrSignInRejected, user)
 	}
 	if !ok || csrf == "" {
 		return fmt.Errorf("dynsecret fortigate: the device refused %s's sign-in", user)
@@ -561,6 +573,10 @@ func (b *NetworkAPIBackend) DiscoverPrivilegedAccounts(ctx context.Context) ([]p
 					Name       string `json:"name"`
 					AccProfile string `json:"accprofile"`
 				} `json:"results"`
+			}
+			if status == http.StatusUnauthorized {
+				// The REST API administrator's token was refused.
+				return fmt.Errorf("%w: dynsecret fortigate: the device refused the API token (HTTP %d)", ErrSignInRejected, status)
 			}
 			if status != http.StatusOK || json.Unmarshal(raw, &reply) != nil {
 				return fmt.Errorf("dynsecret fortigate: the administrator list was unreadable (HTTP %d)", status)
