@@ -2,6 +2,14 @@
 
 ### Added
 
+- The KMS wrap adapter reads AWS credentials from the platform (A200-L1). `trstctl-kms-wrap`'s
+  `aws.credential_source` takes `web_identity` (IRSA: the projected token exchanged at STS),
+  `container` (ECS task roles, EKS Pod Identity), `instance_metadata` (an EC2 instance role over
+  IMDSv2) or `default_chain` (those three in the AWS SDKs' order), reading the environment the AWS
+  SDKs read; `static` (an access key with its secret file) stays the default. Metadata endpoints are
+  reached only by a client pinned to AWS's link-local credential addresses or a loopback agent, with
+  no proxy and no redirects. The Helm chart's isolated signer can run under its own service account
+  (`signer.serviceAccount`), so an IRSA role annotation reaches the signer and not the control plane.
 - `trstctl-agent --edge-attest` writes the PKCS#11 lane's mint body (A175-L2). With a PKCS#11 edge key
   and `--edge-pkcs11-attestation-labels`, it reads the token's attestation chain of the key again,
   checks the leaf certifies the CSR's key, and writes a mode-0600 body with `key_provider: pkcs11`,

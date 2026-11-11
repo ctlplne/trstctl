@@ -64,8 +64,8 @@ const Purpose = "trstctl.kms-wrap.signer-keystore.v1"
 
 // Config is the adapter's JSON configuration: one block per provider kind, of
 // which the provider the signer names must be configured (Azure and PKCS#11
-// need theirs; AWS needs credentials; GCP needs a token). Credential values
-// are always file references.
+// need theirs; AWS needs a static key or a credential source; GCP needs a
+// token). Credential values are always file references.
 type Config struct {
 	AWS    AWSConfig    `json:"aws"`
 	GCP    GCPConfig    `json:"gcp"`
@@ -75,13 +75,30 @@ type Config struct {
 
 // AWSConfig reaches AWS KMS. Region may be left out when the key reference is
 // a key ARN, which names it.
+//
+// CredentialSource says where the credentials come from (A200-L1): static
+// (the default) is access_key_id with secret_access_key_file and an optional
+// session_token_file; web_identity exchanges the platform's projected token
+// (IRSA on EKS) at STS for role_arn; container reads an ECS task role or EKS
+// Pod Identity; instance_metadata reads an EC2 instance role over IMDSv2;
+// default_chain tries those three in that order, as the AWS SDKs do. Every
+// source but static reads the environment variables the AWS SDKs read
+// (AWS_ROLE_ARN, AWS_WEB_IDENTITY_TOKEN_FILE, AWS_CONTAINER_CREDENTIALS_*,
+// AWS_EC2_METADATA_*); role_arn, web_identity_token_file and
+// role_session_name override them, and sts_endpoint overrides the regional
+// STS endpoint.
 type AWSConfig struct {
 	Region                string   `json:"region,omitempty"`
 	Endpoint              string   `json:"endpoint,omitempty"`
 	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
+	CredentialSource      string   `json:"credential_source,omitempty"`
 	AccessKeyID           string   `json:"access_key_id,omitempty"`
 	SecretAccessKeyFile   string   `json:"secret_access_key_file,omitempty"`
 	SessionTokenFile      string   `json:"session_token_file,omitempty"`
+	RoleARN               string   `json:"role_arn,omitempty"`
+	WebIdentityTokenFile  string   `json:"web_identity_token_file,omitempty"`
+	RoleSessionName       string   `json:"role_session_name,omitempty"`
+	STSEndpoint           string   `json:"sts_endpoint,omitempty"`
 	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
 }
 
@@ -173,7 +190,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 		return nil, nil, err
 	}
 	defer input.Destroy()
-	p, err := newProvider(cfg, providerName, keyRef)
+	p, err := newProvider(ctx, cfg, providerName, keyRef, getenv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,10 +302,10 @@ func LoadConfig(path string) (Config, error) {
 }
 
 // newProvider builds the client for the provider the signer names.
-func newProvider(cfg Config, name, keyRef string) (provider, error) {
+func newProvider(ctx context.Context, cfg Config, name, keyRef string, getenv func(string) string) (provider, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "awskms", "aws", "aws-kms":
-		return newAWS(cfg.AWS, keyRef)
+		return newAWS(ctx, cfg.AWS, keyRef, getenv)
 	case "gcpkms", "gcp", "gcp-kms":
 		return newGCP(cfg.GCP)
 	case "azurekv", "azure", "azure-key-vault":

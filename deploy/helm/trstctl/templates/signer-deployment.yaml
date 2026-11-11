@@ -31,6 +31,12 @@ spec:
       labels:
         {{- include "trstctl.signerSelectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.signer.serviceAccount }}
+      {{- if or .create .name }}
+      # A200-L1: the signer's own account, for a cloud identity only it holds.
+      serviceAccountName: {{ include "trstctl.signerServiceAccountName" $ }}
+      {{- end }}
+      {{- end }}
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

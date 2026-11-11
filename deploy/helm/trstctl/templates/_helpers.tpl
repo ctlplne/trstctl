@@ -76,6 +76,16 @@ app.kubernetes.io/part-of: trstctl
 {{- end -}}
 
 {{/*
+The isolated signer pod's service account (A200-L1): the name given, else
+<fullname>-signer when the chart creates it.
+*/}}
+{{- define "trstctl.signerServiceAccountName" -}}
+{{- with .Values.signer.serviceAccount -}}
+{{- default (printf "%s-signer" (include "trstctl.fullname" $)) .name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Resolve the control-plane image reference (OPS-003).
 
 The release pipeline (.github/workflows/release.yml) tags every release image

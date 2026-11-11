@@ -3643,10 +3643,40 @@ holds one block per provider, with credentials only as file paths:
 
 | Provider | `keyRef` | What wraps | Credentials |
 |---|---|---|---|
-| `awskms` | a symmetric key's ARN (the region comes from it) or key ID with `region` set | KMS `Encrypt`/`Decrypt` with the encryption context `trstctl:purpose`; `Decrypt` names the key, so a blob from another key is refused | access key ID plus a secret file, optional session token file |
+| `awskms` | a symmetric key's ARN (the region comes from it) or key ID with `region` set | KMS `Encrypt`/`Decrypt` with the encryption context `trstctl:purpose`; `Decrypt` names the key, so a blob from another key is refused | access key ID plus a secret file, optional session token file; or a `credential_source` (IRSA web identity, ECS/EKS Pod Identity container credentials, an EC2 instance role, or the default chain) |
 | `gcpkms` | `projects/P/locations/L/keyRings/R/cryptoKeys/K` (the CryptoKey, not a version) | Cloud KMS `encrypt`/`decrypt` with associated data and CRC32C checks both ways | an OAuth access token file you keep fresh (workload identity) |
 | `azurekv` | `https://<vault>/keys/<name>[/<version>]` | `wrapkey`/`unwrapkey` with RSA-OAEP-256 for an RSA key, or `A256KW`/`CKM_AES_KEY_WRAP_PAD` for a Managed HSM AES key; without a version the current one wraps, and each data key records the version that wrapped it, so rotating the key's version keeps older ones opening | an access token file for `https://vault.azure.net` you keep fresh |
 | `pkcs11` | the `CKA_LABEL` of a non-extractable AES-256 key on the token | AES-256-GCM on the token, bound to the key store's purpose | the token's user PIN file |
+
+**AWS credentials.** `credential_source` says where the AWS adapter's
+credentials come from. `static` (the default) is `access_key_id` with
+`secret_access_key_file` and an optional `session_token_file`. The other
+sources take no static key and read the environment variables the AWS SDKs
+read, so the platform's own identity works unchanged:
+
+```json
+{"aws": {"credential_source": "default_chain", "region": "us-east-1"}}
+```
+
+| `credential_source` | Reads | Typical platform |
+|---|---|---|
+| `web_identity` | the projected token in `AWS_WEB_IDENTITY_TOKEN_FILE` for `AWS_ROLE_ARN`, exchanged at the regional STS endpoint (`AssumeRoleWithWebIdentity`); `role_arn`, `web_identity_token_file`, `role_session_name` and `sts_endpoint` override them | EKS with IRSA |
+| `container` | `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` (on `169.254.170.2`) or `AWS_CONTAINER_CREDENTIALS_FULL_URI`, with the token in `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` when set | ECS task roles, EKS Pod Identity |
+| `instance_metadata` | the instance role over IMDSv2 (a session token, then the role, then its credentials); `AWS_EC2_METADATA_SERVICE_ENDPOINT` overrides the address and `AWS_EC2_METADATA_DISABLED=true` turns it off | EC2 instance profiles |
+| `default_chain` | web identity when it is configured, else container credentials, else instance metadata, the order the AWS SDKs use | any of the above |
+
+The adapter resolves the credentials each time the signer runs it and keeps
+them in locked memory for that one operation. STS is reached under the same
+egress rules as KMS. Metadata endpoints are reached only by a client that
+dials AWS's link-local credential addresses (`169.254.169.254`,
+`fd00:ec2::254`, `169.254.170.2`, `169.254.170.23`, `fd00:ec2::23`) or a
+loopback agent, by address, with no proxy and no redirects. A container on EC2
+needs the instance's IMDSv2 hop limit at 2 to reach the metadata service. In
+the chart's isolated topology, give the signer pod its own service account
+(`signer.serviceAccount.create=true` with IRSA's
+`eks.amazonaws.com/role-arn` annotation, or `signer.serviceAccount.name` for an
+existing account a Pod Identity association covers), so only the signer holds
+the role; in the sidecar topology the signer shares `serviceAccount`.
 
 `pkcs11` needs the adapter's cgo build, which ships in the HSM signer image
 (`trstctl-signer-hsm`) next to the signer; the standard image's static adapter

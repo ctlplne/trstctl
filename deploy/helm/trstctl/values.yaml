@@ -373,6 +373,18 @@ signer:
   # requires the mTLS material below.
   mode: sidecar
   replicas: 1
+  # The isolated signer pod's own Kubernetes service account (A200-L1). With
+  # create=false and no name it runs under the namespace's default account.
+  # Create one with annotations to give the signer, and only the signer, a
+  # cloud identity: IRSA's eks.amazonaws.com/role-arn for the externalKMS
+  # adapter's credential_source web_identity, or name an account an EKS Pod
+  # Identity association covers. Its API token is never mounted (IRSA projects
+  # its own). In sidecar mode the signer shares the control plane's
+  # serviceAccount above.
+  serviceAccount:
+    create: false
+    name: ""
+    annotations: {}
   resources:
     requests:
       cpu: 100m

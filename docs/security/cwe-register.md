@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2960 annotated sites across 33 rules. Each row is
+2972 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (667 sites)
+### G101 — CWE-798 Use of hardcoded credentials (676 sites)
 
 | Location | Reason |
 |---|---|
@@ -211,6 +211,11 @@ not this file.
 | `internal/cbom/coverage/envelope.go:61` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cli/access_agent_test.go:21` | a fake run token the test's fake control plane expects (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
+| `internal/cloudauth/aws_credential_chain.go:31` | a link-local endpoint address, not a credential (CWE-798) |
+| `internal/cloudauth/aws_credential_chain_test.go:28` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/cloudauth/aws_credential_chain_test.go:29` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/cloudauth/aws_credential_chain_test.go:30` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/cloudauth/aws_credential_chain_test.go:31` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -348,6 +353,10 @@ not this file.
 | `internal/dynsecret/tailscale_test.go:30` | fabricated stand-in API token (CWE-798) |
 | `internal/dynsecret/totp_test.go:13` | the RFC 6238 test-vector seed, not a credential (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/kms/wrapadapter/aws_chain_test.go:23` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/kms/wrapadapter/aws_chain_test.go:24` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/kms/wrapadapter/aws_chain_test.go:25` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/kms/wrapadapter/aws_chain_test.go:229` | a credential source name, not a credential (CWE-798) |
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/mdm/entra_test.go:22` | an unsigned stand-in token shape, not a credential (CWE-798) |
@@ -1048,7 +1057,7 @@ not this file.
 | `internal/kms/tpm/tpm_test.go:95` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:96` | deliberate byte packing of a bounded TPM handle in a test helper (CWE-190) |
 | `internal/kms/tpm/tpm_test.go:245` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/kms/wrapadapter/adapter.go:311` | bounded by the check above (CWE-190) |
+| `internal/kms/wrapadapter/adapter.go:328` | bounded by the check above (CWE-190) |
 | `internal/leader/leader_test.go:36` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/mdm/challenge/challenge.go:79` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
 | `internal/mdm/challenge/challenge.go:90` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
@@ -1518,7 +1527,7 @@ not this file.
 | `ee/whitelabel/email.go:126` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:186` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (393 sites)
+### G204 — CWE-78 OS command injection (394 sites)
 
 | Location | Reason |
 |---|---|
@@ -1562,6 +1571,7 @@ not this file.
 | `deploy/helm/helm_docs_commands_test.go:48` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_docs_commands_test.go:113` | executes the repo's own documented helm command under test (CWE-78) |
 | `deploy/helm/helm_test.go:1188` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `deploy/helm/signer_serviceaccount_test.go:30` | the chart test's own helm template invocation (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/kubernetes/manifests_test.go:452` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:112` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
@@ -2037,7 +2047,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (720 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (722 sites)
 
 | Location | Reason |
 |---|---|
@@ -2369,6 +2379,8 @@ not this file.
 | `internal/cli/secret_scan_hook_test_cmd.go:48` | the operator names their own secret file (CWE-22) |
 | `internal/cli/secret_scan_hook_test_cmd.go:57` | the operator names their own payload file (CWE-22) |
 | `internal/cli/switching_import.go:42` | the operator names the export file to read (CWE-22 not applicable) |
+| `internal/cloudauth/aws_credential_chain.go:164` | operator- or platform-configured projected token path (CWE-22) |
+| `internal/cloudauth/aws_credential_chain.go:223` | platform-configured Pod Identity token path (CWE-22) |
 | `internal/cloudauth/azure_token_source.go:77` | operator-configured projected token path (CWE-22) |
 | `internal/cloudauth/gcp_token_source.go:109` | operator-configured projected token path (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2444,7 +2456,7 @@ not this file.
 | `internal/kmip/pykmip_client_test.go:65` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/pykmip_tenants_test.go:68` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/kmip/tenant_router_test.go:230` | test-generated TLS material in the test's temp dir (CWE-22) |
-| `internal/kms/wrapadapter/adapter.go:263` | operator-named adapter configuration (CWE-22) |
+| `internal/kms/wrapadapter/adapter.go:280` | operator-named adapter configuration (CWE-22) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:104` | the test's own key store (CWE-22) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:74` | the test's own key store (CWE-22) |
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |

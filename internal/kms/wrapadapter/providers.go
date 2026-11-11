@@ -10,18 +10,26 @@ import (
 	"net/url"
 	"strings"
 
+	"trstctl.com/trstctl/internal/cloudauth"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/kms/awskms"
 	"trstctl.com/trstctl/internal/kms/azurekv"
 	"trstctl.com/trstctl/internal/kms/gcpkms"
 	"trstctl.com/trstctl/internal/kms/kmsconn"
 	"trstctl.com/trstctl/internal/kms/pkcs11"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // awsProvider wraps with KMS Encrypt under a symmetric key. Decrypt names the
 // same key, so a blob another key produced is refused by KMS.
 type awsProvider struct{ backend *awskms.Backend }
 
-func newAWS(cfg AWSConfig, keyRef string) (provider, error) {
+// awsSourceStatic is the default credential source: an access key ID with
+// its secret file (A200-L1 adds the cloudauth.AWSSource* chain sources).
+const awsSourceStatic = "static"
+
+func newAWS(ctx context.Context, cfg AWSConfig, keyRef string, getenv func(string) string) (provider, error) {
 	region := strings.TrimSpace(cfg.Region)
 	if region == "" {
 		region = arnRegion(keyRef)
@@ -29,22 +37,55 @@ func newAWS(cfg AWSConfig, keyRef string) (provider, error) {
 	if region == "" {
 		return nil, usagef("aws: region is required unless the key reference is a key ARN")
 	}
-	if strings.TrimSpace(cfg.AccessKeyID) == "" {
-		return nil, usagef("aws: access_key_id is required")
+	source := strings.ToLower(strings.TrimSpace(cfg.CredentialSource))
+	if source == "" {
+		source = awsSourceStatic
 	}
-	if err := kmsconn.ValidateEndpoints("aws", cfg.AllowInsecureLoopback, cfg.Endpoint); err != nil {
-		return nil, usageError{err}
+	webIdentityFields := strings.TrimSpace(cfg.RoleARN) != "" || strings.TrimSpace(cfg.WebIdentityTokenFile) != "" ||
+		strings.TrimSpace(cfg.RoleSessionName) != "" || strings.TrimSpace(cfg.STSEndpoint) != ""
+	var creds awskms.Credentials
+	switch source {
+	case awsSourceStatic:
+		if webIdentityFields {
+			return nil, usagef("aws: role_arn, web_identity_token_file, role_session_name and sts_endpoint need credential_source web_identity or default_chain")
+		}
+		if strings.TrimSpace(cfg.AccessKeyID) == "" {
+			return nil, usagef("aws: access_key_id is required, or set credential_source to web_identity, container, instance_metadata or default_chain")
+		}
+		if err := kmsconn.ValidateEndpoints("aws", cfg.AllowInsecureLoopback, cfg.Endpoint); err != nil {
+			return nil, usageError{err}
+		}
+		secretKey, wipeSecret, err := kmsconn.CredentialFile("aws secret access key", cfg.SecretAccessKeyFile, true)
+		if err != nil {
+			return nil, usageError{err}
+		}
+		defer wipeSecret()
+		session, wipeSession, err := kmsconn.CredentialFile("aws session token", cfg.SessionTokenFile, false)
+		if err != nil {
+			return nil, usageError{err}
+		}
+		defer wipeSession()
+		creds = awskms.Credentials{AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session}
+	case cloudauth.AWSSourceWebIdentity, cloudauth.AWSSourceContainer, cloudauth.AWSSourceInstanceMetadata, cloudauth.AWSSourceDefaultChain:
+		if cfg.AccessKeyID != "" || cfg.SecretAccessKeyFile != "" || cfg.SessionTokenFile != "" {
+			return nil, usagef("aws: credential_source %s reads no access_key_id, secret_access_key_file or session_token_file", source)
+		}
+		if webIdentityFields && source != cloudauth.AWSSourceWebIdentity && source != cloudauth.AWSSourceDefaultChain {
+			return nil, usagef("aws: role_arn, web_identity_token_file, role_session_name and sts_endpoint need credential_source web_identity or default_chain")
+		}
+		if err := kmsconn.ValidateEndpoints("aws", cfg.AllowInsecureLoopback, cfg.Endpoint, cfg.STSEndpoint); err != nil {
+			return nil, usageError{err}
+		}
+		material, err := resolveAWSChain(ctx, cfg, source, region, getenv)
+		if err != nil {
+			return nil, err
+		}
+		defer secret.Wipe(material.Primary)
+		defer secret.Wipe(material.Secondary)
+		creds = awskms.Credentials{AccessKeyID: material.Identifier, SecretAccessKey: material.Primary, SessionToken: material.Secondary}
+	default:
+		return nil, usagef("aws: credential_source must be static, web_identity, container, instance_metadata or default_chain")
 	}
-	secretKey, wipeSecret, err := kmsconn.CredentialFile("aws secret access key", cfg.SecretAccessKeyFile, true)
-	if err != nil {
-		return nil, usageError{err}
-	}
-	defer wipeSecret()
-	session, wipeSession, err := kmsconn.CredentialFile("aws session token", cfg.SessionTokenFile, false)
-	if err != nil {
-		return nil, usageError{err}
-	}
-	defer wipeSession()
 	client, err := kmsconn.EgressClient(cfg.PrivateEgressCIDRs, cfg.Endpoint, cfg.AllowInsecureLoopback)
 	if err != nil {
 		return nil, usageError{fmt.Errorf("aws egress: %w", err)}
@@ -53,13 +94,42 @@ func newAWS(cfg AWSConfig, keyRef string) (provider, error) {
 	if cfg.Endpoint != "" {
 		opts = append(opts, awskms.WithEndpoint(cfg.Endpoint))
 	}
-	backend, err := awskms.NewSecure(region, awskms.Credentials{
-		AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
-	}, opts...)
+	backend, err := awskms.NewSecure(region, creds, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &awsProvider{backend: backend}, nil
+}
+
+// resolveAWSChain reads temporary credentials from the configured source
+// (A200-L1). STS is reached through the same egress rules as KMS; the
+// metadata endpoints only through netsec's metadata client, which dials
+// nothing but AWS's link-local credential addresses (or a loopback agent).
+func resolveAWSChain(ctx context.Context, cfg AWSConfig, source, region string, getenv func(string) string) (cloudauth.Material, error) {
+	stsEndpoint := strings.TrimSpace(cfg.STSEndpoint)
+	if stsEndpoint == "" {
+		stsEndpoint = cloudauth.AWSRegionalSTSEndpoint(region)
+	}
+	stsClient, err := kmsconn.EgressClient(cfg.PrivateEgressCIDRs, stsEndpoint, cfg.AllowInsecureLoopback)
+	if err != nil {
+		return cloudauth.Material{}, usageError{fmt.Errorf("aws sts egress: %w", err)}
+	}
+	material, _, err := cloudauth.AWSCredentialChain{
+		Source:               source,
+		Getenv:               getenv,
+		RoleARN:              cfg.RoleARN,
+		WebIdentityTokenFile: cfg.WebIdentityTokenFile,
+		RoleSessionName:      cfg.RoleSessionName,
+		STSEndpoint:          stsEndpoint,
+		STSDoer:              stsClient,
+		MetadataDoer: func(endpoint string) (cloudhttp.Doer, error) {
+			return netsec.CloudMetadataClient(endpoint, 0)
+		},
+	}.Resolve(ctx)
+	if err != nil {
+		return cloudauth.Material{}, fmt.Errorf("aws credentials: %w", err)
+	}
+	return material, nil
 }
 
 // arnRegion is the region field of a KMS key or alias ARN

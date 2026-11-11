@@ -118,6 +118,7 @@ turn off certificate verification to force a localhost port-forward to work.
 | `signer.mtls.serverName` | `""` | Required for `signer.mode=isolated`; must match the signer certificate SAN. |
 | `signer.mtls.signerSecret` | `""` | Secret for the signer pod: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
 | `signer.mtls.controlPlaneSecret` | `""` | Secret for the control plane: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
+| `signer.serviceAccount.create` / `.name` / `.annotations` | `false` / `""` / `{}` | Isolated mode: the signer pod's own service account (created as `<fullname>-signer`, or an existing one by name), for a cloud identity only the signer holds, such as IRSA's `eks.amazonaws.com/role-arn` for the KMS wrap adapter. Its token is not mounted. |
 
 ## Operational notes
 

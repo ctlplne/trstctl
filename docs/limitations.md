@@ -7081,7 +7081,11 @@ key store remains the default when no provider is configured. Helm
 `externalKMS` separately wraps signer key-store DEKs through the shipped
 `trstctl-kms-wrap` adapter (AWS KMS, Cloud KMS, Azure Key Vault or Managed HSM,
 and, in the HSM signer image, PKCS#11) or an operator's own adapter instead of
-mounting the local signer KEK. A key store the local KEK already sealed is not
+mounting the local signer KEK. The AWS adapter takes a static key or the
+platform's identity (A200-L1: IRSA web identity, ECS or EKS Pod Identity
+container credentials, an EC2 instance role over IMDSv2, or the AWS SDKs'
+default chain), proven against stand-in STS and metadata endpoints; a run on
+EKS, ECS and EC2 themselves is a Track B proof. A key store the local KEK already sealed is not
 re-wrapped onto the adapter; external custody starts from an empty key store.
 The chart runs the standard image, so a PKCS#11 HSM behind the adapter needs the
 HSM signer image outside the chart today. Online break-glass issue,
