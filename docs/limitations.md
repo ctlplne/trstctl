@@ -5486,11 +5486,15 @@ when off, requiring a KEK when on):
   authentication cache TTL (10 seconds by default) after its ServiceAccount is
   gone. AWS cannot end one STS session early, so revoking an STS lease closes
   the lease and reports the session valid until its native expiry, unless the
-  provider has `revoke_with_deny_policy` (N3, below). Vault's
-  engine configuration paths
-  (`database/config`, `database/roles`, `aws/roles`, `kubernetes/roles`), static
-  database credentials, `revoke-prefix` and lease listing are not served:
-  providers stay operator-configured. The stock Vault CLI's KV put and
+  provider has `revoke_with_deny_policy` (N3, below). The engines'
+  configuration paths are served read-only (A203-L2): `LIST`/`GET`
+  `{mount}/roles` and `{mount}/roles/<role>` for the database, AWS and
+  Kubernetes engines and `database/config` and `database/config/<name>`, at the
+  engine mount or a provider's own, from the configured providers, with no DSN,
+  key or token in any answer; writing or deleting them is `405`, because
+  providers and roles stay operator-configured in the configuration file.
+  Static database credentials, `revoke-prefix` and lease listing are not
+  served. The stock Vault CLI's KV put and
   PKI issue/sign commands derive a token-keyed idempotency key when no header is
   sent. Mount and ACL mutations also derive a token-keyed key with the exact
   mount or policy event generation, allowing stock CLI retries and later

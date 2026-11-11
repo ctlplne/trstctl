@@ -4544,6 +4544,441 @@
         "summary": "Wrap a JSON payload under a single-use wrapping token (X-Vault-Wrap-TTL, default 5m) sealed in the tenant key domain"
       }
     },
+    "/v1/{mount}/config": {
+      "get": {
+        "operationId": "vaultCompatEngineConfigListGet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the database engine's connections (GET with ?list=true)",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "list": {
+        "operationId": "vaultCompatEngineConfigList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the database engine's connections (the configured providers)",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/v1/{mount}/config/{name}": {
+      "delete": {
+        "operationId": "vaultCompatEngineConfigDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "get": {
+        "operationId": "vaultCompatEngineConfigRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Read one database connection: its plugin and the roles it allows, never its connection secret",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "vaultCompatEngineConfigWrite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatEngineConfigWritePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
     "/v1/{mount}/creds/{role}": {
       "get": {
         "operationId": "vaultCompatDynamicCredsRead",
@@ -6403,6 +6838,441 @@
         ],
         "summary": "Rewrap a Vault-compatible transit ciphertext",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/roles": {
+      "get": {
+        "operationId": "vaultCompatEngineRolesListGet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the roles a Vault database, AWS or Kubernetes engine offers (GET with ?list=true)",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "list": {
+        "operationId": "vaultCompatEngineRolesList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultKVListResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "List the roles a Vault database, AWS or Kubernetes engine offers",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/v1/{mount}/roles/{name}": {
+      "delete": {
+        "operationId": "vaultCompatEngineRoleDelete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "get": {
+        "operationId": "vaultCompatEngineRoleRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Read one engine role: the provider that serves it and its lease lifetimes",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "vaultCompatEngineRoleWrite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatEngineRoleWritePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Refused (405) for a dynamic engine: trstctl configures providers and roles in its configuration file",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/v1/{mount}/sign/{name}": {

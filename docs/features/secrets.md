@@ -319,14 +319,17 @@ Supported paths are intentionally small:
 | `GET`/`POST /v1/aws/creds/{role}`, `/v1/aws/sts/{role}` | Opens an AWS STS lease: `access_key`, `secret_key`, `session_token` and the assumed-role `arn`; accepts `ttl` and the role's own `role_arn`. |
 | `POST`/`PUT /v1/kubernetes/creds/{role}`   | Opens a Kubernetes lease: a ServiceAccount token for the role's binding, with `service_account_name` and `service_account_namespace`; `kubernetes_namespace` and `audiences` must be the provider's. |
 | `/v1/{provider}/creds/{role}`              | The same lease, naming the provider when several offer the role. |
+| `LIST`/`GET /v1/{engine}/roles`, `GET /v1/{engine}/roles/{role}` | The roles a database, AWS or Kubernetes engine (or one provider's mount) offers, and one role's provider and lifetimes (A203-L2); no credential. |
+| `LIST`/`GET /v1/database/config`, `GET /v1/database/config/{name}` | The database engine's connections: each provider's plugin, allowed roles and readiness, never its DSN (A203-L2). |
+| `POST`/`PUT`/`DELETE` on those roles and config paths | `405`: providers and roles are configured in trstctl's configuration file, not through Vault paths. |
 | `PUT /v1/sys/leases/lookup`, `renew`, `revoke` | Lookup reports a lease's issue and expiry; renew extends a database lease, never past the provider's maximum TTL; revoke with `-sync` returns once the provider confirms removal. An STS session stays valid until its native expiry; a Kubernetes API server may accept a recently used token for its 10-second authentication cache. |
 
 The served compatibility contract also includes tenant-authored KV v2, PKI, and
 transit mounts, Vault ACL policy management, common transit operations, the
 cubbyhole, response wrapping, and the native dynamic leases at the Vault
-database, AWS and Kubernetes engine paths. The engines' configuration paths are
-not served (providers are operator-configured); the native trstctl API remains
-the full surface. The machine-readable contract is
+database, AWS and Kubernetes engine paths, with the engines' roles and database
+connections readable (not writable: providers are operator-configured); the
+native trstctl API remains the full surface. The machine-readable contract is
 pinned separately as
 [`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json),
 since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept

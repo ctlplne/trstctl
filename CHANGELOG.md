@@ -2,6 +2,13 @@
 
 ### Added
 
+- The Vault/OpenBao-compatible shim serves the dynamic engines' configuration paths read-only
+  (A203-L2). `vault list database/roles`, `vault read database/roles/<role>`, the same for `aws/roles`
+  and `kubernetes/roles`, and `vault list database/config` / `vault read database/config/<name>` answer
+  from the configured providers (at the engine mount or a provider's own): a role's provider and
+  lifetimes, a connection's plugin, allowed roles and readiness, never a DSN, key or token. Writing or
+  deleting them is refused with `405`, naming the configuration file where providers and roles live; a
+  cubbyhole path with the same shape still belongs to the cubbyhole.
 - AWS Systems Manager Parameter Store reads its state back (A202-L1). The `aws-parameter-store`
   sync target lists parameters with `GetParametersByPath`, reads one with `GetParameter`
   (`WithDecryption`, compared as a SHA-256 digest or in constant time, never returned) and deletes

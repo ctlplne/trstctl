@@ -52,12 +52,13 @@ var vaultCompatCompleteRoutes = []vaultCompatRoute{
 }
 
 func allVaultCompatRoutes() []vaultCompatRoute {
-	out := make([]vaultCompatRoute, 0, len(vaultCompatRoutes)+len(vaultCompatCompleteRoutes)+len(vaultCompatKVExtraRoutes)+len(vaultCompatWrappingRoutes)+len(vaultCompatDynamicRoutes))
+	out := make([]vaultCompatRoute, 0, len(vaultCompatRoutes)+len(vaultCompatCompleteRoutes)+len(vaultCompatKVExtraRoutes)+len(vaultCompatWrappingRoutes)+len(vaultCompatDynamicRoutes)+len(vaultCompatEngineConfigRoutes))
 	out = append(out, vaultCompatRoutes...)
 	out = append(out, vaultCompatCompleteRoutes...)
 	out = append(out, vaultCompatKVExtraRoutes...)
 	out = append(out, vaultCompatWrappingRoutes...)
 	out = append(out, vaultCompatDynamicRoutes...)
+	out = append(out, vaultCompatEngineConfigRoutes...) // A203-L2
 	return out
 }
 

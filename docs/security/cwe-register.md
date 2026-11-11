@@ -945,7 +945,7 @@ not this file.
 | `internal/api/machine_sessions_served_test.go:64` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/notifications_helpers_test.go:210` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
-| `internal/api/vault_compat_complete.go:814` | DER length of a public key, far under the uint32 bound (CWE-190) |
+| `internal/api/vault_compat_complete.go:815` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `internal/auditarchive/reader.go:104` | positive count checked first (CWE-190) |
 | `internal/auditarchive/reader.go:110` | bounded by the int count above (CWE-190) |
