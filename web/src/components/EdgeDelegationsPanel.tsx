@@ -28,6 +28,10 @@ const setupSchema = z
     providers: z.array(z.enum(keyProviders)).min(1),
     renewal: z.boolean(),
     renewalWindowDays: z.string().trim(),
+    // A175-L1: PKCS#11 token vendors' attestation roots, and whether a PKCS#11
+    // request must carry that token attestation.
+    vendorRootPEM: z.string().trim(),
+    requireVendor: z.boolean(),
   })
   .superRefine((values, context) => {
     if (values.mode === "existing" && !z.string().uuid().safeParse(values.segmentID).success) {
@@ -47,6 +51,13 @@ const setupSchema = z
     if (values.renewal && values.renewalWindowDays && !/^(?:[1-9]|1\d|2[0-9])$/.test(values.renewalWindowDays)) {
       context.addIssue({ code: "custom", path: ["renewalWindowDays"], message: translateNow("edge.setup.renewalWindowError") });
     }
+    if (!values.providers.includes("pkcs11")) return;
+    const vendorRoots = values.vendorRootPEM.match(certificatePEM) ?? [];
+    if (values.vendorRootPEM.replace(certificatePEM, "").trim()) {
+      context.addIssue({ code: "custom", path: ["vendorRootPEM"], message: translateNow("edge.setup.vendorRootError") });
+    } else if (values.requireVendor && !vendorRoots.length) {
+      context.addIssue({ code: "custom", path: ["vendorRootPEM"], message: translateNow("edge.setup.vendorRootRequired") });
+    }
   });
 
 type SetupValues = z.infer<typeof setupSchema>;
@@ -60,7 +71,11 @@ function splitDomains(value: string): string[] {
 }
 
 function policyInput(values: SetupValues): EdgeSegmentPolicyInput {
+  const pkcs11 = values.enabled && values.providers.includes("pkcs11");
+  const vendorRoots = pkcs11 ? (values.vendorRootPEM.match(certificatePEM) ?? []).map((root) => root.trim()) : [];
   return {
+    ...(vendorRoots.length ? { pkcs11_attestation_roots_pem: vendorRoots } : {}),
+    ...(pkcs11 && values.requireVendor ? { require_pkcs11_attestation: true } : {}),
     enabled: values.enabled,
     attestation_roots_pem: values.enabled ? (values.rootPEM.match(certificatePEM) ?? []).map((root) => root.trim()) : [],
     permitted_dns_domains: values.enabled ? splitDomains(values.permittedDomains) : [],
@@ -110,10 +125,13 @@ export function EdgeDelegationsPanel() {
       providers: ["tpm2"],
       renewal: false,
       renewalWindowDays: "",
+      vendorRootPEM: "",
+      requireVendor: false,
     },
   });
   const mode = useWatch({ control: form.control, name: "mode" });
   const enabled = useWatch({ control: form.control, name: "enabled" });
+  const providers = useWatch({ control: form.control, name: "providers" });
 
   function changePolicy(policy: EdgeSegmentPolicyList["items"][number]) {
     form.reset({
@@ -128,6 +146,8 @@ export function EdgeDelegationsPanel() {
       providers: policy.allowed_key_providers,
       renewal: policy.renewal_enabled,
       renewalWindowDays: policy.renewal_enabled ? String(policy.renewal_window_days) : "",
+      vendorRootPEM: "",
+      requireVendor: Boolean(policy.require_pkcs11_attestation),
     });
     setReviewed(null);
     setSaveError(null);
@@ -255,6 +275,16 @@ export function EdgeDelegationsPanel() {
                       : translateNow("edge.setup.renewalOff")}
                   </dd>
                 </div>
+                {(reviewed.input.allowed_key_providers ?? []).includes("pkcs11") ? (
+                  <div>
+                    <dt>{translateNow("edge.setup.vendorReview")}</dt>
+                    <dd>
+                      {translateNow(reviewed.input.require_pkcs11_attestation ? "edge.setup.vendorRequired" : "edge.setup.vendorOptional", {
+                        count: String((reviewed.input.pkcs11_attestation_roots_pem ?? []).length),
+                      })}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt>{translateNow("edge.setup.root")}</dt>
                   <dd>
@@ -335,6 +365,23 @@ export function EdgeDelegationsPanel() {
                   </label>
                 ))}
               </fieldset>
+              {enabled && (providers ?? []).includes("pkcs11") ? (
+                <>
+                  <label htmlFor="edge-vendor-root-pem">{translateNow("edge.setup.vendorRoot")}</label>
+                  <textarea
+                    id="edge-vendor-root-pem"
+                    {...form.register("vendorRootPEM")}
+                    rows={4}
+                    className="rounded-md border border-border p-2 font-mono text-xs"
+                  />
+                  {form.formState.errors.vendorRootPEM ? <span role="alert">{form.formState.errors.vendorRootPEM.message}</span> : null}
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" {...form.register("requireVendor")} />
+                    {translateNow("edge.setup.requireVendor")}
+                  </label>
+                  <p className="text-muted-foreground">{translateNow("edge.setup.vendorHelp")}</p>
+                </>
+              ) : null}
               {enabled ? (
                 <>
                   <label className="flex items-center gap-2">
@@ -395,7 +442,16 @@ export function EdgeDelegationsPanel() {
                         ) : null}
                       </td>
                       <td className="py-1 pr-4">{p.enabled ? translateNow("source.edge.on.b6edge00016") : translateNow("source.edge.off.b6edge00017")}</td>
-                      <td className="py-1 pr-4 tabular-nums">{p.attestation_roots}</td>
+                      <td className="py-1 pr-4 tabular-nums">
+                        {p.attestation_roots}
+                        {p.pkcs11_attestation_roots || p.require_pkcs11_attestation ? (
+                          <span className="block">
+                            {translateNow(p.require_pkcs11_attestation ? "edge.policy.vendorRequired" : "edge.policy.vendorRoots", {
+                              count: String(p.pkcs11_attestation_roots ?? 0),
+                            })}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="py-1 pr-4 font-mono text-xs">{(p.allowed_key_providers ?? ["tpm2"]).join(", ")}</td>
                       <td className="py-1 pr-4">
                         {p.renewal_enabled

@@ -671,6 +671,8 @@ never live in the API process. What you can do end to end against the running bi
   segment pinned (`pkcs11_attestation_roots_pem`) and certifies the CSR's key
   records `hardware_key_attested` with the root, device serial and key
   policies; `require_pkcs11_attestation` refuses PKCS#11 requests without it.
+  The console's edge segment form takes the vendor roots and the requirement
+  when PKCS#11 custody is allowed, and the segment table shows them.
   Proven against SoftHSM holding a stand-in vendor chain; a real token's
   attestation is a hardware proof. Exportable software PEM custody exists only behind BOTH
   `--edge-key-provider software --edge-allow-software-key` and an explicit

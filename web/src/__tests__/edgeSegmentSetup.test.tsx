@@ -181,6 +181,60 @@ describe("Edge segment setup", () => {
     expect(apiMock.createDiscoverySegment.mock.calls[0][1]).toBe(apiMock.createDiscoverySegment.mock.calls[1][1]);
   });
 
+  // A175-L1: PKCS#11 token vendors' attestation roots and the requirement
+  // are set, reviewed and saved in the console, and shown on the segment.
+  it("sets PKCS#11 vendor attestation roots and requires them", async () => {
+    const vendorRoot = "-----BEGIN CERTIFICATE-----\nQA-TEST-VENDOR-ROOT\n-----END CERTIFICATE-----";
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole("button", { name: "Configure edge segment" }));
+    await user.type(screen.getByLabelText("Declared segment ID"), segmentID);
+    await user.type(screen.getByLabelText("TPM attestation root certificate"), publicRoot);
+    await user.type(screen.getByLabelText("Permitted DNS domains"), "edge.qa.invalid");
+    expect(screen.queryByLabelText("PKCS#11 token vendor attestation root certificates")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "pkcs11" }));
+    await user.click(screen.getByLabelText("Require the token's vendor attestation for PKCS#11 keys"));
+    await user.click(screen.getByRole("button", { name: "Review segment policy" }));
+    expect(await screen.findByText("Requiring vendor attestation needs at least one vendor root certificate.")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("PKCS#11 token vendor attestation root certificates"), vendorRoot);
+    await user.click(screen.getByRole("button", { name: "Review segment policy" }));
+    expect(await screen.findByText("Required; 1 vendor roots")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save reviewed segment policy" }));
+    await waitFor(() =>
+      expect(apiMock.setEdgeSegmentPolicy).toHaveBeenCalledWith(
+        segmentID,
+        expect.objectContaining({
+          allowed_key_providers: ["tpm2", "pkcs11"],
+          pkcs11_attestation_roots_pem: [vendorRoot],
+          require_pkcs11_attestation: true,
+        }),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("shows a segment's PKCS#11 vendor roots and whether they are required", async () => {
+    apiMock.edgeSegmentPolicies.mockResolvedValue({
+      items: [
+        {
+          segment_id: segmentID,
+          enabled: true,
+          attestation_roots: 1,
+          pkcs11_attestation_roots: 2,
+          require_pkcs11_attestation: true,
+          permitted_dns_domains: ["edge.qa.invalid"],
+          allowed_key_providers: ["tpm2", "pkcs11"],
+          renewal_enabled: false,
+          renewal_window_days: 0,
+          updated_at: "2026-10-18T09:00:00Z",
+        },
+      ],
+      guidance: "",
+    });
+    mount();
+    expect(await screen.findByText("2 PKCS#11 vendor roots, required")).toBeInTheDocument();
+  });
+
   it("disables an existing segment without asking the API to reveal its roots", async () => {
     apiMock.edgeSegmentPolicies.mockResolvedValue({
       items: [

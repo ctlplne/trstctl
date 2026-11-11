@@ -2,6 +2,12 @@
 
 ### Added
 
+- The console sets PKCS#11 vendor attestation for an edge segment (A175-L1). A segment's PKCS#11
+  token vendor roots and the requirement that a PKCS#11 request carry the token's attestation could be
+  set only through the API or CLI. When PKCS#11 custody is allowed, the edge segment form takes the
+  vendor root certificates and the requirement (refusing a requirement with no root before review),
+  the review shows them, and the segment table shows each segment's vendor roots and whether they are
+  required.
 - The Posture page imports a CBOM (X6-L4). A CycloneDX CBOM from a vendor, a source scan or an image
   scan could be imported only through the API or CLI. Import a CBOM takes the source kind and name and
   a JSON file, sends the file's bytes as they are (so the same file again changes nothing, as from the

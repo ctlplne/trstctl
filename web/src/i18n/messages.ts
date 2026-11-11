@@ -23300,6 +23300,32 @@ export const messages = {
     defaultMessage: "No certificate found: paste PEM blocks from the station's journal.",
     description: "P12-L3: reconcile with no PEM block.",
   },
+  "edge.setup.vendorRoot": {
+    defaultMessage: "PKCS#11 token vendor attestation root certificates",
+    description: "A175-L1: the PKCS#11 vendors' attestation roots.",
+  },
+  "edge.setup.requireVendor": {
+    defaultMessage: "Require the token's vendor attestation for PKCS#11 keys",
+    description: "A175-L1: refuse a PKCS#11 request without vendor attestation.",
+  },
+  "edge.setup.vendorHelp": {
+    defaultMessage:
+      "A PKCS#11 edge key whose token's attestation chains to one of these roots and certifies the CSR's key is recorded as hardware-attested. Requiring it refuses a PKCS#11 request without that attestation; requiring it needs at least one root.",
+    description: "A175-L1: what vendor roots and the requirement do.",
+  },
+  "edge.setup.vendorRootError": {
+    defaultMessage: "Paste only PEM certificates for the vendor roots.",
+    description: "A175-L1: vendor roots must be PEM certificates.",
+  },
+  "edge.setup.vendorRootRequired": {
+    defaultMessage: "Requiring vendor attestation needs at least one vendor root certificate.",
+    description: "A175-L1: the requirement without a root.",
+  },
+  "edge.setup.vendorReview": { defaultMessage: "PKCS#11 vendor attestation", description: "A175-L1: review label." },
+  "edge.setup.vendorRequired": { defaultMessage: "Required; {count} vendor roots", description: "A175-L1: vendor attestation required, with the root count." },
+  "edge.setup.vendorOptional": { defaultMessage: "Optional; {count} vendor roots", description: "A175-L1: vendor attestation optional, with the root count." },
+  "edge.policy.vendorRoots": { defaultMessage: "{count} PKCS#11 vendor roots", description: "A175-L1: a segment's pinned vendor roots." },
+  "edge.policy.vendorRequired": { defaultMessage: "{count} PKCS#11 vendor roots, required", description: "A175-L1: a segment requiring vendor attestation." },
   "edge.setup.saved": {
     defaultMessage: "Segment policy saved. Verify its readback below before minting a delegated CA.",
     description: "Saved policy acknowledgement without claiming host issuance.",
