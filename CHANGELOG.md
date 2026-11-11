@@ -2,6 +2,10 @@
 
 ### Added
 
+- Rendered secret files can belong to the application's user (A238-L2): a render template's `owner` and
+  `group` (names or numeric IDs) make an agent running as root give the file to them before it is renamed
+  into place, so the file never appears with another owner, and every new version keeps them. An agent
+  that isn't root, and Windows (where the file's DACL names who reads it), refuse a template naming them.
 - A scoped sync definition can be replaced in place (A237-L3): `PUT /api/v1/secrets/scoped-syncs/{id}`,
   `trstctl secrets scoped-syncs replace`, and Edit definition in the console. Replacing used to mean
   removing and defining it again. The replacement takes the same checks as a new definition and keeps

@@ -1721,6 +1721,8 @@ templates:
   - name: htpasswd
     destination: /etc/nginx/auth/htpasswd
     mode: "0440"
+    owner: nginx               # optional, with group: names or numeric IDs; needs a root agent
+    group: nginx
     template: |
       app:{PLAIN}{{ secret "web/prod/password" }}
     reload: { command: ["nginx", "-s", "reload"] }   # or { signal: HUP, pid_file: /run/nginx.pid }
@@ -1746,6 +1748,13 @@ exist (`trstctl-cli secrets deliveries report`). When the control plane can't be
 the last file keeps serving until `freshness` runs out. Then it's removed and the
 application reloaded, or kept if the template says `on_stale: keep`. The fetch time lives
 in a state file with no values, so the bound holds across an agent restart.
+
+An agent running as root can give the file to the application's user: `owner` and `group`
+(names or numeric IDs, either or both) are given to the private temporary file before it is
+renamed into place, so the destination never appears with another owner, and every new
+version keeps them (A238-L2). Only root can give a file away, so an agent that isn't root
+refuses a template naming an owner or a group rather than leaving the file as its own. On
+Windows they're refused too: there the file's DACL already names who reads it.
 
 A template can also use a dynamic lease:
 `{{ lease "payments-db/readonly" "username" }}` and `{{ lease "payments-db/readonly" "password" }}`

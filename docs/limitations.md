@@ -5921,8 +5921,10 @@ ID provisioning secrets (write-only, with no list or delete, so no scoped sync).
 
 Secret rendering (A238 part a): `trstctl-agent --secret-render-config` renders
 `{{ secret "name" }}` templates into files for a host application. Writes are atomic
-with the template's mode (never readable by others), followed by a reload hook (argv or
-signal) and an HTTP verify probe. Delivery reports keep `injected` apart from `verified`
+with the template's mode (never readable by others) and, for a root agent, the template's
+owner and group (A238-L2: given before the rename; POSIX only, proven as root in a Linux
+container; an agent that isn't root refuses a template naming them), followed by a reload
+hook (argv or signal) and an HTTP verify probe. Delivery reports keep `injected` apart from `verified`
 (`POST/GET /api/v1/secrets/deliveries`). Freshness is bounded through a control-plane
 outage and an agent restart (remove or keep on stale). Proven with a real nginx through
 two rotations with no unanswered requests. Lease templates (`{{ lease "provider/role"

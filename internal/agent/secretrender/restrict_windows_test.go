@@ -58,7 +58,7 @@ func TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10(t *testing.T) {
 	dir := t.TempDir()
 
 	private := filepath.Join(dir, "private.txt")
-	if err := writeAtomic(private, []byte("value"), 0o400); err != nil {
+	if err := writeAtomic(private, []byte("value"), 0o400, nil); err != nil {
 		t.Fatal(err)
 	}
 	protected, sids := fileDACL(t, private)
@@ -72,7 +72,7 @@ func TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10(t *testing.T) {
 	}
 
 	shared := filepath.Join(dir, "shared.txt")
-	if err := writeAtomic(shared, []byte("value"), 0o444); err != nil {
+	if err := writeAtomic(shared, []byte("value"), 0o444, nil); err != nil {
 		t.Fatal(err)
 	}
 	protected, sids = fileDACL(t, shared)
@@ -85,7 +85,7 @@ func TestWindowsRenderedFileHasAnExplicitProtectedDACLA238L10(t *testing.T) {
 	}
 	// A rewrite keeps the explicit DACL (the new file is restricted before the
 	// replace, not after).
-	if err := writeAtomic(private, []byte("value 2"), 0o400); err != nil {
+	if err := writeAtomic(private, []byte("value 2"), 0o400, nil); err != nil {
 		t.Fatal(err)
 	}
 	if protected, sids = fileDACL(t, private); !protected || len(sids) != 2 {

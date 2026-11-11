@@ -78,7 +78,12 @@ type Template struct {
 	Name        string                `yaml:"name" json:"name"`
 	Destination string                `yaml:"destination" json:"destination"`
 	// Mode is the file's octal permission bits; 0400 when empty.
-	Mode   string `yaml:"mode" json:"mode"`
+	Mode string `yaml:"mode" json:"mode"`
+	// Owner and Group give the file to an application's user and group, as
+	// names or numeric IDs (A238-L2). They need the agent to run as root and
+	// are not served on Windows, where the file's DACL names who reads it.
+	Owner  string `yaml:"owner" json:"owner"`
+	Group  string `yaml:"group" json:"group"`
 	Text   string `yaml:"template" json:"template"`
 	Reload Hook   `yaml:"reload" json:"reload"`
 	Verify Verify `yaml:"verify" json:"verify"`
@@ -217,6 +222,9 @@ func (c *Config) Validate() error {
 		if _, err := t.mode(); err != nil {
 			return err
 		}
+		if _, err := t.ownership(); err != nil {
+			return err
+		}
 		if t.OnStale != "" && t.OnStale != stateRemove && t.OnStale != stateKeep {
 			return fmt.Errorf("secretrender: template %s on_stale is remove or keep", t.Name)
 		}
@@ -349,7 +357,7 @@ func (r *Renderer) saveState(t Template, st templateState) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(r.statePath(t), raw, 0o600)
+	return writeAtomic(r.statePath(t), raw, 0o600, nil)
 }
 
 func (r *Renderer) reconcile(ctx context.Context, t Template) error {
@@ -488,7 +496,12 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	}
 	content := buf.Bytes()
 	mode, _ := t.mode()
-	writeErr := writeAtomic(t.Destination, content, mode)
+	own, ownErr := t.ownership()
+	if ownErr != nil {
+		secret.Wipe(content)
+		return ownErr
+	}
+	writeErr := writeAtomic(t.Destination, content, mode, own)
 	secret.Wipe(content)
 	if writeErr != nil {
 		return writeErr
@@ -709,7 +722,7 @@ func (r *Renderer) reportQuietly(ctx context.Context, t Template, state string, 
 // restricted (on Windows, an explicit DACL from its mode, before any content),
 // written, flushed and given its mode, then renamed over path, and the
 // directory is flushed.
-func writeAtomic(path string, content []byte, mode os.FileMode) error {
+func writeAtomic(path string, content []byte, mode os.FileMode, own *fileOwnership) error {
 	dir := filepath.Dir(path)
 	suffix, err := crypto.RandomBytes(8)
 	if err != nil {
@@ -740,6 +753,15 @@ func writeAtomic(path string, content []byte, mode os.FileMode) error {
 		_ = f.Close()
 		cleanup()
 		return err
+	}
+	// A238-L2: the private temporary file is given away before the rename,
+	// so the destination is never seen with another owner.
+	if own != nil {
+		if err := f.Chown(own.uid, own.gid); err != nil {
+			_ = f.Close()
+			cleanup()
+			return fmt.Errorf("secretrender: give %s to %d:%d: %w", path, own.uid, own.gid, err)
+		}
 	}
 	if err := f.Close(); err != nil {
 		cleanup()
