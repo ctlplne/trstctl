@@ -5098,7 +5098,18 @@ than sending an operator looking for a credential that was never there.
   confirmed. Resolving the finding (remediated or dismissed) settles the note
   the same way (A174-L1): the Slack reply is deleted, the Jira comment says the
   finding was resolved, the commit status turns to success under the same
-  context, and the image referrer is deleted. Native collection from
+  context, and the image referrer is deleted. A registry behind a token
+  server is served (A174-L2): its 401 Bearer challenge is answered with a
+  token from the challenge's https realm, fetched with `username_ref` and the
+  token as basic credentials (or the token as a bearer without one) and
+  reused for the repository; and on a registry without the OCI referrers API
+  (one that does not answer the referrer's put with `OCI-Subject`, such as
+  the CNCF Distribution `registry:2` image) the referrer is also listed in
+  the referrers tag schema's index (`sha256-<subject>`), and taken out of it
+  when the finding is resolved. Proven against the in-repository stand-in
+  and a stock `registry:2` container; two annotators writing one image's
+  index at the same moment can race, and the next annotation rewrites it
+  from what the registry holds. Native collection from
   registries, Slack, Jira, GitHub Actions and GitLab is served (N6).
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every

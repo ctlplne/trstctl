@@ -48,6 +48,63 @@ type Stand struct {
 	uploads      int
 	unauthorized int
 	slackLimited int
+	// A174-L2: noReferrersAPI makes the registry answer manifest puts without
+	// OCI-Subject, as a registry without the referrers API does; tokenUser,
+	// when set, puts the registry behind a token server that takes tokenUser
+	// and the token as basic credentials and issues the bearer the registry
+	// accepts.
+	noReferrersAPI bool
+	tokenUser      string
+	issued         map[string]bool
+	tokenRequests  int
+}
+
+// WithoutReferrersAPI makes the registry one without the OCI referrers API:
+// a client keeps the referrers tag schema's index itself (A174-L2).
+func (s *Stand) WithoutReferrersAPI() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noReferrersAPI = true
+}
+
+// WithTokenServer puts the registry behind a token server (A174-L2): a
+// registry request without an issued bearer is answered 401 with a Bearer
+// challenge, and GET /token with user and the stand-in's token as basic
+// credentials issues one.
+func (s *Stand) WithTokenServer(user string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenUser = user
+	s.issued = map[string]bool{}
+}
+
+// TokenRequests counts the bearer tokens the token server issued.
+func (s *Stand) TokenRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenRequests
+}
+
+// ReferrersIndex lists the digests the referrers tag schema's index for a
+// subject names (A174-L2).
+func (s *Stand) ReferrersIndex(repo, subject string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.images[repo+"@"+strings.Replace(subject, ":", "-", 1)]
+	if !ok {
+		return nil
+	}
+	var index struct {
+		Manifests []struct {
+			Digest string `json:"digest"`
+		} `json:"manifests"`
+	}
+	_ = json.Unmarshal(m.body, &index)
+	out := []string{}
+	for _, d := range index.Manifests {
+		out = append(out, d.Digest)
+	}
+	return out
 }
 
 type imageManifest struct {
@@ -166,6 +223,27 @@ func (s *Stand) authorized(r *http.Request) bool {
 func (s *Stand) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.tokenUser != "" && r.URL.Path == "/token" {
+		s.issueToken(w, r)
+		return
+	}
+	if s.tokenUser != "" && strings.HasPrefix(r.URL.EscapedPath(), "/v2/") {
+		if !s.issued[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")] {
+			repo := strings.TrimPrefix(r.URL.EscapedPath(), "/v2/")
+			for _, marker := range []string{"/manifests/", "/blobs/"} {
+				if i := strings.Index(repo, marker); i >= 0 {
+					repo = repo[:i]
+				}
+			}
+			w.Header().Set("WWW-Authenticate", `Bearer realm="`+s.srv.URL+`/token",service="stand-in-registry",scope="repository:`+repo+`:pull,push"`)
+			s.unauthorized++
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"errors": []map[string]string{{"code": "UNAUTHORIZED"}}})
+			return
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		s.registry(w, r, strings.TrimPrefix(r.URL.EscapedPath(), "/v2/"), body)
+		return
+	}
 	if !s.authorized(r) {
 		s.unauthorized++
 		http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
@@ -188,6 +266,21 @@ func (s *Stand) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
 	}
+}
+
+// issueToken is the token server: basic credentials of tokenUser and the
+// stand-in's token earn a bearer for the requested scope.
+func (s *Stand) issueToken(w http.ResponseWriter, r *http.Request) {
+	user, pass, ok := r.BasicAuth()
+	if !ok || user != s.tokenUser || pass != s.token || r.URL.Query().Get("service") != "stand-in-registry" || r.URL.Query().Get("scope") == "" {
+		s.unauthorized++
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"details": "bad credentials"})
+		return
+	}
+	s.tokenRequests++
+	token := "issued-" + strconv.Itoa(s.tokenRequests)
+	s.issued[token] = true
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_in": 300})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -359,6 +452,12 @@ func (s *Stand) registry(w http.ResponseWriter, r *http.Request, rest string, bo
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
+		if r.Method == http.MethodPut && !strings.HasPrefix(ref, "sha256:") {
+			// A tag: the referrers tag schema's index (A174-L2).
+			s.images[repo+"@"+ref] = imageManifest{mediaType: r.Header.Get("Content-Type"), body: body}
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
 		if r.Method != http.MethodPut || ref != "sha256:"+crypto.SHA256Hex(body) {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"errors": []map[string]string{{"code": "DIGEST_INVALID"}}})
 			return
@@ -380,6 +479,10 @@ func (s *Stand) registry(w http.ResponseWriter, r *http.Request, rest string, bo
 		}
 		s.images[repo+"@"+ref] = imageManifest{mediaType: "application/vnd.oci.image.manifest.v1+json", body: body}
 		w.Header().Set("Docker-Content-Digest", ref)
+		if manifest.Subject != nil && !s.noReferrersAPI {
+			// A registry with the referrers API names the subject (OCI 1.1).
+			w.Header().Set("OCI-Subject", manifest.Subject.Digest)
+		}
 		w.WriteHeader(http.StatusCreated)
 	case strings.Contains(rest, "/blobs/uploads/"):
 		repo := rest[:strings.Index(rest, "/blobs/uploads/")]

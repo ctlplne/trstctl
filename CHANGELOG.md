@@ -2,6 +2,13 @@
 
 ### Added
 
+- Image annotations reach registries behind a token server and registries without the OCI referrers
+  API (A174-L2). A registry's 401 Bearer challenge is answered with a token from its realm (the
+  annotation connection's `username_ref` and token as basic credentials), reused for the repository;
+  and when the registry does not answer the referrer's put with `OCI-Subject` (the CNCF Distribution
+  `registry:2` image, for one), the referrer is also listed in the referrers tag schema's
+  `sha256-<subject>` index, and taken out of it when the finding is resolved, so tools that look up an
+  image's referrers find it.
 - The discovery findings list filters by fingerprint (A172-L2). `GET /api/v1/discovery/findings?fingerprint=`
   (CLI `trstctl-cli discovery findings list --fingerprint`) returns every finding that names one
   certificate or key, whatever its kind, source or run, accepting the colon-separated hex certificate

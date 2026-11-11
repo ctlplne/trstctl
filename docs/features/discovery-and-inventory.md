@@ -721,7 +721,10 @@ connection:
 ```
 
 For a CI log add `system` (`github` or `gitlab`), `repo` and `commit_sha`; for an image,
-`repository` and `digest`; Jira may add `username_ref` for basic authentication. Each
+`repository` and `digest`; Jira may add `username_ref` for basic authentication, and so may
+a registry whose token server takes a login (A174-L2: trstctl answers the registry's Bearer
+challenge with a token from its realm, and on a registry without the OCI referrers API
+lists the referrer in the `sha256-<subject>` referrers tag index). Each
 finding then records where it sat (the Slack channel and message, the Jira issue, the
 commit, the image), and **Annotate at provider** on the finding (or `trstctl-cli
 discovery findings annotate ID`, or `auto: true` on the ingest) writes one note there: a

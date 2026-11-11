@@ -12,7 +12,8 @@ import (
 
 // AnnotationConfig is where a third-party scan's findings are written back
 // at the provider (A174): the provider API's base URL and a token by
-// reference (Jira may add a username reference for basic authentication),
+// reference (Jira, and a registry whose token server takes a login (A174-L2),
+// may add a username reference for basic authentication),
 // the private-endpoint allowance, and for CI logs and container images the
 // object the artifact came from. Slack and Jira findings carry their object
 // from the export itself. Auto annotates each new finding without an

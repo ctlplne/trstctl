@@ -164,7 +164,8 @@ func New(c Connection) (Annotator, func(), error) {
 	case ProviderGitLab:
 		return gitlab{h}, closeFn, nil
 	case ProviderRegistry:
-		return registry{h}, closeFn, nil
+		tokens := &registryTokens{byScope: map[string][]byte{}}
+		return registry{h: h, tokens: tokens}, func() { tokens.wipe(); closeFn() }, nil
 	default:
 		closeFn()
 		return nil, nil, invalid("no annotation provider %q", c.Provider)

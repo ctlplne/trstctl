@@ -179,13 +179,30 @@ func (r registry) Resolve(ctx context.Context, a Annotation, ref string) (Result
 	if repo == "" || !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
 		return Result{}, invalid("resolving an image annotation needs the repository and the referrer's sha256 digest")
 	}
-	_, _, err := r.h.do(ctx, request{op: "registry delete referrer", method: http.MethodDelete, path: "/v2/" + repo + "/manifests/" + digest, auth: r.h.bearer})
+	base := "/v2/" + repo
+	_, _, err := r.call(ctx, request{op: "registry delete referrer", method: http.MethodDelete, path: base + "/manifests/" + digest}, r.scope(base))
 	var status *StatusError
-	if errors.As(err, &status) && status.Code == http.StatusNotFound {
-		return Result{Status: AlreadyResolved, ProviderRef: digest, Detail: "The registry no longer has referrer " + digest + " on " + repo}, nil
-	}
-	if err != nil {
+	gone := errors.As(err, &status) && status.Code == http.StatusNotFound
+	if err != nil && !gone {
 		return Result{}, err
+	}
+	// A174-L2: on a registry without the referrers API the referrer is also
+	// listed in the referrers tag schema's index; take it out.
+	if subject := strings.TrimSpace(a.Object.Digest); strings.HasPrefix(subject, "sha256:") {
+		if err := r.updateReferrersIndex(ctx, base, subject, func(list []indexDescriptor) ([]indexDescriptor, bool) {
+			kept := list[:0:0]
+			for _, d := range list {
+				if d.Digest != digest {
+					kept = append(kept, d)
+				}
+			}
+			return kept, len(kept) != len(list)
+		}); err != nil {
+			return Result{}, err
+		}
+	}
+	if gone {
+		return Result{Status: AlreadyResolved, ProviderRef: digest, Detail: "The registry no longer has referrer " + digest + " on " + repo}, nil
 	}
 	return Result{Status: Resolved, ProviderRef: digest, Detail: "The registry deleted referrer " + digest + " from " + repo}, nil
 }
