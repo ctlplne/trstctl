@@ -49,6 +49,12 @@ const (
 	candidateLimit   = 100
 	defaultInterval  = time.Minute
 	defaultHourlyCap = 20
+	// alertReconcileWindow bounds the M2-L4 reconciliation to findings
+	// detected this recently: long enough to cover a projection delayed by a
+	// database outage, well inside the day a delivered alert row is kept
+	// (internal/outboxgc), so an alert that was written is always seen and
+	// never written again.
+	alertReconcileWindow = 6 * time.Hour
 )
 
 var findingNamespace = uuid.MustParse("3b8f6d2e-91c4-4f7a-a5d0-2c6e8b1f9a47")
@@ -212,8 +218,69 @@ func (d *Detector) DetectOnce(ctx context.Context) error {
 		if err := d.detectTenant(ctx, tenantID, since, now); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("tenant %s: %w", tenantID, err)
 		}
+		if err := d.reconcileAlerts(ctx, tenantID, now); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("tenant %s: %w", tenantID, err)
+		}
 	}
 	return firstErr
+}
+
+// reconcileAlerts writes the alert of an alerting finding that has none
+// (M2-L4). record appends the finding's event and then, in one tenant
+// transaction, projects it and enqueues its alert; when that transaction
+// fails after the append, the event tail projects the finding later but
+// nothing enqueued its alert. The alert is rebuilt from the finding's own
+// event and keyed as record keys it, so it is written once.
+func (d *Detector) reconcileAlerts(ctx context.Context, tenantID string, now time.Time) error {
+	type missing struct {
+		id       string
+		sequence int64
+	}
+	var findings []missing
+	err := d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT f.finding_id, f.event_sequence FROM misuse_findings f
+			 WHERE f.tenant_id = $1 AND f.alerted AND f.detected_at >= $2
+			   AND NOT EXISTS (SELECT 1 FROM outbox o
+			                    WHERE o.tenant_id = f.tenant_id AND o.destination = $3
+			                      AND o.idempotency_key = 'misuse:' || f.finding_id)
+			 ORDER BY f.event_sequence
+			 LIMIT $4`, tenantID, now.Add(-alertReconcileWindow), notify.DestinationRisk, candidateLimit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var m missing
+			if err := rows.Scan(&m.id, &m.sequence); err != nil {
+				return err
+			}
+			findings = append(findings, m)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return err
+	}
+	for _, m := range findings {
+		ev, ok, err := d.log.EventAtSequence(ctx, uint64(m.sequence)) // #nosec G115 -- a projected event sequence is positive (CWE-190)
+		if err != nil {
+			return err
+		}
+		if !ok || ev.Type != EventFindingDetected || ev.ID != m.id || ev.TenantID != tenantID {
+			continue
+		}
+		var f FindingDetected
+		if err := json.Unmarshal(ev.Data, &f); err != nil {
+			return fmt.Errorf("misuse: decode finding %s: %w", m.id, err)
+		}
+		if err := d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return enqueueAlert(ctx, tx, tenantID, m.id, f)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *Detector) detectTenant(ctx context.Context, tenantID string, since, now time.Time) error {
@@ -297,17 +364,23 @@ func (d *Detector) record(ctx context.Context, tenantID string, c candidate) err
 		if !c.finding.Alerted {
 			return nil
 		}
-		alert, err := json.Marshal(map[string]any{
-			"kind": "credential.misuse", "tenant_id": tenantID, "operation_id": "misuse:" + c.id,
-			"subject": alertSubject(c.finding), "detail": alertDetail(c.finding), "severity": "high",
-		})
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
-			VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, tenantID, notify.DestinationRisk, alert, "misuse:"+c.id)
-		return err
+		return enqueueAlert(ctx, tx, tenantID, c.id, c.finding)
 	})
+}
+
+// enqueueAlert writes one finding's alert to the outbox, keyed by the finding
+// so it is written at most once (AN-6).
+func enqueueAlert(ctx context.Context, tx pgx.Tx, tenantID, id string, f FindingDetected) error {
+	alert, err := json.Marshal(map[string]any{
+		"kind": "credential.misuse", "tenant_id": tenantID, "operation_id": "misuse:" + id,
+		"subject": alertSubject(f), "detail": alertDetail(f), "severity": "high",
+	})
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+		VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, tenantID, notify.DestinationRisk, alert, "misuse:"+id)
+	return err
 }
 
 func alertSubject(f FindingDetected) string {

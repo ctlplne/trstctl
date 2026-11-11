@@ -1428,6 +1428,9 @@ never live in the API process. What you can do end to end against the running bi
   14 days. One finding per token, rule and day (repeats fold in), one alert each on
   `notification.risk` with the evidence, at most 20 alerts per tenant per hour (later
   findings recorded unalerted); findings rebuild from the event log without re-alerting.
+  An alerting finding whose database transaction failed after its event was appended
+  is projected later by the event tail, and the next pass writes its alert once, from
+  the event, for findings up to six hours old.
   `GET /api/v1/misuse/findings` (audit:read) and the Risk page list every finding, newest
   first. Rules and thresholds are fixed today, and a finding does not open an incident on
   its own.

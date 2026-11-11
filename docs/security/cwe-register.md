@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2894 annotated sites across 33 rules. Each row is
+2895 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -818,7 +818,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (452 sites)
+### G115 — CWE-190 Integer overflow or wraparound (453 sites)
 
 | Location | Reason |
 |---|---|
@@ -830,7 +830,8 @@ not this file.
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
-| `ee/governance/misuse/misuse.go:130` | event sequences fit int64 (CWE-190) |
+| `ee/governance/misuse/misuse.go:136` | event sequences fit int64 (CWE-190) |
+| `ee/governance/misuse/misuse.go:266` | a projected event sequence is positive (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
 | `internal/agent/accessgateway/kubernetes.go:230` | bounded by len(p) (CWE-190) |
 | `internal/agent/accessgateway/kubernetes.go:238` | take is non-negative (CWE-190) |

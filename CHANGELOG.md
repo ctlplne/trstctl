@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- A misuse alert is no longer lost when its transaction fails (M2-L4). Misuse detection appends a
+  finding's event, then projects it and enqueues its alert in one tenant transaction; when that
+  transaction failed after the append, the event tail projected the finding later but nothing wrote
+  its alert. Each detection pass now writes the alert of an alerting finding that has none, rebuilt
+  from the finding's own event and keyed like the original, for findings up to six hours old, well
+  inside the day a delivered alert row is kept, so no alert is written twice.
 - A host agent's Workload API can issue workload identities: `protocols.spiffe.entries` binds a
   workload's SPIFFE ID to the selectors a named host agent must observe (B8-D1). Entries a host
   agent may deliver must name that agent, and nothing could, so every workload that dialed an
