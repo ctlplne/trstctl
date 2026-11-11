@@ -7374,7 +7374,8 @@ func componentSchemas() map[string]*Schema {
 		"secret_data_handling":     str(),
 	}, "capability", "ready", "effect_free", "provider", "key", "old_ref", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "secret_data_handling")
 	secretRotationScheduleProvider := str()
-	secretRotationScheduleProvider.Description = "connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence."
+	secretRotationScheduleProvider.Description = "connector:<target>, a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge), or dynamic-lease:<provider> with ttl_seconds (each due edge issues a new lease of that TTL and revokes the one before; A201-L1). A provider that cannot run the rotation fails closed with 503 before persistence."
+	secretRotationScheduleTTL := &Schema{Type: "integer", Description: "Lease lifetime in seconds each scheduled dynamic-lease rotation issues; required and positive for dynamic-lease:<provider>, refused (400) for every other provider (A201-L1)."}
 	// A235: the secrets workspace.
 	secretProjectSecret := object(map[string]*Schema{
 		"name": str(), "key": str(), "version": {Type: "integer"}, "owner_id": str(), "owner": str(),
@@ -7414,6 +7415,7 @@ func componentSchemas() map[string]*Schema {
 		"next_run_at": timestamp(),
 		"consumers":   rotationConsumers, "retire_after_seconds": rotationRetireAfter,
 		"acknowledge_single_phase": rotationAcknowledge,
+		"ttl_seconds":              secretRotationScheduleTTL,
 	}, "name", "provider", "key", "old_ref", "interval_seconds")
 	secretRotationRunStatuses := []string{
 		"completed", "queued", "failed", "rolled_back", "rollback_failed", "retire_pending", "delivery_failed", "unsupported",
@@ -7430,6 +7432,7 @@ func componentSchemas() map[string]*Schema {
 		"last_new_ref": str(), "last_error": str(),
 		"consumers": {Type: "array", Items: str()}, "retire_after_seconds": {Type: "integer"},
 		"single_phase_acknowledged": {Type: "boolean"},
+		"ttl_seconds":               {Type: "integer"},
 		"created_at":                timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "name", "provider", "key", "old_ref", "interval_seconds", "enabled", "next_run_at", "last_run_status", "created_at", "updated_at")
 	secretRotationScheduleRunStatus := str()

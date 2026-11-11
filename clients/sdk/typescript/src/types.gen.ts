@@ -10309,7 +10309,7 @@ export interface paths {
         /** List scheduled secret rotations */
         get: operations["listSecretRotationSchedules"];
         put?: never;
-        /** Create a scheduled connector:<target> secret rotation */
+        /** Create a scheduled connector, static-provider or dynamic-lease secret rotation */
         post: operations["createSecretRotationSchedule"];
         delete?: never;
         options?: never;
@@ -26749,6 +26749,7 @@ export interface components {
             single_phase_acknowledged?: boolean;
             /** Format: uuid */
             tenant_id: string;
+            ttl_seconds?: number;
             /** Format: date-time */
             updated_at: string;
         };
@@ -26781,10 +26782,12 @@ export interface components {
             /** Format: date-time */
             next_run_at?: string;
             old_ref: string;
-            /** @description connector:<target>, or a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge). dynamic-lease schedules fail closed with 503 before persistence. */
+            /** @description connector:<target>, a configured dynamic-secret provider with allow_static_rotation whose allowed_roles lists the secret name (a durable static-provider command runs each due edge), or dynamic-lease:<provider> with ttl_seconds (each due edge issues a new lease of that TTL and revokes the one before; A201-L1). A provider that cannot run the rotation fails closed with 503 before persistence. */
             provider: string;
             /** @description Static rotations (A240): the approved deadline, in seconds after verification (0 to 2592000), at which the predecessor retires even if a named consumer never reports. */
             retire_after_seconds?: number;
+            /** @description Lease lifetime in seconds each scheduled dynamic-lease rotation issues; required and positive for dynamic-lease:<provider>, refused (400) for every other provider (A201-L1). */
+            ttl_seconds?: number;
         };
         SecretRotationScheduleRun: {
             /** Format: date-time */

@@ -11909,6 +11909,7 @@ export interface SecretRotationSchedule {
   retired_at?: string;
   single_phase_acknowledged?: boolean;
   tenant_id: string;
+  ttl_seconds?: number;
   updated_at: string;
 }
 
@@ -11935,6 +11936,7 @@ export interface SecretRotationScheduleRequest {
   old_ref: string;
   provider: string;
   retire_after_seconds?: number;
+  ttl_seconds?: number;
 }
 
 export interface SecretRotationScheduleRun {

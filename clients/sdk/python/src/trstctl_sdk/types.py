@@ -16569,6 +16569,7 @@ SecretRotationSchedule = TypedDict(
         'retired_at': str,
         'single_phase_acknowledged': bool,
         'tenant_id': str,
+        'ttl_seconds': int,
         'updated_at': str,
     },
     total=False,
@@ -16607,6 +16608,7 @@ SecretRotationScheduleRequest = TypedDict(
         'old_ref': str,
         'provider': str,
         'retire_after_seconds': int,
+        'ttl_seconds': int,
     },
     total=False,
 )

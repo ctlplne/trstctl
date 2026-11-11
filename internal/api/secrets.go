@@ -450,6 +450,9 @@ type secretRotationScheduleRequest struct {
 	Consumers              []string   `json:"consumers,omitempty"`
 	RetireAfterSeconds     int        `json:"retire_after_seconds,omitempty"`
 	AcknowledgeSinglePhase bool       `json:"acknowledge_single_phase,omitempty"`
+	// TTLSeconds is the lease lifetime each scheduled dynamic-lease rotation
+	// issues (A201-L1); required for dynamic-lease:<provider>, refused otherwise.
+	TTLSeconds *int `json:"ttl_seconds,omitempty"`
 }
 
 type secretRotationScheduleResponse struct {
@@ -469,11 +472,13 @@ type secretRotationScheduleResponse struct {
 	LastNewRef      string     `json:"last_new_ref,omitempty"`
 	LastError       string     `json:"last_error,omitempty"`
 	// The retirement gate every static command this schedule queues carries.
-	Consumers               []string  `json:"consumers,omitempty"`
-	RetireAfterSeconds      int       `json:"retire_after_seconds,omitempty"`
-	SinglePhaseAcknowledged bool      `json:"single_phase_acknowledged,omitempty"`
-	CreatedAt               time.Time `json:"created_at"`
-	UpdatedAt               time.Time `json:"updated_at"`
+	Consumers               []string `json:"consumers,omitempty"`
+	RetireAfterSeconds      int      `json:"retire_after_seconds,omitempty"`
+	SinglePhaseAcknowledged bool     `json:"single_phase_acknowledged,omitempty"`
+	// TTLSeconds is the lease lifetime of a dynamic-lease schedule (A201-L1).
+	TTLSeconds int       `json:"ttl_seconds,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type secretRotationScheduleRunResponse struct {
@@ -1174,10 +1179,11 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 	a.writeError(w, errStatus(http.StatusBadRequest, "provider must be connector:<target>, dynamic-lease:<provider>, or a configured static provider"))
 }
 
-// createSecretRotationSchedule records a tenant cadence for connector-backed
-// application-secret rotation. Static providers are also refused by the manual
-// route: their in-process phases have no durable ACK-loss receiver, so neither
-// route can truthfully promise crash-safe execution.
+// createSecretRotationSchedule records a tenant cadence for application-secret
+// rotation: connector:<target>, a configured static provider (A15), or a
+// dynamic-lease:<provider> whose every due edge issues a new lease of the
+// schedule's ttl_seconds and revokes the one before (A201-L1). A provider that
+// cannot run the rotation is refused before anything is persisted.
 //
 //trstctl:mutation
 func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
@@ -1205,6 +1211,15 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			return 0, nil, err // A235: a scheduled rotation writes the secret
 		}
 		rotationRequest := secretRotationRequest{Provider: provider, Key: key, OldRef: oldRef}
+		ttlSeconds := 0
+		if isDynamicLeaseRotation(provider) {
+			if req.TTLSeconds == nil || *req.TTLSeconds <= 0 {
+				return 0, nil, errStatus(http.StatusBadRequest, dynamicLeaseRotationTTLRequiredDetail)
+			}
+			ttlSeconds = *req.TTLSeconds
+		} else if req.TTLSeconds != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "ttl_seconds applies to dynamic-lease:<provider> schedules only")
+		}
 		if isConnectorSecretRotation(provider) {
 			targetID, _, err := connectorSecretRotationTarget(rotationRequest)
 			if err != nil {
@@ -1213,8 +1228,19 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			if a.secrets.syncTargets(tenantID)[targetID] == nil {
 				return 0, nil, errStatus(http.StatusServiceUnavailable, connectorRotationTargetUnavailableDetail)
 			}
-		} else if strings.HasPrefix(provider, secretDynamicLeaseRotationPrefix) {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, dynamicLeaseRotationUnavailableDetail)
+		} else if isDynamicLeaseRotation(provider) {
+			// A201-L1: the provider must issue and verify a lease of this TTL
+			// for the role, and old_ref must be the role's active lease (or
+			// none), exactly as for an on-demand dynamic-lease rotation.
+			if dynamicLeaseRotationProviderName(provider) == "" {
+				return 0, nil, errStatus(http.StatusBadRequest, dynamicLeaseRotationProviderRequiredDetail)
+			}
+			if _, err := a.dynamicLeaseRotationProvider(tenantID, provider, key, ttlSeconds); err != nil {
+				return 0, nil, err
+			}
+			if err := a.checkDynamicLeaseRotationPredecessor(ctx, tenantID, dynamicLeaseRotationProviderName(provider), key, oldRef); err != nil {
+				return 0, nil, err
+			}
 		} else if staticProvider, _, err := a.staticRotationProvider(tenantID, provider, key); err != nil {
 			// A15: static providers are scheduled when a configured provider may
 			// mint static credentials for the secret's role; otherwise fail closed.
@@ -1245,7 +1271,7 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			Name: name, Provider: provider, Key: key, OldRef: oldRef,
 			IntervalSeconds: req.IntervalSeconds, Enabled: enabled, NextRunAt: nextRunAt,
 			Consumers: req.Consumers, RetireAfterSeconds: req.RetireAfterSeconds,
-			SinglePhaseAcknowledged: req.AcknowledgeSinglePhase,
+			SinglePhaseAcknowledged: req.AcknowledgeSinglePhase, TTLSeconds: ttlSeconds,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -1612,7 +1638,7 @@ func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRota
 		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef,
 		LastError: store.CanonicalSecretRotationScheduleError(s.LastRunStatus, s.LastError),
 		Consumers: s.Consumers, RetireAfterSeconds: s.RetireAfterSeconds, SinglePhaseAcknowledged: s.SinglePhaseAcknowledged,
-		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+		TTLSeconds: s.TTLSeconds, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }
 

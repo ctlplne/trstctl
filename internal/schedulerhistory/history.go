@@ -42,6 +42,16 @@ var ErrSanitationRequired = errors.New("legacy secret-rotation scheduler history
 // the due edge ends unsupported without a provider phase.
 const StaticProviderUnavailableError = "scheduled static-provider rotation is unavailable: the provider does not allow static rotation"
 
+// DynamicLeaseProviderUnavailableError is the closed-vocabulary detail for a
+// dynamic-lease schedule whose provider is no longer configured to issue and
+// verify its leases (A201-L1): the due edge ends unsupported without a lease.
+const DynamicLeaseProviderUnavailableError = "scheduled dynamic-lease rotation is unavailable: the provider cannot issue and verify this lease"
+
+// DynamicLeaseOldLeaseError is the closed-vocabulary detail for a
+// dynamic-lease due edge whose predecessor is no longer the role's active
+// lease (A201-L1).
+const DynamicLeaseOldLeaseError = "old_ref must be none or an active lease of this provider for the role the secret names"
+
 // Unknown input is classified from status and is never returned.
 func CanonicalError(status, detail string) string {
 	if detail == "" {
@@ -90,6 +100,7 @@ func isGenericTerminalError(detail string) bool {
 		"secret sync target is not configured",
 		"connector rotation old_ref must be version:<n>",
 		"connector rotation old_ref does not name the current version",
+		DynamicLeaseOldLeaseError,
 		"scheduled rotation failed":
 		return true
 	default:
@@ -102,6 +113,7 @@ func isUnsupportedError(detail string) bool {
 	case "dynamic-lease rotation is unavailable until its issue, delivery, and predecessor retirement phases share one durable worker command",
 		"scheduled static-provider rotation is unavailable until a durable worker owns stage, cutover, verification, rollback, and retirement",
 		StaticProviderUnavailableError,
+		DynamicLeaseProviderUnavailableError,
 		"scheduled rotation is unavailable":
 		return true
 	default:

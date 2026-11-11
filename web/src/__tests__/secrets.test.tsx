@@ -1653,6 +1653,61 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/command 4f0c6a3e-8d2b-4c71-9a51-2b7d0e6f1c90 runs in the background/i)).toBeInTheDocument();
   });
 
+  // A201-L1: a dynamic-lease schedule asks for the lease TTL each run issues,
+  // refuses to send without it, sends ttl_seconds with it, and the schedule
+  // table names that lifetime.
+  it("schedules a dynamic-lease rotation with the lease TTL each run issues", async () => {
+    apiMock.secretRotationSchedules.mockResolvedValue({
+      items: [
+        {
+          id: "schedule-lease",
+          tenant_id: "t1",
+          name: "reporting-hourly",
+          provider: "dynamic-lease:pg-leases",
+          key: "reporting",
+          old_ref: "lease-1",
+          interval_seconds: 3600,
+          ttl_seconds: 1200,
+          enabled: true,
+          next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
+          last_run_status: "",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderSecrets();
+    await screen.findByText("app/db/password");
+    expect(await screen.findByText("Lease TTL 1200 s")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /new schedule/i }));
+    const scheduleForm = within(screen.getByRole("form", { name: "Create rotation schedule" }));
+    expect(scheduleForm.queryByLabelText("Lease TTL seconds (dynamic-lease only)")).not.toBeInTheDocument();
+    await user.type(scheduleForm.getByLabelText("Schedule name"), "reporting-hourly");
+    await user.type(scheduleForm.getByLabelText("Key"), "reporting");
+    await user.type(scheduleForm.getByLabelText("Old reference"), "lease-1");
+    await user.type(scheduleForm.getByLabelText("Provider"), "dynamic-lease:pg-leases");
+    const ttl = scheduleForm.getByLabelText("Lease TTL seconds (dynamic-lease only)");
+    await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
+    expect(await scheduleForm.findByText("A dynamic-lease schedule needs a whole number of seconds for the lease each run issues.")).toBeInTheDocument();
+    expect(apiMock.createSecretRotationSchedule).not.toHaveBeenCalled();
+
+    await user.type(ttl, "1200");
+    await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
+    await waitFor(() =>
+      expect(apiMock.createSecretRotationSchedule).toHaveBeenCalledWith({
+        name: "reporting-hourly",
+        key: "reporting",
+        old_ref: "lease-1",
+        provider: "dynamic-lease:pg-leases",
+        interval_seconds: 86400,
+        enabled: true,
+        ttl_seconds: 1200,
+      }),
+    );
+  });
+
   it("keeps manual and scheduled rotation scope truthful and clears stale deferred evidence", async () => {
     const user = userEvent.setup();
     renderSecrets();
@@ -1706,9 +1761,11 @@ describe("secrets surface", () => {
     await user.type(scheduleForm.getByLabelText("Schedule name"), "daily-ci");
     await user.type(scheduleForm.getByLabelText("Key"), "app/db/password");
     await user.type(scheduleForm.getByLabelText("Old reference"), "version:3");
-    await user.type(scheduleForm.getByLabelText("Provider"), "dynamic-lease:postgresql");
+    // A201-L1: a dynamic-lease schedule must name its provider; a bare
+    // dynamic-lease: is refused before any request.
+    await user.type(scheduleForm.getByLabelText("Provider"), "dynamic-lease:");
     await user.click(scheduleForm.getByRole("button", { name: /create schedule/i }));
-    expect(await scheduleForm.findByText(/scheduled rotation requires a connector:<target> provider or a configured static provider/i)).toBeInTheDocument();
+    expect(await scheduleForm.findByText(/scheduled rotation requires a connector:<target> provider, a configured static provider/i)).toBeInTheDocument();
     expect(apiMock.createSecretRotationSchedule).not.toHaveBeenCalled();
 
     await user.clear(scheduleForm.getByLabelText("Provider"));

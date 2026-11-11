@@ -2,6 +2,13 @@
 
 ### Added
 
+- Dynamic-lease rotation runs on a schedule (A201-L1). `POST /api/v1/secrets/rotation-schedules`
+  accepts `dynamic-lease:<provider>` with `ttl_seconds`, checked like an on-demand dynamic-lease
+  rotation before anything is stored (TTL required and within the provider's maximum, a provider that
+  issues and verifies the role's leases, `old_ref` the role's active lease); each due edge queues the
+  durable dynamic-lease command, which issues a lease of that TTL, publishes it and revokes the lease
+  the last command left live. The schedule carries `ttl_seconds` (migration 0446); the console's
+  schedule form asks for the lease TTL for a dynamic-lease provider and the schedule table names it.
 - The Helm chart runs the HSM signer image (A200-L3). `signer.hsm.enabled` runs the signer from
   `trstctl-signer-hsm` (by digest, by tag, or by the chart's own tag) and its cgo
   `/usr/local/bin/trstctl-signer-hsm` in the sidecar and the isolated topology, mounting the vendor's

@@ -1139,14 +1139,22 @@ The scheduled path records connector cadences at
 `POST /api/v1/secrets/rotation-schedules/run-due`. Schedule names are distinct per
 tenant: one under a name another schedule holds answers 409 (`code: name_held`) and
 records nothing. A schedule may name a
-connector target or a static provider that allows static rotation for the secret;
-dynamic-lease schedules fail closed with `503`. A static due edge queues one durable
+connector target, a static provider that allows static rotation for the secret,
+or `dynamic-lease:<provider>` with `ttl_seconds` (A201-L1). A dynamic-lease
+schedule is checked like an on-demand dynamic-lease rotation before it is stored:
+the TTL is required and at most the provider's `max_ttl` (`400`, `422`), the
+provider must issue and verify leases for the role (`503`), and `old_ref` must be
+`none` or the role's active lease (`409`); `ttl_seconds` on any other schedule is
+`400`. A static or dynamic-lease due edge queues one durable
 command, chains its predecessor from the credential the last terminal command left
 live (the successor after `completed`, the preserved predecessor after
 `rolled_back` or `failed`), defers with `command_in_flight` while a command is
 still running, and fails the edge after an unresolved `rollback_failed` until an
-operator resolves that command. A schedule whose provider no longer allows static
-rotation, or a historical dynamic-lease schedule, is terminalized as
+operator resolves that command. Each dynamic-lease command issues a new lease of
+the schedule's TTL, publishes it as the secret's next version and revokes the lease
+before, so the next cadence starts from the newest lease. A schedule whose provider
+no longer allows static rotation, or a dynamic-lease schedule whose provider is no
+longer configured to issue and verify its leases, is terminalized as
 `unsupported`, disabled, and makes zero provider calls. A queued connector run
 advances `old_ref`; a connector whose local version committed before terminal
 delivery failure also advances to that committed version so later cadences cannot

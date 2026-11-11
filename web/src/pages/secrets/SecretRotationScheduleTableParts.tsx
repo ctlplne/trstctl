@@ -66,7 +66,19 @@ export function SecretRotationScheduleTable({
         </span>
       ),
     },
-    { id: "interval", header: t("secrets.rotation.scheduleIntervalColumn"), cell: (item) => formatRotationInterval(item.interval_seconds) },
+    {
+      id: "interval",
+      header: t("secrets.rotation.scheduleIntervalColumn"),
+      cell: (item) => (
+        <span className="grid gap-0.5">
+          <span>{formatRotationInterval(item.interval_seconds)}</span>
+          {item.ttl_seconds ? (
+            // A201-L1: a dynamic-lease schedule names the lease lifetime each run issues.
+            <span className="text-xs text-muted-foreground">{t("secrets.rotation.scheduleLeaseTTL", { seconds: item.ttl_seconds })}</span>
+          ) : null}
+        </span>
+      ),
+    },
     {
       id: "enabled",
       header: t("secrets.rotation.scheduleStatus"),

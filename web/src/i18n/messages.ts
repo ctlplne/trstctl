@@ -5193,12 +5193,20 @@ export const messages = {
   "secrets.rotation.executeReviewed": { defaultMessage: "Run reviewed rotation", description: "F37 explicit execution action after review." },
   "secrets.rotation.scheduleConnectorOnly": {
     defaultMessage:
-      "Scheduled rotation requires a connector:<target> provider or a configured static provider with allow_static_rotation. Dynamic-lease providers remain unavailable.",
-    description: "Secret rotation schedule form: connector-only fail-closed validation.",
+      "Scheduled rotation requires a connector:<target> provider, a configured static provider with allow_static_rotation, or a dynamic-lease:<provider> with a lease TTL.",
+    description: "Secret rotation schedule form: the providers a schedule accepts (A201-L1 adds dynamic-lease with a lease TTL).",
   },
   "secrets.rotation.scheduleProviderPlaceholder": {
     defaultMessage: "connector:ci",
     description: "Secret rotation schedule form: connector provider example.",
+  },
+  "secrets.rotation.scheduleLeaseTTLRequired": {
+    defaultMessage: "A dynamic-lease schedule needs a whole number of seconds for the lease each run issues.",
+    description: "A201-L1: schedule form validation when a dynamic-lease provider has no positive lease TTL.",
+  },
+  "secrets.rotation.scheduleLeaseTTL": {
+    defaultMessage: "Lease TTL {seconds} s",
+    description: "A201-L1: caption under a dynamic-lease schedule's interval naming the lifetime of the lease each run issues.",
   },
   "secrets.rotation.leaseTTLLabel": {
     defaultMessage: "Lease TTL seconds (dynamic-lease only)",

@@ -391,7 +391,8 @@ func secretRotationScheduleTerminalErrorDetail(err error) string {
 			connectorRotationTargetRequiredDetail,
 			connectorRotationTargetUnavailableDetail,
 			connectorRotationOldRefInvalidDetail,
-			connectorRotationOldRefStaleDetail:
+			connectorRotationOldRefStaleDetail,
+			dynamicLeaseRotationOldLeaseDetail:
 			return public.detail
 		}
 	}
@@ -414,7 +415,8 @@ func secretRotationScheduleContext(ctx context.Context, tenantID string, sched s
 // snapshot's; a newer revision cannot claim this due edge, and a mismatch here
 // fails closed instead of running without the gate.
 func (a *API) secretRotationScheduleGate(ctx context.Context, tenantID string, sched store.SecretRotationSchedule) (store.SecretRotationSchedule, error) {
-	if !isStaticSecretRotation(sched.Provider) || isDynamicLeaseRotation(sched.Provider) {
+	// A201-L1: a dynamic-lease schedule reads its lease TTL the same way.
+	if !isStaticSecretRotation(sched.Provider) && !isDynamicLeaseRotation(sched.Provider) {
 		return store.SecretRotationSchedule{}, nil
 	}
 	live, err := a.store.GetSecretRotationSchedule(ctx, tenantID, sched.ID)
@@ -450,6 +452,10 @@ func (a *API) runSecretRotationSchedule(
 	}
 	request := secretRotationRequest{Provider: sched.Provider, Key: sched.Key, OldRef: sched.OldRef,
 		Consumers: gate.Consumers, RetireAfterSeconds: gate.RetireAfterSeconds, AcknowledgeSinglePhase: gate.SinglePhaseAcknowledged}
+	if isDynamicLeaseRotation(sched.Provider) {
+		ttl := gate.TTLSeconds
+		request.TTLSeconds = &ttl
+	}
 	requestBinding, err := a.secretRotationScheduleRequestBinding(
 		tenantID, principal, sched, commandKey, request)
 	if err != nil {
@@ -590,11 +596,48 @@ func (a *API) runSecretRotationSchedule(
 			}
 			err = applicationSecretMutationError(err)
 		}
-	} else {
-		// Rows that name a dynamic-lease provider execute no provider phase: a
-		// terminal unsupported event advances and disables the schedule.
+	} else if isDynamicLeaseRotation(sched.Provider) && a.dynamicLeaseProviderGone(tenantID, sched.Provider, sched.Key, *request.TTLSeconds) {
+		// A201-L1: a provider no longer configured to issue and verify this
+		// lease executes no lease phase: a terminal unsupported event advances
+		// and disables the schedule truthfully, as for a static provider.
 		status = "unsupported"
-		errText = dynamicLeaseRotationUnavailableDetail
+		errText = schedulerhistory.DynamicLeaseProviderUnavailableError
+	} else if isDynamicLeaseRotation(sched.Provider) {
+		// A201-L1: a dynamic-lease schedule queues one durable command per due
+		// edge. The predecessor is the lease the last command left live, an
+		// in-flight command defers this edge, and each command issues a lease
+		// of the schedule's TTL and revokes the one before.
+		if latest, found, lookupErr := a.store.LatestSecretStaticRotationCommandForKey(ctx, tenantID, sched.Key); lookupErr != nil {
+			return secretRotationScheduleRunResponse{}, commandRelease, lookupErr
+		} else if found && !latest.Terminal() {
+			return secretRotationScheduleRunResponse{}, commandRelease, secretRotationScheduleDeferredError{
+				reason: "command_in_flight", cause: errStatus(http.StatusConflict, staticRotationInFlightDetail),
+			}
+		} else if found && latest.Phase == store.SecretStaticRotationRollbackFailed {
+			err = errStatus(http.StatusConflict, staticRotationUnresolvedDetail)
+		} else if live := staticRotationLiveRef(latest); found && live != "" {
+			request.OldRef = live
+			rep.OldRef = live
+		}
+		if err == nil {
+			var cmd store.SecretStaticRotationCommand
+			cmd, err = a.queueDynamicLeaseRotationScheduled(ctx, tenantID, commandKey, requestBinding, sched.ID, request)
+			if err == nil {
+				rep = toStaticRotationReport(cmd)
+			}
+		}
+		if err != nil {
+			var public *apiError
+			if !errors.As(err, &public) {
+				return secretRotationScheduleRunResponse{}, commandRelease, applicationSecretMutationError(err)
+			}
+			err = applicationSecretMutationError(err)
+		}
+	} else {
+		// No other provider kind is schedulable: a terminal unsupported event
+		// advances and disables the schedule.
+		status = "unsupported"
+		errText = "scheduled rotation is unavailable"
 	}
 	if err != nil {
 		errText = secretRotationScheduleTerminalErrorDetail(err)

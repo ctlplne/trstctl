@@ -3269,6 +3269,9 @@ type SecretRotationScheduleUpserted struct {
 	Consumers               []string `json:"consumers,omitempty"`
 	RetireAfterSeconds      int      `json:"retire_after_seconds,omitempty"`
 	SinglePhaseAcknowledged bool     `json:"single_phase_acknowledged,omitempty"`
+	// TTLSeconds is the lease lifetime every scheduled dynamic-lease
+	// rotation requests (A201-L1).
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
 }
 
 // SecretRotationScheduleControlled changes future eligibility without
@@ -8012,7 +8015,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Key: pl.Key, OldRef: pl.OldRef, IntervalSeconds: pl.IntervalSeconds,
 			ConfigEventSequence: e.Sequence, Enabled: pl.Enabled, NextRunAt: nextRunAt,
 			CreatedAt: e.Time, UpdatedAt: e.Time, Consumers: pl.Consumers, RetireAfterSeconds: pl.RetireAfterSeconds,
-			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged,
+			SinglePhaseAcknowledged: pl.SinglePhaseAcknowledged, TTLSeconds: pl.TTLSeconds,
 		})
 	case EventSecretRotationSchedulePaused, EventSecretRotationScheduleResumed, EventSecretRotationScheduleRetired:
 		expectedAction := map[string]string{

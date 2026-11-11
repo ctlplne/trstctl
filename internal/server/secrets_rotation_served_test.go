@@ -487,14 +487,32 @@ func TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008(t *testin
 		t.Fatalf("static ignored TTL invoked rotator %d times, want zero", ignoredTTLRotator.calls)
 	}
 
-	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", tok,
-		"dynamic-rotation-schedule-fails-closed",
-		map[string]any{
-			"name": "unsupported-dynamic", "provider": "dynamic-lease:postgresql",
+	// A201-L1: a dynamic-lease schedule runs once it names a lease TTL and a
+	// provider that can issue and verify the lease; one that cannot is still
+	// refused before anything is persisted: no TTL is 400, a provider that is
+	// not configured is the fail-closed 503.
+	for _, c := range []struct {
+		key      string
+		schedule map[string]any
+		want     int
+	}{
+		{"dynamic-rotation-schedule-needs-ttl", map[string]any{
+			"name": "dynamic-without-ttl", "provider": "dynamic-lease:postgresql",
 			"key": "readonly", "old_ref": initialLease.ID, "interval_seconds": 60,
-		})
-	if status != http.StatusServiceUnavailable {
-		t.Fatalf("dynamic rotation schedule status=%d body=%s, want fail-closed 503", status, body)
+		}, http.StatusBadRequest},
+		{"dynamic-rotation-schedule-fails-closed", map[string]any{
+			"name": "unsupported-dynamic", "provider": "dynamic-lease:absent",
+			"key": "readonly", "old_ref": initialLease.ID, "interval_seconds": 60, "ttl_seconds": 600,
+		}, http.StatusServiceUnavailable},
+	} {
+		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", tok, c.key, c.schedule)
+		if status != c.want {
+			t.Fatalf("dynamic rotation schedule %s status=%d body=%s, want %d before persistence", c.key, status, body, c.want)
+		}
+	}
+	if dynamicBackend.issuedCount() != issuedBefore || dynamicBackend.revokedCount() != 0 || injectedDynamicRotator.calls != 0 {
+		t.Fatalf("a refused dynamic schedule reached the provider: issued/revoked=%d/%d rotator=%d",
+			dynamicBackend.issuedCount(), dynamicBackend.revokedCount(), injectedDynamicRotator.calls)
 	}
 	schedules, err := h.store.ListSecretRotationSchedulesPage(context.Background(), h.tenant, store.ZeroUUID, 100)
 	if err != nil || len(schedules) != 0 {

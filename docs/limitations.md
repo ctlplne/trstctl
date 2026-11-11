@@ -5753,11 +5753,14 @@ when off, requiring a KEK when on):
   for the role the secret names. Rotating a MongoDB, cloud IAM or Kubernetes lease
   is what comes next (`503` today); those leases issue, renew and revoke through
   the lease endpoints. A connector or static request that supplies `ttl_seconds`
-  returns `400`. New schedules accept `connector:<target>` and static providers;
-  scheduled dynamic-lease rotation is what comes next (creation returns `503`). Historical
-  dynamic-lease schedules, and static schedules whose provider no longer allows
-  static rotation, are marked `unsupported`, disabled, and make zero provider
-  calls. Scheduled ticks bind each exact due edge to one durable,
+  returns `400`. New schedules accept `connector:<target>`, static providers and
+  `dynamic-lease:<provider>` with `ttl_seconds` (A201-L1): each due edge queues the
+  same durable dynamic-lease command, issuing a lease of the schedule's TTL and
+  revoking the lease the last command left live; a provider that cannot issue and
+  verify the lease refuses the schedule with `503` before anything is stored.
+  Dynamic-lease schedules whose provider is no longer configured, and static
+  schedules whose provider no longer allows static rotation, are marked
+  `unsupported`, disabled, and make zero provider calls. Scheduled ticks bind each exact due edge to one durable,
   deterministic command before effects, execute at most 50 rotations while
   scanning at most 500 due rows, report every `approval_pending`,
   `command_in_flight`, `command_claimed`, or `config_revision_unanchored`

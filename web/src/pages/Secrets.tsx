@@ -325,6 +325,8 @@ export function Secrets() {
   const [scheduleOldRef, setScheduleOldRef] = useState("");
   const [scheduleProvider, setScheduleProvider] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState("86400");
+  // A201-L1: the lease lifetime each scheduled dynamic-lease rotation issues.
+  const [scheduleTTL, setScheduleTTL] = useState("");
   const [scheduleNextRunAt, setScheduleNextRunAt] = useState("");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [scheduleBusy, setScheduleBusy] = useState(false);
@@ -1132,11 +1134,20 @@ export function Secrets() {
       if (!key) throw new Error("Key is required");
       if (!oldRef) throw new Error("Old reference is required");
       if (!provider) throw new Error("Provider is required");
-      // connector:<target> and configured static providers are scheduled by the
-      // control plane (A15); a bare connector: or a dynamic-lease provider is
-      // refused here, before any request, with the served scope message.
-      if ((provider.startsWith("connector:") && provider.slice("connector:".length).trim() === "") || provider.startsWith("dynamic-lease:")) {
+      // connector:<target>, configured static providers (A15) and
+      // dynamic-lease:<provider> with a lease TTL (A201-L1) are scheduled by the
+      // control plane; a bare connector: or dynamic-lease: is refused here,
+      // before any request, with the served scope message.
+      const dynamicLease = provider.startsWith("dynamic-lease:");
+      if (
+        (provider.startsWith("connector:") && provider.slice("connector:".length).trim() === "") ||
+        (dynamicLease && provider.slice("dynamic-lease:".length).trim() === "")
+      ) {
         throw new Error(t("secrets.rotation.scheduleConnectorOnly"));
+      }
+      const ttlSeconds = Number(scheduleTTL.trim());
+      if (dynamicLease && (!scheduleTTL.trim() || !Number.isInteger(ttlSeconds) || ttlSeconds <= 0)) {
+        throw new Error(t("secrets.rotation.scheduleLeaseTTLRequired"));
       }
       const interval = Number(scheduleInterval);
       if (!Number.isFinite(interval) || interval <= 0) throw new Error("Interval seconds must be a positive number");
@@ -1154,12 +1165,14 @@ export function Secrets() {
         interval_seconds: Math.round(interval),
         enabled: scheduleEnabled,
         ...(nextRunAt ? { next_run_at: nextRunAt } : {}),
+        ...(dynamicLease ? { ttl_seconds: ttlSeconds } : {}),
       });
       setScheduleDialogOpen(false);
       setScheduleName("");
       setScheduleKey("");
       setScheduleOldRef("");
       setScheduleNextRunAt("");
+      setScheduleTTL("");
       setNotice(`Rotation schedule ${created.name} created; next run ${formatDate(created.next_run_at)}.`);
       await refreshRotationSchedules();
     } catch (err) {
@@ -3056,6 +3069,20 @@ export function Secrets() {
                 required
               />
             </label>
+            {scheduleProvider.trim().startsWith("dynamic-lease:") && (
+              <label className="grid gap-1 text-body font-medium">
+                {t("secrets.rotation.leaseTTLLabel")}
+                <input
+                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={scheduleTTL}
+                  onChange={(event) => setScheduleTTL(event.target.value)}
+                />
+              </label>
+            )}
             <label className="grid gap-1 text-body font-medium">
               {t("parity.firstRunOptional_7ecf76")}
               <input

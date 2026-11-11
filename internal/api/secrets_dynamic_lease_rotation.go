@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/schedulerhistory"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -38,7 +39,7 @@ const (
 	dynamicLeaseRotationTypeUnavailableDetail  = "dynamic-lease rotation needs a configured postgresql, mysql, redis or aws-sts dynamic-secret provider whose allowed roles include the secret name"
 	dynamicLeaseRotationProviderRequiredDetail = "dynamic-lease rotation names its provider as dynamic-lease:<provider>"
 	dynamicLeaseRotationTTLRequiredDetail      = "ttl_seconds is required for dynamic-lease rotation and must be positive"
-	dynamicLeaseRotationOldLeaseDetail         = "old_ref must be none or an active lease of this provider for the role the secret names"
+	dynamicLeaseRotationOldLeaseDetail         = schedulerhistory.DynamicLeaseOldLeaseError
 	dynamicLeaseRotationRetirePendingDetail    = "predecessor lease revocation is still pending at the provider"
 	dynamicLeaseRotationRetireFailedDetail     = "predecessor lease revocation failed at the provider"
 	// dynamicLeaseRotationIssueWait bounds how long one worker attempt waits
@@ -76,6 +77,16 @@ func (a *API) dynamicLeaseRotationProvider(tenantID, provider, role string, ttlS
 		return dynamicSecretConfiguredProvider{}, err
 	}
 	return configured, nil
+}
+
+// dynamicLeaseProviderGone reports whether a dynamic-lease schedule's provider
+// is no longer configured to issue and verify its leases: the typed 503 an
+// on-demand rotation answers (A201-L1). A role or TTL the provider refuses is
+// not "gone"; that due edge fails and the next one tries again.
+func (a *API) dynamicLeaseProviderGone(tenantID, provider, role string, ttlSeconds int) bool {
+	_, err := a.dynamicLeaseRotationProvider(tenantID, provider, role, ttlSeconds)
+	var public *apiError
+	return errors.As(err, &public) && public.status == http.StatusServiceUnavailable
 }
 
 // checkDynamicLeaseRotationPredecessor requires old_ref to be "none" or this
@@ -160,6 +171,17 @@ func (a *API) queueDynamicLeaseRotationExpected(ctx context.Context, tenantID, i
 	return a.queueDynamicLeaseRotationBound(ctx, tenantID, idempotencyKey, requestBinding, req, expectedVersion, "")
 }
 func (a *API) queueDynamicLeaseRotationBound(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest, expectedVersion int, cloudChangeID string) (store.SecretStaticRotationCommand, error) {
+	return a.queueDynamicLeaseRotationCommand(ctx, tenantID, idempotencyKey, requestBinding, req, expectedVersion, cloudChangeID, "")
+}
+
+// queueDynamicLeaseRotationScheduled is a dynamic-lease schedule's due edge
+// (A201-L1): the same durable command, keyed by the schedule run's command key
+// and naming the schedule that queued it.
+func (a *API) queueDynamicLeaseRotationScheduled(ctx context.Context, tenantID, commandKey, requestBinding, scheduleID string, req secretRotationRequest) (store.SecretStaticRotationCommand, error) {
+	return a.queueDynamicLeaseRotationCommand(ctx, tenantID, commandKey, requestBinding, req, 0, "", scheduleID)
+}
+
+func (a *API) queueDynamicLeaseRotationCommand(ctx context.Context, tenantID, idempotencyKey, requestBinding string, req secretRotationRequest, expectedVersion int, cloudChangeID, scheduleID string) (store.SecretStaticRotationCommand, error) {
 	if _, err := a.dynamicLeaseRotationProvider(tenantID, req.Provider, req.Key, *req.TTLSeconds); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
@@ -200,7 +222,7 @@ func (a *API) queueDynamicLeaseRotationBound(ctx context.Context, tenantID, idem
 		CloudChangeID: cloudChangeID,
 		ID:            id, TenantEpoch: epoch, Provider: req.Provider, Key: req.Key, OldRef: req.OldRef,
 		ExpectedVersion: current.Version, IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
-		TTLSeconds: *req.TTLSeconds,
+		TTLSeconds: *req.TTLSeconds, ScheduleID: scheduleID,
 	}
 	if err := a.appendAndProjectStaticRotation(ctx, tenantID, id, projections.EventSecretStaticRotationQueued, payload); err != nil {
 		return store.SecretStaticRotationCommand{}, err

@@ -236,8 +236,9 @@ func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully
 	scheduleProviderDescription, _ := scheduleRequest["properties"].(map[string]any)["provider"].(map[string]any)["description"].(string)
 	if !strings.Contains(scheduleProviderDescription, "connector:<target>") ||
 		!strings.Contains(scheduleProviderDescription, "allow_static_rotation") ||
+		!strings.Contains(scheduleProviderDescription, "dynamic-lease:<provider> with ttl_seconds") ||
 		!strings.Contains(scheduleProviderDescription, "503") {
-		t.Fatalf("schedule provider description=%q, want connector plus static-provider contract with the dynamic-lease refusal", scheduleProviderDescription)
+		t.Fatalf("schedule provider description=%q, want connector, static-provider and dynamic-lease (A201-L1) contracts with the fail-closed 503", scheduleProviderDescription)
 	}
 
 	due := schemas["SecretRotationDueRun"].(map[string]any)
