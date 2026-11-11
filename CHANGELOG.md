@@ -2,6 +2,12 @@
 
 ### Added
 
+- OAuth provider actions read the change back before recording it (A170-L2). After the provider
+  confirms a revoke, block or admin-consent revoke, trstctl reads the grants, tokens or application back
+  (up to three reads a second apart) and records the read back in the finding's detail; a grant still
+  listed or an app still active after the provider's confirmation is recorded failed, naming what is left,
+  instead of confirmed. Before, the acknowledgement alone was recorded and only the next discovery run
+  re-checked.
 - A Microsoft Entra application's admin consent for every user can be revoked at the provider
   (A170-L1). A Graph grant with consent type `AllPrincipals` names no user, so revoking it used to be
   refused ("block the application instead"); the revoke route now deletes exactly that tenant-wide

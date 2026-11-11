@@ -700,7 +700,8 @@ revoked; its apps are blocked in its own admin console. An Entra application an
 administrator consented to for every user (a Graph grant with consent type
 `AllPrincipals`, which names no user) offers **Revoke admin consent at provider**
 instead (A170-L1): it deletes that admin consent and leaves each user's own grant.
-The finding then shows what the provider confirmed.
+The finding then shows what the provider confirmed, read back from the provider
+(A170-L2); a grant or app the provider still shows after confirming is recorded failed.
 
 ### Annotate a leaked credential where it was seen
 

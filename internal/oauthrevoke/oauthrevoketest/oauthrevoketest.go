@@ -41,6 +41,27 @@ type Server struct {
 	// google: user → client → token present
 	googleTokens map[string]map[string]bool
 	unauthorized int
+	// sticky acknowledges every removal without applying it (A170-L2).
+	sticky bool
+	// refuseReads answers every read 403, as a connection that may change
+	// but not read would see.
+	refuseReads bool
+}
+
+// SetRefuseReads makes every read answer 403 (A170-L2).
+func (s *Server) SetRefuseReads(refuse bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refuseReads = refuse
+}
+
+// SetSticky makes the stand-in acknowledge removals, deactivations and
+// disables without applying them, as a provider that re-grants on its own
+// would look to a read back (A170-L2).
+func (s *Server) SetSticky(sticky bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sticky = sticky
 }
 
 // New starts a stand-in that accepts the given token on every API.
@@ -161,6 +182,13 @@ func (s *Server) authorized(r *http.Request, scheme string) bool {
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.EscapedPath()
+	s.mu.Lock()
+	refuse := s.refuseReads && r.Method == http.MethodGet && !strings.HasSuffix(path, "/oauth2PermissionGrants")
+	s.mu.Unlock()
+	if refuse {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	switch {
 	case strings.HasPrefix(path, "/api/v1/"):
 		if !s.authorized(r, "SSWS ") {
@@ -180,7 +208,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		parts := strings.Split(strings.TrimPrefix(path, "/admin/directory/v1/users/"), "/")
-		if r.Method != http.MethodDelete || len(parts) != 3 || parts[1] != "tokens" {
+		if (r.Method != http.MethodDelete && r.Method != http.MethodGet) || len(parts) != 3 || parts[1] != "tokens" {
 			http.NotFound(w, r)
 			return
 		}
@@ -191,7 +219,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		delete(s.googleTokens[user], client)
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"clientId": client, "userKey": user})
+			return
+		}
+		if !s.sticky {
+			delete(s.googleTokens[user], client)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.NotFound(w, r)
@@ -215,15 +250,44 @@ func (s *Server) okta(w http.ResponseWriter, r *http.Request, parts []string) {
 			http.NotFound(w, r)
 			return
 		}
-		store[user][client] = 0
+		if !s.sticky {
+			store[user][client] = 0
+		}
 		w.WriteHeader(http.StatusNoContent)
+	case r.Method == http.MethodGet && len(parts) == 5 && parts[0] == "users" && parts[2] == "clients" && (parts[4] == "grants" || parts[4] == "tokens"):
+		user, client := unescape(parts[1]), unescape(parts[3])
+		store := s.oktaGrants
+		if parts[4] == "tokens" {
+			store = s.oktaTokens
+		}
+		items := make([]map[string]string, 0, store[user][client])
+		for i := 0; i < store[user][client]; i++ {
+			items = append(items, map[string]string{"clientId": client, "userId": user})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(items)
+	case r.Method == http.MethodGet && len(parts) == 2 && parts[0] == "apps":
+		app := unescape(parts[1])
+		active, ok := s.oktaApps[app]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		status := "INACTIVE"
+		if active {
+			status = "ACTIVE"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": app, "status": status})
 	case r.Method == http.MethodPost && len(parts) == 4 && parts[0] == "apps" && parts[2] == "lifecycle" && parts[3] == "deactivate":
 		app := unescape(parts[1])
 		if _, ok := s.oktaApps[app]; !ok {
 			http.NotFound(w, r)
 			return
 		}
-		s.oktaApps[app] = false
+		if !s.sticky {
+			s.oktaApps[app] = false
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("{}"))
 	default:
@@ -261,12 +325,23 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request, rest string) {
 		id := unescape(strings.TrimPrefix(rest, "oauth2PermissionGrants/"))
 		for i, g := range s.graphGrants {
 			if g.ID == id {
-				s.graphGrants = append(s.graphGrants[:i], s.graphGrants[i+1:]...)
+				if !s.sticky {
+					s.graphGrants = append(s.graphGrants[:i], s.graphGrants[i+1:]...)
+				}
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 		}
 		http.NotFound(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(rest, "servicePrincipals/"):
+		sp := unescape(strings.TrimPrefix(rest, "servicePrincipals/"))
+		enabled, ok := s.graphSPs[sp]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": sp, "accountEnabled": enabled})
 	case r.Method == http.MethodPatch && strings.HasPrefix(rest, "servicePrincipals/"):
 		sp := unescape(strings.TrimPrefix(rest, "servicePrincipals/"))
 		if _, ok := s.graphSPs[sp]; !ok {
@@ -281,7 +356,9 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request, rest string) {
 			http.Error(w, `{"error":{"code":"BadRequest"}}`, http.StatusBadRequest)
 			return
 		}
-		s.graphSPs[sp] = *body.AccountEnabled
+		if !s.sticky {
+			s.graphSPs[sp] = *body.AccountEnabled
+		}
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.NotFound(w, r)

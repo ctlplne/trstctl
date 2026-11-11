@@ -5281,7 +5281,12 @@ control only in its admin console, so a block there is refused with that
 reason. Both take `connectors:write`, are idempotent, and run from a
 control-plane outbox row; the finding records the request as queued and then
 what the provider confirmed (`metadata.provider_actions`: confirmed, already
-absent, or failed with the provider's status). A provider that is unreachable,
+absent, or failed with the provider's status). Each action reads the change
+back before it is recorded (A170-L2): the user's grants and tokens, the
+admin consent, the Google token, or the application's state, up to three
+reads a second apart for a directory that is eventually consistent; one the
+provider acknowledged but still shows (a provider that re-grants on its own)
+is recorded failed, naming what is left, rather than confirmed. A provider that is unreachable,
 throttles or fails on its side is retried; a token it refuses fails once,
 visibly. The Discovery finding panel has **Revoke grant at provider** and
 **Block app at provider**. Proven against in-repository stand-ins of the three

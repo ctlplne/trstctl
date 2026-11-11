@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2945 annotated sites across 33 rules. Each row is
+2947 annotated sites across 33 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (663 sites)
+### G101 — CWE-798 Use of hardcoded credentials (665 sites)
 
 | Location | Reason |
 |---|---|
@@ -573,6 +573,8 @@ not this file.
 | `internal/server/notification_tenant_channel_families_served_test.go:87` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/notification_tenant_channel_families_served_test.go:88` | fabricated fixture credential (CWE-798) |
 | `internal/server/oauth_provider_action_served_test.go:34` | fabricated fixture credential (CWE-798) |
+| `internal/server/oauth_readback_served_test.go:23` | fabricated fixture credential (CWE-798) |
+| `internal/server/oauth_readback_served_test.go:40` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/oauth_tenant_consent_served_test.go:26` | fabricated fixture credential (CWE-798) |
 | `internal/server/oauth_tenant_consent_served_test.go:45` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/oidc_issuer.go:112` | the token endpoint's path and the token lifetime, no credential (CWE-798) |
