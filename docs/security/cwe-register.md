@@ -1733,7 +1733,7 @@ not this file.
 | `internal/server/pam_gateway_azure_served_test.go:87` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_gateway_clickhouse_served_test.go:125` | the stock curl against the test's own tunnel (CWE-78) |
-| `internal/server/pam_gateway_fixture_test.go:367` | the stock ssh client against the test's own tunnel (CWE-78) |
+| `internal/server/pam_gateway_fixture_test.go:369` | the stock ssh client against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_gcp_served_test.go:86` | stock curl uses only the test-owned credential-free gateway tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:171` | the stock kubectl against the test's own tunnel (CWE-78) |
 | `internal/server/pam_gateway_kubernetes_kind_test.go:194` | the stock kubectl against the test's own tunnel (CWE-78) |
@@ -1757,7 +1757,7 @@ not this file.
 | `internal/server/pam_signin_served_test.go:46` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_signin_served_test.go:68` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/pam_signin_served_test.go:498` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/pam_signin_served_test.go:504` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:68` | docker with the lab's own arguments and the runner's image (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:146` | the lab's own container names (CWE-78) |
 | `internal/server/pqc_posture_two_hosts_lab_a176_test.go:161` | the lab's own container name (CWE-78) |

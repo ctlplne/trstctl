@@ -106,6 +106,27 @@ func Match(signIns []SignIn, windows []Window, slack time.Duration) []Matched {
 	return out
 }
 
+// Settled splits the sign-ins a collection may judge now from the ones it
+// leaves for a later collection (A274-L1). trstctl records its own use of an
+// account (a health check's sign-in, say) only after the sign-in has
+// happened, so a dated sign-in younger than settle may be trstctl's own
+// whose window has not landed yet; a later collection, whose lookback still
+// covers it, judges it once its window could have. A sign-in dated only when
+// a collection first saw it (Earliest set) has no time of its own to wait
+// out and is judged now.
+func Settled(signIns []SignIn, now time.Time, settle time.Duration) (judged []SignIn, deferred int) {
+	cutoff := now.Add(-settle)
+	judged = make([]SignIn, 0, len(signIns))
+	for _, s := range signIns {
+		if s.Earliest.IsZero() && s.At.After(cutoff) {
+			deferred++
+			continue
+		}
+		judged = append(judged, s)
+	}
+	return judged, deferred
+}
+
 // Bypasses are the sign-ins no window explains.
 func Bypasses(matched []Matched) []SignIn {
 	var out []SignIn

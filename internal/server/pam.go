@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 	"trstctl.com/trstctl/internal/accessconsole"
 	"trstctl.com/trstctl/internal/accessdesktop"
@@ -212,6 +213,10 @@ type PAMSSHTarget struct {
 }
 
 type pamService struct {
+	// signInSettle is how old a dated sign-in must be before a collection
+	// judges it (A274-L1), in nanoseconds; nil or zero is
+	// pamsignin.DefaultSlack.
+	signInSettle                        *atomic.Int64
 	windowsDependentInventoryEnabled    bool
 	windowsLocalAccountInventoryEnabled bool
 	desktopJobEnabled                   bool
@@ -421,7 +426,7 @@ func newPAMService(d pamDeps) (*pamService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pamService{desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled, webJobEnabled: d.WebJobEnabled,
+	return &pamService{signInSettle: new(atomic.Int64), desktopJobEnabled: d.DesktopJobEnabled, adDesktopJobEnabled: d.ADDesktopJobEnabled, netDeviceJobEnabled: d.NetDeviceJobEnabled, webJobEnabled: d.WebJobEnabled,
 		commandRuleJobKinds:                 d.CommandRuleJobKinds,
 		windowsDependentInventoryEnabled:    d.WindowsDependentInventoryEnabled,
 		windowsLocalAccountInventoryEnabled: d.WindowsLocalAccountInventoryEnabled,

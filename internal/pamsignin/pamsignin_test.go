@@ -159,3 +159,27 @@ func TestConfigAndBypassFindingA274(t *testing.T) {
 		t.Fatalf("finding: %+v", f)
 	}
 }
+
+// A274-L1: a collection judges a dated sign-in only once it is older than
+// the settle time, so trstctl's own record of it can land first; a sign-in
+// dated at first sight is judged at once.
+func TestSettledLeavesRecentDatedSignInsA274L1(t *testing.T) {
+	now := time.Date(2026, 11, 11, 6, 0, 0, 0, time.UTC)
+	signIns := []SignIn{
+		{Account: "svc", At: now.Add(-time.Minute), Ref: "old"},
+		{Account: "svc", At: now.Add(-30 * time.Second), Ref: "at-the-edge"},
+		{Account: "svc", At: now.Add(-10 * time.Second), Ref: "recent"},
+		{Account: "svc", At: now, Earliest: now.Add(-time.Hour), Ref: "first-seen"},
+	}
+	judged, deferred := Settled(signIns, now, 30*time.Second)
+	refs := []string{}
+	for _, s := range judged {
+		refs = append(refs, s.Ref)
+	}
+	if deferred != 1 || len(refs) != 3 || refs[0] != "old" || refs[1] != "at-the-edge" || refs[2] != "first-seen" {
+		t.Fatalf("judged %v, deferred %d", refs, deferred)
+	}
+	if judged, deferred := Settled(signIns, now.Add(time.Minute), 30*time.Second); len(judged) != 4 || deferred != 0 {
+		t.Fatalf("a minute later: judged %d, deferred %d", len(judged), deferred)
+	}
+}

@@ -131,6 +131,9 @@ func TestServedBypassDetectionOnALinuxHostA274(t *testing.T) {
 			Attestors: []attest.Attestor{servedPAMAttestor{}}}
 	})
 	registerServedTenantID(t, h, tenant, "A274 bypass detection")
+	// This proof collects right after each sign-in; how long a collection
+	// waits before judging one is proven by A274-L1's test.
+	h.srv.pam.signInSettle.Store(int64(time.Millisecond))
 	tok := seedScopedToken(t, h.store, tenant, "discovery:read", "discovery:write", "secrets:read", "secrets:write")
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, "a274-source", map[string]any{
@@ -329,6 +332,9 @@ func TestServedBypassDetectionOnADatabaseA274(t *testing.T) {
 	ctx := context.Background()
 	f := startGatewayFixture(t, gatewayFixtureOptions{vaulted: true})
 	h := f.h
+	// This proof collects right after each sign-in; how long a collection
+	// waits before judging one is proven by A274-L1's test.
+	h.srv.pam.signInSettle.Store(int64(time.Millisecond))
 	custodian := seedScopedTokenSubject(t, h.store, h.tenant, "a274-db-secrets", "secrets:read", "secrets:write")
 	registrar := seedScopedTokenSubject(t, h.store, h.tenant, "a274-db-registrar", "access:read", "access:targets.write")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "a274-db-requester", "access:read", "access:sessions.open")

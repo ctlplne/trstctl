@@ -632,6 +632,13 @@
 
 ### Fixed
 
+- A sign-in collection no longer flags trstctl's own health check before its record lands (A274-L1).
+  trstctl records a credential health check when it finishes, after the check has signed in, so a
+  `pam_signin` run that read the sign-in in between raised a compromised-credential finding for
+  trstctl's own sign-in. A run now judges a dated sign-in only once it is older than the 30-second
+  clock-skew allowance and reads back that much past its lookback, so the next run judges the ones it
+  left: an outside sign-in is still flagged, one run later. A sign-in dated only when a run first saw
+  it (a MySQL connection) is judged at once.
 - A cloud-store migration member's gate waits for the load balancer (A166-L3). The gate closed as soon
   as the certificate store served the successor, while the provider's load balancers could still be
   serving the predecessor until the change propagated. When the target names the endpoint its load

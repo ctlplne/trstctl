@@ -9867,7 +9867,9 @@ connection (sshd records from the journal and the auth log files; Windows logon 
 OpenSSH; PostgreSQL `pg_stat_activity`, MySQL `performance_schema.threads`, SQL Server
 `sys.dm_exec_sessions`), explains each by a session, a revealed check-out, a rotation or a
 health check of that account (30 seconds of clock skew allowed), and records every
-unexplained sign-in as a `compromised_credential` finding. The console creates the source.
+unexplained sign-in as a `compromised_credential` finding. A dated sign-in under 30 seconds
+old waits for the next run (A274-L1), so trstctl's own record of a health check that signed
+in just before the run is there to explain it; an outside sign-in is flagged one run later. The console creates the source.
 Each sign-in read is recorded, metadata only, with the verdict of the run that first read it;
 the console, `GET /api/v1/access/signins` and `trstctl access signins list` list them, and
 `pam.signin_retention` (default 90 days) purges them while their findings stay.

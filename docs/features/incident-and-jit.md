@@ -131,7 +131,11 @@ sign-in no span explains (allowing 30 seconds of clock skew) becomes a
 `compromised_credential` finding (CAP-ITDR-02, OWASP NHI2) with the account, the client
 address, the method, the collector and the target-side reference as evidence — the input to
 the credential compromise workflow above. A later run that reads the same sign-in refreshes
-the finding instead of repeating it.
+the finding instead of repeating it. trstctl records its own use of an account (a health
+check, say) only after the sign-in has happened, so a run judges a dated sign-in only once it
+is older than the same 30 seconds and leaves a more recent one to the next run, which reads
+back that much past its lookback; a sign-in dated only when a run first saw it (a MySQL
+connection) is judged at once.
 
 ```json
 {"name": "orders-db-signins", "kind": "pam_signin",

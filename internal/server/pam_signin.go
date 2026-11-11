@@ -100,10 +100,22 @@ func (p *configuredDynamicProvider) DynamicSecretTargetAddress() string {
 }
 
 // pamSignInCollection is one run's sign-ins and how each was explained.
+// Deferred counts the sign-ins too recent to judge yet (A274-L1).
 type pamSignInCollection struct {
 	ProviderID, ProviderType, Collector string
 	Accounts                            []string
 	Matched                             []pamsignin.Matched
+	Deferred                            int
+}
+
+// settle is how old a dated sign-in must be before a collection judges it.
+func (s *pamService) settle() time.Duration {
+	if s.signInSettle != nil {
+		if v := s.signInSettle.Load(); v > 0 {
+			return time.Duration(v)
+		}
+	}
+	return pamsignin.DefaultSlack
 }
 
 func (s *pamService) signInSource(tenantID, providerID string) (pamSignInSource, error) {
@@ -146,12 +158,15 @@ func (s *pamService) collectSignIns(ctx context.Context, tenantID, providerID st
 	if err != nil {
 		return pamSignInCollection{}, err
 	}
+	// A274-L1: a sign-in younger than the settle time may be trstctl's own
+	// whose window has not been recorded yet; the next run judges it.
+	judged, deferred := pamsignin.Settled(signIns, now, s.settle())
 	windows, err := s.signInWindows(ctx, tenantID, src, roles, since.Add(-pamsignin.DefaultSlack), now)
 	if err != nil {
 		return pamSignInCollection{}, err
 	}
 	return pamSignInCollection{ProviderID: providerID, ProviderType: src.DynamicSecretProviderType(), Collector: collector, Accounts: accounts,
-		Matched: pamsignin.Match(signIns, windows, pamsignin.DefaultSlack)}, nil
+		Matched: pamsignin.Match(judged, windows, pamsignin.DefaultSlack), Deferred: deferred}, nil
 }
 
 // signInWindows are the spans in [from, to] in which trstctl or a person it
@@ -380,7 +395,9 @@ func (d *issuanceDispatcher) executePAMSignInDiscoveryRun(ctx context.Context, t
 		lookback = time.Duration(cfg.LookbackSeconds) * time.Second
 	}
 	now := time.Now().UTC()
-	collection, err := d.pamSignIns(ctx, tenantID, cfg.ProviderID, src.ID, run.ID, now.Add(-lookback), now, !run.DryRun)
+	// The run reads back past its lookback by the settle time, so a sign-in
+	// the previous run left for later (A274-L1) is read again and judged.
+	collection, err := d.pamSignIns(ctx, tenantID, cfg.ProviderID, src.ID, run.ID, now.Add(-lookback-pamsignin.DefaultSlack), now, !run.DryRun)
 	if err != nil {
 		return netscan.Report{}, "failed", pamSignInFailure(err), nil
 	}

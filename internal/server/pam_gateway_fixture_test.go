@@ -57,6 +57,8 @@ type gatewayFixture struct {
 	// requester opens sessions; operator registers targets and terminates;
 	// auditor reads and exports recordings.
 	requester, reviewerOne, reviewerTwo, operator, auditor string
+	// pgAdminDSN reaches the fixture's PostgreSQL as its administrator.
+	pgAdminDSN string
 	// vaultDSN is the vaulted account's starting DSN (opts.vaulted).
 	vaultDSN string
 	// mysqlVaultDSN is the vaulted MySQL account's starting DSN
@@ -122,7 +124,7 @@ func startGatewayFixture(t *testing.T, opts gatewayFixtureOptions) *gatewayFixtu
 	t.Cleanup(stopPG)
 	seedPAMPostgresTable(t, pgDSN, opts.commandRules)
 	adminDSNRef := pamPostgresAdminFileRef(t, pgDSN)
-	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir()}
+	f := &gatewayFixture{t: t, objects: s3test.NewServer(t), gatewayLog: &lockedBuffer{}, dir: t.TempDir(), pgAdminDSN: pgDSN}
 	if opts.vaulted {
 		_, f.vaultDSN = provisionTwoUserTarget(t, pgDSN)
 	}
