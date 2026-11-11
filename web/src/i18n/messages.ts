@@ -16437,6 +16437,19 @@ export const messages = {
       "Revoke the grant {user} gave {app}, or block {app} so no one can grant it again. trstctl acts through the admin connection the source names.",
     description: "Explanation of the OAuth grant provider actions; names the user and application.",
   },
+  "discovery.findings.oauthProvider.helpTenantWide": {
+    defaultMessage:
+      "An administrator consented to {app} for every user in the tenant. Revoke that admin consent, or block {app} so no one can grant it again. trstctl acts through the admin connection the source names; each user's own grant stays.",
+    description: "A170-L1: explanation of the provider actions for Microsoft Graph's admin consent for every user (consentType AllPrincipals).",
+  },
+  "discovery.findings.oauthProvider.revokeTenantWide": {
+    defaultMessage: "Revoke admin consent at provider",
+    description: "A170-L1: button that starts revoking Microsoft Graph's admin consent for every user.",
+  },
+  "discovery.findings.oauthProvider.revokeTenantWideConfirm": {
+    defaultMessage: "Revoke at the provider the admin consent that lets every user in the tenant use {app}? Each user's own grant stays.",
+    description: "A170-L1: confirmation before revoking Microsoft Graph's admin consent for every user.",
+  },
   "discovery.findings.oauthProvider.revokeLabel": { defaultMessage: "Grant revocation", description: "Label of the revoke action in its status line." },
   "discovery.findings.oauthProvider.blockLabel": { defaultMessage: "App block", description: "Label of the block action in its status line." },
   "discovery.findings.oauthProvider.state": {

@@ -139,7 +139,10 @@ func (a *API) oauthProviderActionIntent(ctx context.Context, tenantID, findingID
 	if oauthrevoke.NormalizeProvider(provider) == "" {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "the grant's provider "+provider+" has no served admin API; act in its own console")
 	}
-	if action == orchestrator.OAuthActionRevokeGrant && user == "" {
+	// A170-L1: Microsoft Graph's admin consent for every user (consentType
+	// AllPrincipals) names no user and is revoked as the tenant's grant.
+	tenantWide := oauthrevoke.NormalizeProvider(provider) == "microsoft" && strings.EqualFold(metadataString(meta, "consent_type"), "AllPrincipals")
+	if action == orchestrator.OAuthActionRevokeGrant && user == "" && !tenantWide {
 		return orchestrator.OAuthProviderActionIntent{}, errStatus(http.StatusConflict, "the grant names no user to revoke it for; block the application instead")
 	}
 	if action == orchestrator.OAuthActionBlockApp && !oauthrevoke.CanBlock(provider) {
@@ -155,6 +158,6 @@ func (a *API) oauthProviderActionIntent(ctx context.Context, tenantID, findingID
 	}
 	return orchestrator.OAuthProviderActionIntent{
 		FindingID: finding.ID, SourceID: finding.SourceID, Action: action, Provider: oauthrevoke.NormalizeProvider(provider),
-		AppID: appID, Principal: user, Reason: reason,
+		AppID: appID, Principal: user, Reason: reason, TenantWide: tenantWide && action == orchestrator.OAuthActionRevokeGrant,
 	}, nil
 }

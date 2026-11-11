@@ -7,7 +7,8 @@ export type OAuthProviderAction = "revoke" | "block";
 
 type ProviderActionState = { status?: string; detail?: string; provider?: string };
 
-const blockable = new Set(["okta", "microsoft", "entra", "azuread", "azure-ad", "microsoft365", "m365", "graph"]);
+const graphProviders = new Set(["microsoft", "entra", "azuread", "azure-ad", "microsoft365", "m365", "graph"]);
+const blockable = new Set(["okta", ...graphProviders]);
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -35,6 +36,9 @@ export function OAuthGrantProviderActions({
   const user = text(meta.principal);
   const actions = (meta.provider_actions ?? {}) as Record<string, ProviderActionState>;
   const canBlock = blockable.has(provider.toLowerCase());
+  // A170-L1: Microsoft Graph's admin consent for every user names no user
+  // and is revoked as the tenant's grant; each user's own grant stays.
+  const tenantWide = !user && graphProviders.has(provider.toLowerCase()) && text(meta.consent_type).toLowerCase() === "allprincipals";
   const states: [string, ProviderActionState | undefined][] = [
     [t("discovery.findings.oauthProvider.revokeLabel"), actions.revoke_grant],
     [t("discovery.findings.oauthProvider.blockLabel"), actions.block_app],
@@ -50,7 +54,11 @@ export function OAuthGrantProviderActions({
       <h3 id="oauth-provider-heading" className="font-medium">
         {t("discovery.findings.oauthProvider.heading", { provider: provider || "-" })}
       </h3>
-      <p className="mt-1 text-muted-foreground">{t("discovery.findings.oauthProvider.help", { app: app || "-", user: user || "-" })}</p>
+      <p className="mt-1 text-muted-foreground">
+        {tenantWide
+          ? t("discovery.findings.oauthProvider.helpTenantWide", { app: app || "-" })
+          : t("discovery.findings.oauthProvider.help", { app: app || "-", user: user || "-" })}
+      </p>
       <ul className="mt-2 grid gap-1">
         {states
           .filter(([, state]) => state?.status)
@@ -61,9 +69,11 @@ export function OAuthGrantProviderActions({
       {confirm ? (
         <div className="mt-3 grid gap-2">
           <p>
-            {confirm === "revoke"
-              ? t("discovery.findings.oauthProvider.revokeConfirm", { app: app || "-", user: user || "-" })
-              : t("discovery.findings.oauthProvider.blockConfirm", { app: app || "-" })}
+            {confirm === "block"
+              ? t("discovery.findings.oauthProvider.blockConfirm", { app: app || "-" })
+              : tenantWide
+                ? t("discovery.findings.oauthProvider.revokeTenantWideConfirm", { app: app || "-" })
+                : t("discovery.findings.oauthProvider.revokeConfirm", { app: app || "-", user: user || "-" })}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={() => void run(confirm)}>
@@ -76,8 +86,8 @@ export function OAuthGrantProviderActions({
         </div>
       ) : (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="destructive-outline" disabled={busy || !user} onClick={() => setConfirm("revoke")}>
-            {t("discovery.findings.oauthProvider.revoke")}
+          <Button type="button" size="sm" variant="destructive-outline" disabled={busy || (!user && !tenantWide)} onClick={() => setConfirm("revoke")}>
+            {tenantWide ? t("discovery.findings.oauthProvider.revokeTenantWide") : t("discovery.findings.oauthProvider.revoke")}
           </Button>
           {canBlock ? (
             <Button type="button" size="sm" variant="destructive-outline" disabled={busy} onClick={() => setConfirm("block")}>

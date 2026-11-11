@@ -5267,7 +5267,13 @@ reference (`env:NAME`), never a token. `POST
 findings revoke-oauth-grant`) revokes, at the provider, every grant and refresh
 token the finding's user gave its application: Okta's user client grants and
 tokens, Graph's delegated permission grants for that user and service
-principal, Google's user token for that client. `POST
+principal, Google's user token for that client. A Graph admin consent for
+every user (consentType `AllPrincipals`, a grant that names no user) is revoked
+as the tenant's grant (A170-L1): the same route deletes exactly that admin
+consent for the application, leaving each user's own grant, and the panel's
+button reads **Revoke admin consent at provider**; a grant that names no user
+and is not such a consent is still refused. Okta and Google expose no
+tenant-wide consent grant for this action. `POST
 /api/v1/discovery/findings/{id}/oauth-grant/block` (`... block-oauth-app`)
 deactivates the Okta application or disables the Entra service principal so no
 one can sign in to it or grant it again; Google Workspace exposes app access

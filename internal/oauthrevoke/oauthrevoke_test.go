@@ -87,3 +87,40 @@ func TestProvidersRevokeAndBlockWhatTheProviderConfirms(t *testing.T) {
 		t.Fatal("an unserved provider was accepted")
 	}
 }
+
+// A170-L1: Microsoft Graph's admin consent for every user (consentType
+// AllPrincipals, no principal) is its own grant. A per-user revoke never
+// reaches it; the tenant-wide revoke deletes exactly it, leaving each user's
+// own grants, and a second one finds nothing left. Okta and Google have no
+// such grant for this action to name.
+func TestGraphRevokesTheTenantWideAdminConsentA170L1(t *testing.T) {
+	ctx := context.Background()
+	s := oauthrevoketest.New(a170Token)
+	t.Cleanup(s.Close)
+	s.SeedGraph("sp-exfil",
+		oauthrevoketest.GraphGrant{ID: "g-all", ClientID: "sp-exfil", ConsentType: "AllPrincipals"},
+		oauthrevoketest.GraphGrant{ID: "g-carol", ClientID: "sp-exfil", PrincipalID: "user-carol"},
+		oauthrevoketest.GraphGrant{ID: "g-other-app", ClientID: "sp-other", ConsentType: "AllPrincipals"})
+	graph := provider(t, s, "entra", a170Token)
+	if got, err := graph.RevokeGrant(ctx, oauthrevoke.Grant{Principal: "user-carol", AppID: "sp-exfil"}); err != nil || got.Removed != 1 {
+		t.Fatalf("per-user revoke = %+v %v", got, err)
+	}
+	if s.GraphTenantWideGrants("sp-exfil") != 1 {
+		t.Fatal("a per-user revoke touched the tenant-wide admin consent")
+	}
+	got, err := graph.RevokeGrant(ctx, oauthrevoke.Grant{AppID: "sp-exfil", TenantWide: true})
+	if err != nil || got.Status != oauthrevoke.Confirmed || got.Removed != 1 {
+		t.Fatalf("tenant-wide revoke = %+v %v", got, err)
+	}
+	if s.GraphTenantWideGrants("sp-exfil") != 0 || s.GraphTenantWideGrants("sp-other") != 1 {
+		t.Fatal("the tenant-wide revoke left the admin consent or took another application's")
+	}
+	if again, err := graph.RevokeGrant(ctx, oauthrevoke.Grant{AppID: "sp-exfil", TenantWide: true}); err != nil || again.Status != oauthrevoke.AlreadyAbsent {
+		t.Fatalf("second tenant-wide revoke = %+v %v", again, err)
+	}
+	for _, name := range []string{"okta", "google-workspace"} {
+		if _, err := provider(t, s, name, a170Token).RevokeGrant(ctx, oauthrevoke.Grant{AppID: "app", TenantWide: true}); !errors.Is(err, oauthrevoke.ErrUnsupported) {
+			t.Fatalf("%s tenant-wide revoke = %v; want ErrUnsupported", name, err)
+		}
+	}
+}

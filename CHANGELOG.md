@@ -2,6 +2,11 @@
 
 ### Added
 
+- A Microsoft Entra application's admin consent for every user can be revoked at the provider
+  (A170-L1). A Graph grant with consent type `AllPrincipals` names no user, so revoking it used to be
+  refused ("block the application instead"); the revoke route now deletes exactly that tenant-wide
+  admin consent for the application, leaving each user's own grant, and the Discovery finding panel
+  offers **Revoke admin consent at provider** with a confirmation that says so.
 - GCP Cloud KMS managed-key custody can run on a workload identity instead of a static bearer token
   (A169-L1). `managed_keys.gcp.workload_identity` (or `TRSTCTL_MANAGED_KEYS_GCP_WORKLOAD_*`) names the
   workload identity pool provider and the projected OIDC token file; the isolated signer exchanges that

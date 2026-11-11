@@ -59,7 +59,7 @@ func (d *issuanceDispatcher) handleOAuthProviderAction(ctx context.Context, m or
 	var result oauthrevoke.Result
 	switch in.Action {
 	case orchestrator.OAuthActionRevokeGrant:
-		result, err = provider.RevokeGrant(ctx, oauthrevoke.Grant{Principal: in.Principal, AppID: in.AppID})
+		result, err = provider.RevokeGrant(ctx, oauthrevoke.Grant{Principal: in.Principal, AppID: in.AppID, TenantWide: in.TenantWide})
 	case orchestrator.OAuthActionBlockApp:
 		result, err = provider.BlockApp(ctx, in.AppID)
 	default:

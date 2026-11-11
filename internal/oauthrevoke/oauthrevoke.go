@@ -48,10 +48,14 @@ const (
 // ErrUnsupported marks an action the provider's API cannot perform.
 var ErrUnsupported = errors.New("oauthrevoke: the provider's API cannot perform this action")
 
-// Grant names one user's grant to one application.
+// Grant names one user's grant to one application, or, with TenantWide, the
+// administrator's consent on behalf of every user (A170-L1).
 type Grant struct {
-	Principal string // the user (provider id or login)
+	Principal string // the user (provider id or login); empty when TenantWide
 	AppID     string // the OAuth client / application id
+	// TenantWide names Microsoft Graph's admin consent for the whole tenant
+	// (consentType AllPrincipals), which no per-user revoke removes.
+	TenantWide bool
 }
 
 // Result is what the provider confirmed.
@@ -203,6 +207,9 @@ func Retryable(err error) bool {
 type okta struct{ client }
 
 func (o okta) RevokeGrant(ctx context.Context, g Grant) (Result, error) {
+	if g.TenantWide {
+		return Result{}, ErrUnsupported
+	}
 	user, app := url.PathEscape(g.Principal), url.PathEscape(g.AppID)
 	removed := 0
 	for _, kind := range []string{"grants", "tokens"} {
@@ -240,7 +247,14 @@ func (o okta) BlockApp(ctx context.Context, appID string) (Result, error) {
 type graph struct{ client }
 
 func (m graph) RevokeGrant(ctx context.Context, g Grant) (Result, error) {
+	who := "this user"
 	filter := url.QueryEscape("clientId eq '" + odataQuote(g.AppID) + "' and principalId eq '" + odataQuote(g.Principal) + "'")
+	if g.TenantWide {
+		// A170-L1: the admin consent for every user is its own grant, with
+		// no principal; a per-user revoke never reaches it.
+		who = "the tenant (admin consent for all users)"
+		filter = url.QueryEscape("clientId eq '" + odataQuote(g.AppID) + "' and consentType eq 'AllPrincipals'")
+	}
 	status, raw, err := m.do(ctx, http.MethodGet, "/v1.0/oauth2PermissionGrants?$filter="+filter, nil)
 	if err != nil {
 		return Result{}, fmt.Errorf("oauthrevoke: graph list grants: %w", err)
@@ -270,9 +284,9 @@ func (m graph) RevokeGrant(ctx context.Context, g Grant) (Result, error) {
 		}
 	}
 	if removed == 0 {
-		return Result{Status: AlreadyAbsent, Detail: "Microsoft Graph lists no delegated grant from this user to this application"}, nil
+		return Result{Status: AlreadyAbsent, Detail: "Microsoft Graph lists no delegated grant from " + who + " to this application"}, nil
 	}
-	return Result{Status: Confirmed, Removed: removed, Detail: fmt.Sprintf("Microsoft Graph deleted %d delegated permission grant(s)", removed)}, nil
+	return Result{Status: Confirmed, Removed: removed, Detail: fmt.Sprintf("Microsoft Graph deleted %d delegated permission grant(s) from %s", removed, who)}, nil
 }
 
 func (m graph) BlockApp(ctx context.Context, appID string) (Result, error) {
@@ -295,6 +309,9 @@ func odataQuote(value string) string { return strings.ReplaceAll(value, "'", "''
 type google struct{ client }
 
 func (g google) RevokeGrant(ctx context.Context, grant Grant) (Result, error) {
+	if grant.TenantWide {
+		return Result{}, ErrUnsupported
+	}
 	status, _, err := g.do(ctx, http.MethodDelete, "/admin/directory/v1/users/"+url.PathEscape(grant.Principal)+"/tokens/"+url.PathEscape(grant.AppID), nil)
 	switch {
 	case err != nil:

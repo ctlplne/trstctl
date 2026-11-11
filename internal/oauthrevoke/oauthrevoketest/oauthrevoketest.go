@@ -18,9 +18,12 @@ import (
 	"sync"
 )
 
-// GraphGrant is one delegated permission grant.
+// GraphGrant is one delegated permission grant. ConsentType is "Principal"
+// (the default) or "AllPrincipals", the admin consent for every user, which
+// has no principal.
 type GraphGrant struct {
 	ID, ClientID, PrincipalID string
+	ConsentType               string
 }
 
 // Server is the stand-in.
@@ -105,6 +108,20 @@ func (s *Server) GraphGrants(client, principal string) int {
 	n := 0
 	for _, g := range s.graphGrants {
 		if g.ClientID == client && g.PrincipalID == principal {
+			n++
+		}
+	}
+	return n
+}
+
+// GraphTenantWideGrants counts the admin consents for every user left on
+// client (A170-L1).
+func (s *Server) GraphTenantWideGrants(client string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, g := range s.graphGrants {
+		if g.ClientID == client && g.ConsentType == "AllPrincipals" {
 			n++
 		}
 	}
@@ -219,11 +236,23 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request, rest string) {
 	defer s.mu.Unlock()
 	switch {
 	case r.Method == http.MethodGet && rest == "oauth2PermissionGrants":
-		client, principal := parseGraphFilter(r.URL.Query().Get("$filter"))
-		out := []map[string]string{}
+		client, principal, consent := parseGraphFilter(r.URL.Query().Get("$filter"))
+		out := []map[string]any{}
 		for _, g := range s.graphGrants {
-			if g.ClientID == client && g.PrincipalID == principal {
-				out = append(out, map[string]string{"id": g.ID, "clientId": g.ClientID, "principalId": g.PrincipalID})
+			kind := g.ConsentType
+			if kind == "" {
+				kind = "Principal"
+			}
+			matches := g.ClientID == client && g.PrincipalID == principal && kind == "Principal"
+			if consent != "" {
+				matches = g.ClientID == client && kind == consent && (principal == "" || g.PrincipalID == principal)
+			}
+			if matches {
+				row := map[string]any{"id": g.ID, "clientId": g.ClientID, "consentType": kind, "principalId": nil}
+				if g.PrincipalID != "" {
+					row["principalId"] = g.PrincipalID
+				}
+				out = append(out, row)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -259,8 +288,9 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request, rest string) {
 	}
 }
 
-// parseGraphFilter reads "clientId eq 'X' and principalId eq 'Y'".
-func parseGraphFilter(filter string) (client, principal string) {
+// parseGraphFilter reads "clientId eq 'X' and principalId eq 'Y'" or
+// "clientId eq 'X' and consentType eq 'AllPrincipals'".
+func parseGraphFilter(filter string) (client, principal, consent string) {
 	for _, clause := range strings.Split(filter, " and ") {
 		field, value, ok := strings.Cut(strings.TrimSpace(clause), " eq ")
 		if !ok {
@@ -272,9 +302,11 @@ func parseGraphFilter(filter string) (client, principal string) {
 			client = value
 		case "principalId":
 			principal = value
+		case "consentType":
+			consent = value
 		}
 	}
-	return client, principal
+	return client, principal, consent
 }
 
 func unescape(part string) string {

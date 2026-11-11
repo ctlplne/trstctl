@@ -58,6 +58,9 @@ type OAuthProviderActionIntent struct {
 	AppID     string `json:"app_id"`
 	Principal string `json:"principal,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	// TenantWide revokes Microsoft Graph's admin consent for every user
+	// (consentType AllPrincipals), which names no principal (A170-L1).
+	TenantWide bool `json:"tenant_wide,omitempty"`
 }
 
 // QueueOAuthProviderAction records the request on the finding and queues its
@@ -69,7 +72,7 @@ func (o *Orchestrator) QueueOAuthProviderAction(ctx context.Context, tenantID, r
 	}
 	if (in.Action != OAuthActionRevokeGrant && in.Action != OAuthActionBlockApp) || strings.TrimSpace(in.FindingID) == "" ||
 		strings.TrimSpace(in.SourceID) == "" || strings.TrimSpace(in.Provider) == "" || strings.TrimSpace(in.AppID) == "" ||
-		(in.Action == OAuthActionRevokeGrant && strings.TrimSpace(in.Principal) == "") {
+		(in.Action == OAuthActionRevokeGrant && strings.TrimSpace(in.Principal) == "" && !in.TenantWide) {
 		return OAuthProviderActionIntent{}, errors.New("orchestrator: OAuth provider action is incomplete")
 	}
 	in.RequestID = uuid.NewSHA1(oauthProviderActionNamespace, []byte(tenantID+"\x00"+requestKey)).String()
