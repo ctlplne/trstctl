@@ -644,7 +644,8 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
   expiry, as an AWS STS session or a TOTP code does. Each configured provider also
   states its own `revocation` (an OAuth provider is confirmed only with a revocation
-  endpoint; an AWS STS provider with `revoke_with_deny_policy` is `deny_policy`). The
+  endpoint; an AWS STS provider with `revoke_with_deny_policy` is `deny_policy`), and the
+  console says it beside the connected provider ("When a lease is revoked"). The
   response also returns
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,

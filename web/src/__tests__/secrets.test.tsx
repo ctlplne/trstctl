@@ -2020,6 +2020,48 @@ describe("secrets surface", () => {
     expect(screen.queryByRole("button", { name: "Run reviewed access test" })).not.toBeInTheDocument();
   });
 
+  // A239-L6: the connected provider's panel says what revoking a lease does
+  // there, from the provider's own configuration.
+  it("says what revoking a lease does at the connected provider", async () => {
+    const base = await apiMock.dynamicSecretProviders();
+    apiMock.dynamicSecretProviders.mockResolvedValue({
+      ...base,
+      configured_providers: [
+        { ...base.configured_providers[0], revocation: "confirmed" },
+        {
+          id: "partner-oauth",
+          type: "oauth-client-credentials",
+          label: "OAuth 2.0 client credentials",
+          allowed_roles: ["orders-read"],
+          maximum_ttl_seconds: 900,
+          ready: true,
+          configuration_revision: "runtime-revision-b",
+          revocation: "ttl_only",
+        },
+        {
+          id: "aws-sessions",
+          type: "aws-sts",
+          label: "AWS STS",
+          allowed_roles: ["deployer"],
+          maximum_ttl_seconds: 3600,
+          ready: true,
+          configuration_revision: "runtime-revision-c",
+          revocation: "deny_policy",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    expect(await screen.findByRole("heading", { name: "Temporary backend credentials" })).toBeInTheDocument();
+    expect(await screen.findByText("When a lease is revoked")).toBeInTheDocument();
+    expect(screen.getByText("The provider removes the credential, and the lease records its confirmation.")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "partner-oauth");
+    expect(await screen.findByText(/This provider cannot remove a credential early/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "aws-sessions");
+    expect(await screen.findByText(/attaches a deny policy that refuses the credential before it expires/)).toBeInTheDocument();
+  });
+
   it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const user = userEvent.setup();

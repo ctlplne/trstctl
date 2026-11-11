@@ -49,6 +49,13 @@ function actionIsRunnable(enabled: boolean, state: string): boolean {
   return !enabled || state === "allowed" || state === "scoped";
 }
 
+// A239-L6: what revoking a lease does at this provider, from its configuration.
+const revocationMessages = {
+  confirmed: "secrets.dynamic.revocationConfirmed",
+  ttl_only: "secrets.dynamic.revocationTTLOnly",
+  deny_policy: "secrets.dynamic.revocationDenyPolicy",
+} as const;
+
 export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean }) {
   const { t } = useTranslation();
   const capabilities = useCapabilities();
@@ -393,6 +400,12 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
                         <dt>{t("secrets.dynamic.maxTTL")}</dt>
                         <dd className="font-mono text-foreground">{selectedProvider.maximum_ttl_seconds}s</dd>
                       </div>
+                      {selectedProvider.revocation ? (
+                        <div className="sm:col-span-2">
+                          <dt>{t("secrets.dynamic.revocation")}</dt>
+                          <dd className="text-foreground">{t(revocationMessages[selectedProvider.revocation])}</dd>
+                        </div>
+                      ) : null}
                     </dl>
                   ) : null}
                 </CardContent>

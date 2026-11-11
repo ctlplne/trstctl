@@ -8430,6 +8430,23 @@ export const messages = {
   "secrets.dynamic.notSelected": { defaultMessage: "No connection selected", description: "No selected dynamic provider heading." },
   "secrets.dynamic.backendType": { defaultMessage: "Backend type", description: "Dynamic provider backend type label." },
   "secrets.dynamic.maxTTL": { defaultMessage: "Maximum lifetime", description: "Dynamic provider maximum TTL label." },
+  "secrets.dynamic.revocation": {
+    defaultMessage: "When a lease is revoked",
+    description: "A239-L6: label for what revoking a lease does at the connected provider.",
+  },
+  "secrets.dynamic.revocationConfirmed": {
+    defaultMessage: "The provider removes the credential, and the lease records its confirmation.",
+    description: "A239-L6: the provider confirms removal of a revoked lease's credential.",
+  },
+  "secrets.dynamic.revocationTTLOnly": {
+    defaultMessage:
+      "This provider cannot remove a credential early: a revoked lease's credential keeps working until it expires, at most the lease's lifetime.",
+    description: "A239-L6: the provider's credentials lapse only at their native expiry (an OAuth provider without a revocation endpoint).",
+  },
+  "secrets.dynamic.revocationDenyPolicy": {
+    defaultMessage: "The provider attaches a deny policy that refuses the credential before it expires; the credential itself lapses at its expiry.",
+    description: "A239-L6: an AWS STS provider configured to revoke with a deny policy.",
+  },
   "secrets.dynamic.requirements": { defaultMessage: "Safe setup checklist", description: "Dynamic provider prerequisites heading." },
   "secrets.dynamic.requiredLabel": { defaultMessage: "Required", description: "Required provider prerequisite marker." },
   "secrets.dynamic.optionalLabel": { defaultMessage: "Optional", description: "Optional provider prerequisite marker." },
