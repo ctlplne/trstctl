@@ -322,12 +322,16 @@ const (
 	// EventLDAPWritebackRecorded is the audit record of one LDAP directory
 	// writeback (A83): a member change an operator made in trstctl applied to
 	// the directory's role groups.
-	EventLDAPWritebackRecorded          = "ldap.writeback.recorded" // #nosec G101 -- an event type name, not a credential (CWE-798)
-	EventAPITokenCreated                = "api_token.created"
-	EventAPITokenRevoked                = "api_token.revoked"
-	EventHoneyTokenCreated              = "honeytoken.created"
-	EventHoneyTokenTriggered            = "honeytoken.triggered"
-	EventHoneyTokenRevoked              = "honeytoken.revoked"
+	EventLDAPWritebackRecorded = "ldap.writeback.recorded" // #nosec G101 -- an event type name, not a credential (CWE-798)
+	EventAPITokenCreated       = "api_token.created"
+	EventAPITokenRevoked       = "api_token.revoked"
+	EventHoneyTokenCreated     = "honeytoken.created"
+	EventHoneyTokenTriggered   = "honeytoken.triggered"
+	EventHoneyTokenRevoked     = "honeytoken.revoked"
+	// EventHoneyTokenWatchGapOpened and EventHoneyTokenWatchGapClosed bound a
+	// decoy login's monitoring gap (Q6-L10).
+	EventHoneyTokenWatchGapOpened       = "honeytoken.watch_gap.opened"
+	EventHoneyTokenWatchGapClosed       = "honeytoken.watch_gap.closed"
 	EventAWSHoneyTokenCreated           = "honeytoken.aws.created"
 	EventAWSHoneyScanPage               = "honeytoken.aws.scan_page"
 	EventAWSHoneyTrailObjectScanned     = "honeytoken.aws.trail_object_scanned"
@@ -4309,6 +4313,22 @@ type HoneyTokenRevoked struct {
 	ID string `json:"id"`
 }
 
+// HoneyTokenWatchGapOpened records that the watcher has not been able to read
+// a decoy login since Since, and why (Q6-L10).
+type HoneyTokenWatchGapOpened struct {
+	ID     string    `json:"id"`
+	Reason string    `json:"reason"`
+	Since  time.Time `json:"since"`
+}
+
+// HoneyTokenWatchGapClosed records that the watcher reads the decoy again.
+type HoneyTokenWatchGapClosed struct {
+	ID string `json:"id"`
+}
+
+// maxHoneyTokenWatchGapReason bounds a gap's recorded reason.
+const maxHoneyTokenWatchGapReason = 512
+
 // AWSHoneyTokenCreated contains IAM identity metadata, never access-key secret
 // material. The durable dynamic lease event separately owns IAM creation.
 type AWSHoneyTokenCreated struct {
@@ -5447,6 +5467,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventHoneyTokenCreated:                        {1: true},
 	EventHoneyTokenTriggered:                      {1: true},
 	EventHoneyTokenRevoked:                        {1: true},
+	EventHoneyTokenWatchGapOpened:                 {1: true},
+	EventHoneyTokenWatchGapClosed:                 {1: true},
 	EventAWSHoneyTokenCreated:                     {1: true},
 	EventAWSHoneyScanPage:                         {1: true},
 	EventAWSHoneyTrailObjectScanned:               {1: true},
@@ -8757,6 +8779,24 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyHoneyTokenRevokedTx(ctx, tx, e.TenantID, pl.ID, e.Time)
+	case EventHoneyTokenWatchGapOpened:
+		var pl HoneyTokenWatchGapOpened
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Reason == "" || len(pl.Reason) > maxHoneyTokenWatchGapReason || pl.Since.IsZero() {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyHoneyTokenWatchGapOpenedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, pl.Since)
+	case EventHoneyTokenWatchGapClosed:
+		var pl HoneyTokenWatchGapClosed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyHoneyTokenWatchGapClosedTx(ctx, tx, e.TenantID, pl.ID)
 	case EventAWSHoneyTokenCreated:
 		var pl AWSHoneyTokenCreated
 		if err := decode(e, &pl); err != nil {

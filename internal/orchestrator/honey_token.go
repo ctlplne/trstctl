@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -47,6 +48,30 @@ func (o *Orchestrator) RecordHoneyTokenTrigger(ctx context.Context, tenantID, id
 		return err
 	}
 	_, err = o.emit(ctx, projections.EventHoneyTokenTriggered, tenantID, payload)
+	return err
+}
+
+// OpenHoneyTokenWatchGap records that the watcher has not been able to read a
+// decoy login since since, and why (Q6-L10); the projection alerts once.
+func (o *Orchestrator) OpenHoneyTokenWatchGap(ctx context.Context, tenantID, id, reason string, since time.Time) error {
+	if len(reason) > 512 {
+		reason = reason[:512]
+	}
+	payload, err := json.Marshal(projections.HoneyTokenWatchGapOpened{ID: id, Reason: reason, Since: since.UTC()})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventHoneyTokenWatchGapOpened, tenantID, payload)
+	return err
+}
+
+// CloseHoneyTokenWatchGap records that the watcher reads the decoy again.
+func (o *Orchestrator) CloseHoneyTokenWatchGap(ctx context.Context, tenantID, id string) error {
+	payload, err := json.Marshal(projections.HoneyTokenWatchGapClosed{ID: id})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventHoneyTokenWatchGapClosed, tenantID, payload)
 	return err
 }
 

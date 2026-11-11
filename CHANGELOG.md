@@ -632,6 +632,12 @@
 
 ### Fixed
 
+- A decoy login the watcher cannot read records a monitoring gap (Q6-L10). When a decoy's provider
+  stayed unreachable, or its database was gone while its lease was active, the watcher only logged it
+  every 30 seconds, so nobody learned that uses of the bait were not being seen. A decoy unread for
+  five minutes now records a gap on the decoy (`watch_gap_since` and `watch_gap_reason` on the decoy
+  login API), from `honeytoken.watch_gap.opened` and `.closed` events, with one warning alert through
+  the outbox; reading it again closes the gap.
 - A decoy login retires when its lease ends (Q6-L9). A database decoy lives as long as the lease
   that minted its login, but when the lease expired or was revoked the decoy stayed active: its
   database was gone, the watcher saw nothing to count and raised nothing, and the decoy kept reading as

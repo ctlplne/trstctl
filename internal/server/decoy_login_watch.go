@@ -4,8 +4,10 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -23,6 +25,41 @@ import (
 // establishes no session.
 
 const defaultDecoyLoginWatchInterval = 30 * time.Second
+
+// defaultDecoyWatchGapGrace is how long a decoy login may go unread before
+// its monitoring gap is recorded and alerted (Q6-L10): long enough that a
+// brief provider restart does not page anyone.
+const defaultDecoyWatchGapGrace = 5 * time.Minute
+
+// decoyWatchFailureLog remembers since when the watcher has failed to read
+// each decoy login, until it is read again or its gap is recorded.
+type decoyWatchFailureLog struct {
+	mu    sync.Mutex
+	since map[string]time.Time
+}
+
+// failing records a failed read of decoy id at now and returns since when the
+// reads have failed.
+func (l *decoyWatchFailureLog) failing(id string, now time.Time) time.Time {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.since == nil {
+		l.since = map[string]time.Time{}
+	}
+	first, ok := l.since[id]
+	if !ok {
+		l.since[id] = now
+		first = now
+	}
+	return first
+}
+
+// read forgets decoy id's failures.
+func (l *decoyWatchFailureLog) read(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.since, id)
+}
 
 type decoySessionReader interface {
 	DecoySessions(ctx context.Context, role string) (int64, bool, error)
@@ -108,6 +145,14 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 			firstErr = err
 		}
 	}
+	// Q6-L10: a decoy that stays unreadable past the grace records a
+	// monitoring gap (one alert through the outbox); reading it again closes
+	// the gap.
+	grace := s.decoyWatchGapGrace
+	if grace <= 0 {
+		grace = defaultDecoyWatchGapGrace
+	}
+	now := time.Now().UTC()
 	for _, tenantID := range tenants {
 		decoys, err := s.store.ListActiveDatabaseDecoys(ctx, tenantID)
 		if err != nil {
@@ -116,6 +161,25 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 		}
 		providers := s.secretIntegrations.dynamicProvidersForTenant(tenantID)
 		for _, decoy := range decoys {
+			unwatched := func(cause error) {
+				note(fmt.Errorf("decoy %s: %w", decoy.ID, cause))
+				since := s.decoyWatchFailures.failing(decoy.ID, now)
+				if decoy.WatchGapSince != nil || now.Sub(since) < grace {
+					return
+				}
+				if err := s.orch.OpenHoneyTokenWatchGap(ctx, tenantID, decoy.ID, cause.Error(), since); err != nil {
+					note(fmt.Errorf("decoy %s: record its monitoring gap: %w", decoy.ID, err))
+				}
+			}
+			watched := func() {
+				s.decoyWatchFailures.read(decoy.ID)
+				if decoy.WatchGapSince == nil {
+					return
+				}
+				if err := s.orch.CloseHoneyTokenWatchGap(ctx, tenantID, decoy.ID); err != nil {
+					note(fmt.Errorf("decoy %s: close its monitoring gap: %w", decoy.ID, err))
+				}
+			}
 			// Q6-L9: a decoy lives as long as its lease. Once the lease has
 			// ended, its login and database are gone or going: one last read
 			// still catches a use before the end, then the decoy retires, so it
@@ -141,7 +205,7 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 					retire()
 					continue
 				}
-				note(fmt.Errorf("decoy %s: provider %q is not configured for decoy logins", decoy.ID, decoy.DBProviderID))
+				unwatched(fmt.Errorf("provider %q is not configured for decoy logins", decoy.DBProviderID))
 				continue
 			}
 			sessions, exists, err := reader.DecoySessions(ctx, decoy.DBRole)
@@ -150,7 +214,7 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 					retire()
 					continue
 				}
-				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+				unwatched(err)
 				continue
 			}
 			database := dynsecret.DecoyDatabaseName(decoy.DBRole)
@@ -159,19 +223,27 @@ func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
 				// count on the decoy's own; the live sessions name it.
 				elsewhere, err := reader.DecoyElsewhere(ctx, decoy.DBRole)
 				if err != nil {
-					note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+					if ended {
+						retire()
+						continue
+					}
+					unwatched(err)
 					continue
 				}
 				if len(elsewhere) == 0 {
-					if ended {
+					switch {
+					case ended:
 						retire()
-					} else if !exists {
-						note(fmt.Errorf("decoy %s: its database is gone while its lease is active", decoy.ID))
+					case !exists:
+						unwatched(errors.New("its database is gone while its lease is active"))
+					default:
+						watched()
 					}
 					continue
 				}
 				database = elsewhere[0]
 			}
+			watched()
 			if err := s.orch.RecordHoneyTokenTrigger(ctx, tenantID, decoy.ID, "LOGIN", "postgres/"+database); err != nil {
 				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
 			}

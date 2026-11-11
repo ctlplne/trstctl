@@ -42,6 +42,11 @@ type HoneyToken struct {
 	DBProviderID string `json:"db_provider_id,omitempty"`
 	DBLeaseID    string `json:"db_lease_id,omitempty"`
 	DBRole       string `json:"db_role,omitempty"`
+	// WatchGapSince and WatchGapReason are a decoy login's open monitoring
+	// gap (Q6-L10): since when the watcher has not been able to read it, and
+	// why. Nil while it is watched.
+	WatchGapSince  *time.Time `json:"watch_gap_since,omitempty"`
+	WatchGapReason string     `json:"watch_gap_reason,omitempty"`
 }
 
 // #nosec G101 -- SQL column names only; this string contains no credential material.
@@ -50,7 +55,8 @@ const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, tok
     COALESCE(aws_lease_id, ''), aws_regions, COALESCE(aws_poll_interval_seconds, 0), alarm_generation, state,
     created_at, triggered_at, COALESCE(trigger_method, ''), COALESCE(trigger_path, ''), revoked_at,
     COALESCE(secret_name, ''), COALESCE(trigger_subject, ''),
-    COALESCE(db_provider_id, ''), COALESCE(db_lease_id, ''), COALESCE(db_role, '')`
+    COALESCE(db_provider_id, ''), COALESCE(db_lease_id, ''), COALESCE(db_role, ''),
+    watch_gap_since, COALESCE(watch_gap_reason, '')`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
@@ -58,7 +64,8 @@ func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 		&h.AWSAccountConfigID, &h.AWSAccountID, &h.AWSAccessKeyID, &h.AWSLeaseID,
 		&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
 		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
-		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole)
+		&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
+		&h.WatchGapSince, &h.WatchGapReason)
 	return h, err
 }
 
@@ -97,7 +104,8 @@ func (s *Store) ListHoneyTokensPage(ctx context.Context, tenantID, afterID strin
 				&h.AWSAccountConfigID, &h.AWSAccountID, &h.AWSAccessKeyID, &h.AWSLeaseID,
 				&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
 				&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
-				&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole); err != nil {
+				&h.SecretName, &h.TriggerSubject, &h.DBProviderID, &h.DBLeaseID, &h.DBRole,
+				&h.WatchGapSince, &h.WatchGapReason); err != nil {
 				return err
 			}
 			out = append(out, h)

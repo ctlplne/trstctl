@@ -19563,6 +19563,15 @@
           "triggered_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "watch_gap_reason": {
+            "description": "Q6-L10: why the watcher cannot read this decoy",
+            "type": "string"
+          },
+          "watch_gap_since": {
+            "description": "Q6-L10: since when the watcher has not been able to read this decoy; absent while it is watched",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
@@ -19661,6 +19670,15 @@
             "type": "string"
           },
           "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "watch_gap_reason": {
+            "description": "Q6-L10: why the watcher cannot read this decoy",
+            "type": "string"
+          },
+          "watch_gap_since": {
+            "description": "Q6-L10: since when the watcher has not been able to read this decoy; absent while it is watched",
             "format": "date-time",
             "type": "string"
           }

@@ -5574,7 +5574,10 @@ when off, requiring a KEK when on):
   other database and alerts on one, naming that database, but a session that opens
   and closes between two checks (30 seconds apart) there is not seen. A decoy lives
   as long as its lease: when the lease ends, a last check still catches a use, and an
-  unused decoy retires instead of reading as watching. A failed login with a
+  unused decoy retires instead of reading as watching. A decoy the watcher cannot
+  read for five minutes (its provider unreachable, or its database gone while its
+  lease is active) records a monitoring gap on the decoy, since when and why, with one
+  warning alert; reading it again closes the gap. A failed login with a
   wrong password is not detected, a statistics reset hides earlier uses, and only
   PostgreSQL providers can mint decoys. Decoy SSH keys and Kubernetes tokens are
   not built.

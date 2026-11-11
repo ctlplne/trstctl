@@ -679,6 +679,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/path", clear), privacyRule("/reader", exact),
 	)
 	honeyTokenRevoked := privacyRules(privacyRule("/id", opaque))
+	honeyTokenWatchGapOpened := privacyRules(privacyRule("/id", opaque), privacyRule("/reason", opaque), privacyRule("/since", opaque))
+	honeyTokenWatchGapClosed := privacyRules(privacyRule("/id", opaque))
 	awsHoneyTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", clear),
 		privacyRule("/placement", clear), privacyRule("/account_config_id", opaque),
@@ -993,6 +995,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventHoneyTokenCreated, 1}:                                 honeyTokenCreated,
 		{EventHoneyTokenTriggered, 1}:                               honeyTokenTriggered,
 		{EventHoneyTokenRevoked, 1}:                                 honeyTokenRevoked,
+		{EventHoneyTokenWatchGapOpened, 1}:                          honeyTokenWatchGapOpened,
+		{EventHoneyTokenWatchGapClosed, 1}:                          honeyTokenWatchGapClosed,
 		{EventAWSHoneyTokenCreated, 1}:                              awsHoneyTokenCreated,
 		{EventAWSHoneyScanPage, 1}:                                  awsHoneyScanPage,
 		{EventAWSHoneyTrailObjectScanned, 1}:                        awsHoneyTrailObjectScanned,
@@ -1783,6 +1787,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventHoneyTokenCreated, 1}:                                                          privacyPayloadShape[HoneyTokenCreated](),
 		{EventHoneyTokenTriggered, 1}:                                                        privacyPayloadShape[HoneyTokenTriggered](),
 		{EventHoneyTokenRevoked, 1}:                                                          privacyPayloadShape[HoneyTokenRevoked](),
+		{EventHoneyTokenWatchGapOpened, 1}:                                                   privacyPayloadShape[HoneyTokenWatchGapOpened](),
+		{EventHoneyTokenWatchGapClosed, 1}:                                                   privacyPayloadShape[HoneyTokenWatchGapClosed](),
 		{EventAWSHoneyTokenCreated, 1}:                                                       privacyPayloadShape[AWSHoneyTokenCreated](),
 		{EventAWSHoneyScanPage, 1}:                                                           privacyPayloadShape[store.AWSHoneyScanPage](),
 		{EventAWSHoneyTrailObjectScanned, 1}:                                                 privacyPayloadShape[store.AWSHoneyTrailObjectScan](),

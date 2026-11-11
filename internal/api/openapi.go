@@ -4745,7 +4745,9 @@ func componentSchemas() map[string]*Schema {
 		"db_role":    {Type: "string", Description: "the login role; its own database is the role name followed by _db"},
 		"state":      {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
 		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
-		"revoked_at": timestamp(),
+		"revoked_at":       timestamp(),
+		"watch_gap_since":  {Type: "string", Format: "date-time", Description: "Q6-L10: since when the watcher has not been able to read this decoy; absent while it is watched"},
+		"watch_gap_reason": {Type: "string", Description: "Q6-L10: why the watcher cannot read this decoy"},
 	}
 	databaseDecoy := object(databaseDecoyFields, "id", "kind", "name", "placement", "db_provider_id", "db_lease_id", "db_role", "state", "created_at")
 	databaseDecoyCreateRespFields := map[string]*Schema{

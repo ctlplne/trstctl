@@ -4043,6 +4043,8 @@ export interface DatabaseDecoy {
   trigger_method?: string;
   trigger_path?: string;
   triggered_at?: string;
+  watch_gap_reason?: string;
+  watch_gap_since?: string;
 }
 
 export interface DatabaseDecoyCreateRequest {
@@ -4068,6 +4070,8 @@ export interface DatabaseDecoyCreateResponse {
   trigger_method?: string;
   trigger_path?: string;
   triggered_at?: string;
+  watch_gap_reason?: string;
+  watch_gap_since?: string;
 }
 
 export interface DatabaseDecoyList {

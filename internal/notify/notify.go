@@ -137,8 +137,11 @@ const (
 	// KindCheckoutRotationBlocked (A261-L2): a vaulted account's check-out
 	// passed its deadline and the rotation that retires its revealed
 	// credential could not be queued, so that credential still signs in.
-	KindCheckoutRotationBlocked   = "pam.checkout.rotation_blocked"
-	KindHoneyTokenTriggered       = "honeytoken.triggered"
+	KindCheckoutRotationBlocked = "pam.checkout.rotation_blocked"
+	KindHoneyTokenTriggered     = "honeytoken.triggered"
+	// KindHoneyTokenWatchGap (Q6-L10): the watcher cannot read a decoy login,
+	// so a use of the bait is not seen until it can.
+	KindHoneyTokenWatchGap        = "honeytoken.watch_gap"
 	KindEndpointContainmentFailed = "endpoint.containment_failed"
 )
 

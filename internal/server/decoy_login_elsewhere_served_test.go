@@ -14,10 +14,18 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
-// plantServedDecoyLogin serves a tenant PostgreSQL provider that mints decoy
-// logins against a real PostgreSQL and plants one, returning the harness, the
-// planted decoy and the planter's token.
-func plantServedDecoyLogin(t *testing.T, key string) (*servedHarness, servedDecoyLogin, string) {
+// servedDecoyLab is a served tenant PostgreSQL provider minting decoy logins
+// against a real PostgreSQL, with one decoy planted.
+type servedDecoyLab struct {
+	h        *servedHarness
+	planted  servedDecoyLogin
+	planter  string
+	adminDSN string
+}
+
+// plantServedDecoyLogin serves the lab and plants one decoy; opts adjust the
+// server's dependencies.
+func plantServedDecoyLogin(t *testing.T, key string, opts ...func(*Deps)) servedDecoyLab {
 	t.Helper()
 	pgDSN, stopPG := startPAMPostgres(t)
 	t.Cleanup(stopPG)
@@ -34,10 +42,13 @@ func plantServedDecoyLogin(t *testing.T, key string) (*servedHarness, servedDeco
 			integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}, nil)
 		d.TenantDynamicSecretProviders = DynamicSecretProviderRegistry{servedTestTenant: {provider}}
 		d.DecoyLoginWatchInterval = time.Hour // the test drives each check itself
+		for _, opt := range opts {
+			opt(d)
+		}
 	})
 	startServedExternalCADispatcher(t, h)
 	planter := seedScopedTokenSubject(t, h.store, h.tenant, "decoy-planter", "secrets:read", "secrets:write")
-	return h, plantAnotherServedDecoyLogin(t, h, planter, key), planter
+	return servedDecoyLab{h: h, planted: plantAnotherServedDecoyLogin(t, h, planter, key), planter: planter, adminDSN: pgDSN}
 }
 
 func plantAnotherServedDecoyLogin(t *testing.T, h *servedHarness, planter, key string) servedDecoyLogin {
@@ -76,7 +87,8 @@ func servedDecoyState(t *testing.T, h *servedHarness, id string) (state, path st
 // does not count on its own database; the watcher reads the server's live
 // sessions for the role and raises the decoy's alert, naming that database.
 func TestServedDecoyLoginInAnotherDatabaseAlertsQ6L8(t *testing.T) {
-	h, planted, _ := plantServedDecoyLogin(t, "q6l8-plant")
+	lab := plantServedDecoyLogin(t, "q6l8-plant")
+	h, planted := lab.h, lab.planted
 	ctx := t.Context()
 	if err := h.srv.WatchDecoyLoginsOnce(ctx); err != nil {
 		t.Fatalf("decoy login watch: %v", err)
@@ -113,8 +125,9 @@ func TestServedDecoyLoginInAnotherDatabaseAlertsQ6L8(t *testing.T) {
 // decoy retires instead of staying active with nothing to watch, and a decoy
 // the bait used before the end still raises its alert first.
 func TestServedDecoyLoginRetiresWhenItsLeaseEndsQ6L9(t *testing.T) {
-	h, unused, planter := plantServedDecoyLogin(t, "q6l9-unused")
-	used := plantAnotherServedDecoyLogin(t, h, planter, "q6l9-used")
+	lab := plantServedDecoyLogin(t, "q6l9-unused")
+	h, unused := lab.h, lab.planted
+	used := plantAnotherServedDecoyLogin(t, h, lab.planter, "q6l9-used")
 	ctx := t.Context()
 	watch := func() {
 		t.Helper()
@@ -167,5 +180,82 @@ func TestServedDecoyLoginRetiresWhenItsLeaseEndsQ6L9(t *testing.T) {
 	}
 	if alerts != 1 {
 		t.Fatalf("%d alerts, want the used decoy's one", alerts)
+	}
+}
+
+// Q6-L10: a decoy login the watcher cannot read past the grace records a
+// monitoring gap on the decoy, since when and why, with one warning through
+// the outbox; reading it again closes the gap.
+func TestServedDecoyLoginWatchGapIsRecordedAndClosesQ6L10(t *testing.T) {
+	lab := plantServedDecoyLogin(t, "q6l10-plant", func(d *Deps) { d.DecoyLoginWatchGapGrace = time.Nanosecond })
+	h, planted := lab.h, lab.planted
+	ctx := t.Context()
+	admin, err := pgx.Connect(ctx, lab.adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = admin.Close(ctx) }()
+	database := pgx.Identifier{planted.Database}.Sanitize()
+	if _, err := admin.Exec(ctx, "DROP DATABASE "+database+" WITH (FORCE)"); err != nil {
+		t.Fatal(err)
+	}
+	gap := func() (since *time.Time, reason string) {
+		t.Helper()
+		if err := h.store.SystemPool().QueryRow(ctx,
+			`SELECT watch_gap_since, COALESCE(watch_gap_reason, '') FROM honey_tokens WHERE tenant_id = $1 AND id = $2`,
+			h.tenant, planted.ID).Scan(&since, &reason); err != nil {
+			t.Fatal(err)
+		}
+		return since, reason
+	}
+	gapAlerts := func() int {
+		t.Helper()
+		var n int
+		if err := h.store.SystemPool().QueryRow(ctx,
+			`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'notification.honeytoken'
+			    AND convert_from(payload, 'UTF8')::jsonb->>'kind' = 'honeytoken.watch_gap'`, h.tenant).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for range 3 {
+		if err := h.srv.WatchDecoyLoginsOnce(ctx); err == nil {
+			t.Fatal("the watch reported no error for a decoy it cannot read")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	since, reason := gap()
+	if since == nil || !strings.Contains(reason, "its database is gone while its lease is active") {
+		t.Fatalf("monitoring gap = %v %q, want one recorded with its reason", since, reason)
+	}
+	if n := gapAlerts(); n != 1 {
+		t.Fatalf("%d monitoring-gap alerts after three failed checks, want 1", n)
+	}
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/honeytokens/databases", lab.planter, nil)
+	if status != http.StatusOK || !strings.Contains(string(body), `"watch_gap_reason"`) {
+		t.Fatalf("the decoy list does not show the gap: HTTP %d %s", status, body)
+	}
+
+	role := pgx.Identifier{planted.DBRole}.Sanitize()
+	for _, stmt := range []string{
+		"CREATE DATABASE " + database,
+		"REVOKE CONNECT, TEMPORARY ON DATABASE " + database + " FROM PUBLIC",
+		"GRANT CONNECT ON DATABASE " + database + " TO " + role,
+	} {
+		if _, err := admin.Exec(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := h.srv.WatchDecoyLoginsOnce(ctx); err != nil {
+		t.Fatalf("decoy login watch after the database is back: %v", err)
+	}
+	if since, _ := gap(); since != nil {
+		t.Fatalf("the monitoring gap is still open after the decoy was read again (since %v)", since)
+	}
+	if state, _ := servedDecoyState(t, h, planted.ID); state != "active" {
+		t.Fatalf("the decoy reads %q after its gap closed", state)
+	}
+	if n := gapAlerts(); n != 1 {
+		t.Fatalf("%d monitoring-gap alerts, want the one", n)
 	}
 }

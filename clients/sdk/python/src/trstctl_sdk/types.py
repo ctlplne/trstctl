@@ -5635,6 +5635,8 @@ DatabaseDecoy = TypedDict(
         'trigger_method': str,
         'trigger_path': str,
         'triggered_at': str,
+        'watch_gap_reason': str,
+        'watch_gap_since': str,
     },
     total=False,
 )
@@ -5668,6 +5670,8 @@ DatabaseDecoyCreateResponse = TypedDict(
         'trigger_method': str,
         'trigger_path': str,
         'triggered_at': str,
+        'watch_gap_reason': str,
+        'watch_gap_since': str,
     },
     total=False,
 )

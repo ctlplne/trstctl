@@ -17053,6 +17053,13 @@ export interface components {
             trigger_path?: string;
             /** Format: date-time */
             triggered_at?: string;
+            /** @description Q6-L10: why the watcher cannot read this decoy */
+            watch_gap_reason?: string;
+            /**
+             * Format: date-time
+             * @description Q6-L10: since when the watcher has not been able to read this decoy; absent while it is watched
+             */
+            watch_gap_since?: string;
         };
         DatabaseDecoyCreateRequest: {
             name: string;
@@ -17086,6 +17093,13 @@ export interface components {
             trigger_path?: string;
             /** Format: date-time */
             triggered_at?: string;
+            /** @description Q6-L10: why the watcher cannot read this decoy */
+            watch_gap_reason?: string;
+            /**
+             * Format: date-time
+             * @description Q6-L10: since when the watcher has not been able to read this decoy; absent while it is watched
+             */
+            watch_gap_since?: string;
         };
         DatabaseDecoyList: {
             items: components["schemas"]["DatabaseDecoy"][];

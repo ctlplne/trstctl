@@ -651,6 +651,10 @@ type Deps struct {
 	// DecoyLoginWatchInterval is how often the leader checks decoy database
 	// logins for use (Q6). Zero uses the production default.
 	DecoyLoginWatchInterval time.Duration
+	// DecoyLoginWatchGapGrace is how long a decoy login may go unread before
+	// its monitoring gap is recorded and alerted (Q6-L10). Zero uses the
+	// production default.
+	DecoyLoginWatchGapGrace time.Duration
 	// DynamicSecretAccessInterval is how often the leader reads what new or
 	// stale dynamic-secret leases reach (G2). Zero uses the production default.
 	DynamicSecretAccessInterval time.Duration
@@ -942,6 +946,10 @@ type Server struct {
 	serviceNowBindings []api.ServiceNowBinding
 	// decoyLoginWatchInterval paces RunDecoyLoginWatch (Q6).
 	decoyLoginWatchInterval time.Duration
+	// decoyWatchGapGrace and decoyWatchFailures track decoy logins the watcher
+	// cannot read, until a monitoring gap is recorded (Q6-L10).
+	decoyWatchGapGrace time.Duration
+	decoyWatchFailures decoyWatchFailureLog
 	// dynamicSecretAccessInterval paces RunDynamicSecretAccessWatch (G2).
 	dynamicSecretAccessInterval time.Duration
 	// secretMoveClosureInterval paces RunSecretMoveClosure (P6).
@@ -1184,7 +1192,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantCrypto:              d.TenantCrypto,
 		kek:                       d.KEK,
 		restoreDrillSigner:        d.AuditSigningKey, deploymentKEK: d.DeploymentKEK,
-		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval, secretMoveClosureInterval: d.SecretMoveClosureInterval, scopedSyncReconcileInterval: d.ScopedSyncReconcileInterval,
+		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, decoyWatchGapGrace: d.DecoyLoginWatchGapGrace, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval, secretMoveClosureInterval: d.SecretMoveClosureInterval, scopedSyncReconcileInterval: d.ScopedSyncReconcileInterval,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
